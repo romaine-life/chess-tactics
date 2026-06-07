@@ -10,6 +10,35 @@
     queen: { mark: 'Q', name: 'Queen', role: 'Promoted raider' },
   };
 
+  const BISHOP_SVG_TEMPLATE = `<svg width="100%" height="100%" viewBox="0 0 64 64" style="shape-rendering: crispedges;" class="cursor-pointer transition-transform hover:-translate-y-1.5 active:translate-y-0" xmlns="http://www.w3.org/2000/svg"><defs><mask id="outline-mask-Bishop-SIDE"><rect width="100%" height="100%" fill="white"></rect><g fill="black" stroke="black" stroke-width="0.5"><path d="M 16,46 L 32,54 L 48,46 L 32,38 Z"></path><path d="M 16,52 L 32,60 L 32,54 L 16,46 Z"></path><path d="M 32,60 L 48,52 L 48,46 L 32,54 Z"></path><path d="M 22,42 L 32,47 L 32,29 L 22,24 Z"></path><path d="M 32,47 L 42,42 L 42,24 L 32,29 Z"></path><path d="M 20,24 L 32,29 L 44,24 L 32,19 Z"></path><path d="M 20,27 L 32,32 L 32,29 L 20,24 Z"></path><path d="M 32,32 L 44,27 L 44,24 L 32,29 Z"></path><path d="M 23,21 L 32,25 L 32,11 L 23,15 Z"></path><path d="M 32,25 L 41,21 L 41,15 L 32,11 Z"></path><path d="M 26,18 L 29,19 L 29,15 L 26,14 Z"></path><path d="M 30,6 L 32,7 L 34,6 L 32,5 Z"></path><path d="M 30,9 L 32,10 L 32,7 L 30,6 Z"></path><path d="M 32,10 L 34,9 L 34,6 L 32,7 Z"></path></g></mask></defs><g mask="url(#outline-mask-Bishop-SIDE)"><g fill="none" stroke="rgb(0,0,0)" stroke-width="1" stroke-linejoin="miter" stroke-linecap="square"><path d="M 16,46 L 32,54 L 48,46 L 32,38 Z"></path><path d="M 16,52 L 32,60 L 32,54 L 16,46 Z"></path><path d="M 32,60 L 48,52 L 48,46 L 32,54 Z"></path><path d="M 22,42 L 32,47 L 32,29 L 22,24 Z"></path><path d="M 32,47 L 42,42 L 42,24 L 32,29 Z"></path><path d="M 20,24 L 32,29 L 44,24 L 32,19 Z"></path><path d="M 20,27 L 32,32 L 32,29 L 20,24 Z"></path><path d="M 32,32 L 44,27 L 44,24 L 32,29 Z"></path><path d="M 23,21 L 32,25 L 32,11 L 23,15 Z"></path><path d="M 32,25 L 41,21 L 41,15 L 32,11 Z"></path><path d="M 26,18 L 29,19 L 29,15 L 26,14 Z"></path><path d="M 30,6 L 32,7 L 34,6 L 32,5 Z"></path><path d="M 30,9 L 32,10 L 32,7 L 30,6 Z"></path><path d="M 32,10 L 34,9 L 34,6 L 32,7 Z"></path></g></g><g opacity="0.95" stroke="none"><path d="M 16,46 L 32,54 L 48,46 L 32,38 Z" fill="TOP_COLOR"></path><path d="M 16,52 L 32,60 L 32,54 L 16,46 Z" fill="LEFT_COLOR"></path><path d="M 32,60 L 48,52 L 48,46 L 32,54 Z" fill="RIGHT_COLOR"></path><path d="M 22,42 L 32,47 L 32,29 L 22,24 Z" fill="LEFT_COLOR"></path><path d="M 32,47 L 42,42 L 42,24 L 32,29 Z" fill="RIGHT_COLOR"></path><path d="M 20,24 L 32,29 L 44,24 L 32,19 Z" fill="TOP_COLOR"></path><path d="M 20,27 L 32,32 L 32,29 L 20,24 Z" fill="LEFT_COLOR"></path><path d="M 32,32 L 44,27 L 44,24 L 32,29 Z" fill="RIGHT_COLOR"></path><path d="M 23,21 L 32,25 L 32,11 L 23,15 Z" fill="LEFT_COLOR"></path><path d="M 32,25 L 41,21 L 41,15 L 32,11 Z" fill="RIGHT_COLOR"></path><path d="M 26,18 L 29,19 L 29,15 L 26,14 Z" fill="DEEP_COLOR"></path><path d="M 30,6 L 32,7 L 34,6 L 32,5 Z" fill="TOP_COLOR"></path><path d="M 30,9 L 32,10 L 32,7 L 30,6 Z" fill="LEFT_COLOR"></path><path d="M 32,10 L 34,9 L 34,6 L 32,7 Z" fill="RIGHT_COLOR"></path></g></svg>`;
+
+  function getBishopSvg(side) {
+    let top, left, right, deep;
+    if (side === 'player') {
+      top = '#eef6fc';
+      left = '#b9cad6';
+      right = '#8fa6b4';
+      deep = '#405866';
+    } else {
+      top = '#f5af95';
+      left = '#b3664d';
+      right = '#7a3f2a';
+      deep = '#471e11';
+    }
+    return BISHOP_SVG_TEMPLATE
+      .replace(/SIDE/g, side)
+      .replace(/TOP_COLOR/g, top)
+      .replace(/LEFT_COLOR/g, left)
+      .replace(/RIGHT_COLOR/g, right)
+      .replace(/DEEP_COLOR/g, deep);
+  }
+
+  const playerBishopImg = new Image();
+  playerBishopImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getBishopSvg('player'));
+
+  const enemyBishopImg = new Image();
+  enemyBishopImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getBishopSvg('enemy'));
+
   const boardEl = document.getElementById('board');
   const ctx = boardEl.getContext('2d');
   const rosterEl = document.getElementById('roster');
@@ -434,19 +463,25 @@
     ctx.translate(Math.round(x), Math.round(y - 18));
     ctx.fillStyle = 'rgba(0,0,0,0.38)';
     ctx.fillRect(-17, 24, 34, 6);
-    ctx.fillStyle = shade;
-    ctx.fillRect(-15, 2, 30, 30);
-    ctx.fillStyle = base;
-    ctx.fillRect(-12, -2, 24, 28);
-    ctx.fillStyle = accent;
-    ctx.fillRect(-8, 6, 16, 5);
-    ctx.fillStyle = '#101522';
-    ctx.fillRect(-10, 21, 20, 5);
-    ctx.font = '16px "Press Start 2P", monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = piece.side === 'player' ? '#101522' : '#f5e0c8';
-    ctx.fillText(piece.mark, 0, 14);
+
+    if (piece.type === 'bishop') {
+      const img = piece.side === 'player' ? playerBishopImg : enemyBishopImg;
+      ctx.drawImage(img, -24, -15, 48, 48);
+    } else {
+      ctx.fillStyle = shade;
+      ctx.fillRect(-15, 2, 30, 30);
+      ctx.fillStyle = base;
+      ctx.fillRect(-12, -2, 24, 28);
+      ctx.fillStyle = accent;
+      ctx.fillRect(-8, 6, 16, 5);
+      ctx.fillStyle = '#101522';
+      ctx.fillRect(-10, 21, 20, 5);
+      ctx.font = '16px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = piece.side === 'player' ? '#101522' : '#f5e0c8';
+      ctx.fillText(piece.mark, 0, 14);
+    }
     ctx.restore();
   }
 
@@ -492,7 +527,7 @@
             <div class="piece-picker" data-slot="${slot}">
               ${PIECE_CHOICES.map((type) => `
                 <button type="button" class="${state.party[slot] === type ? 'active' : ''}" data-piece="${type}">
-                  <span>${PIECES[type].mark}</span>${PIECES[type].name}
+                  <span>${type === 'bishop' ? getBishopSvg('player') : PIECES[type].mark}</span>${PIECES[type].name}
                 </button>`).join('')}
             </div>`).join('')}
           <div class="menu-row">
@@ -538,7 +573,9 @@
       <div class="roster-title">${side === 'player' ? 'Allies' : 'Enemies'}</div>
       ${livingPieces(side).map((unit) => `
         <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== 'player' || state.turn !== 'player' ? 'disabled' : ''}>
-          <span class="badge ${side === 'player' ? 'player' : 'enemy'}">${unit.mark}</span>
+          <span class="badge ${side === 'player' ? 'player' : 'enemy'}">
+            ${unit.type === 'bishop' ? getBishopSvg(side) : unit.mark}
+          </span>
           <span><strong>${unit.name}</strong><span>${unit.role}</span></span>
           <span>${unit.x + 1},${unit.y + 1}</span>
         </button>
