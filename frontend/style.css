@@ -74,6 +74,11 @@ button.active {
   box-shadow: inset 0 0 0 1px var(--move);
 }
 
+button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
 .shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -219,6 +224,107 @@ h1 {
   height: auto;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.menu-layer {
+  align-items: center;
+  display: flex;
+  inset: 8px;
+  justify-content: center;
+  position: absolute;
+  z-index: 2;
+}
+
+.menu-layer[hidden] { display: none; }
+
+.game-menu {
+  background:
+    linear-gradient(180deg, rgba(36, 28, 66, .97), rgba(18, 14, 34, .98));
+  border: 3px solid #7567ad;
+  box-shadow:
+    0 0 0 3px #0d0a1c,
+    inset 0 0 0 2px rgba(174, 230, 255, .14),
+    0 16px 0 rgba(0, 0, 0, .28);
+  display: grid;
+  gap: 12px;
+  max-width: min(520px, calc(100vw - 48px));
+  padding: 22px;
+  width: 100%;
+}
+
+.game-menu h2 {
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: clamp(1rem, 3vw, 1.55rem);
+  line-height: 1.3;
+  text-shadow: 0 3px 0 #0b0818;
+}
+
+.game-menu .eyebrow {
+  color: var(--power);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .54rem;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.game-menu button {
+  background: #211a3d;
+  border-color: #5f548d;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .28);
+  min-height: 48px;
+  text-align: left;
+}
+
+.game-menu button:hover,
+.game-menu button:focus-visible,
+.game-menu button.active {
+  background: #15455a;
+  border-color: var(--move);
+}
+
+.menu-copy {
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1.35;
+}
+
+.party-menu { max-width: min(640px, calc(100vw - 48px)); }
+
+.locked-piece {
+  align-items: center;
+  background: #17132b;
+  border: 2px solid var(--line);
+  display: flex;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px;
+}
+
+.piece-picker,
+.menu-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.menu-row { grid-template-columns: 1fr 1fr; }
+
+.piece-picker button {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 28px 1fr;
+  min-width: 0;
+}
+
+.piece-picker button span {
+  background: #dceaf2;
+  color: #101522;
+  display: grid;
+  font-size: .6rem;
+  height: 28px;
+  place-items: center;
+  width: 28px;
 }
 
 .cell {
@@ -406,6 +512,11 @@ h1 {
   font-size: 1.05rem;
 }
 
+.unit-row.active {
+  border-color: var(--move);
+  box-shadow: inset 0 0 0 1px var(--move);
+}
+
 .unit-row .badge {
   border-radius: 3px;
   display: grid;
@@ -420,6 +531,21 @@ h1 {
   background: linear-gradient(160deg, #eaf2f7, #8fa6b4);
   color: #16242e;
   border: 1px solid #1f2e38;
+}
+
+.badge.enemy {
+  background: linear-gradient(160deg, #a8743e, #5e3c20);
+  color: #ffe2bd;
+  border: 1px solid #2d160f;
+}
+
+.roster-title {
+  color: var(--power);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .52rem;
+  line-height: 1.4;
+  margin-top: 4px;
+  text-transform: uppercase;
 }
 
 .unit-row strong, .unit-row span {
@@ -524,6 +650,8 @@ h1 {
   #accountName { max-width: min(58vw, 260px); }
   .meters { justify-content: flex-start; }
   body { font-size: 17px; }
+  .piece-picker { grid-template-columns: 1fr; }
+  .game-menu { padding: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
