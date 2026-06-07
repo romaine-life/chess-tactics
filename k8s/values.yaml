@@ -1,0 +1,32 @@
+# The image tag is bumped by .github/workflows/build-and-deploy.yaml on every
+# push to main (via sed on this file).
+image:
+  repository: romainecr.azurecr.io/chess-tactics
+  # Quoted on purpose: a bare short SHA like a8d4270 can parse as a YAML
+  # float/scientific-notation; keep the quotes.
+  tag: "a8d4270"
+  pullPolicy: IfNotPresent
+
+name: chess-tactics
+namespace: chess-tactics
+
+hostname: chess.romaine.life
+
+# normal = full app (prod, what ArgoCD renders).
+# warm   = preliminary test-slot scaffolding only (SA, cert, route, listener).
+# hot    = warm + the running workload (Deployment, Service).
+# Glimmung's native_webapp test-slot installer sets renderMode + testEnv.slotName.
+renderMode: normal
+
+testEnv:
+  slotName: ""
+
+# Plain service account — chess-tactics is a static server and needs no Azure
+# access, so there is no workload-identity federation here.
+serviceAccount: chess-tactics
+
+ingress:
+  gatewayName: main
+  gatewayNamespace: envoy-gateway-system
+  certIssuer: letsencrypt-prod
+  tlsSecret: chess-tactics-tls

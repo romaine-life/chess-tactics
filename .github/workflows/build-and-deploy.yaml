@@ -118,32 +118,24 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
 
-      - name: Bump image tag in deployment
+      - name: Bump image tag in k8s/values.yaml
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          node <<'JS'
-          const fs = require('fs');
-          const path = 'k8s/deployment.yaml';
-          const image = `${process.env.REGISTRY}/${process.env.IMAGE}:${process.env.TAG}`;
-          const before = fs.readFileSync(path, 'utf8');
-          const after = before.replace(
-            /image: romainecr\.azurecr\.io\/chess-tactics:[^\s]+/,
-            `image: ${image}`,
-          );
-          if (after === before) {
-            throw new Error('Deployment image line was not updated');
-          }
-          fs.writeFileSync(path, after);
-          JS
+          set -euo pipefail
+          # Quote the tag: short SHAs like a8d4270 can parse as YAML
+          # float/scientific-notation and must stay quoted.
+          sed -i "s|^  tag: .*|  tag: \"${TAG}\"|" k8s/values.yaml
+          grep -qx "  tag: \"${TAG}\"" k8s/values.yaml \
+            || { echo "::error::k8s/values.yaml image tag was not updated"; exit 1; }
 
       - name: Commit and push tag bump
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add k8s/deployment.yaml
+          git add k8s/values.yaml
           if git diff --cached --quiet; then
-            echo "No kustomization changes to commit"
+            echo "No image tag changes to commit"
             exit 0
           fi
           git commit -m "chore: bump chess-tactics image to ${{ env.TAG }} [skip ci]"
