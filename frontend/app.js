@@ -159,18 +159,39 @@
   const endButton = document.getElementById('endButton');
   const menuLayer = document.getElementById('menuLayer');
   const accountEl = document.getElementById('account');
+  const accountAvatarEl = document.getElementById('accountAvatar');
   const accountNameEl = document.getElementById('accountName');
   const signInButton = document.getElementById('signInButton');
   const signOutButton = document.getElementById('signOutButton');
+  let currentUser = null;
+  let lobbyPollTimer = null;
 
   function returnTo() {
     return `${window.location.pathname}${window.location.search}${window.location.hash}`;
   }
 
   function showGuest() {
+    currentUser = null;
+    accountAvatarEl.hidden = true;
+    accountAvatarEl.removeAttribute('src');
     accountNameEl.textContent = 'Guest';
     signInButton.hidden = false;
     signOutButton.hidden = true;
+  }
+
+  function showUser(user) {
+    currentUser = user;
+    accountNameEl.textContent = user.name || user.email;
+    if (user.avatar_url) {
+      accountAvatarEl.src = user.avatar_url;
+      accountAvatarEl.alt = `${user.name || user.email} avatar`;
+      accountAvatarEl.hidden = false;
+    } else {
+      accountAvatarEl.hidden = true;
+      accountAvatarEl.removeAttribute('src');
+    }
+    signInButton.hidden = true;
+    signOutButton.hidden = false;
   }
 
   async function initAuth() {
@@ -180,9 +201,8 @@
       if (!res.ok) return;
       const user = await res.json();
       if (!user.signed_in) return;
-      accountNameEl.textContent = user.name || user.email;
-      signInButton.hidden = true;
-      signOutButton.hidden = false;
+      showUser(user);
+      if (state.screen === 'lobbies') void loadLobbies();
     } catch (_error) {
       showGuest();
     }
@@ -215,6 +235,10 @@
     turn: 'player',
     selected: null,
     hoverTile: null,
+    lobby: null,
+    lobbies: [],
+    lobbyMessage: '',
+    lobbyLoading: false,
     party: ['knight', 'bishop'],
     pieces: [],
     winner: null,
@@ -252,6 +276,154 @@
   function addLog(message, tone) {
     state.log.unshift(tone ? `<span class="${tone}">${message}</span>` : message);
     state.log = state.log.slice(0, 8);
+  }
+
+  function escapeText(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[char]));
+  }
+
+  function lobbyDisplayName(user) {
+    return user ? escapeText(user.name || user.email) : 'Open seat';
+  }
+
+  function lobbyAvatar(user) {
+    if (!user || !user.avatar_url) {
+      return '<span class="lobby-avatar fallback" aria-hidden="true">?</span>';
+    }
+    return `<img class="lobby-avatar" src="${escapeText(user.avatar_url)}" alt="">`;
+  }
+
+  async function lobbyRequest(path, options) {
+    const res = await fetch(path, {
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      ...options,
+    });
+    let body = null;
+    const text = await res.text();
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch (_error) {
+        body = { error: text };
+      }
+    }
+    if (!res.ok) {
+      const error = new Error((body && body.error) || 'lobby_request_failed');
+      error.statusCode = res.status;
+      error.body = body;
+      throw error;
+    }
+    return body;
+  }
+
+  function setLobbyMessage(message, danger) {
+    state.lobbyMessage = danger ? `<span class="danger">${escapeText(message)}</span>` : escapeText(message);
+  }
+
+  async function loadLobbies(silent) {
+    if (!currentUser) {
+      state.lobby = null;
+      state.lobbies = [];
+      setLobbyMessage('Sign in to host or join lobbies.');
+      render();
+      return;
+    }
+    if (!silent) state.lobbyLoading = true;
+    render();
+    try {
+      const body = await lobbyRequest('/api/lobbies');
+      state.lobby = body.current || null;
+      state.lobbies = body.lobbies || [];
+      if (!silent) setLobbyMessage(state.lobby ? 'Lobby synced.' : 'Choose a lobby or host one.');
+      if (state.lobby && state.lobby.phase === 'started' && state.screen === 'lobby') {
+        setLobbyMessage('Match is ready. Deploy when you are set.');
+      }
+    } catch (error) {
+      setLobbyMessage(error.message === 'sign_in_required' ? 'Sign in to use lobbies.' : 'Could not load lobbies.', true);
+    } finally {
+      state.lobbyLoading = false;
+      render();
+    }
+  }
+
+  async function hostLobby() {
+    state.lobbyLoading = true;
+    setLobbyMessage('Opening lobby...');
+    render();
+    try {
+      const body = await lobbyRequest('/api/lobbies', { method: 'POST', body: '{}' });
+      state.lobby = body.lobby;
+      state.screen = 'lobby';
+      setLobbyMessage('Lobby open. Waiting for an opponent.');
+      await loadLobbies(true);
+    } catch (error) {
+      setLobbyMessage(error.message || 'Could not host lobby.', true);
+    } finally {
+      state.lobbyLoading = false;
+      render();
+    }
+  }
+
+  async function joinLobby(id) {
+    state.lobbyLoading = true;
+    setLobbyMessage('Joining lobby...');
+    render();
+    try {
+      const body = await lobbyRequest(`/api/lobbies/${encodeURIComponent(id)}/join`, { method: 'POST', body: '{}' });
+      state.lobby = body.lobby;
+      state.screen = 'lobby';
+      setLobbyMessage('Joined. Waiting for the host to start.');
+      await loadLobbies(true);
+    } catch (error) {
+      setLobbyMessage(error.message || 'Could not join lobby.', true);
+    } finally {
+      state.lobbyLoading = false;
+      render();
+    }
+  }
+
+  async function startLobbyMatch() {
+    if (!state.lobby) return;
+    state.lobbyLoading = true;
+    setLobbyMessage('Starting match...');
+    render();
+    try {
+      const body = await lobbyRequest(`/api/lobbies/${encodeURIComponent(state.lobby.id)}/start`, { method: 'POST', body: '{}' });
+      state.lobby = body.lobby;
+      setLobbyMessage('Match started. Deploy your squad.');
+    } catch (error) {
+      setLobbyMessage(error.message || 'Could not start lobby.', true);
+    } finally {
+      state.lobbyLoading = false;
+      render();
+    }
+  }
+
+  async function leaveLobby() {
+    if (!state.lobby) return;
+    const id = state.lobby.id;
+    state.lobbyLoading = true;
+    setLobbyMessage('Leaving lobby...');
+    render();
+    try {
+      await lobbyRequest(`/api/lobbies/${encodeURIComponent(id)}/leave`, { method: 'POST', body: '{}' });
+      state.lobby = null;
+      state.screen = 'lobbies';
+      setLobbyMessage('Lobby closed.');
+      await loadLobbies(true);
+    } catch (error) {
+      setLobbyMessage(error.message || 'Could not leave lobby.', true);
+    } finally {
+      state.lobbyLoading = false;
+      render();
+    }
   }
 
   function emptyBackCells(side) {
@@ -306,10 +478,20 @@
     state.selected = livingPieces('player')[0].id;
     state.winner = null;
     state.screen = 'game';
-    state.log = [
-      `Enemy fields ${enemyTypes.map((type) => PIECES[type].name).join(', ')}.`,
-      'Pick one piece and move or capture. Last side standing wins.',
-    ];
+    if (state.lobby) {
+      const opponent = state.lobby.viewer_role === 'host' ? state.lobby.guest : state.lobby.host;
+      const opponentName = opponent ? escapeText(opponent.name || opponent.email || 'opponent') : 'opponent';
+      state.log = [
+        `Lobby match started against ${opponentName}.`,
+        `Enemy fields ${enemyTypes.map((type) => PIECES[type].name).join(', ')}.`,
+        'Pick one piece and move or capture. Last side standing wins.',
+      ];
+    } else {
+      state.log = [
+        `Enemy fields ${enemyTypes.map((type) => PIECES[type].name).join(', ')}.`,
+        'Pick one piece and move or capture. Last side standing wins.',
+      ];
+    }
     render();
   }
 
@@ -608,6 +790,29 @@
     render();
   }
 
+  function renderLobbyCard(lobby, compact) {
+    const host = lobby.host;
+    const guest = lobby.guest;
+    const canJoin = currentUser && lobby.phase === 'waiting' && lobby.viewer_role === 'observer';
+    const phaseText = lobby.phase === 'waiting'
+      ? 'Waiting'
+      : (lobby.phase === 'ready' ? 'Ready' : 'Started');
+    return `
+      <div class="lobby-card ${compact ? 'compact' : ''}">
+        <div class="lobby-card-head">
+          <div>
+            <strong>${escapeText(lobby.name)}</strong>
+            <span>${phaseText} · ${lobby.seats.filled}/${lobby.seats.total}</span>
+          </div>
+          ${canJoin ? `<button type="button" data-action="join-lobby" data-lobby-id="${escapeText(lobby.id)}">Join</button>` : ''}
+        </div>
+        <div class="lobby-seats">
+          <div class="lobby-seat">${lobbyAvatar(host)}<span>${lobbyDisplayName(host)}</span><small>Host</small></div>
+          <div class="lobby-seat ${guest ? '' : 'empty'}">${lobbyAvatar(guest)}<span>${lobbyDisplayName(guest)}</span><small>${guest ? 'Opponent' : 'Waiting'}</small></div>
+        </div>
+      </div>`;
+  }
+
   function renderMenu() {
     if (state.screen === 'game') {
       menuLayer.innerHTML = '';
@@ -620,8 +825,55 @@
         <div class="game-menu">
           <p class="eyebrow">12 x 8 chess skirmish</p>
           <h2>Chess Tactics</h2>
-          <button type="button" data-action="party">Start Game</button>
+          <button type="button" data-action="party">Solo Skirmish</button>
+          <button type="button" data-action="lobbies">Lobbies</button>
           <button type="button" data-action="settings">Settings</button>
+        </div>`;
+    } else if (state.screen === 'lobbies') {
+      const visibleLobbies = state.lobbies.filter((lobby) => !state.lobby || lobby.id !== state.lobby.id);
+      menuLayer.innerHTML = `
+        <div class="game-menu lobby-menu">
+          <p class="eyebrow">Online rooms</p>
+          <h2>Lobbies</h2>
+          ${currentUser ? `
+            <p class="menu-copy">${state.lobbyMessage || 'Host a lobby or join an active table.'}</p>
+            ${state.lobby ? renderLobbyCard(state.lobby, true) : ''}
+            <div class="lobby-list">
+              ${visibleLobbies.length ? visibleLobbies.map((lobby) => renderLobbyCard(lobby, true)).join('') : '<p class="empty-lobbies">No other active lobbies.</p>'}
+            </div>
+            <div class="menu-row">
+              <button type="button" data-action="host-lobby" ${state.lobby || state.lobbyLoading ? 'disabled' : ''}>Host Lobby</button>
+              <button type="button" data-action="refresh-lobbies" ${state.lobbyLoading ? 'disabled' : ''}>Refresh</button>
+            </div>
+            <button type="button" data-action="main">Back</button>
+          ` : `
+            <p class="menu-copy">Sign in to host, search, and join lobbies.</p>
+            <div class="menu-row">
+              <button type="button" data-action="sign-in">Sign In</button>
+              <button type="button" data-action="main">Back</button>
+            </div>
+          `}
+        </div>`;
+    } else if (state.screen === 'lobby') {
+      const lobby = state.lobby;
+      const isHost = lobby && lobby.viewer_role === 'host';
+      const canStart = lobby && isHost && lobby.phase === 'ready';
+      const canDeploy = lobby && lobby.phase === 'started';
+      menuLayer.innerHTML = `
+        <div class="game-menu lobby-menu">
+          <p class="eyebrow">Match lobby</p>
+          <h2>${lobby ? escapeText(lobby.name) : 'Lobby'}</h2>
+          <p class="menu-copy">${state.lobbyMessage || (lobby && lobby.phase === 'waiting' ? 'Waiting for an opponent.' : 'Ready up.')}</p>
+          ${lobby ? renderLobbyCard(lobby, false) : '<p class="empty-lobbies">Lobby not found.</p>'}
+          <div class="menu-row">
+            <button type="button" data-action="start-lobby" ${canStart && !state.lobbyLoading ? '' : 'disabled'}>Start Game</button>
+            <button type="button" data-action="begin-lobby-game" ${canDeploy ? '' : 'disabled'}>Deploy</button>
+          </div>
+          <div class="menu-row">
+            <button type="button" data-action="refresh-lobbies" ${state.lobbyLoading ? 'disabled' : ''}>Refresh</button>
+            <button type="button" data-action="leave-lobby" ${lobby && !state.lobbyLoading ? '' : 'disabled'}>${isHost ? 'Close Lobby' : 'Leave Lobby'}</button>
+          </div>
+          <button type="button" data-action="lobbies">Browse Lobbies</button>
         </div>`;
     } else if (state.screen === 'party') {
       menuLayer.innerHTML = `
@@ -664,11 +916,15 @@
     const piece = selectedPiece();
     const playerCount = livingPieces('player').length;
     const enemyCount = livingPieces('enemy').length;
-    statusLine.textContent = state.screen === 'game' ? `${state.turn === 'player' ? 'Player' : 'Enemy'} turn` : 'Menu';
+    statusLine.textContent = state.screen === 'game'
+      ? `${state.turn === 'player' ? 'Player' : 'Enemy'} turn`
+      : (state.screen === 'lobbies' || state.screen === 'lobby' ? 'Lobbies' : 'Menu');
     anchorMeter.textContent = `Allies ${playerCount}`;
     enemyMeter.textContent = `Enemies ${enemyCount}`;
-    selectedName.textContent = piece ? piece.name : (state.screen === 'game' ? 'Select a piece' : 'Command Menu');
-    selectedMeta.textContent = piece ? `${piece.role} | ${piece.mark} | ${legalMoves(piece).length} legal` : 'Start a skirmish from the board menu.';
+    selectedName.textContent = piece ? piece.name : (state.screen === 'game' ? 'Select a piece' : (state.screen === 'lobby' ? 'Lobby Ready Room' : 'Command Menu'));
+    selectedMeta.textContent = piece
+      ? `${piece.role} | ${piece.mark} | ${legalMoves(piece).length} legal`
+      : (state.screen === 'lobby' || state.screen === 'lobbies' ? 'Host a lobby, join one, then start the match.' : 'Start a skirmish from the board menu.');
     moveButton.textContent = 'Menu';
     powerButton.textContent = 'Restart';
     endButton.textContent = state.turn === 'enemy' ? 'Enemy Moving' : 'Wait';
@@ -714,6 +970,19 @@
       return;
     }
     if (button.dataset.action === 'party') setScreen('party');
+    if (button.dataset.action === 'lobbies') {
+      setScreen('lobbies');
+      void loadLobbies();
+    }
+    if (button.dataset.action === 'host-lobby') void hostLobby();
+    if (button.dataset.action === 'refresh-lobbies') void loadLobbies();
+    if (button.dataset.action === 'join-lobby' && button.dataset.lobbyId) void joinLobby(button.dataset.lobbyId);
+    if (button.dataset.action === 'start-lobby') void startLobbyMatch();
+    if (button.dataset.action === 'leave-lobby') void leaveLobby();
+    if (button.dataset.action === 'begin-lobby-game') setScreen('party');
+    if (button.dataset.action === 'sign-in') {
+      window.location.href = `/api/auth/sign-in?returnTo=${encodeURIComponent(returnTo())}`;
+    }
     if (button.dataset.action === 'settings') setScreen('settings');
     if (button.dataset.action === 'main') setScreen('main');
     if (button.dataset.action === 'start') startGame();
@@ -752,5 +1021,13 @@
   });
 
   initAuth();
+  lobbyPollTimer = window.setInterval(() => {
+    if (currentUser && (state.screen === 'lobbies' || state.screen === 'lobby')) {
+      void loadLobbies(true);
+    }
+  }, 3500);
+  window.addEventListener('beforeunload', () => {
+    if (lobbyPollTimer) window.clearInterval(lobbyPollTimer);
+  });
   render();
 }());
