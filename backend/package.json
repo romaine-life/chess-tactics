@@ -2,7 +2,7 @@
   "name": "chimera-board-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Static server for Chimera Board.",
+  "description": "Static server for Chess Tactics.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

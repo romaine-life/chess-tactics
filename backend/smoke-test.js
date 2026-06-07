@@ -51,11 +51,11 @@ async function waitForServer() {
 async function main() {
   await waitForServer();
   const root = await get('/');
-  if (root.statusCode !== 200 || !root.body.includes('Chimera Board')) {
+  if (root.statusCode !== 200 || !root.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected root response: ${root.statusCode}`);
   }
   const fallback = await get('/squad/unknown');
-  if (fallback.statusCode !== 200 || !fallback.body.includes('Chimera Board')) {
+  if (fallback.statusCode !== 200 || !fallback.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
   }
 }

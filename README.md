@@ -1,4 +1,4 @@
-# Chimera Board
+# Chess Tactics
 
 Chess-based squad combat prototype.
 
