@@ -9,6 +9,6 @@
     "test": "node --check server.js && node --check ../frontend/app.js"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^5.2.1"
   }
 }
