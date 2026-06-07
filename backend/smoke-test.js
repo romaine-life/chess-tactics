@@ -100,6 +100,9 @@ async function main() {
   if (root.statusCode !== 200 || !root.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected root response: ${root.statusCode}`);
   }
+  if (!root.body.includes('Guest') || root.body.includes('Sign in to play')) {
+    throw new Error('Root shell should offer optional sign-in without blocking guest play');
+  }
   const fallback = await get('/squad/unknown');
   if (fallback.statusCode !== 200 || !fallback.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
