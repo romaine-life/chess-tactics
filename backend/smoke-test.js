@@ -21,6 +21,11 @@ const mockAuth = http.createServer((req, res) => {
     return;
   }
   if (req.url === '/api/auth/sign-out' && req.method === 'POST') {
+    if (req.headers.origin !== 'https://chess.romaine.life') {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ code: 'MISSING_OR_NULL_ORIGIN' }));
+      return;
+    }
     res.writeHead(200, {
       'content-type': 'application/json',
       'set-cookie': 'better-auth.session=; Max-Age=0; Domain=romaine.life; Path=/',

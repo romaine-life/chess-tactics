@@ -13,14 +13,18 @@ function safeReturnPath(raw) {
   return raw;
 }
 
-function callbackUrl(req) {
-  const pathOnly = safeReturnPath(req.query.returnTo);
-  if (process.env.PUBLIC_ORIGIN) return `${publicOrigin}${pathOnly}`;
+function requestOrigin(req) {
+  if (process.env.PUBLIC_ORIGIN) return publicOrigin;
 
   const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
   const host = req.get('x-forwarded-host') || req.get('host');
-  if (!host) return `${publicOrigin}${pathOnly}`;
-  return `${proto}://${host}${pathOnly}`;
+  if (!host) return publicOrigin;
+  return `${proto}://${host}`;
+}
+
+function callbackUrl(req) {
+  const pathOnly = safeReturnPath(req.query.returnTo);
+  return `${requestOrigin(req)}${pathOnly}`;
 }
 
 function publicUser(session) {
@@ -91,12 +95,19 @@ app.post('/api/auth/sign-out', async (req, res) => {
           accept: 'application/json',
           'content-type': 'application/json',
           cookie,
+          origin: requestOrigin(req),
         },
         body: '{}',
       });
       forwardSetCookie(upstream, res);
+      if (!upstream.ok) {
+        res.status(502).json({ error: 'sign_out_failed' });
+        return;
+      }
     } catch (error) {
       console.error('auth sign-out failed:', error);
+      res.status(502).json({ error: 'auth_unavailable' });
+      return;
     }
   }
   res.status(204).end();
