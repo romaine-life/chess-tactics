@@ -23,31 +23,80 @@
   const powerButton = document.getElementById('powerButton');
   const endButton = document.getElementById('endButton');
   const menuLayer = document.getElementById('menuLayer');
-  const accountEl = document.getElementById('account');
   const accountNameEl = document.getElementById('accountName');
   const signInButton = document.getElementById('signInButton');
   const signOutButton = document.getElementById('signOutButton');
+
+  const TW = 72;
+  const TH = 36;
+  const CLIFF = 34;
+  const ORIGIN_X = boardEl.width / 2 + 54;
+  const ORIGIN_Y = 54;
+
+  const state = {
+    phase: 'main',
+    account: { signed_in: false },
+    lobbyId: null,
+    lobby: null,
+    side: null,
+    game: null,
+    turn: null,
+    selected: null,
+    hoverTile: null,
+    log: ['Sign in and host/join a lobby to play.'],
+    lobbySearch: '',
+    openLobbies: [],
+    pollHandle: null,
+  };
 
   function returnTo() {
     return `${window.location.pathname}${window.location.search}${window.location.hash}`;
   }
 
   function showGuest() {
+    state.account = { signed_in: false };
     accountNameEl.textContent = 'Guest';
     signInButton.hidden = false;
     signOutButton.hidden = true;
   }
 
+  async function apiRequest(path, options = {}) {
+    const init = {
+      method: options.method || 'GET',
+      credentials: 'include',
+      headers: {
+        ...(options.body ? { 'content-type': 'application/json' } : {}),
+      },
+    };
+    if (options.body) init.body = JSON.stringify(options.body);
+
+    const response = await fetch(path, init);
+    const text = await response.text();
+    let payload = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch (_error) {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      const message = payload && payload.error ? payload.error : text || `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    return payload;
+  }
+
   async function initAuth() {
     showGuest();
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'include' });
-      if (!res.ok) return;
-      const user = await res.json();
-      if (!user.signed_in) return;
-      accountNameEl.textContent = user.name || user.email;
+      const response = await apiRequest('/api/auth/me');
+      if (!response || !response.signed_in) return;
+      state.account = response;
+      accountNameEl.textContent = response.name || response.email;
       signInButton.hidden = true;
       signOutButton.hidden = false;
+      state.phase = 'main';
     } catch (_error) {
       showGuest();
     }
@@ -60,122 +109,33 @@
   signOutButton.addEventListener('click', async () => {
     signOutButton.disabled = true;
     try {
-      await fetch('/api/auth/sign-out', {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await apiRequest('/api/auth/sign-out', { method: 'POST' });
     } finally {
       window.location.reload();
     }
   });
 
-  const TW = 72;
-  const TH = 36;
-  const CLIFF = 34;
-  const ORIGIN_X = boardEl.width / 2 + 54;
-  const ORIGIN_Y = 54;
-
-  const state = {
-    screen: 'main',
-    turn: 'player',
-    selected: null,
-    hoverTile: null,
-    party: ['knight', 'bishop'],
-    pieces: [],
-    winner: null,
-    log: ['Choose your squad. One pawn is always fielded.'],
-  };
-
-  function rand(max) {
-    return Math.floor(Math.random() * max);
-  }
-
-  function choice(items) {
-    return items[rand(items.length)];
-  }
-
   function inBounds(x, y) {
     return x >= 0 && x < COLS && y >= 0 && y < ROWS;
   }
 
-  function livingPieces(side) {
-    return state.pieces.filter((piece) => piece.side === side && piece.alive);
-  }
-
   function pieceAt(x, y) {
-    return state.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y) || null;
+    if (!state.game) return null;
+    return state.game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y) || null;
   }
 
   function selectedPiece() {
-    return state.pieces.find((piece) => piece.id === state.selected && piece.alive) || null;
+    if (!state.game) return null;
+    return state.game.pieces.find((piece) => piece.id === state.selected && piece.alive) || null;
+  }
+
+  function livingPieces(side) {
+    if (!state.game) return [];
+    return state.game.pieces.filter((piece) => piece.side === side && piece.alive);
   }
 
   function isEnemy(piece, target) {
     return target && target.side !== piece.side;
-  }
-
-  function addLog(message, tone) {
-    state.log.unshift(tone ? `<span class="${tone}">${message}</span>` : message);
-    state.log = state.log.slice(0, 8);
-  }
-
-  function emptyBackCells(side) {
-    const rows = side === 'player' ? [ROWS - 1, ROWS - 2] : [0, 1];
-    const cells = [];
-    rows.forEach((y) => {
-      for (let x = 0; x < COLS; x += 1) {
-        if (!pieceAt(x, y)) cells.push({ x, y });
-      }
-    });
-    return cells;
-  }
-
-  function placeRandom(piece, side) {
-    const cells = emptyBackCells(side);
-    const spot = cells.splice(rand(cells.length), 1)[0];
-    piece.x = spot.x;
-    piece.y = spot.y;
-  }
-
-  function createPiece(side, type, index) {
-    const base = PIECES[type];
-    return {
-      id: `${side}-${index}-${Date.now()}-${rand(9999)}`,
-      side,
-      type,
-      mark: base.mark,
-      name: `${side === 'player' ? 'Allied' : 'Enemy'} ${base.name}`,
-      role: base.role,
-      x: 0,
-      y: 0,
-      alive: true,
-      startY: side === 'player' ? ROWS - 1 : 0,
-    };
-  }
-
-  function startGame() {
-    const playerTypes = ['pawn', ...state.party];
-    const enemyTypes = ['pawn', choice(PIECE_CHOICES), choice(PIECE_CHOICES)];
-    state.pieces = [];
-    playerTypes.forEach((type, index) => {
-      const piece = createPiece('player', type, index);
-      placeRandom(piece, 'player');
-      state.pieces.push(piece);
-    });
-    enemyTypes.forEach((type, index) => {
-      const piece = createPiece('enemy', type, index);
-      placeRandom(piece, 'enemy');
-      state.pieces.push(piece);
-    });
-    state.turn = 'player';
-    state.selected = livingPieces('player')[0].id;
-    state.winner = null;
-    state.screen = 'game';
-    state.log = [
-      `Enemy fields ${enemyTypes.map((type) => PIECES[type].name).join(', ')}.`,
-      'Pick one piece and move or capture. Last side standing wins.',
-    ];
-    render();
   }
 
   function rayMoves(piece, dirs) {
@@ -203,7 +163,7 @@
         if (!inBounds(move.x, move.y)) return false;
         const occupant = pieceAt(move.x, move.y);
         if (!occupant) return true;
-        if (!isEnemy(piece, occupant)) return false;
+        if (occupant.side === piece.side) return false;
         move.capture = occupant.id;
         return true;
       });
@@ -216,19 +176,23 @@
     if (inBounds(one.x, one.y) && !pieceAt(one.x, one.y)) {
       moves.push(one);
       const two = { x: piece.x, y: piece.y + dir * 2 };
-      if (piece.y === piece.startY && inBounds(two.x, two.y) && !pieceAt(two.x, two.y)) moves.push(two);
+      if (piece.y === (piece.side === 'player' ? ROWS - 1 : 0) && inBounds(two.x, two.y) && !pieceAt(two.x, two.y)) {
+        moves.push(two);
+      }
     }
+
     [-1, 1].forEach((dx) => {
       const x = piece.x + dx;
       const y = piece.y + dir;
       const occupant = inBounds(x, y) && pieceAt(x, y);
-      if (isEnemy(piece, occupant)) moves.push({ x, y, capture: occupant.id });
+      if (occupant && occupant.side !== piece.side) moves.push({ x, y, capture: occupant.id });
     });
+
     return moves;
   }
 
   function legalMoves(piece) {
-    if (!piece || !piece.alive || state.screen !== 'game') return [];
+    if (!piece || !piece.alive || !state.game || state.phase !== 'game') return [];
     if (piece.type === 'pawn') return pawnMoves(piece);
     if (piece.type === 'knight') {
       return stepMoves(piece, [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]);
@@ -238,94 +202,17 @@
     return rayMoves(piece, [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
   }
 
-  function promoteIfNeeded(piece) {
-    if (piece.type !== 'pawn') return;
-    if ((piece.side === 'player' && piece.y === 0) || (piece.side === 'enemy' && piece.y === ROWS - 1)) {
-      piece.type = 'queen';
-      piece.mark = PIECES.queen.mark;
-      piece.name = `${piece.side === 'player' ? 'Allied' : 'Enemy'} Queen`;
-      piece.role = PIECES.queen.role;
-      addLog(`${piece.name} rises from a pawn.`, piece.side === 'player' ? 'victory' : 'danger');
-    }
-  }
-
-  function movePiece(piece, move) {
-    const captured = move.capture ? state.pieces.find((target) => target.id === move.capture) : pieceAt(move.x, move.y);
-    if (captured && captured.side !== piece.side) {
-      captured.alive = false;
-      addLog(`${piece.name} captures ${captured.name}.`, piece.side === 'player' ? 'victory' : 'danger');
-    } else {
-      addLog(`${piece.name} advances.`);
-    }
-    piece.x = move.x;
-    piece.y = move.y;
-    promoteIfNeeded(piece);
-    checkVictory();
-  }
-
-  function checkVictory() {
-    const playerCount = livingPieces('player').length;
-    const enemyCount = livingPieces('enemy').length;
-    if (!playerCount || !enemyCount) {
-      state.winner = playerCount ? 'player' : 'enemy';
-      state.screen = 'victory';
-      state.turn = 'done';
-      state.selected = null;
-      addLog(playerCount ? 'Victory. The last enemy piece falls.' : 'Defeat. No allied pieces remain.', playerCount ? 'victory' : 'danger');
-    }
-  }
-
-  function completePlayerMove(piece, move) {
-    movePiece(piece, move);
-    if (state.winner) {
-      render();
-      return;
-    }
-    state.turn = 'enemy';
-    state.selected = null;
-    render();
-    window.setTimeout(enemyTurn, 380);
-  }
-
-  function enemyTurn() {
-    if (state.screen !== 'game' || state.turn !== 'enemy') return;
-    const candidates = livingPieces('enemy')
-      .map((piece) => ({ piece, moves: legalMoves(piece) }))
-      .filter((entry) => entry.moves.length);
-    if (!candidates.length) {
-      addLog('Enemy has no legal move.');
-      state.turn = 'player';
-      state.selected = livingPieces('player')[0] && livingPieces('player')[0].id;
-      render();
-      return;
-    }
-    const captureEntries = candidates
-      .map((entry) => ({ piece: entry.piece, moves: entry.moves.filter((move) => move.capture) }))
-      .filter((entry) => entry.moves.length);
-    const entry = choice(captureEntries.length ? captureEntries : candidates);
-    movePiece(entry.piece, choice(entry.moves));
-    if (!state.winner) {
-      state.turn = 'player';
-      state.selected = livingPieces('player')[0] && livingPieces('player')[0].id;
-    }
-    render();
-  }
-
-  function handleTile(x, y) {
-    if (state.screen !== 'game' || state.turn !== 'player') return;
-    const clicked = pieceAt(x, y);
-    if (clicked && clicked.side === 'player') {
-      state.selected = clicked.id;
-      render();
-      return;
-    }
-    const piece = selectedPiece();
-    const move = legalMoves(piece).find((item) => item.x === x && item.y === y);
-    if (piece && move) completePlayerMove(piece, move);
+  function addLog(message, tone) {
+    const line = tone ? `<span class="${tone}">${message}</span>` : message;
+    state.log.unshift(line);
+    state.log = state.log.slice(0, 8);
   }
 
   function isoCenter(c, r) {
-    return { x: ORIGIN_X + (c - r) * (TW / 2), y: ORIGIN_Y + (c + r) * (TH / 2) };
+    return {
+      x: ORIGIN_X + (c - r) * (TW / 2),
+      y: ORIGIN_Y + (c + r) * (TH / 2),
+    };
   }
 
   function prand(a, b, salt) {
@@ -347,21 +234,35 @@
     const left = { x: isoCenter(0, ROWS - 1).x - TW / 2, y: isoCenter(0, ROWS - 1).y };
     const right = { x: isoCenter(COLS - 1, 0).x + TW / 2, y: isoCenter(COLS - 1, 0).y };
     const bottom = { x: isoCenter(COLS - 1, ROWS - 1).x, y: isoCenter(COLS - 1, ROWS - 1).y + TH / 2 };
+
     ctx.fillStyle = '#5a4226';
     ctx.beginPath();
-    ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y);
-    ctx.lineTo(bottom.x, bottom.y + CLIFF); ctx.lineTo(left.x, left.y + CLIFF);
-    ctx.closePath(); ctx.fill();
+    ctx.moveTo(left.x, left.y);
+    ctx.lineTo(bottom.x, bottom.y);
+    ctx.lineTo(bottom.x, bottom.y + CLIFF);
+    ctx.lineTo(left.x, left.y + CLIFF);
+    ctx.closePath();
+    ctx.fill();
+
     ctx.fillStyle = '#45331d';
     ctx.beginPath();
-    ctx.moveTo(bottom.x, bottom.y); ctx.lineTo(right.x, right.y);
-    ctx.lineTo(right.x, right.y + CLIFF); ctx.lineTo(bottom.x, bottom.y + CLIFF);
-    ctx.closePath(); ctx.fill();
+    ctx.moveTo(bottom.x, bottom.y);
+    ctx.lineTo(right.x, right.y);
+    ctx.lineTo(right.x, right.y + CLIFF);
+    ctx.lineTo(bottom.x, bottom.y + CLIFF);
+    ctx.closePath();
+    ctx.fill();
+
     ctx.fillStyle = '#56753b';
     ctx.beginPath();
-    ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y); ctx.lineTo(right.x, right.y);
-    ctx.lineTo(right.x, right.y + 3); ctx.lineTo(bottom.x, bottom.y + 3); ctx.lineTo(left.x, left.y + 3);
-    ctx.closePath(); ctx.fill();
+    ctx.moveTo(left.x, left.y);
+    ctx.lineTo(bottom.x, bottom.y);
+    ctx.lineTo(right.x, right.y);
+    ctx.lineTo(right.x, right.y + 3);
+    ctx.lineTo(bottom.x, bottom.y + 3);
+    ctx.lineTo(left.x, left.y + 3);
+    ctx.closePath();
+    ctx.fill();
   }
 
   function drawTile(c, r) {
@@ -394,35 +295,6 @@
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-  }
-
-  function drawBoard() {
-    ctx.clearRect(0, 0, boardEl.width, boardEl.height);
-    ctx.imageSmoothingEnabled = false;
-    drawCliff();
-    for (let s = 0; s <= COLS + ROWS - 2; s += 1) {
-      for (let c = 0; c < COLS; c += 1) {
-        const r = s - c;
-        if (r >= 0 && r < ROWS) drawTile(c, r);
-      }
-    }
-    for (let x = 0; x < COLS; x += 1) {
-      drawDiamondFill(x, 0, 'rgba(255,106,82,0.13)', null);
-      drawDiamondFill(x, 1, 'rgba(255,106,82,0.08)', null);
-      drawDiamondFill(x, ROWS - 1, 'rgba(174,230,255,0.14)', null);
-      drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.08)', null);
-    }
-    const selected = selectedPiece();
-    const moves = state.turn === 'player' ? legalMoves(selected) : [];
-    moves.forEach((move) => {
-      drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff');
-    });
-    if (selected) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
-    if (state.hoverTile) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
-    state.pieces
-      .filter((piece) => piece.alive)
-      .sort((a, b) => (a.x + a.y) - (b.x + b.y))
-      .forEach(drawPiece);
   }
 
   function drawPiece(piece) {
@@ -462,96 +334,259 @@
     return { x, y };
   }
 
-  function setScreen(screen) {
-    state.screen = screen;
-    render();
+  function drawBoard() {
+    ctx.clearRect(0, 0, boardEl.width, boardEl.height);
+    ctx.imageSmoothingEnabled = false;
+    drawCliff();
+
+    for (let s = 0; s <= COLS + ROWS - 2; s += 1) {
+      for (let c = 0; c < COLS; c += 1) {
+        const r = s - c;
+        if (r >= 0 && r < ROWS) drawTile(c, r);
+      }
+    }
+
+    if (!state.game) {
+      for (let x = 0; x < COLS; x += 1) {
+        drawDiamondFill(x, 0, 'rgba(255,106,82,0.08)', null);
+        drawDiamondFill(x, 1, 'rgba(255,106,82,0.05)', null);
+        drawDiamondFill(x, ROWS - 1, 'rgba(174,230,255,0.08)', null);
+        drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.05)', null);
+      }
+      return;
+    }
+
+    for (let x = 0; x < COLS; x += 1) {
+      drawDiamondFill(x, 0, 'rgba(255,106,82,0.13)', null);
+      drawDiamondFill(x, 1, 'rgba(255,106,82,0.08)', null);
+      drawDiamondFill(x, ROWS - 1, 'rgba(174,230,255,0.14)', null);
+      drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.08)', null);
+    }
+
+    const selected = selectedPiece();
+    const moves = state.turn === state.side ? legalMoves(selected) : [];
+    moves.forEach((move) => {
+      drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff');
+    });
+
+    if (selected) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
+    if (state.hoverTile) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
+
+    state.game.pieces
+      .filter((piece) => piece.alive)
+      .sort((a, b) => (a.x + a.y) - (b.x + b.y))
+      .forEach(drawPiece);
   }
 
   function renderMenu() {
-    if (state.screen === 'game') {
-      menuLayer.innerHTML = '';
+    if (state.phase === 'game' && (!state.game)) {
+      state.phase = state.lobby ? 'lobby' : 'main';
+    }
+
+    if (state.phase === 'game') {
       menuLayer.hidden = true;
       return;
     }
-    menuLayer.hidden = false;
-    if (state.screen === 'main') {
-      menuLayer.innerHTML = `
+
+    let menuHtml = '';
+
+    if (state.phase === 'search') {
+      const rows = state.openLobbies
+        .map(
+          (lobby) => `
+            <div class="menu-copy" style="border-bottom:1px solid var(--line); padding:10px 0;">
+              <strong>${lobby.name}</strong>
+              <div>${lobby.players.map((player) => `${player.name} (${player.side === 'player' ? 'Blue' : 'Red'})`).join(' & ')}</div>
+              <div>Players ${lobby.players.length}/2</div>
+              <div style="margin-top:8px;"><button type="button" data-action="join" data-lobby-id="${lobby.id}">Join</button></div>
+            </div>
+          `,
+        )
+        .join('');
+
+      menuHtml = `
         <div class="game-menu">
-          <p class="eyebrow">12 x 8 chess skirmish</p>
-          <h2>Chess Tactics</h2>
-          <button type="button" data-action="party">Start Game</button>
-          <button type="button" data-action="settings">Settings</button>
-        </div>`;
-    } else if (state.screen === 'party') {
-      menuLayer.innerHTML = `
-        <div class="game-menu party-menu">
-          <p class="eyebrow">Choose two pieces</p>
-          <h2>Pick Party</h2>
-          <div class="locked-piece"><span class="badge player">P</span><span>Pawn locked in</span></div>
-          ${[0, 1].map((slot) => `
-            <div class="piece-picker" data-slot="${slot}">
-              ${PIECE_CHOICES.map((type) => `
-                <button type="button" class="${state.party[slot] === type ? 'active' : ''}" data-piece="${type}">
-                  <span>${PIECES[type].mark}</span>${PIECES[type].name}
-                </button>`).join('')}
-            </div>`).join('')}
+          <p class="eyebrow">Search</p>
+          <h2>Find Lobby</h2>
           <div class="menu-row">
-            <button type="button" data-action="start">Deploy</button>
+            <input id="searchInput" class="menu-input" value="${state.lobbySearch}" placeholder="Search name">
+            <button type="button" data-action="search">Search</button>
+          </div>
+          ${rows || '<p class="menu-copy">No open lobbies.</p>'}
+          <div class="menu-row">
+            <button type="button" data-action="refresh-search">Refresh</button>
             <button type="button" data-action="main">Back</button>
           </div>
-        </div>`;
-    } else if (state.screen === 'settings') {
-      menuLayer.innerHTML = `
+        </div>
+      `;
+    } else if (state.phase === 'lobby') {
+      const lobby = state.lobby;
+      const isHost = lobby ? lobby.is_host : false;
+      const canStart = lobby ? lobby.status === 'open' && lobby.can_start : false;
+      const myParty = state.side
+        ? (lobby && lobby.players.find((player) => player.side === state.side)?.party) || ['knight', 'bishop']
+        : ['knight', 'bishop'];
+      const status = lobby ? (lobby.status === 'open' ? 'Open' : lobby.status === 'in_progress' ? 'In progress' : 'Finished') : 'No lobby';
+      const startBlock = lobby.status === 'open'
+        ? `<div class="menu-row">
+            <button type="button" data-action="start" ${canStart ? '' : 'disabled'}>Start Match</button>
+            <button type="button" data-action="refresh">Refresh</button>
+          </div>`
+        : `<div class="menu-row">
+            ${isHost && lobby.status === 'finished' ? '<button type="button" data-action="start">Rematch</button>' : ''}
+            <button type="button" data-action="refresh">Refresh</button>
+          </div>`;
+
+      const partyPicker = lobby && lobby.status === 'open'
+        ? `<p class="menu-copy">Your squad picks:</p>
+          ${[0, 1]
+            .map(
+              (slot) => `
+                <div class="piece-picker" data-slot="${slot}">
+                  ${PIECE_CHOICES.map(
+                    (type) => `
+                      <button type="button" class="${myParty[slot] === type ? 'active' : ''}" data-piece="${type}">
+                        <span>${PIECES[type].mark}</span>${PIECES[type].name}
+                      </button>
+                    `,
+                  ).join('')}
+                </div>`,
+            )
+            .join('')}`
+        : '';
+
+      menuHtml = `
         <div class="game-menu">
-          <p class="eyebrow">Settings</p>
-          <h2>Empty Bay</h2>
-          <p class="menu-copy">No tuning controls are wired yet.</p>
-          <button type="button" data-action="main">Back</button>
-        </div>`;
-    } else {
-      menuLayer.innerHTML = `
+          <p class="eyebrow">Lobby</p>
+          <h2>${lobby ? lobby.name : 'Lobby'}</h2>
+          <p class="menu-copy">${status}</p>
+          <div class="menu-copy">${lobby ? lobby.players.map((player) => `${player.name} (${player.isHost ? 'host' : 'guest'})`).join('<br>') : 'No players'}</div>
+          ${partyPicker}
+          ${startBlock}
+          <div class="menu-row">
+            <button type="button" data-action="leave">Leave</button>
+            <button type="button" data-action="main">Main</button>
+          </div>
+        </div>
+      `;
+    } else if (state.phase === 'victory') {
+      const winner = state.game && state.game.winner
+        ? state.game.winner === 'disconnect'
+          ? 'Opponent disconnected'
+          : state.game.winner === state.side
+            ? 'You won'
+            : 'Opponent won'
+        : 'Match ended';
+      const host = state.lobby ? state.lobby.is_host : false;
+      menuHtml = `
         <div class="game-menu">
-          <p class="eyebrow">${state.winner === 'player' ? 'Victory' : 'Defeat'}</p>
-          <h2>${state.winner === 'player' ? 'Last Piece Standing' : 'Squad Lost'}</h2>
-          <button type="button" data-action="party">New Game</button>
+          <p class="eyebrow">Match Finished</p>
+          <h2>${winner}</h2>
+          <div class="menu-row">
+            ${host ? '<button type="button" data-action="start">Rematch</button>' : ''}
+            <button type="button" data-action="leave">Leave Lobby</button>
+          </div>
           <button type="button" data-action="main">Main Menu</button>
-        </div>`;
+        </div>
+      `;
+    } else {
+      if (!state.account.signed_in) {
+        menuHtml = `
+          <div class="game-menu">
+            <p class="eyebrow">Guest</p>
+            <h2>Chess Tactics</h2>
+            <p class="menu-copy">Sign in to host or join a lobby.</p>
+            <button type="button" data-action="signIn">Sign in</button>
+          </div>
+        `;
+      } else {
+        const activeLobby = state.lobby ? `<button type="button" data-action="lobby">Return to Lobby</button>` : '';
+        menuHtml = `
+          <div class="game-menu">
+            <p class="eyebrow">Lobby</p>
+            <h2>Chess Tactics</h2>
+            <div class="menu-row">
+              <input id="hostInput" class="menu-input" value="${state.account.name}'s Lobby" placeholder="Lobby name">
+              <button type="button" data-action="host">Host</button>
+            </div>
+            <button type="button" data-action="search">Search & Join</button>
+            ${activeLobby}
+          </div>
+        `;
+      }
     }
+
+    menuLayer.hidden = false;
+    menuLayer.innerHTML = menuHtml;
   }
 
   function renderPanel() {
-    const piece = selectedPiece();
     const playerCount = livingPieces('player').length;
     const enemyCount = livingPieces('enemy').length;
-    statusLine.textContent = state.screen === 'game' ? `${state.turn === 'player' ? 'Player' : 'Enemy'} turn` : 'Menu';
-    anchorMeter.textContent = `Allies ${playerCount}`;
-    enemyMeter.textContent = `Enemies ${enemyCount}`;
-    selectedName.textContent = piece ? piece.name : (state.screen === 'game' ? 'Select a piece' : 'Command Menu');
-    selectedMeta.textContent = piece ? `${piece.role} | ${piece.mark} | ${legalMoves(piece).length} legal` : 'Start a skirmish from the board menu.';
-    moveButton.textContent = 'Menu';
-    powerButton.textContent = 'Restart';
-    endButton.textContent = state.turn === 'enemy' ? 'Enemy Moving' : 'Wait';
-    moveButton.classList.toggle('active', state.screen !== 'game');
+    const piece = selectedPiece();
+
+    if (state.phase === 'game' && state.game) {
+      anchorMeter.textContent = `Allies ${playerCount}`;
+      enemyMeter.textContent = `Enemies ${enemyCount}`;
+      statusLine.textContent = `Turn: ${state.turn === state.side ? 'Your move' : 'Opponent move'}`;
+      selectedName.textContent = piece ? piece.name : 'Select a piece';
+      selectedMeta.textContent = piece
+        ? `${piece.role} | ${piece.mark} | moves ${legalMoves(piece).length}`
+        : state.turn === state.side
+          ? 'Tap a piece to move.'
+          : 'Waiting for opponent.';
+      moveButton.textContent = 'Lobby';
+      powerButton.textContent = 'Refresh';
+      endButton.textContent = 'Wait';
+      moveButton.disabled = false;
+      powerButton.disabled = false;
+      endButton.disabled = true;
+    } else {
+      anchorMeter.textContent = `Allies ${playerCount}`;
+      enemyMeter.textContent = `Enemies ${enemyCount}`;
+      selectedMeta.textContent = 'Use the board menu to host or join lobbies.';
+      selectedName.textContent = 'Command Menu';
+      moveButton.textContent = 'Menu';
+      powerButton.textContent = 'Refresh';
+      endButton.textContent = 'Leave Lobby';
+      statusLine.textContent = state.phase === 'search' ? 'Search lobbies' : 'Menu';
+      moveButton.disabled = false;
+      powerButton.disabled = false;
+      endButton.disabled = !state.lobbyId;
+    }
+
+    moveButton.classList.remove('active');
     powerButton.classList.remove('active');
-    endButton.disabled = state.screen !== 'game' || state.turn !== 'player';
-    rosterEl.innerHTML = ['player', 'enemy'].map((side) => `
-      <div class="roster-title">${side === 'player' ? 'Allies' : 'Enemies'}</div>
-      ${livingPieces(side).map((unit) => `
-        <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== 'player' || state.turn !== 'player' ? 'disabled' : ''}>
-          <span class="badge ${side === 'player' ? 'player' : 'enemy'}">${unit.mark}</span>
-          <span><strong>${unit.name}</strong><span>${unit.role}</span></span>
-          <span>${unit.x + 1},${unit.y + 1}</span>
-        </button>
-      `).join('')}`).join('');
+
+    if (state.phase === 'game') {
+      rosterEl.innerHTML = ['player', 'enemy'].map((side) => `
+        <div class="roster-title">${side === 'player' ? 'Allies' : 'Enemies'}</div>
+        ${livingPieces(side)
+          .map(
+            (unit) => `
+              <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== state.side || state.turn !== state.side ? 'disabled' : ''}>
+                <span class="badge ${side === 'player' ? 'player' : 'enemy'}">${unit.mark}</span>
+                <span><strong>${unit.name}</strong><span>${unit.role}</span></span>
+                <span>${unit.x + 1},${unit.y + 1}</span>
+              </button>
+            `,
+          )
+          .join('')}
+      `).join('');
+    } else {
+      rosterEl.innerHTML = '<div class="roster-title">No active game.</div>';
+    }
+
     rosterEl.querySelectorAll('button[data-unit]').forEach((button) => {
       button.addEventListener('click', () => {
-        const unit = state.pieces.find((item) => item.id === button.dataset.unit);
-        if (unit && unit.side === 'player' && state.turn === 'player') {
+        const unit = state.game.pieces.find((item) => item.id === button.dataset.unit);
+        if (unit && unit.side === state.side && state.turn === state.side) {
           state.selected = unit.id;
           render();
         }
       });
     });
+
     logEl.innerHTML = state.log.map((line) => `<p>${line}</p>`).join('');
   }
 
@@ -559,26 +594,251 @@
     drawBoard();
     renderMenu();
     renderPanel();
+    updatePoller();
+  }
+
+  function updatePoller() {
+    const needsPoll = state.lobbyId || state.phase === 'search';
+    if (!needsPoll) {
+      if (state.pollHandle) {
+        clearInterval(state.pollHandle);
+        state.pollHandle = null;
+      }
+      return;
+    }
+
+    if (state.pollHandle) return;
+    state.pollHandle = setInterval(() => {
+      if (state.phase === 'search') {
+        loadOpenLobbies().then(() => render()).catch(() => {});
+      } else if (state.lobbyId) {
+        refreshLobby().catch(() => {});
+      }
+    }, 1500);
+  }
+
+  function getMyParty() {
+    if (!state.lobby || !state.side) return ['knight', 'bishop'];
+    const mine = state.lobby.players.find((player) => player.side === state.side);
+    return mine && mine.party ? mine.party : ['knight', 'bishop'];
+  }
+
+  function ensureTurnFromGame() {
+    state.turn = state.game ? state.game.turn : null;
+  }
+
+  function applyLobby(snapshot) {
+    state.lobby = snapshot;
+    state.lobbyId = snapshot.id;
+    state.side = snapshot.you_side;
+    state.game = snapshot.game;
+    ensureTurnFromGame();
+
+    if (state.game) {
+      state.log = (snapshot.game.log || ['Match started.']).slice(0, 8);
+      if (snapshot.game.winner) {
+        state.phase = 'victory';
+      } else {
+        state.phase = 'game';
+      }
+    } else {
+      state.log = ['Lobby open, waiting for match start.'];
+      state.phase = snapshot.status === 'open' ? 'lobby' : snapshot.status === 'finished' ? 'victory' : 'lobby';
+    }
+    render();
+  }
+
+  async function clearLobbyState() {
+    state.lobby = null;
+    state.lobbyId = null;
+    state.side = null;
+    state.game = null;
+    state.turn = null;
+    state.log = ['Lobby cleared.'];
+    state.phase = 'main';
+    render();
+  }
+
+  async function loadOpenLobbies() {
+    const query = state.lobbySearch ? `&q=${encodeURIComponent(state.lobbySearch)}` : '';
+    const data = await apiRequest(`/api/lobbies?status=open${query}`);
+    state.openLobbies = data.lobbies || [];
+  }
+
+  async function refreshLobby() {
+    if (!state.lobbyId) return;
+    const snapshot = await apiRequest(`/api/lobbies/${state.lobbyId}`);
+    applyLobby(snapshot);
+  }
+
+  async function hostLobby(name) {
+    const payload = await apiRequest('/api/lobbies', {
+      method: 'POST',
+      body: {
+        name,
+        party: ['knight', 'bishop'],
+      },
+    });
+    applyLobby(payload.lobby);
+  }
+
+  async function joinLobby(id) {
+    const payload = await apiRequest(`/api/lobbies/${id}/join`, { method: 'POST' });
+    applyLobby(payload.lobby);
+  }
+
+  async function leaveLobby() {
+    if (!state.lobbyId) return;
+    try {
+      await apiRequest(`/api/lobbies/${state.lobbyId}/leave`, { method: 'POST' });
+    } catch (_error) {
+      // ignore for client UX.
+    }
+    await clearLobbyState();
+  }
+
+  async function startMatch() {
+    if (!state.lobbyId) return;
+    const payload = await apiRequest(`/api/lobbies/${state.lobbyId}/start`, { method: 'POST' });
+    applyLobby(payload.lobby);
+  }
+
+  async function updateParty(slot, type) {
+    const party = getMyParty();
+    party[slot] = type;
+    await apiRequest(`/api/lobbies/${state.lobbyId}/party`, {
+      method: 'POST',
+      body: { party },
+    });
+    await refreshLobby();
+  }
+
+  async function submitMove(pieceId, target) {
+    const payload = await apiRequest(`/api/lobbies/${state.lobbyId}/move`, {
+      method: 'POST',
+      body: { pieceId, x: target.x, y: target.y },
+    });
+    applyLobby(payload.lobby);
   }
 
   menuLayer.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button) return;
+
     const picker = button.closest('.piece-picker');
     if (picker && button.dataset.piece) {
-      state.party[Number(picker.dataset.slot)] = button.dataset.piece;
+      const slot = Number(picker.dataset.slot);
+      updateParty(slot, button.dataset.piece).catch((error) => {
+        addLog(`Party update failed: ${error.message}`, 'danger');
+        render();
+      });
+      return;
+    }
+
+    const action = button.dataset.action;
+    if (!action) return;
+
+    if (action === 'signIn') {
+      window.location.href = `/api/auth/sign-in?returnTo=${encodeURIComponent(returnTo())}`;
+      return;
+    }
+
+    if (action === 'main') {
+      state.phase = 'main';
       render();
       return;
     }
-    if (button.dataset.action === 'party') setScreen('party');
-    if (button.dataset.action === 'settings') setScreen('settings');
-    if (button.dataset.action === 'main') setScreen('main');
-    if (button.dataset.action === 'start') startGame();
+
+    if (action === 'lobby') {
+      if (state.lobby) state.phase = 'lobby';
+      render();
+      return;
+    }
+
+    if (action === 'search') {
+      const input = menuLayer.querySelector('#searchInput');
+      if (input) state.lobbySearch = input.value || '';
+      state.phase = 'search';
+      loadOpenLobbies().then(() => render()).catch((error) => {
+        addLog(`Search failed: ${error.message}`, 'danger');
+        render();
+      });
+      return;
+    }
+
+    if (action === 'host') {
+      const input = menuLayer.querySelector('#hostInput');
+      const value = input ? input.value : `${state.account.name}'s Lobby`;
+      hostLobby(value).catch((error) => {
+        addLog(`Host failed: ${error.message}`, 'danger');
+        render();
+      });
+      return;
+    }
+
+    if (action === 'refresh-search') {
+      state.phase = 'search';
+      loadOpenLobbies().then(() => render()).catch((error) => {
+        addLog(`Refresh failed: ${error.message}`, 'danger');
+        render();
+      });
+      return;
+    }
+
+    if (action === 'join') {
+      const id = button.dataset.lobbyId;
+      if (!id) return;
+      joinLobby(id).catch((error) => {
+        addLog(`Join failed: ${error.message}`, 'danger');
+        render();
+      });
+      return;
+    }
+
+    if (action === 'start') {
+      startMatch().catch((error) => {
+        addLog(`Start failed: ${error.message}`, 'danger');
+        render();
+      });
+      return;
+    }
+
+    if (action === 'refresh') {
+      if (state.lobbyId) {
+        refreshLobby().catch((error) => {
+          addLog(`Refresh failed: ${error.message}`, 'danger');
+          render();
+        });
+      }
+      return;
+    }
+
+    if (action === 'leave') {
+      leaveLobby();
+      return;
+    }
   });
 
   boardEl.addEventListener('click', (event) => {
+    if (state.phase !== 'game' || !state.game || state.turn !== state.side || !state.lobbyId) return;
     const tile = pointToTile(event.clientX, event.clientY);
-    if (tile) handleTile(tile.x, tile.y);
+    if (!tile) return;
+
+    const clicked = pieceAt(tile.x, tile.y);
+    if (clicked && clicked.side === state.side) {
+      state.selected = clicked.id;
+      render();
+      return;
+    }
+
+    const moving = selectedPiece();
+    const move = legalMoves(moving).find((item) => item.x === tile.x && item.y === tile.y);
+    if (!moving || !move) return;
+
+    submitMove(moving.id, move).catch((error) => {
+      addLog(`Move failed: ${error.message}`, 'danger');
+      render();
+    });
   });
 
   boardEl.addEventListener('mousemove', (event) => {
@@ -597,17 +857,31 @@
     }
   });
 
-  moveButton.addEventListener('click', () => setScreen('main'));
-  powerButton.addEventListener('click', () => startGame());
-  endButton.addEventListener('click', () => {
-    if (state.screen === 'game' && state.turn === 'player') {
-      state.turn = 'enemy';
-      state.selected = null;
-      render();
-      window.setTimeout(enemyTurn, 280);
+  moveButton.addEventListener('click', () => {
+    if (state.lobby) {
+      state.phase = 'lobby';
+    } else {
+      state.phase = 'main';
+    }
+    render();
+  });
+
+  powerButton.addEventListener('click', () => {
+    if (state.lobbyId && state.phase !== 'main') {
+      refreshLobby().catch((error) => {
+        addLog(`Refresh failed: ${error.message}`, 'danger');
+        render();
+      });
     }
   });
 
-  initAuth();
-  render();
+  endButton.addEventListener('click', () => {
+    if (state.lobbyId) {
+      leaveLobby();
+    }
+  });
+
+  initAuth().finally(() => {
+    render();
+  });
 }());

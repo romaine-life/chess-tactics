@@ -613,3 +613,19 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; }
 }
+
+.menu-input {
+  background: #17132b;
+  border: 2px solid var(--line);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 1.15rem;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.menu-input:focus {
+  border-color: #7a6cc0;
+  outline: none;
+}
+
