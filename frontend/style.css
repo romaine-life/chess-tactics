@@ -183,16 +183,13 @@ h1 {
 }
 
 .board {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(8, 1fr);
-  gap: 2px;
-  background: var(--grout);
-  border: 2px solid var(--grout);
-  border-radius: 4px;
-  transform-style: preserve-3d;
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(100%, 760px);
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .cell {

@@ -2,6 +2,7 @@
   const SIZE = 8;
   const MAX_BREACH = 6;
   const boardEl = document.getElementById('board');
+  const ctx = boardEl.getContext('2d');
   const rosterEl = document.getElementById('roster');
   const logEl = document.getElementById('log');
   const statusLine = document.getElementById('statusLine');
@@ -347,66 +348,157 @@
     usePower(unit, x, y);
   }
 
-  function render() {
-    const unit = selectedUnit();
-    const moves = new Set(moveTargets(unit).map((p) => key(p.x, p.y)));
-    const powers = new Set(powerTargets(unit).map((p) => key(p.x, p.y)));
-    const spawns = new Set(spawnCells().map((p) => key(p.x, p.y)));
+  // ===== Isometric pixel board (canvas, orthographic 2:1, Into-the-Breach style) =====
+  const TW = 72;           // tile width  (2 : 1 dimetric)
+  const TH = 36;           // tile height
+  const CLIFF = 32;        // floating-island thickness
+  const ORIGIN_X = boardEl.width / 2;
+  const ORIGIN_Y = 54;
+  let hoverTile = null;
 
-    // Map each threatened tile to the direction the attack travels, so the
-    // telegraph can paint a directional arrow toward the impact tile.
-    const threatDir = new Map();
-    enemyThreats().forEach((t) => {
-      const src = state.enemies.find((e) => e.id === t.source);
-      const dx = src ? Math.sign(t.x - src.x) : 0;
-      const dy = src ? Math.sign(t.y - src.y) : 0;
-      threatDir.set(key(t.x, t.y), { dx, dy });
-    });
+  function isoCenter(c, r) {
+    return { x: ORIGIN_X + (c - r) * (TW / 2), y: ORIGIN_Y + (c + r) * (TH / 2) };
+  }
 
-    boardEl.innerHTML = '';
-    for (let y = 0; y < SIZE; y += 1) {
-      for (let x = 0; x < SIZE; x += 1) {
-        const cell = document.createElement('button');
-        cell.type = 'button';
-        cell.className = `cell ${(x + y) % 2 ? 'dark' : 'light'}`;
+  // Deterministic per-coordinate noise so the grass texture is stable across redraws.
+  function prand(a, b, salt) {
+    let h = (a * 73856093) ^ (b * 19349663) ^ (salt * 83492791);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
 
-        const isMove = state.mode === 'move' && moves.has(key(x, y));
-        const isPower = state.mode === 'power' && powers.has(key(x, y));
-        const isSpawn = spawns.has(key(x, y));
-        const threat = threatDir.get(key(x, y));
-        const isSelected = unit && unit.x === x && unit.y === y;
+  function diamond(cx, cy) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - TH / 2);
+    ctx.lineTo(cx + TW / 2, cy);
+    ctx.lineTo(cx, cy + TH / 2);
+    ctx.lineTo(cx - TW / 2, cy);
+    ctx.closePath();
+  }
 
-        if (isMove) cell.classList.add('move');
-        if (isPower) cell.classList.add('power');
-        if (threat) cell.classList.add('threat');
-        if (isSpawn) cell.classList.add('spawn');
-        if (isSelected) cell.classList.add('selected');
-        cell.addEventListener('click', () => handleCell(x, y));
+  function drawCliff() {
+    const left = { x: isoCenter(0, SIZE - 1).x - TW / 2, y: isoCenter(0, SIZE - 1).y };
+    const right = { x: isoCenter(SIZE - 1, 0).x + TW / 2, y: isoCenter(SIZE - 1, 0).y };
+    const bottom = { x: ORIGIN_X, y: isoCenter(SIZE - 1, SIZE - 1).y + TH / 2 };
+    // left (lit) and right (shaded) earth faces
+    ctx.fillStyle = '#5a4226';
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y);
+    ctx.lineTo(bottom.x, bottom.y + CLIFF); ctx.lineTo(left.x, left.y + CLIFF);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#45331d';
+    ctx.beginPath();
+    ctx.moveTo(bottom.x, bottom.y); ctx.lineTo(right.x, right.y);
+    ctx.lineTo(right.x, right.y + CLIFF); ctx.lineTo(bottom.x, bottom.y + CLIFF);
+    ctx.closePath(); ctx.fill();
+    // dirt speckle
+    for (let i = 0; i < 140; i += 1) {
+      const t = prand(i, 3, 5);
+      const onLeft = t < 0.5;
+      const fx = onLeft ? left.x + (bottom.x - left.x) * (t * 2) : bottom.x + (right.x - bottom.x) * ((t - 0.5) * 2);
+      const fy = (onLeft ? left.y + (bottom.y - left.y) * (t * 2) : bottom.y + (right.y - bottom.y) * ((t - 0.5) * 2)) + prand(i, 7, 9) * CLIFF;
+      ctx.fillStyle = prand(i, 11, 2) > 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.14)';
+      ctx.fillRect(Math.round(fx), Math.round(fy), 2, 2);
+    }
+    // grass lip along the top of the cliff
+    ctx.fillStyle = '#56753b';
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y); ctx.lineTo(right.x, right.y);
+    ctx.lineTo(right.x, right.y + 3); ctx.lineTo(bottom.x, bottom.y + 3); ctx.lineTo(left.x, left.y + 3);
+    ctx.closePath(); ctx.fill();
+  }
 
-        // Ground decals, painted flat on the tilted board, beneath units.
-        if (isSelected) cell.appendChild(decal('reticle'));
-        if (isMove) cell.appendChild(decal('move-decal'));
-        if (isPower) cell.appendChild(decal('power-decal'));
-        if (isSpawn) cell.appendChild(decal('spawn-decal'));
-        if (threat) {
-          const arrow = decal('threat-decal');
-          const angle = Math.round((Math.atan2(threat.dy, threat.dx) * 180) / Math.PI);
-          arrow.style.setProperty('--angle', `${angle}deg`);
-          cell.appendChild(arrow);
-        }
-
-        const anchor = anchorAt(x, y);
-        const occ = occupantAt(x, y);
-        if (!anchor && !occ) {
-          const terr = TERRAIN[key(x, y)];
-          if (terr === 'water') cell.appendChild(decal('water-decal'));
-          else if (terr) cell.appendChild(terrainToken(terr));
-        }
-        if (anchor) cell.appendChild(buildingToken(anchor));
-        if (occ) cell.appendChild(state.units.includes(occ) ? unitToken(occ) : enemyToken(occ));
-        boardEl.appendChild(cell);
+  function drawTile(c, r) {
+    const { x: cx, y: cy } = isoCenter(c, r);
+    ctx.save();
+    diamond(cx, cy);
+    ctx.fillStyle = prand(c, r, 1) > 0.5 ? '#6e9350' : '#6a8e4c';
+    ctx.fill();
+    ctx.clip();
+    // grass texture — keyed by absolute pixel position so it flows across tiles
+    const PIX = 2;
+    for (let py = cy - TH / 2; py < cy + TH / 2; py += PIX) {
+      for (let px = cx - TW / 2; px < cx + TW / 2; px += PIX) {
+        const t = prand(Math.round(px), Math.round(py), 7);
+        if (t > 0.88) ctx.fillStyle = '#587a3e';
+        else if (t < 0.10) ctx.fillStyle = '#84aa63';
+        else continue;
+        ctx.fillRect(px, py, PIX, PIX);
       }
     }
+    // a few grass blades
+    for (let i = 0; i < 5; i += 1) {
+      const bx = Math.round(cx + (prand(c, r, 10 + i) - 0.5) * TW * 0.66);
+      const by = Math.round(cy + (prand(c, r, 30 + i) - 0.5) * TH * 0.6);
+      ctx.fillStyle = '#4d6a35';
+      ctx.fillRect(bx, by - 3, 1, 4);
+      ctx.fillStyle = '#a6c977';
+      ctx.fillRect(bx, by - 4, 1, 1);
+    }
+    ctx.restore();
+    // grid line
+    diamond(cx, cy);
+    ctx.strokeStyle = 'rgba(33,50,22,0.55)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    if (hoverTile && hoverTile.c === c && hoverTile.r === r) {
+      diamond(cx, cy);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  function drawBoard() {
+    ctx.clearRect(0, 0, boardEl.width, boardEl.height);
+    ctx.imageSmoothingEnabled = false;
+    drawCliff();
+    for (let s = 0; s <= 2 * (SIZE - 1); s += 1) {
+      for (let c = 0; c < SIZE; c += 1) {
+        const r = s - c;
+        if (r >= 0 && r < SIZE) drawTile(c, r);
+      }
+    }
+    // outer island rim
+    const top = isoCenter(0, 0);
+    const right = isoCenter(SIZE - 1, 0);
+    const bottom = isoCenter(SIZE - 1, SIZE - 1);
+    const left = isoCenter(0, SIZE - 1);
+    ctx.beginPath();
+    ctx.moveTo(top.x, top.y - TH / 2);
+    ctx.lineTo(right.x + TW / 2, right.y);
+    ctx.lineTo(bottom.x, bottom.y + TH / 2);
+    ctx.lineTo(left.x - TW / 2, left.y);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(20,30,14,0.7)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function pointToTile(clientX, clientY) {
+    const rect = boardEl.getBoundingClientRect();
+    const px = (clientX - rect.left) * (boardEl.width / rect.width);
+    const py = (clientY - rect.top) * (boardEl.height / rect.height);
+    const a = (px - ORIGIN_X) / (TW / 2);
+    const b = (py - ORIGIN_Y) / (TH / 2);
+    const c = Math.floor((a + b) / 2 + 0.5);
+    const r = Math.floor((b - a) / 2 + 0.5);
+    if (c < 0 || c >= SIZE || r < 0 || r >= SIZE) return null;
+    return { c, r };
+  }
+
+  boardEl.addEventListener('mousemove', (e) => {
+    const t = pointToTile(e.clientX, e.clientY);
+    const changed = (!!t !== !!hoverTile) || (t && hoverTile && (t.c !== hoverTile.c || t.r !== hoverTile.r));
+    if (changed) { hoverTile = t; drawBoard(); }
+  });
+  boardEl.addEventListener('mouseleave', () => { if (hoverTile) { hoverTile = null; drawBoard(); } });
+
+  function render() {
+    const unit = selectedUnit();
+    drawBoard();
 
     statusLine.textContent = state.over ? 'Run complete' : `Breach ${Math.min(state.breach, MAX_BREACH)} / ${MAX_BREACH}`;
     anchorMeter.textContent = `Anchors ${state.anchors.reduce((sum, a) => sum + a.hp, 0)}`;
