@@ -15,6 +15,11 @@ npm start
 
 Open `http://localhost:3000`.
 
+The server uses `auth.romaine.life` for Microsoft sign-in. Optional env:
+
+- `AUTH_BASE_URL` defaults to `https://auth.romaine.life`.
+- `PUBLIC_ORIGIN` defaults to the request host and can pin callback URLs.
+
 ## Checks
 
 ```sh
