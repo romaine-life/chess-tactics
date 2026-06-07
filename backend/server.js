@@ -11,7 +11,7 @@ app.get('/health', (_req, res) => {
 
 app.use(express.static(frontendDir));
 
-app.get('*', (_req, res) => {
+app.use((_req, res) => {
   res.sendFile(path.join(frontendDir, 'index.html'));
 });
 

@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --check server.js && node --check ../frontend/app.js"
+    "test": "node --check server.js && node --check smoke-test.js && node --check ../frontend/app.js && node smoke-test.js"
   },
   "dependencies": {
     "express": "^5.2.1"
