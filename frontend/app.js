@@ -10,9 +10,91 @@
     queen: { mark: 'Q', name: 'Queen', role: 'Promoted raider' },
   };
 
-  const BISHOP_SVG_TEMPLATE = `<svg width="100%" height="100%" viewBox="0 0 64 64" style="shape-rendering: crispedges;" class="cursor-pointer transition-transform hover:-translate-y-1.5 active:translate-y-0" xmlns="http://www.w3.org/2000/svg"><defs><mask id="outline-mask-Bishop-SIDE"><rect width="100%" height="100%" fill="white"></rect><g fill="black" stroke="black" stroke-width="0.5"><path d="M 16,46 L 32,54 L 48,46 L 32,38 Z"></path><path d="M 16,52 L 32,60 L 32,54 L 16,46 Z"></path><path d="M 32,60 L 48,52 L 48,46 L 32,54 Z"></path><path d="M 22,42 L 32,47 L 32,29 L 22,24 Z"></path><path d="M 32,47 L 42,42 L 42,24 L 32,29 Z"></path><path d="M 20,24 L 32,29 L 44,24 L 32,19 Z"></path><path d="M 20,27 L 32,32 L 32,29 L 20,24 Z"></path><path d="M 32,32 L 44,27 L 44,24 L 32,29 Z"></path><path d="M 23,21 L 32,25 L 32,11 L 23,15 Z"></path><path d="M 32,25 L 41,21 L 41,15 L 32,11 Z"></path><path d="M 26,18 L 29,19 L 29,15 L 26,14 Z"></path><path d="M 30,6 L 32,7 L 34,6 L 32,5 Z"></path><path d="M 30,9 L 32,10 L 32,7 L 30,6 Z"></path><path d="M 32,10 L 34,9 L 34,6 L 32,7 Z"></path></g></mask></defs><g mask="url(#outline-mask-Bishop-SIDE)"><g fill="none" stroke="rgb(0,0,0)" stroke-width="1" stroke-linejoin="miter" stroke-linecap="square"><path d="M 16,46 L 32,54 L 48,46 L 32,38 Z"></path><path d="M 16,52 L 32,60 L 32,54 L 16,46 Z"></path><path d="M 32,60 L 48,52 L 48,46 L 32,54 Z"></path><path d="M 22,42 L 32,47 L 32,29 L 22,24 Z"></path><path d="M 32,47 L 42,42 L 42,24 L 32,29 Z"></path><path d="M 20,24 L 32,29 L 44,24 L 32,19 Z"></path><path d="M 20,27 L 32,32 L 32,29 L 20,24 Z"></path><path d="M 32,32 L 44,27 L 44,24 L 32,29 Z"></path><path d="M 23,21 L 32,25 L 32,11 L 23,15 Z"></path><path d="M 32,25 L 41,21 L 41,15 L 32,11 Z"></path><path d="M 26,18 L 29,19 L 29,15 L 26,14 Z"></path><path d="M 30,6 L 32,7 L 34,6 L 32,5 Z"></path><path d="M 30,9 L 32,10 L 32,7 L 30,6 Z"></path><path d="M 32,10 L 34,9 L 34,6 L 32,7 Z"></path></g></g><g opacity="0.95" stroke="none"><path d="M 16,46 L 32,54 L 48,46 L 32,38 Z" fill="TOP_COLOR"></path><path d="M 16,52 L 32,60 L 32,54 L 16,46 Z" fill="LEFT_COLOR"></path><path d="M 32,60 L 48,52 L 48,46 L 32,54 Z" fill="RIGHT_COLOR"></path><path d="M 22,42 L 32,47 L 32,29 L 22,24 Z" fill="LEFT_COLOR"></path><path d="M 32,47 L 42,42 L 42,24 L 32,29 Z" fill="RIGHT_COLOR"></path><path d="M 20,24 L 32,29 L 44,24 L 32,19 Z" fill="TOP_COLOR"></path><path d="M 20,27 L 32,32 L 32,29 L 20,24 Z" fill="LEFT_COLOR"></path><path d="M 32,32 L 44,27 L 44,24 L 32,29 Z" fill="RIGHT_COLOR"></path><path d="M 23,21 L 32,25 L 32,11 L 23,15 Z" fill="LEFT_COLOR"></path><path d="M 32,25 L 41,21 L 41,15 L 32,11 Z" fill="RIGHT_COLOR"></path><path d="M 26,18 L 29,19 L 29,15 L 26,14 Z" fill="DEEP_COLOR"></path><path d="M 30,6 L 32,7 L 34,6 L 32,5 Z" fill="TOP_COLOR"></path><path d="M 30,9 L 32,10 L 32,7 L 30,6 Z" fill="LEFT_COLOR"></path><path d="M 32,10 L 34,9 L 34,6 L 32,7 Z" fill="RIGHT_COLOR"></path></g></svg>`;
+  const GEOMETRIES = {
+    pawn: [
+      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
+      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
+      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
+      { type: 'top', d: 'M 22,39 L 32,44 L 42,39 L 32,34 Z' },
+      { type: 'left', d: 'M 22,42 L 32,47 L 32,44 L 22,39 Z' },
+      { type: 'right', d: 'M 32,47 L 42,42 L 42,39 L 32,44 Z' },
+      { type: 'left', d: 'M 24,37 L 32,41 L 32,32 L 24,28 Z' },
+      { type: 'right', d: 'M 32,41 L 40,37 L 40,28 L 32,32 Z' },
+      { type: 'top', d: 'M 22,17 L 32,22 L 42,17 L 32,12 Z' },
+      { type: 'left', d: 'M 22,29 L 32,34 L 32,22 L 22,17 Z' },
+      { type: 'right', d: 'M 32,34 L 42,29 L 42,17 L 32,22 Z' }
+    ],
+    rook: [
+      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
+      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
+      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
+      { type: 'top', d: 'M 20,21 L 32,27 L 44,21 L 32,15 Z' },
+      { type: 'left', d: 'M 20,43 L 32,49 L 32,27 L 20,21 Z' },
+      { type: 'right', d: 'M 32,49 L 44,43 L 44,21 L 32,27 Z' },
+      { type: 'top', d: 'M 28,19 L 32,21 L 36,19 L 32,17 Z' },
+      { type: 'left', d: 'M 28,23 L 32,25 L 32,21 L 28,19 Z' },
+      { type: 'right', d: 'M 32,25 L 36,23 L 36,19 L 32,21 Z' },
+      { type: 'top', d: 'M 20,15 L 24,17 L 28,15 L 24,13 Z' },
+      { type: 'left', d: 'M 20,19 L 24,21 L 24,17 L 20,15 Z' },
+      { type: 'right', d: 'M 24,21 L 28,19 L 28,15 L 24,17 Z' },
+      { type: 'top', d: 'M 36,15 L 40,17 L 44,15 L 40,13 Z' },
+      { type: 'left', d: 'M 36,19 L 40,21 L 40,17 L 36,15 Z' },
+      { type: 'right', d: 'M 40,21 L 44,19 L 44,15 L 40,17 Z' },
+      { type: 'top', d: 'M 28,11 L 32,13 L 36,11 L 32,9 Z' },
+      { type: 'left', d: 'M 28,15 L 32,17 L 32,13 L 28,11 Z' },
+      { type: 'right', d: 'M 32,17 L 36,15 L 36,11 L 32,13 Z' }
+    ],
+    bishop: [
+      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
+      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
+      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
+      { type: 'left', d: 'M 22,42 L 32,47 L 32,29 L 22,24 Z' },
+      { type: 'right', d: 'M 32,47 L 42,42 L 42,24 L 32,29 Z' },
+      { type: 'top', d: 'M 20,24 L 32,29 L 44,24 L 32,19 Z' },
+      { type: 'left', d: 'M 20,27 L 32,32 L 32,29 L 20,24 Z' },
+      { type: 'right', d: 'M 32,32 L 44,27 L 44,24 L 32,29 Z' },
+      { type: 'left', d: 'M 23,21 L 32,25 L 32,11 L 23,15 Z' },
+      { type: 'right', d: 'M 32,25 L 41,21 L 41,15 L 32,11 Z' },
+      { type: 'accent', d: 'M 26,18 L 29,19 L 29,15 L 26,14 Z' },
+      { type: 'top', d: 'M 30,6 L 32,7 L 34,6 L 32,5 Z' },
+      { type: 'left', d: 'M 30,9 L 32,10 L 32,7 L 30,6 Z' },
+      { type: 'right', d: 'M 32,10 L 34,9 L 34,6 L 32,7 Z' }
+    ],
+    knight: [
+      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
+      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
+      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
+      { type: 'left', d: 'M 20,38 L 32,44 L 32,25 L 20,19 Z' },
+      { type: 'right', d: 'M 32,44 L 44,38 L 44,20 L 32,26 Z' },
+      { type: 'top', d: 'M 20,19 L 32,25 L 44,20 L 32,14 Z' },
+      { type: 'left', d: 'M 14,31 L 22,35 L 22,25 L 14,21 Z' },
+      { type: 'top', d: 'M 14,21 L 22,25 L 32,20 L 24,16 Z' },
+      { type: 'left', d: 'M 24,20 L 32,24 L 32,20 L 24,16 Z' },
+      { type: 'left', d: 'M 26,17 L 29,18 L 29,11 L 26,12 Z' },
+      { type: 'right', d: 'M 29,18 L 32,17 L 32,10 L 29,11 Z' },
+      { type: 'top', d: 'M 26,12 L 29,11 L 32,10 L 29,9 Z' }
+    ],
+    queen: [
+      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
+      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
+      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
+      { type: 'top', d: 'M 18,22 L 32,28 L 46,22 L 32,16 Z' },
+      { type: 'left', d: 'M 18,44 L 32,50 L 32,28 L 18,22 Z' },
+      { type: 'right', d: 'M 32,50 L 46,44 L 46,22 L 32,28 Z' },
+      { type: 'top', d: 'M 18,16 L 22,20 L 26,16 L 22,12 Z' },
+      { type: 'left', d: 'M 18,22 L 22,24 L 22,20 L 18,16 Z' },
+      { type: 'right', d: 'M 22,24 L 26,22 L 26,16 L 22,20 Z' },
+      { type: 'top', d: 'M 38,16 L 42,20 L 46,16 L 42,12 Z' },
+      { type: 'left', d: 'M 38,22 L 42,24 L 42,20 L 38,16 Z' },
+      { type: 'right', d: 'M 42,24 L 46,22 L 46,16 L 42,20 Z' },
+      { type: 'top', d: 'M 28,10 L 32,12 L 36,10 L 32,8 Z' },
+      { type: 'left', d: 'M 28,16 L 32,18 L 32,12 L 28,10 Z' },
+      { type: 'right', d: 'M 32,18 L 36,16 L 36,10 L 32,12 Z' }
+    ]
+  };
 
-  function getBishopSvg(side) {
+  function getPieceSvg(type, side) {
+    const paths = GEOMETRIES[type] || GEOMETRIES.pawn;
     let top, left, right, deep;
     if (side === 'player') {
       top = '#eef6fc';
@@ -25,19 +107,43 @@
       right = '#7a3f2a';
       deep = '#471e11';
     }
-    return BISHOP_SVG_TEMPLATE
-      .replace(/SIDE/g, side)
-      .replace(/TOP_COLOR/g, top)
-      .replace(/LEFT_COLOR/g, left)
-      .replace(/RIGHT_COLOR/g, right)
-      .replace(/DEEP_COLOR/g, deep);
+    const fillColors = { top, left, right, accent: deep };
+
+    const pathStrings = paths.map((path) => `<path d="${path.d}"></path>`).join('');
+    const fillStrings = paths.map((path) => {
+      const fillVal = fillColors[path.type] || left;
+      return `<path d="${path.d}" fill="${fillVal}"></path>`;
+    }).join('');
+
+    return `<svg width="100%" height="100%" viewBox="0 0 64 64" style="shape-rendering: crispedges;" class="cursor-pointer transition-transform hover:-translate-y-1.5 active:translate-y-0" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <mask id="outline-mask-${type}-${side}">
+          <rect width="100%" height="100%" fill="white"></rect>
+          <g fill="black" stroke="black" stroke-width="0.5">
+            ${pathStrings}
+          </g>
+        </mask>
+      </defs>
+      <g mask="url(#outline-mask-${type}-${side})">
+        <g fill="none" stroke="rgb(0,0,0)" stroke-width="1" stroke-linejoin="miter" stroke-linecap="square">
+          ${pathStrings}
+        </g>
+      </g>
+      <g opacity="0.95" stroke="none">
+        ${fillStrings}
+      </g>
+    </svg>`;
   }
 
-  const playerBishopImg = new Image();
-  playerBishopImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getBishopSvg('player'));
-
-  const enemyBishopImg = new Image();
-  enemyBishopImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getBishopSvg('enemy'));
+  const IMAGES = {};
+  Object.keys(GEOMETRIES).forEach((type) => {
+    IMAGES[type] = {
+      player: new Image(),
+      enemy: new Image()
+    };
+    IMAGES[type].player.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getPieceSvg(type, 'player'));
+    IMAGES[type].enemy.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getPieceSvg(type, 'enemy'));
+  });
 
   const boardEl = document.getElementById('board');
   const ctx = boardEl.getContext('2d');
@@ -464,8 +570,8 @@
     ctx.fillStyle = 'rgba(0,0,0,0.38)';
     ctx.fillRect(-17, 24, 34, 6);
 
-    if (piece.type === 'bishop') {
-      const img = piece.side === 'player' ? playerBishopImg : enemyBishopImg;
+    const img = IMAGES[piece.type] ? (piece.side === 'player' ? IMAGES[piece.type].player : IMAGES[piece.type].enemy) : null;
+    if (img) {
       ctx.drawImage(img, -24, -15, 48, 48);
     } else {
       ctx.fillStyle = shade;
@@ -522,12 +628,12 @@
         <div class="game-menu party-menu">
           <p class="eyebrow">Choose two pieces</p>
           <h2>Pick Party</h2>
-          <div class="locked-piece"><span class="badge player">P</span><span>Pawn locked in</span></div>
+          <div class="locked-piece"><span class="badge player">${getPieceSvg('pawn', 'player')}</span><span>Pawn locked in</span></div>
           ${[0, 1].map((slot) => `
             <div class="piece-picker" data-slot="${slot}">
               ${PIECE_CHOICES.map((type) => `
                 <button type="button" class="${state.party[slot] === type ? 'active' : ''}" data-piece="${type}">
-                  <span>${type === 'bishop' ? getBishopSvg('player') : PIECES[type].mark}</span>${PIECES[type].name}
+                  <span>${getPieceSvg(type, 'player')}</span>${PIECES[type].name}
                 </button>`).join('')}
             </div>`).join('')}
           <div class="menu-row">
@@ -574,7 +680,7 @@
       ${livingPieces(side).map((unit) => `
         <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== 'player' || state.turn !== 'player' ? 'disabled' : ''}>
           <span class="badge ${side === 'player' ? 'player' : 'enemy'}">
-            ${unit.type === 'bishop' ? getBishopSvg(side) : unit.mark}
+            ${getPieceSvg(unit.type, side)}
           </span>
           <span><strong>${unit.name}</strong><span>${unit.role}</span></span>
           <span>${unit.x + 1},${unit.y + 1}</span>
