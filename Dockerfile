@@ -10,12 +10,18 @@ COPY frontend/ frontend/
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app
+    mkdir -p /var/run/chess-tactics-hot /var/run/chess-tactics-static-override && \
+    chown -R nodejs:nodejs /app /var/run/chess-tactics-hot /var/run/chess-tactics-static-override
 USER nodejs
+
+ENV HOT_BACKEND_DIR=/var/run/chess-tactics-hot \
+    STATIC_FRONTEND_DIR=/var/run/chess-tactics-static-override \
+    FRONTEND_DIR=/app/frontend \
+    NODE_PATH=/app/backend/node_modules
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"
 
-CMD ["node", "backend/server.js"]
+CMD ["node", "backend/supervisor.js"]

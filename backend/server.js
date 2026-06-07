@@ -1,9 +1,11 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const frontendDir = path.join(__dirname, '..', 'frontend');
+const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend');
+const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 
@@ -44,6 +46,14 @@ function forwardSetCookie(upstream, res) {
     ? upstream.headers.getSetCookie()
     : [upstream.headers.get('set-cookie')].filter(Boolean);
   cookies.forEach((cookie) => res.append('set-cookie', cookie));
+}
+
+function frontendIndexFile() {
+  if (staticFrontendDir) {
+    const overrideIndex = path.join(staticFrontendDir, 'index.html');
+    if (fs.existsSync(overrideIndex)) return overrideIndex;
+  }
+  return path.join(frontendDir, 'index.html');
 }
 
 app.get('/health', (_req, res) => {
@@ -113,10 +123,13 @@ app.post('/api/auth/sign-out', async (req, res) => {
   res.status(204).end();
 });
 
+if (staticFrontendDir) {
+  app.use(express.static(staticFrontendDir));
+}
 app.use(express.static(frontendDir));
 
 app.use((_req, res) => {
-  res.sendFile(path.join(frontendDir, 'index.html'));
+  res.sendFile(frontendIndexFile());
 });
 
 app.listen(port, () => {
