@@ -397,8 +397,13 @@
 
         const anchor = anchorAt(x, y);
         const occ = occupantAt(x, y);
-        if (anchor) cell.appendChild(token('anchor', 'A', anchor.hp, anchor.maxHp));
-        if (occ) cell.appendChild(token(state.units.includes(occ) ? 'player' : 'enemy', occ.mark, occ.hp, occ.maxHp));
+        if (!anchor && !occ) {
+          const terr = TERRAIN[key(x, y)];
+          if (terr === 'water') cell.appendChild(decal('water-decal'));
+          else if (terr) cell.appendChild(terrainToken(terr));
+        }
+        if (anchor) cell.appendChild(buildingToken(anchor));
+        if (occ) cell.appendChild(state.units.includes(occ) ? unitToken(occ) : enemyToken(occ));
         boardEl.appendChild(cell);
       }
     }
@@ -426,23 +431,124 @@
     logEl.innerHTML = state.log.map((line) => `<p>${line}</p>`).join('');
   }
 
-  function token(className, mark, hp, maxHp) {
-    const el = document.createElement('div');
-    el.className = className === 'anchor' ? 'anchor' : `token ${className}`;
-    const cap = Math.max(hp, maxHp || hp);
-    let pips = '';
-    for (let i = 0; i < cap; i += 1) {
-      pips += `<i class="pip${i < hp ? '' : ' empty'}"></i>`;
-    }
-    el.innerHTML = `<span class="glyph">${mark}</span><span class="pips">${pips}</span>`;
-    el.setAttribute('aria-label', `${mark}, ${hp} of ${cap} health`);
-    return el;
-  }
+  // Cosmetic terrain (does not affect rules) — drawn only on empty tiles so a
+  // unit moving onto the tile cleanly replaces it.
+  const TERRAIN = {
+    '0,0': 'mountain', '1,0': 'mountain', '0,1': 'mountain',
+    '7,6': 'mountain', '7,7': 'mountain',
+    '0,4': 'forest', '1,4': 'forest', '6,4': 'forest', '5,3': 'forest', '0,6': 'forest',
+    '3,3': 'water', '4,3': 'water', '3,4': 'water',
+  };
 
   function decal(cls) {
     const el = document.createElement('div');
     el.className = `decal ${cls}`;
     return el;
+  }
+
+  function hpbar(hp, maxHp) {
+    const cap = Math.max(hp, maxHp || hp);
+    let s = '';
+    for (let i = 0; i < cap; i += 1) s += `<i class="seg${i < hp ? '' : ' empty'}"></i>`;
+    return `<div class="hpbar">${s}</div>`;
+  }
+
+  function makeToken(cls, svg, hp, maxHp) {
+    const el = document.createElement('div');
+    el.className = `token ${cls}`;
+    const bar = hp != null ? hpbar(hp, maxHp) : '';
+    el.innerHTML = `${bar}<div class="sprite-wrap">${svg}</div>`;
+    return el;
+  }
+
+  function unitToken(u) {
+    const accents = { crown: '#f2c14e', rookhook: '#e0584f', vesper: '#3fb8a6' };
+    const t = makeToken('player', mechSprite(accents[u.id] || '#cfe0ee'), u.hp, u.maxHp);
+    t.setAttribute('aria-label', `${u.name}, ${u.hp} of ${u.maxHp} health`);
+    return t;
+  }
+
+  function enemyToken(e) {
+    return makeToken('enemy', vekSprite(e.mark === 'L' ? '#7a3f2a' : '#8a5a30'), e.hp, e.maxHp);
+  }
+
+  function buildingToken(a) {
+    return makeToken('building', buildingSprite(a.hp, a.maxHp), a.hp, a.maxHp);
+  }
+
+  function terrainToken(type) {
+    return makeToken(`terrain ${type}`, type === 'mountain' ? mountainSprite() : treeSprite(), null, null);
+  }
+
+  function mechSprite(accent) {
+    return `<svg class="sprite" viewBox="0 0 32 40">
+      <rect x="9" y="27" width="5" height="11" fill="#2f3a47"/>
+      <rect x="18" y="27" width="5" height="11" fill="#2f3a47"/>
+      <rect x="7" y="37" width="8" height="3" fill="#222a33"/>
+      <rect x="17" y="37" width="8" height="3" fill="#222a33"/>
+      <rect x="6" y="13" width="20" height="16" fill="#c6d3de"/>
+      <rect x="6" y="13" width="20" height="4" fill="#eef5fa"/>
+      <rect x="6" y="25" width="20" height="4" fill="#9fb0bd"/>
+      <rect x="10" y="19" width="12" height="6" fill="${accent}"/>
+      <rect x="1" y="14" width="6" height="6" fill="#5a6a78"/>
+      <rect x="0" y="15" width="2" height="4" fill="#2f3a47"/>
+      <rect x="25" y="15" width="5" height="11" fill="#9fb0bd"/>
+      <rect x="12" y="6" width="8" height="8" fill="#39424e"/>
+      <rect x="13" y="8" width="6" height="2" fill="#8fe6ff"/>
+    </svg>`;
+  }
+
+  function vekSprite(body) {
+    return `<svg class="sprite" viewBox="0 0 38 30">
+      <rect x="7" y="19" width="3" height="8" fill="#5e3c20"/>
+      <rect x="13" y="21" width="3" height="8" fill="#5e3c20"/>
+      <rect x="22" y="21" width="3" height="8" fill="#5e3c20"/>
+      <rect x="28" y="19" width="3" height="8" fill="#5e3c20"/>
+      <rect x="8" y="10" width="21" height="11" fill="${body}"/>
+      <rect x="8" y="10" width="21" height="3" fill="#a8743e"/>
+      <rect x="12" y="14" width="13" height="3" fill="#5e3c20"/>
+      <rect x="25" y="9" width="9" height="9" fill="#9a6636"/>
+      <rect x="32" y="11" width="4" height="2" fill="#ffae57"/>
+      <rect x="32" y="15" width="4" height="2" fill="#ffae57"/>
+      <rect x="27" y="11" width="2" height="2" fill="#ff5b33"/>
+      <rect x="3" y="5" width="5" height="7" fill="${body}"/>
+      <rect x="2" y="2" width="4" height="4" fill="#ff5b33"/>
+    </svg>`;
+  }
+
+  function buildingSprite(hp, maxHp) {
+    const cap = Math.max(hp, maxHp || hp);
+    const litCount = Math.round((cap ? hp / cap : 0) * 15);
+    let windows = '';
+    let idx = 0;
+    for (let row = 0; row < 5; row += 1) {
+      for (let col = 0; col < 3; col += 1) {
+        windows += `<rect x="${8 + col * 5}" y="${13 + row * 5}" width="3" height="3" fill="${idx < litCount ? '#ffd24a' : '#39434f'}"/>`;
+        idx += 1;
+      }
+    }
+    return `<svg class="sprite" viewBox="0 0 34 46">
+      <rect x="23" y="9" width="8" height="33" fill="#5a636e"/>
+      <rect x="6" y="9" width="17" height="33" fill="#828c98"/>
+      <rect x="6" y="6" width="17" height="4" fill="#9aa4af"/>
+      ${windows}
+    </svg>`;
+  }
+
+  function treeSprite() {
+    return `<svg class="sprite" viewBox="0 0 24 30">
+      <rect x="10" y="20" width="4" height="8" fill="#5b3f24"/>
+      <polygon points="12,2 21,16 3,16" fill="#3f7a3a"/>
+      <polygon points="12,8 19,20 5,20" fill="#4f9147"/>
+    </svg>`;
+  }
+
+  function mountainSprite() {
+    return `<svg class="sprite" viewBox="0 0 34 28">
+      <polygon points="17,3 31,26 3,26" fill="#6b6f78"/>
+      <polygon points="17,3 17,26 3,26" fill="#5a5e66"/>
+      <polygon points="17,3 22,11 12,11" fill="#e8ecf2"/>
+    </svg>`;
   }
 
   moveButton.addEventListener('click', () => {
