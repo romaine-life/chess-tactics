@@ -21,7 +21,9 @@
         </header>
 
         <div class="board-wrap">
-          <div id="board" class="board" aria-label="Tactical board"></div>
+          <div class="board-stage">
+            <div id="board" class="board" aria-label="Tactical board"></div>
+          </div>
         </div>
       </section>
 
@@ -37,6 +39,14 @@
         </div>
 
         <div class="panel-section roster" id="roster"></div>
+
+        <div class="panel-section legend" aria-label="Board key">
+          <div><i class="k-move"></i><span>Move range</span></div>
+          <div><i class="k-power"></i><span>Power target</span></div>
+          <div><i class="k-threat"></i><span>Incoming attack (resolves on End Turn)</span></div>
+          <div><i class="k-spawn"></i><span>Enemy emergence next turn</span></div>
+        </div>
+
         <div class="panel-section log" id="log" aria-live="polite"></div>
       </aside>
     </main>

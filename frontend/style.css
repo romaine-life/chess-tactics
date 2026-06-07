@@ -1,17 +1,29 @@
 :root {
   color-scheme: dark;
-  --ink: #eef2f6;
-  --muted: #9fa9b4;
-  --panel: #181d22;
-  --panel-2: #20262d;
-  --line: #343c45;
-  --tile-a: #d8c79a;
-  --tile-b: #87976d;
-  --move: #4aa4ff;
-  --power: #f1b34c;
-  --threat: #d84c4c;
-  --good: #74c69d;
-  --black: #101418;
+  --ink: #eaf2f1;
+  --muted: #8a98a5;
+  --panel: #11171c;
+  --panel-2: #182027;
+  --line: #2b3640;
+
+  /* Diorama tile field (Into the Breach "grassy island" read) */
+  --tile-a: #6f8f59;
+  --tile-b: #5b7a47;
+  --grout: #0b130d;
+  --slab: #16241a;
+  --slab-edge: #0a130d;
+
+  /* Telegraph + action palette: cyan = friendly, amber = ability,
+     hot orange = incoming damage. Perfect-information colours. */
+  --move: #45d6e0;
+  --power: #f2b134;
+  --threat: #ff5b33;
+  --good: #7bd0a4;
+  --danger: #ff9f9f;
+
+  /* Board tilt. Overridden smaller on narrow screens. */
+  --tilt: 26deg;
+  --lift: 16px;
 }
 
 * {
@@ -21,15 +33,16 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: #111518;
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(1200px 760px at 50% -12%, #1c2b33 0%, #0c1318 58%, #06090c 100%);
 }
 
 button {
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #252c34;
+  background: #1d242b;
   color: var(--ink);
   cursor: pointer;
   font: inherit;
@@ -38,13 +51,14 @@ button {
 
 button:hover,
 button:focus-visible {
-  border-color: #73808d;
+  border-color: #6c7c8a;
   outline: none;
 }
 
 button.active {
-  background: #35536f;
+  background: #16404a;
   border-color: var(--move);
+  box-shadow: inset 0 0 0 1px rgba(69, 214, 224, .4);
 }
 
 .shell {
@@ -76,10 +90,11 @@ p {
 }
 
 h1 {
-  font-size: clamp(2rem, 4vw, 4.4rem);
+  font-size: clamp(1.8rem, 3.4vw, 3.4rem);
   font-weight: 800;
-  letter-spacing: 0;
+  letter-spacing: .5px;
   line-height: .95;
+  text-transform: uppercase;
 }
 
 h2 {
@@ -105,23 +120,56 @@ h2 {
   background: var(--panel);
   padding: 8px 12px;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Diorama board ---------- */
 
 .board-wrap {
   display: grid;
-  min-height: 0;
   place-items: center;
+  min-height: 0;
+  padding: 14px 6px 40px;
+  perspective: 1500px;
+  perspective-origin: 50% 36%;
+  /* Float shadow lives here (not on the preserve-3d node, which a filter
+     would flatten). */
+  filter: drop-shadow(0 36px 44px rgba(0, 0, 0, .55));
+}
+
+.board-stage {
+  position: relative;
+  width: min(100%, calc(100vh - 170px));
+  max-width: 720px;
+  min-width: min(92vw, 320px);
+  aspect-ratio: 1;
+  transform: rotateX(var(--tilt));
+  transform-style: preserve-3d;
+}
+
+/* Slab underside, offset along the board normal to fake tile thickness. */
+.board-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateZ(-30px);
+  background: linear-gradient(160deg, var(--slab), var(--slab-edge));
+  border: 3px solid var(--slab-edge);
+  border-radius: 4px;
 }
 
 .board {
+  position: relative;
   aspect-ratio: 1;
+  width: 100%;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  width: min(100%, calc(100vh - 130px));
-  max-width: 850px;
-  min-width: min(92vw, 330px);
-  border: 2px solid #07090b;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+  grid-template-rows: repeat(8, 1fr);
+  gap: 2px;
+  background: var(--grout);
+  border: 3px solid var(--slab-edge);
+  border-radius: 4px;
+  transform-style: preserve-3d;
 }
 
 .cell {
@@ -130,91 +178,180 @@ h2 {
   place-items: center;
   min-width: 0;
   min-height: 0;
-  border: 1px solid rgba(0, 0, 0, .14);
-  color: var(--black);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #0c130e;
+  transform-style: preserve-3d;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, .06),
+    inset 0 -4px 8px rgba(0, 0, 0, .26);
 }
 
 .cell.light {
-  background: var(--tile-a);
+  background: linear-gradient(160deg, rgba(255, 255, 255, .07), rgba(0, 0, 0, .12)), var(--tile-a);
 }
 
 .cell.dark {
-  background: var(--tile-b);
+  background: linear-gradient(160deg, rgba(255, 255, 255, .05), rgba(0, 0, 0, .16)), var(--tile-b);
 }
 
-.cell.move::after,
-.cell.power::after,
-.cell.threat::before,
-.cell.spawn::before {
+.cell:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- Ground decals (painted flat on the tilted board) ---------- */
+
+.decal {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.move-decal {
+  inset: 9%;
+  border: 2px solid var(--move);
+  border-radius: 6px;
+  background: rgba(69, 214, 224, .14);
+  box-shadow: inset 0 0 16px rgba(69, 214, 224, .35);
+}
+
+.power-decal {
+  inset: 9%;
+  border: 2px solid var(--power);
+  border-radius: 6px;
+  background: rgba(242, 177, 52, .16);
+  box-shadow: inset 0 0 16px rgba(242, 177, 52, .4);
+}
+
+/* Incoming attack: hazard stripes + a directional arrow toward impact. */
+.threat-decal {
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(255, 91, 51, .34) 0 9px,
+      rgba(255, 91, 51, .12) 9px 18px);
+  box-shadow: inset 0 0 0 2px var(--threat);
+  animation: threat-pulse 1.15s ease-in-out infinite;
+}
+
+.threat-decal::before {
   content: "";
   position: absolute;
-  inset: 10%;
-  border-radius: 5px;
-  pointer-events: none;
+  top: 50%;
+  left: 50%;
+  width: 38%;
+  height: 38%;
+  transform: translate(-50%, -50%) rotate(var(--angle, 0deg));
+  background: var(--threat);
+  clip-path: polygon(0 18%, 58% 18%, 58% 0, 100% 50%, 58% 100%, 58% 82%, 0 82%);
+  filter: drop-shadow(0 0 5px rgba(255, 91, 51, .8));
 }
 
-.cell.move::after {
-  border: 3px solid var(--move);
-  background: rgba(74, 164, 255, .16);
+.spawn-decal {
+  inset: 14%;
+  border: 2px dashed rgba(255, 255, 255, .5);
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .14), transparent 70%);
 }
 
-.cell.power::after {
-  border: 3px solid var(--power);
-  background: rgba(241, 179, 76, .22);
+.spawn-decal::before {
+  content: "";
+  position: absolute;
+  inset: 28%;
+  background: rgba(255, 255, 255, .55);
+  clip-path: polygon(50% 100%, 0 38%, 28% 38%, 28% 0, 72% 0, 72% 38%, 100% 38%);
+  opacity: .65;
 }
 
-.cell.threat::before {
-  border: 3px solid var(--threat);
-  background: rgba(216, 76, 76, .22);
+.reticle {
+  inset: 5%;
+  border: 2px dashed var(--move);
+  border-radius: 8px;
+  box-shadow:
+    0 0 16px rgba(69, 214, 224, .5),
+    inset 0 0 14px rgba(69, 214, 224, .28);
+  animation: reticle-glow 1.6s ease-in-out infinite;
 }
 
-.cell.spawn::before {
-  border: 3px dashed #333;
-  background: rgba(0, 0, 0, .1);
-}
+/* ---------- Units / anchors (lifted billboards) ---------- */
 
 .token,
 .anchor {
-  align-items: center;
-  border: 2px solid rgba(0, 0, 0, .38);
-  border-radius: 7px;
-  display: grid;
-  font-weight: 900;
-  height: 68%;
-  justify-items: center;
-  line-height: 1;
   position: relative;
-  width: 68%;
-  z-index: 2;
+  z-index: 3;
+  width: 76%;
+  height: 76%;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  place-items: center;
+  gap: 3px;
+  padding: 6px 4px 4px;
+  border-radius: 9px;
+  line-height: 1;
+  pointer-events: none;
+  transform-origin: center bottom;
+  transform: rotateX(calc(-1 * var(--tilt))) translateZ(var(--lift));
+  filter: drop-shadow(0 9px 7px rgba(0, 0, 0, .55));
 }
 
-.token small,
-.anchor small {
-  bottom: -15px;
-  font-size: .62rem;
-  font-weight: 800;
-  left: 50%;
-  position: absolute;
-  transform: translateX(-50%);
+.glyph {
+  font-weight: 900;
+  font-size: clamp(.78rem, 3.2vw, 1.5rem);
+  letter-spacing: .5px;
 }
 
-.player {
-  background: linear-gradient(145deg, #fbf7e8, #92c7b1);
+.pips {
+  display: flex;
+  gap: 3px;
 }
 
-.enemy {
-  background: linear-gradient(145deg, #2b1114, #b84a51);
-  color: #fff4ee;
+.pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--good);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .55);
+}
+
+.pip.empty {
+  background: rgba(0, 0, 0, .35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+
+.token.player {
+  background: linear-gradient(160deg, #eaf2f7 0%, #aebfcb 52%, #74909f 100%);
+  border: 2px solid #1f2e38;
+  color: #16242e;
+}
+
+.token.player .pip {
+  background: var(--move);
+}
+
+.token.enemy {
+  background: linear-gradient(160deg, #3c2330 0%, #6a2330 52%, #2a1117 100%);
+  border: 2px solid #170a0e;
+  color: #ffe7df;
+}
+
+.token.enemy .pip {
+  background: #ffb6a3;
 }
 
 .anchor {
-  background: linear-gradient(145deg, #efe0bd, #d79f4d);
+  background: linear-gradient(160deg, #e8d7ac 0%, #c39a52 55%, #8a6a32 100%);
+  border: 2px solid #503c1b;
+  color: #2d2008;
+  border-radius: 5px;
 }
 
-.selected .token {
-  border-color: #172c41;
-  box-shadow: 0 0 0 4px rgba(74, 164, 255, .45);
+.anchor .pip {
+  background: var(--power);
 }
+
+/* ---------- Side panel ---------- */
 
 .panel {
   align-self: stretch;
@@ -259,6 +396,7 @@ h2 {
   gap: 8px;
   grid-template-columns: 34px 1fr auto;
   padding: 8px;
+  text-align: left;
 }
 
 .unit-row .badge {
@@ -268,6 +406,12 @@ h2 {
   height: 34px;
   place-items: center;
   width: 34px;
+}
+
+.badge.player {
+  background: linear-gradient(160deg, #eaf2f7, #8fa6b4);
+  color: #16242e;
+  border: 1px solid #1f2e38;
 }
 
 .unit-row strong,
@@ -284,11 +428,52 @@ h2 {
   font-size: .86rem;
 }
 
+/* Legend — perfect-information key, in the ItB spirit. */
+.legend {
+  display: grid;
+  gap: 8px;
+  font-size: .82rem;
+  color: var(--muted);
+}
+
+.legend div {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 16px 1fr;
+}
+
+.legend i {
+  border-radius: 4px;
+  height: 14px;
+  width: 14px;
+}
+
+.legend .k-move {
+  background: rgba(69, 214, 224, .25);
+  border: 2px solid var(--move);
+}
+
+.legend .k-power {
+  background: rgba(242, 177, 52, .3);
+  border: 2px solid var(--power);
+}
+
+.legend .k-threat {
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 91, 51, .55) 0 4px, rgba(255, 91, 51, .18) 4px 8px);
+  border: 2px solid var(--threat);
+}
+
+.legend .k-spawn {
+  border: 2px dashed rgba(255, 255, 255, .55);
+}
+
 .log {
   flex: 1;
   font-size: .92rem;
   line-height: 1.45;
-  min-height: 140px;
+  min-height: 120px;
   overflow: auto;
 }
 
@@ -297,8 +482,22 @@ h2 {
 }
 
 .danger {
-  color: #ff9f9f;
+  color: var(--danger);
 }
+
+/* ---------- Animations (gated by reduced-motion below) ---------- */
+
+@keyframes threat-pulse {
+  0%, 100% { opacity: .72; }
+  50% { opacity: 1; }
+}
+
+@keyframes reticle-glow {
+  0%, 100% { box-shadow: 0 0 12px rgba(69, 214, 224, .4), inset 0 0 10px rgba(69, 214, 224, .2); }
+  50% { box-shadow: 0 0 22px rgba(69, 214, 224, .7), inset 0 0 18px rgba(69, 214, 224, .35); }
+}
+
+/* ---------- Responsive ---------- */
 
 @media (max-width: 980px) {
   .shell {
@@ -310,8 +509,15 @@ h2 {
     min-height: auto;
   }
 
-  .board {
-    width: min(100%, 92vh);
+  .board-stage {
+    width: min(100%, 88vw);
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --tilt: 15deg;
+    --lift: 10px;
   }
 }
 
@@ -325,14 +531,14 @@ h2 {
     justify-content: flex-start;
   }
 
-  .token,
-  .anchor {
-    border-radius: 5px;
-    font-size: .84rem;
+  .pip {
+    width: 6px;
+    height: 6px;
   }
+}
 
-  .token small,
-  .anchor small {
-    display: none;
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
   }
 }

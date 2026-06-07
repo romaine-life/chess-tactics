@@ -351,8 +351,17 @@
     const unit = selectedUnit();
     const moves = new Set(moveTargets(unit).map((p) => key(p.x, p.y)));
     const powers = new Set(powerTargets(unit).map((p) => key(p.x, p.y)));
-    const threats = new Set(enemyThreats().map((p) => key(p.x, p.y)));
     const spawns = new Set(spawnCells().map((p) => key(p.x, p.y)));
+
+    // Map each threatened tile to the direction the attack travels, so the
+    // telegraph can paint a directional arrow toward the impact tile.
+    const threatDir = new Map();
+    enemyThreats().forEach((t) => {
+      const src = state.enemies.find((e) => e.id === t.source);
+      const dx = src ? Math.sign(t.x - src.x) : 0;
+      const dy = src ? Math.sign(t.y - src.y) : 0;
+      threatDir.set(key(t.x, t.y), { dx, dy });
+    });
 
     boardEl.innerHTML = '';
     for (let y = 0; y < SIZE; y += 1) {
@@ -360,17 +369,36 @@
         const cell = document.createElement('button');
         cell.type = 'button';
         cell.className = `cell ${(x + y) % 2 ? 'dark' : 'light'}`;
-        if (state.mode === 'move' && moves.has(key(x, y))) cell.classList.add('move');
-        if (state.mode === 'power' && powers.has(key(x, y))) cell.classList.add('power');
-        if (threats.has(key(x, y))) cell.classList.add('threat');
-        if (spawns.has(key(x, y))) cell.classList.add('spawn');
-        if (unit && unit.x === x && unit.y === y) cell.classList.add('selected');
+
+        const isMove = state.mode === 'move' && moves.has(key(x, y));
+        const isPower = state.mode === 'power' && powers.has(key(x, y));
+        const isSpawn = spawns.has(key(x, y));
+        const threat = threatDir.get(key(x, y));
+        const isSelected = unit && unit.x === x && unit.y === y;
+
+        if (isMove) cell.classList.add('move');
+        if (isPower) cell.classList.add('power');
+        if (threat) cell.classList.add('threat');
+        if (isSpawn) cell.classList.add('spawn');
+        if (isSelected) cell.classList.add('selected');
         cell.addEventListener('click', () => handleCell(x, y));
+
+        // Ground decals, painted flat on the tilted board, beneath units.
+        if (isSelected) cell.appendChild(decal('reticle'));
+        if (isMove) cell.appendChild(decal('move-decal'));
+        if (isPower) cell.appendChild(decal('power-decal'));
+        if (isSpawn) cell.appendChild(decal('spawn-decal'));
+        if (threat) {
+          const arrow = decal('threat-decal');
+          const angle = Math.round((Math.atan2(threat.dy, threat.dx) * 180) / Math.PI);
+          arrow.style.setProperty('--angle', `${angle}deg`);
+          cell.appendChild(arrow);
+        }
 
         const anchor = anchorAt(x, y);
         const occ = occupantAt(x, y);
-        if (anchor) cell.appendChild(token('anchor', 'A', anchor.hp));
-        if (occ) cell.appendChild(token(state.units.includes(occ) ? 'player' : 'enemy', occ.mark, occ.hp));
+        if (anchor) cell.appendChild(token('anchor', 'A', anchor.hp, anchor.maxHp));
+        if (occ) cell.appendChild(token(state.units.includes(occ) ? 'player' : 'enemy', occ.mark, occ.hp, occ.maxHp));
         boardEl.appendChild(cell);
       }
     }
@@ -398,10 +426,22 @@
     logEl.innerHTML = state.log.map((line) => `<p>${line}</p>`).join('');
   }
 
-  function token(className, mark, hp) {
+  function token(className, mark, hp, maxHp) {
     const el = document.createElement('div');
     el.className = className === 'anchor' ? 'anchor' : `token ${className}`;
-    el.innerHTML = `${mark}<small>${hp}</small>`;
+    const cap = Math.max(hp, maxHp || hp);
+    let pips = '';
+    for (let i = 0; i < cap; i += 1) {
+      pips += `<i class="pip${i < hp ? '' : ' empty'}"></i>`;
+    }
+    el.innerHTML = `<span class="glyph">${mark}</span><span class="pips">${pips}</span>`;
+    el.setAttribute('aria-label', `${mark}, ${hp} of ${cap} health`);
+    return el;
+  }
+
+  function decal(cls) {
+    const el = document.createElement('div');
+    el.className = `decal ${cls}`;
     return el;
   }
 
