@@ -1,0 +1,18 @@
+{{- if eq (include "chess-tactics.renderHot" .) "true" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chess-tactics.resourceName" . }}
+  namespace: {{ include "chess-tactics.namespace" . }}
+  labels:
+    app: {{ include "chess-tactics.resourceName" . }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "chess-tactics.resourceName" . }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+{{- end }}

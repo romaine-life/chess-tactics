@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Chess Tactics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/style.css">
   </head>
   <body>
@@ -21,7 +24,18 @@
         </header>
 
         <div class="board-wrap">
-          <div id="board" class="board" aria-label="Tactical board"></div>
+          <svg class="skyline" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+            <defs>
+              <pattern id="win" width="13" height="18" patternUnits="userSpaceOnUse">
+                <rect x="3" y="5" width="3" height="4" fill="#7d65bf" opacity="0.55" />
+                <rect x="8" y="10" width="3" height="4" fill="#6c54ab" opacity="0.45" />
+              </pattern>
+            </defs>
+            <path d="M0,360 0,210 80,210 80,170 180,170 180,232 300,232 300,150 430,150 430,205 560,205 560,120 690,120 690,192 820,192 820,160 960,160 960,214 1080,214 1080,176 1200,176 1200,360 Z" fill="#241a3e" />
+            <path id="cityFront" d="M0,360 0,262 64,262 64,300 150,300 150,240 250,240 250,292 350,292 350,222 470,222 470,282 610,282 610,250 730,250 730,300 870,300 870,242 1010,242 1010,286 1130,286 1130,256 1200,256 1200,360 Z" fill="#2e2350" />
+            <path d="M0,360 0,262 64,262 64,300 150,300 150,240 250,240 250,292 350,292 350,222 470,222 470,282 610,282 610,250 730,250 730,300 870,300 870,242 1010,242 1010,286 1130,286 1130,256 1200,256 1200,360 Z" fill="url(#win)" />
+          </svg>
+          <canvas id="board" class="board" width="760" height="412" aria-label="Tactical board"></canvas>
         </div>
       </section>
 
@@ -37,6 +51,14 @@
         </div>
 
         <div class="panel-section roster" id="roster"></div>
+
+        <div class="panel-section legend" aria-label="Board key">
+          <div><i class="k-move"></i><span>Move range</span></div>
+          <div><i class="k-power"></i><span>Power target</span></div>
+          <div><i class="k-threat"></i><span>Incoming attack (resolves on End Turn)</span></div>
+          <div><i class="k-spawn"></i><span>Enemy emergence next turn</span></div>
+        </div>
+
         <div class="panel-section log" id="log" aria-live="polite"></div>
       </aside>
     </main>

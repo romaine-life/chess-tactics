@@ -2,6 +2,7 @@
   const SIZE = 8;
   const MAX_BREACH = 6;
   const boardEl = document.getElementById('board');
+  const ctx = boardEl.getContext('2d');
   const rosterEl = document.getElementById('roster');
   const logEl = document.getElementById('log');
   const statusLine = document.getElementById('statusLine');
@@ -347,33 +348,157 @@
     usePower(unit, x, y);
   }
 
-  function render() {
-    const unit = selectedUnit();
-    const moves = new Set(moveTargets(unit).map((p) => key(p.x, p.y)));
-    const powers = new Set(powerTargets(unit).map((p) => key(p.x, p.y)));
-    const threats = new Set(enemyThreats().map((p) => key(p.x, p.y)));
-    const spawns = new Set(spawnCells().map((p) => key(p.x, p.y)));
+  // ===== Isometric pixel board (canvas, orthographic 2:1, Into-the-Breach style) =====
+  const TW = 72;           // tile width  (2 : 1 dimetric)
+  const TH = 36;           // tile height
+  const CLIFF = 32;        // floating-island thickness
+  const ORIGIN_X = boardEl.width / 2;
+  const ORIGIN_Y = 54;
+  let hoverTile = null;
 
-    boardEl.innerHTML = '';
-    for (let y = 0; y < SIZE; y += 1) {
-      for (let x = 0; x < SIZE; x += 1) {
-        const cell = document.createElement('button');
-        cell.type = 'button';
-        cell.className = `cell ${(x + y) % 2 ? 'dark' : 'light'}`;
-        if (state.mode === 'move' && moves.has(key(x, y))) cell.classList.add('move');
-        if (state.mode === 'power' && powers.has(key(x, y))) cell.classList.add('power');
-        if (threats.has(key(x, y))) cell.classList.add('threat');
-        if (spawns.has(key(x, y))) cell.classList.add('spawn');
-        if (unit && unit.x === x && unit.y === y) cell.classList.add('selected');
-        cell.addEventListener('click', () => handleCell(x, y));
+  function isoCenter(c, r) {
+    return { x: ORIGIN_X + (c - r) * (TW / 2), y: ORIGIN_Y + (c + r) * (TH / 2) };
+  }
 
-        const anchor = anchorAt(x, y);
-        const occ = occupantAt(x, y);
-        if (anchor) cell.appendChild(token('anchor', 'A', anchor.hp));
-        if (occ) cell.appendChild(token(state.units.includes(occ) ? 'player' : 'enemy', occ.mark, occ.hp));
-        boardEl.appendChild(cell);
+  // Deterministic per-coordinate noise so the grass texture is stable across redraws.
+  function prand(a, b, salt) {
+    let h = (a * 73856093) ^ (b * 19349663) ^ (salt * 83492791);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
+
+  function diamond(cx, cy) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - TH / 2);
+    ctx.lineTo(cx + TW / 2, cy);
+    ctx.lineTo(cx, cy + TH / 2);
+    ctx.lineTo(cx - TW / 2, cy);
+    ctx.closePath();
+  }
+
+  function drawCliff() {
+    const left = { x: isoCenter(0, SIZE - 1).x - TW / 2, y: isoCenter(0, SIZE - 1).y };
+    const right = { x: isoCenter(SIZE - 1, 0).x + TW / 2, y: isoCenter(SIZE - 1, 0).y };
+    const bottom = { x: ORIGIN_X, y: isoCenter(SIZE - 1, SIZE - 1).y + TH / 2 };
+    // left (lit) and right (shaded) earth faces
+    ctx.fillStyle = '#5a4226';
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y);
+    ctx.lineTo(bottom.x, bottom.y + CLIFF); ctx.lineTo(left.x, left.y + CLIFF);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#45331d';
+    ctx.beginPath();
+    ctx.moveTo(bottom.x, bottom.y); ctx.lineTo(right.x, right.y);
+    ctx.lineTo(right.x, right.y + CLIFF); ctx.lineTo(bottom.x, bottom.y + CLIFF);
+    ctx.closePath(); ctx.fill();
+    // dirt speckle
+    for (let i = 0; i < 140; i += 1) {
+      const t = prand(i, 3, 5);
+      const onLeft = t < 0.5;
+      const fx = onLeft ? left.x + (bottom.x - left.x) * (t * 2) : bottom.x + (right.x - bottom.x) * ((t - 0.5) * 2);
+      const fy = (onLeft ? left.y + (bottom.y - left.y) * (t * 2) : bottom.y + (right.y - bottom.y) * ((t - 0.5) * 2)) + prand(i, 7, 9) * CLIFF;
+      ctx.fillStyle = prand(i, 11, 2) > 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.14)';
+      ctx.fillRect(Math.round(fx), Math.round(fy), 2, 2);
+    }
+    // grass lip along the top of the cliff
+    ctx.fillStyle = '#56753b';
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y); ctx.lineTo(right.x, right.y);
+    ctx.lineTo(right.x, right.y + 3); ctx.lineTo(bottom.x, bottom.y + 3); ctx.lineTo(left.x, left.y + 3);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawTile(c, r) {
+    const { x: cx, y: cy } = isoCenter(c, r);
+    ctx.save();
+    diamond(cx, cy);
+    ctx.fillStyle = prand(c, r, 1) > 0.5 ? '#6e9350' : '#6a8e4c';
+    ctx.fill();
+    ctx.clip();
+    // grass texture — keyed by absolute pixel position so it flows across tiles
+    const PIX = 2;
+    for (let py = cy - TH / 2; py < cy + TH / 2; py += PIX) {
+      for (let px = cx - TW / 2; px < cx + TW / 2; px += PIX) {
+        const t = prand(Math.round(px), Math.round(py), 7);
+        if (t > 0.88) ctx.fillStyle = '#587a3e';
+        else if (t < 0.10) ctx.fillStyle = '#84aa63';
+        else continue;
+        ctx.fillRect(px, py, PIX, PIX);
       }
     }
+    // a few grass blades
+    for (let i = 0; i < 5; i += 1) {
+      const bx = Math.round(cx + (prand(c, r, 10 + i) - 0.5) * TW * 0.66);
+      const by = Math.round(cy + (prand(c, r, 30 + i) - 0.5) * TH * 0.6);
+      ctx.fillStyle = '#4d6a35';
+      ctx.fillRect(bx, by - 3, 1, 4);
+      ctx.fillStyle = '#a6c977';
+      ctx.fillRect(bx, by - 4, 1, 1);
+    }
+    ctx.restore();
+    // grid line
+    diamond(cx, cy);
+    ctx.strokeStyle = 'rgba(33,50,22,0.55)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    if (hoverTile && hoverTile.c === c && hoverTile.r === r) {
+      diamond(cx, cy);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  function drawBoard() {
+    ctx.clearRect(0, 0, boardEl.width, boardEl.height);
+    ctx.imageSmoothingEnabled = false;
+    drawCliff();
+    for (let s = 0; s <= 2 * (SIZE - 1); s += 1) {
+      for (let c = 0; c < SIZE; c += 1) {
+        const r = s - c;
+        if (r >= 0 && r < SIZE) drawTile(c, r);
+      }
+    }
+    // outer island rim
+    const top = isoCenter(0, 0);
+    const right = isoCenter(SIZE - 1, 0);
+    const bottom = isoCenter(SIZE - 1, SIZE - 1);
+    const left = isoCenter(0, SIZE - 1);
+    ctx.beginPath();
+    ctx.moveTo(top.x, top.y - TH / 2);
+    ctx.lineTo(right.x + TW / 2, right.y);
+    ctx.lineTo(bottom.x, bottom.y + TH / 2);
+    ctx.lineTo(left.x - TW / 2, left.y);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(20,30,14,0.7)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function pointToTile(clientX, clientY) {
+    const rect = boardEl.getBoundingClientRect();
+    const px = (clientX - rect.left) * (boardEl.width / rect.width);
+    const py = (clientY - rect.top) * (boardEl.height / rect.height);
+    const a = (px - ORIGIN_X) / (TW / 2);
+    const b = (py - ORIGIN_Y) / (TH / 2);
+    const c = Math.floor((a + b) / 2 + 0.5);
+    const r = Math.floor((b - a) / 2 + 0.5);
+    if (c < 0 || c >= SIZE || r < 0 || r >= SIZE) return null;
+    return { c, r };
+  }
+
+  boardEl.addEventListener('mousemove', (e) => {
+    const t = pointToTile(e.clientX, e.clientY);
+    const changed = (!!t !== !!hoverTile) || (t && hoverTile && (t.c !== hoverTile.c || t.r !== hoverTile.r));
+    if (changed) { hoverTile = t; drawBoard(); }
+  });
+  boardEl.addEventListener('mouseleave', () => { if (hoverTile) { hoverTile = null; drawBoard(); } });
+
+  function render() {
+    const unit = selectedUnit();
+    drawBoard();
 
     statusLine.textContent = state.over ? 'Run complete' : `Breach ${Math.min(state.breach, MAX_BREACH)} / ${MAX_BREACH}`;
     anchorMeter.textContent = `Anchors ${state.anchors.reduce((sum, a) => sum + a.hp, 0)}`;
@@ -398,11 +523,124 @@
     logEl.innerHTML = state.log.map((line) => `<p>${line}</p>`).join('');
   }
 
-  function token(className, mark, hp) {
+  // Cosmetic terrain (does not affect rules) — drawn only on empty tiles so a
+  // unit moving onto the tile cleanly replaces it.
+  const TERRAIN = {
+    '0,0': 'mountain', '1,0': 'mountain', '0,1': 'mountain',
+    '7,6': 'mountain', '7,7': 'mountain',
+    '0,4': 'forest', '1,4': 'forest', '6,4': 'forest', '5,3': 'forest', '0,6': 'forest',
+    '3,3': 'water', '4,3': 'water', '3,4': 'water',
+  };
+
+  function decal(cls) {
     const el = document.createElement('div');
-    el.className = className === 'anchor' ? 'anchor' : `token ${className}`;
-    el.innerHTML = `${mark}<small>${hp}</small>`;
+    el.className = `decal ${cls}`;
     return el;
+  }
+
+  function hpbar(hp, maxHp) {
+    const cap = Math.max(hp, maxHp || hp);
+    let s = '';
+    for (let i = 0; i < cap; i += 1) s += `<i class="seg${i < hp ? '' : ' empty'}"></i>`;
+    return `<div class="hpbar">${s}</div>`;
+  }
+
+  function makeToken(cls, svg, hp, maxHp) {
+    const el = document.createElement('div');
+    el.className = `token ${cls}`;
+    const bar = hp != null ? hpbar(hp, maxHp) : '';
+    el.innerHTML = `${bar}<div class="sprite-wrap">${svg}</div>`;
+    return el;
+  }
+
+  function unitToken(u) {
+    const accents = { crown: '#f2c14e', rookhook: '#e0584f', vesper: '#3fb8a6' };
+    const t = makeToken('player', mechSprite(accents[u.id] || '#cfe0ee'), u.hp, u.maxHp);
+    t.setAttribute('aria-label', `${u.name}, ${u.hp} of ${u.maxHp} health`);
+    return t;
+  }
+
+  function enemyToken(e) {
+    return makeToken('enemy', vekSprite(e.mark === 'L' ? '#7a3f2a' : '#8a5a30'), e.hp, e.maxHp);
+  }
+
+  function buildingToken(a) {
+    return makeToken('building', buildingSprite(a.hp, a.maxHp), a.hp, a.maxHp);
+  }
+
+  function terrainToken(type) {
+    return makeToken(`terrain ${type}`, type === 'mountain' ? mountainSprite() : treeSprite(), null, null);
+  }
+
+  function mechSprite(accent) {
+    return `<svg class="sprite" viewBox="0 0 32 40">
+      <rect x="9" y="27" width="5" height="11" fill="#2f3a47"/>
+      <rect x="18" y="27" width="5" height="11" fill="#2f3a47"/>
+      <rect x="7" y="37" width="8" height="3" fill="#222a33"/>
+      <rect x="17" y="37" width="8" height="3" fill="#222a33"/>
+      <rect x="6" y="13" width="20" height="16" fill="#c6d3de"/>
+      <rect x="6" y="13" width="20" height="4" fill="#eef5fa"/>
+      <rect x="6" y="25" width="20" height="4" fill="#9fb0bd"/>
+      <rect x="10" y="19" width="12" height="6" fill="${accent}"/>
+      <rect x="1" y="14" width="6" height="6" fill="#5a6a78"/>
+      <rect x="0" y="15" width="2" height="4" fill="#2f3a47"/>
+      <rect x="25" y="15" width="5" height="11" fill="#9fb0bd"/>
+      <rect x="12" y="6" width="8" height="8" fill="#39424e"/>
+      <rect x="13" y="8" width="6" height="2" fill="#8fe6ff"/>
+    </svg>`;
+  }
+
+  function vekSprite(body) {
+    return `<svg class="sprite" viewBox="0 0 38 30">
+      <rect x="7" y="19" width="3" height="8" fill="#5e3c20"/>
+      <rect x="13" y="21" width="3" height="8" fill="#5e3c20"/>
+      <rect x="22" y="21" width="3" height="8" fill="#5e3c20"/>
+      <rect x="28" y="19" width="3" height="8" fill="#5e3c20"/>
+      <rect x="8" y="10" width="21" height="11" fill="${body}"/>
+      <rect x="8" y="10" width="21" height="3" fill="#a8743e"/>
+      <rect x="12" y="14" width="13" height="3" fill="#5e3c20"/>
+      <rect x="25" y="9" width="9" height="9" fill="#9a6636"/>
+      <rect x="32" y="11" width="4" height="2" fill="#ffae57"/>
+      <rect x="32" y="15" width="4" height="2" fill="#ffae57"/>
+      <rect x="27" y="11" width="2" height="2" fill="#ff5b33"/>
+      <rect x="3" y="5" width="5" height="7" fill="${body}"/>
+      <rect x="2" y="2" width="4" height="4" fill="#ff5b33"/>
+    </svg>`;
+  }
+
+  function buildingSprite(hp, maxHp) {
+    const cap = Math.max(hp, maxHp || hp);
+    const litCount = Math.round((cap ? hp / cap : 0) * 15);
+    let windows = '';
+    let idx = 0;
+    for (let row = 0; row < 5; row += 1) {
+      for (let col = 0; col < 3; col += 1) {
+        windows += `<rect x="${8 + col * 5}" y="${13 + row * 5}" width="3" height="3" fill="${idx < litCount ? '#ffd24a' : '#39434f'}"/>`;
+        idx += 1;
+      }
+    }
+    return `<svg class="sprite" viewBox="0 0 34 46">
+      <rect x="23" y="9" width="8" height="33" fill="#5a636e"/>
+      <rect x="6" y="9" width="17" height="33" fill="#828c98"/>
+      <rect x="6" y="6" width="17" height="4" fill="#9aa4af"/>
+      ${windows}
+    </svg>`;
+  }
+
+  function treeSprite() {
+    return `<svg class="sprite" viewBox="0 0 24 30">
+      <rect x="10" y="20" width="4" height="8" fill="#5b3f24"/>
+      <polygon points="12,2 21,16 3,16" fill="#3f7a3a"/>
+      <polygon points="12,8 19,20 5,20" fill="#4f9147"/>
+    </svg>`;
+  }
+
+  function mountainSprite() {
+    return `<svg class="sprite" viewBox="0 0 34 28">
+      <polygon points="17,3 31,26 3,26" fill="#6b6f78"/>
+      <polygon points="17,3 17,26 3,26" fill="#5a5e66"/>
+      <polygon points="17,3 22,11 12,11" fill="#e8ecf2"/>
+    </svg>`;
   }
 
   moveButton.addEventListener('click', () => {
