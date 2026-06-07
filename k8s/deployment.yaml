@@ -23,7 +23,7 @@ spec:
       serviceAccountName: chess-tactics
       containers:
         - name: chess-tactics
-          image: romainecr.azurecr.io/chess-tactics:placeholder
+          image: romainecr.azurecr.io/chess-tactics:a8d4270
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
