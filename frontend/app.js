@@ -25,41 +25,31 @@
   const menuLayer = document.getElementById('menuLayer');
   const accountEl = document.getElementById('account');
   const accountNameEl = document.getElementById('accountName');
-  const signOutButton = document.getElementById('signOutButton');
-  const authGate = document.getElementById('authGate');
-  const authStatus = document.getElementById('authStatus');
   const signInButton = document.getElementById('signInButton');
+  const signOutButton = document.getElementById('signOutButton');
 
   function returnTo() {
     return `${window.location.pathname}${window.location.search}${window.location.hash}`;
   }
 
-  function showSignIn(message) {
-    authStatus.textContent = message;
+  function showGuest() {
+    accountNameEl.textContent = 'Guest';
     signInButton.hidden = false;
-    authGate.hidden = false;
+    signOutButton.hidden = true;
   }
 
   async function initAuth() {
-    signInButton.hidden = true;
-    authGate.hidden = false;
-    authStatus.textContent = 'Checking session...';
+    showGuest();
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include' });
-      if (!res.ok) {
-        showSignIn('Sign in to play.');
-        return;
-      }
+      if (!res.ok) return;
       const user = await res.json();
-      if (!user.signed_in) {
-        showSignIn('Sign in to play.');
-        return;
-      }
+      if (!user.signed_in) return;
       accountNameEl.textContent = user.name || user.email;
-      accountEl.hidden = false;
-      authGate.hidden = true;
+      signInButton.hidden = true;
+      signOutButton.hidden = false;
     } catch (_error) {
-      showSignIn('Sign-in check failed.');
+      showGuest();
     }
   }
 

@@ -18,9 +18,10 @@
             <p id="statusLine">Breach 1 / 6</p>
           </div>
           <div class="topbar-right">
-            <div class="account" id="account" hidden>
-              <span id="accountName"></span>
-              <button id="signOutButton" type="button">Sign Out</button>
+            <div class="account" id="account">
+              <span id="accountName">Guest</span>
+              <button id="signInButton" type="button">Sign In</button>
+              <button id="signOutButton" type="button" hidden>Sign Out</button>
             </div>
             <div class="meters" aria-live="polite">
               <span id="anchorMeter">Anchors 6</span>
@@ -69,14 +70,6 @@
         <div class="panel-section log" id="log" aria-live="polite"></div>
       </aside>
     </main>
-
-    <div class="auth-gate" id="authGate" aria-live="polite">
-      <div class="auth-box">
-        <h2>Chess Tactics</h2>
-        <p id="authStatus">Checking session...</p>
-        <button id="signInButton" type="button" hidden>Sign In With Microsoft</button>
-      </div>
-    </div>
 
     <script src="/app.js"></script>
   </body>

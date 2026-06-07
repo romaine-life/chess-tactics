@@ -5,8 +5,8 @@
   "description": "Static server for Chess Tactics.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "node --check server.js && node --check smoke-test.js && node --check ../frontend/app.js && node smoke-test.js"
+    "start": "node supervisor.js",
+    "test": "node --check server.js && node --check supervisor.js && node --check smoke-test.js && node --check ../frontend/app.js && node smoke-test.js"
   },
   "dependencies": {
     "express": "^5.2.1"

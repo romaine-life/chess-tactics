@@ -1,9 +1,11 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const frontendDir = path.join(__dirname, '..', 'frontend');
+const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend');
+const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 
@@ -13,14 +15,18 @@ function safeReturnPath(raw) {
   return raw;
 }
 
-function callbackUrl(req) {
-  const pathOnly = safeReturnPath(req.query.returnTo);
-  if (process.env.PUBLIC_ORIGIN) return `${publicOrigin}${pathOnly}`;
+function requestOrigin(req) {
+  if (process.env.PUBLIC_ORIGIN) return publicOrigin;
 
   const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
   const host = req.get('x-forwarded-host') || req.get('host');
-  if (!host) return `${publicOrigin}${pathOnly}`;
-  return `${proto}://${host}${pathOnly}`;
+  if (!host) return publicOrigin;
+  return `${proto}://${host}`;
+}
+
+function callbackUrl(req) {
+  const pathOnly = safeReturnPath(req.query.returnTo);
+  return `${requestOrigin(req)}${pathOnly}`;
 }
 
 function publicUser(session) {
@@ -40,6 +46,14 @@ function forwardSetCookie(upstream, res) {
     ? upstream.headers.getSetCookie()
     : [upstream.headers.get('set-cookie')].filter(Boolean);
   cookies.forEach((cookie) => res.append('set-cookie', cookie));
+}
+
+function frontendIndexFile() {
+  if (staticFrontendDir) {
+    const overrideIndex = path.join(staticFrontendDir, 'index.html');
+    if (fs.existsSync(overrideIndex)) return overrideIndex;
+  }
+  return path.join(frontendDir, 'index.html');
 }
 
 app.get('/health', (_req, res) => {
@@ -91,21 +105,31 @@ app.post('/api/auth/sign-out', async (req, res) => {
           accept: 'application/json',
           'content-type': 'application/json',
           cookie,
+          origin: requestOrigin(req),
         },
         body: '{}',
       });
       forwardSetCookie(upstream, res);
+      if (!upstream.ok) {
+        res.status(502).json({ error: 'sign_out_failed' });
+        return;
+      }
     } catch (error) {
       console.error('auth sign-out failed:', error);
+      res.status(502).json({ error: 'auth_unavailable' });
+      return;
     }
   }
   res.status(204).end();
 });
 
+if (staticFrontendDir) {
+  app.use(express.static(staticFrontendDir));
+}
 app.use(express.static(frontendDir));
 
 app.use((_req, res) => {
-  res.sendFile(path.join(frontendDir, 'index.html'));
+  res.sendFile(frontendIndexFile());
 });
 
 app.listen(port, () => {
