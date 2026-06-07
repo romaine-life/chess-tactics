@@ -11,4 +11,4 @@ resources:
 images:
 - name: romainecr.azurecr.io/chimera-board
   newName: romainecr.azurecr.io/chimera-board
-  newTag: f5d7338
+  newTag: "3077275"
