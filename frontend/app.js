@@ -13,6 +13,61 @@
   const moveButton = document.getElementById('moveButton');
   const powerButton = document.getElementById('powerButton');
   const endButton = document.getElementById('endButton');
+  const accountEl = document.getElementById('account');
+  const accountNameEl = document.getElementById('accountName');
+  const signOutButton = document.getElementById('signOutButton');
+  const authGate = document.getElementById('authGate');
+  const authStatus = document.getElementById('authStatus');
+  const signInButton = document.getElementById('signInButton');
+
+  function returnTo() {
+    return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  }
+
+  function showSignIn(message) {
+    authStatus.textContent = message;
+    signInButton.hidden = false;
+    authGate.hidden = false;
+  }
+
+  async function initAuth() {
+    signInButton.hidden = true;
+    authGate.hidden = false;
+    authStatus.textContent = 'Checking session...';
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      if (!res.ok) {
+        showSignIn('Sign in to play.');
+        return;
+      }
+      const user = await res.json();
+      if (!user.signed_in) {
+        showSignIn('Sign in to play.');
+        return;
+      }
+      accountNameEl.textContent = user.name || user.email;
+      accountEl.hidden = false;
+      authGate.hidden = true;
+    } catch (_error) {
+      showSignIn('Sign-in check failed.');
+    }
+  }
+
+  signInButton.addEventListener('click', () => {
+    window.location.href = `/api/auth/sign-in?returnTo=${encodeURIComponent(returnTo())}`;
+  });
+
+  signOutButton.addEventListener('click', async () => {
+    signOutButton.disabled = true;
+    try {
+      await fetch('/api/auth/sign-out', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } finally {
+      window.location.reload();
+    }
+  });
 
   const state = {
     breach: 1,
@@ -655,5 +710,6 @@
 
   endButton.addEventListener('click', endTurn);
 
+  initAuth();
   render();
 }());

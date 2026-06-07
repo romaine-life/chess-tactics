@@ -27,6 +27,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -93,6 +94,34 @@ button.active {
   display: flex;
   justify-content: space-between;
   gap: 16px;
+}
+
+.topbar-right {
+  align-items: flex-end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.account {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+#accountName {
+  color: var(--muted);
+  font-size: 1.05rem;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#signOutButton {
+  min-height: 34px;
+  padding: 6px 8px;
 }
 
 h1 {
@@ -423,6 +452,51 @@ h1 {
 .victory { color: var(--good); }
 .danger { color: var(--danger); }
 
+/* ---------------- Auth gate ---------------- */
+
+.auth-gate {
+  align-items: center;
+  background: rgba(8, 8, 18, .82);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 20;
+}
+
+.auth-gate[hidden] { display: none; }
+
+.auth-box {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
+  max-width: 420px;
+  padding: 18px;
+  text-align: center;
+  width: min(100%, 420px);
+}
+
+.auth-box h2 {
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .95rem;
+  line-height: 1.4;
+}
+
+.auth-box p {
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1.3;
+  margin-top: 12px;
+}
+
+#signInButton {
+  margin-top: 16px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
 /* ---------------- Animations ---------------- */
 
 @keyframes threat-pulse {
@@ -445,6 +519,9 @@ h1 {
 
 @media (max-width: 560px) {
   .topbar { align-items: start; flex-direction: column; }
+  .topbar-right { align-items: start; justify-items: start; width: 100%; }
+  .account { justify-content: space-between; width: 100%; }
+  #accountName { max-width: min(58vw, 260px); }
   .meters { justify-content: flex-start; }
   body { font-size: 17px; }
 }

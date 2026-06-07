@@ -17,9 +17,15 @@
             <h1>Chess Tactics</h1>
             <p id="statusLine">Breach 1 / 6</p>
           </div>
-          <div class="meters" aria-live="polite">
-            <span id="anchorMeter">Anchors 6</span>
-            <span id="enemyMeter">Threats 0</span>
+          <div class="topbar-right">
+            <div class="account" id="account" hidden>
+              <span id="accountName"></span>
+              <button id="signOutButton" type="button">Sign Out</button>
+            </div>
+            <div class="meters" aria-live="polite">
+              <span id="anchorMeter">Anchors 6</span>
+              <span id="enemyMeter">Threats 0</span>
+            </div>
           </div>
         </header>
 
@@ -62,6 +68,14 @@
         <div class="panel-section log" id="log" aria-live="polite"></div>
       </aside>
     </main>
+
+    <div class="auth-gate" id="authGate" aria-live="polite">
+      <div class="auth-box">
+        <h2>Chess Tactics</h2>
+        <p id="authStatus">Checking session...</p>
+        <button id="signInButton" type="button" hidden>Sign In With Microsoft</button>
+      </div>
+    </div>
 
     <script src="/app.js"></script>
   </body>
