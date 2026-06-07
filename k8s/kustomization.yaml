@@ -1,6 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: chimera-board
+namespace: chess-tactics
 resources:
 - serviceaccount.yaml
 - deployment.yaml
@@ -9,6 +9,6 @@ resources:
 - xlistenerset.yaml
 - httproute.yaml
 images:
-- name: romainecr.azurecr.io/chimera-board
-  newName: romainecr.azurecr.io/chimera-board
-  newTag: "3077275"
+- name: romainecr.azurecr.io/chess-tactics
+  newName: romainecr.azurecr.io/chess-tactics
+  newTag: placeholder

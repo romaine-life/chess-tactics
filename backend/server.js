@@ -16,5 +16,5 @@ app.use((_req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`chimera-board listening on :${port}`);
+  console.log(`chess-tactics listening on :${port}`);
 });

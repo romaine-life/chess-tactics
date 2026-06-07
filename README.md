@@ -25,4 +25,4 @@ npm test
 ## Deploy
 
 The app is deployed from `k8s/` by ArgoCD. CI builds and pushes
-`romainecr.azurecr.io/chimera-board:<sha>` and updates the kustomize image tag.
+`romainecr.azurecr.io/chess-tactics:<sha>` and updates the kustomize image tag.

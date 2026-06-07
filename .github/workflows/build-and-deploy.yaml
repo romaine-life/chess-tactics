@@ -33,7 +33,7 @@ jobs:
     environment: prod
     env:
       REGISTRY: romainecr.azurecr.io
-      IMAGE: chimera-board
+      IMAGE: chess-tactics
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -127,7 +127,7 @@ jobs:
       - name: Bump image tag in k8s/kustomization.yaml
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: k8s
-        run: kustomize edit set image romainecr.azurecr.io/chimera-board=romainecr.azurecr.io/chimera-board:${{ env.TAG }}
+        run: kustomize edit set image romainecr.azurecr.io/chess-tactics=romainecr.azurecr.io/chess-tactics:${{ env.TAG }}
 
       - name: Commit and push tag bump
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -139,5 +139,5 @@ jobs:
             echo "No kustomization changes to commit"
             exit 0
           fi
-          git commit -m "chore: bump chimera-board image to ${{ env.TAG }} [skip ci]"
+          git commit -m "chore: bump chess-tactics image to ${{ env.TAG }} [skip ci]"
           git push origin HEAD:main

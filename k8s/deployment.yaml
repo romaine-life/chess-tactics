@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: chimera-board
-  namespace: chimera-board
+  name: chess-tactics
+  namespace: chess-tactics
   labels:
-    app: chimera-board
+    app: chess-tactics
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: chimera-board
+      app: chess-tactics
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -18,12 +18,12 @@ spec:
   template:
     metadata:
       labels:
-        app: chimera-board
+        app: chess-tactics
     spec:
-      serviceAccountName: chimera-board
+      serviceAccountName: chess-tactics
       containers:
-        - name: chimera-board
-          image: romainecr.azurecr.io/chimera-board:placeholder
+        - name: chess-tactics
+          image: romainecr.azurecr.io/chess-tactics:placeholder
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
