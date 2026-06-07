@@ -9,6 +9,7 @@
     "test": "node --check server.js && node --check supervisor.js && node --check smoke-test.js && node --check ../frontend/app.js && node smoke-test.js"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "playwright-core": "^1.56.0"
   }
 }

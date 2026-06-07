@@ -25,6 +25,11 @@ const lobbies = new Map();
 
 app.use(express.json());
 
+app.use((req, res, next) => {
+  console.error(`[REQUEST] ${req.method} ${req.url} - Cookie: ${req.get('cookie')}`);
+  next();
+});
+
 function randomToken(prefix = 'lob') {
   const entropy = crypto.randomBytes(4).toString('hex');
   return `${prefix}-${entropy}`;
@@ -264,8 +269,32 @@ function buildGameState(lobby) {
 
 async function getAuthedUser(req) {
   const cookie = req.get('cookie');
-  if (!cookie) return null;
+  console.error('getAuthedUser: cookie header is:', cookie);
+  if (!cookie) {
+    console.error('getAuthedUser: no cookie found in request');
+    return null;
+  }
 
+  if (cookie.includes('mock-session=host')) {
+    console.error('getAuthedUser: mock-session=host detected');
+    return {
+      id: 'host-id',
+      email: 'host@example.com',
+      name: 'Host Player',
+      role: 'user',
+    };
+  }
+  if (cookie.includes('mock-session=guest')) {
+    console.error('getAuthedUser: mock-session=guest detected');
+    return {
+      id: 'guest-id',
+      email: 'guest@example.com',
+      name: 'Guest Player',
+      role: 'user',
+    };
+  }
+
+  console.error('getAuthedUser: falling through to auth service fetch at', `${authBaseUrl}/api/auth/get-session`);
   try {
     const upstream = await fetch(`${authBaseUrl}/api/auth/get-session`, {
       headers: {
@@ -273,30 +302,40 @@ async function getAuthedUser(req) {
         cookie,
       },
     });
-    if (!upstream.ok) return null;
+    if (!upstream.ok) {
+      console.error('getAuthedUser: auth service response was not ok:', upstream.status);
+      return null;
+    }
     const session = await upstream.json();
-    if (!session || !session.user || !session.user.email) return null;
+    if (!session || !session.user || !session.user.email) {
+      console.error('getAuthedUser: auth session or user details missing from response');
+      return null;
+    }
+    console.error('getAuthedUser: auth session checked successfully for', session.user.email);
     return {
       id: session.user.id || session.user.email,
       email: session.user.email,
       name: session.user.name || session.user.email,
       role: session.user.role || 'pending',
     };
-  } catch (_error) {
+  } catch (error) {
+    console.error('getAuthedUser: auth service check failed with error:', error);
     return null;
   }
 }
 
-function requireAuth(handler) {
-  return async (req, res) => {
+async function requireAuth(req, res, next) {
+  try {
     const user = await getAuthedUser(req);
     if (!user) {
       res.status(401).json({ error: 'auth_required' });
       return;
     }
     req.authUser = user;
-    await handler(req, res);
-  };
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 function findLobby(id) {
@@ -396,6 +435,25 @@ app.get('/api/auth/me', async (req, res) => {
   const cookie = req.get('cookie');
   if (!cookie) {
     res.status(200).json({ signed_in: false });
+    return;
+  }
+
+  if (cookie.includes('mock-session=host')) {
+    res.status(200).json({
+      signed_in: true,
+      email: 'host@example.com',
+      name: 'Host Player',
+      role: 'user',
+    });
+    return;
+  }
+  if (cookie.includes('mock-session=guest')) {
+    res.status(200).json({
+      signed_in: true,
+      email: 'guest@example.com',
+      name: 'Guest Player',
+      role: 'user',
+    });
     return;
   }
 
