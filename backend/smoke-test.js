@@ -1,5 +1,6 @@
 const http = require('http');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -14,6 +15,17 @@ const mockAuth = http.createServer((req, res) => {
     if (!req.headers.cookie || !req.headers.cookie.includes('better-auth.session')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end('null');
+      return;
+    }
+    if (req.headers.cookie.includes('better-auth.session=rival')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        user: {
+          email: 'rival@example.com',
+          name: 'Lobby Rival',
+          role: 'pending',
+        },
+      }));
       return;
     }
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -64,7 +76,7 @@ child.stderr.on('data', (chunk) => {
   output += chunk.toString();
 });
 
-function request(method, path, headers = {}) {
+function request(method, path, headers = {}, body = null) {
   return new Promise((resolve, reject) => {
     const req = http.request({ hostname: '127.0.0.1', port, method, path, headers }, (res) => {
       let body = '';
@@ -78,7 +90,7 @@ function request(method, path, headers = {}) {
     req.setTimeout(1000, () => {
       req.destroy(new Error(`Timed out requesting ${path}`));
     });
-    req.end();
+    req.end(body);
   });
 }
 
@@ -144,6 +156,48 @@ async function main() {
   const signedInBody = JSON.parse(signedIn.body);
   if (signedIn.statusCode !== 200 || signedInBody.email !== 'player@example.com' || signedInBody.role !== 'pending') {
     throw new Error(`Unexpected signed-in auth response: ${signedIn.statusCode} ${signedIn.body}`);
+  }
+  const playerHash = crypto.createHash('md5').update('player@example.com').digest('hex');
+  if (!String(signedInBody.gravatar_url).includes(`/avatar/${playerHash}`) || signedInBody.avatar_url !== signedInBody.gravatar_url) {
+    throw new Error(`Signed-in user did not include Gravatar avatar data: ${signedIn.body}`);
+  }
+
+  const anonymousLobbies = await get('/api/lobbies');
+  if (anonymousLobbies.statusCode !== 401) {
+    throw new Error(`Anonymous lobby list should require sign-in: ${anonymousLobbies.statusCode}`);
+  }
+
+  const hosted = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const hostedBody = JSON.parse(hosted.body);
+  if (hosted.statusCode !== 201 || hostedBody.lobby.phase !== 'waiting' || hostedBody.lobby.viewer_role !== 'host') {
+    throw new Error(`Unexpected host lobby response: ${hosted.statusCode} ${hosted.body}`);
+  }
+  if (!hostedBody.lobby.host.avatar_url.includes(`/avatar/${playerHash}`)) {
+    throw new Error(`Lobby host is missing Gravatar URL: ${hosted.body}`);
+  }
+
+  const listed = await get('/api/lobbies', { cookie: 'better-auth.session=rival' });
+  const listedBody = JSON.parse(listed.body);
+  if (listed.statusCode !== 200 || listedBody.lobbies.length !== 1 || listedBody.lobbies[0].viewer_role !== 'observer') {
+    throw new Error(`Unexpected lobby list response: ${listed.statusCode} ${listed.body}`);
+  }
+
+  const lobbyId = hostedBody.lobby.id;
+  const joined = await request('POST', `/api/lobbies/${lobbyId}/join`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+  const joinedBody = JSON.parse(joined.body);
+  if (joined.statusCode !== 200 || joinedBody.lobby.phase !== 'ready' || joinedBody.lobby.viewer_role !== 'guest') {
+    throw new Error(`Unexpected join lobby response: ${joined.statusCode} ${joined.body}`);
+  }
+
+  const rivalStart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+  if (rivalStart.statusCode !== 403) {
+    throw new Error(`Guest should not be able to start lobby: ${rivalStart.statusCode} ${rivalStart.body}`);
+  }
+
+  const started = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const startedBody = JSON.parse(started.body);
+  if (started.statusCode !== 200 || startedBody.lobby.phase !== 'started') {
+    throw new Error(`Unexpected start lobby response: ${started.statusCode} ${started.body}`);
   }
 
   const redirect = await get('/api/auth/sign-in?returnTo=%2Fplay');

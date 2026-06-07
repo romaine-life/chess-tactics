@@ -115,6 +115,15 @@ button:disabled {
   min-width: 0;
 }
 
+.account-avatar {
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  display: block;
+  height: 34px;
+  image-rendering: auto;
+  width: 34px;
+}
+
 #accountName {
   color: var(--muted);
   font-size: 1.05rem;
@@ -290,6 +299,130 @@ h1 {
 }
 
 .party-menu { max-width: min(640px, calc(100vw - 48px)); }
+
+.lobby-menu {
+  max-height: min(78vh, 760px);
+  max-width: min(720px, calc(100vw - 48px));
+  overflow: auto;
+}
+
+.lobby-list {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+
+.empty-lobbies {
+  background: #17132b;
+  border: 2px dashed var(--line);
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1.35;
+  padding: 12px;
+}
+
+.lobby-card {
+  background: #17132b;
+  border: 2px solid var(--line);
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.lobby-card.compact { gap: 8px; }
+
+.lobby-card-head {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.lobby-card-head strong,
+.lobby-card-head span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-card-head strong {
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .62rem;
+  line-height: 1.35;
+}
+
+.lobby-card-head span {
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.lobby-card-head button {
+  min-height: 36px;
+  min-width: 82px;
+  text-align: center;
+}
+
+.lobby-seats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lobby-seat {
+  align-items: center;
+  background: #211a3d;
+  border: 2px solid #40366c;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  min-height: 58px;
+  padding: 8px;
+}
+
+.lobby-seat.empty {
+  opacity: .72;
+}
+
+.lobby-avatar {
+  border: 2px solid #0d0a1c;
+  border-radius: 4px;
+  display: grid;
+  grid-row: span 2;
+  height: 38px;
+  image-rendering: auto;
+  place-items: center;
+  width: 38px;
+}
+
+.lobby-avatar.fallback {
+  background: #0f0c21;
+  color: var(--muted);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .62rem;
+}
+
+.lobby-seat span,
+.lobby-seat small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-seat span {
+  font-size: 1.1rem;
+}
+
+.lobby-seat small {
+  color: var(--power);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .48rem;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
 
 .locked-piece {
   align-items: center;
@@ -613,6 +746,7 @@ h1 {
   .meters { justify-content: flex-start; }
   body { font-size: 17px; }
   .piece-picker { grid-template-columns: 1fr; }
+  .lobby-seats { grid-template-columns: 1fr; }
   .game-menu { padding: 16px; }
 }
 
