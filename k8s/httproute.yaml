@@ -1,0 +1,27 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: chimera-board
+  namespace: chimera-board
+spec:
+  hostnames:
+    - chimera-board.romaine.life
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: main
+      namespace: envoy-gateway-system
+    - group: gateway.networking.x-k8s.io
+      kind: XListenerSet
+      name: chimera-board
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: chimera-board
+          port: 80
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /

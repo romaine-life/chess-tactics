@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Chimera Board</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="game">
+        <header class="topbar">
+          <div>
+            <h1>Chimera Board</h1>
+            <p id="statusLine">Breach 1 / 6</p>
+          </div>
+          <div class="meters" aria-live="polite">
+            <span id="anchorMeter">Anchors 6</span>
+            <span id="enemyMeter">Threats 0</span>
+          </div>
+        </header>
+
+        <div class="board-wrap">
+          <div id="board" class="board" aria-label="Tactical board"></div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-section">
+          <h2 id="selectedName">Crown Lancer</h2>
+          <p id="selectedMeta">Hybrid royal vanguard</p>
+          <div class="actions">
+            <button id="moveButton" class="active" type="button">Move</button>
+            <button id="powerButton" type="button">Power</button>
+            <button id="endButton" type="button">End Turn</button>
+          </div>
+        </div>
+
+        <div class="panel-section roster" id="roster"></div>
+        <div class="panel-section log" id="log" aria-live="polite"></div>
+      </aside>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

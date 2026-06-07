@@ -1,0 +1,143 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - frontend/**
+      - Dockerfile
+      - .dockerignore
+      - k8s/**
+      - .github/workflows/build-and-deploy.yaml
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: "Git ref or commit SHA to build. Leave blank to build the dispatch revision."
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: write
+
+concurrency:
+  group: build-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build image, push, bump kustomization tag
+    if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      REGISTRY: romainecr.azurecr.io
+      IMAGE: chimera-board
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve requested ref
+        env:
+          INPUT_REF: ${{ inputs.git_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin '+refs/heads/*:refs/remotes/origin/*'
+          target_ref="${INPUT_REF:-$GITHUB_SHA}"
+          if full_sha="$(git rev-parse --verify "${target_ref}^{commit}" 2>/dev/null)"; then
+            :
+          elif git show-ref --verify --quiet "refs/remotes/origin/${target_ref}"; then
+            full_sha="$(git rev-parse "refs/remotes/origin/${target_ref}^{commit}")"
+          elif git show-ref --verify --quiet "refs/tags/${target_ref}"; then
+            full_sha="$(git rev-parse "refs/tags/${target_ref}^{commit}")"
+          else
+            echo "::error::Unable to resolve git_ref '${target_ref}' to a commit."
+            exit 1
+          fi
+          git checkout --detach "$full_sha"
+          echo "Resolved ${target_ref} -> ${full_sha}"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Test app
+        working-directory: backend
+        run: |
+          npm ci
+          npm test
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Resolve image tag
+        run: |
+          TAG="$(git rev-parse --short=7 HEAD)"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "Built ref $(git rev-parse HEAD) as ${REGISTRY}/${IMAGE}:${TAG}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Login to ACR
+        run: az acr login --name romainecr
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Check existing image tag
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          if az acr repository show-tags \
+              --name romainecr \
+              --repository "${IMAGE}" \
+              --query "[?@=='${TAG}'] | [0]" \
+              --output tsv | grep -qx "${TAG}"; then
+            echo "target_exists=true" >>"${GITHUB_OUTPUT}"
+          else
+            echo "target_exists=false" >>"${GITHUB_OUTPUT}"
+          fi
+
+      - name: Build and push image
+        if: steps.image.outputs.target_exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.TAG }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
+
+      - name: Install kustomize
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          KUSTOMIZE_VERSION=v5.8.1
+          curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin/
+
+      - name: Bump image tag in k8s/kustomization.yaml
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: k8s
+        run: kustomize edit set image romainecr.azurecr.io/chimera-board=romainecr.azurecr.io/chimera-board:${{ env.TAG }}
+
+      - name: Commit and push tag bump
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/kustomization.yaml
+          if git diff --cached --quiet; then
+            echo "No kustomization changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: bump chimera-board image to ${{ env.TAG }} [skip ci]"
+          git push origin HEAD:main

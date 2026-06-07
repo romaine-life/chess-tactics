@@ -1,0 +1,14 @@
+{
+  "name": "chimera-board-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static server for Chimera Board.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --check server.js && node --check ../frontend/app.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
