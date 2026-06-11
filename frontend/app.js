@@ -748,9 +748,7 @@
     const shade = piece.side === 'player' ? '#8fa6b4' : '#4b2419';
     const accent = piece.side === 'player' ? '#8fe6ff' : '#ff8b52';
     ctx.save();
-    ctx.translate(Math.round(x), Math.round(y - 18));
-    ctx.fillStyle = 'rgba(0,0,0,0.38)';
-    ctx.fillRect(-17, 24, 34, 6);
+    ctx.translate(Math.round(x), Math.round(y - 24));
 
     const img = IMAGES[piece.type] ? (piece.side === 'player' ? IMAGES[piece.type].player : IMAGES[piece.type].enemy) : null;
     if (img) {
