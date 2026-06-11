@@ -4,7 +4,7 @@ image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted on purpose: a bare short SHA like a8d4270 can parse as a YAML
   # float/scientific-notation; keep the quotes.
-  tag: "7c2d024"
+  tag: "f995a72"
   pullPolicy: IfNotPresent
 
 name: chess-tactics
