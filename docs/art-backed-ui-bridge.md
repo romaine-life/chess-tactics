@@ -23,11 +23,11 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` shows the saved main menu concept render.
-- `/?screen=main` explicitly opens the saved main menu concept render.
-- `/?screen=main-concept` also opens the saved main menu concept render.
-- `/?screen=main-skeleton` opens the live DOM skeleton, with unfinished asset
-  slots labeled in place.
+- `/` shows the live DOM main menu skeleton, with unfinished asset slots labeled
+  in place.
+- `/?screen=main` explicitly opens the live DOM main menu skeleton.
+- `/?screen=main-skeleton` also opens the live DOM main menu skeleton.
+- `/?screen=main-concept` opens the saved main menu concept render.
 - `/?screen=campaigns` opens the campaign editor concept.
 - `/?screen=level-editor` opens the level editor concept.
 - `/?screen=skirmish` opens the skirmish concept.
@@ -37,9 +37,10 @@ the concept main menu, use `/?screen=main-concept&hotspots=1`.
 
 ## What Is Live
 
-The main menu has two review surfaces: the approved render remains visible, and
-the live skeleton maps the real DOM structure. Its buttons route directly into
-existing app actions, but its labeled slots are intentionally unfinished.
+The main menu has two review surfaces: the live skeleton is the default work
+surface, and the approved render remains visible as a reference. Skeleton
+buttons route directly into existing app actions, but its labeled slots are
+intentionally unfinished.
 
 The remaining art-backed screens have real buttons layered over the render. The
 hotspots route back into existing app actions such as menu navigation, campaign

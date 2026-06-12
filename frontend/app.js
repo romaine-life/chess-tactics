@@ -2509,12 +2509,13 @@
   function shouldShowMainConcept() {
     const params = new URLSearchParams(window.location.search);
     const screen = params.get('screen');
-    return !screen || screen === 'main' || screen === 'menu' || screen === 'main-concept' || screen === 'main-art';
+    return screen === 'main-concept' || screen === 'main-art';
   }
 
   function shouldShowMainSkeleton() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('screen') === 'main-skeleton';
+    const screen = params.get('screen');
+    return !screen || screen === 'main' || screen === 'menu' || screen === 'main-skeleton';
   }
 
   function renderSkeletonTag(label, stateLabel = 'Unfilled') {
@@ -2663,7 +2664,7 @@
     }
     menuLayer.hidden = false;
     if (state.screen === 'main') {
-      menuLayer.innerHTML = shouldShowMainSkeleton() && !shouldShowMainConcept() ? renderMainMenuSkeleton() : renderArtScreen('main');
+      menuLayer.innerHTML = shouldShowMainConcept() ? renderArtScreen('main') : renderMainMenuSkeleton();
     } else if (state.screen === 'lobbies') {
       const visibleLobbies = state.lobbies.filter((lobby) => !state.lobby || lobby.id !== state.lobby.id);
       menuLayer.innerHTML = `
