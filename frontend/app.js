@@ -2116,9 +2116,6 @@
                           <option value="${difficulty}" ${level.difficulty === difficulty ? 'selected' : ''}>${difficulty}</option>`).join('')}
                       </select>
                     </label>
-                    <label>Width<input id="levelWidth" type="number" min="4" max="16" value="${escapeText(level.width)}"></label>
-                    <label>Height<input id="levelHeight" type="number" min="4" max="20" value="${escapeText(level.height)}"></label>
-                    <label>Enemy Budget<input id="levelEnemyBudget" type="number" min="1" max="24" value="${escapeText(level.enemy_budget)}"></label>
                     <label class="wide">Notes<textarea id="levelNotes" maxlength="400">${escapeText(level.notes)}</textarea></label>
                   </div>
                   <div class="menu-row">
@@ -2270,6 +2267,14 @@
             </div>
           </div>
           ${mode === 'board' ? `
+            <div class="panel-section">
+              <div class="roster-title" style="margin-bottom: 8px;">Level Setup</div>
+              <div class="editor-grid">
+                <label>Width<input id="levelWidth" type="number" min="4" max="16" value="${level ? escapeText(level.width) : 8}"></label>
+                <label>Height<input id="levelHeight" type="number" min="4" max="20" value="${level ? escapeText(level.height) : 12}"></label>
+                <label>Enemy Budget<input id="levelEnemyBudget" type="number" min="1" max="24" value="${level ? escapeText(level.enemy_budget) : 3}"></label>
+              </div>
+            </div>
             <div class="panel-section">
               <div class="roster-title" style="margin-bottom: 8px;">Palette Brushes</div>
               <div class="level-palette canvas-palette" aria-label="Level editor brushes">
@@ -2513,6 +2518,23 @@
       const level = selectedLevel(campaign);
       if (level) {
         level.random_rocks_count = clampBoardNumber(target.value, 0, 0, 100);
+      }
+    }
+    if (target.id === 'levelWidth' || target.id === 'levelHeight' || target.id === 'levelEnemyBudget') {
+      const campaign = selectedCampaign();
+      const level = selectedLevel(campaign);
+      if (level) {
+        if (target.id === 'levelWidth') level.width = clampBoardNumber(target.value, level.width, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX);
+        if (target.id === 'levelHeight') level.height = clampBoardNumber(target.value, level.height, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX);
+        if (target.id === 'levelEnemyBudget') level.enemy_budget = clampBoardNumber(target.value, level.enemy_budget, 1, 24);
+        if (target.id === 'levelWidth' || target.id === 'levelHeight') {
+          applyLevelFormDraft(level);
+          syncLevelEditorPieces();
+          state.gridEndX = level.width - 1;
+          state.gridEndY = level.height - 1;
+        }
+        setCampaignMessage('Level settings changed. Save the level to persist them.');
+        render();
       }
     }
     if (target.id === 'selectedZoneName') {
