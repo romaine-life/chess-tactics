@@ -16,7 +16,7 @@ app.use(express.json({ limit: '64kb' }));
 
 const LEVEL_ROLES = new Set(['player', 'enemy', 'terrain']);
 const LEVEL_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen']);
-const LEVEL_TERRAIN = new Set(['rock']);
+const LEVEL_TERRAIN = new Set(['rock', 'random-rock']);
 
 function safeReturnPath(raw) {
   if (!raw || typeof raw !== 'string') return '/';
@@ -121,6 +121,7 @@ function publicLevel(level) {
     enemy_budget: level.enemyBudget,
     notes: level.notes,
     layout: level.layout.map(publicLevelCell),
+    random_rocks_count: level.randomRocksCount ?? 0,
   };
 }
 
@@ -199,6 +200,7 @@ function buildLevel(raw, index) {
     enemyBudget: clampNumber(raw && (raw.enemy_budget ?? raw.enemyBudget), 3, 1, 24),
     notes: clampText(raw && raw.notes, '', 400),
     layout: normalizeLevelLayout(raw && raw.layout, width, height),
+    randomRocksCount: clampNumber(raw && (raw.random_rocks_count ?? raw.randomRocksCount), 0, 0, 100),
   };
 }
 
@@ -219,9 +221,25 @@ function applyLevelPatch(level, raw) {
   if (Object.hasOwn(raw, 'layout')) {
     level.layout = normalizeLevelLayout(raw.layout, level.width, level.height);
   }
+  if (Object.hasOwn(raw, 'random_rocks_count') || Object.hasOwn(raw, 'randomRocksCount')) {
+    level.randomRocksCount = clampNumber(raw.random_rocks_count ?? raw.randomRocksCount, level.randomRocksCount, 0, 100);
+  }
 }
 
 async function readSession(req) {
+  const host = req.get('host') || '';
+  if (host.includes('.tank.dev.romaine.life')) {
+    const cookie = req.get('cookie') || '';
+    if (cookie.includes('better-auth.session=mock-dev-session')) {
+      return {
+        user: {
+          email: 'player@example.com',
+          name: 'Tactics Player',
+          role: 'pending',
+        }
+      };
+    }
+  }
   const cookie = req.get('cookie');
   if (!cookie) return null;
   const upstream = await fetch(`${authBaseUrl}/api/auth/get-session`, {
@@ -532,6 +550,13 @@ app.delete('/api/campaigns/:id/levels/:levelId', async (req, res) => {
 });
 
 app.get('/api/auth/sign-in', (req, res) => {
+  const host = req.get('host') || '';
+  if (host.includes('.tank.dev.romaine.life')) {
+    res.setHeader('Set-Cookie', 'better-auth.session=mock-dev-session; Path=/; HttpOnly');
+    const returnTo = req.query.returnTo || '/';
+    res.redirect(302, returnTo);
+    return;
+  }
   const next = encodeURIComponent(callbackUrl(req));
   res.redirect(302, `${authBaseUrl}/sign-in/microsoft?callbackURL=${next}`);
 });

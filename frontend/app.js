@@ -17,6 +17,7 @@
     { id: 'enemy:bishop', label: 'E Bishop', role: 'enemy', type: 'bishop', mark: 'B' },
     { id: 'enemy:rook', label: 'E Rook', role: 'enemy', type: 'rook', mark: 'R' },
     { id: 'terrain:rock', label: 'Rock', role: 'terrain', type: 'rock', mark: 'O' },
+    { id: 'terrain:random-rock', label: 'Rand Rock', role: 'terrain', type: 'random-rock', mark: '?' },
   ];
   const PIECES = {
     pawn: { mark: 'P', name: 'Pawn', role: 'Forward footman' },
@@ -25,6 +26,7 @@
     rook: { mark: 'R', name: 'Rook', role: 'Straight-line tower' },
     queen: { mark: 'Q', name: 'Queen', role: 'Promoted raider' },
     rock: { mark: 'O', name: 'Rock', role: 'Impassable obstacle' },
+    'random-rock': { mark: '?', name: 'Rand Rock', role: 'Potential falling rock' },
   };
 
   const GEOMETRIES = {
@@ -115,6 +117,14 @@
       { type: 'right', d: 'M 30,36 L 52,30 L 44,18 L 31,20 Z' },
       { type: 'top', d: 'M 18,18 L 31,20 L 32,10 L 22,12 Z' },
       { type: 'top', d: 'M 31,20 L 44,18 L 40,11 L 32,10 Z' }
+    ],
+    'random-rock': [
+      { type: 'left', d: 'M 16,44 L 32,52 L 30,36 L 12,32 Z' },
+      { type: 'right', d: 'M 32,52 L 48,44 L 52,30 L 30,36 Z' },
+      { type: 'left', d: 'M 12,32 L 30,36 L 31,20 L 18,18 Z' },
+      { type: 'right', d: 'M 30,36 L 52,30 L 44,18 L 31,20 Z' },
+      { type: 'top', d: 'M 18,18 L 31,20 L 32,10 L 22,12 Z' },
+      { type: 'top', d: 'M 31,20 L 44,18 L 40,11 L 32,10 Z' }
     ]
   };
 
@@ -132,14 +142,21 @@
       right = '#7a3f2a';
       deep = '#471e11';
     } else {
-      top = '#a8a8a8';
-      left = '#7a7a7a';
-      right = '#545454';
-      deep = '#303030';
+      if (type === 'random-rock') {
+        top = 'rgba(214, 187, 242, 0.45)';
+        left = 'rgba(156, 124, 182, 0.45)';
+        right = 'rgba(115, 87, 138, 0.45)';
+        deep = 'rgba(70, 50, 87, 0.45)';
+      } else {
+        top = '#a8a8a8';
+        left = '#7a7a7a';
+        right = '#545454';
+        deep = '#303030';
+      }
     }
     const fillColors = { top, left, right, accent: deep };
 
-    const pathStrings = paths.map((path) => `<path d="${path.d}"></path>`).join('');
+    const pathStrings = paths.map((path) => `<path d="${path.d}" ${type === 'random-rock' ? 'stroke-dasharray="2,2"' : ''}></path>`).join('');
     const fillStrings = paths.map((path) => {
       const fillVal = fillColors[path.type] || left;
       return `<path d="${path.d}" fill="${fillVal}"></path>`;
@@ -298,6 +315,10 @@
     log: ['Choose your squad. One pawn is always fielded.'],
     battleAnimating: false,
     battleAnimStartTime: 0,
+    gridStartX: 0,
+    gridStartY: 0,
+    gridEndX: 7,
+    gridEndY: 11,
   };
 
   function rand(max) {
@@ -630,6 +651,8 @@
   function levelFormData() {
     const campaign = selectedCampaign();
     const level = selectedLevel(campaign);
+    const rocksInput = document.getElementById('levelRandomRocksCount') || document.getElementById('levelEditorRocksCount');
+    const rocksValue = rocksInput ? Number(rocksInput.value) : (level && level.random_rocks_count);
     return {
       name: (document.getElementById('levelName') && document.getElementById('levelName').value) || (level && level.name),
       objective: (document.getElementById('levelObjective') && document.getElementById('levelObjective').value) || (level && level.objective),
@@ -639,6 +662,7 @@
       enemy_budget: (document.getElementById('levelEnemyBudget') && document.getElementById('levelEnemyBudget').value) || (level && level.enemy_budget),
       notes: (document.getElementById('levelNotes') && document.getElementById('levelNotes').value) || (level && level.notes),
       layout: level ? (level.layout || []) : [],
+      random_rocks_count: clampBoardNumber(rocksValue, 0, 0, 100),
     };
   }
 
@@ -733,6 +757,10 @@
     applyLevelFormDraft(level);
     state.screen = 'level-editor';
     state.hoverTile = null;
+    state.gridStartX = 0;
+    state.gridStartY = 0;
+    state.gridEndX = level.width - 1;
+    state.gridEndY = level.height - 1;
     syncLevelEditorPieces();
     setCampaignMessage(`Editing ${level.name}.`);
     render();
@@ -756,6 +784,39 @@
     paintLevelCell(level, x, y);
     syncLevelEditorPieces();
     setCampaignMessage('Board changed. Save the level to persist it.');
+    render();
+  }
+
+  function paintRandomRockGrid(add) {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    const x1 = state.gridStartX;
+    const y1 = state.gridStartY;
+    const x2 = state.gridEndX;
+    const y2 = state.gridEndY;
+
+    const startX = Math.min(x1, x2);
+    const endX = Math.max(x1, x2);
+    const startY = Math.min(y1, y2);
+    const endY = Math.max(y1, y2);
+
+    level.layout = editorPiecesToLayout();
+    let layout = level.layout;
+
+    for (let y = startY; y <= endY; y++) {
+      for (let x = startX; x <= endX; x++) {
+        if (!inBounds(x, y, { cols: level.width, rows: level.height })) continue;
+        layout = layout.filter((cell) => Number(cell.x) !== x || Number(cell.y) !== y);
+        if (add) {
+          layout.push({ x, y, role: 'terrain', type: 'random-rock' });
+        }
+      }
+    }
+
+    level.layout = layout.sort((a, b) => (Number(a.y) - Number(b.y)) || (Number(a.x) - Number(b.x)));
+    syncLevelEditorPieces();
+    setCampaignMessage('Board grid updated. Save the level to persist it.');
     render();
   }
 
@@ -1722,6 +1783,7 @@
                     <label>Width<input id="levelWidth" type="number" min="4" max="16" value="${escapeText(level.width)}"></label>
                     <label>Height<input id="levelHeight" type="number" min="4" max="20" value="${escapeText(level.height)}"></label>
                     <label>Enemy Budget<input id="levelEnemyBudget" type="number" min="1" max="24" value="${escapeText(level.enemy_budget)}"></label>
+                    <label>Rocks to Spawn<input id="levelRandomRocksCount" type="number" min="0" max="100" value="${escapeText(level.random_rocks_count || 0)}"></label>
                     <label class="wide">Notes<textarea id="levelNotes" maxlength="400">${escapeText(level.notes)}</textarea></label>
                   </div>
                   <div class="menu-row">
@@ -1855,12 +1917,33 @@
             <button type="button" data-action="toggle-level-editor-panel">${collapsed ? 'Expand' : 'Collapse'}</button>
             <button type="button" data-action="back-to-campaigns">Back</button>
           </div>
-          ${collapsed ? '' : `<div class="level-palette canvas-palette" aria-label="Level editor brushes">
-            ${LEVEL_BRUSHES.map((item) => `
-              <button type="button" class="${brush.id === item.id ? 'active' : ''} ${item.role || 'empty'}" data-action="select-level-brush" data-brush="${item.id}">
-                <span>${escapeText(item.mark)}</span>${escapeText(item.label)}
-              </button>`).join('')}
-          </div>`}
+          ${collapsed ? '' : `
+            <div class="level-palette canvas-palette" aria-label="Level editor brushes">
+              ${LEVEL_BRUSHES.map((item) => `
+                <button type="button" class="${brush.id === item.id ? 'active' : ''} ${item.role || 'empty'} ${item.type || ''}" data-action="select-level-brush" data-brush="${item.id}">
+                  <span>${escapeText(item.mark)}</span>${escapeText(item.label)}
+                </button>
+              `).join('')}
+            </div>
+            <div class="level-editor-rocks">
+              <label>Rocks to Spawn:
+                <input type="number" id="levelEditorRocksCount" min="0" max="100" value="${level ? (level.random_rocks_count || 0) : 0}">
+              </label>
+            </div>
+            <div class="level-editor-grid-tool">
+              <p class="tool-heading">Draw Grid of Random Rock Set:</p>
+              <div class="tool-inputs">
+                <label>From: X <input type="number" id="gridStartX" min="0" max="15" value="${state.gridStartX}"></label>
+                <label>Y <input type="number" id="gridStartY" min="0" max="19" value="${state.gridStartY}"></label>
+                <label>To: X <input type="number" id="gridEndX" min="0" max="15" value="${state.gridEndX}"></label>
+                <label>Y <input type="number" id="gridEndY" min="0" max="19" value="${state.gridEndY}"></label>
+              </div>
+              <div class="tool-actions">
+                <button type="button" data-action="draw-rock-grid">Paint Grid</button>
+                <button type="button" data-action="clear-rock-grid">Clear Grid</button>
+              </div>
+            </div>
+          `}
         </div>`;
     } else {
       menuLayer.innerHTML = `
@@ -1971,6 +2054,14 @@
       clearLevelLayout();
       return;
     }
+    if (button.dataset.action === 'draw-rock-grid') {
+      paintRandomRockGrid(true);
+      return;
+    }
+    if (button.dataset.action === 'clear-rock-grid') {
+      paintRandomRockGrid(false);
+      return;
+    }
     if (button.dataset.action === 'save-level') void saveCampaignLevel();
     if (button.dataset.action === 'edit-level-board') enterLevelEditor();
     if (button.dataset.action === 'save-level-editor') void saveLevelEditor();
@@ -1992,6 +2083,21 @@
     if (button.dataset.action === 'settings') setScreen('settings');
     if (button.dataset.action === 'main') setScreen('main');
     if (button.dataset.action === 'start') startGame();
+  });
+  
+  menuLayer.addEventListener('input', (event) => {
+    const target = event.target;
+    if (target.id === 'levelEditorRocksCount') {
+      const campaign = selectedCampaign();
+      const level = selectedLevel(campaign);
+      if (level) {
+        level.random_rocks_count = clampBoardNumber(target.value, 0, 0, 100);
+      }
+    }
+    if (target.id === 'gridStartX') state.gridStartX = clampBoardNumber(target.value, 0, 0, 15);
+    if (target.id === 'gridStartY') state.gridStartY = clampBoardNumber(target.value, 0, 0, 19);
+    if (target.id === 'gridEndX') state.gridEndX = clampBoardNumber(target.value, 7, 0, 15);
+    if (target.id === 'gridEndY') state.gridEndY = clampBoardNumber(target.value, 11, 0, 19);
   });
 
   menuLayer.addEventListener('wheel', (event) => {

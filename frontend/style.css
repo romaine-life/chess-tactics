@@ -1122,6 +1122,99 @@ h1 {
   .game-menu { padding: 16px; }
 }
 
+.level-palette button.random-rock span,
+.level-palette button.random-rock.active span {
+  background: #a872cc;
+  color: #ffe2bd;
+}
+
+.level-editor-rocks {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(23, 19, 43, 0.6);
+  border: 1px solid rgba(117, 103, 173, 0.4);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.level-editor-rocks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "VT323", monospace;
+  font-size: 1.15rem;
+  color: #dceaf2;
+  cursor: pointer;
+  width: 100%;
+}
+
+.level-editor-rocks input[type="number"] {
+  background: #17132b;
+  border: 2px solid #7567ad;
+  color: #ffd24a;
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.8rem;
+  padding: 4px 6px;
+  width: 70px;
+  text-align: center;
+}
+
+.level-editor-grid-tool {
+  background: rgba(23, 19, 43, 0.6);
+  border: 1px solid rgba(117, 103, 173, 0.4);
+  padding: 12px;
+  border-radius: 4px;
+  display: grid;
+  gap: 8px;
+}
+
+.level-editor-grid-tool .tool-heading {
+  font-family: "VT323", monospace;
+  font-size: 1.15rem;
+  color: #ffd24a;
+  margin: 0;
+}
+
+.level-editor-grid-tool .tool-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.level-editor-grid-tool .tool-inputs label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: "VT323", monospace;
+  font-size: 1rem;
+  color: #b9cad6;
+}
+
+.level-editor-grid-tool .tool-inputs input[type="number"] {
+  background: #17132b;
+  border: 2px solid #7567ad;
+  color: #ffffff;
+  font-family: "VT323", monospace;
+  font-size: 1rem;
+  padding: 2px 4px;
+  width: 50px;
+  text-align: center;
+}
+
+.level-editor-grid-tool .tool-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.level-editor-grid-tool .tool-actions button {
+  flex: 1;
+  min-height: 30px;
+  font-size: 0.75rem;
+  padding: 4px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; }
 }
