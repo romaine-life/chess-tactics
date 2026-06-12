@@ -244,6 +244,7 @@
     pieces: [],
     winner: null,
     showThreats: false,
+    animating: false,
     log: ['Choose your squad. One pawn is always fielded.'],
   };
 
@@ -618,18 +619,92 @@
     }
   }
 
-  function movePiece(piece, move) {
-    const captured = move.capture ? state.pieces.find((target) => target.id === move.capture) : pieceAt(move.x, move.y);
-    if (captured && captured.side !== piece.side) {
-      captured.alive = false;
-      addLog(`${piece.name} captures ${captured.name}.`, piece.side === 'player' ? 'victory' : 'danger');
-    } else {
-      addLog(`${piece.name} advances.`);
+  function easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
+  function getPieceRenderPos(piece) {
+    if (piece.anim) {
+      const now = performance.now();
+      const elapsed = now - piece.anim.startTime;
+      const t = Math.min(1, elapsed / piece.anim.duration);
+      const easeT = easeInOutQuad(t);
+      const px = piece.anim.startX + (piece.anim.endX - piece.anim.startX) * easeT;
+      const py = piece.anim.startY + (piece.anim.endY - piece.anim.startY) * easeT;
+      return { x: px, y: py };
     }
-    piece.x = move.x;
-    piece.y = move.y;
-    promoteIfNeeded(piece);
-    checkVictory();
+    return { x: piece.x, y: piece.y };
+  }
+
+  let animFrameId = null;
+  function updateAnimations() {
+    let active = false;
+    const now = performance.now();
+    const callbacks = [];
+    state.pieces.forEach((piece) => {
+      if (piece.anim) {
+        const elapsed = now - piece.anim.startTime;
+        if (elapsed >= piece.anim.duration) {
+          const cb = piece.anim.callback;
+          piece.anim = null;
+          if (cb) callbacks.push(cb);
+        } else {
+          active = true;
+        }
+      }
+    });
+
+    drawBoard();
+
+    if (active) {
+      animFrameId = requestAnimationFrame(updateAnimations);
+    } else {
+      animFrameId = null;
+      render();
+    }
+
+    callbacks.forEach((cb) => cb());
+  }
+
+  function startAnimationLoop() {
+    if (!animFrameId) {
+      animFrameId = requestAnimationFrame(updateAnimations);
+    }
+  }
+
+  function movePiece(piece, move, onComplete) {
+    const startX = piece.x;
+    const startY = piece.y;
+    const endX = move.x;
+    const endY = move.y;
+
+    state.animating = true;
+
+    piece.anim = {
+      startX,
+      startY,
+      endX,
+      endY,
+      startTime: performance.now(),
+      duration: 350,
+      callback: () => {
+        const captured = move.capture ? state.pieces.find((target) => target.id === move.capture) : pieceAt(endX, endY);
+        if (captured && captured.side !== piece.side) {
+          captured.alive = false;
+          addLog(`${piece.name} captures ${captured.name}.`, piece.side === 'player' ? 'victory' : 'danger');
+        } else {
+          addLog(`${piece.name} advances.`);
+        }
+        piece.x = endX;
+        piece.y = endY;
+        promoteIfNeeded(piece);
+        checkVictory();
+
+        state.animating = false;
+        if (onComplete) onComplete();
+      }
+    };
+    startAnimationLoop();
   }
 
   function checkVictory() {
@@ -645,15 +720,16 @@
   }
 
   function completePlayerMove(piece, move) {
-    movePiece(piece, move);
-    if (state.winner) {
+    movePiece(piece, move, () => {
+      if (state.winner) {
+        render();
+        return;
+      }
+      state.turn = 'enemy';
+      state.selected = null;
       render();
-      return;
-    }
-    state.turn = 'enemy';
-    state.selected = null;
-    render();
-    window.setTimeout(enemyTurn, 380);
+      window.setTimeout(enemyTurn, 380);
+    });
   }
 
   function enemyTurn() {
@@ -672,16 +748,17 @@
       .map((entry) => ({ piece: entry.piece, moves: entry.moves.filter((move) => move.capture) }))
       .filter((entry) => entry.moves.length);
     const entry = choice(captureEntries.length ? captureEntries : candidates);
-    movePiece(entry.piece, choice(entry.moves));
-    if (!state.winner) {
-      state.turn = 'player';
-      state.selected = livingPieces('player')[0] && livingPieces('player')[0].id;
-    }
-    render();
+    movePiece(entry.piece, choice(entry.moves), () => {
+      if (!state.winner) {
+        state.turn = 'player';
+        state.selected = livingPieces('player')[0] && livingPieces('player')[0].id;
+      }
+      render();
+    });
   }
 
   function handleTile(x, y) {
-    if (state.screen !== 'game' || state.turn !== 'player') return;
+    if (state.screen !== 'game' || state.turn !== 'player' || state.animating) return;
     const clicked = pieceAt(x, y);
     if (clicked && clicked.side === 'player') {
       state.selected = clicked.id;
@@ -782,7 +859,7 @@
       drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.08)', null);
     }
     const selected = selectedPiece();
-    const moves = state.turn === 'player' ? legalMoves(selected) : [];
+    const moves = state.turn === 'player' && !state.animating ? legalMoves(selected) : [];
     if (state.screen === 'game' && state.showThreats) {
       getEnemyThreats().forEach((sq) => {
         drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)');
@@ -791,16 +868,21 @@
     moves.forEach((move) => {
       drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff');
     });
-    if (selected) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
-    if (state.hoverTile) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
+    if (selected && !state.animating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
+    if (state.hoverTile && !state.animating) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
     state.pieces
       .filter((piece) => piece.alive)
-      .sort((a, b) => (a.x + a.y) - (b.x + b.y))
+      .sort((a, b) => {
+        const posA = getPieceRenderPos(a);
+        const posB = getPieceRenderPos(b);
+        return (posA.x + posA.y) - (posB.x + posB.y);
+      })
       .forEach(drawPiece);
   }
 
   function drawPiece(piece) {
-    const { x, y } = isoCenter(piece.x, piece.y);
+    const renderPos = getPieceRenderPos(piece);
+    const { x, y } = isoCenter(renderPos.x, renderPos.y);
     const base = piece.side === 'player' ? '#dceaf2' : '#7a3f2a';
     const shade = piece.side === 'player' ? '#8fa6b4' : '#4b2419';
     const accent = piece.side === 'player' ? '#8fe6ff' : '#ff8b52';
@@ -1002,6 +1084,7 @@
       `).join('')}`).join('');
     rosterEl.querySelectorAll('button[data-unit]').forEach((button) => {
       button.addEventListener('click', () => {
+        if (state.animating) return;
         const unit = state.pieces.find((item) => item.id === button.dataset.unit);
         if (unit && unit.side === 'player' && state.turn === 'player') {
           state.selected = unit.id;
@@ -1052,6 +1135,13 @@
   });
 
   boardEl.addEventListener('mousemove', (event) => {
+    if (state.animating) {
+      if (state.hoverTile) {
+        state.hoverTile = null;
+        render();
+      }
+      return;
+    }
     const tile = pointToTile(event.clientX, event.clientY);
     const changed = (!tile && state.hoverTile) || (tile && (!state.hoverTile || tile.x !== state.hoverTile.x || tile.y !== state.hoverTile.y));
     if (changed) {
@@ -1067,9 +1157,16 @@
     }
   });
 
-  moveButton.addEventListener('click', () => setScreen('main'));
-  powerButton.addEventListener('click', () => startGame());
+  moveButton.addEventListener('click', () => {
+    if (state.animating) return;
+    setScreen('main');
+  });
+  powerButton.addEventListener('click', () => {
+    if (state.animating) return;
+    startGame();
+  });
   endButton.addEventListener('click', () => {
+    if (state.animating) return;
     if (state.screen === 'game' && state.turn === 'player') {
       state.turn = 'enemy';
       state.selected = null;
@@ -1079,6 +1176,7 @@
   });
 
   threatButton.addEventListener('click', () => {
+    if (state.animating) return;
     if (state.screen === 'game') {
       state.showThreats = !state.showThreats;
       render();
