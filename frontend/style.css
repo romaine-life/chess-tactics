@@ -239,6 +239,44 @@ h1 {
   box-shadow: 0 60px 70px rgba(0, 0, 0, .6);
 }
 
+.board-scroll {
+  display: grid;
+  max-height: 100%;
+  max-width: 100%;
+  min-height: 0;
+  min-width: 0;
+  place-items: center;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+.board-scroll.level-editor-scroll {
+  align-content: start;
+  height: 100%;
+  justify-items: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #7567ad #100d22;
+  scrollbar-width: thin;
+  touch-action: pan-y;
+}
+
+.board-scroll.level-editor-scroll::-webkit-scrollbar {
+  width: 12px;
+}
+
+.board-scroll.level-editor-scroll::-webkit-scrollbar-track {
+  background: #100d22;
+}
+
+.board-scroll.level-editor-scroll::-webkit-scrollbar-thumb {
+  background: #7567ad;
+  border: 2px solid #100d22;
+  border-radius: 0;
+}
+
 .board {
   position: relative;
   z-index: 1;
@@ -249,6 +287,11 @@ h1 {
   height: auto;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.board-scroll.level-editor-scroll .board {
+  margin-block: 340px 320px;
+  max-height: none;
 }
 
 .menu-layer {
@@ -319,6 +362,277 @@ h1 {
   max-height: min(78vh, 760px);
   max-width: min(720px, calc(100vw - 48px));
   overflow: auto;
+}
+
+.campaign-menu {
+  max-height: min(86vh, 840px);
+  max-width: min(980px, calc(100vw - 48px));
+  overflow: auto;
+}
+
+.campaign-shell {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.campaign-list,
+.campaign-editor,
+.campaign-levels {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.campaign-list {
+  align-content: start;
+}
+
+.campaign-card {
+  align-items: start;
+  background: #17132b;
+  border: 2px solid var(--line);
+  display: grid;
+  gap: 6px;
+  min-height: 58px;
+  padding: 10px;
+  text-align: left;
+}
+
+.campaign-card.active {
+  background: #15455a;
+  border-color: var(--move);
+  box-shadow: inset 0 0 0 1px var(--move);
+}
+
+.campaign-card strong,
+.campaign-card span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-card strong {
+  font-size: .58rem;
+  line-height: 1.45;
+}
+
+.campaign-card span {
+  color: var(--muted);
+  font-family: "VT323", ui-monospace, monospace;
+  font-size: 1.05rem;
+}
+
+.editor-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.editor-grid.two {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+}
+
+.editor-grid label {
+  color: var(--power);
+  display: grid;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .48rem;
+  gap: 7px;
+  line-height: 1.45;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.editor-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.editor-grid input,
+.editor-grid select,
+.editor-grid textarea {
+  background: #100d22;
+  border: 2px solid #40366c;
+  border-radius: 4px;
+  color: var(--ink);
+  font: 1.05rem "VT323", ui-monospace, monospace;
+  min-height: 42px;
+  min-width: 0;
+  padding: 8px;
+  width: 100%;
+}
+
+.editor-grid input:focus,
+.editor-grid select:focus,
+.editor-grid textarea:focus {
+  border-color: var(--move);
+  outline: none;
+}
+
+.editor-grid textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.campaign-levels {
+  border-top: 2px solid var(--line);
+  padding-top: 12px;
+}
+
+.campaign-levels-head {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.campaign-levels-head span {
+  color: var(--power);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .56rem;
+  text-transform: uppercase;
+}
+
+.campaign-levels-head button {
+  min-height: 36px;
+  min-width: 112px;
+  text-align: center;
+}
+
+.level-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.level-tabs button {
+  display: grid;
+  height: 38px;
+  min-height: 38px;
+  min-width: 38px;
+  padding: 0;
+  place-items: center;
+  text-align: center;
+  width: 38px;
+}
+
+.level-palette {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.level-palette button {
+  align-items: center;
+  display: grid;
+  font-size: .48rem;
+  gap: 6px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-height: 36px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px;
+  text-align: left;
+}
+
+.level-palette button span {
+  border: 1px solid rgba(255, 255, 255, .28);
+  display: grid;
+  font-size: .48rem;
+  height: 22px;
+  place-items: center;
+  width: 22px;
+}
+
+.level-palette .player span,
+.level-palette .player.active span {
+  background: #dceaf2;
+  color: #101522;
+}
+
+.level-palette .enemy span,
+.level-palette .enemy.active span {
+  background: #b3664d;
+  color: #ffe2bd;
+}
+
+.level-palette .terrain span,
+.level-palette .terrain.active span {
+  background: #7a7a7a;
+  color: #101010;
+}
+
+.level-palette .empty span,
+.level-palette .empty.active span {
+  background: #17132b;
+  color: var(--muted);
+}
+
+.menu-layer.level-editor-layer {
+  align-items: start;
+  justify-content: start;
+  pointer-events: none;
+}
+
+.level-editor-hud {
+  background:
+    linear-gradient(180deg, rgba(36, 28, 66, .97), rgba(18, 14, 34, .98));
+  border: 3px solid #7567ad;
+  box-shadow:
+    0 0 0 3px #0d0a1c,
+    inset 0 0 0 2px rgba(174, 230, 255, .14),
+    0 16px 0 rgba(0, 0, 0, .28);
+  display: grid;
+  gap: 10px;
+  max-width: min(720px, calc(100vw - 58px));
+  padding: 14px;
+  pointer-events: auto;
+  width: 100%;
+}
+
+.level-editor-hud h2 {
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: clamp(.85rem, 2vw, 1.2rem);
+  line-height: 1.3;
+}
+
+.level-editor-hud.collapsed {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, auto);
+  max-width: min(640px, calc(100vw - 58px));
+  padding: 10px;
+}
+
+.level-editor-title {
+  min-width: 0;
+}
+
+.level-editor-hud.collapsed .level-editor-title h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.level-editor-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.level-editor-hud.collapsed .level-editor-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.level-editor-actions button {
+  min-height: 38px;
+  text-align: center;
+}
+
+.canvas-palette {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .lobby-list {
@@ -788,6 +1102,23 @@ h1 {
   body { font-size: 17px; }
   .piece-picker { grid-template-columns: 1fr; }
   .lobby-seats { grid-template-columns: 1fr; }
+  .campaign-shell,
+  .editor-grid,
+  .editor-grid.two {
+    grid-template-columns: 1fr;
+  }
+  .level-palette {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .level-editor-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .level-editor-hud.collapsed {
+    grid-template-columns: 1fr;
+  }
+  .level-editor-hud.collapsed .level-editor-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .game-menu { padding: 16px; }
 }
 

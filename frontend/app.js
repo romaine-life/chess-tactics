@@ -1,7 +1,23 @@
 (function () {
   const COLS = 8;
   const ROWS = 12;
+  const LEVEL_WIDTH_MIN = 4;
+  const LEVEL_WIDTH_MAX = 16;
+  const LEVEL_HEIGHT_MIN = 4;
+  const LEVEL_HEIGHT_MAX = 20;
   const PIECE_CHOICES = ['knight', 'bishop', 'rook'];
+  const LEVEL_BRUSHES = [
+    { id: 'empty', label: 'Empty', role: '', type: '', mark: '.' },
+    { id: 'player:pawn', label: 'P Pawn', role: 'player', type: 'pawn', mark: 'P' },
+    { id: 'player:knight', label: 'P Knight', role: 'player', type: 'knight', mark: 'N' },
+    { id: 'player:bishop', label: 'P Bishop', role: 'player', type: 'bishop', mark: 'B' },
+    { id: 'player:rook', label: 'P Rook', role: 'player', type: 'rook', mark: 'R' },
+    { id: 'enemy:pawn', label: 'E Pawn', role: 'enemy', type: 'pawn', mark: 'P' },
+    { id: 'enemy:knight', label: 'E Knight', role: 'enemy', type: 'knight', mark: 'N' },
+    { id: 'enemy:bishop', label: 'E Bishop', role: 'enemy', type: 'bishop', mark: 'B' },
+    { id: 'enemy:rook', label: 'E Rook', role: 'enemy', type: 'rook', mark: 'R' },
+    { id: 'terrain:rock', label: 'Rock', role: 'terrain', type: 'rock', mark: 'O' },
+  ];
   const PIECES = {
     pawn: { mark: 'P', name: 'Pawn', role: 'Forward footman' },
     knight: { mark: 'N', name: 'Knight', role: 'L-shaped jumper' },
@@ -162,6 +178,8 @@
   });
 
   const boardEl = document.getElementById('board');
+  const boardWrapEl = boardEl.closest('.board-wrap');
+  const boardScrollEl = document.getElementById('boardScroll');
   const ctx = boardEl.getContext('2d');
   const rosterEl = document.getElementById('roster');
   const logEl = document.getElementById('log');
@@ -222,6 +240,7 @@
       if (!user.signed_in) return;
       showUser(user);
       if (state.screen === 'lobbies') void loadLobbies();
+      if (state.screen === 'campaigns') void loadCampaigns();
     } catch (_error) {
       showGuest();
     }
@@ -246,8 +265,14 @@
   const TW = 72;
   const TH = 36;
   const CLIFF = 34;
-  const ORIGIN_X = boardEl.width / 2 + 54;
-  const ORIGIN_Y = 54;
+  const DEFAULT_BOARD_METRICS = {
+    cols: COLS,
+    rows: ROWS,
+    width: boardEl.width,
+    height: boardEl.height,
+    originX: boardEl.width / 2 + 54,
+    originY: 54,
+  };
 
   const state = {
     screen: 'main',
@@ -258,6 +283,13 @@
     lobbies: [],
     lobbyMessage: '',
     lobbyLoading: false,
+    campaigns: [],
+    selectedCampaignId: null,
+    selectedLevelId: null,
+    selectedLevelBrush: 'enemy:pawn',
+    levelEditorCollapsed: false,
+    campaignMessage: '',
+    campaignLoading: false,
     party: ['knight', 'bishop'],
     pieces: [],
     winner: null,
@@ -276,8 +308,58 @@
     return items[rand(items.length)];
   }
 
-  function inBounds(x, y) {
-    return x >= 0 && x < COLS && y >= 0 && y < ROWS;
+  function clampBoardNumber(value, fallback, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(number)));
+  }
+
+  function activeLevelSize() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    return {
+      cols: clampBoardNumber(level && level.width, COLS, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX),
+      rows: clampBoardNumber(level && level.height, ROWS, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX),
+    };
+  }
+
+  function currentBoardSize() {
+    return state.screen === 'level-editor' ? activeLevelSize() : { cols: COLS, rows: ROWS };
+  }
+
+  function boardRows() {
+    return currentBoardSize().rows;
+  }
+
+  function editorBoardMetrics(size) {
+    const cols = size.cols;
+    const rows = size.rows;
+    const spanWidth = (cols + rows) * (TW / 2);
+    const width = Math.max(DEFAULT_BOARD_METRICS.width, Math.ceil(spanWidth + 128));
+    const height = Math.max(DEFAULT_BOARD_METRICS.height, Math.ceil(64 + (cols + rows) * (TH / 2) + CLIFF + 96));
+    const sideMargin = (width - spanWidth) / 2;
+    return {
+      cols,
+      rows,
+      width,
+      height,
+      originX: sideMargin + rows * (TW / 2),
+      originY: 64 + TH / 2,
+    };
+  }
+
+  function boardMetrics() {
+    return state.screen === 'level-editor' ? editorBoardMetrics(activeLevelSize()) : DEFAULT_BOARD_METRICS;
+  }
+
+  function syncCanvasSize(metrics) {
+    if (boardEl.width !== metrics.width) boardEl.width = metrics.width;
+    if (boardEl.height !== metrics.height) boardEl.height = metrics.height;
+  }
+
+  function inBounds(x, y, size) {
+    const bounds = size || currentBoardSize();
+    return x >= 0 && x < bounds.cols && y >= 0 && y < bounds.rows;
   }
 
   function livingPieces(side) {
@@ -323,7 +405,7 @@
     return `<img class="lobby-avatar" src="${escapeText(user.avatar_url)}" alt="">`;
   }
 
-  async function lobbyRequest(path, options) {
+  async function apiRequest(path, options) {
     const res = await fetch(path, {
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
@@ -345,6 +427,10 @@
       throw error;
     }
     return body;
+  }
+
+  function lobbyRequest(path, options) {
+    return apiRequest(path, options);
   }
 
   function setLobbyMessage(message, danger) {
@@ -446,6 +532,380 @@
       setLobbyMessage(error.message || 'Could not leave lobby.', true);
     } finally {
       state.lobbyLoading = false;
+      render();
+    }
+  }
+
+  function campaignRequest(path, options) {
+    return apiRequest(path, options);
+  }
+
+  function selectedCampaign() {
+    return state.campaigns.find((campaign) => campaign.id === state.selectedCampaignId) || state.campaigns[0] || null;
+  }
+
+  function selectedLevel(campaign) {
+    if (!campaign || !campaign.levels || !campaign.levels.length) return null;
+    return campaign.levels.find((level) => level.id === state.selectedLevelId) || campaign.levels[0];
+  }
+
+  function setCampaignMessage(message, danger) {
+    state.campaignMessage = danger ? `<span class="danger">${escapeText(message)}</span>` : escapeText(message);
+  }
+
+  function syncCampaign(campaign) {
+    if (!campaign) return;
+    const index = state.campaigns.findIndex((item) => item.id === campaign.id);
+    if (index === -1) {
+      state.campaigns.unshift(campaign);
+    } else {
+      state.campaigns[index] = campaign;
+    }
+    state.selectedCampaignId = campaign.id;
+    if (!campaign.levels.some((level) => level.id === state.selectedLevelId)) {
+      state.selectedLevelId = campaign.levels[0] && campaign.levels[0].id;
+    }
+  }
+
+  async function loadCampaigns(silent) {
+    if (!currentUser) {
+      state.campaigns = [];
+      state.selectedCampaignId = null;
+      state.selectedLevelId = null;
+      setCampaignMessage('Sign in to edit campaigns.');
+      render();
+      return;
+    }
+    if (!silent) state.campaignLoading = true;
+    render();
+    try {
+      const body = await campaignRequest('/api/campaigns');
+      state.campaigns = body.campaigns || [];
+      if (!state.campaigns.some((campaign) => campaign.id === state.selectedCampaignId)) {
+        state.selectedCampaignId = state.campaigns[0] && state.campaigns[0].id;
+      }
+      const campaign = selectedCampaign();
+      if (!campaign || !campaign.levels.some((level) => level.id === state.selectedLevelId)) {
+        state.selectedLevelId = campaign && campaign.levels[0] && campaign.levels[0].id;
+      }
+      if (!silent) setCampaignMessage(campaign ? 'Campaigns synced.' : 'Create a campaign draft.');
+    } catch (error) {
+      setCampaignMessage(error.message === 'sign_in_required' ? 'Sign in to edit campaigns.' : 'Could not load campaigns.', true);
+    } finally {
+      state.campaignLoading = false;
+      render();
+    }
+  }
+
+  async function createCampaign() {
+    state.campaignLoading = true;
+    setCampaignMessage('Creating campaign...');
+    render();
+    try {
+      const body = await campaignRequest('/api/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: `${currentUser && currentUser.name ? currentUser.name.split('@')[0] : 'Player'} Campaign`,
+          description: 'Draft campaign',
+          level: { name: 'Level 1', objective: 'Defeat all enemies' },
+        }),
+      });
+      syncCampaign(body.campaign);
+      setCampaignMessage('Campaign created.');
+    } catch (error) {
+      setCampaignMessage(error.message || 'Could not create campaign.', true);
+    } finally {
+      state.campaignLoading = false;
+      render();
+    }
+  }
+
+  function campaignFormData() {
+    return {
+      title: document.getElementById('campaignTitle') && document.getElementById('campaignTitle').value,
+      description: document.getElementById('campaignDescription') && document.getElementById('campaignDescription').value,
+    };
+  }
+
+  function levelFormData() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    return {
+      name: (document.getElementById('levelName') && document.getElementById('levelName').value) || (level && level.name),
+      objective: (document.getElementById('levelObjective') && document.getElementById('levelObjective').value) || (level && level.objective),
+      difficulty: (document.getElementById('levelDifficulty') && document.getElementById('levelDifficulty').value) || (level && level.difficulty),
+      width: (document.getElementById('levelWidth') && document.getElementById('levelWidth').value) || (level && level.width),
+      height: (document.getElementById('levelHeight') && document.getElementById('levelHeight').value) || (level && level.height),
+      enemy_budget: (document.getElementById('levelEnemyBudget') && document.getElementById('levelEnemyBudget').value) || (level && level.enemy_budget),
+      notes: (document.getElementById('levelNotes') && document.getElementById('levelNotes').value) || (level && level.notes),
+      layout: level ? (level.layout || []) : [],
+    };
+  }
+
+  function applyLevelFormDraft(level) {
+    if (!level) return;
+    const widthInput = document.getElementById('levelWidth');
+    const heightInput = document.getElementById('levelHeight');
+    if (widthInput) level.width = clampBoardNumber(widthInput.value, level.width, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX);
+    if (heightInput) level.height = clampBoardNumber(heightInput.value, level.height, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX);
+    const cols = clampBoardNumber(level.width, COLS, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX);
+    const rows = clampBoardNumber(level.height, ROWS, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX);
+    level.width = cols;
+    level.height = rows;
+    level.layout = levelLayout(level).filter((cell) => (
+      inBounds(Number(cell.x), Number(cell.y), { cols, rows })
+    ));
+  }
+
+  function selectedLevelBrush() {
+    return LEVEL_BRUSHES.find((brush) => brush.id === state.selectedLevelBrush) || LEVEL_BRUSHES[0];
+  }
+
+  function levelLayout(level) {
+    if (!level || !Array.isArray(level.layout)) return [];
+    return level.layout;
+  }
+
+  function levelCellAt(level, x, y) {
+    return levelLayout(level).find((cell) => Number(cell.x) === x && Number(cell.y) === y) || null;
+  }
+
+  function brushForCell(cell) {
+    if (!cell) return LEVEL_BRUSHES[0];
+    return LEVEL_BRUSHES.find((brush) => brush.role === cell.role && brush.type === cell.type) || LEVEL_BRUSHES[0];
+  }
+
+  function paintLevelCell(level, x, y) {
+    const brush = selectedLevelBrush();
+    const layout = levelLayout(level).filter((cell) => Number(cell.x) !== x || Number(cell.y) !== y);
+    if (brush.id !== 'empty') {
+      layout.push({ x, y, role: brush.role, type: brush.type });
+    }
+    level.layout = layout.sort((a, b) => (Number(a.y) - Number(b.y)) || (Number(a.x) - Number(b.x)));
+  }
+
+  function levelCellToPiece(cell, index) {
+    const side = cell.role === 'terrain' ? 'neutral' : cell.role;
+    const type = cell.type === 'rock' ? 'rock' : cell.type;
+    const base = PIECES[type] || PIECES.pawn;
+    const rows = boardRows();
+    return {
+      id: `editor-${index}-${cell.x}-${cell.y}-${cell.role}-${cell.type}`,
+      side,
+      type,
+      mark: base.mark,
+      name: `${side === 'player' ? 'Allied' : (side === 'enemy' ? 'Enemy' : 'Terrain')} ${base.name}`,
+      role: base.role,
+      x: Number(cell.x),
+      y: Number(cell.y),
+      alive: true,
+      startY: side === 'player' ? rows - 1 : (side === 'enemy' ? 0 : -1),
+      offsetY: 0,
+    };
+  }
+
+  function syncLevelEditorPieces() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    state.pieces = levelLayout(level)
+      .filter((cell) => inBounds(Number(cell.x), Number(cell.y)))
+      .map(levelCellToPiece);
+    state.selected = null;
+    state.turn = 'editor';
+  }
+
+  function editorPiecesToLayout() {
+    return state.pieces
+      .filter((piece) => piece.alive)
+      .map((piece) => ({
+        x: piece.x,
+        y: piece.y,
+        role: piece.side === 'neutral' ? 'terrain' : piece.side,
+        type: piece.type,
+      }))
+      .sort((a, b) => (Number(a.y) - Number(b.y)) || (Number(a.x) - Number(b.x)));
+  }
+
+  function enterLevelEditor() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!campaign || !level) return;
+    applyLevelFormDraft(level);
+    state.screen = 'level-editor';
+    state.hoverTile = null;
+    syncLevelEditorPieces();
+    setCampaignMessage(`Editing ${level.name}.`);
+    render();
+  }
+
+  function exitLevelEditor() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (level) level.layout = editorPiecesToLayout();
+    state.screen = 'campaigns';
+    state.hoverTile = null;
+    state.selected = null;
+    render();
+  }
+
+  function paintEditorTile(x, y) {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    level.layout = editorPiecesToLayout();
+    paintLevelCell(level, x, y);
+    syncLevelEditorPieces();
+    setCampaignMessage('Board changed. Save the level to persist it.');
+    render();
+  }
+
+  async function saveLevelEditor() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    level.layout = editorPiecesToLayout();
+    await saveCampaignLevel();
+    if (selectedLevel(selectedCampaign())) syncLevelEditorPieces();
+    state.screen = 'level-editor';
+    render();
+  }
+
+  function clearLevelLayout() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    level.layout = [];
+    if (state.screen === 'level-editor') syncLevelEditorPieces();
+    setCampaignMessage('Level board cleared. Save the level to persist it.');
+    render();
+  }
+
+  function seededLevelLayout(width, height) {
+    return [
+      { x: Math.floor(width / 2), y: height - 1, role: 'player', type: 'pawn' },
+      { x: Math.floor(width / 2), y: 0, role: 'enemy', type: 'pawn' },
+      { x: Math.max(0, Math.floor(width / 2) - 1), y: Math.max(0, Math.floor(height / 2) - 1), role: 'terrain', type: 'rock' },
+    ];
+  }
+
+  function seedLevelLayout() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    level.layout = seededLevelLayout(Number(level.width) || 8, Number(level.height) || 12);
+    if (state.screen === 'level-editor') syncLevelEditorPieces();
+    setCampaignMessage('Level board seeded. Save the level to persist it.');
+    render();
+  }
+
+  async function saveCampaignDetails() {
+    const campaign = selectedCampaign();
+    if (!campaign) return;
+    const patch = campaignFormData();
+    state.campaignLoading = true;
+    setCampaignMessage('Saving campaign...');
+    render();
+    try {
+      const body = await campaignRequest(`/api/campaigns/${encodeURIComponent(campaign.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      syncCampaign(body.campaign);
+      setCampaignMessage('Campaign saved.');
+    } catch (error) {
+      setCampaignMessage(error.message || 'Could not save campaign.', true);
+    } finally {
+      state.campaignLoading = false;
+      render();
+    }
+  }
+
+  async function deleteCampaign() {
+    const campaign = selectedCampaign();
+    if (!campaign) return;
+    state.campaignLoading = true;
+    setCampaignMessage('Deleting campaign...');
+    render();
+    try {
+      await campaignRequest(`/api/campaigns/${encodeURIComponent(campaign.id)}`, { method: 'DELETE' });
+      state.campaigns = state.campaigns.filter((item) => item.id !== campaign.id);
+      state.selectedCampaignId = state.campaigns[0] && state.campaigns[0].id;
+      const nextCampaign = selectedCampaign();
+      state.selectedLevelId = nextCampaign && nextCampaign.levels[0] && nextCampaign.levels[0].id;
+      setCampaignMessage('Campaign deleted.');
+    } catch (error) {
+      setCampaignMessage(error.message || 'Could not delete campaign.', true);
+    } finally {
+      state.campaignLoading = false;
+      render();
+    }
+  }
+
+  async function addCampaignLevel() {
+    const campaign = selectedCampaign();
+    if (!campaign) return;
+    state.campaignLoading = true;
+    setCampaignMessage('Adding level...');
+    render();
+    try {
+      const body = await campaignRequest(`/api/campaigns/${encodeURIComponent(campaign.id)}/levels`, {
+        method: 'POST',
+        body: JSON.stringify({ name: `Level ${campaign.levels.length + 1}`, objective: 'Defeat all enemies' }),
+      });
+      syncCampaign(body.campaign);
+      state.selectedLevelId = body.level.id;
+      setCampaignMessage('Level added.');
+      state.screen = 'level-editor';
+      syncLevelEditorPieces();
+    } catch (error) {
+      setCampaignMessage(error.message || 'Could not add level.', true);
+    } finally {
+      state.campaignLoading = false;
+      render();
+    }
+  }
+
+  async function saveCampaignLevel() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!campaign || !level) return;
+    const patch = levelFormData();
+    state.campaignLoading = true;
+    setCampaignMessage('Saving level...');
+    render();
+    try {
+      const body = await campaignRequest(`/api/campaigns/${encodeURIComponent(campaign.id)}/levels/${encodeURIComponent(level.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      syncCampaign(body.campaign);
+      state.selectedLevelId = body.level.id;
+      setCampaignMessage('Level saved.');
+    } catch (error) {
+      setCampaignMessage(error.message || 'Could not save level.', true);
+    } finally {
+      state.campaignLoading = false;
+      render();
+    }
+  }
+
+  async function deleteCampaignLevel() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!campaign || !level) return;
+    state.campaignLoading = true;
+    setCampaignMessage('Deleting level...');
+    render();
+    try {
+      const body = await campaignRequest(`/api/campaigns/${encodeURIComponent(campaign.id)}/levels/${encodeURIComponent(level.id)}`, {
+        method: 'DELETE',
+      });
+      syncCampaign(body.campaign);
+      setCampaignMessage('Level deleted.');
+    } catch (error) {
+      setCampaignMessage(error.message === 'campaign_needs_level' ? 'Campaigns need at least one level.' : (error.message || 'Could not delete level.'), true);
+    } finally {
+      state.campaignLoading = false;
       render();
     }
   }
@@ -892,6 +1352,10 @@
   }
 
   function handleTile(x, y) {
+    if (state.screen === 'level-editor') {
+      paintEditorTile(x, y);
+      return;
+    }
     if (state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating || state.animating) return;
     const clicked = pieceAt(x, y);
     if (clicked && clicked.side === 'player') {
@@ -914,8 +1378,9 @@
     }
   }
 
-  function isoCenter(c, r) {
-    return { x: ORIGIN_X + (c - r) * (TW / 2), y: ORIGIN_Y + (c + r) * (TH / 2) };
+  function isoCenter(c, r, metrics) {
+    const board = metrics || boardMetrics();
+    return { x: board.originX + (c - r) * (TW / 2), y: board.originY + (c + r) * (TH / 2) };
   }
 
   function prand(a, b, salt) {
@@ -933,10 +1398,13 @@
     ctx.closePath();
   }
 
-  function drawCliff() {
-    const left = { x: isoCenter(0, ROWS - 1).x - TW / 2, y: isoCenter(0, ROWS - 1).y };
-    const right = { x: isoCenter(COLS - 1, 0).x + TW / 2, y: isoCenter(COLS - 1, 0).y };
-    const bottom = { x: isoCenter(COLS - 1, ROWS - 1).x, y: isoCenter(COLS - 1, ROWS - 1).y + TH / 2 };
+  function drawCliff(metrics) {
+    const leftCenter = isoCenter(0, metrics.rows - 1, metrics);
+    const rightCenter = isoCenter(metrics.cols - 1, 0, metrics);
+    const bottomCenter = isoCenter(metrics.cols - 1, metrics.rows - 1, metrics);
+    const left = { x: leftCenter.x - TW / 2, y: leftCenter.y };
+    const right = { x: rightCenter.x + TW / 2, y: rightCenter.y };
+    const bottom = { x: bottomCenter.x, y: bottomCenter.y + TH / 2 };
     ctx.fillStyle = '#5a4226';
     ctx.beginPath();
     ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y);
@@ -954,8 +1422,8 @@
     ctx.closePath(); ctx.fill();
   }
 
-  function drawTile(c, r) {
-    const { x: cx, y: cy } = isoCenter(c, r);
+  function drawTile(c, r, metrics) {
+    const { x: cx, y: cy } = isoCenter(c, r, metrics);
     ctx.save();
     diamond(cx, cy);
     ctx.fillStyle = (c + r) % 2 ? '#6a8e4c' : '#789d59';
@@ -974,8 +1442,8 @@
     ctx.stroke();
   }
 
-  function drawDiamondFill(x, y, fill, stroke) {
-    const center = isoCenter(x, y);
+  function drawDiamondFill(x, y, fill, stroke, metrics) {
+    const center = isoCenter(x, y, metrics);
     diamond(center.x, center.y);
     ctx.fillStyle = fill;
     ctx.fill();
@@ -986,16 +1454,16 @@
     }
   }
 
-  function drawTacticalIndicators(x, y, isMove, isAttack, isEnemy) {
-    const { x: cx, y: cy } = isoCenter(x, y);
+  function drawTacticalIndicators(x, y, isMove, isAttack, isEnemy, metrics) {
+    const { x: cx, y: cy } = isoCenter(x, y, metrics);
     
     // 1. Draw tile-wide background/shading
     if (isMove && isAttack) {
-      drawDiamondFill(x, y, isEnemy ? 'rgba(168,85,247,0.12)' : 'rgba(14,165,233,0.12)', null);
+      drawDiamondFill(x, y, isEnemy ? 'rgba(168,85,247,0.12)' : 'rgba(14,165,233,0.12)', null, metrics);
     } else if (isMove) {
-      drawDiamondFill(x, y, isEnemy ? 'rgba(168,85,247,0.08)' : 'rgba(14,165,233,0.08)', null);
+      drawDiamondFill(x, y, isEnemy ? 'rgba(168,85,247,0.08)' : 'rgba(14,165,233,0.08)', null, metrics);
     } else if (isAttack) {
-      drawDiamondFill(x, y, isEnemy ? 'rgba(239,68,68,0.06)' : 'rgba(249,115,22,0.06)', null);
+      drawDiamondFill(x, y, isEnemy ? 'rgba(239,68,68,0.06)' : 'rgba(249,115,22,0.06)', null, metrics);
     }
     
     // 2. Draw Attack Indicator (Dashed border around the tile)
@@ -1029,25 +1497,27 @@
   }
 
   function drawBoard() {
+    const metrics = boardMetrics();
+    syncCanvasSize(metrics);
     ctx.clearRect(0, 0, boardEl.width, boardEl.height);
     ctx.imageSmoothingEnabled = false;
-    drawCliff();
-    for (let s = 0; s <= COLS + ROWS - 2; s += 1) {
-      for (let c = 0; c < COLS; c += 1) {
+    drawCliff(metrics);
+    for (let s = 0; s <= metrics.cols + metrics.rows - 2; s += 1) {
+      for (let c = 0; c < metrics.cols; c += 1) {
         const r = s - c;
-        if (r >= 0 && r < ROWS) drawTile(c, r);
+        if (r >= 0 && r < metrics.rows) drawTile(c, r, metrics);
       }
     }
-    for (let x = 0; x < COLS; x += 1) {
-      drawDiamondFill(x, 0, 'rgba(255,106,82,0.13)', null);
-      drawDiamondFill(x, 1, 'rgba(255,106,82,0.08)', null);
-      drawDiamondFill(x, ROWS - 1, 'rgba(174,230,255,0.14)', null);
-      drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.08)', null);
+    for (let x = 0; x < metrics.cols; x += 1) {
+      drawDiamondFill(x, 0, 'rgba(255,106,82,0.13)', null, metrics);
+      if (metrics.rows > 1) drawDiamondFill(x, 1, 'rgba(255,106,82,0.08)', null, metrics);
+      drawDiamondFill(x, metrics.rows - 1, 'rgba(174,230,255,0.14)', null, metrics);
+      if (metrics.rows > 1) drawDiamondFill(x, metrics.rows - 2, 'rgba(174,230,255,0.08)', null, metrics);
     }
     const selected = state.battleAnimating ? null : selectedPiece();
     if (state.screen === 'game' && state.showThreats) {
       getEnemyThreats().forEach((sq) => {
-        drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)');
+        drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)', metrics);
       });
     }
     if (selected && state.turn === 'player' && !state.battleAnimating && !state.animating) {
@@ -1067,11 +1537,21 @@
         }
       });
       tileMap.forEach((tile) => {
-        drawTacticalIndicators(tile.x, tile.y, tile.isMove, tile.isAttack, selected.side === 'enemy');
+        drawTacticalIndicators(tile.x, tile.y, tile.isMove, tile.isAttack, selected.side === 'enemy', metrics);
       });
     }
-    if (selected && !state.animating && !state.battleAnimating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
-    if (state.hoverTile && !state.animating && !state.battleAnimating) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
+    if (selected && !state.animating && !state.battleAnimating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff', metrics);
+    if (state.hoverTile && !state.animating && !state.battleAnimating) {
+      if (state.screen === 'level-editor') {
+        const brush = selectedLevelBrush();
+        const fill = brush.role === 'player'
+          ? 'rgba(174,230,255,0.25)'
+          : (brush.role === 'enemy' ? 'rgba(255,106,82,0.25)' : (brush.role === 'terrain' ? 'rgba(180,180,180,0.24)' : 'rgba(255,255,255,0.12)'));
+        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, fill, brush.id === 'empty' ? '#ffffff' : '#ffd24a', metrics);
+      } else {
+        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)', metrics);
+      }
+    }
     
     const activePieces = state.pieces
       .filter((piece) => piece.alive)
@@ -1129,14 +1609,15 @@
   }
 
   function pointToTile(clientX, clientY) {
+    const metrics = boardMetrics();
     const rect = boardEl.getBoundingClientRect();
     const px = (clientX - rect.left) * (boardEl.width / rect.width);
     const py = (clientY - rect.top) * (boardEl.height / rect.height);
-    const a = (px - ORIGIN_X) / (TW / 2);
-    const b = (py - ORIGIN_Y) / (TH / 2);
+    const a = (px - metrics.originX) / (TW / 2);
+    const b = (py - metrics.originY) / (TH / 2);
     const x = Math.floor((a + b) / 2 + 0.5);
     const y = Math.floor((b - a) / 2 + 0.5);
-    if (!inBounds(x, y)) return null;
+    if (!inBounds(x, y, metrics)) return null;
     return { x, y };
   }
 
@@ -1168,7 +1649,101 @@
       </div>`;
   }
 
+  function renderCampaignCard(campaign) {
+    const active = campaign.id === state.selectedCampaignId;
+    return `
+      <button class="campaign-card ${active ? 'active' : ''}" type="button" data-action="select-campaign" data-campaign-id="${escapeText(campaign.id)}">
+        <strong>${escapeText(campaign.title)}</strong>
+        <span>${campaign.level_count} ${campaign.level_count === 1 ? 'level' : 'levels'}</span>
+      </button>`;
+  }
+
+  function renderLevelTabs(campaign) {
+    return `
+      <div class="level-tabs">
+        ${campaign.levels.map((level, index) => `
+          <button type="button" class="${level.id === state.selectedLevelId ? 'active' : ''}" data-action="select-level" data-level-id="${escapeText(level.id)}">
+            ${index + 1}
+          </button>`).join('')}
+      </div>`;
+  }
+
+  function renderCampaignEditor() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!currentUser) {
+      return `
+        <div class="game-menu campaign-menu">
+          <p class="eyebrow">Dev tools</p>
+          <h2>Campaign Editor</h2>
+          <p class="menu-copy">Sign in to create and edit campaigns.</p>
+          <div class="menu-row">
+            <button type="button" data-action="sign-in">Sign In</button>
+            <button type="button" data-action="main">Back</button>
+          </div>
+        </div>`;
+    }
+    return `
+      <div class="game-menu campaign-menu">
+        <p class="eyebrow">Dev tools</p>
+        <h2>Campaign Editor</h2>
+        <p class="menu-copy">${state.campaignMessage || 'Draft campaigns and levels.'}</p>
+        <div class="campaign-shell">
+          <div class="campaign-list" aria-label="Campaigns">
+            ${state.campaigns.length ? state.campaigns.map(renderCampaignCard).join('') : '<p class="empty-lobbies">No campaigns yet.</p>'}
+            <button type="button" data-action="new-campaign" ${state.campaignLoading ? 'disabled' : ''}>New Campaign</button>
+          </div>
+          <div class="campaign-editor">
+            ${campaign ? `
+              <div class="editor-grid two">
+                <label>Title<input id="campaignTitle" maxlength="64" value="${escapeText(campaign.title)}"></label>
+                <label>Description<input id="campaignDescription" maxlength="220" value="${escapeText(campaign.description)}"></label>
+              </div>
+              <div class="menu-row">
+                <button type="button" data-action="save-campaign" ${state.campaignLoading ? 'disabled' : ''}>Save Campaign</button>
+                <button type="button" data-action="delete-campaign" ${state.campaignLoading ? 'disabled' : ''}>Delete Campaign</button>
+              </div>
+              <div class="campaign-levels">
+                <div class="campaign-levels-head">
+                  <span>Levels</span>
+                  <button type="button" data-action="add-level" ${state.campaignLoading ? 'disabled' : ''}>Add Level</button>
+                </div>
+                ${renderLevelTabs(campaign)}
+                ${level ? `
+                  <div class="editor-grid">
+                    <label>Name<input id="levelName" maxlength="48" value="${escapeText(level.name)}"></label>
+                    <label>Objective<input id="levelObjective" maxlength="96" value="${escapeText(level.objective)}"></label>
+                    <label>Difficulty
+                      <select id="levelDifficulty">
+                        ${['easy', 'normal', 'hard', 'boss'].map((difficulty) => `
+                          <option value="${difficulty}" ${level.difficulty === difficulty ? 'selected' : ''}>${difficulty}</option>`).join('')}
+                      </select>
+                    </label>
+                    <label>Width<input id="levelWidth" type="number" min="4" max="16" value="${escapeText(level.width)}"></label>
+                    <label>Height<input id="levelHeight" type="number" min="4" max="20" value="${escapeText(level.height)}"></label>
+                    <label>Enemy Budget<input id="levelEnemyBudget" type="number" min="1" max="24" value="${escapeText(level.enemy_budget)}"></label>
+                    <label class="wide">Notes<textarea id="levelNotes" maxlength="400">${escapeText(level.notes)}</textarea></label>
+                  </div>
+                  <div class="menu-row">
+                    <button type="button" data-action="save-level" ${state.campaignLoading ? 'disabled' : ''}>Save Level</button>
+                    <button type="button" data-action="edit-level-board" ${state.campaignLoading ? 'disabled' : ''}>Edit Board</button>
+                  </div>
+                  <div class="menu-row">
+                    <button type="button" data-action="seed-level-layout" ${state.campaignLoading ? 'disabled' : ''}>Seed Board</button>
+                    <button type="button" data-action="delete-level" ${campaign.levels.length <= 1 || state.campaignLoading ? 'disabled' : ''}>Delete Level</button>
+                  </div>` : ''}
+              </div>
+            ` : '<p class="empty-lobbies">Create a campaign to begin.</p>'}
+          </div>
+        </div>
+        <button type="button" data-action="main">Back</button>
+      </div>`;
+  }
+
   function renderMenu() {
+    if (boardWrapEl) boardWrapEl.classList.toggle('level-editor-active', state.screen === 'level-editor');
+    if (boardScrollEl) boardScrollEl.classList.toggle('level-editor-scroll', state.screen === 'level-editor');
+    menuLayer.classList.toggle('level-editor-layer', state.screen === 'level-editor');
     if (state.screen === 'game') {
       menuLayer.innerHTML = '';
       menuLayer.hidden = true;
@@ -1182,6 +1757,7 @@
           <h2>Chess Tactics</h2>
           <button type="button" data-action="party">Solo Skirmish</button>
           <button type="button" data-action="lobbies">Lobbies</button>
+          <button type="button" data-action="campaigns">Campaign Editor</button>
           <button type="button" data-action="settings">Settings</button>
         </div>`;
     } else if (state.screen === 'lobbies') {
@@ -1256,6 +1832,36 @@
           <p class="menu-copy">No tuning controls are wired yet.</p>
           <button type="button" data-action="main">Back</button>
         </div>`;
+    } else if (state.screen === 'campaigns') {
+      menuLayer.innerHTML = renderCampaignEditor();
+    } else if (state.screen === 'level-editor') {
+      const campaign = selectedCampaign();
+      const level = selectedLevel(campaign);
+      const brush = selectedLevelBrush();
+      const collapsed = state.levelEditorCollapsed;
+      menuLayer.innerHTML = `
+        <div class="level-editor-hud ${collapsed ? 'collapsed' : ''}">
+          <div class="level-editor-title">
+            <p class="eyebrow">Level editor</p>
+            <h2>${level ? escapeText(level.name) : 'Level'}</h2>
+            ${collapsed ? '' : `<p class="menu-copy">${state.campaignMessage || 'Paint the board, then save the level.'}</p>`}
+          </div>
+          <div class="level-editor-actions">
+            <button type="button" data-action="save-level-editor" ${state.campaignLoading ? 'disabled' : ''}>Save</button>
+            ${collapsed ? '' : `
+              <button type="button" data-action="seed-level-layout">Seed</button>
+              <button type="button" data-action="clear-level-layout">Clear</button>
+            `}
+            <button type="button" data-action="toggle-level-editor-panel">${collapsed ? 'Expand' : 'Collapse'}</button>
+            <button type="button" data-action="back-to-campaigns">Back</button>
+          </div>
+          ${collapsed ? '' : `<div class="level-palette canvas-palette" aria-label="Level editor brushes">
+            ${LEVEL_BRUSHES.map((item) => `
+              <button type="button" class="${brush.id === item.id ? 'active' : ''} ${item.role || 'empty'}" data-action="select-level-brush" data-brush="${item.id}">
+                <span>${escapeText(item.mark)}</span>${escapeText(item.label)}
+              </button>`).join('')}
+          </div>`}
+        </div>`;
     } else {
       menuLayer.innerHTML = `
         <div class="game-menu">
@@ -1273,19 +1879,19 @@
     const enemyCount = livingPieces('enemy').length;
     statusLine.textContent = state.screen === 'game'
       ? `${state.turn === 'player' ? 'Player' : 'Enemy'} turn`
-      : (state.screen === 'lobbies' || state.screen === 'lobby' ? 'Lobbies' : 'Menu');
+      : (state.screen === 'lobbies' || state.screen === 'lobby' ? 'Lobbies' : (state.screen === 'campaigns' || state.screen === 'level-editor' ? 'Campaigns' : 'Menu'));
     anchorMeter.textContent = `Allies ${playerCount}`;
     enemyMeter.textContent = `Enemies ${enemyCount}`;
-    selectedName.textContent = piece ? piece.name : (state.screen === 'game' ? 'Select a piece' : (state.screen === 'lobby' ? 'Lobby Ready Room' : 'Command Menu'));
+    selectedName.textContent = piece ? piece.name : (state.screen === 'game' ? 'Select a piece' : (state.screen === 'lobby' ? 'Lobby Ready Room' : (state.screen === 'campaigns' ? 'Campaign Editor' : (state.screen === 'level-editor' ? 'Level Board' : 'Command Menu'))));
     selectedMeta.textContent = piece
       ? `${piece.role} | ${piece.mark} | ${legalMoves(piece).length} legal`
-      : (state.screen === 'lobby' || state.screen === 'lobbies' ? 'Host a lobby, join one, then start the match.' : 'Start a skirmish from the board menu.');
+      : (state.screen === 'lobby' || state.screen === 'lobbies' ? 'Host a lobby, join one, then start the match.' : (state.screen === 'campaigns' ? 'Create campaigns and basic level drafts.' : (state.screen === 'level-editor' ? 'Paint pieces and terrain directly on the board.' : 'Start a skirmish from the board menu.')));
     moveButton.textContent = 'Menu';
-    powerButton.textContent = 'Restart';
-    endButton.textContent = state.turn === 'enemy' ? 'Enemy Moving' : 'Wait';
+    powerButton.textContent = state.screen === 'level-editor' ? 'Seed' : 'Restart';
+    endButton.textContent = state.screen === 'level-editor' ? 'Save' : (state.turn === 'enemy' ? 'Enemy Moving' : 'Wait');
     moveButton.classList.toggle('active', state.screen !== 'game');
     powerButton.classList.remove('active');
-    endButton.disabled = state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating || state.animating;
+    endButton.disabled = state.screen !== 'level-editor' && (state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating || state.animating);
     threatButton.textContent = state.showThreats ? 'Threats: On' : 'Threats: Off';
     threatButton.classList.toggle('active', state.showThreats);
     threatButton.disabled = state.screen !== 'game';
@@ -1334,6 +1940,46 @@
       setScreen('lobbies');
       void loadLobbies();
     }
+    if (button.dataset.action === 'campaigns') {
+      setScreen('campaigns');
+      void loadCampaigns();
+    }
+    if (button.dataset.action === 'new-campaign') void createCampaign();
+    if (button.dataset.action === 'select-campaign' && button.dataset.campaignId) {
+      state.selectedCampaignId = button.dataset.campaignId;
+      const campaign = selectedCampaign();
+      state.selectedLevelId = campaign && campaign.levels[0] && campaign.levels[0].id;
+      render();
+    }
+    if (button.dataset.action === 'save-campaign') void saveCampaignDetails();
+    if (button.dataset.action === 'delete-campaign') void deleteCampaign();
+    if (button.dataset.action === 'add-level') void addCampaignLevel();
+    if (button.dataset.action === 'select-level' && button.dataset.levelId) {
+      state.selectedLevelId = button.dataset.levelId;
+      render();
+    }
+    if (button.dataset.action === 'select-level-brush' && button.dataset.brush) {
+      state.selectedLevelBrush = button.dataset.brush;
+      render();
+      return;
+    }
+    if (button.dataset.action === 'seed-level-layout') {
+      seedLevelLayout();
+      return;
+    }
+    if (button.dataset.action === 'clear-level-layout') {
+      clearLevelLayout();
+      return;
+    }
+    if (button.dataset.action === 'save-level') void saveCampaignLevel();
+    if (button.dataset.action === 'edit-level-board') enterLevelEditor();
+    if (button.dataset.action === 'save-level-editor') void saveLevelEditor();
+    if (button.dataset.action === 'toggle-level-editor-panel') {
+      state.levelEditorCollapsed = !state.levelEditorCollapsed;
+      render();
+    }
+    if (button.dataset.action === 'back-to-campaigns') exitLevelEditor();
+    if (button.dataset.action === 'delete-level') void deleteCampaignLevel();
     if (button.dataset.action === 'host-lobby') void hostLobby();
     if (button.dataset.action === 'refresh-lobbies') void loadLobbies();
     if (button.dataset.action === 'join-lobby' && button.dataset.lobbyId) void joinLobby(button.dataset.lobbyId);
@@ -1347,6 +1993,12 @@
     if (button.dataset.action === 'main') setScreen('main');
     if (button.dataset.action === 'start') startGame();
   });
+
+  menuLayer.addEventListener('wheel', (event) => {
+    if (state.screen !== 'level-editor' || !boardScrollEl) return;
+    boardScrollEl.scrollTop += event.deltaY;
+    event.preventDefault();
+  }, { passive: false });
 
   boardEl.addEventListener('click', (event) => {
     const tile = pointToTile(event.clientX, event.clientY);
@@ -1378,14 +2030,26 @@
 
   moveButton.addEventListener('click', () => {
     if (state.animating) return;
+    if (state.screen === 'level-editor') {
+      exitLevelEditor();
+      return;
+    }
     setScreen('main');
   });
   powerButton.addEventListener('click', () => {
     if (state.animating) return;
+    if (state.screen === 'level-editor') {
+      seedLevelLayout();
+      return;
+    }
     startGame();
   });
   endButton.addEventListener('click', () => {
     if (state.animating) return;
+    if (state.screen === 'level-editor') {
+      void saveLevelEditor();
+      return;
+    }
     if (state.screen === 'game' && state.turn === 'player') {
       state.turn = 'enemy';
       state.selected = null;

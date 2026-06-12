@@ -10,8 +10,13 @@ const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 const lobbies = new Map();
+const campaigns = new Map();
 
-app.use(express.json({ limit: '8kb' }));
+app.use(express.json({ limit: '64kb' }));
+
+const LEVEL_ROLES = new Set(['player', 'enemy', 'terrain']);
+const LEVEL_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen']);
+const LEVEL_TERRAIN = new Set(['rock']);
 
 function safeReturnPath(raw) {
   if (!raw || typeof raw !== 'string') return '/';
@@ -79,6 +84,141 @@ function publicLobby(lobby, viewerEmail) {
     },
     viewer_role: viewerEmail === lobby.host.email ? 'host' : (lobby.guest && viewerEmail === lobby.guest.email ? 'guest' : 'observer'),
   };
+}
+
+function clampText(value, fallback, maxLength) {
+  const text = String(value || '').trim();
+  return (text || fallback).slice(0, maxLength);
+}
+
+function clampNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(number)));
+}
+
+function campaignSummary(campaign) {
+  return {
+    id: campaign.id,
+    title: campaign.title,
+    description: campaign.description,
+    created_at: campaign.createdAt,
+    updated_at: campaign.updatedAt,
+    owner_email: campaign.owner.email,
+    level_count: campaign.levels.length,
+    levels: campaign.levels.map(publicLevel),
+  };
+}
+
+function publicLevel(level) {
+  return {
+    id: level.id,
+    name: level.name,
+    objective: level.objective,
+    difficulty: level.difficulty,
+    width: level.width,
+    height: level.height,
+    enemy_budget: level.enemyBudget,
+    notes: level.notes,
+    layout: level.layout.map(publicLevelCell),
+  };
+}
+
+function publicLevelCell(cell) {
+  return {
+    x: cell.x,
+    y: cell.y,
+    role: cell.role,
+    type: cell.type,
+  };
+}
+
+function userCampaigns(email) {
+  return Array.from(campaigns.values())
+    .filter((campaign) => campaign.owner.email === email)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function campaignForUser(id, email) {
+  const campaign = campaigns.get(id);
+  if (!campaign || campaign.owner.email !== email) return null;
+  return campaign;
+}
+
+function defaultLevelLayout(width, height) {
+  return [
+    { x: Math.floor(width / 2), y: height - 1, role: 'player', type: 'pawn' },
+    { x: Math.floor(width / 2), y: 0, role: 'enemy', type: 'pawn' },
+    { x: Math.max(0, Math.floor(width / 2) - 1), y: Math.max(0, Math.floor(height / 2) - 1), role: 'terrain', type: 'rock' },
+  ];
+}
+
+function normalizeCoordinate(value, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  const rounded = Math.round(number);
+  if (rounded < 0 || rounded >= max) return null;
+  return rounded;
+}
+
+function normalizeLevelCell(raw, width, height) {
+  if (!raw || typeof raw !== 'object') return null;
+  const role = String(raw.role || '').trim().toLowerCase();
+  const type = String(raw.type || '').trim().toLowerCase();
+  const x = normalizeCoordinate(raw.x, width);
+  const y = normalizeCoordinate(raw.y, height);
+  if (x === null || y === null || !LEVEL_ROLES.has(role)) return null;
+  if (role === 'terrain') {
+    if (!LEVEL_TERRAIN.has(type)) return null;
+  } else if (!LEVEL_PIECES.has(type)) {
+    return null;
+  }
+  return { x, y, role, type };
+}
+
+function normalizeLevelLayout(rawLayout, width, height) {
+  const cells = Array.isArray(rawLayout) ? rawLayout : defaultLevelLayout(width, height);
+  const byCoord = new Map();
+  cells.forEach((raw) => {
+    const cell = normalizeLevelCell(raw, width, height);
+    if (cell) byCoord.set(`${cell.x},${cell.y}`, cell);
+  });
+  return Array.from(byCoord.values()).sort((a, b) => (a.y - b.y) || (a.x - b.x));
+}
+
+function buildLevel(raw, index) {
+  const width = clampNumber(raw && raw.width, 8, 4, 16);
+  const height = clampNumber(raw && raw.height, 12, 4, 20);
+  return {
+    id: crypto.randomUUID(),
+    name: clampText(raw && raw.name, `Level ${index + 1}`, 48),
+    objective: clampText(raw && raw.objective, 'Defeat all enemies', 96),
+    difficulty: clampText(raw && raw.difficulty, 'normal', 20),
+    width,
+    height,
+    enemyBudget: clampNumber(raw && (raw.enemy_budget ?? raw.enemyBudget), 3, 1, 24),
+    notes: clampText(raw && raw.notes, '', 400),
+    layout: normalizeLevelLayout(raw && raw.layout, width, height),
+  };
+}
+
+function applyLevelPatch(level, raw) {
+  if (!raw || typeof raw !== 'object') return;
+  if (Object.hasOwn(raw, 'name')) level.name = clampText(raw.name, level.name, 48);
+  if (Object.hasOwn(raw, 'objective')) level.objective = clampText(raw.objective, level.objective, 96);
+  if (Object.hasOwn(raw, 'difficulty')) level.difficulty = clampText(raw.difficulty, level.difficulty, 20);
+  if (Object.hasOwn(raw, 'width')) level.width = clampNumber(raw.width, level.width, 4, 16);
+  if (Object.hasOwn(raw, 'height')) level.height = clampNumber(raw.height, level.height, 4, 20);
+  if (Object.hasOwn(raw, 'enemy_budget') || Object.hasOwn(raw, 'enemyBudget')) {
+    level.enemyBudget = clampNumber(raw.enemy_budget ?? raw.enemyBudget, level.enemyBudget, 1, 24);
+  }
+  if (Object.hasOwn(raw, 'notes')) level.notes = clampText(raw.notes, level.notes, 400);
+  if (Object.hasOwn(raw, 'width') || Object.hasOwn(raw, 'height')) {
+    level.layout = normalizeLevelLayout(level.layout, level.width, level.height);
+  }
+  if (Object.hasOwn(raw, 'layout')) {
+    level.layout = normalizeLevelLayout(raw.layout, level.width, level.height);
+  }
 }
 
 async function readSession(req) {
@@ -273,6 +413,122 @@ app.post('/api/lobbies/:id/leave', async (req, res) => {
     return;
   }
   res.status(403).json({ error: 'not_in_lobby' });
+});
+
+app.get('/api/campaigns', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  res.status(200).json({ campaigns: userCampaigns(user.email).map(campaignSummary) });
+});
+
+app.post('/api/campaigns', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const now = new Date().toISOString();
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const campaign = {
+    id: crypto.randomUUID(),
+    title: clampText(raw.title, 'Untitled Campaign', 64),
+    description: clampText(raw.description, '', 220),
+    createdAt: now,
+    updatedAt: now,
+    owner: user,
+    levels: [buildLevel(raw.level, 0)],
+  };
+  campaigns.set(campaign.id, campaign);
+  res.status(201).json({ campaign: campaignSummary(campaign) });
+});
+
+app.get('/api/campaigns/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const campaign = campaignForUser(req.params.id, user.email);
+  if (!campaign) {
+    res.status(404).json({ error: 'campaign_not_found' });
+    return;
+  }
+  res.status(200).json({ campaign: campaignSummary(campaign) });
+});
+
+app.patch('/api/campaigns/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const campaign = campaignForUser(req.params.id, user.email);
+  if (!campaign) {
+    res.status(404).json({ error: 'campaign_not_found' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (Object.hasOwn(raw, 'title')) campaign.title = clampText(raw.title, campaign.title, 64);
+  if (Object.hasOwn(raw, 'description')) campaign.description = clampText(raw.description, campaign.description, 220);
+  campaign.updatedAt = new Date().toISOString();
+  res.status(200).json({ campaign: campaignSummary(campaign) });
+});
+
+app.delete('/api/campaigns/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const campaign = campaignForUser(req.params.id, user.email);
+  if (!campaign) {
+    res.status(404).json({ error: 'campaign_not_found' });
+    return;
+  }
+  campaigns.delete(campaign.id);
+  res.status(204).end();
+});
+
+app.post('/api/campaigns/:id/levels', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const campaign = campaignForUser(req.params.id, user.email);
+  if (!campaign) {
+    res.status(404).json({ error: 'campaign_not_found' });
+    return;
+  }
+  const level = buildLevel(req.body, campaign.levels.length);
+  campaign.levels.push(level);
+  campaign.updatedAt = new Date().toISOString();
+  res.status(201).json({ campaign: campaignSummary(campaign), level: publicLevel(level) });
+});
+
+app.patch('/api/campaigns/:id/levels/:levelId', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const campaign = campaignForUser(req.params.id, user.email);
+  if (!campaign) {
+    res.status(404).json({ error: 'campaign_not_found' });
+    return;
+  }
+  const level = campaign.levels.find((item) => item.id === req.params.levelId);
+  if (!level) {
+    res.status(404).json({ error: 'level_not_found' });
+    return;
+  }
+  applyLevelPatch(level, req.body);
+  campaign.updatedAt = new Date().toISOString();
+  res.status(200).json({ campaign: campaignSummary(campaign), level: publicLevel(level) });
+});
+
+app.delete('/api/campaigns/:id/levels/:levelId', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const campaign = campaignForUser(req.params.id, user.email);
+  if (!campaign) {
+    res.status(404).json({ error: 'campaign_not_found' });
+    return;
+  }
+  if (campaign.levels.length <= 1) {
+    res.status(409).json({ error: 'campaign_needs_level' });
+    return;
+  }
+  const index = campaign.levels.findIndex((level) => level.id === req.params.levelId);
+  if (index === -1) {
+    res.status(404).json({ error: 'level_not_found' });
+    return;
+  }
+  campaign.levels.splice(index, 1);
+  campaign.updatedAt = new Date().toISOString();
+  res.status(200).json({ campaign: campaignSummary(campaign) });
 });
 
 app.get('/api/auth/sign-in', (req, res) => {
