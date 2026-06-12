@@ -431,7 +431,7 @@
   function applyInitialScreenParam() {
     const params = new URLSearchParams(window.location.search);
     const screen = params.get('screen');
-    if (screen === 'main' || screen === 'menu' || screen === 'main-concept' || screen === 'main-skeleton') {
+    if (screen === 'main' || screen === 'menu' || screen === 'main-concept' || screen === 'main-skeleton' || screen === 'main-assets') {
       state.screen = 'main';
     } else if (screen === 'campaigns') {
       state.screen = 'campaigns';
@@ -2518,6 +2518,11 @@
     return !screen || screen === 'main' || screen === 'menu' || screen === 'main-skeleton';
   }
 
+  function shouldShowMainAssets() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('screen') === 'main-assets';
+  }
+
   function renderSkeletonTag(label, stateLabel = 'Unfilled') {
     return `<span class="skeleton-tag"><b>${escapeText(stateLabel)}</b>${escapeText(label)}</span>`;
   }
@@ -2534,6 +2539,67 @@
 
   function renderMainMenuDockButton(action, label) {
     return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">${escapeText(label.slice(0, 2).toUpperCase())}</button>`;
+  }
+
+  function renderAssetButton(variant, label, icon, stateClass = '') {
+    return `
+      <button class="asset-button ${escapeText(variant)} ${escapeText(stateClass)}" type="button">
+        <span class="asset-button-icon">${escapeText(icon)}</span>
+        <span class="asset-button-label">${escapeText(label)}</span>
+        <i aria-hidden="true">&gt;</i>
+      </button>`;
+  }
+
+  function renderButtonVariantCard(variant, title, note) {
+    return `
+      <article class="asset-variant-card">
+        <div class="asset-card-head">
+          <strong>${escapeText(title)}</strong>
+          <span>${escapeText(note)}</span>
+        </div>
+        <div class="asset-button-stack">
+          ${renderAssetButton(variant, 'Solo Skirmish', 'N', 'is-active')}
+          ${renderAssetButton(variant, 'Campaign Editor', 'C')}
+          ${renderAssetButton(variant, 'Level Editor', 'LV', 'is-hover')}
+          ${renderAssetButton(variant, 'Lobbies', 'P2', 'is-muted')}
+        </div>
+      </article>`;
+  }
+
+  function renderMainAssetReview() {
+    return `
+      <div class="main-assets-screen" data-live-screen="main-assets">
+        <header class="main-assets-header">
+          <div>
+            <p>Main menu asset review</p>
+            <h2>Mode Button Family</h2>
+          </div>
+          <nav aria-label="Main menu review links">
+            <a href="/">Skeleton</a>
+            <a href="/?screen=main-concept">Render reference</a>
+          </nav>
+        </header>
+
+        <section class="asset-reference-panel" aria-label="Approved render reference">
+          <div class="asset-reference-copy">
+            <strong>Approved render crop</strong>
+            <span>Targeting the left-side mode buttons: heavy pixel frame, luminous selected state, compact icon tile, and dark low-glare fill.</span>
+          </div>
+          <div class="asset-reference-crop">
+            <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
+          </div>
+        </section>
+
+        <section class="asset-variants" aria-label="Button style candidates">
+          ${renderButtonVariantCard('render-match', 'A. Render Match', 'Closest to the approved image: brighter cyan frame, glassy blue selected state.')}
+          ${renderButtonVariantCard('moon-steel', 'B. Moon Steel', 'Lower glare and more tactical; keeps the pixel silhouette but calms the glow.')}
+          ${renderButtonVariantCard('gold-inlay', 'C. Gold Inlay', 'More Chessmaster restraint: warm bevels, noble frame, less arcade energy.')}
+        </section>
+
+        <footer class="asset-review-footer">
+          <span>Pick a direction, then I will wire the approved family into the skeleton and remove the matching button asset labels.</span>
+        </footer>
+      </div>`;
   }
 
   function renderMainMenuSkeleton() {
@@ -2664,7 +2730,13 @@
     }
     menuLayer.hidden = false;
     if (state.screen === 'main') {
-      menuLayer.innerHTML = shouldShowMainConcept() ? renderArtScreen('main') : renderMainMenuSkeleton();
+      if (shouldShowMainConcept()) {
+        menuLayer.innerHTML = renderArtScreen('main');
+      } else if (shouldShowMainAssets()) {
+        menuLayer.innerHTML = renderMainAssetReview();
+      } else {
+        menuLayer.innerHTML = renderMainMenuSkeleton();
+      }
     } else if (state.screen === 'lobbies') {
       const visibleLobbies = state.lobbies.filter((lobby) => !state.lobby || lobby.id !== state.lobby.id);
       menuLayer.innerHTML = `

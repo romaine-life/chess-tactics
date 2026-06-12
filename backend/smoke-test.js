@@ -151,6 +151,7 @@ async function main() {
     '/?screen=main',
     '/?screen=main-concept',
     '/?screen=main-skeleton',
+    '/?screen=main-assets',
     '/?screen=campaigns',
     '/?screen=level-editor',
     '/?screen=skirmish',

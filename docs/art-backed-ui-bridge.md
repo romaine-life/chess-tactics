@@ -28,6 +28,9 @@ rectangles over the 16:10 artboard.
 - `/?screen=main` explicitly opens the live DOM main menu skeleton.
 - `/?screen=main-skeleton` also opens the live DOM main menu skeleton.
 - `/?screen=main-concept` opens the saved main menu concept render.
+- `/?screen=main-assets` opens the main menu asset review board. It compares
+  the approved render crop against candidate live asset families before any
+  candidate replaces a skeleton slot.
 - `/?screen=campaigns` opens the campaign editor concept.
 - `/?screen=level-editor` opens the level editor concept.
 - `/?screen=skirmish` opens the skirmish concept.
@@ -69,7 +72,9 @@ Replace the bridge from the inside out:
 1. Maintain a clear skeleton for each screen so unfinished asset slots remain
    visible during decomposition. The main menu skeleton is the first slice.
 2. Fill one main menu asset family at a time: logo/crest, button row, profile
-   panel, dock icons, status/news panels, and battlefield plate.
+   panel, dock icons, status/news panels, and battlefield plate. Use
+   `/?screen=main-assets` to compare candidates against the approved render
+   before wiring them into the skeleton.
 3. Extract editor and skirmish side panels as real DOM components.
 4. Replace remaining rendered board imagery with canvas terrain tiles and overlays that
    match the concepts.

@@ -197,6 +197,8 @@ The main menu has begun that decomposition with the skeleton as the default work
 surface: `/`, `/?screen=main`, and `/?screen=main-skeleton` show the live DOM
 shell with unfinished asset slots labeled in place. `/?screen=main-concept`
 preserves the exact approved main menu render for comparison.
+`/?screen=main-assets` is the asset review board for comparing candidate asset
+families against the render before wiring them into the skeleton.
 
 ## Parallel Work Boundaries
 
