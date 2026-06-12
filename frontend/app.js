@@ -2537,6 +2537,13 @@
       </button>`;
   }
 
+  function renderMainMenuArtAction(action, label, active = false) {
+    return `
+      <button class="main-menu-art-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}">
+        <span>${escapeText(label)}</span>
+      </button>`;
+  }
+
   function renderMainMenuDockButton(action, label) {
     return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">${escapeText(label.slice(0, 2).toUpperCase())}</button>`;
   }
@@ -2593,8 +2600,8 @@
         <section class="asset-artwork-panel" aria-label="Generated bitmap button artwork">
           <article class="asset-artwork-card primary">
             <div class="asset-card-head">
-              <strong>Generated Artwork 1</strong>
-              <span>Complete five-button menu family with illustrated plaques and empty label lanes.</span>
+              <strong>Generated Artwork 1 - Approved</strong>
+              <span>Complete five-button menu family now wired into the skeleton as the live button source.</span>
             </div>
             <img src="/assets/ui/main-menu-button-art-five-mode.png" alt="Generated pixel art menu button family with five button plates">
           </article>
@@ -2614,7 +2621,7 @@
         </section>
 
         <footer class="asset-review-footer">
-          <span>Pick a direction, then I will wire the approved family into the skeleton and remove the matching button asset labels.</span>
+          <span>Generated Artwork 1 is the current approved button source. The skeleton route uses it with live labels and click targets overlaid.</span>
         </footer>
       </div>`;
   }
@@ -2645,12 +2652,13 @@
             </div>
           </div>
 
-          <nav class="main-menu-actions" aria-label="Play modes">
-            ${renderMainMenuAction('party', 'blue', 'N', 'Solo Skirmish', true, 'Primary button art and icon')}
-            ${renderMainMenuAction('campaigns', 'gold', 'C', 'Campaign Editor', false, 'Mode button art and icon')}
-            ${renderMainMenuAction('level-editor-preview', 'green', 'LV', 'Level Editor', false, 'Mode button art and icon')}
-            ${renderMainMenuAction('lobbies', 'violet', 'P2', 'Lobbies', false, 'Mode button art and icon')}
-            ${renderMainMenuAction('settings', 'slate', '..', 'Settings', false, 'Mode button art and icon')}
+          <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">
+            <img src="/assets/ui/main-menu-button-art-five-mode.png" alt="" aria-hidden="true" draggable="false">
+            ${renderMainMenuArtAction('party', 'Solo Skirmish', true)}
+            ${renderMainMenuArtAction('campaigns', 'Campaign Editor')}
+            ${renderMainMenuArtAction('level-editor-preview', 'Level Editor')}
+            ${renderMainMenuArtAction('lobbies', 'Lobbies')}
+            ${renderMainMenuArtAction('settings', 'Settings')}
           </nav>
 
           <div class="main-menu-daily">

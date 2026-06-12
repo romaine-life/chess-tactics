@@ -13,8 +13,10 @@ keeps the implementation browser-first. It is not the final component system.
 - `docs/ui-art-direction.md` remains the binding art direction source.
 - `frontend/assets/ui/*.png` are the web-visible concept screens.
 - `docs/art/ui-screen-concepts/*.png` are the saved source references.
-- `frontend/assets/ui/main-menu-button-art-*.png` are generated bitmap button
-  art candidates used by the main menu asset review board.
+- `frontend/assets/ui/main-menu-button-art-five-mode.png` is the approved
+  bitmap source for the live main menu mode button stack.
+- `frontend/assets/ui/main-menu-button-art-*.png` also includes generated
+  candidates used by the main menu asset review board.
 - `frontend/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
   action wiring.
 - `frontend/style.css` owns hotspot geometry and art-screen presentation.
@@ -25,8 +27,8 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` shows the live DOM main menu skeleton, with unfinished asset slots labeled
-  in place.
+- `/` shows the live DOM main menu skeleton, with the approved button bitmap
+  family filled and remaining unfinished asset slots labeled in place.
 - `/?screen=main` explicitly opens the live DOM main menu skeleton.
 - `/?screen=main-skeleton` also opens the live DOM main menu skeleton.
 - `/?screen=main-concept` opens the saved main menu concept render.
@@ -43,9 +45,9 @@ the concept main menu, use `/?screen=main-concept&hotspots=1`.
 ## What Is Live
 
 The main menu has two review surfaces: the live skeleton is the default work
-surface, and the approved render remains visible as a reference. Skeleton
-buttons route directly into existing app actions, but its labeled slots are
-intentionally unfinished.
+surface, and the approved render remains visible as a reference. The mode
+button family uses the approved generated bitmap art with live HTML labels and
+click targets overlaid. Other labeled slots are intentionally unfinished.
 
 The remaining art-backed screens have real buttons layered over the render. The
 hotspots route back into existing app actions such as menu navigation, campaign
@@ -73,8 +75,9 @@ Replace the bridge from the inside out:
 
 1. Maintain a clear skeleton for each screen so unfinished asset slots remain
    visible during decomposition. The main menu skeleton is the first slice.
-2. Fill one main menu asset family at a time: logo/crest, button row, profile
-   panel, dock icons, status/news panels, and battlefield plate. Use
+2. Fill one main menu asset family at a time: logo/crest, profile panel, dock
+   icons, status/news panels, and battlefield plate. The button row is the
+   first filled family and uses `main-menu-button-art-five-mode.png`. Use
    `/?screen=main-assets` to compare candidates against the approved render
    before wiring them into the skeleton.
 3. Extract editor and skirmish side panels as real DOM components.

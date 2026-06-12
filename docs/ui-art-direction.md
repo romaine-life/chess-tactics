@@ -195,10 +195,12 @@ screens into reusable browser-rendered UI, board, tile, and piece systems.
 
 The main menu has begun that decomposition with the skeleton as the default work
 surface: `/`, `/?screen=main`, and `/?screen=main-skeleton` show the live DOM
-shell with unfinished asset slots labeled in place. `/?screen=main-concept`
+shell with unfinished asset slots labeled in place. Generated Artwork 1 is the
+approved bitmap source for the five-button mode stack and is now wired into the
+skeleton with live HTML labels and click targets. `/?screen=main-concept`
 preserves the exact approved main menu render for comparison.
-`/?screen=main-assets` is the asset review board for comparing candidate asset
-families against the render before wiring them into the skeleton.
+`/?screen=main-assets` remains the asset review board for comparing candidate
+asset families against the render before wiring them into the skeleton.
 
 ## Parallel Work Boundaries
 
