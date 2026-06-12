@@ -157,6 +157,7 @@
   const moveButton = document.getElementById('moveButton');
   const powerButton = document.getElementById('powerButton');
   const endButton = document.getElementById('endButton');
+  const threatsButton = document.getElementById('threatsButton');
   const menuLayer = document.getElementById('menuLayer');
   const accountEl = document.getElementById('account');
   const accountAvatarEl = document.getElementById('accountAvatar');
@@ -243,6 +244,7 @@
     pieces: [],
     winner: null,
     log: ['Choose your squad. One pawn is always fielded.'],
+    showOpponentAttacks: false,
   };
 
   function rand(max) {
@@ -555,6 +557,60 @@
     return rayMoves(piece, [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
   }
 
+  function getAttackedSquares(piece) {
+    if (!piece || !piece.alive) return [];
+    const attacks = [];
+    if (piece.type === 'pawn') {
+      const dir = piece.side === 'player' ? -1 : 1;
+      [-1, 1].forEach((dx) => {
+        const x = piece.x + dx;
+        const y = piece.y + dir;
+        if (inBounds(x, y)) {
+          attacks.push({ x, y });
+        }
+      });
+    } else if (piece.type === 'knight') {
+      const deltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+      deltas.forEach(([dx, dy]) => {
+        const x = piece.x + dx;
+        const y = piece.y + dy;
+        if (inBounds(x, y)) {
+          attacks.push({ x, y });
+        }
+      });
+    } else {
+      const dirs = piece.type === 'bishop'
+        ? [[1, 1], [1, -1], [-1, 1], [-1, -1]]
+        : (piece.type === 'rook'
+          ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+          : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
+      dirs.forEach(([dx, dy]) => {
+        for (let step = 1; ; step += 1) {
+          const x = piece.x + dx * step;
+          const y = piece.y + dy * step;
+          if (!inBounds(x, y)) break;
+          attacks.push({ x, y });
+          const occupant = pieceAt(x, y);
+          if (occupant) break;
+        }
+      });
+    }
+    return attacks;
+  }
+
+  function getOpponentAttackedTiles() {
+    const attackedMap = new Map();
+    const enemies = livingPieces('enemy');
+    enemies.forEach((enemy) => {
+      const attacks = getAttackedSquares(enemy);
+      attacks.forEach((tile) => {
+        const key = `${tile.x},${tile.y}`;
+        attackedMap.set(key, tile);
+      });
+    });
+    return Array.from(attackedMap.values());
+  }
+
   function promoteIfNeeded(piece) {
     if (piece.type !== 'pawn') return;
     if ((piece.side === 'player' && piece.y === 0) || (piece.side === 'enemy' && piece.y === ROWS - 1)) {
@@ -728,6 +784,12 @@
       drawDiamondFill(x, 1, 'rgba(255,106,82,0.08)', null);
       drawDiamondFill(x, ROWS - 1, 'rgba(174,230,255,0.14)', null);
       drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.08)', null);
+    }
+    if (state.showOpponentAttacks) {
+      const attacked = getOpponentAttackedTiles();
+      attacked.forEach((tile) => {
+        drawDiamondFill(tile.x, tile.y, 'rgba(255, 106, 82, 0.18)', 'rgba(255, 106, 82, 0.45)');
+      });
     }
     const selected = selectedPiece();
     const moves = state.turn === 'player' ? legalMoves(selected) : [];
@@ -929,6 +991,9 @@
     moveButton.classList.toggle('active', state.screen !== 'game');
     powerButton.classList.remove('active');
     endButton.disabled = state.screen !== 'game' || state.turn !== 'player';
+    threatsButton.textContent = state.showOpponentAttacks ? 'Hide Threats' : 'Show Threats';
+    threatsButton.classList.toggle('active', state.showOpponentAttacks);
+    threatsButton.disabled = state.screen !== 'game';
     rosterEl.innerHTML = ['player', 'enemy'].map((side) => `
       <div class="roster-title">${side === 'player' ? 'Allies' : 'Enemies'}</div>
       ${livingPieces(side).map((unit) => `
@@ -1015,6 +1080,13 @@
       state.selected = null;
       render();
       window.setTimeout(enemyTurn, 280);
+    }
+  });
+
+  threatsButton.addEventListener('click', () => {
+    if (state.screen === 'game') {
+      state.showOpponentAttacks = !state.showOpponentAttacks;
+      render();
     }
   });
 
