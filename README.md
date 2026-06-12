@@ -15,6 +15,30 @@ npm start
 
 Open `http://localhost:3000`.
 
+## Agent Preview Contract
+
+Agents and session tooling should start preview through the repo-owned launcher:
+
+```sh
+bin/agent-preview
+```
+
+The launcher uses `$PORT` when it is set by the session, otherwise `3000`.
+It always starts `backend/supervisor.js`; do not run `backend/server.js`
+directly for preview work. The supervisor is the supported entrypoint because
+it owns the hot backend and static override paths used during session edits.
+When the session does not provide explicit override directories, the launcher
+uses writable paths under `${XDG_RUNTIME_DIR:-/tmp}`.
+
+To check whether the expected preview is running:
+
+```sh
+bin/agent-preview-status
+```
+
+A direct `node backend/server.js` process, even on the right port, is not the
+agent preview contract.
+
 The server uses `auth.romaine.life` for Microsoft sign-in. Optional env:
 
 - `AUTH_BASE_URL` defaults to `https://auth.romaine.life`.
