@@ -1270,17 +1270,19 @@
     }
   }
 
-  async function saveCampaignLevel() {
+  async function saveCampaignLevel(options = {}) {
     const campaign = selectedCampaign();
     const level = selectedLevel(campaign);
     if (!campaign || !level) return;
+    const label = options.label || 'level';
+    const titleLabel = label.charAt(0).toUpperCase() + label.slice(1);
     const patch = levelFormData();
     if (!validateLevelForSave(level, patch)) {
       render();
       return;
     }
     state.campaignLoading = true;
-    setCampaignMessage('Saving level...');
+    setCampaignMessage(`Saving ${label}...`);
     render();
     try {
       const body = await campaignRequest(`/api/campaigns/${encodeURIComponent(campaign.id)}/levels/${encodeURIComponent(level.id)}`, {
@@ -1289,13 +1291,17 @@
       });
       syncCampaign(body.campaign);
       state.selectedLevelId = body.level.id;
-      setCampaignMessage('Level saved.');
+      setCampaignMessage(`${titleLabel} saved.`);
     } catch (error) {
-      setCampaignMessage(error.message || 'Could not save level.', true);
+      setCampaignMessage(error.message || `Could not save ${label}.`, true);
     } finally {
       state.campaignLoading = false;
       render();
     }
+  }
+
+  function saveZoneEditor() {
+    void saveCampaignLevel({ label: 'zone' });
   }
 
   async function deleteCampaignLevel() {
@@ -2428,6 +2434,7 @@
                 <p>${zone ? `${zone.selections.length} selections. Overlaps are allowed; unique cells are drawn on the board.` : 'Create a zone to start drawing.'}</p>
               </div>
               <div class="tool-actions">
+                <button type="button" data-action="save-zone-editor" ${zone || level ? '' : 'disabled'}>Save Zone</button>
                 <button type="button" data-action="clear-selected-zone" ${zone ? '' : 'disabled'}>Clear Zone</button>
                 <button type="button" data-action="delete-selected-zone" ${zone ? '' : 'disabled'}>Delete Zone</button>
               </div>
@@ -2581,6 +2588,10 @@
     }
     if (button.dataset.action === 'delete-misc-zone') {
       deleteMiscZoneAssignment(Number(button.dataset.miscIndex));
+      return;
+    }
+    if (button.dataset.action === 'save-zone-editor') {
+      saveZoneEditor();
       return;
     }
     if (button.dataset.action === 'seed-level-layout') {
