@@ -305,9 +305,8 @@ function normalizeZoneId(value, zoneIds) {
 function normalizeZoneAssignments(raw, zones, layout) {
   const zoneIds = new Set(zones.map((zone) => zone.id));
   const source = raw && typeof raw === 'object' ? raw : {};
-  const useDefaultAssignments = !raw;
-  const player1SpawnZoneId = normalizeZoneId(source.player_1_spawn_zone_id ?? source.player1SpawnZoneId, zoneIds) || (useDefaultAssignments && zoneIds.has(PLAYER_1_SPAWN_ZONE_ID) ? PLAYER_1_SPAWN_ZONE_ID : null);
-  const player2SpawnZoneId = normalizeZoneId(source.player_2_spawn_zone_id ?? source.player2SpawnZoneId, zoneIds) || (useDefaultAssignments && zoneIds.has(PLAYER_2_SPAWN_ZONE_ID) ? PLAYER_2_SPAWN_ZONE_ID : null);
+  const player1SpawnZoneId = zoneIds.has(PLAYER_1_SPAWN_ZONE_ID) ? PLAYER_1_SPAWN_ZONE_ID : null;
+  const player2SpawnZoneId = zoneIds.has(PLAYER_2_SPAWN_ZONE_ID) ? PLAYER_2_SPAWN_ZONE_ID : null;
   const rawMisc = Array.isArray(source.misc_zones) ? source.misc_zones : (Array.isArray(source.miscZones) ? source.miscZones : []);
   const miscZones = rawMisc.map((rawZone, index) => {
     if (!rawZone || typeof rawZone !== 'object') return null;
@@ -364,12 +363,11 @@ function validationError(message) {
 
 function validateLevelZones(level) {
   const zoneById = new Map(level.zones.map((zone) => [zone.id, zone]));
-  const assignments = level.zoneAssignments;
   [
-    ['player_1_spawn_zone_id', assignments.player1SpawnZoneId],
-    ['player_2_spawn_zone_id', assignments.player2SpawnZoneId],
+    ['player_1_spawn_zone_id', PLAYER_1_SPAWN_ZONE_ID],
+    ['player_2_spawn_zone_id', PLAYER_2_SPAWN_ZONE_ID],
   ].forEach(([field, zoneId]) => {
-    if (!zoneId || !zoneById.has(zoneId)) {
+    if (!zoneById.has(zoneId)) {
       throw validationError(`${field}_required`);
     }
     const count = zoneCells(zoneById.get(zoneId), level.width, level.height).size;

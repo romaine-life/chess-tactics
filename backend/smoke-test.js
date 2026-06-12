@@ -247,8 +247,6 @@ async function main() {
         { id: 'player-2-spawn', name: 'Player 2 Spawn', selections: [{ id: 'selection-1', type: 'rect', x1: 0, y1: 0, x2: 7, y2: 0 }] },
       ],
       zone_assignments: {
-        player_1_spawn_zone_id: 'player-1-spawn',
-        player_2_spawn_zone_id: 'player-2-spawn',
         misc_zones: [],
       },
     }),
@@ -303,8 +301,6 @@ async function main() {
         },
       ],
       zone_assignments: {
-        player_1_spawn_zone_id: 'player-1-spawn',
-        player_2_spawn_zone_id: 'player-2-spawn',
         misc_zones: [
           { id: 'misc-zone-1', type: 'falling-rock', zone_id: 'falling-rock-a' },
           { id: 'misc-zone-2', type: 'falling-rock', zone_id: 'falling-rock-b' },

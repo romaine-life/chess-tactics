@@ -676,8 +676,6 @@
     const rocksInput = document.getElementById('levelEditorRocksCount');
     const rocksValue = rocksInput ? Number(rocksInput.value) : (level && level.random_rocks_count);
     const assignments = levelZoneAssignments(level);
-    const player1Input = document.getElementById('player1SpawnZone');
-    const player2Input = document.getElementById('player2SpawnZone');
     return {
       name: (document.getElementById('levelName') && document.getElementById('levelName').value) || (level && level.name),
       objective: (document.getElementById('levelObjective') && document.getElementById('levelObjective').value) || (level && level.objective),
@@ -690,8 +688,8 @@
       random_rocks_count: clampBoardNumber(rocksValue, 0, 0, 100),
       zones: level ? levelZones(level) : [],
       zone_assignments: {
-        player_1_spawn_zone_id: player1Input ? player1Input.value : assignments.player_1_spawn_zone_id,
-        player_2_spawn_zone_id: player2Input ? player2Input.value : assignments.player_2_spawn_zone_id,
+        player_1_spawn_zone_id: PLAYER_1_SPAWN_ZONE_ID,
+        player_2_spawn_zone_id: PLAYER_2_SPAWN_ZONE_ID,
         misc_zones: collectMiscZoneAssignments(assignments),
       },
     };
@@ -807,8 +805,8 @@
   function levelZoneAssignments(level) {
     const assignments = (level && level.zone_assignments) || {};
     return {
-      player_1_spawn_zone_id: assignments.player_1_spawn_zone_id || assignments.player1SpawnZoneId || '',
-      player_2_spawn_zone_id: assignments.player_2_spawn_zone_id || assignments.player2SpawnZoneId || '',
+      player_1_spawn_zone_id: PLAYER_1_SPAWN_ZONE_ID,
+      player_2_spawn_zone_id: PLAYER_2_SPAWN_ZONE_ID,
       misc_zones: Array.isArray(assignments.misc_zones) ? assignments.misc_zones : (Array.isArray(assignments.miscZones) ? assignments.miscZones : []),
     };
   }
@@ -829,8 +827,6 @@
 
   function normalizeClientZoneAssignments(assignments, zones) {
     const zoneIds = new Set(zones.map((zone) => zone.id));
-    const player1 = zoneIds.has(assignments.player_1_spawn_zone_id) ? assignments.player_1_spawn_zone_id : '';
-    const player2 = zoneIds.has(assignments.player_2_spawn_zone_id) ? assignments.player_2_spawn_zone_id : '';
     const misc_zones = assignments.misc_zones
       .map((zone, index) => ({
         id: zone.id || `misc-zone-${index + 1}`,
@@ -839,10 +835,14 @@
       }))
       .filter((zone) => MISC_ZONE_TYPES.some((type) => type.id === zone.type) && zoneIds.has(zone.zone_id));
     return {
-      player_1_spawn_zone_id: player1,
-      player_2_spawn_zone_id: player2,
+      player_1_spawn_zone_id: PLAYER_1_SPAWN_ZONE_ID,
+      player_2_spawn_zone_id: PLAYER_2_SPAWN_ZONE_ID,
       misc_zones,
     };
+  }
+
+  function isRequiredSpawnZone(zoneId) {
+    return zoneId === PLAYER_1_SPAWN_ZONE_ID || zoneId === PLAYER_2_SPAWN_ZONE_ID;
   }
 
   function selectedZone(level) {
@@ -900,10 +900,9 @@
       zone_assignments: patch.zone_assignments || levelZoneAssignments(level),
     };
     const zonesById = new Map(draft.zones.map((zone) => [zone.id, zone]));
-    const assignments = levelZoneAssignments(draft);
     const checks = [
-      { label: 'Player 1 spawn zone', zoneId: assignments.player_1_spawn_zone_id },
-      { label: 'Player 2 spawn zone', zoneId: assignments.player_2_spawn_zone_id },
+      { label: 'Player 1 spawn zone', zoneId: PLAYER_1_SPAWN_ZONE_ID },
+      { label: 'Player 2 spawn zone', zoneId: PLAYER_2_SPAWN_ZONE_ID },
     ];
     for (const check of checks) {
       const zone = zonesById.get(check.zoneId);
@@ -1087,6 +1086,11 @@
     if (!level) return;
     const zone = selectedZone(level);
     if (!zone) return;
+    if (isRequiredSpawnZone(zone.id)) {
+      setCampaignMessage(`${zone.name} is required and cannot be deleted. Clear or edit its cells instead.`, true);
+      render();
+      return;
+    }
     level.zones = levelZones(level).filter((item) => item.id !== zone.id);
     level.zone_assignments = normalizeClientZoneAssignments(levelZoneAssignments(level), level.zones);
     state.selectedZoneId = level.zones[0] && level.zones[0].id;
@@ -2158,14 +2162,6 @@
   function renderZoneAssignmentControls(level) {
     const assignments = levelZoneAssignments(level);
     return `
-      <div class="editor-grid zone-assignment-grid">
-        <label>Player 1 Spawn Zone
-          <select id="player1SpawnZone">${renderZoneOptions(level, assignments.player_1_spawn_zone_id, false)}</select>
-        </label>
-        <label>Player 2 Spawn Zone
-          <select id="player2SpawnZone">${renderZoneOptions(level, assignments.player_2_spawn_zone_id, false)}</select>
-        </label>
-      </div>
       <div class="misc-zone-assignments">
         <div class="zone-editor-head compact">
           <div class="roster-title">Misc Zones</div>
@@ -2661,7 +2657,7 @@
       const zone = level && selectedZone(level);
       if (zone) zone.name = String(target.value || '').slice(0, 40) || zone.name;
     }
-    if (target.id === 'player1SpawnZone' || target.id === 'player2SpawnZone' || target.dataset.miscField) {
+    if (target.dataset.miscField) {
       const campaign = selectedCampaign();
       const level = selectedLevel(campaign);
       if (level) level.zone_assignments = levelFormData().zone_assignments;
