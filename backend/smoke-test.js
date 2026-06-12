@@ -167,6 +167,110 @@ async function main() {
     throw new Error(`Anonymous lobby list should require sign-in: ${anonymousLobbies.statusCode}`);
   }
 
+  const anonymousCampaigns = await get('/api/campaigns');
+  if (anonymousCampaigns.statusCode !== 401) {
+    throw new Error(`Anonymous campaign list should require sign-in: ${anonymousCampaigns.statusCode}`);
+  }
+
+  const createdCampaign = await request(
+    'POST',
+    '/api/campaigns',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      title: 'Forked Opening',
+      description: 'First draft campaign',
+      level: {
+        name: 'Rook Alley',
+        objective: 'Hold the back rank',
+        width: 10,
+        height: 14,
+        enemy_budget: 5,
+        notes: 'Start with a forced rook lane.',
+      },
+    }),
+  );
+  const createdCampaignBody = JSON.parse(createdCampaign.body);
+  if (createdCampaign.statusCode !== 201 || createdCampaignBody.campaign.level_count !== 1 || createdCampaignBody.campaign.levels[0].width !== 10 || createdCampaignBody.campaign.levels[0].layout.length < 2) {
+    throw new Error(`Unexpected campaign create response: ${createdCampaign.statusCode} ${createdCampaign.body}`);
+  }
+
+  const campaignId = createdCampaignBody.campaign.id;
+  const rivalCampaigns = await get('/api/campaigns', { cookie: 'better-auth.session=rival' });
+  const rivalCampaignsBody = JSON.parse(rivalCampaigns.body);
+  if (rivalCampaigns.statusCode !== 200 || rivalCampaignsBody.campaigns.length !== 0) {
+    throw new Error(`Campaigns should be scoped to owner: ${rivalCampaigns.statusCode} ${rivalCampaigns.body}`);
+  }
+
+  const forbiddenCampaign = await get(`/api/campaigns/${campaignId}`, { cookie: 'better-auth.session=rival' });
+  if (forbiddenCampaign.statusCode !== 404) {
+    throw new Error(`Rival should not read player campaign: ${forbiddenCampaign.statusCode} ${forbiddenCampaign.body}`);
+  }
+
+  const renamedCampaign = await request(
+    'PATCH',
+    `/api/campaigns/${campaignId}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ title: 'Knight Forks', description: 'Renamed draft' }),
+  );
+  const renamedCampaignBody = JSON.parse(renamedCampaign.body);
+  if (renamedCampaign.statusCode !== 200 || renamedCampaignBody.campaign.title !== 'Knight Forks') {
+    throw new Error(`Unexpected campaign update response: ${renamedCampaign.statusCode} ${renamedCampaign.body}`);
+  }
+
+  const addedLevel = await request(
+    'POST',
+    `/api/campaigns/${campaignId}/levels`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ name: 'Bishop Net', difficulty: 'hard', enemy_budget: 8 }),
+  );
+  const addedLevelBody = JSON.parse(addedLevel.body);
+  if (addedLevel.statusCode !== 201 || addedLevelBody.campaign.level_count !== 2 || addedLevelBody.level.name !== 'Bishop Net') {
+    throw new Error(`Unexpected add level response: ${addedLevel.statusCode} ${addedLevel.body}`);
+  }
+
+  const patchedLevel = await request(
+    'PATCH',
+    `/api/campaigns/${campaignId}/levels/${addedLevelBody.level.id}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      height: 18,
+      notes: 'Late pressure test.',
+      layout: [
+        { x: 1, y: 2, role: 'enemy', type: 'knight' },
+        { x: 2, y: 2, role: 'terrain', type: 'rock' },
+        { x: 99, y: 2, role: 'enemy', type: 'rook' },
+        { x: 3, y: 3, role: 'enemy', type: 'dragon' },
+      ],
+    }),
+  );
+  const patchedLevelBody = JSON.parse(patchedLevel.body);
+  if (patchedLevel.statusCode !== 200 || patchedLevelBody.level.height !== 18 || patchedLevelBody.level.notes !== 'Late pressure test.' || patchedLevelBody.level.layout.length !== 2) {
+    throw new Error(`Unexpected level update response: ${patchedLevel.statusCode} ${patchedLevel.body}`);
+  }
+  if (!patchedLevelBody.level.layout.some((cell) => cell.x === 1 && cell.y === 2 && cell.role === 'enemy' && cell.type === 'knight')) {
+    throw new Error(`Patched level layout did not persist enemy knight: ${patchedLevel.body}`);
+  }
+
+  const deletedLevel = await request(
+    'DELETE',
+    `/api/campaigns/${campaignId}/levels/${addedLevelBody.level.id}`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  const deletedLevelBody = JSON.parse(deletedLevel.body);
+  if (deletedLevel.statusCode !== 200 || deletedLevelBody.campaign.level_count !== 1) {
+    throw new Error(`Unexpected level delete response: ${deletedLevel.statusCode} ${deletedLevel.body}`);
+  }
+
+  const lastLevelId = deletedLevelBody.campaign.levels[0].id;
+  const rejectedLastLevelDelete = await request(
+    'DELETE',
+    `/api/campaigns/${campaignId}/levels/${lastLevelId}`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  if (rejectedLastLevelDelete.statusCode !== 409) {
+    throw new Error(`Deleting the last level should fail: ${rejectedLastLevelDelete.statusCode} ${rejectedLastLevelDelete.body}`);
+  }
+
   const hosted = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
   const hostedBody = JSON.parse(hosted.body);
   if (hosted.statusCode !== 201 || hostedBody.lobby.phase !== 'waiting' || hostedBody.lobby.viewer_role !== 'host') {
