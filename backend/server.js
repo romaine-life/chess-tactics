@@ -17,6 +17,10 @@ app.use(express.json({ limit: '64kb' }));
 const LEVEL_ROLES = new Set(['player', 'enemy', 'terrain']);
 const LEVEL_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 const LEVEL_TERRAIN = new Set(['rock', 'random-rock']);
+const MISC_ZONE_TYPES = new Set(['falling-rock']);
+const PLAYER_SPAWN_MIN_CELLS = 3;
+const PLAYER_1_SPAWN_ZONE_ID = 'player-1-spawn';
+const PLAYER_2_SPAWN_ZONE_ID = 'player-2-spawn';
 
 function safeReturnPath(raw) {
   if (!raw || typeof raw !== 'string') return '/';
@@ -111,6 +115,8 @@ function campaignSummary(campaign) {
 }
 
 function publicLevel(level) {
+  const zones = ensureRequiredSpawnZones(Array.isArray(level.zones) ? level.zones : normalizeLevelZones(null, level.width, level.height, level.layout), level.width, level.height);
+  const zoneAssignments = normalizeZoneAssignments(level.zoneAssignments, zones, level.layout);
   return {
     id: level.id,
     name: level.name,
@@ -122,6 +128,8 @@ function publicLevel(level) {
     notes: level.notes,
     layout: level.layout.map(publicLevelCell),
     random_rocks_count: level.randomRocksCount ?? 0,
+    zones: zones.map(publicZone),
+    zone_assignments: publicZoneAssignments(zoneAssignments),
   };
 }
 
@@ -131,6 +139,22 @@ function publicLevelCell(cell) {
     y: cell.y,
     role: cell.role,
     type: cell.type,
+  };
+}
+
+function publicZone(zone) {
+  return {
+    id: zone.id,
+    name: zone.name,
+    selections: zone.selections.map((selection) => ({ ...selection })),
+  };
+}
+
+function publicZoneAssignments(assignments) {
+  return {
+    player_1_spawn_zone_id: assignments.player1SpawnZoneId,
+    player_2_spawn_zone_id: assignments.player2SpawnZoneId,
+    misc_zones: assignments.miscZones.map((zone) => ({ ...zone })),
   };
 }
 
@@ -187,10 +211,178 @@ function normalizeLevelLayout(rawLayout, width, height) {
   return Array.from(byCoord.values()).sort((a, b) => (a.y - b.y) || (a.x - b.x));
 }
 
+function normalizeZoneSelection(raw, width, height, index) {
+  if (!raw || typeof raw !== 'object') return null;
+  const type = String(raw.type || '').trim().toLowerCase();
+  const id = clampText(raw.id, `selection-${index + 1}`, 64);
+  if (type === 'cell') {
+    const x = normalizeCoordinate(raw.x, width);
+    const y = normalizeCoordinate(raw.y, height);
+    if (x === null || y === null) return null;
+    return { id, type, x, y };
+  }
+  if (type === 'rect') {
+    const x1 = normalizeCoordinate(raw.x1, width);
+    const y1 = normalizeCoordinate(raw.y1, height);
+    const x2 = normalizeCoordinate(raw.x2, width);
+    const y2 = normalizeCoordinate(raw.y2, height);
+    if (x1 === null || y1 === null || x2 === null || y2 === null) return null;
+    return { id, type, x1, y1, x2, y2 };
+  }
+  return null;
+}
+
+function defaultSpawnZones(width, height) {
+  return [
+    {
+      id: PLAYER_1_SPAWN_ZONE_ID,
+      name: 'Player 1 Spawn',
+      selections: [{ id: 'selection-1', type: 'rect', x1: 0, y1: height - 1, x2: width - 1, y2: height - 1 }],
+    },
+    {
+      id: PLAYER_2_SPAWN_ZONE_ID,
+      name: 'Player 2 Spawn',
+      selections: [{ id: 'selection-1', type: 'rect', x1: 0, y1: 0, x2: width - 1, y2: 0 }],
+    },
+  ];
+}
+
+function ensureRequiredSpawnZones(zones, width, height) {
+  const next = Array.isArray(zones) ? zones.map((zone) => ({ ...zone, selections: [...zone.selections] })) : [];
+  const ids = new Set(next.map((zone) => zone.id));
+  defaultSpawnZones(width, height).forEach((zone) => {
+    if (!ids.has(zone.id)) next.unshift(zone);
+  });
+  return next;
+}
+
+function randomRockZoneFromLayout(layout, id = 'falling-rock-zone') {
+  const randomRocks = layout.filter((cell) => cell.role === 'terrain' && cell.type === 'random-rock');
+  if (!randomRocks.length) return null;
+  return {
+    id,
+    name: 'Falling Rock Zone',
+    selections: randomRocks.map((cell, index) => ({
+      id: `selection-${index + 1}`,
+      type: 'cell',
+      x: cell.x,
+      y: cell.y,
+    })),
+  };
+}
+
+function normalizeLevelZones(rawZones, width, height, layout) {
+  const zones = Array.isArray(rawZones) ? rawZones : [];
+  const normalized = zones.map((raw, index) => {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = clampText(raw.id, `zone-${index + 1}`, 64);
+    const selections = Array.isArray(raw.selections) ? raw.selections : [];
+    return {
+      id,
+      name: clampText(raw.name, `Zone ${index + 1}`, 40),
+      selections: selections
+        .map((selection, selectionIndex) => normalizeZoneSelection(selection, width, height, selectionIndex))
+        .filter(Boolean)
+        .slice(0, 500),
+    };
+  }).filter(Boolean).slice(0, 50);
+
+  if (!Array.isArray(rawZones)) {
+    const defaultZones = defaultSpawnZones(width, height);
+    normalized.unshift(...defaultZones);
+    const migrated = randomRockZoneFromLayout(layout);
+    if (migrated) normalized.push(migrated);
+  }
+
+  return normalized;
+}
+
+function normalizeZoneId(value, zoneIds) {
+  const id = String(value || '').trim();
+  return id && zoneIds.has(id) ? id : null;
+}
+
+function normalizeZoneAssignments(raw, zones, layout) {
+  const zoneIds = new Set(zones.map((zone) => zone.id));
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const player1SpawnZoneId = zoneIds.has(PLAYER_1_SPAWN_ZONE_ID) ? PLAYER_1_SPAWN_ZONE_ID : null;
+  const player2SpawnZoneId = zoneIds.has(PLAYER_2_SPAWN_ZONE_ID) ? PLAYER_2_SPAWN_ZONE_ID : null;
+  const rawMisc = Array.isArray(source.misc_zones) ? source.misc_zones : (Array.isArray(source.miscZones) ? source.miscZones : []);
+  const miscZones = rawMisc.map((rawZone, index) => {
+    if (!rawZone || typeof rawZone !== 'object') return null;
+    const type = String(rawZone.type || '').trim().toLowerCase();
+    const zoneId = normalizeZoneId(rawZone.zone_id ?? rawZone.zoneId, zoneIds);
+    if (!MISC_ZONE_TYPES.has(type) || !zoneId) return null;
+    return {
+      id: clampText(rawZone.id, `misc-zone-${index + 1}`, 64),
+      type,
+      zone_id: zoneId,
+    };
+  }).filter(Boolean).slice(0, 50);
+
+  const migrated = randomRockZoneFromLayout(layout);
+  if (!raw && migrated && zoneIds.has(migrated.id)) {
+    miscZones.push({ id: 'misc-zone-1', type: 'falling-rock', zone_id: migrated.id });
+  }
+
+  return { player1SpawnZoneId, player2SpawnZoneId, miscZones };
+}
+
+function zoneCells(zone, width, height) {
+  const cells = new Set();
+  (zone && Array.isArray(zone.selections) ? zone.selections : []).forEach((selection) => {
+    if (selection.type === 'cell') {
+      if (normalizeCoordinate(selection.x, width) !== null && normalizeCoordinate(selection.y, height) !== null) {
+        cells.add(`${selection.x},${selection.y}`);
+      }
+    } else if (selection.type === 'rect') {
+      const x1 = normalizeCoordinate(selection.x1, width);
+      const y1 = normalizeCoordinate(selection.y1, height);
+      const x2 = normalizeCoordinate(selection.x2, width);
+      const y2 = normalizeCoordinate(selection.y2, height);
+      if (x1 === null || y1 === null || x2 === null || y2 === null) return;
+      const startX = Math.min(x1, x2);
+      const endX = Math.max(x1, x2);
+      const startY = Math.min(y1, y2);
+      const endY = Math.max(y1, y2);
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+          cells.add(`${x},${y}`);
+        }
+      }
+    }
+  });
+  return cells;
+}
+
+function validationError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
+function validateLevelZones(level) {
+  const zoneById = new Map(level.zones.map((zone) => [zone.id, zone]));
+  [
+    ['player_1_spawn_zone_id', PLAYER_1_SPAWN_ZONE_ID],
+    ['player_2_spawn_zone_id', PLAYER_2_SPAWN_ZONE_ID],
+  ].forEach(([field, zoneId]) => {
+    if (!zoneById.has(zoneId)) {
+      throw validationError(`${field}_required`);
+    }
+    const count = zoneCells(zoneById.get(zoneId), level.width, level.height).size;
+    if (count < PLAYER_SPAWN_MIN_CELLS) {
+      throw validationError(`${field}_needs_${PLAYER_SPAWN_MIN_CELLS}_cells`);
+    }
+  });
+}
+
 function buildLevel(raw, index) {
   const width = clampNumber(raw && raw.width, 8, 4, 16);
   const height = clampNumber(raw && raw.height, 12, 4, 20);
-  return {
+  const layout = normalizeLevelLayout(raw && raw.layout, width, height);
+  const zones = normalizeLevelZones(raw && raw.zones, width, height, layout);
+  const level = {
     id: crypto.randomUUID(),
     name: clampText(raw && raw.name, `Level ${index + 1}`, 48),
     objective: clampText(raw && raw.objective, 'Defeat all enemies', 96),
@@ -199,31 +391,53 @@ function buildLevel(raw, index) {
     height,
     enemyBudget: clampNumber(raw && (raw.enemy_budget ?? raw.enemyBudget), 3, 1, 24),
     notes: clampText(raw && raw.notes, '', 400),
-    layout: normalizeLevelLayout(raw && raw.layout, width, height),
+    layout,
     randomRocksCount: clampNumber(raw && (raw.random_rocks_count ?? raw.randomRocksCount), 0, 0, 100),
+    zones,
+    zoneAssignments: normalizeZoneAssignments(raw && (raw.zone_assignments ?? raw.zoneAssignments), zones, layout),
   };
+  validateLevelZones(level);
+  return level;
 }
 
 function applyLevelPatch(level, raw) {
   if (!raw || typeof raw !== 'object') return;
-  if (Object.hasOwn(raw, 'name')) level.name = clampText(raw.name, level.name, 48);
-  if (Object.hasOwn(raw, 'objective')) level.objective = clampText(raw.objective, level.objective, 96);
-  if (Object.hasOwn(raw, 'difficulty')) level.difficulty = clampText(raw.difficulty, level.difficulty, 20);
-  if (Object.hasOwn(raw, 'width')) level.width = clampNumber(raw.width, level.width, 4, 16);
-  if (Object.hasOwn(raw, 'height')) level.height = clampNumber(raw.height, level.height, 4, 20);
+  const next = {
+    ...level,
+    layout: [...level.layout],
+    zones: Array.isArray(level.zones) ? level.zones.map((zone) => ({ ...zone, selections: [...zone.selections] })) : normalizeLevelZones(null, level.width, level.height, level.layout),
+    zoneAssignments: null,
+  };
+  next.zoneAssignments = normalizeZoneAssignments(level.zoneAssignments, next.zones, next.layout);
+  if (Object.hasOwn(raw, 'name')) next.name = clampText(raw.name, next.name, 48);
+  if (Object.hasOwn(raw, 'objective')) next.objective = clampText(raw.objective, next.objective, 96);
+  if (Object.hasOwn(raw, 'difficulty')) next.difficulty = clampText(raw.difficulty, next.difficulty, 20);
+  if (Object.hasOwn(raw, 'width')) next.width = clampNumber(raw.width, next.width, 4, 16);
+  if (Object.hasOwn(raw, 'height')) next.height = clampNumber(raw.height, next.height, 4, 20);
   if (Object.hasOwn(raw, 'enemy_budget') || Object.hasOwn(raw, 'enemyBudget')) {
-    level.enemyBudget = clampNumber(raw.enemy_budget ?? raw.enemyBudget, level.enemyBudget, 1, 24);
+    next.enemyBudget = clampNumber(raw.enemy_budget ?? raw.enemyBudget, next.enemyBudget, 1, 24);
   }
-  if (Object.hasOwn(raw, 'notes')) level.notes = clampText(raw.notes, level.notes, 400);
+  if (Object.hasOwn(raw, 'notes')) next.notes = clampText(raw.notes, next.notes, 400);
   if (Object.hasOwn(raw, 'width') || Object.hasOwn(raw, 'height')) {
-    level.layout = normalizeLevelLayout(level.layout, level.width, level.height);
+    next.layout = normalizeLevelLayout(next.layout, next.width, next.height);
+    next.zones = normalizeLevelZones(next.zones, next.width, next.height, next.layout);
+    next.zoneAssignments = normalizeZoneAssignments(next.zoneAssignments, next.zones, next.layout);
   }
   if (Object.hasOwn(raw, 'layout')) {
-    level.layout = normalizeLevelLayout(raw.layout, level.width, level.height);
+    next.layout = normalizeLevelLayout(raw.layout, next.width, next.height);
   }
   if (Object.hasOwn(raw, 'random_rocks_count') || Object.hasOwn(raw, 'randomRocksCount')) {
-    level.randomRocksCount = clampNumber(raw.random_rocks_count ?? raw.randomRocksCount, level.randomRocksCount, 0, 100);
+    next.randomRocksCount = clampNumber(raw.random_rocks_count ?? raw.randomRocksCount, next.randomRocksCount, 0, 100);
   }
+  if (Object.hasOwn(raw, 'zones')) {
+    next.zones = normalizeLevelZones(raw.zones, next.width, next.height, next.layout);
+    next.zoneAssignments = normalizeZoneAssignments(next.zoneAssignments, next.zones, next.layout);
+  }
+  if (Object.hasOwn(raw, 'zone_assignments') || Object.hasOwn(raw, 'zoneAssignments')) {
+    next.zoneAssignments = normalizeZoneAssignments(raw.zone_assignments ?? raw.zoneAssignments, next.zones, next.layout);
+  }
+  validateLevelZones(next);
+  Object.assign(level, next);
 }
 
 async function readSession(req) {
@@ -444,6 +658,13 @@ app.post('/api/campaigns', async (req, res) => {
   if (!user) return;
   const now = new Date().toISOString();
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  let level;
+  try {
+    level = buildLevel(raw.level, 0);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ error: error.message || 'invalid_level' });
+    return;
+  }
   const campaign = {
     id: crypto.randomUUID(),
     title: clampText(raw.title, 'Untitled Campaign', 64),
@@ -451,7 +672,7 @@ app.post('/api/campaigns', async (req, res) => {
     createdAt: now,
     updatedAt: now,
     owner: user,
-    levels: [buildLevel(raw.level, 0)],
+    levels: [level],
   };
   campaigns.set(campaign.id, campaign);
   res.status(201).json({ campaign: campaignSummary(campaign) });
@@ -503,7 +724,13 @@ app.post('/api/campaigns/:id/levels', async (req, res) => {
     res.status(404).json({ error: 'campaign_not_found' });
     return;
   }
-  const level = buildLevel(req.body, campaign.levels.length);
+  let level;
+  try {
+    level = buildLevel(req.body, campaign.levels.length);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ error: error.message || 'invalid_level' });
+    return;
+  }
   campaign.levels.push(level);
   campaign.updatedAt = new Date().toISOString();
   res.status(201).json({ campaign: campaignSummary(campaign), level: publicLevel(level) });
@@ -522,7 +749,12 @@ app.patch('/api/campaigns/:id/levels/:levelId', async (req, res) => {
     res.status(404).json({ error: 'level_not_found' });
     return;
   }
-  applyLevelPatch(level, req.body);
+  try {
+    applyLevelPatch(level, req.body);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ error: error.message || 'invalid_level' });
+    return;
+  }
   campaign.updatedAt = new Date().toISOString();
   res.status(200).json({ campaign: campaignSummary(campaign), level: publicLevel(level) });
 });

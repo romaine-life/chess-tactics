@@ -571,6 +571,166 @@ h1 {
   color: var(--muted);
 }
 
+.editor-mode-tabs,
+.zone-tool-tabs {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 12px;
+}
+
+.editor-mode-tabs button,
+.zone-tool-tabs button {
+  min-height: 36px;
+  text-align: center;
+}
+
+.zone-editor-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.zone-editor-head {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.zone-editor-head.compact {
+  grid-template-columns: minmax(0, 1fr) 68px;
+}
+
+.zone-editor-head p,
+.zone-swatch p {
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.25;
+  margin-top: 4px;
+}
+
+.zone-editor-head button {
+  min-height: 36px;
+  min-width: 104px;
+  text-align: center;
+}
+
+.zone-list {
+  display: grid;
+  gap: 8px;
+}
+
+.zone-list button {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  min-height: 38px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.zone-list i {
+  border: 1px solid rgba(255, 255, 255, .36);
+  display: block;
+  height: 16px;
+  width: 16px;
+}
+
+.zone-list span,
+.zone-list small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zone-list small {
+  color: var(--power);
+  font-family: "VT323", ui-monospace, monospace;
+  font-size: 1rem;
+}
+
+.zone-name-label {
+  color: var(--power);
+  display: grid;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .48rem;
+  gap: 7px;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.zone-name-label input {
+  background: #100d22;
+  border: 2px solid #40366c;
+  border-radius: 4px;
+  color: var(--ink);
+  font: 1.05rem "VT323", ui-monospace, monospace;
+  min-height: 42px;
+  padding: 8px;
+  width: 100%;
+}
+
+.zone-swatch {
+  align-items: center;
+  background: rgba(23, 19, 43, .6);
+  border: 1px solid rgba(117, 103, 173, .4);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  padding: 10px;
+}
+
+.zone-swatch span {
+  background: var(--zone-color);
+  border: 2px solid rgba(255, 255, 255, .4);
+  display: block;
+  height: 28px;
+  width: 28px;
+}
+
+.misc-zone-assignments {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.misc-zone-row {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px;
+}
+
+.misc-zone-row label {
+  color: var(--power);
+  display: grid;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .44rem;
+  gap: 6px;
+  line-height: 1.45;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.misc-zone-row select {
+  background: #100d22;
+  border: 2px solid #40366c;
+  border-radius: 4px;
+  color: var(--ink);
+  font: 1.05rem "VT323", ui-monospace, monospace;
+  min-height: 36px;
+  min-width: 0;
+  padding: 6px;
+  width: 100%;
+}
+
+.misc-zone-row button {
+  min-height: 36px;
+  text-align: center;
+}
+
 .menu-layer.level-editor-layer {
   align-items: start;
   justify-content: start;
@@ -1104,7 +1264,8 @@ h1 {
   .lobby-seats { grid-template-columns: 1fr; }
   .campaign-shell,
   .editor-grid,
-  .editor-grid.two {
+  .editor-grid.two,
+  .misc-zone-row {
     grid-template-columns: 1fr;
   }
   .level-palette {
@@ -1126,38 +1287,6 @@ h1 {
 .level-palette button.random-rock.active span {
   background: #a872cc;
   color: #ffe2bd;
-}
-
-.level-editor-rocks {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(23, 19, 43, 0.6);
-  border: 1px solid rgba(117, 103, 173, 0.4);
-  padding: 8px 12px;
-  border-radius: 4px;
-}
-
-.level-editor-rocks label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: "VT323", monospace;
-  font-size: 1.15rem;
-  color: #dceaf2;
-  cursor: pointer;
-  width: 100%;
-}
-
-.level-editor-rocks input[type="number"] {
-  background: #17132b;
-  border: 2px solid #7567ad;
-  color: #ffd24a;
-  font-family: "Press Start 2P", monospace;
-  font-size: 0.8rem;
-  padding: 4px 6px;
-  width: 70px;
-  text-align: center;
 }
 
 .level-editor-grid-tool {
