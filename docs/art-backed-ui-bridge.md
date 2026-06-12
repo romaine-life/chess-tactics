@@ -23,24 +23,29 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` shows the main menu concept.
-- `/?screen=main` explicitly opens the main menu concept.
+- `/` shows the live browser-rendered main menu, with the saved concept used as
+  its visual reference.
+- `/?screen=main` explicitly opens the live main menu.
+- `/?screen=main-concept` opens the saved main menu concept render.
 - `/?screen=campaigns` opens the campaign editor concept.
 - `/?screen=level-editor` opens the level editor concept.
 - `/?screen=skirmish` opens the skirmish concept.
 
 Append `&hotspots=1` to any review URL to show the clickable overlay map. For
-the root URL, use `/?hotspots=1`.
+the concept main menu, use `/?screen=main-concept&hotspots=1`.
 
 ## What Is Live
 
-The art-backed screens have real buttons layered over the render. The hotspots
-route back into existing app actions such as menu navigation, campaign creation,
-level editor preview, sign-in, settings, and skirmish end-turn.
+The live main menu is now real DOM chrome over the browser-rendered board scene.
+Its buttons route directly into existing app actions.
 
-The visible board, editor controls, roster, and HUD inside these art-backed
-screens are still part of the render. They should be treated as an approved
-visual target, not as finished live UI.
+The remaining art-backed screens have real buttons layered over the render. The
+hotspots route back into existing app actions such as menu navigation, campaign
+creation, level editor preview, sign-in, settings, and skirmish end-turn.
+
+The visible editor controls, skirmish roster, and skirmish HUD inside the
+remaining art-backed screens are still part of the render. They should be
+treated as approved visual targets, not as finished live UI.
 
 ## Tuning Hotspots
 
@@ -59,9 +64,9 @@ Keep hotspot labels short because they are also used as accessibility labels.
 Replace the bridge from the inside out:
 
 1. Extract persistent chrome: top HUD, profile area, mode navigation, and
-   bottom/dock navigation.
+   bottom/dock navigation. The main menu is the first extracted slice.
 2. Extract editor and skirmish side panels as real DOM components.
-3. Replace rendered board imagery with canvas terrain tiles and overlays that
+3. Replace remaining rendered board imagery with canvas terrain tiles and overlays that
    match the concepts.
 4. Replace rendered pieces with sprite-friendly chess silhouettes.
 5. Keep the concept images available as visual regression references until the

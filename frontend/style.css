@@ -554,7 +554,7 @@ h1 {
   grid-column: 1;
   grid-row: 1 / 4;
   grid-template-rows: auto auto 1fr;
-  gap: clamp(18px, 3vh, 34px);
+  gap: clamp(14px, 2.3vh, 26px);
   max-width: 540px;
   min-width: 0;
 }
@@ -631,7 +631,7 @@ h1 {
 
 .main-menu-actions {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .main-menu-action {
@@ -639,7 +639,7 @@ h1 {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr) 28px;
   gap: 18px;
-  min-height: clamp(70px, 8.8vh, 88px);
+  min-height: clamp(62px, 7.4vh, 78px);
   padding: 10px 20px 10px 12px;
   border-radius: 0;
   border: 2px solid rgba(63, 95, 111, .78);
@@ -703,9 +703,9 @@ h1 {
 .main-menu-daily {
   align-self: end;
   display: grid;
-  gap: 14px;
-  min-height: 154px;
-  padding: 18px 20px;
+  gap: 10px;
+  min-height: 118px;
+  padding: 14px 18px;
   border: 2px solid var(--menu-line);
   background: var(--menu-panel);
   box-shadow:
@@ -742,7 +742,7 @@ h1 {
 
 .main-menu-daily p {
   color: #d5e0e4;
-  font-size: 1.25rem;
+  font-size: 1.12rem;
   line-height: 1.2;
 }
 
@@ -921,15 +921,6 @@ h1 {
 .main-menu-dock button:focus-visible {
   border-color: var(--menu-cyan);
   color: #f4ead0;
-}
-
-.shell.main-menu-active .board-scroll,
-.shell.main-menu-active .skyline {
-  display: none;
-}
-
-.shell.main-menu-active .board-wrap {
-  background: #02070b;
 }
 
 .main-menu-art-screen {

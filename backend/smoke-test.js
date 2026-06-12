@@ -149,10 +149,11 @@ async function main() {
 
   const reviewUrls = [
     '/?screen=main',
+    '/?screen=main-concept',
     '/?screen=campaigns',
     '/?screen=level-editor',
     '/?screen=skirmish',
-    '/?hotspots=1',
+    '/?screen=main-concept&hotspots=1',
     '/?screen=campaigns&hotspots=1',
     '/?screen=level-editor&hotspots=1',
     '/?screen=skirmish&hotspots=1',

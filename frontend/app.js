@@ -431,7 +431,7 @@
   function applyInitialScreenParam() {
     const params = new URLSearchParams(window.location.search);
     const screen = params.get('screen');
-    if (screen === 'main' || screen === 'menu') {
+    if (screen === 'main' || screen === 'menu' || screen === 'main-concept') {
       state.screen = 'main';
     } else if (screen === 'campaigns') {
       state.screen = 'campaigns';
@@ -2506,6 +2506,92 @@
       </div>`;
   }
 
+  function shouldShowMainConcept() {
+    const params = new URLSearchParams(window.location.search);
+    const screen = params.get('screen');
+    return screen === 'main-concept' || screen === 'main-art';
+  }
+
+  function renderMainMenuAction(action, iconClass, icon, label, active = false) {
+    return `
+      <button class="main-menu-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}">
+        <span class="main-menu-action-icon ${escapeText(iconClass)}">${escapeText(icon)}</span>
+        <span>${escapeText(label)}</span>
+        <i aria-hidden="true">&gt;</i>
+      </button>`;
+  }
+
+  function renderMainMenuDockButton(action, label) {
+    return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">${escapeText(label.slice(0, 2).toUpperCase())}</button>`;
+  }
+
+  function renderMainMenu() {
+    const signedIn = Boolean(currentUser);
+    const displayName = signedIn ? (currentUser.name || currentUser.email || 'Player') : 'Guest';
+    const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
+    return `
+      <div class="main-menu-screen main-menu-live-screen" data-live-screen="main">
+        <section class="main-menu-left" aria-label="Main navigation">
+          <div class="main-menu-brand">
+            <p class="main-menu-eyebrow">Moonlit campaign tactics</p>
+            <div class="main-menu-title-row">
+              <div class="main-menu-crest" aria-hidden="true">K</div>
+              <div>
+                <h2>Chess Tactics</h2>
+                <p>Small-board strategy. Readable threats. Pixel command.</p>
+              </div>
+            </div>
+          </div>
+
+          <nav class="main-menu-actions" aria-label="Play modes">
+            ${renderMainMenuAction('party', 'blue', 'N', 'Solo Skirmish', true)}
+            ${renderMainMenuAction('campaigns', 'gold', 'C', 'Campaign Editor')}
+            ${renderMainMenuAction('level-editor-preview', 'green', 'LV', 'Level Editor')}
+            ${renderMainMenuAction('lobbies', 'violet', 'P2', 'Lobbies')}
+            ${renderMainMenuAction('settings', 'slate', '..', 'Settings')}
+          </nav>
+
+          <div class="main-menu-daily">
+            <div>
+              <strong>Daily Line</strong>
+              <small>Preview</small>
+            </div>
+            <p>Hold the bridge, trade cleanly, and keep the king lane sealed.</p>
+            <span>Generated board target</span>
+          </div>
+        </section>
+
+        <aside class="main-menu-right" aria-label="Profile and status">
+          <div class="main-menu-profile">
+            <div class="main-menu-avatar" aria-hidden="true">${signedIn ? 'P' : '?'}</div>
+            <div>
+              <strong>${escapeText(displayName)}</strong>
+              <span>${escapeText(email)}</span>
+            </div>
+            <button type="button" data-action="${signedIn ? 'settings' : 'sign-in'}">${signedIn ? 'Account' : 'Sign In'}</button>
+          </div>
+
+          <div class="main-menu-counts" aria-label="Preview force count">
+            <span><b aria-hidden="true">A</b><strong>6 Allies</strong></span>
+            <span><b aria-hidden="true">T</b><strong>5 Threats</strong></span>
+          </div>
+
+          <div class="main-menu-news">
+            <strong>Campaign tools</strong>
+            <p><span aria-hidden="true">&gt;</span> Editor shell is moving from render reference to live browser UI.</p>
+            <p><span aria-hidden="true">&gt;</span> Tile and piece extraction follow this main-menu slice.</p>
+          </div>
+        </aside>
+
+        <div class="main-menu-dock" aria-label="Quick links">
+          ${renderMainMenuDockButton('settings', 'Achievements')}
+          ${renderMainMenuDockButton('campaigns', 'Campaigns')}
+          ${renderMainMenuDockButton('lobbies', 'Lobbies')}
+          ${renderMainMenuDockButton('settings', 'Collection')}
+        </div>
+      </div>`;
+  }
+
   function renderArtHotspot(screenId, screen, hotspot) {
     const signedIn = Boolean(currentUser);
     const action = hotspot.action === 'auth-dynamic'
@@ -2554,7 +2640,7 @@
     }
     menuLayer.hidden = false;
     if (state.screen === 'main') {
-      menuLayer.innerHTML = renderArtScreen('main');
+      menuLayer.innerHTML = shouldShowMainConcept() ? renderArtScreen('main') : renderMainMenu();
     } else if (state.screen === 'lobbies') {
       const visibleLobbies = state.lobbies.filter((lobby) => !state.lobby || lobby.id !== state.lobby.id);
       menuLayer.innerHTML = `
