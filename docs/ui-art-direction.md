@@ -193,9 +193,10 @@ to display the approved renders in the app while live hotspots are tuned on top.
 That bridge is a temporary production aid, not a replacement for decomposing the
 screens into reusable browser-rendered UI, board, tile, and piece systems.
 
-The main menu has begun that decomposition: `/` is now live DOM chrome over the
-browser-rendered board scene, while `/?screen=main-concept` preserves the exact
-approved main menu render for comparison.
+The main menu has begun that decomposition without replacing the approved render:
+`/` and `/?screen=main-concept` preserve the exact approved main menu render,
+while `/?screen=main-skeleton` shows the live DOM shell with unfinished asset
+slots labeled in place.
 
 ## Parallel Work Boundaries
 

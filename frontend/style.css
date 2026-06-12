@@ -923,6 +923,111 @@ h1 {
   color: #f4ead0;
 }
 
+.main-menu-skeleton-screen::before {
+  background:
+    repeating-linear-gradient(135deg, rgba(74, 128, 151, .08) 0 10px, transparent 10px 20px),
+    linear-gradient(90deg, rgba(2, 7, 11, .94) 0%, rgba(2, 7, 11, .72) 32%, rgba(2, 7, 11, .18) 58%, rgba(2, 7, 11, .74) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .5));
+}
+
+.main-menu-skeleton-banner {
+  align-items: center;
+  background: rgba(7, 20, 30, .94);
+  border: 2px dashed rgba(255, 216, 122, .72);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .66);
+  color: #f1e3b3;
+  display: flex;
+  gap: 12px;
+  left: 41%;
+  max-width: 460px;
+  padding: 10px 14px;
+  pointer-events: none;
+  position: absolute;
+  top: 34px;
+  transform: translateX(-50%);
+  text-transform: uppercase;
+  z-index: 7;
+}
+
+.main-menu-skeleton-banner strong {
+  color: #ffd87a;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .58rem;
+}
+
+.main-menu-skeleton-banner span {
+  color: #bfd5dc;
+  font-size: 1.05rem;
+}
+
+.main-menu-skeleton-board-callout {
+  left: 43%;
+  max-width: min(420px, 30vw);
+  pointer-events: none;
+  position: absolute;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+}
+
+.skeleton-tag {
+  align-items: center;
+  background: rgba(2, 7, 11, .94);
+  border: 1px dashed rgba(255, 216, 122, .82);
+  color: #d8e6ec;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  letter-spacing: 0;
+  line-height: 1.08;
+  max-width: min(100%, 360px);
+  padding: 4px 6px;
+  pointer-events: none;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.skeleton-tag b {
+  flex: 0 0 auto;
+  color: #ffd87a;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .44rem;
+}
+
+.main-menu-skeleton-screen .main-menu-brand,
+.main-menu-skeleton-screen .main-menu-action,
+.main-menu-skeleton-screen .main-menu-daily,
+.main-menu-skeleton-screen .main-menu-profile,
+.main-menu-skeleton-screen .main-menu-counts,
+.main-menu-skeleton-screen .main-menu-news,
+.main-menu-skeleton-screen .main-menu-dock {
+  outline: 2px dashed rgba(255, 216, 122, .46);
+  outline-offset: 4px;
+  position: relative;
+}
+
+.main-menu-skeleton-screen .main-menu-brand > .skeleton-tag,
+.main-menu-skeleton-screen .main-menu-daily > .skeleton-tag,
+.main-menu-skeleton-screen .main-menu-profile > .skeleton-tag,
+.main-menu-skeleton-screen .main-menu-counts > .skeleton-tag,
+.main-menu-skeleton-screen .main-menu-news > .skeleton-tag,
+.main-menu-skeleton-screen .main-menu-dock > .skeleton-tag {
+  left: 10px;
+  max-width: calc(100% - 20px);
+  position: absolute;
+  top: -16px;
+  z-index: 4;
+}
+
+.main-menu-action .skeleton-tag {
+  bottom: 6px;
+  font-size: .9rem;
+  left: 80px;
+  max-width: calc(100% - 104px);
+  position: absolute;
+  z-index: 3;
+}
+
 .main-menu-art-screen {
   display: grid;
   grid-template-columns: 1fr;

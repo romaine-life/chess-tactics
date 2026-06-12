@@ -150,6 +150,7 @@ async function main() {
   const reviewUrls = [
     '/?screen=main',
     '/?screen=main-concept',
+    '/?screen=main-skeleton',
     '/?screen=campaigns',
     '/?screen=level-editor',
     '/?screen=skirmish',

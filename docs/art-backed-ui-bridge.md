@@ -23,10 +23,11 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` shows the live browser-rendered main menu, with the saved concept used as
-  its visual reference.
-- `/?screen=main` explicitly opens the live main menu.
-- `/?screen=main-concept` opens the saved main menu concept render.
+- `/` shows the saved main menu concept render.
+- `/?screen=main` explicitly opens the saved main menu concept render.
+- `/?screen=main-concept` also opens the saved main menu concept render.
+- `/?screen=main-skeleton` opens the live DOM skeleton, with unfinished asset
+  slots labeled in place.
 - `/?screen=campaigns` opens the campaign editor concept.
 - `/?screen=level-editor` opens the level editor concept.
 - `/?screen=skirmish` opens the skirmish concept.
@@ -36,8 +37,9 @@ the concept main menu, use `/?screen=main-concept&hotspots=1`.
 
 ## What Is Live
 
-The live main menu is now real DOM chrome over the browser-rendered board scene.
-Its buttons route directly into existing app actions.
+The main menu has two review surfaces: the approved render remains visible, and
+the live skeleton maps the real DOM structure. Its buttons route directly into
+existing app actions, but its labeled slots are intentionally unfinished.
 
 The remaining art-backed screens have real buttons layered over the render. The
 hotspots route back into existing app actions such as menu navigation, campaign
@@ -63,13 +65,15 @@ Keep hotspot labels short because they are also used as accessibility labels.
 
 Replace the bridge from the inside out:
 
-1. Extract persistent chrome: top HUD, profile area, mode navigation, and
-   bottom/dock navigation. The main menu is the first extracted slice.
-2. Extract editor and skirmish side panels as real DOM components.
-3. Replace remaining rendered board imagery with canvas terrain tiles and overlays that
+1. Maintain a clear skeleton for each screen so unfinished asset slots remain
+   visible during decomposition. The main menu skeleton is the first slice.
+2. Fill one main menu asset family at a time: logo/crest, button row, profile
+   panel, dock icons, status/news panels, and battlefield plate.
+3. Extract editor and skirmish side panels as real DOM components.
+4. Replace remaining rendered board imagery with canvas terrain tiles and overlays that
    match the concepts.
-4. Replace rendered pieces with sprite-friendly chess silhouettes.
-5. Keep the concept images available as visual regression references until the
+5. Replace rendered pieces with sprite-friendly chess silhouettes.
+6. Keep the concept images available as visual regression references until the
    live screens clearly match them.
 
 Each extraction should preserve the current review URL and hotspot behavior

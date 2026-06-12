@@ -431,7 +431,7 @@
   function applyInitialScreenParam() {
     const params = new URLSearchParams(window.location.search);
     const screen = params.get('screen');
-    if (screen === 'main' || screen === 'menu' || screen === 'main-concept') {
+    if (screen === 'main' || screen === 'menu' || screen === 'main-concept' || screen === 'main-skeleton') {
       state.screen = 'main';
     } else if (screen === 'campaigns') {
       state.screen = 'campaigns';
@@ -2509,15 +2509,25 @@
   function shouldShowMainConcept() {
     const params = new URLSearchParams(window.location.search);
     const screen = params.get('screen');
-    return screen === 'main-concept' || screen === 'main-art';
+    return !screen || screen === 'main' || screen === 'menu' || screen === 'main-concept' || screen === 'main-art';
   }
 
-  function renderMainMenuAction(action, iconClass, icon, label, active = false) {
+  function shouldShowMainSkeleton() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('screen') === 'main-skeleton';
+  }
+
+  function renderSkeletonTag(label, stateLabel = 'Unfilled') {
+    return `<span class="skeleton-tag"><b>${escapeText(stateLabel)}</b>${escapeText(label)}</span>`;
+  }
+
+  function renderMainMenuAction(action, iconClass, icon, label, active = false, skeletonLabel = '') {
     return `
       <button class="main-menu-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}">
         <span class="main-menu-action-icon ${escapeText(iconClass)}">${escapeText(icon)}</span>
         <span>${escapeText(label)}</span>
         <i aria-hidden="true">&gt;</i>
+        ${skeletonLabel ? renderSkeletonTag(skeletonLabel) : ''}
       </button>`;
   }
 
@@ -2525,14 +2535,22 @@
     return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">${escapeText(label.slice(0, 2).toUpperCase())}</button>`;
   }
 
-  function renderMainMenu() {
+  function renderMainMenuSkeleton() {
     const signedIn = Boolean(currentUser);
     const displayName = signedIn ? (currentUser.name || currentUser.email || 'Player') : 'Guest';
     const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
     return `
-      <div class="main-menu-screen main-menu-live-screen" data-live-screen="main">
+      <div class="main-menu-screen main-menu-live-screen main-menu-skeleton-screen" data-live-screen="main-skeleton">
+        <div class="main-menu-skeleton-banner">
+          <strong>Skeleton mode</strong>
+          <span>Live structure only. Labeled slots still need approved art.</span>
+        </div>
+        <div class="main-menu-skeleton-board-callout">
+          ${renderSkeletonTag('Battlefield plate, lighting, terrain richness, and hero board composition', 'Pending art')}
+        </div>
         <section class="main-menu-left" aria-label="Main navigation">
           <div class="main-menu-brand">
+            ${renderSkeletonTag('Crest, logo lockup, title pixels, and campaign identity', 'Asset slot')}
             <p class="main-menu-eyebrow">Moonlit campaign tactics</p>
             <div class="main-menu-title-row">
               <div class="main-menu-crest" aria-hidden="true">K</div>
@@ -2544,14 +2562,15 @@
           </div>
 
           <nav class="main-menu-actions" aria-label="Play modes">
-            ${renderMainMenuAction('party', 'blue', 'N', 'Solo Skirmish', true)}
-            ${renderMainMenuAction('campaigns', 'gold', 'C', 'Campaign Editor')}
-            ${renderMainMenuAction('level-editor-preview', 'green', 'LV', 'Level Editor')}
-            ${renderMainMenuAction('lobbies', 'violet', 'P2', 'Lobbies')}
-            ${renderMainMenuAction('settings', 'slate', '..', 'Settings')}
+            ${renderMainMenuAction('party', 'blue', 'N', 'Solo Skirmish', true, 'Primary button art and icon')}
+            ${renderMainMenuAction('campaigns', 'gold', 'C', 'Campaign Editor', false, 'Mode button art and icon')}
+            ${renderMainMenuAction('level-editor-preview', 'green', 'LV', 'Level Editor', false, 'Mode button art and icon')}
+            ${renderMainMenuAction('lobbies', 'violet', 'P2', 'Lobbies', false, 'Mode button art and icon')}
+            ${renderMainMenuAction('settings', 'slate', '..', 'Settings', false, 'Mode button art and icon')}
           </nav>
 
           <div class="main-menu-daily">
+            ${renderSkeletonTag('Daily challenge/news panel frame and content treatment', 'Asset slot')}
             <div>
               <strong>Daily Line</strong>
               <small>Preview</small>
@@ -2563,6 +2582,7 @@
 
         <aside class="main-menu-right" aria-label="Profile and status">
           <div class="main-menu-profile">
+            ${renderSkeletonTag('Account panel frame, avatar crest, and button art', 'Asset slot')}
             <div class="main-menu-avatar" aria-hidden="true">${signedIn ? 'P' : '?'}</div>
             <div>
               <strong>${escapeText(displayName)}</strong>
@@ -2572,11 +2592,13 @@
           </div>
 
           <div class="main-menu-counts" aria-label="Preview force count">
+            ${renderSkeletonTag('Status counters and compact HUD treatment', 'Asset slot')}
             <span><b aria-hidden="true">A</b><strong>6 Allies</strong></span>
             <span><b aria-hidden="true">T</b><strong>5 Threats</strong></span>
           </div>
 
           <div class="main-menu-news">
+            ${renderSkeletonTag('Right rail news/status panel art', 'Asset slot')}
             <strong>Campaign tools</strong>
             <p><span aria-hidden="true">&gt;</span> Editor shell is moving from render reference to live browser UI.</p>
             <p><span aria-hidden="true">&gt;</span> Tile and piece extraction follow this main-menu slice.</p>
@@ -2584,6 +2606,7 @@
         </aside>
 
         <div class="main-menu-dock" aria-label="Quick links">
+          ${renderSkeletonTag('Dock icons and bottom nav frame', 'Asset slot')}
           ${renderMainMenuDockButton('settings', 'Achievements')}
           ${renderMainMenuDockButton('campaigns', 'Campaigns')}
           ${renderMainMenuDockButton('lobbies', 'Lobbies')}
@@ -2640,7 +2663,7 @@
     }
     menuLayer.hidden = false;
     if (state.screen === 'main') {
-      menuLayer.innerHTML = shouldShowMainConcept() ? renderArtScreen('main') : renderMainMenu();
+      menuLayer.innerHTML = shouldShowMainSkeleton() && !shouldShowMainConcept() ? renderMainMenuSkeleton() : renderArtScreen('main');
     } else if (state.screen === 'lobbies') {
       const visibleLobbies = state.lobbies.filter((lobby) => !state.lobby || lobby.id !== state.lobby.id);
       menuLayer.innerHTML = `
