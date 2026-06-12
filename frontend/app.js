@@ -156,6 +156,7 @@
   const selectedMeta = document.getElementById('selectedMeta');
   const moveButton = document.getElementById('moveButton');
   const powerButton = document.getElementById('powerButton');
+  const threatButton = document.getElementById('threatButton');
   const endButton = document.getElementById('endButton');
   const menuLayer = document.getElementById('menuLayer');
   const accountEl = document.getElementById('account');
@@ -242,6 +243,7 @@
     party: ['knight', 'bishop'],
     pieces: [],
     winner: null,
+    showThreats: false,
     log: ['Choose your squad. One pawn is always fielded.'],
   };
 
@@ -555,6 +557,56 @@
     return rayMoves(piece, [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
   }
 
+  function attackedSquares(piece) {
+    if (!piece || !piece.alive) return [];
+    if (piece.type === 'pawn') {
+      const dir = piece.side === 'player' ? -1 : 1;
+      const squares = [];
+      [-1, 1].forEach((dx) => {
+        const x = piece.x + dx;
+        const y = piece.y + dir;
+        if (inBounds(x, y)) {
+          squares.push({ x, y });
+        }
+      });
+      return squares;
+    }
+    if (piece.type === 'knight') {
+      const deltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+      return deltas
+        .map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
+        .filter((pos) => inBounds(pos.x, pos.y));
+    }
+    const dirs = piece.type === 'bishop'
+      ? [[1, 1], [1, -1], [-1, 1], [-1, -1]]
+      : piece.type === 'rook'
+        ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    
+    const squares = [];
+    dirs.forEach(([dx, dy]) => {
+      for (let step = 1; ; step += 1) {
+        const x = piece.x + dx * step;
+        const y = piece.y + dy * step;
+        if (!inBounds(x, y)) break;
+        squares.push({ x, y });
+        if (pieceAt(x, y)) break;
+      }
+    });
+    return squares;
+  }
+
+  function getEnemyThreats() {
+    const threats = new Map();
+    livingPieces('enemy').forEach((piece) => {
+      attackedSquares(piece).forEach((sq) => {
+        const key = `${sq.x},${sq.y}`;
+        threats.set(key, sq);
+      });
+    });
+    return Array.from(threats.values());
+  }
+
   function promoteIfNeeded(piece) {
     if (piece.type !== 'pawn') return;
     if ((piece.side === 'player' && piece.y === 0) || (piece.side === 'enemy' && piece.y === ROWS - 1)) {
@@ -731,6 +783,11 @@
     }
     const selected = selectedPiece();
     const moves = state.turn === 'player' ? legalMoves(selected) : [];
+    if (state.screen === 'game' && state.showThreats) {
+      getEnemyThreats().forEach((sq) => {
+        drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)');
+      });
+    }
     moves.forEach((move) => {
       drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff');
     });
@@ -929,6 +986,9 @@
     moveButton.classList.toggle('active', state.screen !== 'game');
     powerButton.classList.remove('active');
     endButton.disabled = state.screen !== 'game' || state.turn !== 'player';
+    threatButton.textContent = state.showThreats ? 'Threats: On' : 'Threats: Off';
+    threatButton.classList.toggle('active', state.showThreats);
+    threatButton.disabled = state.screen !== 'game';
     rosterEl.innerHTML = ['player', 'enemy'].map((side) => `
       <div class="roster-title">${side === 'player' ? 'Allies' : 'Enemies'}</div>
       ${livingPieces(side).map((unit) => `
@@ -1015,6 +1075,13 @@
       state.selected = null;
       render();
       window.setTimeout(enemyTurn, 280);
+    }
+  });
+
+  threatButton.addEventListener('click', () => {
+    if (state.screen === 'game') {
+      state.showThreats = !state.showThreats;
+      render();
     }
   });
 
