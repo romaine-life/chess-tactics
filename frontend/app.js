@@ -156,6 +156,7 @@
   const selectedMeta = document.getElementById('selectedMeta');
   const moveButton = document.getElementById('moveButton');
   const powerButton = document.getElementById('powerButton');
+  const threatButton = document.getElementById('threatButton');
   const endButton = document.getElementById('endButton');
   const menuLayer = document.getElementById('menuLayer');
   const accountEl = document.getElementById('account');
@@ -243,6 +244,8 @@
     party: ['knight', 'bishop'],
     pieces: [],
     winner: null,
+    showThreats: false,
+    animating: false,
     log: ['Choose your squad. One pawn is always fielded.'],
     battleAnimating: false,
     battleAnimStartTime: 0,
@@ -624,6 +627,56 @@
     return rayMoves(piece, [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
   }
 
+  function attackedSquares(piece) {
+    if (!piece || !piece.alive) return [];
+    if (piece.type === 'pawn') {
+      const dir = piece.side === 'player' ? -1 : 1;
+      const squares = [];
+      [-1, 1].forEach((dx) => {
+        const x = piece.x + dx;
+        const y = piece.y + dir;
+        if (inBounds(x, y)) {
+          squares.push({ x, y });
+        }
+      });
+      return squares;
+    }
+    if (piece.type === 'knight') {
+      const deltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+      return deltas
+        .map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
+        .filter((pos) => inBounds(pos.x, pos.y));
+    }
+    const dirs = piece.type === 'bishop'
+      ? [[1, 1], [1, -1], [-1, 1], [-1, -1]]
+      : piece.type === 'rook'
+        ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    
+    const squares = [];
+    dirs.forEach(([dx, dy]) => {
+      for (let step = 1; ; step += 1) {
+        const x = piece.x + dx * step;
+        const y = piece.y + dy * step;
+        if (!inBounds(x, y)) break;
+        squares.push({ x, y });
+        if (pieceAt(x, y)) break;
+      }
+    });
+    return squares;
+  }
+
+  function getEnemyThreats() {
+    const threats = new Map();
+    livingPieces('enemy').forEach((piece) => {
+      attackedSquares(piece).forEach((sq) => {
+        const key = `${sq.x},${sq.y}`;
+        threats.set(key, sq);
+      });
+    });
+    return Array.from(threats.values());
+  }
+
   function promoteIfNeeded(piece) {
     if (piece.type !== 'pawn') return;
     if ((piece.side === 'player' && piece.y === 0) || (piece.side === 'enemy' && piece.y === ROWS - 1)) {
@@ -635,18 +688,92 @@
     }
   }
 
-  function movePiece(piece, move) {
-    const captured = move.capture ? state.pieces.find((target) => target.id === move.capture) : pieceAt(move.x, move.y);
-    if (captured && captured.side !== piece.side) {
-      captured.alive = false;
-      addLog(`${piece.name} captures ${captured.name}.`, piece.side === 'player' ? 'victory' : 'danger');
-    } else {
-      addLog(`${piece.name} advances.`);
+  function easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
+  function getPieceRenderPos(piece) {
+    if (piece.anim) {
+      const now = performance.now();
+      const elapsed = now - piece.anim.startTime;
+      const t = Math.min(1, elapsed / piece.anim.duration);
+      const easeT = easeInOutQuad(t);
+      const px = piece.anim.startX + (piece.anim.endX - piece.anim.startX) * easeT;
+      const py = piece.anim.startY + (piece.anim.endY - piece.anim.startY) * easeT;
+      return { x: px, y: py };
     }
-    piece.x = move.x;
-    piece.y = move.y;
-    promoteIfNeeded(piece);
-    checkVictory();
+    return { x: piece.x, y: piece.y };
+  }
+
+  let animFrameId = null;
+  function updateAnimations() {
+    let active = false;
+    const now = performance.now();
+    const callbacks = [];
+    state.pieces.forEach((piece) => {
+      if (piece.anim) {
+        const elapsed = now - piece.anim.startTime;
+        if (elapsed >= piece.anim.duration) {
+          const cb = piece.anim.callback;
+          piece.anim = null;
+          if (cb) callbacks.push(cb);
+        } else {
+          active = true;
+        }
+      }
+    });
+
+    drawBoard();
+
+    if (active) {
+      animFrameId = requestAnimationFrame(updateAnimations);
+    } else {
+      animFrameId = null;
+      render();
+    }
+
+    callbacks.forEach((cb) => cb());
+  }
+
+  function startAnimationLoop() {
+    if (!animFrameId) {
+      animFrameId = requestAnimationFrame(updateAnimations);
+    }
+  }
+
+  function movePiece(piece, move, onComplete) {
+    const startX = piece.x;
+    const startY = piece.y;
+    const endX = move.x;
+    const endY = move.y;
+
+    state.animating = true;
+
+    piece.anim = {
+      startX,
+      startY,
+      endX,
+      endY,
+      startTime: performance.now(),
+      duration: 350,
+      callback: () => {
+        const captured = move.capture ? state.pieces.find((target) => target.id === move.capture) : pieceAt(endX, endY);
+        if (captured && captured.side !== piece.side) {
+          captured.alive = false;
+          addLog(`${piece.name} captures ${captured.name}.`, piece.side === 'player' ? 'victory' : 'danger');
+        } else {
+          addLog(`${piece.name} advances.`);
+        }
+        piece.x = endX;
+        piece.y = endY;
+        promoteIfNeeded(piece);
+        checkVictory();
+
+        state.animating = false;
+        if (onComplete) onComplete();
+      }
+    };
+    startAnimationLoop();
   }
 
   function checkVictory() {
@@ -662,15 +789,16 @@
   }
 
   function completePlayerMove(piece, move) {
-    movePiece(piece, move);
-    if (state.winner) {
+    movePiece(piece, move, () => {
+      if (state.winner) {
+        render();
+        return;
+      }
+      state.turn = 'enemy';
+      state.selected = null;
       render();
-      return;
-    }
-    state.turn = 'enemy';
-    state.selected = null;
-    render();
-    window.setTimeout(enemyTurn, 380);
+      window.setTimeout(enemyTurn, 380);
+    });
   }
 
   function enemyTurn() {
@@ -689,16 +817,17 @@
       .map((entry) => ({ piece: entry.piece, moves: entry.moves.filter((move) => move.capture) }))
       .filter((entry) => entry.moves.length);
     const entry = choice(captureEntries.length ? captureEntries : candidates);
-    movePiece(entry.piece, choice(entry.moves));
-    if (!state.winner) {
-      state.turn = 'player';
-      state.selected = livingPieces('player')[0] && livingPieces('player')[0].id;
-    }
-    render();
+    movePiece(entry.piece, choice(entry.moves), () => {
+      if (!state.winner) {
+        state.turn = 'player';
+        state.selected = livingPieces('player')[0] && livingPieces('player')[0].id;
+      }
+      render();
+    });
   }
 
   function handleTile(x, y) {
-    if (state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating) return;
+    if (state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating || state.animating) return;
     const clicked = pieceAt(x, y);
     if (clicked && clicked.side === 'player') {
       state.selected = clicked.id;
@@ -799,23 +928,33 @@
       drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.08)', null);
     }
     const selected = state.battleAnimating ? null : selectedPiece();
-    const moves = (state.turn === 'player' && !state.battleAnimating) ? legalMoves(selected) : [];
+    const moves = (state.turn === 'player' && !state.battleAnimating && !state.animating) ? legalMoves(selected) : [];
+    if (state.screen === 'game' && state.showThreats) {
+      getEnemyThreats().forEach((sq) => {
+        drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)');
+      });
+    }
     moves.forEach((move) => {
       drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff');
     });
-    if (selected) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
-    if (state.hoverTile && !state.battleAnimating) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
+    if (selected && !state.animating && !state.battleAnimating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
+    if (state.hoverTile && !state.animating && !state.battleAnimating) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
     
     const activePieces = state.pieces
       .filter((piece) => piece.alive)
-      .sort((a, b) => (a.x + a.y) - (b.x + b.y));
+      .sort((a, b) => {
+        const posA = getPieceRenderPos(a);
+        const posB = getPieceRenderPos(b);
+        return (posA.x + posA.y) - (posB.x + posB.y);
+      });
 
     activePieces.forEach(drawPieceShadow);
     activePieces.forEach(drawPiece);
   }
 
   function drawPieceShadow(piece) {
-    const { x, y } = isoCenter(piece.x, piece.y);
+    const renderPos = getPieceRenderPos(piece);
+    const { x, y } = isoCenter(renderPos.x, renderPos.y);
     const offsetY = piece.offsetY || 0;
     const startHeight = 400;
     const ratio = Math.max(0, Math.min(1, offsetY / startHeight));
@@ -832,7 +971,8 @@
   }
 
   function drawPiece(piece) {
-    const { x, y } = isoCenter(piece.x, piece.y);
+    const renderPos = getPieceRenderPos(piece);
+    const { x, y } = isoCenter(renderPos.x, renderPos.y);
     const base = piece.side === 'player' ? '#dceaf2' : '#7a3f2a';
     const shade = piece.side === 'player' ? '#8fa6b4' : '#4b2419';
     const accent = piece.side === 'player' ? '#8fe6ff' : '#ff8b52';
@@ -1018,11 +1158,14 @@
     endButton.textContent = state.turn === 'enemy' ? 'Enemy Moving' : 'Wait';
     moveButton.classList.toggle('active', state.screen !== 'game');
     powerButton.classList.remove('active');
-    endButton.disabled = state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating;
+    endButton.disabled = state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating || state.animating;
+    threatButton.textContent = state.showThreats ? 'Threats: On' : 'Threats: Off';
+    threatButton.classList.toggle('active', state.showThreats);
+    threatButton.disabled = state.screen !== 'game';
     rosterEl.innerHTML = ['player', 'enemy'].map((side) => `
       <div class="roster-title">${side === 'player' ? 'Allies' : 'Enemies'}</div>
       ${livingPieces(side).map((unit) => `
-        <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== 'player' || state.turn !== 'player' || state.battleAnimating ? 'disabled' : ''}>
+        <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== 'player' || state.turn !== 'player' || state.battleAnimating || state.animating ? 'disabled' : ''}>
           <span class="badge ${side === 'player' ? 'player' : 'enemy'}">
             ${getPieceSvg(unit.type, side)}
           </span>
@@ -1032,6 +1175,7 @@
       `).join('')}`).join('');
     rosterEl.querySelectorAll('button[data-unit]').forEach((button) => {
       button.addEventListener('click', () => {
+        if (state.animating) return;
         const unit = state.pieces.find((item) => item.id === button.dataset.unit);
         if (unit && unit.side === 'player' && state.turn === 'player') {
           state.selected = unit.id;
@@ -1082,7 +1226,13 @@
   });
 
   boardEl.addEventListener('mousemove', (event) => {
-    if (state.battleAnimating) return;
+    if (state.battleAnimating || state.animating) {
+      if (state.hoverTile) {
+        state.hoverTile = null;
+        render();
+      }
+      return;
+    }
     const tile = pointToTile(event.clientX, event.clientY);
     const changed = (!tile && state.hoverTile) || (tile && (!state.hoverTile || tile.x !== state.hoverTile.x || tile.y !== state.hoverTile.y));
     if (changed) {
@@ -1098,14 +1248,29 @@
     }
   });
 
-  moveButton.addEventListener('click', () => setScreen('main'));
-  powerButton.addEventListener('click', () => startGame());
+  moveButton.addEventListener('click', () => {
+    if (state.animating) return;
+    setScreen('main');
+  });
+  powerButton.addEventListener('click', () => {
+    if (state.animating) return;
+    startGame();
+  });
   endButton.addEventListener('click', () => {
+    if (state.animating) return;
     if (state.screen === 'game' && state.turn === 'player') {
       state.turn = 'enemy';
       state.selected = null;
       render();
       window.setTimeout(enemyTurn, 280);
+    }
+  });
+
+  threatButton.addEventListener('click', () => {
+    if (state.animating) return;
+    if (state.screen === 'game') {
+      state.showThreats = !state.showThreats;
+      render();
     }
   });
 
