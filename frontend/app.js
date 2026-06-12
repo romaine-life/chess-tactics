@@ -183,6 +183,7 @@
   let currentUser = null;
   let lobbyPollTimer = null;
   let battleAnimFrameId = null;
+  let idleAnimFrameId = null;
 
   function returnTo() {
     return `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -486,18 +487,8 @@
     };
   }
 
-  function easeOutBounce(x) {
-    const n1 = 7.5625;
-    const d1 = 2.75;
-    if (x < 1 / d1) {
-      return n1 * x * x;
-    } else if (x < 2 / d1) {
-      return n1 * (x -= 1.5 / d1) * x + 0.75;
-    } else if (x < 2.5 / d1) {
-      return n1 * (x -= 2.25 / d1) * x + 0.9375;
-    } else {
-      return n1 * (x -= 2.625 / d1) * x + 0.984375;
-    }
+  function easeOutLanding(x) {
+    return 1 - Math.pow(1 - x, 3);
   }
 
   function animate() {
@@ -519,7 +510,7 @@
         allDone = false;
       } else if (elapsed < delay + duration) {
         const t = (elapsed - delay) / duration;
-        piece.offsetY = startHeight * (1 - easeOutBounce(t));
+        piece.offsetY = startHeight * (1 - easeOutLanding(t));
         allDone = false;
       } else {
         piece.offsetY = 0;
@@ -743,6 +734,40 @@
       return { x: px, y: py };
     }
     return { x: piece.x, y: piece.y };
+  }
+
+  function getIdleHover(piece, now) {
+    if (piece.type === 'rock') {
+      return 0;
+    }
+    const seed = piece.id.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
+    const wave = Math.sin(now * 0.003 + seed * 0.17);
+    return 3 + wave * 1.35;
+  }
+
+  function shouldIdleAnimateBoard() {
+    return state.screen === 'game'
+      && !state.battleAnimating
+      && !state.animating
+      && state.pieces.some((piece) => piece.alive && piece.type !== 'rock');
+  }
+
+  function syncIdleAnimationLoop() {
+    if (shouldIdleAnimateBoard()) {
+      if (!idleAnimFrameId) {
+        idleAnimFrameId = requestAnimationFrame(updateIdleAnimation);
+      }
+    } else if (idleAnimFrameId) {
+      cancelAnimationFrame(idleAnimFrameId);
+      idleAnimFrameId = null;
+    }
+  }
+
+  function updateIdleAnimation() {
+    idleAnimFrameId = null;
+    if (!shouldIdleAnimateBoard()) return;
+    drawBoard();
+    idleAnimFrameId = requestAnimationFrame(updateIdleAnimation);
   }
 
   let animFrameId = null;
@@ -1054,31 +1079,13 @@
         const posA = getPieceRenderPos(a);
         const posB = getPieceRenderPos(b);
         return (posA.x + posA.y) - (posB.x + posB.y);
-      });
+    });
 
-    activePieces.forEach(drawPieceShadow);
-    activePieces.forEach(drawPiece);
+    const now = performance.now();
+    activePieces.forEach((piece) => drawPiece(piece, now));
   }
 
-  function drawPieceShadow(piece) {
-    const renderPos = getPieceRenderPos(piece);
-    const { x, y } = isoCenter(renderPos.x, renderPos.y);
-    const offsetY = piece.offsetY || 0;
-    const startHeight = 400;
-    const ratio = Math.max(0, Math.min(1, offsetY / startHeight));
-    
-    const scale = 1 - ratio * 0.5;
-    const opacity = 0.3 * (1 - ratio * 0.85);
-    
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(x, y, (TW / 3.2) * scale, (TH / 3.2) * scale, 0, 0, 2 * Math.PI);
-    ctx.fillStyle = `rgba(10, 15, 25, ${opacity})`;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawPiece(piece) {
+  function drawPiece(piece, now) {
     const renderPos = getPieceRenderPos(piece);
     const { x, y } = isoCenter(renderPos.x, renderPos.y);
     const base = piece.side === 'player' ? '#dceaf2' : (piece.side === 'enemy' ? '#7a3f2a' : '#a8a8a8');
@@ -1086,7 +1093,8 @@
     const accent = piece.side === 'player' ? '#8fe6ff' : (piece.side === 'enemy' ? '#ff8b52' : '#7a7a7a');
     ctx.save();
     const offsetY = piece.offsetY || 0;
-    ctx.translate(Math.round(x), Math.round(y - 24 - offsetY));
+    const lift = getIdleHover(piece, now);
+    ctx.translate(Math.round(x), Math.round(y - 24 - offsetY - lift));
 
     const img = IMAGES[piece.type] 
       ? (piece.side === 'player' 
@@ -1309,6 +1317,7 @@
     drawBoard();
     renderMenu();
     renderPanel();
+    syncIdleAnimationLoop();
   }
 
   menuLayer.addEventListener('click', (event) => {
