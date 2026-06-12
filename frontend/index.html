@@ -10,10 +10,11 @@
     <link rel="stylesheet" href="/style.css">
   </head>
   <body>
-    <main class="shell">
+    <main class="shell app-frame">
       <section class="game">
         <header class="topbar">
-          <div>
+          <div class="title-block">
+            <span class="hud-kicker">Tactical breach console</span>
             <h1>Chess Tactics</h1>
             <p id="statusLine">Breach 1 / 6</p>
           </div>
@@ -51,8 +52,9 @@
       </section>
 
       <aside class="panel">
-        <div id="gamePanel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
+        <div id="gamePanel" class="panel-stack">
           <div class="panel-section">
+            <p class="eyebrow">Selection</p>
             <h2 id="selectedName">Crown Lancer</h2>
             <p id="selectedMeta">Hybrid royal vanguard</p>
             <div class="actions">
@@ -66,6 +68,7 @@
           <div class="panel-section roster" id="roster"></div>
 
           <div class="panel-section legend" aria-label="Board key">
+            <div class="roster-title">Board Key</div>
             <div><i class="k-move-dot"></i><span>Move capability</span></div>
             <div><i class="k-attack-dash"></i><span>Attack capability</span></div>
             <div><i class="k-danger"></i><span>Enemy threat range</span></div>
@@ -75,7 +78,7 @@
 
           <div class="panel-section log" id="log" aria-live="polite"></div>
         </div>
-        <div id="levelEditorPanel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;" hidden></div>
+        <div id="levelEditorPanel" class="panel-stack" hidden></div>
       </aside>
     </main>
 
