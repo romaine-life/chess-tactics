@@ -297,6 +297,26 @@
   const TW = 72;
   const TH = 36;
   const CLIFF = 34;
+  const MOONLIGHT = {
+    skyTop: '#08111c',
+    skyBottom: '#101c25',
+    grassA: '#243f2c',
+    grassB: '#2b4931',
+    grassMoon: '#466e4a',
+    grassDeep: '#142519',
+    grid: 'rgba(126, 170, 143, 0.48)',
+    gridShadow: 'rgba(3, 10, 13, 0.78)',
+    waterA: '#113447',
+    waterB: '#18506a',
+    waterMoon: '#7dd7ee',
+    stoneA: '#43525a',
+    stoneB: '#647176',
+    stoneDeep: '#222c31',
+    cliffLeft: '#394238',
+    cliffRight: '#263139',
+    cliffDeep: '#151d22',
+    cliffMoss: '#526e49',
+  };
   const DEFAULT_BOARD_METRICS = {
     cols: COLS,
     rows: ROWS,
@@ -1810,24 +1830,83 @@
     ctx.closePath();
   }
 
-  function drawCliff(metrics) {
+  function boardExtents(metrics) {
+    const top = isoCenter(0, 0, metrics);
     const leftCenter = isoCenter(0, metrics.rows - 1, metrics);
     const rightCenter = isoCenter(metrics.cols - 1, 0, metrics);
     const bottomCenter = isoCenter(metrics.cols - 1, metrics.rows - 1, metrics);
-    const left = { x: leftCenter.x - TW / 2, y: leftCenter.y };
-    const right = { x: rightCenter.x + TW / 2, y: rightCenter.y };
-    const bottom = { x: bottomCenter.x, y: bottomCenter.y + TH / 2 };
-    ctx.fillStyle = '#5a4226';
+    return {
+      top: { x: top.x, y: top.y - TH / 2 },
+      left: { x: leftCenter.x - TW / 2, y: leftCenter.y },
+      right: { x: rightCenter.x + TW / 2, y: rightCenter.y },
+      bottom: { x: bottomCenter.x, y: bottomCenter.y + TH / 2 },
+    };
+  }
+
+  function terrainKind(c, r, metrics) {
+    const lowerWater = r >= metrics.rows - 2 && c <= Math.max(1, Math.floor(metrics.cols * 0.42));
+    const leftWater = c === 0 && r >= Math.floor(metrics.rows * 0.38);
+    const pond = c <= 2 && r >= metrics.rows - 3 && r - c >= metrics.rows - 4;
+    if (lowerWater || leftWater || pond) return 'water';
+    const roadLine = Math.round(metrics.rows * 0.38) + c;
+    const diagonalRoad = Math.abs(r - roadLine) <= (metrics.cols > 10 ? 1 : 0);
+    const midRoad = r === Math.floor(metrics.rows / 2) && c >= 1 && c < metrics.cols - 1;
+    if (diagonalRoad || midRoad) return 'stone';
+    return 'grass';
+  }
+
+  function drawBattlefieldBackground(metrics) {
+    const ext = boardExtents(metrics);
+    const glowX = (ext.left.x + ext.right.x) / 2;
+    const glowY = Math.max(0, ext.top.y - 72);
+    const sky = ctx.createLinearGradient(0, 0, 0, boardEl.height);
+    sky.addColorStop(0, MOONLIGHT.skyTop);
+    sky.addColorStop(0.58, MOONLIGHT.skyBottom);
+    sky.addColorStop(1, '#071015');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, boardEl.width, boardEl.height);
+
+    const moonGlow = ctx.createRadialGradient(glowX, glowY, 12, glowX, glowY, 260);
+    moonGlow.addColorStop(0, 'rgba(134, 202, 220, 0.22)');
+    moonGlow.addColorStop(0.42, 'rgba(72, 119, 137, 0.10)');
+    moonGlow.addColorStop(1, 'rgba(72, 119, 137, 0)');
+    ctx.fillStyle = moonGlow;
+    ctx.fillRect(0, 0, boardEl.width, boardEl.height);
+
+    ctx.fillStyle = 'rgba(3, 8, 10, 0.34)';
+    ctx.beginPath();
+    ctx.ellipse((ext.left.x + ext.right.x) / 2, ext.bottom.y + CLIFF + 18, (ext.right.x - ext.left.x) * 0.62, 42, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawCliff(metrics) {
+    const { left, right, bottom } = boardExtents(metrics);
+    const leftFace = ctx.createLinearGradient(left.x, left.y, bottom.x, bottom.y + CLIFF);
+    leftFace.addColorStop(0, MOONLIGHT.cliffLeft);
+    leftFace.addColorStop(1, MOONLIGHT.cliffDeep);
+    ctx.fillStyle = leftFace;
     ctx.beginPath();
     ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y);
     ctx.lineTo(bottom.x, bottom.y + CLIFF); ctx.lineTo(left.x, left.y + CLIFF);
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#45331d';
+    const rightFace = ctx.createLinearGradient(right.x, right.y, bottom.x, bottom.y + CLIFF);
+    rightFace.addColorStop(0, MOONLIGHT.cliffRight);
+    rightFace.addColorStop(1, MOONLIGHT.cliffDeep);
+    ctx.fillStyle = rightFace;
     ctx.beginPath();
     ctx.moveTo(bottom.x, bottom.y); ctx.lineTo(right.x, right.y);
     ctx.lineTo(right.x, right.y + CLIFF); ctx.lineTo(bottom.x, bottom.y + CLIFF);
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#56753b';
+
+    for (let i = 0; i < metrics.cols + metrics.rows; i += 1) {
+      const t = i / Math.max(1, metrics.cols + metrics.rows - 1);
+      const x = left.x + (bottom.x - left.x) * t;
+      const y = left.y + (bottom.y - left.y) * t;
+      ctx.fillStyle = i % 2 ? 'rgba(92, 112, 104, 0.26)' : 'rgba(15, 21, 24, 0.34)';
+      ctx.fillRect(Math.round(x), Math.round(y + 7), 2, CLIFF - 10);
+    }
+
+    ctx.fillStyle = MOONLIGHT.cliffMoss;
     ctx.beginPath();
     ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y); ctx.lineTo(right.x, right.y);
     ctx.lineTo(right.x, right.y + 3); ctx.lineTo(bottom.x, bottom.y + 3); ctx.lineTo(left.x, left.y + 3);
@@ -1836,20 +1915,63 @@
 
   function drawTile(c, r, metrics) {
     const { x: cx, y: cy } = isoCenter(c, r, metrics);
+    const terrain = terrainKind(c, r, metrics);
     ctx.save();
     diamond(cx, cy);
-    ctx.fillStyle = (c + r) % 2 ? '#6a8e4c' : '#789d59';
+    if (terrain === 'water') {
+      const water = ctx.createLinearGradient(cx - TW / 2, cy - TH / 2, cx + TW / 2, cy + TH / 2);
+      water.addColorStop(0, '#0b2434');
+      water.addColorStop(0.45, MOONLIGHT.waterA);
+      water.addColorStop(1, MOONLIGHT.waterB);
+      ctx.fillStyle = water;
+    } else if (terrain === 'stone') {
+      ctx.fillStyle = (c + r) % 2 ? MOONLIGHT.stoneA : '#4d5e63';
+    } else {
+      ctx.fillStyle = (c + r) % 2 ? MOONLIGHT.grassA : MOONLIGHT.grassB;
+    }
     ctx.fill();
     ctx.clip();
-    for (let i = 0; i < 7; i += 1) {
-      const bx = Math.round(cx + (prand(c, r, i) - 0.5) * TW * 0.64);
-      const by = Math.round(cy + (prand(c, r, i + 20) - 0.5) * TH * 0.58);
-      ctx.fillStyle = prand(c, r, i + 40) > 0.5 ? '#587a3e' : '#87ad66';
-      ctx.fillRect(bx, by, 2, 2);
+    if (terrain === 'water') {
+      for (let i = 0; i < 5; i += 1) {
+        const waveY = Math.round(cy - 8 + i * 4 + (prand(c, r, i + 60) - 0.5) * 2);
+        const waveX = Math.round(cx - 24 + prand(c, r, i + 80) * 18);
+        ctx.fillStyle = i % 2 ? 'rgba(125, 215, 238, 0.46)' : 'rgba(172, 236, 247, 0.30)';
+        ctx.fillRect(waveX, waveY, 18 + Math.round(prand(c, r, i + 90) * 16), 2);
+      }
+      ctx.fillStyle = 'rgba(3, 12, 18, 0.26)';
+      ctx.fillRect(Math.round(cx - TW / 2), Math.round(cy + TH / 2 - 5), TW, 5);
+    } else if (terrain === 'stone') {
+      for (let i = 0; i < 6; i += 1) {
+        const bx = Math.round(cx - 28 + i * 11 + (prand(c, r, i + 100) - 0.5) * 4);
+        const by = Math.round(cy - 7 + (i % 2) * 5 + (prand(c, r, i + 110) - 0.5) * 3);
+        ctx.fillStyle = prand(c, r, i + 120) > 0.45 ? MOONLIGHT.stoneB : MOONLIGHT.stoneDeep;
+        ctx.fillRect(bx, by, 9, 3);
+      }
+      ctx.fillStyle = 'rgba(185, 213, 207, 0.16)';
+      ctx.fillRect(Math.round(cx - 20), Math.round(cy - 13), 34, 2);
+    } else {
+      for (let i = 0; i < 9; i += 1) {
+        const bx = Math.round(cx + (prand(c, r, i) - 0.5) * TW * 0.68);
+        const by = Math.round(cy + (prand(c, r, i + 20) - 0.5) * TH * 0.62);
+        ctx.fillStyle = prand(c, r, i + 40) > 0.56 ? MOONLIGHT.grassMoon : MOONLIGHT.grassDeep;
+        ctx.fillRect(bx, by, prand(c, r, i + 130) > 0.6 ? 3 : 2, 2);
+      }
+      if (prand(c, r, 220) > 0.86 && (c === 0 || r === 0 || c === metrics.cols - 1 || r === metrics.rows - 1)) {
+        ctx.fillStyle = '#132016';
+        ctx.fillRect(Math.round(cx - 3), Math.round(cy - 7), 5, 10);
+        ctx.fillStyle = '#35583b';
+        ctx.fillRect(Math.round(cx - 8), Math.round(cy - 13), 14, 8);
+        ctx.fillStyle = 'rgba(118, 175, 123, 0.52)';
+        ctx.fillRect(Math.round(cx - 5), Math.round(cy - 14), 8, 2);
+      }
     }
     ctx.restore();
     diamond(cx, cy);
-    ctx.strokeStyle = 'rgba(28,42,18,0.62)';
+    ctx.strokeStyle = MOONLIGHT.gridShadow;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    diamond(cx, cy);
+    ctx.strokeStyle = terrain === 'water' ? 'rgba(125, 215, 238, 0.42)' : MOONLIGHT.grid;
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -1868,37 +1990,41 @@
 
   function drawTacticalIndicators(x, y, isMove, isAttack, isEnemy, metrics) {
     const { x: cx, y: cy } = isoCenter(x, y, metrics);
-    
+
     // 1. Draw tile-wide background/shading
     if (isMove && isAttack) {
-      drawDiamondFill(x, y, isEnemy ? 'rgba(168,85,247,0.12)' : 'rgba(14,165,233,0.12)', null, metrics);
+      drawDiamondFill(x, y, isEnemy ? 'rgba(255,72,66,0.17)' : 'rgba(19,211,255,0.20)', null, metrics);
     } else if (isMove) {
-      drawDiamondFill(x, y, isEnemy ? 'rgba(168,85,247,0.08)' : 'rgba(14,165,233,0.08)', null, metrics);
+      drawDiamondFill(x, y, isEnemy ? 'rgba(255,72,66,0.10)' : 'rgba(19,211,255,0.16)', null, metrics);
     } else if (isAttack) {
-      drawDiamondFill(x, y, isEnemy ? 'rgba(239,68,68,0.06)' : 'rgba(249,115,22,0.06)', null, metrics);
+      drawDiamondFill(x, y, isEnemy ? 'rgba(255,72,66,0.13)' : 'rgba(255,139,64,0.13)', null, metrics);
     }
-    
+
     // 2. Draw Attack Indicator (Dashed border around the tile)
     if (isAttack) {
       ctx.save();
       diamond(cx, cy);
-      ctx.strokeStyle = isEnemy ? '#ef4444' : '#f97316'; // Red for enemy attacks, Orange for player attacks
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = isEnemy ? '#ff4842' : '#ff8b40';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([7, 3]);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(20, 5, 4, 0.70)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
       ctx.stroke();
       ctx.restore();
     }
-    
+
     // 3. Draw Move Indicator (Isometric disk/ring in the center of the tile)
     if (isMove) {
       ctx.save();
       ctx.beginPath();
-      // An isometric ellipse: horizontal radius = 9, vertical radius = 4.5
-      ctx.ellipse(cx, cy, 9, 4.5, 0, 0, 2 * Math.PI);
-      
-      const strokeColor = isEnemy ? '#a855f7' : '#0ea5e9'; // Purple for enemy moves, Cyan for player moves
-      const fillColor = isEnemy ? 'rgba(168,85,247,0.45)' : 'rgba(14,165,233,0.45)';
-      
+      // An isometric ellipse tuned to stay visible over dark terrain.
+      ctx.ellipse(cx, cy, 11, 5.5, 0, 0, 2 * Math.PI);
+
+      const strokeColor = isEnemy ? '#ff4842' : '#13d3ff';
+      const fillColor = isEnemy ? 'rgba(255,72,66,0.34)' : 'rgba(19,211,255,0.42)';
+
       ctx.fillStyle = fillColor;
       ctx.fill();
       ctx.strokeStyle = strokeColor;
@@ -1962,6 +2088,7 @@
     syncCanvasSize(metrics);
     ctx.clearRect(0, 0, boardEl.width, boardEl.height);
     ctx.imageSmoothingEnabled = false;
+    drawBattlefieldBackground(metrics);
     drawCliff(metrics);
     for (let s = 0; s <= metrics.cols + metrics.rows - 2; s += 1) {
       for (let c = 0; c < metrics.cols; c += 1) {
@@ -1970,16 +2097,16 @@
       }
     }
     for (let x = 0; x < metrics.cols; x += 1) {
-      drawDiamondFill(x, 0, 'rgba(255,106,82,0.13)', null, metrics);
-      if (metrics.rows > 1) drawDiamondFill(x, 1, 'rgba(255,106,82,0.08)', null, metrics);
-      drawDiamondFill(x, metrics.rows - 1, 'rgba(174,230,255,0.14)', null, metrics);
-      if (metrics.rows > 1) drawDiamondFill(x, metrics.rows - 2, 'rgba(174,230,255,0.08)', null, metrics);
+      drawDiamondFill(x, 0, 'rgba(255,92,72,0.14)', null, metrics);
+      if (metrics.rows > 1) drawDiamondFill(x, 1, 'rgba(255,139,64,0.07)', null, metrics);
+      drawDiamondFill(x, metrics.rows - 1, 'rgba(19,211,255,0.14)', null, metrics);
+      if (metrics.rows > 1) drawDiamondFill(x, metrics.rows - 2, 'rgba(19,211,255,0.08)', null, metrics);
     }
     drawZoneOverlays(metrics);
     const selected = state.battleAnimating ? null : selectedPiece();
     if (state.screen === 'game' && state.showThreats) {
       getEnemyThreats().forEach((sq) => {
-        drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)', metrics);
+        drawDiamondFill(sq.x, sq.y, 'rgba(255,72,66,0.28)', 'rgba(255,116,88,0.86)', metrics);
       });
     }
     if (selected && state.turn === 'player' && !state.battleAnimating && !state.animating) {
@@ -2002,7 +2129,19 @@
         drawTacticalIndicators(tile.x, tile.y, tile.isMove, tile.isAttack, selected.side === 'enemy', metrics);
       });
     }
-    if (selected && !state.animating && !state.battleAnimating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff', metrics);
+    if (selected && !state.animating && !state.battleAnimating) {
+      const selectedFill = selected.side === 'enemy' ? 'rgba(255,72,66,0.20)' : 'rgba(19,211,255,0.22)';
+      const selectedStroke = selected.side === 'enemy' ? '#ff7458' : '#9beeff';
+      drawDiamondFill(selected.x, selected.y, selectedFill, selectedStroke, metrics);
+      const center = isoCenter(selected.x, selected.y, metrics);
+      ctx.save();
+      diamond(center.x, center.y);
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = selected.side === 'enemy' ? 'rgba(255,184,92,0.76)' : 'rgba(255,226,127,0.78)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
     if (state.hoverTile && !state.animating && !state.battleAnimating) {
       if (state.screen === 'level-editor') {
         if (state.levelEditorMode === 'zones') {
@@ -2015,7 +2154,7 @@
           drawDiamondFill(state.hoverTile.x, state.hoverTile.y, fill, brush.id === 'empty' ? '#ffffff' : '#ffd24a', metrics);
         }
       } else {
-        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)', metrics);
+        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(155,238,255,0.11)', 'rgba(155,238,255,0.62)', metrics);
       }
     }
     
