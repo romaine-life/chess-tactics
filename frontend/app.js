@@ -165,6 +165,7 @@
   const signOutButton = document.getElementById('signOutButton');
   let currentUser = null;
   let lobbyPollTimer = null;
+  let battleAnimFrameId = null;
 
   function returnTo() {
     return `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -243,6 +244,8 @@
     pieces: [],
     winner: null,
     log: ['Choose your squad. One pawn is always fielded.'],
+    battleAnimating: false,
+    battleAnimStartTime: 0,
   };
 
   function rand(max) {
@@ -460,6 +463,57 @@
     };
   }
 
+  function easeOutBounce(x) {
+    const n1 = 7.5625;
+    const d1 = 2.75;
+    if (x < 1 / d1) {
+      return n1 * x * x;
+    } else if (x < 2 / d1) {
+      return n1 * (x -= 1.5 / d1) * x + 0.75;
+    } else if (x < 2.5 / d1) {
+      return n1 * (x -= 2.25 / d1) * x + 0.9375;
+    } else {
+      return n1 * (x -= 2.625 / d1) * x + 0.984375;
+    }
+  }
+
+  function animate() {
+    if (!state.battleAnimating || state.screen !== 'game') {
+      state.battleAnimating = false;
+      battleAnimFrameId = null;
+      return;
+    }
+    const now = performance.now();
+    const elapsed = now - state.battleAnimStartTime;
+    let allDone = true;
+    const startHeight = 400;
+    const duration = 700;
+
+    state.pieces.forEach((piece) => {
+      const delay = piece.dropDelay || 0;
+      if (elapsed < delay) {
+        piece.offsetY = startHeight;
+        allDone = false;
+      } else if (elapsed < delay + duration) {
+        const t = (elapsed - delay) / duration;
+        piece.offsetY = startHeight * (1 - easeOutBounce(t));
+        allDone = false;
+      } else {
+        piece.offsetY = 0;
+      }
+    });
+
+    render();
+
+    if (allDone) {
+      state.battleAnimating = false;
+      battleAnimFrameId = null;
+      render();
+    } else {
+      battleAnimFrameId = requestAnimationFrame(animate);
+    }
+  }
+
   function startGame() {
     const playerTypes = ['pawn', ...state.party];
     const enemyTypes = ['pawn', choice(PIECE_CHOICES), choice(PIECE_CHOICES)];
@@ -474,6 +528,13 @@
       placeRandom(piece, 'enemy');
       state.pieces.push(piece);
     });
+
+    // Assign stagger delays and starting height to pieces
+    state.pieces.forEach((piece, index) => {
+      piece.dropDelay = index * 100;
+      piece.offsetY = 400;
+    });
+
     state.turn = 'player';
     state.selected = livingPieces('player')[0].id;
     state.winner = null;
@@ -492,7 +553,15 @@
         'Pick one piece and move or capture. Last side standing wins.',
       ];
     }
-    render();
+
+    if (battleAnimFrameId) {
+      cancelAnimationFrame(battleAnimFrameId);
+      battleAnimFrameId = null;
+    }
+
+    state.battleAnimating = true;
+    state.battleAnimStartTime = performance.now();
+    battleAnimFrameId = requestAnimationFrame(animate);
   }
 
   function rayMoves(piece, dirs) {
@@ -629,7 +698,7 @@
   }
 
   function handleTile(x, y) {
-    if (state.screen !== 'game' || state.turn !== 'player') return;
+    if (state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating) return;
     const clicked = pieceAt(x, y);
     if (clicked && clicked.side === 'player') {
       state.selected = clicked.id;
@@ -729,17 +798,37 @@
       drawDiamondFill(x, ROWS - 1, 'rgba(174,230,255,0.14)', null);
       drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.08)', null);
     }
-    const selected = selectedPiece();
-    const moves = state.turn === 'player' ? legalMoves(selected) : [];
+    const selected = state.battleAnimating ? null : selectedPiece();
+    const moves = (state.turn === 'player' && !state.battleAnimating) ? legalMoves(selected) : [];
     moves.forEach((move) => {
       drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff');
     });
     if (selected) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
-    if (state.hoverTile) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
-    state.pieces
+    if (state.hoverTile && !state.battleAnimating) drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
+    
+    const activePieces = state.pieces
       .filter((piece) => piece.alive)
-      .sort((a, b) => (a.x + a.y) - (b.x + b.y))
-      .forEach(drawPiece);
+      .sort((a, b) => (a.x + a.y) - (b.x + b.y));
+
+    activePieces.forEach(drawPieceShadow);
+    activePieces.forEach(drawPiece);
+  }
+
+  function drawPieceShadow(piece) {
+    const { x, y } = isoCenter(piece.x, piece.y);
+    const offsetY = piece.offsetY || 0;
+    const startHeight = 400;
+    const ratio = Math.max(0, Math.min(1, offsetY / startHeight));
+    
+    const scale = 1 - ratio * 0.5;
+    const opacity = 0.3 * (1 - ratio * 0.85);
+    
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(x, y, (TW / 3.2) * scale, (TH / 3.2) * scale, 0, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(10, 15, 25, ${opacity})`;
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawPiece(piece) {
@@ -748,7 +837,8 @@
     const shade = piece.side === 'player' ? '#8fa6b4' : '#4b2419';
     const accent = piece.side === 'player' ? '#8fe6ff' : '#ff8b52';
     ctx.save();
-    ctx.translate(Math.round(x), Math.round(y - 24));
+    const offsetY = piece.offsetY || 0;
+    ctx.translate(Math.round(x), Math.round(y - 24 - offsetY));
 
     const img = IMAGES[piece.type] ? (piece.side === 'player' ? IMAGES[piece.type].player : IMAGES[piece.type].enemy) : null;
     if (img) {
@@ -928,11 +1018,11 @@
     endButton.textContent = state.turn === 'enemy' ? 'Enemy Moving' : 'Wait';
     moveButton.classList.toggle('active', state.screen !== 'game');
     powerButton.classList.remove('active');
-    endButton.disabled = state.screen !== 'game' || state.turn !== 'player';
+    endButton.disabled = state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating;
     rosterEl.innerHTML = ['player', 'enemy'].map((side) => `
       <div class="roster-title">${side === 'player' ? 'Allies' : 'Enemies'}</div>
       ${livingPieces(side).map((unit) => `
-        <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== 'player' || state.turn !== 'player' ? 'disabled' : ''}>
+        <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== 'player' || state.turn !== 'player' || state.battleAnimating ? 'disabled' : ''}>
           <span class="badge ${side === 'player' ? 'player' : 'enemy'}">
             ${getPieceSvg(unit.type, side)}
           </span>
@@ -992,6 +1082,7 @@
   });
 
   boardEl.addEventListener('mousemove', (event) => {
+    if (state.battleAnimating) return;
     const tile = pointToTile(event.clientX, event.clientY);
     const changed = (!tile && state.hoverTile) || (tile && (!state.hoverTile || tile.x !== state.hoverTile.x || tile.y !== state.hoverTile.y));
     if (changed) {
