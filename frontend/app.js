@@ -1339,8 +1339,18 @@
       return;
     }
     const piece = selectedPiece();
-    const move = legalMoves(piece).find((item) => item.x === x && item.y === y);
-    if (piece && move) completePlayerMove(piece, move);
+    if (piece && piece.side === 'player') {
+      const move = legalMoves(piece).find((item) => item.x === x && item.y === y);
+      if (move) {
+        completePlayerMove(piece, move);
+        return;
+      }
+    }
+    if (clicked && clicked.side === 'enemy') {
+      state.selected = clicked.id;
+      render();
+      return;
+    }
   }
 
   function isoCenter(c, r, metrics) {
@@ -1419,6 +1429,48 @@
     }
   }
 
+  function drawTacticalIndicators(x, y, isMove, isAttack, isEnemy, metrics) {
+    const { x: cx, y: cy } = isoCenter(x, y, metrics);
+    
+    // 1. Draw tile-wide background/shading
+    if (isMove && isAttack) {
+      drawDiamondFill(x, y, isEnemy ? 'rgba(168,85,247,0.12)' : 'rgba(14,165,233,0.12)', null, metrics);
+    } else if (isMove) {
+      drawDiamondFill(x, y, isEnemy ? 'rgba(168,85,247,0.08)' : 'rgba(14,165,233,0.08)', null, metrics);
+    } else if (isAttack) {
+      drawDiamondFill(x, y, isEnemy ? 'rgba(239,68,68,0.06)' : 'rgba(249,115,22,0.06)', null, metrics);
+    }
+    
+    // 2. Draw Attack Indicator (Dashed border around the tile)
+    if (isAttack) {
+      ctx.save();
+      diamond(cx, cy);
+      ctx.strokeStyle = isEnemy ? '#ef4444' : '#f97316'; // Red for enemy attacks, Orange for player attacks
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.restore();
+    }
+    
+    // 3. Draw Move Indicator (Isometric disk/ring in the center of the tile)
+    if (isMove) {
+      ctx.save();
+      ctx.beginPath();
+      // An isometric ellipse: horizontal radius = 9, vertical radius = 4.5
+      ctx.ellipse(cx, cy, 9, 4.5, 0, 0, 2 * Math.PI);
+      
+      const strokeColor = isEnemy ? '#a855f7' : '#0ea5e9'; // Purple for enemy moves, Cyan for player moves
+      const fillColor = isEnemy ? 'rgba(168,85,247,0.45)' : 'rgba(14,165,233,0.45)';
+      
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   function drawBoard() {
     const metrics = boardMetrics();
     syncCanvasSize(metrics);
@@ -1438,15 +1490,31 @@
       if (metrics.rows > 1) drawDiamondFill(x, metrics.rows - 2, 'rgba(174,230,255,0.08)', null, metrics);
     }
     const selected = state.battleAnimating ? null : selectedPiece();
-    const moves = (state.turn === 'player' && !state.battleAnimating && !state.animating) ? legalMoves(selected) : [];
     if (state.screen === 'game' && state.showThreats) {
       getEnemyThreats().forEach((sq) => {
         drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)', metrics);
       });
     }
-    moves.forEach((move) => {
-      drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff', metrics);
-    });
+    if (selected && state.turn === 'player' && !state.battleAnimating && !state.animating) {
+      const moves = legalMoves(selected);
+      const attacks = attackedSquares(selected);
+      const tileMap = new Map();
+      const tileKey = (x, y) => `${x},${y}`;
+      moves.forEach((m) => {
+        tileMap.set(tileKey(m.x, m.y), { x: m.x, y: m.y, isMove: true, isAttack: false });
+      });
+      attacks.forEach((a) => {
+        const key = tileKey(a.x, a.y);
+        if (tileMap.has(key)) {
+          tileMap.get(key).isAttack = true;
+        } else {
+          tileMap.set(key, { x: a.x, y: a.y, isMove: false, isAttack: true });
+        }
+      });
+      tileMap.forEach((tile) => {
+        drawTacticalIndicators(tile.x, tile.y, tile.isMove, tile.isAttack, selected.side === 'enemy', metrics);
+      });
+    }
     if (selected && !state.animating && !state.battleAnimating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff', metrics);
     if (state.hoverTile && !state.animating && !state.battleAnimating) {
       if (state.screen === 'level-editor') {
@@ -1822,7 +1890,7 @@
     rosterEl.innerHTML = ['player', 'enemy'].map((side) => `
       <div class="roster-title">${side === 'player' ? 'Allies' : 'Enemies'}</div>
       ${livingPieces(side).map((unit) => `
-        <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${side !== 'player' || state.turn !== 'player' || state.battleAnimating || state.animating ? 'disabled' : ''}>
+        <button class="unit-row ${unit.id === state.selected ? 'active' : ''}" type="button" data-unit="${unit.id}" ${state.turn !== 'player' || state.battleAnimating || state.animating ? 'disabled' : ''}>
           <span class="badge ${side === 'player' ? 'player' : 'enemy'}">
             ${getPieceSvg(unit.type, side)}
           </span>
@@ -1834,7 +1902,7 @@
       button.addEventListener('click', () => {
         if (state.animating) return;
         const unit = state.pieces.find((item) => item.id === button.dataset.unit);
-        if (unit && unit.side === 'player' && state.turn === 'player') {
+        if (unit) {
           state.selected = unit.id;
           render();
         }
