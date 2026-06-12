@@ -291,6 +291,7 @@ h1 {
 
 .board-scroll.level-editor-scroll .board {
   margin-block: 340px 320px;
+  max-height: none;
 }
 
 .menu-layer {

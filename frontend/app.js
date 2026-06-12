@@ -1,6 +1,10 @@
 (function () {
   const COLS = 8;
   const ROWS = 12;
+  const LEVEL_WIDTH_MIN = 4;
+  const LEVEL_WIDTH_MAX = 16;
+  const LEVEL_HEIGHT_MIN = 4;
+  const LEVEL_HEIGHT_MAX = 20;
   const PIECE_CHOICES = ['knight', 'bishop', 'rook'];
   const LEVEL_BRUSHES = [
     { id: 'empty', label: 'Empty', role: '', type: '', mark: '.' },
@@ -260,8 +264,14 @@
   const TW = 72;
   const TH = 36;
   const CLIFF = 34;
-  const ORIGIN_X = boardEl.width / 2 + 54;
-  const ORIGIN_Y = 54;
+  const DEFAULT_BOARD_METRICS = {
+    cols: COLS,
+    rows: ROWS,
+    width: boardEl.width,
+    height: boardEl.height,
+    originX: boardEl.width / 2 + 54,
+    originY: 54,
+  };
 
   const state = {
     screen: 'main',
@@ -297,8 +307,58 @@
     return items[rand(items.length)];
   }
 
-  function inBounds(x, y) {
-    return x >= 0 && x < COLS && y >= 0 && y < ROWS;
+  function clampBoardNumber(value, fallback, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(number)));
+  }
+
+  function activeLevelSize() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    return {
+      cols: clampBoardNumber(level && level.width, COLS, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX),
+      rows: clampBoardNumber(level && level.height, ROWS, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX),
+    };
+  }
+
+  function currentBoardSize() {
+    return state.screen === 'level-editor' ? activeLevelSize() : { cols: COLS, rows: ROWS };
+  }
+
+  function boardRows() {
+    return currentBoardSize().rows;
+  }
+
+  function editorBoardMetrics(size) {
+    const cols = size.cols;
+    const rows = size.rows;
+    const spanWidth = (cols + rows) * (TW / 2);
+    const width = Math.max(DEFAULT_BOARD_METRICS.width, Math.ceil(spanWidth + 128));
+    const height = Math.max(DEFAULT_BOARD_METRICS.height, Math.ceil(64 + (cols + rows) * (TH / 2) + CLIFF + 96));
+    const sideMargin = (width - spanWidth) / 2;
+    return {
+      cols,
+      rows,
+      width,
+      height,
+      originX: sideMargin + rows * (TW / 2),
+      originY: 64 + TH / 2,
+    };
+  }
+
+  function boardMetrics() {
+    return state.screen === 'level-editor' ? editorBoardMetrics(activeLevelSize()) : DEFAULT_BOARD_METRICS;
+  }
+
+  function syncCanvasSize(metrics) {
+    if (boardEl.width !== metrics.width) boardEl.width = metrics.width;
+    if (boardEl.height !== metrics.height) boardEl.height = metrics.height;
+  }
+
+  function inBounds(x, y, size) {
+    const bounds = size || currentBoardSize();
+    return x >= 0 && x < bounds.cols && y >= 0 && y < bounds.rows;
   }
 
   function livingPieces(side) {
@@ -581,6 +641,21 @@
     };
   }
 
+  function applyLevelFormDraft(level) {
+    if (!level) return;
+    const widthInput = document.getElementById('levelWidth');
+    const heightInput = document.getElementById('levelHeight');
+    if (widthInput) level.width = clampBoardNumber(widthInput.value, level.width, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX);
+    if (heightInput) level.height = clampBoardNumber(heightInput.value, level.height, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX);
+    const cols = clampBoardNumber(level.width, COLS, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX);
+    const rows = clampBoardNumber(level.height, ROWS, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX);
+    level.width = cols;
+    level.height = rows;
+    level.layout = levelLayout(level).filter((cell) => (
+      inBounds(Number(cell.x), Number(cell.y), { cols, rows })
+    ));
+  }
+
   function selectedLevelBrush() {
     return LEVEL_BRUSHES.find((brush) => brush.id === state.selectedLevelBrush) || LEVEL_BRUSHES[0];
   }
@@ -612,6 +687,7 @@
     const side = cell.role === 'terrain' ? 'neutral' : cell.role;
     const type = cell.type === 'rock' ? 'rock' : cell.type;
     const base = PIECES[type] || PIECES.pawn;
+    const rows = boardRows();
     return {
       id: `editor-${index}-${cell.x}-${cell.y}-${cell.role}-${cell.type}`,
       side,
@@ -622,7 +698,7 @@
       x: Number(cell.x),
       y: Number(cell.y),
       alive: true,
-      startY: side === 'player' ? ROWS - 1 : (side === 'enemy' ? 0 : -1),
+      startY: side === 'player' ? rows - 1 : (side === 'enemy' ? 0 : -1),
       offsetY: 0,
     };
   }
@@ -653,6 +729,7 @@
     const campaign = selectedCampaign();
     const level = selectedLevel(campaign);
     if (!campaign || !level) return;
+    applyLevelFormDraft(level);
     state.screen = 'level-editor';
     state.hoverTile = null;
     syncLevelEditorPieces();
@@ -1266,8 +1343,9 @@
     if (piece && move) completePlayerMove(piece, move);
   }
 
-  function isoCenter(c, r) {
-    return { x: ORIGIN_X + (c - r) * (TW / 2), y: ORIGIN_Y + (c + r) * (TH / 2) };
+  function isoCenter(c, r, metrics) {
+    const board = metrics || boardMetrics();
+    return { x: board.originX + (c - r) * (TW / 2), y: board.originY + (c + r) * (TH / 2) };
   }
 
   function prand(a, b, salt) {
@@ -1285,10 +1363,13 @@
     ctx.closePath();
   }
 
-  function drawCliff() {
-    const left = { x: isoCenter(0, ROWS - 1).x - TW / 2, y: isoCenter(0, ROWS - 1).y };
-    const right = { x: isoCenter(COLS - 1, 0).x + TW / 2, y: isoCenter(COLS - 1, 0).y };
-    const bottom = { x: isoCenter(COLS - 1, ROWS - 1).x, y: isoCenter(COLS - 1, ROWS - 1).y + TH / 2 };
+  function drawCliff(metrics) {
+    const leftCenter = isoCenter(0, metrics.rows - 1, metrics);
+    const rightCenter = isoCenter(metrics.cols - 1, 0, metrics);
+    const bottomCenter = isoCenter(metrics.cols - 1, metrics.rows - 1, metrics);
+    const left = { x: leftCenter.x - TW / 2, y: leftCenter.y };
+    const right = { x: rightCenter.x + TW / 2, y: rightCenter.y };
+    const bottom = { x: bottomCenter.x, y: bottomCenter.y + TH / 2 };
     ctx.fillStyle = '#5a4226';
     ctx.beginPath();
     ctx.moveTo(left.x, left.y); ctx.lineTo(bottom.x, bottom.y);
@@ -1306,8 +1387,8 @@
     ctx.closePath(); ctx.fill();
   }
 
-  function drawTile(c, r) {
-    const { x: cx, y: cy } = isoCenter(c, r);
+  function drawTile(c, r, metrics) {
+    const { x: cx, y: cy } = isoCenter(c, r, metrics);
     ctx.save();
     diamond(cx, cy);
     ctx.fillStyle = (c + r) % 2 ? '#6a8e4c' : '#789d59';
@@ -1326,8 +1407,8 @@
     ctx.stroke();
   }
 
-  function drawDiamondFill(x, y, fill, stroke) {
-    const center = isoCenter(x, y);
+  function drawDiamondFill(x, y, fill, stroke, metrics) {
+    const center = isoCenter(x, y, metrics);
     diamond(center.x, center.y);
     ctx.fillStyle = fill;
     ctx.fill();
@@ -1339,41 +1420,43 @@
   }
 
   function drawBoard() {
+    const metrics = boardMetrics();
+    syncCanvasSize(metrics);
     ctx.clearRect(0, 0, boardEl.width, boardEl.height);
     ctx.imageSmoothingEnabled = false;
-    drawCliff();
-    for (let s = 0; s <= COLS + ROWS - 2; s += 1) {
-      for (let c = 0; c < COLS; c += 1) {
+    drawCliff(metrics);
+    for (let s = 0; s <= metrics.cols + metrics.rows - 2; s += 1) {
+      for (let c = 0; c < metrics.cols; c += 1) {
         const r = s - c;
-        if (r >= 0 && r < ROWS) drawTile(c, r);
+        if (r >= 0 && r < metrics.rows) drawTile(c, r, metrics);
       }
     }
-    for (let x = 0; x < COLS; x += 1) {
-      drawDiamondFill(x, 0, 'rgba(255,106,82,0.13)', null);
-      drawDiamondFill(x, 1, 'rgba(255,106,82,0.08)', null);
-      drawDiamondFill(x, ROWS - 1, 'rgba(174,230,255,0.14)', null);
-      drawDiamondFill(x, ROWS - 2, 'rgba(174,230,255,0.08)', null);
+    for (let x = 0; x < metrics.cols; x += 1) {
+      drawDiamondFill(x, 0, 'rgba(255,106,82,0.13)', null, metrics);
+      if (metrics.rows > 1) drawDiamondFill(x, 1, 'rgba(255,106,82,0.08)', null, metrics);
+      drawDiamondFill(x, metrics.rows - 1, 'rgba(174,230,255,0.14)', null, metrics);
+      if (metrics.rows > 1) drawDiamondFill(x, metrics.rows - 2, 'rgba(174,230,255,0.08)', null, metrics);
     }
     const selected = state.battleAnimating ? null : selectedPiece();
     const moves = (state.turn === 'player' && !state.battleAnimating && !state.animating) ? legalMoves(selected) : [];
     if (state.screen === 'game' && state.showThreats) {
       getEnemyThreats().forEach((sq) => {
-        drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)');
+        drawDiamondFill(sq.x, sq.y, 'rgba(255,106,82,0.28)', 'rgba(255,106,82,0.7)', metrics);
       });
     }
     moves.forEach((move) => {
-      drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff');
+      drawDiamondFill(move.x, move.y, move.capture ? 'rgba(255,210,74,0.32)' : 'rgba(174,230,255,0.24)', move.capture ? '#ffd24a' : '#aee6ff', metrics);
     });
-    if (selected && !state.animating && !state.battleAnimating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff');
+    if (selected && !state.animating && !state.battleAnimating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff', metrics);
     if (state.hoverTile && !state.animating && !state.battleAnimating) {
       if (state.screen === 'level-editor') {
         const brush = selectedLevelBrush();
         const fill = brush.role === 'player'
           ? 'rgba(174,230,255,0.25)'
           : (brush.role === 'enemy' ? 'rgba(255,106,82,0.25)' : (brush.role === 'terrain' ? 'rgba(180,180,180,0.24)' : 'rgba(255,255,255,0.12)'));
-        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, fill, brush.id === 'empty' ? '#ffffff' : '#ffd24a');
+        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, fill, brush.id === 'empty' ? '#ffffff' : '#ffd24a', metrics);
       } else {
-        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)');
+        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)', metrics);
       }
     }
     
@@ -1450,14 +1533,15 @@
   }
 
   function pointToTile(clientX, clientY) {
+    const metrics = boardMetrics();
     const rect = boardEl.getBoundingClientRect();
     const px = (clientX - rect.left) * (boardEl.width / rect.width);
     const py = (clientY - rect.top) * (boardEl.height / rect.height);
-    const a = (px - ORIGIN_X) / (TW / 2);
-    const b = (py - ORIGIN_Y) / (TH / 2);
+    const a = (px - metrics.originX) / (TW / 2);
+    const b = (py - metrics.originY) / (TH / 2);
     const x = Math.floor((a + b) / 2 + 0.5);
     const y = Math.floor((b - a) / 2 + 0.5);
-    if (!inBounds(x, y)) return null;
+    if (!inBounds(x, y, metrics)) return null;
     return { x, y };
   }
 
