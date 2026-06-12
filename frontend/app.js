@@ -673,8 +673,6 @@
   function levelFormData() {
     const campaign = selectedCampaign();
     const level = selectedLevel(campaign);
-    const rocksInput = document.getElementById('levelEditorRocksCount');
-    const rocksValue = rocksInput ? Number(rocksInput.value) : (level && level.random_rocks_count);
     const assignments = levelZoneAssignments(level);
     return {
       name: (document.getElementById('levelName') && document.getElementById('levelName').value) || (level && level.name),
@@ -685,7 +683,6 @@
       enemy_budget: (document.getElementById('levelEnemyBudget') && document.getElementById('levelEnemyBudget').value) || (level && level.enemy_budget),
       notes: (document.getElementById('levelNotes') && document.getElementById('levelNotes').value) || (level && level.notes),
       layout: level ? (level.layout || []) : [],
-      random_rocks_count: clampBoardNumber(rocksValue, 0, 0, 100),
       zones: level ? levelZones(level) : [],
       zone_assignments: {
         player_1_spawn_zone_id: PLAYER_1_SPAWN_ZONE_ID,
@@ -2397,11 +2394,6 @@
                 `).join('')}
               </div>
             </div>
-            <div class="panel-section level-editor-rocks">
-              <label>Rocks to Spawn:
-                <input type="number" id="levelEditorRocksCount" min="0" max="100" value="${level ? (level.random_rocks_count || 0) : 0}">
-              </label>
-            </div>
           ` : `
             <div class="panel-section zone-editor-panel">
               <div class="zone-editor-head">
@@ -2638,13 +2630,6 @@
 
   function handleMenuInput(event) {
     const target = event.target;
-    if (target.id === 'levelEditorRocksCount') {
-      const campaign = selectedCampaign();
-      const level = selectedLevel(campaign);
-      if (level) {
-        level.random_rocks_count = clampBoardNumber(target.value, 0, 0, 100);
-      }
-    }
     if (target.id === 'levelWidth' || target.id === 'levelHeight' || target.id === 'levelEnemyBudget') {
       const campaign = selectedCampaign();
       const level = selectedLevel(campaign);

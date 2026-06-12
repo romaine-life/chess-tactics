@@ -1289,38 +1289,6 @@ h1 {
   color: #ffe2bd;
 }
 
-.level-editor-rocks {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(23, 19, 43, 0.6);
-  border: 1px solid rgba(117, 103, 173, 0.4);
-  padding: 8px 12px;
-  border-radius: 4px;
-}
-
-.level-editor-rocks label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: "VT323", monospace;
-  font-size: 1.15rem;
-  color: #dceaf2;
-  cursor: pointer;
-  width: 100%;
-}
-
-.level-editor-rocks input[type="number"] {
-  background: #17132b;
-  border: 2px solid #7567ad;
-  color: #ffd24a;
-  font-family: "Press Start 2P", monospace;
-  font-size: 0.8rem;
-  padding: 4px 6px;
-  width: 70px;
-  text-align: center;
-}
-
 .level-editor-grid-tool {
   background: rgba(23, 19, 43, 0.6);
   border: 1px solid rgba(117, 103, 173, 0.4);
