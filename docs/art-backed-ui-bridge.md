@@ -13,6 +13,8 @@ keeps the implementation browser-first. It is not the final component system.
 - `docs/ui-art-direction.md` remains the binding art direction source.
 - `frontend/assets/ui/*.png` are the web-visible concept screens.
 - `docs/art/ui-screen-concepts/*.png` are the saved source references.
+- `frontend/assets/ui/main-menu-button-art-*.png` are generated bitmap button
+  art candidates used by the main menu asset review board.
 - `frontend/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
   action wiring.
 - `frontend/style.css` owns hotspot geometry and art-screen presentation.

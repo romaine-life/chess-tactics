@@ -172,6 +172,8 @@ async function main() {
     '/assets/ui/campaign-editor-concept.png',
     '/assets/ui/level-editor-concept.png',
     '/assets/ui/skirmish-concept.png',
+    '/assets/ui/main-menu-button-art-five-mode.png',
+    '/assets/ui/main-menu-button-art-three-state.png',
   ];
   for (const assetPath of artAssets) {
     const response = await get(assetPath);

@@ -2590,6 +2590,23 @@
           </div>
         </section>
 
+        <section class="asset-artwork-panel" aria-label="Generated bitmap button artwork">
+          <article class="asset-artwork-card primary">
+            <div class="asset-card-head">
+              <strong>Generated Artwork 1</strong>
+              <span>Complete five-button menu family with illustrated plaques and empty label lanes.</span>
+            </div>
+            <img src="/assets/ui/main-menu-button-art-five-mode.png" alt="Generated pixel art menu button family with five button plates">
+          </article>
+          <article class="asset-artwork-card">
+            <div class="asset-card-head">
+              <strong>Generated Artwork 2</strong>
+              <span>Three-state material study for selected, default, and muted button treatment.</span>
+            </div>
+            <img src="/assets/ui/main-menu-button-art-three-state.png" alt="Generated pixel art menu button material study with three button plates">
+          </article>
+        </section>
+
         <section class="asset-variants" aria-label="Button style candidates">
           ${renderButtonVariantCard('render-match', 'A. Render Match', 'Closest to the approved image: brighter cyan frame, glassy blue selected state.')}
           ${renderButtonVariantCard('moon-steel', 'B. Moon Steel', 'Lower glare and more tactical; keeps the pixel silhouette but calms the glow.')}
