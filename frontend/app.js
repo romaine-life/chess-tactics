@@ -42,155 +42,147 @@
     'random-rock': { mark: '?', name: 'Rand Rock', role: 'Potential falling rock' },
   };
 
+  const TOKEN_BASE = [
+    { type: 'baseDark', d: 'M 13,45 L 32,55 L 51,45 L 32,35 Z' },
+    { type: 'base', d: 'M 17,43 L 32,51 L 47,43 L 32,36 Z' },
+    { type: 'gold', d: 'M 21,42 L 32,47 L 43,42 L 40,40 L 32,44 L 24,40 Z' }
+  ];
+
   const GEOMETRIES = {
     pawn: [
-      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
-      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
-      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
-      { type: 'top', d: 'M 22,39 L 32,44 L 42,39 L 32,34 Z' },
-      { type: 'left', d: 'M 22,42 L 32,47 L 32,44 L 22,39 Z' },
-      { type: 'right', d: 'M 32,47 L 42,42 L 42,39 L 32,44 Z' },
-      { type: 'left', d: 'M 24,37 L 32,41 L 32,32 L 24,28 Z' },
-      { type: 'right', d: 'M 32,41 L 40,37 L 40,28 L 32,32 Z' },
-      { type: 'top', d: 'M 22,17 L 32,22 L 42,17 L 32,12 Z' },
-      { type: 'left', d: 'M 22,29 L 32,34 L 32,22 L 22,17 Z' },
-      { type: 'right', d: 'M 32,34 L 42,29 L 42,17 L 32,22 Z' }
+      ...TOKEN_BASE,
+      { type: 'shade', d: 'M 23,27 H 41 V 39 L 32,45 L 23,39 Z' },
+      { type: 'core', d: 'M 26,25 H 38 V 38 L 32,42 L 26,38 Z' },
+      { type: 'accent', d: 'M 28,30 H 36 V 37 L 32,40 L 28,37 Z' },
+      { type: 'gold', d: 'M 25,23 H 39 V 27 H 25 Z' },
+      { type: 'dark', d: 'M 31,12 H 34 V 25 H 31 Z' },
+      { type: 'accent', d: 'M 34,13 H 46 V 20 H 34 Z' },
+      { type: 'gold', d: 'M 34,20 H 43 V 24 H 34 Z' }
     ],
     rook: [
-      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
-      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
-      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
-      { type: 'top', d: 'M 20,21 L 32,27 L 44,21 L 32,15 Z' },
-      { type: 'left', d: 'M 20,43 L 32,49 L 32,27 L 20,21 Z' },
-      { type: 'right', d: 'M 32,49 L 44,43 L 44,21 L 32,27 Z' },
-      { type: 'top', d: 'M 28,19 L 32,21 L 36,19 L 32,17 Z' },
-      { type: 'left', d: 'M 28,23 L 32,25 L 32,21 L 28,19 Z' },
-      { type: 'right', d: 'M 32,25 L 36,23 L 36,19 L 32,21 Z' },
-      { type: 'top', d: 'M 20,15 L 24,17 L 28,15 L 24,13 Z' },
-      { type: 'left', d: 'M 20,19 L 24,21 L 24,17 L 20,15 Z' },
-      { type: 'right', d: 'M 24,21 L 28,19 L 28,15 L 24,17 Z' },
-      { type: 'top', d: 'M 36,15 L 40,17 L 44,15 L 40,13 Z' },
-      { type: 'left', d: 'M 36,19 L 40,21 L 40,17 L 36,15 Z' },
-      { type: 'right', d: 'M 40,21 L 44,19 L 44,15 L 40,17 Z' },
-      { type: 'top', d: 'M 28,11 L 32,13 L 36,11 L 32,9 Z' },
-      { type: 'left', d: 'M 28,15 L 32,17 L 32,13 L 28,11 Z' },
-      { type: 'right', d: 'M 32,17 L 36,15 L 36,11 L 32,13 Z' }
+      ...TOKEN_BASE,
+      { type: 'shade', d: 'M 21,22 H 43 V 41 L 32,46 L 21,41 Z' },
+      { type: 'core', d: 'M 24,24 H 40 V 39 L 32,43 L 24,39 Z' },
+      { type: 'accent', d: 'M 26,31 H 38 V 36 H 26 Z' },
+      { type: 'gold', d: 'M 22,19 H 42 V 24 H 22 Z' },
+      { type: 'core', d: 'M 20,12 H 25 V 20 H 20 Z' },
+      { type: 'core', d: 'M 30,10 H 35 V 20 H 30 Z' },
+      { type: 'core', d: 'M 40,12 H 45 V 20 H 40 Z' }
     ],
     bishop: [
-      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
-      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
-      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
-      { type: 'left', d: 'M 22,42 L 32,47 L 32,29 L 22,24 Z' },
-      { type: 'right', d: 'M 32,47 L 42,42 L 42,24 L 32,29 Z' },
-      { type: 'top', d: 'M 20,24 L 32,29 L 44,24 L 32,19 Z' },
-      { type: 'left', d: 'M 20,27 L 32,32 L 32,29 L 20,24 Z' },
-      { type: 'right', d: 'M 32,32 L 44,27 L 44,24 L 32,29 Z' },
-      { type: 'left', d: 'M 23,21 L 32,25 L 32,11 L 23,15 Z' },
-      { type: 'right', d: 'M 32,25 L 41,21 L 41,15 L 32,11 Z' },
-      { type: 'accent', d: 'M 26,18 L 29,19 L 29,15 L 26,14 Z' },
-      { type: 'top', d: 'M 30,6 L 32,7 L 34,6 L 32,5 Z' },
-      { type: 'left', d: 'M 30,9 L 32,10 L 32,7 L 30,6 Z' },
-      { type: 'right', d: 'M 32,10 L 34,9 L 34,6 L 32,7 Z' }
+      ...TOKEN_BASE,
+      { type: 'shade', d: 'M 23,27 L 32,18 L 41,27 V 40 L 32,45 L 23,40 Z' },
+      { type: 'core', d: 'M 26,28 L 32,21 L 38,28 V 38 L 32,42 L 26,38 Z' },
+      { type: 'accent', d: 'M 27,34 L 38,25 L 40,29 L 29,38 Z' },
+      { type: 'gold', d: 'M 24,25 L 32,16 L 40,25 L 38,28 L 32,22 L 26,28 Z' },
+      { type: 'dark', d: 'M 30,10 H 34 V 17 H 30 Z' },
+      { type: 'gold', d: 'M 27,9 L 32,5 L 37,9 L 34,12 H 30 Z' }
     ],
     knight: [
-      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
-      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
-      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
-      { type: 'left', d: 'M 20,38 L 32,44 L 32,25 L 20,19 Z' },
-      { type: 'right', d: 'M 32,44 L 44,38 L 44,20 L 32,26 Z' },
-      { type: 'top', d: 'M 20,19 L 32,25 L 44,20 L 32,14 Z' },
-      { type: 'left', d: 'M 14,31 L 22,35 L 22,25 L 14,21 Z' },
-      { type: 'top', d: 'M 14,21 L 22,25 L 32,20 L 24,16 Z' },
-      { type: 'left', d: 'M 24,20 L 32,24 L 32,20 L 24,16 Z' },
-      { type: 'left', d: 'M 26,17 L 29,18 L 29,11 L 26,12 Z' },
-      { type: 'right', d: 'M 29,18 L 32,17 L 32,10 L 29,11 Z' },
-      { type: 'top', d: 'M 26,12 L 29,11 L 32,10 L 29,9 Z' }
+      ...TOKEN_BASE,
+      { type: 'shade', d: 'M 25,27 H 39 L 42,40 L 32,45 L 23,40 Z' },
+      { type: 'core', d: 'M 25,18 L 37,15 L 45,22 L 41,29 L 34,28 L 32,36 L 24,39 L 22,30 Z' },
+      { type: 'shade', d: 'M 18,25 L 25,18 L 25,28 L 17,32 Z' },
+      { type: 'dark', d: 'M 29,12 L 34,15 L 28,19 Z' },
+      { type: 'gold', d: 'M 38,18 H 43 L 46,21 L 39,22 Z' },
+      { type: 'accent', d: 'M 27,30 H 37 L 36,35 H 26 Z' },
+      { type: 'dark', d: 'M 35,21 H 38 V 24 H 35 Z' }
     ],
     queen: [
-      { type: 'top', d: 'M 16,46 L 32,54 L 48,46 L 32,38 Z' },
-      { type: 'left', d: 'M 16,52 L 32,60 L 32,54 L 16,46 Z' },
-      { type: 'right', d: 'M 32,60 L 48,52 L 48,46 L 32,54 Z' },
-      { type: 'top', d: 'M 18,22 L 32,28 L 46,22 L 32,16 Z' },
-      { type: 'left', d: 'M 18,44 L 32,50 L 32,28 L 18,22 Z' },
-      { type: 'right', d: 'M 32,50 L 46,44 L 46,22 L 32,28 Z' },
-      { type: 'top', d: 'M 18,16 L 22,20 L 26,16 L 22,12 Z' },
-      { type: 'left', d: 'M 18,22 L 22,24 L 22,20 L 18,16 Z' },
-      { type: 'right', d: 'M 22,24 L 26,22 L 26,16 L 22,20 Z' },
-      { type: 'top', d: 'M 38,16 L 42,20 L 46,16 L 42,12 Z' },
-      { type: 'left', d: 'M 38,22 L 42,24 L 42,20 L 38,16 Z' },
-      { type: 'right', d: 'M 42,24 L 46,22 L 46,16 L 42,20 Z' },
-      { type: 'top', d: 'M 28,10 L 32,12 L 36,10 L 32,8 Z' },
-      { type: 'left', d: 'M 28,16 L 32,18 L 32,12 L 28,10 Z' },
-      { type: 'right', d: 'M 32,18 L 36,16 L 36,10 L 32,12 Z' }
+      ...TOKEN_BASE,
+      { type: 'shade', d: 'M 21,25 H 43 V 40 L 32,47 L 21,40 Z' },
+      { type: 'core', d: 'M 25,24 H 39 V 39 L 32,43 L 25,39 Z' },
+      { type: 'accent', d: 'M 27,31 H 37 V 37 H 27 Z' },
+      { type: 'gold', d: 'M 20,18 L 25,24 H 39 L 44,18 L 40,29 H 24 Z' },
+      { type: 'gold', d: 'M 21,15 L 25,10 L 29,17 L 25,21 Z' },
+      { type: 'gold', d: 'M 29,16 L 32,8 L 35,16 L 32,21 Z' },
+      { type: 'gold', d: 'M 35,17 L 39,10 L 43,15 L 39,21 Z' },
+      { type: 'dark', d: 'M 30,20 H 34 V 24 H 30 Z' }
     ],
     rock: [
-      { type: 'left', d: 'M 16,44 L 32,52 L 30,36 L 12,32 Z' },
-      { type: 'right', d: 'M 32,52 L 48,44 L 52,30 L 30,36 Z' },
-      { type: 'left', d: 'M 12,32 L 30,36 L 31,20 L 18,18 Z' },
-      { type: 'right', d: 'M 30,36 L 52,30 L 44,18 L 31,20 Z' },
-      { type: 'top', d: 'M 18,18 L 31,20 L 32,10 L 22,12 Z' },
-      { type: 'top', d: 'M 31,20 L 44,18 L 40,11 L 32,10 Z' }
+      { type: 'stoneDark', d: 'M 12,39 L 24,51 H 42 L 53,38 L 47,21 L 36,13 L 22,16 L 13,27 Z' },
+      { type: 'stone', d: 'M 16,38 L 25,47 H 40 L 49,37 L 44,24 L 35,18 L 24,20 L 17,29 Z' },
+      { type: 'stoneLight', d: 'M 24,20 L 35,18 L 41,24 L 30,27 L 19,28 Z' },
+      { type: 'stoneShade', d: 'M 31,28 L 44,24 L 49,37 L 39,42 Z' },
+      { type: 'stoneShade', d: 'M 17,29 L 30,27 L 25,47 L 16,38 Z' }
     ],
     'random-rock': [
-      { type: 'left', d: 'M 16,44 L 32,52 L 30,36 L 12,32 Z' },
-      { type: 'right', d: 'M 32,52 L 48,44 L 52,30 L 30,36 Z' },
-      { type: 'left', d: 'M 12,32 L 30,36 L 31,20 L 18,18 Z' },
-      { type: 'right', d: 'M 30,36 L 52,30 L 44,18 L 31,20 Z' },
-      { type: 'top', d: 'M 18,18 L 31,20 L 32,10 L 22,12 Z' },
-      { type: 'top', d: 'M 31,20 L 44,18 L 40,11 L 32,10 Z' }
+      { type: 'stoneDark', d: 'M 12,39 L 24,51 H 42 L 53,38 L 47,21 L 36,13 L 22,16 L 13,27 Z' },
+      { type: 'stone', d: 'M 16,38 L 25,47 H 40 L 49,37 L 44,24 L 35,18 L 24,20 L 17,29 Z' },
+      { type: 'stoneLight', d: 'M 24,20 L 35,18 L 41,24 L 30,27 L 19,28 Z' },
+      { type: 'stoneShade', d: 'M 31,28 L 44,24 L 49,37 L 39,42 Z' },
+      { type: 'stoneShade', d: 'M 17,29 L 30,27 L 25,47 L 16,38 Z' },
+      { type: 'gold', d: 'M 29,30 H 35 V 36 H 29 Z' }
     ]
+  };
+
+  const PIECE_PALETTES = {
+    player: {
+      core: '#efe7d2',
+      shade: '#b7b9ad',
+      light: '#fff6dc',
+      dark: '#25364b',
+      accent: '#2866b8',
+      accentDark: '#15366f',
+      gold: '#d6a43a',
+      base: '#214f9f',
+      baseDark: '#12284f',
+      outline: '#0b1019',
+      shadow: 'rgba(4, 9, 16, 0.38)'
+    },
+    enemy: {
+      core: '#34383a',
+      shade: '#1d2225',
+      light: '#5a5d56',
+      dark: '#111417',
+      accent: '#b5362f',
+      accentDark: '#661b19',
+      gold: '#d1a13a',
+      base: '#91251f',
+      baseDark: '#411111',
+      outline: '#06080b',
+      shadow: 'rgba(4, 4, 5, 0.48)'
+    },
+    neutral: {
+      core: '#777f7d',
+      shade: '#4d5656',
+      light: '#a6aaa2',
+      dark: '#2d3435',
+      accent: '#6c7480',
+      accentDark: '#3e4650',
+      gold: '#a88a48',
+      base: '#60696c',
+      baseDark: '#30383a',
+      outline: '#15191b',
+      shadow: 'rgba(3, 5, 6, 0.42)',
+      stone: '#69716c',
+      stoneDark: '#333b3a',
+      stoneLight: '#9aa097',
+      stoneShade: '#4c5652'
+    }
   };
 
   function getPieceSvg(type, side) {
     const paths = GEOMETRIES[type] || GEOMETRIES.pawn;
-    let top, left, right, deep;
-    if (side === 'player') {
-      top = '#eef6fc';
-      left = '#b9cad6';
-      right = '#8fa6b4';
-      deep = '#405866';
-    } else if (side === 'enemy') {
-      top = '#f5af95';
-      left = '#b3664d';
-      right = '#7a3f2a';
-      deep = '#471e11';
-    } else {
-      if (type === 'random-rock') {
-        top = 'rgba(214, 187, 242, 0.45)';
-        left = 'rgba(156, 124, 182, 0.45)';
-        right = 'rgba(115, 87, 138, 0.45)';
-        deep = 'rgba(70, 50, 87, 0.45)';
-      } else {
-        top = '#a8a8a8';
-        left = '#7a7a7a';
-        right = '#545454';
-        deep = '#303030';
-      }
-    }
-    const fillColors = { top, left, right, accent: deep };
+    const palette = side === 'player' ? PIECE_PALETTES.player : (side === 'enemy' ? PIECE_PALETTES.enemy : PIECE_PALETTES.neutral);
+    const fillColors = {
+      ...palette,
+      stone: type === 'random-rock' ? 'rgba(126, 105, 151, 0.58)' : palette.stone,
+      stoneDark: type === 'random-rock' ? 'rgba(58, 48, 74, 0.62)' : palette.stoneDark,
+      stoneLight: type === 'random-rock' ? 'rgba(175, 151, 201, 0.62)' : palette.stoneLight,
+      stoneShade: type === 'random-rock' ? 'rgba(90, 73, 112, 0.62)' : palette.stoneShade
+    };
 
-    const pathStrings = paths.map((path) => `<path d="${path.d}" ${type === 'random-rock' ? 'stroke-dasharray="2,2"' : ''}></path>`).join('');
-    const fillStrings = paths.map((path) => {
-      const fillVal = fillColors[path.type] || left;
-      return `<path d="${path.d}" fill="${fillVal}"></path>`;
+    const pathStrings = paths.map((path) => {
+      const fillVal = fillColors[path.type] || palette.core;
+      const strokeWidth = path.type === 'gold' || path.type === 'accent' ? 1.1 : 1.45;
+      return `<path d="${path.d}" fill="${fillVal}" stroke="${palette.outline}" stroke-width="${strokeWidth}" stroke-linejoin="miter" stroke-linecap="square" ${type === 'random-rock' ? 'stroke-dasharray="2,2"' : ''}></path>`;
     }).join('');
 
-    return `<svg width="100%" height="100%" viewBox="0 0 64 64" style="shape-rendering: crispedges;" class="cursor-pointer transition-transform hover:-translate-y-1.5 active:translate-y-0" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <mask id="outline-mask-${type}-${side}">
-          <rect width="100%" height="100%" fill="white"></rect>
-          <g fill="black" stroke="black" stroke-width="0.5">
-            ${pathStrings}
-          </g>
-        </mask>
-      </defs>
-      <g mask="url(#outline-mask-${type}-${side})">
-        <g fill="none" stroke="rgb(0,0,0)" stroke-width="1" stroke-linejoin="miter" stroke-linecap="square">
-          ${pathStrings}
-        </g>
-      </g>
-      <g opacity="0.95" stroke="none">
-        ${fillStrings}
+    return `<svg width="100%" height="100%" viewBox="0 0 64 64" style="shape-rendering: crispEdges;" class="cursor-pointer transition-transform hover:-translate-y-1 active:translate-y-0" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 17,50 L 32,58 L 47,50 L 32,43 Z" fill="${palette.shadow}" stroke="none"></path>
+      <g>
+        ${pathStrings}
       </g>
     </svg>`;
   }
@@ -1628,20 +1620,15 @@
     return { x: piece.x, y: piece.y };
   }
 
-  function getIdleHover(piece, now) {
-    if (piece.type === 'rock') {
-      return 0;
-    }
-    const seed = piece.id.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
-    const wave = Math.sin(now * 0.003 + seed * 0.17);
-    return 3 + wave * 1.35;
+  function getMovementLift(piece, now) {
+    if (!piece.anim) return 0;
+    const elapsed = now - piece.anim.startTime;
+    const t = Math.min(1, elapsed / piece.anim.duration);
+    return Math.sin(t * Math.PI) * (piece.type === 'rock' ? 2 : 6);
   }
 
   function shouldIdleAnimateBoard() {
-    return state.screen === 'game'
-      && !state.battleAnimating
-      && !state.animating
-      && state.pieces.some((piece) => piece.alive && piece.type !== 'rock');
+    return false;
   }
 
   function syncIdleAnimationLoop() {
@@ -2173,12 +2160,12 @@
   function drawPiece(piece, now) {
     const renderPos = getPieceRenderPos(piece);
     const { x, y } = isoCenter(renderPos.x, renderPos.y);
-    const base = piece.side === 'player' ? '#dceaf2' : (piece.side === 'enemy' ? '#7a3f2a' : '#a8a8a8');
-    const shade = piece.side === 'player' ? '#8fa6b4' : (piece.side === 'enemy' ? '#4b2419' : '#545454');
-    const accent = piece.side === 'player' ? '#8fe6ff' : (piece.side === 'enemy' ? '#ff8b52' : '#7a7a7a');
+    const palette = piece.side === 'player'
+      ? PIECE_PALETTES.player
+      : (piece.side === 'enemy' ? PIECE_PALETTES.enemy : PIECE_PALETTES.neutral);
     ctx.save();
     const offsetY = piece.offsetY || 0;
-    const lift = getIdleHover(piece, now);
+    const lift = getMovementLift(piece, now);
     ctx.translate(Math.round(x), Math.round(y - 24 - offsetY - lift));
 
     const img = IMAGES[piece.type] 
@@ -2186,28 +2173,34 @@
           ? IMAGES[piece.type].player 
           : (piece.side === 'enemy' ? IMAGES[piece.type].enemy : IMAGES[piece.type].neutral))
       : null;
-    if (img) {
-      ctx.drawImage(img, -24, -15, 48, 48);
+    if (img && img.complete && img.naturalWidth) {
+      const size = piece.type === 'rock' || piece.type === 'random-rock' ? 48 : 52;
+      ctx.drawImage(img, -size / 2, -16, size, size);
     } else {
-      if (piece.type === 'rock') {
-        ctx.fillStyle = '#545454';
-        ctx.fillRect(-15, 2, 30, 30);
-        ctx.fillStyle = '#7a7a7a';
-        ctx.fillRect(-12, -2, 24, 28);
+      if (piece.type === 'rock' || piece.type === 'random-rock') {
+        ctx.fillStyle = palette.outline;
+        ctx.fillRect(-17, -6, 34, 29);
+        ctx.fillStyle = palette.stone || palette.core;
+        ctx.fillRect(-13, -10, 26, 30);
+        ctx.fillStyle = palette.stoneLight || palette.light;
+        ctx.fillRect(-8, -8, 11, 8);
+        ctx.fillStyle = palette.stoneShade || palette.shade;
+        ctx.fillRect(2, 3, 10, 13);
       } else {
-        ctx.fillStyle = shade;
-        ctx.fillRect(-15, 2, 30, 30);
-        ctx.fillStyle = base;
-        ctx.fillRect(-12, -2, 24, 28);
-        ctx.fillStyle = accent;
-        ctx.fillRect(-8, 6, 16, 5);
-        ctx.fillStyle = '#101522';
-        ctx.fillRect(-10, 21, 20, 5);
-        ctx.font = '16px "Press Start 2P", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = piece.side === 'player' ? '#101522' : '#f5e0c8';
-        ctx.fillText(piece.mark, 0, 14);
+        ctx.fillStyle = palette.outline;
+        ctx.fillRect(-17, 13, 34, 8);
+        ctx.fillStyle = palette.baseDark;
+        ctx.fillRect(-14, 10, 28, 8);
+        ctx.fillStyle = palette.base;
+        ctx.fillRect(-11, 7, 22, 6);
+        ctx.fillStyle = palette.outline;
+        ctx.fillRect(-12, -11, 24, 23);
+        ctx.fillStyle = palette.core;
+        ctx.fillRect(-9, -14, 18, 24);
+        ctx.fillStyle = palette.accent;
+        ctx.fillRect(-6, -2, 12, 7);
+        ctx.fillStyle = palette.gold;
+        ctx.fillRect(-8, -17, 16, 5);
       }
     }
     ctx.restore();
