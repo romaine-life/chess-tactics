@@ -670,7 +670,7 @@
   function levelFormData() {
     const campaign = selectedCampaign();
     const level = selectedLevel(campaign);
-    const rocksInput = document.getElementById('levelRandomRocksCount') || document.getElementById('levelEditorRocksCount');
+    const rocksInput = document.getElementById('levelEditorRocksCount');
     const rocksValue = rocksInput ? Number(rocksInput.value) : (level && level.random_rocks_count);
     const assignments = levelZoneAssignments(level);
     const player1Input = document.getElementById('player1SpawnZone');
@@ -2119,22 +2119,11 @@
                     <label>Width<input id="levelWidth" type="number" min="4" max="16" value="${escapeText(level.width)}"></label>
                     <label>Height<input id="levelHeight" type="number" min="4" max="20" value="${escapeText(level.height)}"></label>
                     <label>Enemy Budget<input id="levelEnemyBudget" type="number" min="1" max="24" value="${escapeText(level.enemy_budget)}"></label>
-                    <label>Rocks to Spawn<input id="levelRandomRocksCount" type="number" min="0" max="100" value="${escapeText(level.random_rocks_count || 0)}"></label>
                     <label class="wide">Notes<textarea id="levelNotes" maxlength="400">${escapeText(level.notes)}</textarea></label>
-                  </div>
-                  <div class="campaign-levels zone-assignments">
-                    <div class="campaign-levels-head">
-                      <span>Zone Assignments</span>
-                      <button type="button" data-action="edit-level-zones" ${state.campaignLoading ? 'disabled' : ''}>Edit Zones</button>
-                    </div>
-                    ${renderZoneAssignmentControls(level)}
                   </div>
                   <div class="menu-row">
                     <button type="button" data-action="save-level" ${state.campaignLoading ? 'disabled' : ''}>Save Level</button>
-                    <button type="button" data-action="edit-level-board" ${state.campaignLoading ? 'disabled' : ''}>Edit Board</button>
-                  </div>
-                  <div class="menu-row">
-                    <button type="button" data-action="seed-level-layout" ${state.campaignLoading ? 'disabled' : ''}>Seed Board</button>
+                    <button type="button" data-action="edit-level-board" ${state.campaignLoading ? 'disabled' : ''}>Edit Level</button>
                     <button type="button" data-action="delete-level" ${campaign.levels.length <= 1 || state.campaignLoading ? 'disabled' : ''}>Delete Level</button>
                   </div>` : ''}
               </div>
@@ -2332,6 +2321,10 @@
                 <button type="button" data-action="delete-selected-zone" ${zone ? '' : 'disabled'}>Delete Zone</button>
               </div>
             </div>
+            <div class="panel-section zone-editor-panel">
+              <div class="roster-title">Assignments</div>
+              ${level ? renderZoneAssignmentControls(level) : ''}
+            </div>
           `}
         `;
       }
@@ -2490,10 +2483,6 @@
     if (button.dataset.action === 'save-level') void saveCampaignLevel();
     if (button.dataset.action === 'edit-level-board') {
       state.levelEditorMode = 'board';
-      enterLevelEditor();
-    }
-    if (button.dataset.action === 'edit-level-zones') {
-      state.levelEditorMode = 'zones';
       enterLevelEditor();
     }
     if (button.dataset.action === 'save-level-editor') void saveLevelEditor();
