@@ -13,7 +13,7 @@
     <main class="shell">
       <section class="game">
         <header class="topbar">
-          <div>
+          <div class="mission-id">
             <h1>Chess Tactics</h1>
             <p id="statusLine">Breach 1 / 6</p>
           </div>
@@ -34,14 +34,15 @@
         <div class="board-wrap">
           <svg class="skyline" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
             <defs>
-              <pattern id="win" width="13" height="18" patternUnits="userSpaceOnUse">
-                <rect x="3" y="5" width="3" height="4" fill="#7d65bf" opacity="0.55" />
-                <rect x="8" y="10" width="3" height="4" fill="#6c54ab" opacity="0.45" />
-              </pattern>
+              <linearGradient id="moonField" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0" stop-color="#172d3b" stop-opacity="0.46" />
+                <stop offset="1" stop-color="#071016" stop-opacity="0.95" />
+              </linearGradient>
             </defs>
-            <path d="M0,360 0,210 80,210 80,170 180,170 180,232 300,232 300,150 430,150 430,205 560,205 560,120 690,120 690,192 820,192 820,160 960,160 960,214 1080,214 1080,176 1200,176 1200,360 Z" fill="#241a3e" />
-            <path id="cityFront" d="M0,360 0,262 64,262 64,300 150,300 150,240 250,240 250,292 350,292 350,222 470,222 470,282 610,282 610,250 730,250 730,300 870,300 870,242 1010,242 1010,286 1130,286 1130,256 1200,256 1200,360 Z" fill="#2e2350" />
-            <path d="M0,360 0,262 64,262 64,300 150,300 150,240 250,240 250,292 350,292 350,222 470,222 470,282 610,282 610,250 730,250 730,300 870,300 870,242 1010,242 1010,286 1130,286 1130,256 1200,256 1200,360 Z" fill="url(#win)" />
+            <circle cx="930" cy="74" r="40" fill="#dce9ee" opacity="0.16" />
+            <path d="M0,360 0,258 C105,226 190,248 290,222 C394,195 492,206 588,238 C692,272 786,238 890,214 C1008,187 1105,212 1200,174 L1200,360 Z" fill="url(#moonField)" />
+            <path d="M0,360 0,300 C132,278 262,292 395,278 C541,262 696,286 840,264 C980,244 1088,260 1200,232 L1200,360 Z" fill="#09151c" opacity="0.86" />
+            <path d="M90,322 l10,-54 l10,54 M192,310 l8,-42 l8,42 M1020,302 l9,-48 l9,48 M1092,318 l12,-62 l12,62" stroke="#1c352d" stroke-width="5" stroke-linecap="square" opacity="0.78" />
           </svg>
           <div id="boardScroll" class="board-scroll">
             <canvas id="board" class="board" width="760" height="560" aria-label="Tactical board"></canvas>
@@ -50,9 +51,9 @@
         </div>
       </section>
 
-      <aside class="panel">
-        <div id="gamePanel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
-          <div class="panel-section">
+      <aside class="panel" aria-label="Tactical command panel">
+        <div id="gamePanel" class="game-panel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
+          <div class="panel-section selected-unit">
             <h2 id="selectedName">Crown Lancer</h2>
             <p id="selectedMeta">Hybrid royal vanguard</p>
             <div class="actions">
