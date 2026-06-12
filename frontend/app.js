@@ -19,6 +19,16 @@
     { id: 'terrain:rock', label: 'Rock', role: 'terrain', type: 'rock', mark: 'O' },
     { id: 'terrain:random-rock', label: 'Rand Rock', role: 'terrain', type: 'random-rock', mark: '?' },
   ];
+  const MISC_ZONE_TYPES = [
+    { id: 'falling-rock', label: 'Falling Rock' },
+  ];
+  const ZONE_COLORS = [
+    { fill: 'rgba(255,210,74,0.24)', stroke: '#ffd24a' },
+    { fill: 'rgba(174,230,255,0.22)', stroke: '#aee6ff' },
+    { fill: 'rgba(255,106,82,0.21)', stroke: '#ff6a52' },
+    { fill: 'rgba(123,208,164,0.22)', stroke: '#7bd0a4' },
+    { fill: 'rgba(220,186,255,0.22)', stroke: '#dcbaff' },
+  ];
   const PIECES = {
     pawn: { mark: 'P', name: 'Pawn', role: 'Forward footman' },
     knight: { mark: 'N', name: 'Knight', role: 'L-shaped jumper' },
@@ -306,6 +316,13 @@
     selectedCampaignId: null,
     selectedLevelId: null,
     selectedLevelBrush: 'enemy:pawn',
+    levelEditorMode: 'board',
+    selectedZoneId: null,
+    zoneTool: 'paint',
+    zoneDragStart: null,
+    zoneDragPreview: null,
+    zonePainting: false,
+    zoneLastPaintKey: null,
     levelEditorCollapsed: false,
     campaignMessage: '',
     campaignLoading: false,
@@ -655,6 +672,11 @@
     const level = selectedLevel(campaign);
     const rocksInput = document.getElementById('levelRandomRocksCount') || document.getElementById('levelEditorRocksCount');
     const rocksValue = rocksInput ? Number(rocksInput.value) : (level && level.random_rocks_count);
+    const assignments = levelZoneAssignments(level);
+    const player1Input = document.getElementById('player1SpawnZone');
+    const player2Input = document.getElementById('player2SpawnZone');
+    const fallingRockInput = document.getElementById('fallingRockZone');
+    const fallingRockZoneId = fallingRockInput ? fallingRockInput.value : assignedMiscZoneId(assignments, 'falling-rock');
     return {
       name: (document.getElementById('levelName') && document.getElementById('levelName').value) || (level && level.name),
       objective: (document.getElementById('levelObjective') && document.getElementById('levelObjective').value) || (level && level.objective),
@@ -665,6 +687,12 @@
       notes: (document.getElementById('levelNotes') && document.getElementById('levelNotes').value) || (level && level.notes),
       layout: level ? (level.layout || []) : [],
       random_rocks_count: clampBoardNumber(rocksValue, 0, 0, 100),
+      zones: level ? levelZones(level) : [],
+      zone_assignments: {
+        player_1_spawn_zone_id: player1Input ? player1Input.value : assignments.player_1_spawn_zone_id,
+        player_2_spawn_zone_id: player2Input ? player2Input.value : assignments.player_2_spawn_zone_id,
+        misc_zones: fallingRockZoneId ? [{ id: 'misc-zone-1', type: 'falling-rock', zone_id: fallingRockZoneId }] : [],
+      },
     };
   }
 
@@ -681,6 +709,8 @@
     level.layout = levelLayout(level).filter((cell) => (
       inBounds(Number(cell.x), Number(cell.y), { cols, rows })
     ));
+    level.zones = levelZones(level).map((zone, zoneIndex) => normalizeClientZone(zone, cols, rows, zoneIndex));
+    level.zone_assignments = normalizeClientZoneAssignments(levelZoneAssignments(level), level.zones);
   }
 
   function selectedLevelBrush() {
@@ -690,6 +720,148 @@
   function levelLayout(level) {
     if (!level || !Array.isArray(level.layout)) return [];
     return level.layout;
+  }
+
+  function zoneId(index) {
+    return `zone-${index + 1}`;
+  }
+
+  function selectionId(zone, index) {
+    return `${zone.id || 'zone'}-selection-${index + 1}-${Date.now()}`;
+  }
+
+  function randomRockZoneFromLayout(level) {
+    const randomRocks = levelLayout(level).filter((cell) => cell.role === 'terrain' && cell.type === 'random-rock');
+    if (!randomRocks.length) return null;
+    return {
+      id: 'zone-1',
+      name: 'Zone 1',
+      selections: randomRocks.map((cell, index) => ({
+        id: `selection-${index + 1}`,
+        type: 'cell',
+        x: Number(cell.x),
+        y: Number(cell.y),
+      })),
+    };
+  }
+
+  function levelZones(level) {
+    if (!level) return [];
+    if (!Array.isArray(level.zones)) {
+      const migrated = randomRockZoneFromLayout(level);
+      level.zones = migrated ? [migrated] : [];
+      if (migrated) {
+        level.zone_assignments = {
+          player_1_spawn_zone_id: '',
+          player_2_spawn_zone_id: '',
+          misc_zones: [{ id: 'misc-zone-1', type: 'falling-rock', zone_id: migrated.id }],
+        };
+      }
+    }
+    return level.zones;
+  }
+
+  function normalizeClientZone(zone, cols, rows, index) {
+    const normalized = {
+      id: zone.id || zoneId(index),
+      name: String(zone.name || `Zone ${index + 1}`).slice(0, 40),
+      selections: [],
+    };
+    const selections = Array.isArray(zone.selections) ? zone.selections : [];
+    normalized.selections = selections.map((selection, selectionIndex) => {
+      if (!selection || typeof selection !== 'object') return null;
+      if (selection.type === 'cell') {
+        const x = clampBoardNumber(selection.x, 0, 0, cols - 1);
+        const y = clampBoardNumber(selection.y, 0, 0, rows - 1);
+        return { id: selection.id || `${normalized.id}-selection-${selectionIndex + 1}`, type: 'cell', x, y };
+      }
+      if (selection.type === 'rect') {
+        const x1 = clampBoardNumber(selection.x1, 0, 0, cols - 1);
+        const y1 = clampBoardNumber(selection.y1, 0, 0, rows - 1);
+        const x2 = clampBoardNumber(selection.x2, 0, 0, cols - 1);
+        const y2 = clampBoardNumber(selection.y2, 0, 0, rows - 1);
+        return { id: selection.id || `${normalized.id}-selection-${selectionIndex + 1}`, type: 'rect', x1, y1, x2, y2 };
+      }
+      return null;
+    }).filter(Boolean);
+    return normalized;
+  }
+
+  function levelZoneAssignments(level) {
+    const assignments = (level && level.zone_assignments) || {};
+    return {
+      player_1_spawn_zone_id: assignments.player_1_spawn_zone_id || assignments.player1SpawnZoneId || '',
+      player_2_spawn_zone_id: assignments.player_2_spawn_zone_id || assignments.player2SpawnZoneId || '',
+      misc_zones: Array.isArray(assignments.misc_zones) ? assignments.misc_zones : (Array.isArray(assignments.miscZones) ? assignments.miscZones : []),
+    };
+  }
+
+  function assignedMiscZoneId(assignments, type) {
+    const item = assignments.misc_zones.find((zone) => zone.type === type);
+    return item ? (item.zone_id || item.zoneId || '') : '';
+  }
+
+  function normalizeClientZoneAssignments(assignments, zones) {
+    const zoneIds = new Set(zones.map((zone) => zone.id));
+    const player1 = zoneIds.has(assignments.player_1_spawn_zone_id) ? assignments.player_1_spawn_zone_id : '';
+    const player2 = zoneIds.has(assignments.player_2_spawn_zone_id) ? assignments.player_2_spawn_zone_id : '';
+    const misc_zones = assignments.misc_zones
+      .map((zone, index) => ({
+        id: zone.id || `misc-zone-${index + 1}`,
+        type: zone.type,
+        zone_id: zone.zone_id || zone.zoneId || '',
+      }))
+      .filter((zone) => MISC_ZONE_TYPES.some((type) => type.id === zone.type) && zoneIds.has(zone.zone_id));
+    return {
+      player_1_spawn_zone_id: player1,
+      player_2_spawn_zone_id: player2,
+      misc_zones,
+    };
+  }
+
+  function selectedZone(level) {
+    const zones = levelZones(level);
+    if (!zones.length) return null;
+    return zones.find((zone) => zone.id === state.selectedZoneId) || zones[0];
+  }
+
+  function ensureSelectedZone(level) {
+    const zones = levelZones(level);
+    if (!zones.length) {
+      const zone = { id: zoneId(0), name: 'Zone 1', selections: [] };
+      zones.push(zone);
+      state.selectedZoneId = zone.id;
+      return zone;
+    }
+    const zone = selectedZone(level);
+    state.selectedZoneId = zone.id;
+    return zone;
+  }
+
+  function zoneCells(zone, level) {
+    const size = {
+      cols: clampBoardNumber(level && level.width, COLS, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX),
+      rows: clampBoardNumber(level && level.height, ROWS, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX),
+    };
+    const cells = new Map();
+    (zone && Array.isArray(zone.selections) ? zone.selections : []).forEach((selection) => {
+      if (selection.type === 'cell') {
+        const x = Number(selection.x);
+        const y = Number(selection.y);
+        if (inBounds(x, y, size)) cells.set(`${x},${y}`, { x, y });
+      } else if (selection.type === 'rect') {
+        const startX = Math.min(Number(selection.x1), Number(selection.x2));
+        const endX = Math.max(Number(selection.x1), Number(selection.x2));
+        const startY = Math.min(Number(selection.y1), Number(selection.y2));
+        const endY = Math.max(Number(selection.y1), Number(selection.y2));
+        for (let y = startY; y <= endY; y += 1) {
+          for (let x = startX; x <= endX; x += 1) {
+            if (inBounds(x, y, size)) cells.set(`${x},${y}`, { x, y });
+          }
+        }
+      }
+    });
+    return Array.from(cells.values()).sort((a, b) => (a.y - b.y) || (a.x - b.x));
   }
 
   function levelCellAt(level, x, y) {
@@ -758,11 +930,18 @@
     if (!campaign || !level) return;
     applyLevelFormDraft(level);
     state.screen = 'level-editor';
+    state.levelEditorMode = state.levelEditorMode || 'board';
     state.hoverTile = null;
+    state.zoneDragStart = null;
+    state.zoneDragPreview = null;
+    state.zonePainting = false;
+    state.zoneLastPaintKey = null;
     state.gridStartX = 0;
     state.gridStartY = 0;
     state.gridEndX = level.width - 1;
     state.gridEndY = level.height - 1;
+    const zone = selectedZone(level);
+    state.selectedZoneId = zone && zone.id;
     syncLevelEditorPieces();
     setCampaignMessage(`Editing ${level.name}.`);
     render();
@@ -775,6 +954,9 @@
     state.screen = 'campaigns';
     state.hoverTile = null;
     state.selected = null;
+    state.zoneDragStart = null;
+    state.zoneDragPreview = null;
+    state.zonePainting = false;
     render();
   }
 
@@ -822,11 +1004,85 @@
     render();
   }
 
+  function nextZoneId(level) {
+    const used = new Set(levelZones(level).map((zone) => zone.id));
+    for (let index = 1; index < 1000; index += 1) {
+      const id = `zone-${index}`;
+      if (!used.has(id)) return id;
+    }
+    return `zone-${Date.now()}`;
+  }
+
+  function addLevelZone() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    const zones = levelZones(level);
+    const zone = { id: nextZoneId(level), name: `Zone ${zones.length + 1}`, selections: [] };
+    zones.push(zone);
+    state.selectedZoneId = zone.id;
+    state.levelEditorMode = 'zones';
+    setCampaignMessage(`${zone.name} added. Save the level to persist it.`);
+    render();
+  }
+
+  function deleteSelectedZone() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    const zone = selectedZone(level);
+    if (!zone) return;
+    level.zones = levelZones(level).filter((item) => item.id !== zone.id);
+    level.zone_assignments = normalizeClientZoneAssignments(levelZoneAssignments(level), level.zones);
+    state.selectedZoneId = level.zones[0] && level.zones[0].id;
+    state.zoneDragStart = null;
+    state.zoneDragPreview = null;
+    setCampaignMessage(`${zone.name} deleted. Save the level to persist it.`);
+    render();
+  }
+
+  function clearSelectedZone() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    const zone = selectedZone(level);
+    if (!zone) return;
+    zone.selections = [];
+    setCampaignMessage(`${zone.name} cleared. Save the level to persist it.`);
+    render();
+  }
+
+  function addZoneSelection(selection) {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level || !selection) return;
+    const zone = ensureSelectedZone(level);
+    zone.selections = Array.isArray(zone.selections) ? zone.selections : [];
+    zone.selections.push({ id: selectionId(zone, zone.selections.length), ...selection });
+    setCampaignMessage(`${zone.name} updated. Save the level to persist it.`);
+    render();
+  }
+
+  function addZonePaintCell(tile) {
+    if (!tile) return;
+    const key = `${tile.x},${tile.y}`;
+    if (state.zoneLastPaintKey === key) return;
+    state.zoneLastPaintKey = key;
+    addZoneSelection({ type: 'cell', x: tile.x, y: tile.y });
+  }
+
+  function addZoneRectSelection(start, end) {
+    if (!start || !end) return;
+    addZoneSelection({ type: 'rect', x1: start.x, y1: start.y, x2: end.x, y2: end.y });
+  }
+
   async function saveLevelEditor() {
     const campaign = selectedCampaign();
     const level = selectedLevel(campaign);
     if (!level) return;
     level.layout = editorPiecesToLayout();
+    level.zones = levelZones(level);
+    level.zone_assignments = normalizeClientZoneAssignments(levelZoneAssignments(level), level.zones);
     await saveCampaignLevel();
     if (selectedLevel(selectedCampaign())) syncLevelEditorPieces();
     state.screen = 'level-editor';
@@ -1416,7 +1672,7 @@
 
   function handleTile(x, y) {
     if (state.screen === 'level-editor') {
-      paintEditorTile(x, y);
+      if (state.levelEditorMode === 'board') paintEditorTile(x, y);
       return;
     }
     if (state.screen !== 'game' || state.turn !== 'player' || state.battleAnimating || state.animating) return;
@@ -1559,6 +1815,55 @@
     }
   }
 
+  function drawZoneCell(x, y, color, strong, metrics) {
+    drawDiamondFill(x, y, color.fill, strong ? color.stroke : null, metrics);
+    if (!strong) {
+      const center = isoCenter(x, y, metrics);
+      diamond(center.x, center.y);
+      ctx.strokeStyle = color.stroke;
+      ctx.globalAlpha = 0.38;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawZoneOverlays(metrics) {
+    if (state.screen !== 'level-editor') return;
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    const zones = levelZones(level);
+    const assignments = levelZoneAssignments(level);
+    const assignedIds = new Set([
+      assignments.player_1_spawn_zone_id,
+      assignments.player_2_spawn_zone_id,
+      ...assignments.misc_zones.map((zone) => zone.zone_id || zone.zoneId),
+    ].filter(Boolean));
+    zones.forEach((zone, index) => {
+      if (state.levelEditorMode !== 'zones' && !assignedIds.has(zone.id)) return;
+      const active = state.levelEditorMode === 'zones' && (!state.selectedZoneId ? index === 0 : zone.id === state.selectedZoneId);
+      const color = ZONE_COLORS[index % ZONE_COLORS.length];
+      zoneCells(zone, level).forEach((cell) => drawZoneCell(cell.x, cell.y, color, active, metrics));
+    });
+
+    if (state.levelEditorMode === 'zones' && state.zoneDragStart && state.zoneDragPreview) {
+      const startX = Math.min(state.zoneDragStart.x, state.zoneDragPreview.x);
+      const endX = Math.max(state.zoneDragStart.x, state.zoneDragPreview.x);
+      const startY = Math.min(state.zoneDragStart.y, state.zoneDragPreview.y);
+      const endY = Math.max(state.zoneDragStart.y, state.zoneDragPreview.y);
+      const color = ZONE_COLORS[Math.max(0, zones.findIndex((zone) => zone.id === state.selectedZoneId)) % ZONE_COLORS.length];
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+          if (inBounds(x, y, metrics)) drawZoneCell(x, y, color, true, metrics);
+        }
+      }
+      ctx.restore();
+    }
+  }
+
   function drawBoard() {
     const metrics = boardMetrics();
     syncCanvasSize(metrics);
@@ -1577,6 +1882,7 @@
       drawDiamondFill(x, metrics.rows - 1, 'rgba(174,230,255,0.14)', null, metrics);
       if (metrics.rows > 1) drawDiamondFill(x, metrics.rows - 2, 'rgba(174,230,255,0.08)', null, metrics);
     }
+    drawZoneOverlays(metrics);
     const selected = state.battleAnimating ? null : selectedPiece();
     if (state.screen === 'game' && state.showThreats) {
       getEnemyThreats().forEach((sq) => {
@@ -1606,11 +1912,15 @@
     if (selected && !state.animating && !state.battleAnimating) drawDiamondFill(selected.x, selected.y, 'rgba(255,255,255,0.18)', '#ffffff', metrics);
     if (state.hoverTile && !state.animating && !state.battleAnimating) {
       if (state.screen === 'level-editor') {
-        const brush = selectedLevelBrush();
-        const fill = brush.role === 'player'
-          ? 'rgba(174,230,255,0.25)'
-          : (brush.role === 'enemy' ? 'rgba(255,106,82,0.25)' : (brush.role === 'terrain' ? 'rgba(180,180,180,0.24)' : 'rgba(255,255,255,0.12)'));
-        drawDiamondFill(state.hoverTile.x, state.hoverTile.y, fill, brush.id === 'empty' ? '#ffffff' : '#ffd24a', metrics);
+        if (state.levelEditorMode === 'zones') {
+          drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,210,74,0.16)', '#ffd24a', metrics);
+        } else {
+          const brush = selectedLevelBrush();
+          const fill = brush.role === 'player'
+            ? 'rgba(174,230,255,0.25)'
+            : (brush.role === 'enemy' ? 'rgba(255,106,82,0.25)' : (brush.role === 'terrain' ? 'rgba(180,180,180,0.24)' : 'rgba(255,255,255,0.12)'));
+          drawDiamondFill(state.hoverTile.x, state.hoverTile.y, fill, brush.id === 'empty' ? '#ffffff' : '#ffd24a', metrics);
+        }
       } else {
         drawDiamondFill(state.hoverTile.x, state.hoverTile.y, 'rgba(255,255,255,0.10)', 'rgba(255,255,255,0.55)', metrics);
       }
@@ -1731,6 +2041,30 @@
       </div>`;
   }
 
+  function renderZoneOptions(level, selectedId) {
+    const zones = levelZones(level);
+    return `<option value="">None</option>${zones.map((zone) => `
+      <option value="${escapeText(zone.id)}" ${zone.id === selectedId ? 'selected' : ''}>${escapeText(zone.name)}</option>
+    `).join('')}`;
+  }
+
+  function renderZoneAssignmentControls(level) {
+    const assignments = levelZoneAssignments(level);
+    const fallingRockZoneId = assignedMiscZoneId(assignments, 'falling-rock');
+    return `
+      <div class="editor-grid zone-assignment-grid">
+        <label>Player 1 Spawn Zone
+          <select id="player1SpawnZone">${renderZoneOptions(level, assignments.player_1_spawn_zone_id)}</select>
+        </label>
+        <label>Player 2 Spawn Zone
+          <select id="player2SpawnZone">${renderZoneOptions(level, assignments.player_2_spawn_zone_id)}</select>
+        </label>
+        <label>Falling Rock Zone
+          <select id="fallingRockZone">${renderZoneOptions(level, fallingRockZoneId)}</select>
+        </label>
+      </div>`;
+  }
+
   function renderCampaignEditor() {
     const campaign = selectedCampaign();
     const level = selectedLevel(campaign);
@@ -1787,6 +2121,13 @@
                     <label>Enemy Budget<input id="levelEnemyBudget" type="number" min="1" max="24" value="${escapeText(level.enemy_budget)}"></label>
                     <label>Rocks to Spawn<input id="levelRandomRocksCount" type="number" min="0" max="100" value="${escapeText(level.random_rocks_count || 0)}"></label>
                     <label class="wide">Notes<textarea id="levelNotes" maxlength="400">${escapeText(level.notes)}</textarea></label>
+                  </div>
+                  <div class="campaign-levels zone-assignments">
+                    <div class="campaign-levels-head">
+                      <span>Zone Assignments</span>
+                      <button type="button" data-action="edit-level-zones" ${state.campaignLoading ? 'disabled' : ''}>Edit Zones</button>
+                    </div>
+                    ${renderZoneAssignmentControls(level)}
                   </div>
                   <div class="menu-row">
                     <button type="button" data-action="save-level" ${state.campaignLoading ? 'disabled' : ''}>Save Level</button>
@@ -1917,11 +2258,21 @@
         const campaign = selectedCampaign();
         const level = selectedLevel(campaign);
         const brush = selectedLevelBrush();
+        const mode = state.levelEditorMode === 'zones' ? 'zones' : 'board';
+        const zones = level ? levelZones(level) : [];
+        const zone = level ? selectedZone(level) : null;
+        const zoneIndex = zone ? Math.max(0, zones.findIndex((item) => item.id === zone.id)) : 0;
+        const zoneColor = ZONE_COLORS[zoneIndex % ZONE_COLORS.length];
+        const zoneCellCount = zone && level ? zoneCells(zone, level).length : 0;
         levelEditorPanel.innerHTML = `
           <div class="panel-section">
             <p class="eyebrow">Level editor</p>
             <h2 style="font-size: .8rem; line-height: 1.3;">${level ? escapeText(level.name) : 'Level'}</h2>
             <p class="menu-copy" style="color: var(--muted); font-size: 1.05rem; margin-top: 8px;">${state.campaignMessage || 'Paint the board, then save.'}</p>
+            <div class="editor-mode-tabs" role="tablist" aria-label="Level editor modes">
+              <button type="button" class="${mode === 'board' ? 'active' : ''}" data-action="set-level-editor-mode" data-mode="board">Board</button>
+              <button type="button" class="${mode === 'zones' ? 'active' : ''}" data-action="set-level-editor-mode" data-mode="zones">Zones</button>
+            </div>
             <div class="actions">
               <button type="button" data-action="save-level-editor" ${state.campaignLoading ? 'disabled' : ''}>Save</button>
               <button type="button" data-action="back-to-campaigns">Back</button>
@@ -1929,34 +2280,59 @@
               <button type="button" data-action="clear-level-layout">Clear</button>
             </div>
           </div>
-          <div class="panel-section">
-            <div class="roster-title" style="margin-bottom: 8px;">Palette Brushes</div>
-            <div class="level-palette canvas-palette" aria-label="Level editor brushes">
-              ${LEVEL_BRUSHES.map((item) => `
-                <button type="button" class="${brush.id === item.id ? 'active' : ''} ${item.role || 'empty'} ${item.type || ''}" data-action="select-level-brush" data-brush="${item.id}">
-                  <span>${escapeText(item.mark)}</span>${escapeText(item.label)}
-                </button>
-              `).join('')}
+          ${mode === 'board' ? `
+            <div class="panel-section">
+              <div class="roster-title" style="margin-bottom: 8px;">Palette Brushes</div>
+              <div class="level-palette canvas-palette" aria-label="Level editor brushes">
+                ${LEVEL_BRUSHES.map((item) => `
+                  <button type="button" class="${brush.id === item.id ? 'active' : ''} ${item.role || 'empty'} ${item.type || ''}" data-action="select-level-brush" data-brush="${item.id}">
+                    <span>${escapeText(item.mark)}</span>${escapeText(item.label)}
+                  </button>
+                `).join('')}
+              </div>
             </div>
-          </div>
-          <div class="panel-section level-editor-rocks">
-            <label>Rocks to Spawn:
-              <input type="number" id="levelEditorRocksCount" min="0" max="100" value="${level ? (level.random_rocks_count || 0) : 0}">
-            </label>
-          </div>
-          <div class="panel-section level-editor-grid-tool">
-            <p class="tool-heading">Draw Grid of Random Rock Set:</p>
-            <div class="tool-inputs">
-              <label>From: X <input type="number" id="gridStartX" min="0" max="15" value="${state.gridStartX}"></label>
-              <label>Y <input type="number" id="gridStartY" min="0" max="19" value="${state.gridStartY}"></label>
-              <label>To: X <input type="number" id="gridEndX" min="0" max="15" value="${state.gridEndX}"></label>
-              <label>Y <input type="number" id="gridEndY" min="0" max="19" value="${state.gridEndY}"></label>
+            <div class="panel-section level-editor-rocks">
+              <label>Rocks to Spawn:
+                <input type="number" id="levelEditorRocksCount" min="0" max="100" value="${level ? (level.random_rocks_count || 0) : 0}">
+              </label>
             </div>
-            <div class="tool-actions">
-              <button type="button" data-action="draw-rock-grid">Paint Grid</button>
-              <button type="button" data-action="clear-rock-grid">Clear Grid</button>
+          ` : `
+            <div class="panel-section zone-editor-panel">
+              <div class="zone-editor-head">
+                <div>
+                  <div class="roster-title">Zones</div>
+                  <p>${zones.length} saved · ${zoneCellCount} cells in active zone</p>
+                </div>
+                <button type="button" data-action="add-level-zone">New Zone</button>
+              </div>
+              <div class="zone-list" aria-label="Level zones">
+                ${zones.length ? zones.map((item, index) => `
+                  <button type="button" class="${zone && zone.id === item.id ? 'active' : ''}" data-action="select-level-zone" data-zone-id="${escapeText(item.id)}">
+                    <i style="background:${ZONE_COLORS[index % ZONE_COLORS.length].stroke};"></i>
+                    <span>${escapeText(item.name)}</span>
+                    <small>${zoneCells(item, level).length}</small>
+                  </button>
+                `).join('') : '<p class="empty-lobbies">No zones yet.</p>'}
+              </div>
             </div>
-          </div>
+            <div class="panel-section zone-editor-panel">
+              <label class="zone-name-label">Zone Name
+                <input id="selectedZoneName" value="${zone ? escapeText(zone.name) : ''}" maxlength="40" ${zone ? '' : 'disabled'}>
+              </label>
+              <div class="zone-tool-tabs" role="tablist" aria-label="Zone drawing tools">
+                <button type="button" class="${state.zoneTool === 'paint' ? 'active' : ''}" data-action="set-zone-tool" data-tool="paint">Paint</button>
+                <button type="button" class="${state.zoneTool === 'rect' ? 'active' : ''}" data-action="set-zone-tool" data-tool="rect">Area</button>
+              </div>
+              <div class="zone-swatch" style="--zone-color:${zoneColor.stroke};">
+                <span></span>
+                <p>${zone ? `${zone.selections.length} selections. Overlaps are allowed; unique cells are drawn on the board.` : 'Create a zone to start drawing.'}</p>
+              </div>
+              <div class="tool-actions">
+                <button type="button" data-action="clear-selected-zone" ${zone ? '' : 'disabled'}>Clear Zone</button>
+                <button type="button" data-action="delete-selected-zone" ${zone ? '' : 'disabled'}>Delete Zone</button>
+              </div>
+            </div>
+          `}
         `;
       }
       return;
@@ -2054,6 +2430,47 @@
       render();
       return;
     }
+    if (button.dataset.action === 'set-level-editor-mode' && button.dataset.mode) {
+      state.levelEditorMode = button.dataset.mode === 'zones' ? 'zones' : 'board';
+      state.zoneDragStart = null;
+      state.zoneDragPreview = null;
+      state.zonePainting = false;
+      if (state.levelEditorMode === 'zones') {
+        const campaign = selectedCampaign();
+        const level = selectedLevel(campaign);
+        if (level && levelZones(level).length && !selectedZone(level)) state.selectedZoneId = levelZones(level)[0].id;
+      }
+      render();
+      return;
+    }
+    if (button.dataset.action === 'add-level-zone') {
+      addLevelZone();
+      return;
+    }
+    if (button.dataset.action === 'select-level-zone' && button.dataset.zoneId) {
+      state.selectedZoneId = button.dataset.zoneId;
+      state.zoneDragStart = null;
+      state.zoneDragPreview = null;
+      state.zonePainting = false;
+      render();
+      return;
+    }
+    if (button.dataset.action === 'set-zone-tool' && button.dataset.tool) {
+      state.zoneTool = button.dataset.tool === 'rect' ? 'rect' : 'paint';
+      state.zoneDragStart = null;
+      state.zoneDragPreview = null;
+      state.zonePainting = false;
+      render();
+      return;
+    }
+    if (button.dataset.action === 'clear-selected-zone') {
+      clearSelectedZone();
+      return;
+    }
+    if (button.dataset.action === 'delete-selected-zone') {
+      deleteSelectedZone();
+      return;
+    }
     if (button.dataset.action === 'seed-level-layout') {
       seedLevelLayout();
       return;
@@ -2071,7 +2488,14 @@
       return;
     }
     if (button.dataset.action === 'save-level') void saveCampaignLevel();
-    if (button.dataset.action === 'edit-level-board') enterLevelEditor();
+    if (button.dataset.action === 'edit-level-board') {
+      state.levelEditorMode = 'board';
+      enterLevelEditor();
+    }
+    if (button.dataset.action === 'edit-level-zones') {
+      state.levelEditorMode = 'zones';
+      enterLevelEditor();
+    }
     if (button.dataset.action === 'save-level-editor') void saveLevelEditor();
     if (button.dataset.action === 'toggle-level-editor-panel') {
       state.levelEditorCollapsed = !state.levelEditorCollapsed;
@@ -2102,6 +2526,17 @@
         level.random_rocks_count = clampBoardNumber(target.value, 0, 0, 100);
       }
     }
+    if (target.id === 'selectedZoneName') {
+      const campaign = selectedCampaign();
+      const level = selectedLevel(campaign);
+      const zone = level && selectedZone(level);
+      if (zone) zone.name = String(target.value || '').slice(0, 40) || zone.name;
+    }
+    if (target.id === 'player1SpawnZone' || target.id === 'player2SpawnZone' || target.id === 'fallingRockZone') {
+      const campaign = selectedCampaign();
+      const level = selectedLevel(campaign);
+      if (level) level.zone_assignments = levelFormData().zone_assignments;
+    }
     if (target.id === 'gridStartX') state.gridStartX = clampBoardNumber(target.value, 0, 0, 15);
     if (target.id === 'gridStartY') state.gridStartY = clampBoardNumber(target.value, 0, 0, 19);
     if (target.id === 'gridEndX') state.gridEndX = clampBoardNumber(target.value, 7, 0, 15);
@@ -2122,6 +2557,60 @@
   boardEl.addEventListener('click', (event) => {
     const tile = pointToTile(event.clientX, event.clientY);
     if (tile) handleTile(tile.x, tile.y);
+  });
+
+  boardEl.addEventListener('pointerdown', (event) => {
+    if (state.screen !== 'level-editor' || state.levelEditorMode !== 'zones' || event.button !== 0) return;
+    const tile = pointToTile(event.clientX, event.clientY);
+    if (!tile) return;
+    event.preventDefault();
+    boardEl.setPointerCapture(event.pointerId);
+    ensureSelectedZone(selectedLevel(selectedCampaign()));
+    if (state.zoneTool === 'rect') {
+      state.zoneDragStart = tile;
+      state.zoneDragPreview = tile;
+      render();
+    } else {
+      state.zonePainting = true;
+      state.zoneLastPaintKey = null;
+      addZonePaintCell(tile);
+    }
+  });
+
+  boardEl.addEventListener('pointermove', (event) => {
+    if (state.screen !== 'level-editor' || state.levelEditorMode !== 'zones') return;
+    const tile = pointToTile(event.clientX, event.clientY);
+    if (state.zoneTool === 'rect' && state.zoneDragStart) {
+      if (tile && (!state.zoneDragPreview || tile.x !== state.zoneDragPreview.x || tile.y !== state.zoneDragPreview.y)) {
+        state.zoneDragPreview = tile;
+        render();
+      }
+    } else if (state.zonePainting && tile) {
+      addZonePaintCell(tile);
+    }
+  });
+
+  boardEl.addEventListener('pointerup', (event) => {
+    if (state.screen !== 'level-editor' || state.levelEditorMode !== 'zones') return;
+    const tile = pointToTile(event.clientX, event.clientY);
+    if (state.zoneTool === 'rect' && state.zoneDragStart) {
+      addZoneRectSelection(state.zoneDragStart, tile || state.zoneDragPreview || state.zoneDragStart);
+    }
+    state.zoneDragStart = null;
+    state.zoneDragPreview = null;
+    state.zonePainting = false;
+    state.zoneLastPaintKey = null;
+    if (boardEl.hasPointerCapture(event.pointerId)) boardEl.releasePointerCapture(event.pointerId);
+    render();
+  });
+
+  boardEl.addEventListener('pointercancel', (event) => {
+    state.zoneDragStart = null;
+    state.zoneDragPreview = null;
+    state.zonePainting = false;
+    state.zoneLastPaintKey = null;
+    if (boardEl.hasPointerCapture(event.pointerId)) boardEl.releasePointerCapture(event.pointerId);
+    render();
   });
 
   boardEl.addEventListener('mousemove', (event) => {

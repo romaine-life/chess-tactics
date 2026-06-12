@@ -17,6 +17,7 @@ app.use(express.json({ limit: '64kb' }));
 const LEVEL_ROLES = new Set(['player', 'enemy', 'terrain']);
 const LEVEL_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 const LEVEL_TERRAIN = new Set(['rock', 'random-rock']);
+const MISC_ZONE_TYPES = new Set(['falling-rock']);
 
 function safeReturnPath(raw) {
   if (!raw || typeof raw !== 'string') return '/';
@@ -111,6 +112,8 @@ function campaignSummary(campaign) {
 }
 
 function publicLevel(level) {
+  const zones = Array.isArray(level.zones) ? level.zones : normalizeLevelZones(null, level.width, level.height, level.layout);
+  const zoneAssignments = level.zoneAssignments || normalizeZoneAssignments(null, zones, level.layout);
   return {
     id: level.id,
     name: level.name,
@@ -122,6 +125,8 @@ function publicLevel(level) {
     notes: level.notes,
     layout: level.layout.map(publicLevelCell),
     random_rocks_count: level.randomRocksCount ?? 0,
+    zones: zones.map(publicZone),
+    zone_assignments: publicZoneAssignments(zoneAssignments),
   };
 }
 
@@ -131,6 +136,22 @@ function publicLevelCell(cell) {
     y: cell.y,
     role: cell.role,
     type: cell.type,
+  };
+}
+
+function publicZone(zone) {
+  return {
+    id: zone.id,
+    name: zone.name,
+    selections: zone.selections.map((selection) => ({ ...selection })),
+  };
+}
+
+function publicZoneAssignments(assignments) {
+  return {
+    player_1_spawn_zone_id: assignments.player1SpawnZoneId,
+    player_2_spawn_zone_id: assignments.player2SpawnZoneId,
+    misc_zones: assignments.miscZones.map((zone) => ({ ...zone })),
   };
 }
 
@@ -187,9 +208,101 @@ function normalizeLevelLayout(rawLayout, width, height) {
   return Array.from(byCoord.values()).sort((a, b) => (a.y - b.y) || (a.x - b.x));
 }
 
+function normalizeZoneSelection(raw, width, height, index) {
+  if (!raw || typeof raw !== 'object') return null;
+  const type = String(raw.type || '').trim().toLowerCase();
+  const id = clampText(raw.id, `selection-${index + 1}`, 64);
+  if (type === 'cell') {
+    const x = normalizeCoordinate(raw.x, width);
+    const y = normalizeCoordinate(raw.y, height);
+    if (x === null || y === null) return null;
+    return { id, type, x, y };
+  }
+  if (type === 'rect') {
+    const x1 = normalizeCoordinate(raw.x1, width);
+    const y1 = normalizeCoordinate(raw.y1, height);
+    const x2 = normalizeCoordinate(raw.x2, width);
+    const y2 = normalizeCoordinate(raw.y2, height);
+    if (x1 === null || y1 === null || x2 === null || y2 === null) return null;
+    return { id, type, x1, y1, x2, y2 };
+  }
+  return null;
+}
+
+function randomRockZoneFromLayout(layout) {
+  const randomRocks = layout.filter((cell) => cell.role === 'terrain' && cell.type === 'random-rock');
+  if (!randomRocks.length) return null;
+  return {
+    id: 'zone-1',
+    name: 'Zone 1',
+    selections: randomRocks.map((cell, index) => ({
+      id: `selection-${index + 1}`,
+      type: 'cell',
+      x: cell.x,
+      y: cell.y,
+    })),
+  };
+}
+
+function normalizeLevelZones(rawZones, width, height, layout) {
+  const zones = Array.isArray(rawZones) ? rawZones : [];
+  const normalized = zones.map((raw, index) => {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = clampText(raw.id, `zone-${index + 1}`, 64);
+    const selections = Array.isArray(raw.selections) ? raw.selections : [];
+    return {
+      id,
+      name: clampText(raw.name, `Zone ${index + 1}`, 40),
+      selections: selections
+        .map((selection, selectionIndex) => normalizeZoneSelection(selection, width, height, selectionIndex))
+        .filter(Boolean)
+        .slice(0, 500),
+    };
+  }).filter(Boolean).slice(0, 50);
+
+  if (!Array.isArray(rawZones) && !normalized.length) {
+    const migrated = randomRockZoneFromLayout(layout);
+    if (migrated) normalized.push(migrated);
+  }
+
+  return normalized;
+}
+
+function normalizeZoneId(value, zoneIds) {
+  const id = String(value || '').trim();
+  return id && zoneIds.has(id) ? id : null;
+}
+
+function normalizeZoneAssignments(raw, zones, layout) {
+  const zoneIds = new Set(zones.map((zone) => zone.id));
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const player1SpawnZoneId = normalizeZoneId(source.player_1_spawn_zone_id ?? source.player1SpawnZoneId, zoneIds);
+  const player2SpawnZoneId = normalizeZoneId(source.player_2_spawn_zone_id ?? source.player2SpawnZoneId, zoneIds);
+  const rawMisc = Array.isArray(source.misc_zones) ? source.misc_zones : (Array.isArray(source.miscZones) ? source.miscZones : []);
+  const miscZones = rawMisc.map((rawZone, index) => {
+    if (!rawZone || typeof rawZone !== 'object') return null;
+    const type = String(rawZone.type || '').trim().toLowerCase();
+    const zoneId = normalizeZoneId(rawZone.zone_id ?? rawZone.zoneId, zoneIds);
+    if (!MISC_ZONE_TYPES.has(type) || !zoneId) return null;
+    return {
+      id: clampText(rawZone.id, `misc-zone-${index + 1}`, 64),
+      type,
+      zone_id: zoneId,
+    };
+  }).filter(Boolean).slice(0, 50);
+
+  if (!raw && zones.length === 1 && randomRockZoneFromLayout(layout)) {
+    miscZones.push({ id: 'misc-zone-1', type: 'falling-rock', zone_id: zones[0].id });
+  }
+
+  return { player1SpawnZoneId, player2SpawnZoneId, miscZones };
+}
+
 function buildLevel(raw, index) {
   const width = clampNumber(raw && raw.width, 8, 4, 16);
   const height = clampNumber(raw && raw.height, 12, 4, 20);
+  const layout = normalizeLevelLayout(raw && raw.layout, width, height);
+  const zones = normalizeLevelZones(raw && raw.zones, width, height, layout);
   return {
     id: crypto.randomUUID(),
     name: clampText(raw && raw.name, `Level ${index + 1}`, 48),
@@ -199,8 +312,10 @@ function buildLevel(raw, index) {
     height,
     enemyBudget: clampNumber(raw && (raw.enemy_budget ?? raw.enemyBudget), 3, 1, 24),
     notes: clampText(raw && raw.notes, '', 400),
-    layout: normalizeLevelLayout(raw && raw.layout, width, height),
+    layout,
     randomRocksCount: clampNumber(raw && (raw.random_rocks_count ?? raw.randomRocksCount), 0, 0, 100),
+    zones,
+    zoneAssignments: normalizeZoneAssignments(raw && (raw.zone_assignments ?? raw.zoneAssignments), zones, layout),
   };
 }
 
@@ -217,12 +332,21 @@ function applyLevelPatch(level, raw) {
   if (Object.hasOwn(raw, 'notes')) level.notes = clampText(raw.notes, level.notes, 400);
   if (Object.hasOwn(raw, 'width') || Object.hasOwn(raw, 'height')) {
     level.layout = normalizeLevelLayout(level.layout, level.width, level.height);
+    level.zones = normalizeLevelZones(level.zones, level.width, level.height, level.layout);
+    level.zoneAssignments = normalizeZoneAssignments(level.zoneAssignments, level.zones, level.layout);
   }
   if (Object.hasOwn(raw, 'layout')) {
     level.layout = normalizeLevelLayout(raw.layout, level.width, level.height);
   }
   if (Object.hasOwn(raw, 'random_rocks_count') || Object.hasOwn(raw, 'randomRocksCount')) {
     level.randomRocksCount = clampNumber(raw.random_rocks_count ?? raw.randomRocksCount, level.randomRocksCount, 0, 100);
+  }
+  if (Object.hasOwn(raw, 'zones')) {
+    level.zones = normalizeLevelZones(raw.zones, level.width, level.height, level.layout);
+    level.zoneAssignments = normalizeZoneAssignments(level.zoneAssignments, level.zones, level.layout);
+  }
+  if (Object.hasOwn(raw, 'zone_assignments') || Object.hasOwn(raw, 'zoneAssignments')) {
+    level.zoneAssignments = normalizeZoneAssignments(raw.zone_assignments ?? raw.zoneAssignments, level.zones, level.layout);
   }
 }
 

@@ -241,6 +241,25 @@ async function main() {
         { x: 99, y: 2, role: 'enemy', type: 'rook' },
         { x: 3, y: 3, role: 'enemy', type: 'dragon' },
       ],
+      zones: [
+        {
+          id: 'zone-1',
+          name: 'Zone 1',
+          selections: [
+            { id: 'selection-1', type: 'cell', x: 0, y: 0 },
+            { id: 'selection-2', type: 'rect', x1: 1, y1: 1, x2: 3, y2: 3 },
+            { id: 'bad-selection', type: 'cell', x: 99, y: 0 },
+          ],
+        },
+      ],
+      zone_assignments: {
+        player_1_spawn_zone_id: 'zone-1',
+        player_2_spawn_zone_id: 'missing-zone',
+        misc_zones: [
+          { id: 'misc-zone-1', type: 'falling-rock', zone_id: 'zone-1' },
+          { id: 'bad-misc-zone', type: 'lava', zone_id: 'zone-1' },
+        ],
+      },
     }),
   );
   const patchedLevelBody = JSON.parse(patchedLevel.body);
@@ -249,6 +268,16 @@ async function main() {
   }
   if (!patchedLevelBody.level.layout.some((cell) => cell.x === 1 && cell.y === 2 && cell.role === 'enemy' && cell.type === 'knight')) {
     throw new Error(`Patched level layout did not persist enemy knight: ${patchedLevel.body}`);
+  }
+  if (
+    patchedLevelBody.level.zones.length !== 1 ||
+    patchedLevelBody.level.zones[0].selections.length !== 2 ||
+    patchedLevelBody.level.zone_assignments.player_1_spawn_zone_id !== 'zone-1' ||
+    patchedLevelBody.level.zone_assignments.player_2_spawn_zone_id !== null ||
+    patchedLevelBody.level.zone_assignments.misc_zones.length !== 1 ||
+    patchedLevelBody.level.zone_assignments.misc_zones[0].type !== 'falling-rock'
+  ) {
+    throw new Error(`Patched level zones did not normalize as expected: ${patchedLevel.body}`);
   }
 
   const deletedLevel = await request(
