@@ -601,6 +601,10 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.zone-editor-head.compact {
+  grid-template-columns: minmax(0, 1fr) 68px;
+}
+
 .zone-editor-head p,
 .zone-swatch p {
   color: var(--muted);
@@ -688,6 +692,47 @@ h1 {
   display: block;
   height: 28px;
   width: 28px;
+}
+
+.misc-zone-assignments {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.misc-zone-row {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px;
+}
+
+.misc-zone-row label {
+  color: var(--power);
+  display: grid;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .44rem;
+  gap: 6px;
+  line-height: 1.45;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.misc-zone-row select {
+  background: #100d22;
+  border: 2px solid #40366c;
+  border-radius: 4px;
+  color: var(--ink);
+  font: 1.05rem "VT323", ui-monospace, monospace;
+  min-height: 36px;
+  min-width: 0;
+  padding: 6px;
+  width: 100%;
+}
+
+.misc-zone-row button {
+  min-height: 36px;
+  text-align: center;
 }
 
 .menu-layer.level-editor-layer {
@@ -1224,7 +1269,8 @@ h1 {
   .campaign-shell,
   .editor-grid,
   .editor-grid.two,
-  .zone-assignment-grid {
+  .zone-assignment-grid,
+  .misc-zone-row {
     grid-template-columns: 1fr;
   }
   .level-palette {

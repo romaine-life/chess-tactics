@@ -5,6 +5,9 @@
   const LEVEL_WIDTH_MAX = 16;
   const LEVEL_HEIGHT_MIN = 4;
   const LEVEL_HEIGHT_MAX = 20;
+  const MAX_PARTY_SIZE = 3;
+  const PLAYER_1_SPAWN_ZONE_ID = 'player-1-spawn';
+  const PLAYER_2_SPAWN_ZONE_ID = 'player-2-spawn';
   const PIECE_CHOICES = ['knight', 'bishop', 'rook'];
   const LEVEL_BRUSHES = [
     { id: 'empty', label: 'Empty', role: '', type: '', mark: '.' },
@@ -675,8 +678,6 @@
     const assignments = levelZoneAssignments(level);
     const player1Input = document.getElementById('player1SpawnZone');
     const player2Input = document.getElementById('player2SpawnZone');
-    const fallingRockInput = document.getElementById('fallingRockZone');
-    const fallingRockZoneId = fallingRockInput ? fallingRockInput.value : assignedMiscZoneId(assignments, 'falling-rock');
     return {
       name: (document.getElementById('levelName') && document.getElementById('levelName').value) || (level && level.name),
       objective: (document.getElementById('levelObjective') && document.getElementById('levelObjective').value) || (level && level.objective),
@@ -691,7 +692,7 @@
       zone_assignments: {
         player_1_spawn_zone_id: player1Input ? player1Input.value : assignments.player_1_spawn_zone_id,
         player_2_spawn_zone_id: player2Input ? player2Input.value : assignments.player_2_spawn_zone_id,
-        misc_zones: fallingRockZoneId ? [{ id: 'misc-zone-1', type: 'falling-rock', zone_id: fallingRockZoneId }] : [],
+        misc_zones: collectMiscZoneAssignments(assignments),
       },
     };
   }
@@ -745,18 +746,34 @@
     };
   }
 
+  function defaultSpawnZones(level) {
+    const cols = clampBoardNumber(level && level.width, COLS, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX);
+    const rows = clampBoardNumber(level && level.height, ROWS, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX);
+    return [
+      {
+        id: PLAYER_1_SPAWN_ZONE_ID,
+        name: 'Player 1 Spawn',
+        selections: [{ id: 'selection-1', type: 'rect', x1: 0, y1: rows - 1, x2: cols - 1, y2: rows - 1 }],
+      },
+      {
+        id: PLAYER_2_SPAWN_ZONE_ID,
+        name: 'Player 2 Spawn',
+        selections: [{ id: 'selection-1', type: 'rect', x1: 0, y1: 0, x2: cols - 1, y2: 0 }],
+      },
+    ];
+  }
+
   function levelZones(level) {
     if (!level) return [];
     if (!Array.isArray(level.zones)) {
       const migrated = randomRockZoneFromLayout(level);
-      level.zones = migrated ? [migrated] : [];
-      if (migrated) {
-        level.zone_assignments = {
-          player_1_spawn_zone_id: '',
-          player_2_spawn_zone_id: '',
-          misc_zones: [{ id: 'misc-zone-1', type: 'falling-rock', zone_id: migrated.id }],
-        };
-      }
+      level.zones = defaultSpawnZones(level);
+      if (migrated) level.zones.push(migrated);
+      level.zone_assignments = {
+        player_1_spawn_zone_id: PLAYER_1_SPAWN_ZONE_ID,
+        player_2_spawn_zone_id: PLAYER_2_SPAWN_ZONE_ID,
+        misc_zones: migrated ? [{ id: 'misc-zone-1', type: 'falling-rock', zone_id: migrated.id }] : [],
+      };
     }
     return level.zones;
   }
@@ -796,9 +813,18 @@
     };
   }
 
-  function assignedMiscZoneId(assignments, type) {
-    const item = assignments.misc_zones.find((zone) => zone.type === type);
-    return item ? (item.zone_id || item.zoneId || '') : '';
+  function collectMiscZoneAssignments(assignments) {
+    const rows = Array.from(document.querySelectorAll('.misc-zone-row'));
+    if (!rows.length) return assignments.misc_zones;
+    return rows.map((row, index) => {
+      const typeInput = row.querySelector('[data-misc-field="type"]');
+      const zoneInput = row.querySelector('[data-misc-field="zone"]');
+      return {
+        id: row.dataset.miscId || `misc-zone-${index + 1}`,
+        type: typeInput ? typeInput.value : 'falling-rock',
+        zone_id: zoneInput ? zoneInput.value : '',
+      };
+    }).filter((zone) => zone.type && zone.zone_id);
   }
 
   function normalizeClientZoneAssignments(assignments, zones) {
@@ -862,6 +888,35 @@
       }
     });
     return Array.from(cells.values()).sort((a, b) => (a.y - b.y) || (a.x - b.x));
+  }
+
+  function validateLevelForSave(level, patch) {
+    if (!level || !patch) return false;
+    const draft = {
+      ...level,
+      width: clampBoardNumber(patch.width, level.width, LEVEL_WIDTH_MIN, LEVEL_WIDTH_MAX),
+      height: clampBoardNumber(patch.height, level.height, LEVEL_HEIGHT_MIN, LEVEL_HEIGHT_MAX),
+      zones: Array.isArray(patch.zones) ? patch.zones : levelZones(level),
+      zone_assignments: patch.zone_assignments || levelZoneAssignments(level),
+    };
+    const zonesById = new Map(draft.zones.map((zone) => [zone.id, zone]));
+    const assignments = levelZoneAssignments(draft);
+    const checks = [
+      { label: 'Player 1 spawn zone', zoneId: assignments.player_1_spawn_zone_id },
+      { label: 'Player 2 spawn zone', zoneId: assignments.player_2_spawn_zone_id },
+    ];
+    for (const check of checks) {
+      const zone = zonesById.get(check.zoneId);
+      if (!zone) {
+        setCampaignMessage(`${check.label} is required before saving.`, true);
+        return false;
+      }
+      if (zoneCells(zone, draft).length < MAX_PARTY_SIZE) {
+        setCampaignMessage(`${check.label} needs at least ${MAX_PARTY_SIZE} cells before saving.`, true);
+        return false;
+      }
+    }
+    return true;
   }
 
   function levelCellAt(level, x, y) {
@@ -1076,6 +1131,33 @@
     addZoneSelection({ type: 'rect', x1: start.x, y1: start.y, x2: end.x, y2: end.y });
   }
 
+  function addMiscZoneAssignment() {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    const assignments = levelZoneAssignments(level);
+    const zone = selectedZone(level) || levelZones(level)[0];
+    assignments.misc_zones.push({
+      id: `misc-zone-${Date.now()}`,
+      type: MISC_ZONE_TYPES[0].id,
+      zone_id: zone ? zone.id : '',
+    });
+    level.zone_assignments = assignments;
+    setCampaignMessage('Misc zone assignment added. Save the level to persist it.');
+    render();
+  }
+
+  function deleteMiscZoneAssignment(index) {
+    const campaign = selectedCampaign();
+    const level = selectedLevel(campaign);
+    if (!level) return;
+    const assignments = levelZoneAssignments(level);
+    assignments.misc_zones.splice(index, 1);
+    level.zone_assignments = assignments;
+    setCampaignMessage('Misc zone assignment removed. Save the level to persist it.');
+    render();
+  }
+
   async function saveLevelEditor() {
     const campaign = selectedCampaign();
     const level = selectedLevel(campaign);
@@ -1189,6 +1271,10 @@
     const level = selectedLevel(campaign);
     if (!campaign || !level) return;
     const patch = levelFormData();
+    if (!validateLevelForSave(level, patch)) {
+      render();
+      return;
+    }
     state.campaignLoading = true;
     setCampaignMessage('Saving level...');
     render();
@@ -2041,27 +2127,51 @@
       </div>`;
   }
 
-  function renderZoneOptions(level, selectedId) {
+  function renderZoneOptions(level, selectedId, allowNone = true) {
     const zones = levelZones(level);
-    return `<option value="">None</option>${zones.map((zone) => `
+    return `${allowNone ? '<option value="">None</option>' : ''}${zones.map((zone) => `
       <option value="${escapeText(zone.id)}" ${zone.id === selectedId ? 'selected' : ''}>${escapeText(zone.name)}</option>
     `).join('')}`;
   }
 
+  function renderMiscZoneTypeOptions(selectedType) {
+    return MISC_ZONE_TYPES.map((type) => `
+      <option value="${escapeText(type.id)}" ${type.id === selectedType ? 'selected' : ''}>${escapeText(type.label)}</option>
+    `).join('');
+  }
+
+  function renderMiscZoneAssignment(level, assignment, index) {
+    const zoneId = assignment.zone_id || assignment.zoneId || '';
+    const type = assignment.type || 'falling-rock';
+    return `
+      <div class="misc-zone-row" data-misc-id="${escapeText(assignment.id || `misc-zone-${index + 1}`)}">
+        <label>Type
+          <select data-misc-field="type">${renderMiscZoneTypeOptions(type)}</select>
+        </label>
+        <label>Zone
+          <select data-misc-field="zone">${renderZoneOptions(level, zoneId)}</select>
+        </label>
+        <button type="button" data-action="delete-misc-zone" data-misc-index="${index}">Remove</button>
+      </div>`;
+  }
+
   function renderZoneAssignmentControls(level) {
     const assignments = levelZoneAssignments(level);
-    const fallingRockZoneId = assignedMiscZoneId(assignments, 'falling-rock');
     return `
       <div class="editor-grid zone-assignment-grid">
         <label>Player 1 Spawn Zone
-          <select id="player1SpawnZone">${renderZoneOptions(level, assignments.player_1_spawn_zone_id)}</select>
+          <select id="player1SpawnZone">${renderZoneOptions(level, assignments.player_1_spawn_zone_id, false)}</select>
         </label>
         <label>Player 2 Spawn Zone
-          <select id="player2SpawnZone">${renderZoneOptions(level, assignments.player_2_spawn_zone_id)}</select>
+          <select id="player2SpawnZone">${renderZoneOptions(level, assignments.player_2_spawn_zone_id, false)}</select>
         </label>
-        <label>Falling Rock Zone
-          <select id="fallingRockZone">${renderZoneOptions(level, fallingRockZoneId)}</select>
-        </label>
+      </div>
+      <div class="misc-zone-assignments">
+        <div class="zone-editor-head compact">
+          <div class="roster-title">Misc Zones</div>
+          <button type="button" data-action="add-misc-zone">Add</button>
+        </div>
+        ${assignments.misc_zones.length ? assignments.misc_zones.map((assignment, index) => renderMiscZoneAssignment(level, assignment, index)).join('') : '<p class="empty-lobbies">No misc zones assigned.</p>'}
       </div>`;
   }
 
@@ -2469,6 +2579,14 @@
       deleteSelectedZone();
       return;
     }
+    if (button.dataset.action === 'add-misc-zone') {
+      addMiscZoneAssignment();
+      return;
+    }
+    if (button.dataset.action === 'delete-misc-zone') {
+      deleteMiscZoneAssignment(Number(button.dataset.miscIndex));
+      return;
+    }
     if (button.dataset.action === 'seed-level-layout') {
       seedLevelLayout();
       return;
@@ -2543,7 +2661,7 @@
       const zone = level && selectedZone(level);
       if (zone) zone.name = String(target.value || '').slice(0, 40) || zone.name;
     }
-    if (target.id === 'player1SpawnZone' || target.id === 'player2SpawnZone' || target.id === 'fallingRockZone') {
+    if (target.id === 'player1SpawnZone' || target.id === 'player2SpawnZone' || target.dataset.miscField) {
       const campaign = selectedCampaign();
       const level = selectedLevel(campaign);
       if (level) level.zone_assignments = levelFormData().zone_assignments;

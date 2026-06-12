@@ -193,6 +193,15 @@ async function main() {
   if (createdCampaign.statusCode !== 201 || createdCampaignBody.campaign.level_count !== 1 || createdCampaignBody.campaign.levels[0].width !== 10 || createdCampaignBody.campaign.levels[0].layout.length < 2) {
     throw new Error(`Unexpected campaign create response: ${createdCampaign.statusCode} ${createdCampaign.body}`);
   }
+  const createdLevel = createdCampaignBody.campaign.levels[0];
+  if (
+    !createdLevel.zones.some((zone) => zone.id === 'player-1-spawn' && zone.selections.some((selection) => selection.type === 'rect' && selection.y1 === 13 && selection.y2 === 13)) ||
+    !createdLevel.zones.some((zone) => zone.id === 'player-2-spawn' && zone.selections.some((selection) => selection.type === 'rect' && selection.y1 === 0 && selection.y2 === 0)) ||
+    createdLevel.zone_assignments.player_1_spawn_zone_id !== 'player-1-spawn' ||
+    createdLevel.zone_assignments.player_2_spawn_zone_id !== 'player-2-spawn'
+  ) {
+    throw new Error(`Created level did not include default player spawn zones: ${createdCampaign.body}`);
+  }
 
   const campaignId = createdCampaignBody.campaign.id;
   const rivalCampaigns = await get('/api/campaigns', { cookie: 'better-auth.session=rival' });
@@ -228,6 +237,26 @@ async function main() {
     throw new Error(`Unexpected add level response: ${addedLevel.statusCode} ${addedLevel.body}`);
   }
 
+  const rejectedSmallSpawn = await request(
+    'PATCH',
+    `/api/campaigns/${campaignId}/levels/${addedLevelBody.level.id}`,
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      zones: [
+        { id: 'player-1-spawn', name: 'Player 1 Spawn', selections: [{ id: 'selection-1', type: 'cell', x: 0, y: 7 }] },
+        { id: 'player-2-spawn', name: 'Player 2 Spawn', selections: [{ id: 'selection-1', type: 'rect', x1: 0, y1: 0, x2: 7, y2: 0 }] },
+      ],
+      zone_assignments: {
+        player_1_spawn_zone_id: 'player-1-spawn',
+        player_2_spawn_zone_id: 'player-2-spawn',
+        misc_zones: [],
+      },
+    }),
+  );
+  if (rejectedSmallSpawn.statusCode !== 400 || !rejectedSmallSpawn.body.includes('player_1_spawn_zone_id_needs_3_cells')) {
+    throw new Error(`Small mandatory spawn zone should be rejected: ${rejectedSmallSpawn.statusCode} ${rejectedSmallSpawn.body}`);
+  }
+
   const patchedLevel = await request(
     'PATCH',
     `/api/campaigns/${campaignId}/levels/${addedLevelBody.level.id}`,
@@ -243,21 +272,43 @@ async function main() {
       ],
       zones: [
         {
-          id: 'zone-1',
-          name: 'Zone 1',
+          id: 'player-1-spawn',
+          name: 'Player 1 Spawn',
           selections: [
             { id: 'selection-1', type: 'cell', x: 0, y: 0 },
             { id: 'selection-2', type: 'rect', x1: 1, y1: 1, x2: 3, y2: 3 },
             { id: 'bad-selection', type: 'cell', x: 99, y: 0 },
           ],
         },
+        {
+          id: 'player-2-spawn',
+          name: 'Player 2 Spawn',
+          selections: [
+            { id: 'selection-1', type: 'rect', x1: 0, y1: 17, x2: 3, y2: 17 },
+          ],
+        },
+        {
+          id: 'falling-rock-a',
+          name: 'Falling Rock A',
+          selections: [
+            { id: 'selection-1', type: 'rect', x1: 4, y1: 4, x2: 5, y2: 5 },
+          ],
+        },
+        {
+          id: 'falling-rock-b',
+          name: 'Falling Rock B',
+          selections: [
+            { id: 'selection-1', type: 'cell', x: 6, y: 6 },
+          ],
+        },
       ],
       zone_assignments: {
-        player_1_spawn_zone_id: 'zone-1',
-        player_2_spawn_zone_id: 'missing-zone',
+        player_1_spawn_zone_id: 'player-1-spawn',
+        player_2_spawn_zone_id: 'player-2-spawn',
         misc_zones: [
-          { id: 'misc-zone-1', type: 'falling-rock', zone_id: 'zone-1' },
-          { id: 'bad-misc-zone', type: 'lava', zone_id: 'zone-1' },
+          { id: 'misc-zone-1', type: 'falling-rock', zone_id: 'falling-rock-a' },
+          { id: 'misc-zone-2', type: 'falling-rock', zone_id: 'falling-rock-b' },
+          { id: 'bad-misc-zone', type: 'lava', zone_id: 'falling-rock-a' },
         ],
       },
     }),
@@ -270,11 +321,11 @@ async function main() {
     throw new Error(`Patched level layout did not persist enemy knight: ${patchedLevel.body}`);
   }
   if (
-    patchedLevelBody.level.zones.length !== 1 ||
+    patchedLevelBody.level.zones.length !== 4 ||
     patchedLevelBody.level.zones[0].selections.length !== 2 ||
-    patchedLevelBody.level.zone_assignments.player_1_spawn_zone_id !== 'zone-1' ||
-    patchedLevelBody.level.zone_assignments.player_2_spawn_zone_id !== null ||
-    patchedLevelBody.level.zone_assignments.misc_zones.length !== 1 ||
+    patchedLevelBody.level.zone_assignments.player_1_spawn_zone_id !== 'player-1-spawn' ||
+    patchedLevelBody.level.zone_assignments.player_2_spawn_zone_id !== 'player-2-spawn' ||
+    patchedLevelBody.level.zone_assignments.misc_zones.length !== 2 ||
     patchedLevelBody.level.zone_assignments.misc_zones[0].type !== 'falling-rock'
   ) {
     throw new Error(`Patched level zones did not normalize as expected: ${patchedLevel.body}`);
