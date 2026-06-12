@@ -225,6 +225,7 @@
   const menuLayer = document.getElementById('menuLayer');
   const gamePanel = document.getElementById('gamePanel');
   const levelEditorPanel = document.getElementById('levelEditorPanel');
+  const shellEl = document.querySelector('.shell');
   const accountEl = document.getElementById('account');
   const accountAvatarEl = document.getElementById('accountAvatar');
   const accountNameEl = document.getElementById('accountName');
@@ -342,6 +343,122 @@
     gridEndX: 7,
     gridEndY: 11,
   };
+
+  const ART_SCREENS = {
+    main: {
+      label: 'Chess Tactics main menu',
+      src: '/assets/ui/main-menu-aspirational.png',
+      shellClass: 'main-menu-screen main-menu-art-screen',
+      boardClass: 'main-menu-artboard',
+      hotspotClass: 'main-menu-hotspot',
+      hotspots: [
+        { className: 'solo', action: 'party', label: 'Solo Skirmish' },
+        { className: 'campaigns', action: 'campaigns', label: 'Campaign Editor' },
+        { className: 'editor', action: 'level-editor-preview', label: 'Level Editor' },
+        { className: 'lobbies', action: 'lobbies', label: 'Lobbies' },
+        { className: 'settings', action: 'settings', label: 'Settings' },
+        { className: 'signin', action: 'auth-dynamic', label: 'Sign In' },
+        { className: 'account-settings', action: 'settings', label: 'Account settings' },
+        { className: 'dock-achievements', action: 'settings', label: 'Achievements roadmap' },
+        { className: 'dock-campaigns', action: 'campaigns', label: 'Campaigns' },
+        { className: 'dock-lobbies', action: 'lobbies', label: 'Lobbies' },
+        { className: 'dock-collection', action: 'settings', label: 'Collection roadmap' },
+      ],
+    },
+    campaigns: {
+      label: 'Campaign editor',
+      src: '/assets/ui/campaign-editor-concept.png',
+      shellClass: 'screen-concept screen-concept-campaign',
+      boardClass: 'screen-concept-artboard',
+      hotspotClass: 'screen-hotspot',
+      hotspots: [
+        { className: 'campaign-home', action: 'main', label: 'Main menu' },
+        { className: 'campaign-new', action: 'new-campaign', label: 'New campaign' },
+        { className: 'campaign-edit-board', action: 'edit-level-board', label: 'Edit board' },
+        { className: 'campaign-test', action: 'party', label: 'Test play' },
+        { className: 'campaign-save', action: 'save-campaign', label: 'Save campaign' },
+        { className: 'campaign-duplicate', action: 'add-level', label: 'Duplicate or add level' },
+        { className: 'campaign-delete', action: 'delete-campaign', label: 'Delete campaign' },
+        { className: 'campaign-settings', action: 'settings', label: 'Settings' },
+      ],
+    },
+    'level-editor': {
+      label: 'Level editor',
+      src: '/assets/ui/level-editor-concept.png',
+      shellClass: 'screen-concept screen-concept-level-editor',
+      boardClass: 'screen-concept-artboard',
+      hotspotClass: 'screen-hotspot',
+      hotspots: [
+        { className: 'level-home', action: 'back-to-campaigns', label: 'Back to campaign editor' },
+        { className: 'level-board-tab', action: 'set-level-editor-mode', mode: 'board', label: 'Board mode' },
+        { className: 'level-zones-tab', action: 'set-level-editor-mode', mode: 'zones', label: 'Zones mode' },
+        { className: 'level-test', action: 'party', label: 'Test level' },
+        { className: 'level-save', action: 'save-level-editor', label: 'Save level' },
+        { className: 'level-menu', action: 'back-to-campaigns', label: 'Editor menu' },
+        { className: 'level-tiles', action: 'set-level-editor-mode', mode: 'board', label: 'Tiles' },
+        { className: 'level-pieces', action: 'set-level-editor-mode', mode: 'board', label: 'Pieces' },
+      ],
+    },
+    skirmish: {
+      label: 'Skirmish',
+      src: '/assets/ui/skirmish-concept.png',
+      shellClass: 'screen-concept screen-concept-skirmish',
+      boardClass: 'screen-concept-artboard',
+      hotspotClass: 'screen-hotspot',
+      hotspots: [
+        { className: 'skirmish-main', action: 'main', label: 'Main menu' },
+        { className: 'skirmish-settings', action: 'settings', label: 'Settings' },
+        { className: 'skirmish-end', action: 'end-turn', label: 'End turn' },
+        { className: 'skirmish-move', action: 'noop', label: 'Move' },
+        { className: 'skirmish-power', action: 'noop', label: 'Power' },
+        { className: 'skirmish-wait', action: 'end-turn', label: 'Wait' },
+      ],
+    },
+  };
+
+  function applyInitialScreenParam() {
+    const params = new URLSearchParams(window.location.search);
+    const screen = params.get('screen');
+    if (screen === 'main' || screen === 'menu') {
+      state.screen = 'main';
+    } else if (screen === 'campaigns') {
+      state.screen = 'campaigns';
+    } else if (screen === 'level-editor') {
+      state.screen = 'level-editor';
+      state.turn = 'editor';
+    } else if (screen === 'skirmish') {
+      state.screen = 'game';
+      state.turn = 'player';
+    }
+  }
+
+  const MAIN_MENU_PREVIEW_PIECES = [
+    { id: 'menu-blue-rook-left', side: 'player', type: 'rook', mark: 'R', name: 'Allied Rook', role: 'Fortress anchor', x: 0, y: 8, alive: true },
+    { id: 'menu-blue-knight', side: 'player', type: 'knight', mark: 'N', name: 'Allied Knight', role: 'L-shaped jumper', x: 2, y: 7, alive: true },
+    { id: 'menu-blue-bishop', side: 'player', type: 'bishop', mark: 'B', name: 'Allied Bishop', role: 'Diagonal runner', x: 3, y: 9, alive: true },
+    { id: 'menu-blue-rook-center', side: 'player', type: 'rook', mark: 'R', name: 'Allied Rook', role: 'Command tower', x: 4, y: 8, alive: true },
+    { id: 'menu-blue-pawn-a', side: 'player', type: 'pawn', mark: 'P', name: 'Allied Pawn', role: 'Forward sentry', x: 1, y: 10, alive: true },
+    { id: 'menu-blue-pawn-b', side: 'player', type: 'pawn', mark: 'P', name: 'Allied Pawn', role: 'Forward sentry', x: 5, y: 10, alive: true },
+    { id: 'menu-red-rook-left', side: 'enemy', type: 'rook', mark: 'R', name: 'Enemy Rook', role: 'Tower guard', x: 1, y: 1, alive: true },
+    { id: 'menu-red-bishop', side: 'enemy', type: 'bishop', mark: 'B', name: 'Enemy Bishop', role: 'Signal piece', x: 3, y: 2, alive: true },
+    { id: 'menu-red-queen', side: 'enemy', type: 'queen', mark: 'Q', name: 'Enemy Queen', role: 'Command piece', x: 5, y: 2, alive: true },
+    { id: 'menu-red-knight', side: 'enemy', type: 'knight', mark: 'N', name: 'Enemy Knight', role: 'Shock jumper', x: 6, y: 4, alive: true },
+    { id: 'menu-red-rook-right', side: 'enemy', type: 'rook', mark: 'R', name: 'Enemy Rook', role: 'Tower guard', x: 7, y: 1, alive: true },
+    { id: 'menu-rock-a', side: 'neutral', type: 'rock', mark: 'O', name: 'Ruins', role: 'Ancient stone', x: 0, y: 4, alive: true },
+    { id: 'menu-rock-b', side: 'neutral', type: 'rock', mark: 'O', name: 'Ruins', role: 'Ancient stone', x: 6, y: 6, alive: true },
+    { id: 'menu-rock-c', side: 'neutral', type: 'rock', mark: 'O', name: 'Ruins', role: 'Ancient stone', x: 2, y: 3, alive: true },
+  ];
+
+  Object.values(IMAGES).forEach((spriteSet) => {
+    Object.values(spriteSet).forEach((image) => {
+      const redraw = () => drawBoard();
+      if (image.complete) {
+        window.setTimeout(redraw, 0);
+      } else {
+        image.addEventListener('load', redraw, { once: true });
+      }
+    });
+  });
 
   function rand(max) {
     return Math.floor(Math.random() * max);
@@ -1957,6 +2074,21 @@
     }
   }
 
+  function drawMainMenuBoardAccents(metrics) {
+    if (state.screen !== 'main') return;
+    [
+      [1, 7], [2, 7], [3, 7],
+      [1, 8], [2, 8], [3, 8], [4, 8],
+      [2, 9], [3, 9], [4, 9],
+    ].forEach(([x, y]) => drawDiamondFill(x, y, 'rgba(37,199,255,0.20)', 'rgba(37,199,255,0.72)', metrics));
+    [
+      [3, 2], [4, 2], [5, 2],
+      [4, 3], [5, 3], [6, 3],
+      [5, 4], [6, 4],
+    ].forEach(([x, y]) => drawDiamondFill(x, y, 'rgba(255,95,73,0.14)', 'rgba(255,95,73,0.52)', metrics));
+    [[2, 7], [4, 8]].forEach(([x, y]) => drawDiamondFill(x, y, 'rgba(255,255,255,0.16)', '#e8f8ff', metrics));
+  }
+
   function drawBoard() {
     const metrics = boardMetrics();
     syncCanvasSize(metrics);
@@ -1976,6 +2108,7 @@
       if (metrics.rows > 1) drawDiamondFill(x, metrics.rows - 2, 'rgba(174,230,255,0.08)', null, metrics);
     }
     drawZoneOverlays(metrics);
+    drawMainMenuBoardAccents(metrics);
     const selected = state.battleAnimating ? null : selectedPiece();
     if (state.screen === 'game' && state.showThreats) {
       getEnemyThreats().forEach((sq) => {
@@ -2019,7 +2152,8 @@
       }
     }
     
-    const activePieces = state.pieces
+    const piecesForRender = state.screen === 'main' ? MAIN_MENU_PREVIEW_PIECES : state.pieces;
+    const activePieces = piecesForRender
       .filter((piece) => piece.alive)
       .sort((a, b) => {
         const posA = getPieceRenderPos(a);
@@ -2240,26 +2374,55 @@
       </div>`;
   }
 
+  function renderArtHotspot(screenId, screen, hotspot) {
+    const signedIn = Boolean(currentUser);
+    const action = hotspot.action === 'auth-dynamic'
+      ? (signedIn ? 'settings' : 'sign-in')
+      : hotspot.action;
+    const label = hotspot.action === 'auth-dynamic'
+      ? (signedIn ? 'Signed In' : 'Sign In')
+      : hotspot.label;
+    const modeAttr = hotspot.mode ? ` data-mode="${escapeText(hotspot.mode)}"` : '';
+    return `<button class="${screen.hotspotClass} ${hotspot.className}" type="button" data-screen="${screenId}" data-action="${escapeText(action)}"${modeAttr} data-label="${escapeText(label)}" aria-label="${escapeText(label)}"></button>`;
+  }
+
+  function renderArtScreen(screenId) {
+    const screen = ART_SCREENS[screenId];
+    if (!screen) return '';
+    return `
+      <div class="${screen.shellClass}" data-art-screen="${screenId}">
+        <div class="${screen.boardClass}" aria-label="${escapeText(screen.label)}">
+          <img src="${escapeText(screen.src)}" alt="" aria-hidden="true" decoding="async" draggable="false">
+          ${screen.hotspots.map((hotspot) => renderArtHotspot(screenId, screen, hotspot)).join('')}
+        </div>
+      </div>`;
+  }
+
   function renderMenu() {
+    if (shellEl) shellEl.classList.toggle('main-menu-active', state.screen === 'main');
+    if (shellEl) shellEl.classList.toggle('concept-screen-active', ['campaigns', 'level-editor', 'game'].includes(state.screen));
+    if (shellEl) {
+      const params = new URLSearchParams(window.location.search);
+      shellEl.classList.toggle('show-art-hotspots', params.get('hotspots') === '1' || params.get('debug') === 'hotspots');
+    }
     if (boardWrapEl) boardWrapEl.classList.toggle('level-editor-active', state.screen === 'level-editor');
     if (boardScrollEl) boardScrollEl.classList.toggle('level-editor-scroll', state.screen === 'level-editor');
-    menuLayer.classList.toggle('level-editor-layer', state.screen === 'level-editor');
-    if (state.screen === 'game' || state.screen === 'level-editor') {
-      menuLayer.innerHTML = '';
-      menuLayer.hidden = true;
+    menuLayer.classList.toggle('main-menu-layer', state.screen === 'main');
+    menuLayer.classList.toggle('concept-screen-layer', ['campaigns', 'level-editor', 'game'].includes(state.screen));
+    menuLayer.classList.toggle('level-editor-layer', false);
+    if (state.screen === 'level-editor') {
+      menuLayer.hidden = false;
+      menuLayer.innerHTML = renderArtScreen('level-editor');
+      return;
+    }
+    if (state.screen === 'game') {
+      menuLayer.hidden = false;
+      menuLayer.innerHTML = renderArtScreen('skirmish');
       return;
     }
     menuLayer.hidden = false;
     if (state.screen === 'main') {
-      menuLayer.innerHTML = `
-        <div class="game-menu">
-          <p class="eyebrow">12 x 8 chess skirmish</p>
-          <h2>Chess Tactics</h2>
-          <button type="button" data-action="party">Solo Skirmish</button>
-          <button type="button" data-action="lobbies">Lobbies</button>
-          <button type="button" data-action="campaigns">Campaign Editor</button>
-          <button type="button" data-action="settings">Settings</button>
-        </div>`;
+      menuLayer.innerHTML = renderArtScreen('main');
     } else if (state.screen === 'lobbies') {
       const visibleLobbies = state.lobbies.filter((lobby) => !state.lobby || lobby.id !== state.lobby.id);
       menuLayer.innerHTML = `
@@ -2333,7 +2496,7 @@
           <button type="button" data-action="main">Back</button>
         </div>`;
     } else if (state.screen === 'campaigns') {
-      menuLayer.innerHTML = renderCampaignEditor();
+      menuLayer.innerHTML = renderArtScreen('campaigns');
     } else {
       menuLayer.innerHTML = `
         <div class="game-menu">
@@ -2499,6 +2662,23 @@
   function handleMenuClick(event) {
     const button = event.target.closest('button');
     if (!button) return;
+    if (button.dataset.action === 'noop') return;
+    if (button.dataset.action === 'end-turn') {
+      if (state.screen === 'game' && state.turn === 'player' && !state.animating) {
+        state.turn = 'enemy';
+        state.selected = null;
+        render();
+        window.setTimeout(enemyTurn, 280);
+      }
+      return;
+    }
+    if (button.dataset.action === 'level-editor-preview') {
+      state.screen = 'level-editor';
+      state.turn = 'editor';
+      state.selected = null;
+      render();
+      return;
+    }
     const picker = button.closest('.piece-picker');
     if (picker && button.dataset.piece) {
       state.party[Number(picker.dataset.slot)] = button.dataset.piece;
@@ -2605,7 +2785,14 @@
     if (button.dataset.action === 'save-level') void saveCampaignLevel();
     if (button.dataset.action === 'edit-level-board') {
       state.levelEditorMode = 'board';
-      enterLevelEditor();
+      if (selectedCampaign() && selectedLevel(selectedCampaign())) {
+        enterLevelEditor();
+      } else {
+        state.screen = 'level-editor';
+        state.turn = 'editor';
+        state.selected = null;
+        render();
+      }
     }
     if (button.dataset.action === 'save-level-editor') void saveLevelEditor();
     if (button.dataset.action === 'toggle-level-editor-panel') {
@@ -2795,6 +2982,7 @@
     }
   });
 
+  applyInitialScreenParam();
   initAuth();
   lobbyPollTimer = window.setInterval(() => {
     if (currentUser && (state.screen === 'lobbies' || state.screen === 'lobby')) {

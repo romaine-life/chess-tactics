@@ -147,6 +147,36 @@ async function main() {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
   }
 
+  const reviewUrls = [
+    '/?screen=main',
+    '/?screen=campaigns',
+    '/?screen=level-editor',
+    '/?screen=skirmish',
+    '/?hotspots=1',
+    '/?screen=campaigns&hotspots=1',
+    '/?screen=level-editor&hotspots=1',
+    '/?screen=skirmish&hotspots=1',
+  ];
+  for (const reviewUrl of reviewUrls) {
+    const response = await get(reviewUrl);
+    if (response.statusCode !== 200 || !response.body.includes('Chess Tactics')) {
+      throw new Error(`Unexpected review URL response for ${reviewUrl}: ${response.statusCode}`);
+    }
+  }
+
+  const artAssets = [
+    '/assets/ui/main-menu-aspirational.png',
+    '/assets/ui/campaign-editor-concept.png',
+    '/assets/ui/level-editor-concept.png',
+    '/assets/ui/skirmish-concept.png',
+  ];
+  for (const assetPath of artAssets) {
+    const response = await get(assetPath);
+    if (response.statusCode !== 200 || !String(response.headers['content-type'] || '').includes('image/png')) {
+      throw new Error(`Unexpected art asset response for ${assetPath}: ${response.statusCode} ${response.headers['content-type'] || ''}`);
+    }
+  }
+
   const anonymous = await get('/api/auth/me');
   if (anonymous.statusCode !== 200 || JSON.parse(anonymous.body).signed_in !== false) {
     throw new Error(`Unexpected anonymous auth response: ${anonymous.statusCode} ${anonymous.body}`);
