@@ -8,6 +8,7 @@
     bishop: { mark: 'B', name: 'Bishop', role: 'Diagonal runner' },
     rook: { mark: 'R', name: 'Rook', role: 'Straight-line tower' },
     queen: { mark: 'Q', name: 'Queen', role: 'Promoted raider' },
+    rock: { mark: 'O', name: 'Rock', role: 'Impassable obstacle' },
   };
 
   const GEOMETRIES = {
@@ -90,6 +91,14 @@
       { type: 'top', d: 'M 28,10 L 32,12 L 36,10 L 32,8 Z' },
       { type: 'left', d: 'M 28,16 L 32,18 L 32,12 L 28,10 Z' },
       { type: 'right', d: 'M 32,18 L 36,16 L 36,10 L 32,12 Z' }
+    ],
+    rock: [
+      { type: 'left', d: 'M 16,44 L 32,52 L 30,36 L 12,32 Z' },
+      { type: 'right', d: 'M 32,52 L 48,44 L 52,30 L 30,36 Z' },
+      { type: 'left', d: 'M 12,32 L 30,36 L 31,20 L 18,18 Z' },
+      { type: 'right', d: 'M 30,36 L 52,30 L 44,18 L 31,20 Z' },
+      { type: 'top', d: 'M 18,18 L 31,20 L 32,10 L 22,12 Z' },
+      { type: 'top', d: 'M 31,20 L 44,18 L 40,11 L 32,10 Z' }
     ]
   };
 
@@ -101,11 +110,16 @@
       left = '#b9cad6';
       right = '#8fa6b4';
       deep = '#405866';
-    } else {
+    } else if (side === 'enemy') {
       top = '#f5af95';
       left = '#b3664d';
       right = '#7a3f2a';
       deep = '#471e11';
+    } else {
+      top = '#a8a8a8';
+      left = '#7a7a7a';
+      right = '#545454';
+      deep = '#303030';
     }
     const fillColors = { top, left, right, accent: deep };
 
@@ -139,10 +153,12 @@
   Object.keys(GEOMETRIES).forEach((type) => {
     IMAGES[type] = {
       player: new Image(),
-      enemy: new Image()
+      enemy: new Image(),
+      neutral: new Image()
     };
     IMAGES[type].player.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getPieceSvg(type, 'player'));
     IMAGES[type].enemy.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getPieceSvg(type, 'enemy'));
+    IMAGES[type].neutral.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(getPieceSvg(type, 'neutral'));
   });
 
   const boardEl = document.getElementById('board');
@@ -276,6 +292,7 @@
   }
 
   function isEnemy(piece, target) {
+    if (target && (target.type === 'rock' || target.side === 'neutral')) return false;
     return target && target.side !== piece.side;
   }
 
@@ -452,17 +469,20 @@
 
   function createPiece(side, type, index) {
     const base = PIECES[type];
+    let namePrefix = '';
+    if (side === 'player') namePrefix = 'Allied ';
+    else if (side === 'enemy') namePrefix = 'Enemy ';
     return {
       id: `${side}-${index}-${Date.now()}-${rand(9999)}`,
       side,
       type,
       mark: base.mark,
-      name: `${side === 'player' ? 'Allied' : 'Enemy'} ${base.name}`,
+      name: `${namePrefix}${base.name}`,
       role: base.role,
       x: 0,
       y: 0,
       alive: true,
-      startY: side === 'player' ? ROWS - 1 : 0,
+      startY: side === 'player' ? ROWS - 1 : (side === 'enemy' ? 0 : -1),
     };
   }
 
@@ -532,6 +552,24 @@
       state.pieces.push(piece);
     });
 
+    // Generate rocks (3 to 6) row 3 to row 9 (y: 2 to 8)
+    const numRocks = 3 + rand(4);
+    const possibleSquares = [];
+    for (let y = 2; y <= 8; y++) {
+      for (let x = 0; x < COLS; x++) {
+        possibleSquares.push({ x, y });
+      }
+    }
+    for (let i = 0; i < numRocks; i++) {
+      if (possibleSquares.length === 0) break;
+      const index = rand(possibleSquares.length);
+      const spot = possibleSquares.splice(index, 1)[0];
+      const rock = createPiece('neutral', 'rock', i);
+      rock.x = spot.x;
+      rock.y = spot.y;
+      state.pieces.push(rock);
+    }
+
     // Assign stagger delays and starting height to pieces
     state.pieces.forEach((piece, index) => {
       piece.dropDelay = index * 100;
@@ -546,12 +584,14 @@
       const opponent = state.lobby.viewer_role === 'host' ? state.lobby.guest : state.lobby.host;
       const opponentName = opponent ? escapeText(opponent.name || opponent.email || 'opponent') : 'opponent';
       state.log = [
+        `${numRocks} rocks fall on the board!`,
         `Lobby match started against ${opponentName}.`,
         `Enemy fields ${enemyTypes.map((type) => PIECES[type].name).join(', ')}.`,
         'Pick one piece and move or capture. Last side standing wins.',
       ];
     } else {
       state.log = [
+        `${numRocks} rocks fall on the board!`,
         `Enemy fields ${enemyTypes.map((type) => PIECES[type].name).join(', ')}.`,
         'Pick one piece and move or capture. Last side standing wins.',
       ];
@@ -617,7 +657,7 @@
   }
 
   function legalMoves(piece) {
-    if (!piece || !piece.alive || state.screen !== 'game') return [];
+    if (!piece || !piece.alive || piece.type === 'rock' || state.screen !== 'game') return [];
     if (piece.type === 'pawn') return pawnMoves(piece);
     if (piece.type === 'knight') {
       return stepMoves(piece, [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]);
@@ -628,7 +668,7 @@
   }
 
   function attackedSquares(piece) {
-    if (!piece || !piece.alive) return [];
+    if (!piece || !piece.alive || piece.type === 'rock') return [];
     if (piece.type === 'pawn') {
       const dir = piece.side === 'player' ? -1 : 1;
       const squares = [];
@@ -973,30 +1013,41 @@
   function drawPiece(piece) {
     const renderPos = getPieceRenderPos(piece);
     const { x, y } = isoCenter(renderPos.x, renderPos.y);
-    const base = piece.side === 'player' ? '#dceaf2' : '#7a3f2a';
-    const shade = piece.side === 'player' ? '#8fa6b4' : '#4b2419';
-    const accent = piece.side === 'player' ? '#8fe6ff' : '#ff8b52';
+    const base = piece.side === 'player' ? '#dceaf2' : (piece.side === 'enemy' ? '#7a3f2a' : '#a8a8a8');
+    const shade = piece.side === 'player' ? '#8fa6b4' : (piece.side === 'enemy' ? '#4b2419' : '#545454');
+    const accent = piece.side === 'player' ? '#8fe6ff' : (piece.side === 'enemy' ? '#ff8b52' : '#7a7a7a');
     ctx.save();
     const offsetY = piece.offsetY || 0;
     ctx.translate(Math.round(x), Math.round(y - 24 - offsetY));
 
-    const img = IMAGES[piece.type] ? (piece.side === 'player' ? IMAGES[piece.type].player : IMAGES[piece.type].enemy) : null;
+    const img = IMAGES[piece.type] 
+      ? (piece.side === 'player' 
+          ? IMAGES[piece.type].player 
+          : (piece.side === 'enemy' ? IMAGES[piece.type].enemy : IMAGES[piece.type].neutral))
+      : null;
     if (img) {
       ctx.drawImage(img, -24, -15, 48, 48);
     } else {
-      ctx.fillStyle = shade;
-      ctx.fillRect(-15, 2, 30, 30);
-      ctx.fillStyle = base;
-      ctx.fillRect(-12, -2, 24, 28);
-      ctx.fillStyle = accent;
-      ctx.fillRect(-8, 6, 16, 5);
-      ctx.fillStyle = '#101522';
-      ctx.fillRect(-10, 21, 20, 5);
-      ctx.font = '16px "Press Start 2P", monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = piece.side === 'player' ? '#101522' : '#f5e0c8';
-      ctx.fillText(piece.mark, 0, 14);
+      if (piece.type === 'rock') {
+        ctx.fillStyle = '#545454';
+        ctx.fillRect(-15, 2, 30, 30);
+        ctx.fillStyle = '#7a7a7a';
+        ctx.fillRect(-12, -2, 24, 28);
+      } else {
+        ctx.fillStyle = shade;
+        ctx.fillRect(-15, 2, 30, 30);
+        ctx.fillStyle = base;
+        ctx.fillRect(-12, -2, 24, 28);
+        ctx.fillStyle = accent;
+        ctx.fillRect(-8, 6, 16, 5);
+        ctx.fillStyle = '#101522';
+        ctx.fillRect(-10, 21, 20, 5);
+        ctx.font = '16px "Press Start 2P", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = piece.side === 'player' ? '#101522' : '#f5e0c8';
+        ctx.fillText(piece.mark, 0, 14);
+      }
     }
     ctx.restore();
   }
