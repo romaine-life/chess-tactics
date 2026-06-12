@@ -210,6 +210,8 @@
   const threatButton = document.getElementById('threatButton');
   const endButton = document.getElementById('endButton');
   const menuLayer = document.getElementById('menuLayer');
+  const gamePanel = document.getElementById('gamePanel');
+  const levelEditorPanel = document.getElementById('levelEditorPanel');
   const accountEl = document.getElementById('account');
   const accountAvatarEl = document.getElementById('accountAvatar');
   const accountNameEl = document.getElementById('accountName');
@@ -1806,7 +1808,7 @@
     if (boardWrapEl) boardWrapEl.classList.toggle('level-editor-active', state.screen === 'level-editor');
     if (boardScrollEl) boardScrollEl.classList.toggle('level-editor-scroll', state.screen === 'level-editor');
     menuLayer.classList.toggle('level-editor-layer', state.screen === 'level-editor');
-    if (state.screen === 'game') {
+    if (state.screen === 'game' || state.screen === 'level-editor') {
       menuLayer.innerHTML = '';
       menuLayer.hidden = true;
       return;
@@ -1896,55 +1898,6 @@
         </div>`;
     } else if (state.screen === 'campaigns') {
       menuLayer.innerHTML = renderCampaignEditor();
-    } else if (state.screen === 'level-editor') {
-      const campaign = selectedCampaign();
-      const level = selectedLevel(campaign);
-      const brush = selectedLevelBrush();
-      const collapsed = state.levelEditorCollapsed;
-      menuLayer.innerHTML = `
-        <div class="level-editor-hud ${collapsed ? 'collapsed' : ''}">
-          <div class="level-editor-title">
-            <p class="eyebrow">Level editor</p>
-            <h2>${level ? escapeText(level.name) : 'Level'}</h2>
-            ${collapsed ? '' : `<p class="menu-copy">${state.campaignMessage || 'Paint the board, then save the level.'}</p>`}
-          </div>
-          <div class="level-editor-actions">
-            <button type="button" data-action="save-level-editor" ${state.campaignLoading ? 'disabled' : ''}>Save</button>
-            ${collapsed ? '' : `
-              <button type="button" data-action="seed-level-layout">Seed</button>
-              <button type="button" data-action="clear-level-layout">Clear</button>
-            `}
-            <button type="button" data-action="toggle-level-editor-panel">${collapsed ? 'Expand' : 'Collapse'}</button>
-            <button type="button" data-action="back-to-campaigns">Back</button>
-          </div>
-          ${collapsed ? '' : `
-            <div class="level-palette canvas-palette" aria-label="Level editor brushes">
-              ${LEVEL_BRUSHES.map((item) => `
-                <button type="button" class="${brush.id === item.id ? 'active' : ''} ${item.role || 'empty'} ${item.type || ''}" data-action="select-level-brush" data-brush="${item.id}">
-                  <span>${escapeText(item.mark)}</span>${escapeText(item.label)}
-                </button>
-              `).join('')}
-            </div>
-            <div class="level-editor-rocks">
-              <label>Rocks to Spawn:
-                <input type="number" id="levelEditorRocksCount" min="0" max="100" value="${level ? (level.random_rocks_count || 0) : 0}">
-              </label>
-            </div>
-            <div class="level-editor-grid-tool">
-              <p class="tool-heading">Draw Grid of Random Rock Set:</p>
-              <div class="tool-inputs">
-                <label>From: X <input type="number" id="gridStartX" min="0" max="15" value="${state.gridStartX}"></label>
-                <label>Y <input type="number" id="gridStartY" min="0" max="19" value="${state.gridStartY}"></label>
-                <label>To: X <input type="number" id="gridEndX" min="0" max="15" value="${state.gridEndX}"></label>
-                <label>Y <input type="number" id="gridEndY" min="0" max="19" value="${state.gridEndY}"></label>
-              </div>
-              <div class="tool-actions">
-                <button type="button" data-action="draw-rock-grid">Paint Grid</button>
-                <button type="button" data-action="clear-rock-grid">Clear Grid</button>
-              </div>
-            </div>
-          `}
-        </div>`;
     } else {
       menuLayer.innerHTML = `
         <div class="game-menu">
@@ -1957,6 +1910,61 @@
   }
 
   function renderPanel() {
+    if (state.screen === 'level-editor') {
+      if (gamePanel) gamePanel.hidden = true;
+      if (levelEditorPanel) {
+        levelEditorPanel.hidden = false;
+        const campaign = selectedCampaign();
+        const level = selectedLevel(campaign);
+        const brush = selectedLevelBrush();
+        levelEditorPanel.innerHTML = `
+          <div class="panel-section">
+            <p class="eyebrow">Level editor</p>
+            <h2 style="font-size: .8rem; line-height: 1.3;">${level ? escapeText(level.name) : 'Level'}</h2>
+            <p class="menu-copy" style="color: var(--muted); font-size: 1.05rem; margin-top: 8px;">${state.campaignMessage || 'Paint the board, then save.'}</p>
+            <div class="actions">
+              <button type="button" data-action="save-level-editor" ${state.campaignLoading ? 'disabled' : ''}>Save</button>
+              <button type="button" data-action="back-to-campaigns">Back</button>
+              <button type="button" data-action="seed-level-layout">Seed</button>
+              <button type="button" data-action="clear-level-layout">Clear</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <div class="roster-title" style="margin-bottom: 8px;">Palette Brushes</div>
+            <div class="level-palette canvas-palette" aria-label="Level editor brushes">
+              ${LEVEL_BRUSHES.map((item) => `
+                <button type="button" class="${brush.id === item.id ? 'active' : ''} ${item.role || 'empty'} ${item.type || ''}" data-action="select-level-brush" data-brush="${item.id}">
+                  <span>${escapeText(item.mark)}</span>${escapeText(item.label)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="panel-section level-editor-rocks">
+            <label>Rocks to Spawn:
+              <input type="number" id="levelEditorRocksCount" min="0" max="100" value="${level ? (level.random_rocks_count || 0) : 0}">
+            </label>
+          </div>
+          <div class="panel-section level-editor-grid-tool">
+            <p class="tool-heading">Draw Grid of Random Rock Set:</p>
+            <div class="tool-inputs">
+              <label>From: X <input type="number" id="gridStartX" min="0" max="15" value="${state.gridStartX}"></label>
+              <label>Y <input type="number" id="gridStartY" min="0" max="19" value="${state.gridStartY}"></label>
+              <label>To: X <input type="number" id="gridEndX" min="0" max="15" value="${state.gridEndX}"></label>
+              <label>Y <input type="number" id="gridEndY" min="0" max="19" value="${state.gridEndY}"></label>
+            </div>
+            <div class="tool-actions">
+              <button type="button" data-action="draw-rock-grid">Paint Grid</button>
+              <button type="button" data-action="clear-rock-grid">Clear Grid</button>
+            </div>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    if (gamePanel) gamePanel.hidden = false;
+    if (levelEditorPanel) levelEditorPanel.hidden = true;
+
     const piece = selectedPiece();
     const playerCount = livingPieces('player').length;
     const enemyCount = livingPieces('enemy').length;
@@ -2009,7 +2017,7 @@
     syncIdleAnimationLoop();
   }
 
-  menuLayer.addEventListener('click', (event) => {
+  function handleMenuClick(event) {
     const button = event.target.closest('button');
     if (!button) return;
     const picker = button.closest('.piece-picker');
@@ -2083,9 +2091,9 @@
     if (button.dataset.action === 'settings') setScreen('settings');
     if (button.dataset.action === 'main') setScreen('main');
     if (button.dataset.action === 'start') startGame();
-  });
-  
-  menuLayer.addEventListener('input', (event) => {
+  }
+
+  function handleMenuInput(event) {
     const target = event.target;
     if (target.id === 'levelEditorRocksCount') {
       const campaign = selectedCampaign();
@@ -2098,7 +2106,12 @@
     if (target.id === 'gridStartY') state.gridStartY = clampBoardNumber(target.value, 0, 0, 19);
     if (target.id === 'gridEndX') state.gridEndX = clampBoardNumber(target.value, 7, 0, 15);
     if (target.id === 'gridEndY') state.gridEndY = clampBoardNumber(target.value, 11, 0, 19);
-  });
+  }
+
+  menuLayer.addEventListener('click', handleMenuClick);
+  levelEditorPanel.addEventListener('click', handleMenuClick);
+  menuLayer.addEventListener('input', handleMenuInput);
+  levelEditorPanel.addEventListener('input', handleMenuInput);
 
   menuLayer.addEventListener('wheel', (event) => {
     if (state.screen !== 'level-editor' || !boardScrollEl) return;
