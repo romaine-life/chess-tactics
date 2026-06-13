@@ -163,6 +163,25 @@ Do not begin with a full asset pipeline unless the code-rendered prototype
 cannot reach an acceptable style. The first production pass should prove the
 style with the existing architecture.
 
+### Render fidelity rule (binding)
+
+Decide per UI element by whether it carries rich *rendered* detail — painterly
+art, a crest, lighting, illustration:
+
+- **Rendered detail → art-backed.** Use the approved render itself (e.g. a
+  percentage crop of `main-menu-aspirational.png`) as the image layer and overlay
+  only transparent live DOM controls/hotspots. This is how the accepted mode
+  buttons (01), brand plate (02), and the profile/status panel (03) are built.
+  Do NOT reconstruct rendered art in DOM/CSS/SVG: CSS yields stylized geometry,
+  not rendered artwork, and hand-drawn SVG cannot match a rendered lion crest.
+- **Simple / text / utilitarian chrome → DOM/CSS** (news/daily, dock, HUD labels,
+  forms). These have no rendered detail to lose.
+
+Test: would redrawing it in code lose rendered detail visible in the concept? If
+yes, keep the art. (Origin of this rule: element 03 was rebuilt in DOM/SVG and
+could not match the concept's lion — its crest came out a sunburst. The fix was
+to art-back it like 01/02.)
+
 ## Current Screen Concept References
 
 The June 2026 screen concepts are binding visual references for the UI overhaul:

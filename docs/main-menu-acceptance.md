@@ -26,9 +26,12 @@ draft endpoint contract.
 
 ## Needs Review
 
-The profile/status, daily/news, and dock chrome are now token-driven live DOM +
-inline-SVG components (the generated bitmap candidates were retired). What
-remains under review is their visual treatment, not the asset format.
+The profile/status panel (03) is art-backed — a crop of the approved render with
+a transparent live hotspot, matching the accepted mode buttons (01) and brand
+plate (02), because it carries rendered detail (the lion crest, cog). The
+daily/news (04) and dock (05) chrome are token-driven DOM (simple text/icon
+panels, no rendered detail to lose). The generated bitmap candidates were
+retired. See the render-fidelity rule in `docs/ui-art-direction.md`.
 
 - Profile/status panel.
   Includes the right-rail player identity, guest/sign-in/account affordance,

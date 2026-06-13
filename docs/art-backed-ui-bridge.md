@@ -19,10 +19,14 @@ not the final component system.
   painted crop for the live main menu mode button stack, including its labels.
 - `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
-- The main menu profile/status, news/daily, and dock chrome are token-driven
-  live DOM + inline-SVG components in `frontend/src/app.js` and
-  `frontend/src/style.css`. The earlier generated `main-menu-*-chrome-v1.png`
-  bitmaps were retired end-to-end (guarded by
+- The main menu profile/status chrome (03) is **art-backed**: a percentage-cropped
+  region of the approved render `main-menu-aspirational.png`, with a transparent live
+  hotspot overlaid — the same pattern as the accepted mode buttons (01) and brand
+  plate (02), because it carries rendered detail (the lion crest, the cog) that cannot
+  be redrawn faithfully in DOM/SVG. The news/daily (04) and dock (05) chrome are simple
+  text/icon panels with no rendered detail to lose, so they stay token-driven DOM
+  components. The earlier *generated* `main-menu-*-chrome-v1.png` bitmaps (regenerated
+  approximations that had drifted from the concept) were retired end-to-end (guarded by
   `frontend/scripts/check-no-chrome-bitmaps.mjs`).
 - `frontend/public/assets/ui/main-menu-button-art-*.png` also includes generated
   no-text button candidates used by the main menu asset review board.

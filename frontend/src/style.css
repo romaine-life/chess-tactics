@@ -902,173 +902,39 @@ h1 {
   box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(216, 240, 246, .05);
 }
 
-.profile-panel {
+/* Element 03 — art-backed: a crop of the approved render (main-menu-aspirational.png)
+   with a transparent live hotspot, matching accepted elements 01/02. Crop region
+   profile-chrome {x:1175,y:26,w:393,h:162} of the 1586x992 render. */
+.main-menu-profile-art {
   position: relative;
-  display: grid;
-  gap: 9px;
-  min-height: 86px;
-  padding: 13px 15px;
-  align-content: center;
+  align-self: start;
+  aspect-ratio: 393 / 162;
+  background-image: url("/assets/ui/main-menu-aspirational.png");
+  background-repeat: no-repeat;
+  background-size: 403.56% 612.35%;
+  background-position: 98.49% 3.13%;
+  image-rendering: pixelated;
 }
 
-/* corner brackets — concept tech-frame detail */
-.profile-panel::before,
-.profile-panel::after {
-  content: "";
+.profile-art-hotspot {
   position: absolute;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--line-strong);
-  pointer-events: none;
-}
-
-.profile-panel::before { top: 4px; left: 4px; border-right: 0; border-bottom: 0; }
-.profile-panel::after { bottom: 4px; right: 4px; border-left: 0; border-top: 0; }
-
-.profile-panel-identity {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.profile-panel-crest {
-  display: block;
-  width: 42px;
-  flex: 0 0 auto;
-}
-
-.profile-crest {
-  display: block;
-  width: 100%;
-  height: auto;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5));
-}
-
-.profile-panel-name {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.profile-panel-name strong,
-.profile-panel-name span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-panel-name strong {
-  color: var(--ink);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .72rem;
-  line-height: 1.3;
-  text-transform: uppercase;
-}
-
-.profile-panel-name span {
-  color: var(--cobalt-bright);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .5rem;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-.profile-panel-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.profile-panel-action {
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 8px 13px;
-  border: 2px solid var(--line-strong);
-  background: var(--panel-inset);
-  color: var(--cobalt-bright);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .5rem;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.profile-panel-gear {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 2px solid var(--gold-dim);
-  background: var(--panel-inset);
-  color: var(--gold);
-  cursor: pointer;
-}
-
-.profile-panel-gear .ui-icon { width: 16px; height: 16px; }
-
-.profile-panel-action:hover,
-.profile-panel-action:focus-visible,
-.profile-panel-gear:hover,
-.profile-panel-gear:focus-visible {
-  outline: none;
-  border-color: var(--focus-ring);
-  background: rgba(101, 184, 255, .1);
-}
-
-/* unified counter strip — one recessed bar, split by a divider */
-.profile-panel-forces {
-  margin: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-  border: 1px solid var(--line-strong);
-  background: var(--shell);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .45);
-}
-
-.force-stat {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
+  top: 20%;
+  right: 3.5%;
+  width: 36%;
+  height: 52%;
   border: 0;
   background: transparent;
+  cursor: pointer;
 }
 
-.force-stat-enemy { border-left: 1px solid var(--line); }
-
-.force-stat dt {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  color: var(--muted);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .46rem;
-  text-transform: uppercase;
+.profile-art-hotspot:hover,
+.profile-art-hotspot:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
-.force-stat .force-stat-icon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  display: block;
-}
-
-.force-stat dd {
-  margin: 0;
-  flex: 0 0 auto;
-  font-family: Georgia, serif;
-  font-size: 1.2rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.force-stat-player dd { color: var(--cobalt-bright); }
-.force-stat-enemy dd { color: var(--threat-hot); }
+/* Element 03 profile chrome is art-backed (.main-menu-profile-art above); the old
+   DOM/SVG rebuild of it was removed per the render-fidelity rule in ui-art-direction.md. */
 
 /* News / daily panel — live DOM component (element 04) */
 .news-panel {
