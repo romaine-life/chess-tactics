@@ -578,6 +578,17 @@
     ].join(';');
   }
 
+  function mainMenuReferencePreviewStyle(selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!cleanSelection) return '';
+    return [
+      `--crop-x:${cleanSelection.x}`,
+      `--crop-y:${cleanSelection.y}`,
+      `--crop-w:${cleanSelection.w}`,
+      `--crop-h:${cleanSelection.h}`,
+    ].join(';');
+  }
+
   async function saveMainMenuReferenceSelection(key, selection) {
     const cleanSelection = normalizeMainMenuReferenceSelection(selection);
     if (!MAIN_MENU_REFERENCE_CROP_DEFAULTS[key] || !cleanSelection) return;
@@ -3144,9 +3155,8 @@
         data-crop-title="${escapeText(crop.title || 'Approved Render Crop')}"
         aria-label="${escapeText(`Open full render crop picker for ${crop.title || 'approved render crop'}`)}"
       >
-        <span class="portfolio-reference-frame">
+        <span class="portfolio-reference-frame" style="${escapeText(mainMenuReferencePreviewStyle(selection))}">
           <img src="${APPROVED_RENDER_SRC}" alt="" aria-hidden="true" draggable="false">
-          <span class="portfolio-reference-selection" style="${escapeText(mainMenuReferenceSelectionStyle(selection))}"></span>
         </span>
       </button>`;
   }

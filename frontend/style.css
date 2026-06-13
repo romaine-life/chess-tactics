@@ -1945,7 +1945,11 @@ h1 {
 }
 
 .portfolio-reference-frame {
-  aspect-ratio: 1586 / 992;
+  --crop-h: 992;
+  --crop-w: 1586;
+  --crop-x: 0;
+  --crop-y: 0;
+  aspect-ratio: var(--crop-w) / var(--crop-h);
   display: block;
   overflow: hidden;
   position: relative;
@@ -1953,11 +1957,15 @@ h1 {
 
 .portfolio-reference-frame img {
   height: auto;
+  left: calc(-100% * var(--crop-x) / var(--crop-w));
   max-height: none;
-  width: 100%;
+  max-width: none;
+  object-fit: initial;
+  position: absolute;
+  top: calc(-100% * var(--crop-y) / var(--crop-h));
+  width: calc(100% * 1586 / var(--crop-w));
 }
 
-.portfolio-reference-selection,
 .reference-crop-selection {
   border: 2px solid #f1d084;
   box-shadow:
