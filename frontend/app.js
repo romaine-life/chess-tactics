@@ -32,6 +32,7 @@
   const APPROVED_RENDER_SRC = '/assets/ui/main-menu-aspirational.png';
   const APPROVED_RENDER_WIDTH = 1586;
   const APPROVED_RENDER_HEIGHT = 992;
+  const REFERENCE_CROP_MIN_SIZE = 8;
   const MAIN_MENU_REVIEW_STATUSES = {
     accepted: { label: 'Accepted', cardClass: 'accepted', columnClass: 'settled' },
     review: { label: 'Needs Review', cardClass: 'review', columnClass: 'review' },
@@ -542,10 +543,10 @@
     const w = Number(raw.w);
     const h = Number(raw.h);
     if (![x, y, w, h].every(Number.isFinite)) return null;
-    const cleanX = clampReferenceNumber(x, 0, APPROVED_RENDER_WIDTH - 8);
-    const cleanY = clampReferenceNumber(y, 0, APPROVED_RENDER_HEIGHT - 8);
-    const cleanW = clampReferenceNumber(w, 8, APPROVED_RENDER_WIDTH - cleanX);
-    const cleanH = clampReferenceNumber(h, 8, APPROVED_RENDER_HEIGHT - cleanY);
+    const cleanX = clampReferenceNumber(x, 0, APPROVED_RENDER_WIDTH - REFERENCE_CROP_MIN_SIZE);
+    const cleanY = clampReferenceNumber(y, 0, APPROVED_RENDER_HEIGHT - REFERENCE_CROP_MIN_SIZE);
+    const cleanW = clampReferenceNumber(w, REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_WIDTH - cleanX);
+    const cleanH = clampReferenceNumber(h, REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_HEIGHT - cleanY);
     return {
       x: Math.round(cleanX),
       y: Math.round(cleanY),
@@ -3166,6 +3167,7 @@
     const key = state.mainMenuReferenceEditor.key;
     const selection = normalizeMainMenuReferenceSelection(state.mainMenuReferenceEditor.selection)
       || mainMenuReferenceSelection(key);
+    const handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
     return `
       <div class="reference-crop-modal" role="dialog" aria-modal="true" aria-label="Approved render crop picker">
         <div class="reference-crop-dialog">
@@ -3178,7 +3180,15 @@
           </header>
           <div class="reference-crop-stage" data-crop-key="${escapeText(key)}">
             <img src="${APPROVED_RENDER_SRC}" alt="Approved main menu render" draggable="false">
-            <span class="reference-crop-selection" style="${escapeText(mainMenuReferenceSelectionStyle(selection))}"></span>
+            <span class="reference-crop-selection" style="${escapeText(mainMenuReferenceSelectionStyle(selection))}">
+              ${handles.map((handle) => `
+                <span
+                  class="reference-crop-handle reference-crop-handle-${escapeText(handle)}"
+                  data-crop-handle="${escapeText(handle)}"
+                  aria-hidden="true"
+                ></span>
+              `).join('')}
+            </span>
           </div>
           <footer>
             <button type="button" data-action="reset-reference-crop-picker" data-crop-key="${escapeText(key)}">Reset</button>
@@ -3835,6 +3845,49 @@
     return normalizeMainMenuReferenceSelection({ x, y, w, h });
   }
 
+  function referenceSelectionFromMove(initial, start, end) {
+    const cleanInitial = normalizeMainMenuReferenceSelection(initial);
+    if (!cleanInitial || !start || !end) return null;
+    const nextX = cleanInitial.x + (end.x - start.x);
+    const nextY = cleanInitial.y + (end.y - start.y);
+    return normalizeMainMenuReferenceSelection({
+      ...cleanInitial,
+      x: clampReferenceNumber(nextX, 0, APPROVED_RENDER_WIDTH - cleanInitial.w),
+      y: clampReferenceNumber(nextY, 0, APPROVED_RENDER_HEIGHT - cleanInitial.h),
+    });
+  }
+
+  function referenceSelectionFromResize(initial, start, end, handle) {
+    const cleanInitial = normalizeMainMenuReferenceSelection(initial);
+    if (!cleanInitial || !start || !end || !handle) return null;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    let left = cleanInitial.x;
+    let top = cleanInitial.y;
+    let right = cleanInitial.x + cleanInitial.w;
+    let bottom = cleanInitial.y + cleanInitial.h;
+
+    if (handle.includes('w')) {
+      left = clampReferenceNumber(cleanInitial.x + dx, 0, right - REFERENCE_CROP_MIN_SIZE);
+    }
+    if (handle.includes('e')) {
+      right = clampReferenceNumber(cleanInitial.x + cleanInitial.w + dx, left + REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_WIDTH);
+    }
+    if (handle.includes('n')) {
+      top = clampReferenceNumber(cleanInitial.y + dy, 0, bottom - REFERENCE_CROP_MIN_SIZE);
+    }
+    if (handle.includes('s')) {
+      bottom = clampReferenceNumber(cleanInitial.y + cleanInitial.h + dy, top + REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_HEIGHT);
+    }
+
+    return normalizeMainMenuReferenceSelection({
+      x: left,
+      y: top,
+      w: right - left,
+      h: bottom - top,
+    });
+  }
+
   function updateReferenceCropStageSelection(stage, selection) {
     const cleanSelection = normalizeMainMenuReferenceSelection(selection);
     if (!stage || !cleanSelection) return;
@@ -3851,21 +3904,31 @@
     if (!MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) return;
     const start = approvedRenderPointFromEvent(event, stage);
     if (!start) return;
+    const currentSelection = normalizeMainMenuReferenceSelection(state.mainMenuReferenceEditor.selection)
+      || mainMenuReferenceSelection(key);
+    const resizeHandle = event.target.closest('.reference-crop-handle');
+    const selectionBox = event.target.closest('.reference-crop-selection');
+    const mode = resizeHandle ? 'resize' : (selectionBox ? 'move' : 'draw');
     event.preventDefault();
     stage.setPointerCapture(event.pointerId);
     state.mainMenuReferenceDrag = {
       key,
+      mode,
+      handle: resizeHandle ? resizeHandle.dataset.cropHandle : '',
       pointerId: event.pointerId,
       start,
+      initial: currentSelection,
     };
-    const selection = normalizeMainMenuReferenceSelection({
-      x: start.x,
-      y: start.y,
-      w: 8,
-      h: 8,
-    });
-    state.mainMenuReferenceEditor.selection = selection;
-    updateReferenceCropStageSelection(stage, selection);
+    if (mode === 'draw') {
+      const selection = normalizeMainMenuReferenceSelection({
+        x: start.x,
+        y: start.y,
+        w: REFERENCE_CROP_MIN_SIZE,
+        h: REFERENCE_CROP_MIN_SIZE,
+      });
+      state.mainMenuReferenceEditor.selection = selection;
+      updateReferenceCropStageSelection(stage, selection);
+    }
   }
 
   function updateReferenceCropDrag(event) {
@@ -3874,7 +3937,11 @@
     const stage = menuLayer.querySelector('.reference-crop-stage');
     if (!stage) return;
     const end = approvedRenderPointFromEvent(event, stage);
-    const selection = referenceSelectionFromPoints(drag.start, end);
+    const selection = drag.mode === 'move'
+      ? referenceSelectionFromMove(drag.initial, drag.start, end)
+      : drag.mode === 'resize'
+        ? referenceSelectionFromResize(drag.initial, drag.start, end, drag.handle)
+        : referenceSelectionFromPoints(drag.start, end);
     if (!selection) return;
     event.preventDefault();
     state.mainMenuReferenceEditor.selection = selection;

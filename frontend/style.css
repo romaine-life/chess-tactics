@@ -1972,8 +1972,67 @@ h1 {
     0 0 0 9999px rgba(2, 7, 11, .46),
     0 0 18px rgba(241, 208, 132, .42),
     inset 0 0 0 1px rgba(2, 7, 11, .82);
-  pointer-events: none;
+  cursor: move;
+  pointer-events: auto;
   position: absolute;
+}
+
+.reference-crop-handle {
+  background: #07131d;
+  border: 2px solid #f1d084;
+  box-shadow: 0 0 8px rgba(241, 208, 132, .42);
+  height: 12px;
+  pointer-events: auto;
+  position: absolute;
+  width: 12px;
+}
+
+.reference-crop-handle-nw {
+  cursor: nwse-resize;
+  left: -7px;
+  top: -7px;
+}
+
+.reference-crop-handle-n {
+  cursor: ns-resize;
+  left: calc(50% - 6px);
+  top: -7px;
+}
+
+.reference-crop-handle-ne {
+  cursor: nesw-resize;
+  right: -7px;
+  top: -7px;
+}
+
+.reference-crop-handle-e {
+  cursor: ew-resize;
+  right: -7px;
+  top: calc(50% - 6px);
+}
+
+.reference-crop-handle-se {
+  bottom: -7px;
+  cursor: nwse-resize;
+  right: -7px;
+}
+
+.reference-crop-handle-s {
+  bottom: -7px;
+  cursor: ns-resize;
+  left: calc(50% - 6px);
+}
+
+.reference-crop-handle-sw {
+  bottom: -7px;
+  cursor: nesw-resize;
+  left: -7px;
+}
+
+.reference-crop-handle-w {
+  cursor: ew-resize;
+  left: -7px;
+  top: calc(50% - 6px);
 }
 
 .reference-crop-modal {
