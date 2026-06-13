@@ -3004,74 +3004,6 @@
       </div>`;
   }
 
-  function renderApprovalQueue(items, focusedId) {
-    return `
-      <div class="approval-queue" aria-label="Review queue">
-        <div class="approval-panel-head">
-          <strong>Targets</strong>
-          <span>${escapeText(String(items.length))} targets</span>
-        </div>
-        <div class="approval-queue-list">
-          ${items.map((item) => {
-            const meta = mainMenuReviewMeta(item.status);
-            const baseMeta = mainMenuReviewMeta(item.baseStatus);
-            const isFocused = item.id === focusedId;
-            const hasDraftOverride = Object.hasOwn(state.mainMenuReviewDraft, item.id);
-            return `
-              <button
-                type="button"
-                class="approval-queue-item ${escapeText(meta.cardClass)} ${isFocused ? 'is-active' : ''}"
-                data-action="focus-main-menu-review-item"
-                data-review-id="${escapeText(item.id)}"
-                aria-label="${escapeText(`${item.label}: ${meta.label}. ${item.note}`)}"
-                aria-pressed="${isFocused ? 'true' : 'false'}"
-              >
-                ${renderReviewStatusBadge(item.status)}
-                <span class="approval-queue-copy">
-                  <strong>${escapeText(item.label)}</strong>
-                  <small>${escapeText(hasDraftOverride ? `Draft override / profile: ${baseMeta.label}` : `Profile: ${baseMeta.label}`)}</small>
-                </span>
-              </button>`;
-          }).join('')}
-        </div>
-      </div>`;
-  }
-
-  function renderApprovalDecisionPanel(item, position, total) {
-    const baseMeta = mainMenuReviewMeta(item.baseStatus);
-    const currentMeta = mainMenuReviewMeta(item.status);
-    const hasDraftOverride = Object.hasOwn(state.mainMenuReviewDraft, item.id);
-    return `
-      <article class="approval-decision-panel ${escapeText(mainMenuReviewMeta(item.status).cardClass)}" aria-label="Selected review target">
-        <div class="approval-decision-heading">
-          <span>Decision ${escapeText(String(position))} / ${escapeText(String(total))}</span>
-          <h3>${escapeText(item.label)}</h3>
-          ${renderReviewStatusBadge(item.status)}
-        </div>
-        <div class="approval-decision-copy">
-          <p>${escapeText(item.note)}</p>
-          <dl>
-            <div>
-              <dt>Committed profile</dt>
-              <dd>${escapeText(baseMeta.label)}</dd>
-            </div>
-            <div>
-              <dt>Current draft</dt>
-              <dd>${escapeText(currentMeta.label)}</dd>
-            </div>
-            <div>
-              <dt>Where this saves</dt>
-              <dd>${hasDraftOverride ? 'Test slot draft. Profile doc still needs a commit.' : 'No override. It matches the profile doc.'}</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="approval-decision-actions">
-          <span>Set draft decision</span>
-          ${renderReviewStatusControls(item.id, item.label, item.status)}
-        </div>
-      </article>`;
-  }
-
   function renderApprovalSummary(columns) {
     return `
       <div class="approval-summary" aria-label="Review status counts">
@@ -3161,10 +3093,6 @@
       ...column,
       items: reviewItems.filter((item) => item.status === column.status),
     }));
-    const focusedReviewItem = reviewItems.find((item) => item.id === state.mainMenuReviewFocusId)
-      || reviewItems.find((item) => item.status === 'review')
-      || reviewItems[0];
-    const focusedReviewIndex = Math.max(0, reviewItems.findIndex((item) => item.id === focusedReviewItem.id));
     const hasReviewDraft = Object.keys(state.mainMenuReviewDraft).length > 0;
     const portfolioAssets = [
       {
@@ -3328,10 +3256,6 @@
             <button type="button" data-action="reset-main-menu-review-draft" ${hasReviewDraft ? '' : 'disabled'}>${hasReviewDraft ? 'Reset Draft' : 'No Draft'}</button>
           </div>
           ${renderApprovalSummary(acceptanceColumns)}
-          <div class="approval-workbench">
-            ${renderApprovalQueue(reviewItems, focusedReviewItem.id)}
-            ${renderApprovalDecisionPanel(focusedReviewItem, focusedReviewIndex + 1, reviewItems.length)}
-          </div>
           <div class="acceptance-ledger-columns">
             ${acceptanceColumns.map((column) => `
               <article class="acceptance-column ${escapeText(column.className)}">

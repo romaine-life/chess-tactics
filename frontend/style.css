@@ -1651,13 +1651,6 @@ h1 {
 
 .approval-summary strong,
 .approval-summary small,
-.approval-panel-head strong,
-.approval-panel-head span,
-.approval-queue-item strong,
-.approval-queue-item small,
-.approval-decision-heading span,
-.approval-decision-heading h3,
-.approval-decision-panel dt,
 .review-status-badge {
   font-family: "Press Start 2P", "VT323", monospace;
   letter-spacing: 0;
@@ -1674,196 +1667,6 @@ h1 {
   color: #bfd5dc;
   font-size: .48rem;
   line-height: 1.35;
-}
-
-.approval-workbench {
-  align-items: start;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(280px, .78fr) minmax(420px, 1.42fr);
-  min-width: 0;
-}
-
-.approval-queue,
-.approval-decision-panel {
-  align-self: start;
-  background: rgba(2, 7, 11, .5);
-  border: 2px solid rgba(80, 129, 151, .42);
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-  padding: 12px;
-}
-
-.approval-panel-head {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.approval-panel-head strong,
-.approval-decision-heading span {
-  color: #47a9ff;
-  font-size: .55rem;
-  line-height: 1.35;
-}
-
-.approval-panel-head span {
-  color: #d9c28a;
-  font-size: .46rem;
-  line-height: 1.35;
-}
-
-.approval-queue-list {
-  display: grid;
-  gap: 7px;
-}
-
-.approval-queue-item {
-  align-items: start;
-  background: rgba(7, 19, 29, .72);
-  border: 2px solid rgba(63, 95, 111, .7);
-  color: #bfd5dc;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr);
-  min-height: 54px;
-  min-width: 0;
-  padding: 8px;
-  text-align: left;
-}
-
-.approval-queue-item.accepted {
-  border-left-color: rgba(37, 199, 255, .9);
-}
-
-.approval-queue-item.review {
-  border-left-color: rgba(233, 184, 92, .9);
-}
-
-.approval-queue-item.rejected {
-  border-left-color: rgba(157, 172, 181, .74);
-}
-
-.approval-queue-item.is-active,
-.approval-queue-item:hover,
-.approval-queue-item:focus-visible {
-  border-color: var(--asset-cyan);
-  outline: none;
-}
-
-.approval-queue-item.is-active {
-  background: rgba(10, 33, 49, .88);
-  box-shadow: inset 4px 0 0 rgba(37, 199, 255, .78);
-}
-
-.approval-queue-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.approval-queue-item strong {
-  color: #f0eadb;
-  font-size: .52rem;
-  line-height: 1.35;
-}
-
-.approval-queue-item small {
-  color: #d9c28a;
-  font-size: .42rem;
-  line-height: 1.35;
-}
-
-.approval-decision-panel.accepted {
-  border-color: rgba(37, 199, 255, .72);
-}
-
-.approval-decision-panel.review {
-  border-color: rgba(233, 184, 92, .72);
-}
-
-.approval-decision-panel.rejected {
-  border-color: rgba(109, 126, 138, .64);
-}
-
-.approval-decision-heading {
-  align-items: start;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.approval-decision-heading span:first-child {
-  grid-column: 1 / -1;
-}
-
-.approval-decision-heading h3 {
-  color: #f0eadb;
-  font-size: .95rem;
-  line-height: 1.35;
-  margin: 0;
-  min-width: 0;
-}
-
-.approval-decision-copy {
-  display: grid;
-  gap: 14px;
-}
-
-.approval-decision-copy p,
-.approval-decision-panel dd {
-  color: #bfd5dc;
-  font-size: 1.04rem;
-  line-height: 1.16;
-}
-
-.approval-decision-copy p {
-  margin: 0;
-}
-
-.approval-decision-panel dl {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-}
-
-.approval-decision-panel dl div {
-  background: rgba(2, 7, 11, .46);
-  border-left: 2px solid rgba(37, 199, 255, .38);
-  display: grid;
-  gap: 6px;
-  padding: 10px;
-}
-
-.approval-decision-panel dt {
-  color: #47a9ff;
-  font-size: .44rem;
-  line-height: 1.35;
-}
-
-.approval-decision-panel dd {
-  margin: 0;
-}
-
-.approval-decision-actions .review-status-controls button {
-  min-height: 44px;
-}
-
-.approval-decision-actions {
-  display: grid;
-  gap: 8px;
-}
-
-.approval-decision-actions > span {
-  color: #d9c28a;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .46rem;
-  line-height: 1.35;
-  text-transform: uppercase;
 }
 
 .review-status-badge {
@@ -2435,9 +2238,8 @@ h1 {
 
 .asset-reference-crop img {
   display: block;
-  height: 100%;
-  object-fit: cover;
-  object-position: 12% 45%;
+  height: auto;
+  object-fit: contain;
   width: 100%;
 }
 
@@ -4298,11 +4100,6 @@ h1 {
 
   .acceptance-ledger-heading span {
     text-align: left;
-  }
-
-  .approval-workbench,
-  .approval-decision-panel dl {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .acceptance-ledger-columns {
