@@ -949,6 +949,13 @@ app.post('/api/auth/sign-out', async (req, res) => {
   res.status(204).end();
 });
 
+app.use((req, res, next) => {
+  if (Object.hasOwn(req.query || {}, 'screen')) {
+    res.status(404).send('not found');
+    return;
+  }
+  next();
+});
 if (staticFrontendDir) {
   app.use(express.static(staticFrontendDir));
 }

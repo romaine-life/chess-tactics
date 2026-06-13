@@ -25,7 +25,7 @@ under `frontend/public`.
 
 ## Production Links
 
-- Main menu design portfolio: <https://chess.romaine.life/?screen=main-assets>
+- Main menu design portfolio: <https://chess.romaine.life/design/main-menu>
 
 ## Agent Preview Contract
 

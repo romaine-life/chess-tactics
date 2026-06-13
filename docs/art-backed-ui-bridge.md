@@ -33,26 +33,25 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` shows the live DOM main menu bridge, with approved/generated bitmap
+- `/` and `/main-menu` show the live DOM main menu bridge, with approved/generated bitmap
   families filled for buttons, brand, profile/status, news/daily, and dock
   chrome, plus a CSS-framed moonlit battlefield plate over the live canvas.
   Remaining unfinished asset slots stay labeled in place.
-- `/?screen=main` explicitly opens the live DOM main menu bridge.
-- `/?screen=main-skeleton` also opens the live DOM main menu bridge.
-- `/?screen=main-concept` opens the saved main menu concept render.
-- `/?screen=main-assets` opens the main menu asset review board. It compares
+- `/main-menu/skeleton` also opens the live DOM main menu bridge.
+- `/design/main-menu/render` opens the saved main menu concept render.
+- `/design/main-menu` opens the main menu asset review board. It compares
   the approved render crop against candidate live asset families before any
   candidate replaces a skeleton slot.
-- `/?screen=campaigns` opens the live campaign editor skeleton.
-- `/?screen=level-editor` opens the live level editor skeleton.
-- `/?screen=skirmish` opens the live skirmish skeleton.
-- `/?screen=campaigns-concept` opens the campaign editor concept render.
-- `/?screen=level-editor-concept` opens the level editor concept render.
-- `/?screen=skirmish-concept` opens the skirmish concept render.
+- `/campaigns` opens the live campaign editor skeleton.
+- `/level-editor` opens the live level editor skeleton.
+- `/skirmish` opens the live skirmish skeleton.
+- `/design/campaigns/render` opens the campaign editor concept render.
+- `/design/level-editor/render` opens the level editor concept render.
+- `/design/skirmish/render` opens the skirmish concept render.
 
-Append `&hotspots=1` to concept review URLs to show the clickable overlay map.
-For example, use `/?screen=main-concept&hotspots=1` or
-`/?screen=level-editor-concept&hotspots=1`.
+Use the `/hotspots` suffix on concept review URLs to show the clickable overlay
+map. For example, use `/design/main-menu/render/hotspots` or
+`/design/level-editor/render/hotspots`.
 
 ## What Is Live
 
@@ -81,7 +80,7 @@ concept renders are approved visual targets, not finished live UI.
 Hotspots are percentage-positioned so they scale with the artboard. Use this
 loop when adjusting them:
 
-1. Open the target URL with `hotspots=1`.
+1. Open the target URL with the `/hotspots` suffix.
 2. Adjust the matching selector in `frontend/src/style.css`.
 3. Hot-swap the frontend into the test slot.
 4. Inspect normal mode and hotspot mode.
@@ -99,7 +98,7 @@ Replace the bridge from the inside out:
    title/brand plate uses `main-menu-brand-title-only-v1.png` from the approved
    render; the profile/status, news/daily, and dock chrome use generated
    `main-menu-*-chrome-v1.png` assets; the battlefield plate uses the live
-   moonlit canvas board inside CSS chrome. Use `/?screen=main-assets` to
+   moonlit canvas board inside CSS chrome. Use `/design/main-menu` to
    compare candidates against the approved render before wiring them into the
    bridge.
 3. Extract editor and skirmish side panels as real DOM components.

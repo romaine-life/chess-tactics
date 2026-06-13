@@ -1,11 +1,11 @@
 # Main Menu Acceptance Ledger
 
 This ledger is the source of truth for what is settled in the main menu UI
-bridge and what still needs review. Keep `/?screen=main-assets` aligned with
+bridge and what still needs review. Keep `/design/main-menu` aligned with
 this file.
 
 The browser-facing visual ledger lives at
-`/?screen=main-assets#acceptance-ledger`. Its `Accept`, `Needs Review`, and
+`/design/main-menu`. Its `Accept`, `Needs Review`, and
 `Reject` controls save a design-portfolio draft through
 `/api/design-portfolios/main-menu-acceptance` when that endpoint is available,
 with browser-local storage as a fallback. A decision is only committed to git

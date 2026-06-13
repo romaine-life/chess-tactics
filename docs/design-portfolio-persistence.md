@@ -16,7 +16,7 @@ requires the top-level request body to include a `data` object:
 {
   "client_schema_version": 1,
   "metadata": {
-    "screen": "main-assets",
+    "route": "/design/main-menu",
     "source": "visual-acceptance-ledger"
   },
   "data": {
