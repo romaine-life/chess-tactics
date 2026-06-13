@@ -1462,8 +1462,8 @@ h1 {
   color: #e8edf0;
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(360px, 31vw) minmax(0, 1fr);
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 100%;
   overflow-y: auto;
   padding: clamp(18px, 2.4vw, 34px);
@@ -1497,8 +1497,7 @@ h1 {
 }
 
 .main-assets-header p,
-.asset-reference-copy strong,
-.asset-card-head strong {
+.asset-reference-copy strong {
   color: #47a9ff;
   font-family: "Press Start 2P", "VT323", monospace;
   font-size: .62rem;
@@ -1515,35 +1514,9 @@ h1 {
   text-transform: uppercase;
 }
 
-.main-assets-header nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.main-assets-header a {
-  background: #07131d;
-  border: 2px solid rgba(63, 95, 111, .82);
-  color: #e8d4a6;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .58rem;
-  min-height: 42px;
-  padding: 12px;
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
-.main-assets-header a:hover,
-.main-assets-header a:focus-visible {
-  border-color: var(--asset-cyan);
-  color: #f4ead0;
-  outline: none;
-}
-
 .asset-reference-panel,
 .asset-artwork-card,
 .asset-chrome-panel,
-.asset-variant-card,
 .asset-review-footer {
   background: var(--asset-panel);
   border: 2px solid var(--asset-line);
@@ -1668,8 +1641,8 @@ h1 {
 .portfolio-asset-list {
   display: grid;
   gap: 14px;
-  grid-column: 2;
-  grid-row: 2 / span 2;
+  grid-column: 1 / -1;
+  grid-row: 2;
   min-width: 0;
 }
 
@@ -1911,22 +1884,6 @@ h1 {
   width: 100%;
 }
 
-.portfolio-asset-image-wrap.portfolio-button-crop {
-  aspect-ratio: 496 / 492;
-  overflow: hidden;
-}
-
-.portfolio-asset-image-wrap.portfolio-button-crop img {
-  height: auto;
-  left: -8.47%;
-  max-height: none;
-  max-width: none;
-  object-fit: initial;
-  position: absolute;
-  top: -50%;
-  width: 319.76%;
-}
-
 .portfolio-reference-picker {
   appearance: none;
   background: #02070b;
@@ -2160,7 +2117,6 @@ h1 {
 }
 
 .asset-reference-copy span,
-.asset-card-head span,
 .asset-review-footer {
   color: #bfd5dc;
   font-size: 1.08rem;
@@ -2182,155 +2138,9 @@ h1 {
   width: 100%;
 }
 
-.asset-variants {
-  display: grid;
-  gap: 16px;
-  grid-column: 1 / -1;
-  grid-row: 4;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  min-height: 0;
-}
-
-.asset-variant-card {
-  display: grid;
-  gap: 14px;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-width: 0;
-  padding: 16px;
-}
-
-.asset-card-head {
-  display: grid;
-  gap: 8px;
-  min-height: 82px;
-}
-
-.asset-button-stack {
-  align-content: start;
-  display: grid;
-  gap: 12px;
-}
-
-.asset-button {
-  align-items: center;
-  appearance: none;
-  border-radius: 0;
-  cursor: default;
-  display: grid;
-  font-family: "Press Start 2P", "VT323", monospace;
-  grid-template-columns: 54px minmax(0, 1fr) 24px;
-  min-height: 70px;
-  padding: 8px 14px 8px 10px;
-  text-align: left;
-  text-transform: uppercase;
-}
-
-.asset-button-icon {
-  display: grid;
-  height: 42px;
-  place-items: center;
-  width: 42px;
-}
-
-.asset-button-label {
-  color: #f0eadb;
-  font-size: clamp(.54rem, .76vw, .72rem);
-  line-height: 1.25;
-  min-width: 0;
-}
-
-.asset-button i {
-  font-size: 1.35rem;
-  font-style: normal;
-  justify-self: end;
-}
-
-.asset-button.render-match {
-  background:
-    linear-gradient(90deg, rgba(15, 91, 143, .72), rgba(5, 18, 29, .96) 42%, rgba(3, 10, 16, .96)),
-    #06131d;
-  border: 2px solid rgba(48, 188, 255, .88);
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .7),
-    inset 0 0 0 1px rgba(196, 238, 255, .2),
-    inset 0 -7px 0 rgba(0, 0, 0, .24),
-    0 0 20px rgba(37, 199, 255, .16);
-}
-
-.asset-button.render-match .asset-button-icon {
-  background: linear-gradient(180deg, #176fc6, #0a315f);
-  border: 2px solid #64c8ff;
-  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .22), 0 0 14px rgba(37, 199, 255, .14);
-  color: #f1f9ff;
-}
-
-.asset-button.render-match i {
-  color: #d7f4ff;
-  text-shadow: 0 0 8px rgba(37, 199, 255, .55);
-}
-
-.asset-button.moon-steel {
-  background:
-    linear-gradient(180deg, rgba(12, 31, 43, .96), rgba(4, 13, 20, .98)),
-    #061018;
-  border: 2px solid rgba(82, 126, 146, .78);
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .72),
-    inset 0 1px 0 rgba(218, 241, 246, .06),
-    inset 0 -8px 0 rgba(0, 0, 0, .28);
-}
-
-.asset-button.moon-steel .asset-button-icon {
-  background: linear-gradient(180deg, #123753, #071a27);
-  border: 2px solid rgba(103, 168, 198, .74);
-  color: #cae9f7;
-}
-
-.asset-button.moon-steel i {
-  color: #9ccddd;
-}
-
-.asset-button.gold-inlay {
-  background:
-    linear-gradient(180deg, rgba(17, 23, 28, .98), rgba(5, 10, 15, .99)),
-    #050a0f;
-  border: 2px solid rgba(203, 163, 86, .78);
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .75),
-    inset 0 0 0 1px rgba(255, 232, 165, .12),
-    inset 0 -8px 0 rgba(0, 0, 0, .32);
-}
-
-.asset-button.gold-inlay .asset-button-icon {
-  background: linear-gradient(180deg, #825f24, #261b0c);
-  border: 2px solid rgba(242, 197, 105, .85);
-  color: #fff0b9;
-}
-
-.asset-button.gold-inlay i {
-  color: #e8c77c;
-}
-
-.asset-button.is-active {
-  filter: saturate(1.12) brightness(1.08);
-}
-
-.asset-button.is-hover {
-  border-color: #25c7ff;
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .72),
-    inset 0 0 0 1px rgba(203, 239, 255, .2),
-    0 0 24px rgba(37, 199, 255, .18);
-}
-
-.asset-button.is-muted {
-  filter: saturate(.72) brightness(.78);
-  opacity: .76;
-}
-
 .asset-review-footer {
   grid-column: 1 / -1;
-  grid-row: 5;
+  grid-row: 3;
   padding: 12px 16px;
 }
 
@@ -4025,7 +3835,6 @@ h1 {
   .asset-reference-panel,
   .asset-artwork-panel,
   .portfolio-asset-list,
-  .asset-variants,
   .asset-review-footer {
     grid-column: 1;
     grid-row: auto;
@@ -4033,10 +3842,6 @@ h1 {
 
   .asset-reference-crop {
     min-height: 280px;
-  }
-
-  .asset-variants {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .asset-artwork-panel {
@@ -4261,27 +4066,6 @@ h1 {
     flex-direction: column;
   }
 
-  .main-assets-header nav {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .main-assets-header a {
-    font-size: .52rem;
-    min-height: 38px;
-    padding: 10px;
-  }
-
-  .asset-button {
-    grid-template-columns: 44px minmax(0, 1fr) 20px;
-    min-height: 62px;
-    padding: 8px;
-  }
-
-  .asset-button-icon {
-    height: 34px;
-    width: 34px;
-  }
 }
 
 .level-palette button.random-rock span,
