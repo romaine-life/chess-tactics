@@ -626,6 +626,20 @@ h1 {
     0 0 36px rgba(37, 199, 255, .1);
 }
 
+/* Element 06 — the menu battlefield preview is art-backed with the concept board crop
+   (battlefield region of the render). The live canvas board returns in actual gameplay. */
+.main-menu-battlefield-art {
+  background-image: url("/assets/ui/main-menu-aspirational.png");
+  background-repeat: no-repeat;
+  background-size: 170.91% 171.03%;
+  background-position: 81.46% 43.69%;
+  image-rendering: pixelated;
+}
+
+.shell.main-menu-active .board-scroll {
+  display: none;
+}
+
 .main-menu-battlefield-meta,
 .main-menu-battlefield-status {
   align-items: center;
@@ -635,6 +649,7 @@ h1 {
   letter-spacing: 0;
   position: absolute;
   text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .92), 0 0 7px rgba(0, 0, 0, .72);
   z-index: 1;
 }
 

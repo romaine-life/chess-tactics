@@ -3550,7 +3550,7 @@ import './style.css';
             <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" aria-hidden="true" draggable="false">
           </div>
 
-          <section class="main-menu-battlefield-plate" aria-label="Moonlit grassland battlefield preview">
+          <section class="main-menu-battlefield-plate main-menu-battlefield-art" aria-label="Moonlit grassland battlefield preview">
             <div class="main-menu-battlefield-meta">
               <span>Moonlit Grassland</span>
               <span>Skirmish Preview</span>
