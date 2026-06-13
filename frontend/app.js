@@ -2819,7 +2819,10 @@
             </div>
           </div>
           <figure class="portfolio-asset-figure">
-            <img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt)}" draggable="false">
+            <div class="portfolio-asset-image-wrap ${asset.overlayLabel ? 'accepted-brand-preview' : ''}">
+              <img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt)}" draggable="false">
+              ${asset.overlayLabel ? `<span>${escapeText(asset.overlayLabel)}</span>` : ''}
+            </div>
             <figcaption>${escapeText(asset.caption)}</figcaption>
           </figure>
         </div>
@@ -2845,8 +2848,9 @@
         id: 'brand-chrome',
         title: 'Title / Brand Plate',
         status: 'Needs Review',
-        file: '/assets/ui/main-menu-brand-accepted-crop-v1.png',
+        file: '/assets/ui/main-menu-brand-clean-v2.png',
         alt: 'Accepted main menu title and brand plate crop with crest, title, subtitle, and divider',
+        overlayLabel: 'Tactical Breach Console',
         caption: 'Accepted render crop. This restores the exact title lockup from the approved main menu screenshot.',
         description: 'The title plate is now sourced directly from the accepted main menu render: same crest, title typography, subtitle, moonlit background, and divider.',
         target: 'Confirm this is back in line with the approved main menu screenshot before treating the title plate as settled.',
@@ -2950,7 +2954,8 @@
         </div>
         <section class="main-menu-left" aria-label="Main navigation">
           <div class="main-menu-brand main-menu-brand-art accepted-brand-crop" aria-label="Chess Tactics, tactical chess, infinite possibilities">
-            <img src="/assets/ui/main-menu-brand-accepted-crop-v1.png" alt="" aria-hidden="true" draggable="false">
+            <img src="/assets/ui/main-menu-brand-clean-v2.png" alt="" aria-hidden="true" draggable="false">
+            <span class="accepted-brand-label" aria-hidden="true">Tactical Breach Console</span>
           </div>
 
           <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">

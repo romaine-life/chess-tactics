@@ -16,7 +16,7 @@ not the final component system.
 - `docs/art/ui-screen-concepts/*.png` are the saved source references.
 - `frontend/assets/ui/main-menu-button-art-five-mode.png` is the approved
   bitmap source for the live main menu mode button stack.
-- `frontend/assets/ui/main-menu-brand-accepted-crop-v1.png` is the accepted
+- `frontend/assets/ui/main-menu-brand-clean-v2.png` is the accepted
   render crop for the live main menu title/brand plate.
 - `frontend/assets/ui/main-menu-*-chrome-v1.png` are generated bitmap sources
   for the live main menu profile/status, news/daily, and dock chrome.
@@ -87,7 +87,7 @@ Replace the bridge from the inside out:
    visible during decomposition. Skeletons are the default app surfaces.
 2. Fill one main menu asset family at a time. The button row uses
    `main-menu-button-art-five-mode.png`; the title/brand plate uses
-   `main-menu-brand-accepted-crop-v1.png` from the approved render; the
+   `main-menu-brand-clean-v2.png` from the approved render; the
    profile/status, news/daily, and dock chrome use generated
    `main-menu-*-chrome-v1.png` assets; the battlefield plate is still
    intentionally labeled as pending art. Use
