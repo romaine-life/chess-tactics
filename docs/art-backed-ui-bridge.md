@@ -3,10 +3,11 @@
 This document describes the current bridge between the approved screen renders
 and the production web app.
 
-The UI overhaul is intentionally using the approved screen renders as visible
-screens while live controls are layered on top. This gets the app into the
-target visual world immediately, gives reviewers a faithful test surface, and
-keeps the implementation browser-first. It is not the final component system.
+The UI overhaul is intentionally using live skeleton screens as the normal app
+surface while approved renders remain available as explicit references. This
+keeps the work browser-first, lets reviewers see unfinished slots clearly, and
+prevents the old utility UI from being mistaken for the target experience. It is
+not the final component system.
 
 ## Contract
 
@@ -15,6 +16,8 @@ keeps the implementation browser-first. It is not the final component system.
 - `docs/art/ui-screen-concepts/*.png` are the saved source references.
 - `frontend/assets/ui/main-menu-button-art-five-mode.png` is the approved
   bitmap source for the live main menu mode button stack.
+- `frontend/assets/ui/main-menu-*-chrome-v1.png` are generated bitmap sources
+  for the live main menu brand, profile/status, news/daily, and dock chrome.
 - `frontend/assets/ui/main-menu-button-art-*.png` also includes generated
   candidates used by the main menu asset review board.
 - `frontend/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
@@ -27,8 +30,9 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` shows the live DOM main menu skeleton, with the approved button bitmap
-  family filled and remaining unfinished asset slots labeled in place.
+- `/` shows the live DOM main menu skeleton, with approved/generated bitmap
+  families filled for buttons, brand, profile/status, news/daily, and dock
+  chrome. Remaining unfinished asset slots stay labeled in place.
 - `/?screen=main` explicitly opens the live DOM main menu skeleton.
 - `/?screen=main-skeleton` also opens the live DOM main menu skeleton.
 - `/?screen=main-concept` opens the saved main menu concept render.
@@ -49,9 +53,10 @@ For example, use `/?screen=main-concept&hotspots=1` or
 ## What Is Live
 
 The main menu, campaign editor, level editor, and skirmish now use live
-skeletons as their default surfaces. The main menu mode button family uses the
-approved generated bitmap art with live HTML labels and click targets overlaid.
-Other labeled slots are intentionally unfinished.
+skeletons as their default surfaces. The main menu mode button family, brand
+lockup, profile/status panel, news/daily panels, and dock strip use generated
+bitmap art with live HTML labels and click targets overlaid. Other labeled
+slots are intentionally unfinished.
 
 The concept routes keep real buttons layered over the saved renders. The
 hotspots route back into existing app actions such as menu navigation, campaign
@@ -78,9 +83,10 @@ Replace the bridge from the inside out:
 
 1. Maintain a clear skeleton for each screen so unfinished asset slots remain
    visible during decomposition. Skeletons are the default app surfaces.
-2. Fill one main menu asset family at a time: logo/crest, profile panel, dock
-   icons, status/news panels, and battlefield plate. The button row is the
-   first filled family and uses `main-menu-button-art-five-mode.png`. Use
+2. Fill one main menu asset family at a time. The button row uses
+   `main-menu-button-art-five-mode.png`; the brand, profile/status, news/daily,
+   and dock chrome use `main-menu-*-chrome-v1.png`; the battlefield plate is
+   still intentionally labeled as pending art. Use
    `/?screen=main-assets` to compare candidates against the approved render
    before wiring them into the skeleton.
 3. Extract editor and skirmish side panels as real DOM components.

@@ -196,9 +196,10 @@ as explicit concept references, not as the normal app surface.
 The default work surfaces are `/`, `/?screen=main`, `/?screen=campaigns`,
 `/?screen=level-editor`, and `/?screen=skirmish`. They show live DOM skeletons
 with unfinished asset slots labeled in place. Generated Artwork 1 is the
-approved bitmap source for the main menu five-button mode stack and is wired
-into that skeleton with live HTML labels and click targets. `*-concept` routes
-preserve the approved renders for comparison: `/?screen=main-concept`,
+approved bitmap source for the main menu five-button mode stack. The main menu
+also has generated bitmap chrome wired for brand, profile/status, news/daily,
+and dock surfaces, all with live HTML labels and click targets. `*-concept`
+routes preserve the approved renders for comparison: `/?screen=main-concept`,
 `/?screen=campaigns-concept`, `/?screen=level-editor-concept`, and
 `/?screen=skirmish-concept`. `/?screen=main-assets` remains the asset review
 board for comparing candidate asset families before wiring them into a

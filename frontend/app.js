@@ -2757,7 +2757,7 @@
   }
 
   function renderMainMenuDockButton(action, label) {
-    return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">${escapeText(label.slice(0, 2).toUpperCase())}</button>`;
+    return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}"><span>${escapeText(label.slice(0, 3).toUpperCase())}</span></button>`;
   }
 
   function renderAssetButton(variant, label, icon, stateClass = '') {
@@ -2826,6 +2826,37 @@
           </article>
         </section>
 
+        <section class="asset-chrome-panel" aria-label="Generated main menu chrome artwork">
+          <article class="asset-artwork-card primary">
+            <div class="asset-card-head">
+              <strong>Brand Chrome - Wired</strong>
+              <span>Crest and title plate with live HTML title text overlaid.</span>
+            </div>
+            <img src="/assets/ui/main-menu-brand-chrome-v1.png" alt="Generated pixel art brand and title chrome">
+          </article>
+          <article class="asset-artwork-card">
+            <div class="asset-card-head">
+              <strong>Profile Chrome - Wired</strong>
+              <span>Account, compact status counters, and sign-in plate.</span>
+            </div>
+            <img src="/assets/ui/main-menu-profile-chrome-v1.png" alt="Generated pixel art account and status chrome">
+          </article>
+          <article class="asset-artwork-card">
+            <div class="asset-card-head">
+              <strong>News Chrome - Wired</strong>
+              <span>Reusable panel source for daily and right-rail news/status.</span>
+            </div>
+            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="Generated pixel art news and daily panel chrome">
+          </article>
+          <article class="asset-artwork-card">
+            <div class="asset-card-head">
+              <strong>Dock Chrome - Wired</strong>
+              <span>Bottom quick-link dock with live navigation hit targets.</span>
+            </div>
+            <img src="/assets/ui/main-menu-dock-chrome-v1.png" alt="Generated pixel art bottom dock chrome">
+          </article>
+        </section>
+
         <section class="asset-variants" aria-label="Button style candidates">
           ${renderButtonVariantCard('render-match', 'A. Render Match', 'Closest to the approved image: brighter cyan frame, glassy blue selected state.')}
           ${renderButtonVariantCard('moon-steel', 'B. Moon Steel', 'Lower glare and more tactical; keeps the pixel silhouette but calms the glow.')}
@@ -2852,15 +2883,12 @@
           ${renderSkeletonTag('Battlefield plate, lighting, terrain richness, and hero board composition', 'Pending art')}
         </div>
         <section class="main-menu-left" aria-label="Main navigation">
-          <div class="main-menu-brand">
-            ${renderSkeletonTag('Crest, logo lockup, title pixels, and campaign identity', 'Asset slot')}
-            <p class="main-menu-eyebrow">Moonlit campaign tactics</p>
-            <div class="main-menu-title-row">
-              <div class="main-menu-crest" aria-hidden="true">K</div>
-              <div>
-                <h2>Chess Tactics</h2>
-                <p>Small-board strategy. Readable threats. Pixel command.</p>
-              </div>
+          <div class="main-menu-brand main-menu-brand-art">
+            <img src="/assets/ui/main-menu-brand-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
+            <div class="main-menu-brand-copy">
+              <p class="main-menu-eyebrow">Moonlit campaign tactics</p>
+              <h2>Chess Tactics</h2>
+              <p>Small-board strategy. Readable threats. Pixel command.</p>
             </div>
           </div>
 
@@ -2873,44 +2901,44 @@
             ${renderMainMenuArtAction('settings', 'Settings')}
           </nav>
 
-          <div class="main-menu-daily">
-            ${renderSkeletonTag('Daily challenge/news panel frame and content treatment', 'Asset slot')}
-            <div>
+          <div class="main-menu-daily main-menu-news-art">
+            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
+            <div class="main-menu-daily-content">
               <strong>Daily Line</strong>
               <small>Preview</small>
+              <p>Hold the bridge, trade cleanly, and keep the king lane sealed.</p>
+              <span>Generated board target</span>
             </div>
-            <p>Hold the bridge, trade cleanly, and keep the king lane sealed.</p>
-            <span>Generated board target</span>
           </div>
         </section>
 
         <aside class="main-menu-right" aria-label="Profile and status">
-          <div class="main-menu-profile">
-            ${renderSkeletonTag('Account panel frame, avatar crest, and button art', 'Asset slot')}
+          <div class="main-menu-profile main-menu-profile-art">
+            <img src="/assets/ui/main-menu-profile-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
             <div class="main-menu-avatar" aria-hidden="true">${signedIn ? 'P' : '?'}</div>
             <div>
               <strong>${escapeText(displayName)}</strong>
               <span>${escapeText(email)}</span>
             </div>
+            <div class="main-menu-profile-stats" aria-label="Preview force count">
+              <span><b aria-hidden="true">A</b><strong>6 Allies</strong></span>
+              <span><b aria-hidden="true">T</b><strong>5 Threats</strong></span>
+            </div>
             <button type="button" data-action="${signedIn ? 'settings' : 'sign-in'}">${signedIn ? 'Account' : 'Sign In'}</button>
           </div>
 
-          <div class="main-menu-counts" aria-label="Preview force count">
-            ${renderSkeletonTag('Status counters and compact HUD treatment', 'Asset slot')}
-            <span><b aria-hidden="true">A</b><strong>6 Allies</strong></span>
-            <span><b aria-hidden="true">T</b><strong>5 Threats</strong></span>
-          </div>
-
-          <div class="main-menu-news">
-            ${renderSkeletonTag('Right rail news/status panel art', 'Asset slot')}
-            <strong>Campaign tools</strong>
-            <p><span aria-hidden="true">&gt;</span> Editor shell is moving from render reference to live browser UI.</p>
-            <p><span aria-hidden="true">&gt;</span> Tile and piece extraction follow this main-menu slice.</p>
+          <div class="main-menu-news main-menu-news-art">
+            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
+            <div class="main-menu-news-content">
+              <strong>Campaign tools</strong>
+              <p><span aria-hidden="true">&gt;</span> Editor shell is moving from render reference to live browser UI.</p>
+              <p><span aria-hidden="true">&gt;</span> Tile and piece extraction follow this main-menu slice.</p>
+            </div>
           </div>
         </aside>
 
-        <div class="main-menu-dock" aria-label="Quick links">
-          ${renderSkeletonTag('Dock icons and bottom nav frame', 'Asset slot')}
+        <div class="main-menu-dock main-menu-dock-art" aria-label="Quick links">
+          <img src="/assets/ui/main-menu-dock-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
           ${renderMainMenuDockButton('settings', 'Achievements')}
           ${renderMainMenuDockButton('campaigns', 'Campaigns')}
           ${renderMainMenuDockButton('lobbies', 'Lobbies')}

@@ -180,6 +180,10 @@ async function main() {
     '/assets/ui/skirmish-concept.png',
     '/assets/ui/main-menu-button-art-five-mode.png',
     '/assets/ui/main-menu-button-art-three-state.png',
+    '/assets/ui/main-menu-brand-chrome-v1.png',
+    '/assets/ui/main-menu-profile-chrome-v1.png',
+    '/assets/ui/main-menu-news-chrome-v1.png',
+    '/assets/ui/main-menu-dock-chrome-v1.png',
   ];
   for (const assetPath of artAssets) {
     const response = await get(assetPath);
