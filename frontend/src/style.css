@@ -1179,6 +1179,24 @@ h1 {
   padding-bottom: 0;
 }
 
+/* Isolated specimen capture surface — one component per page, for exact screenshots */
+.specimen-capture {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  grid-auto-flow: column;
+  gap: 28px;
+  place-content: center;
+  align-items: center;
+  padding: 40px;
+  background: var(--shell);
+}
+
+.specimen-capture .portfolio-specimen {
+  width: min(520px, 92vw);
+}
+
 .main-menu-brand-art {
   border: 0;
   background: transparent;

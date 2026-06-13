@@ -758,6 +758,7 @@ import './style.css';
     '/main-menu': { screen: 'main', mainMenuView: 'skeleton' },
     '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
     '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
+    '/design/main-menu/specimen': { screen: 'main', mainMenuView: 'specimen' },
     '/design/main-menu/render': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main' },
     '/design/main-menu/render/hotspots': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main', hotspots: true },
     '/campaigns': { screen: 'campaigns' },
@@ -2863,6 +2864,10 @@ import './style.css';
     return currentRoute().mainMenuView === 'assets';
   }
 
+  function shouldShowMainSpecimen() {
+    return currentRoute().mainMenuView === 'specimen';
+  }
+
   function shouldShowScreenConcept(screenId) {
     return currentRoute().conceptScreen === screenId;
   }
@@ -3249,8 +3254,8 @@ import './style.css';
       </details>`;
   }
 
-  function renderMainAssetReview() {
-    const portfolioAssets = [
+  function mainMenuPortfolioAssets() {
+    return [
       {
         id: 'mode-buttons',
         title: 'Mode Button Family',
@@ -3371,7 +3376,32 @@ import './style.css';
           },
         ],
       },
-    ].map((asset) => {
+    ];
+  }
+
+  function renderSpecimenCapture() {
+    const params = new URLSearchParams(window.location.search || '');
+    const id = params.get('id') || '';
+    const only = params.get('only') || 'both';
+    const asset = mainMenuPortfolioAssets().find((entry) => entry.id === id);
+    if (!asset) {
+      return `<div class="specimen-capture" data-live-screen="specimen-missing"><div class="portfolio-specimen">Unknown specimen id: ${escapeText(id)}</div></div>`;
+    }
+    const proposedInner = asset.specimen
+      || (asset.file ? `<img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt || '')}" draggable="false" style="display:block;width:100%">` : '<span>No standalone component for this slot.</span>');
+    const proposed = `<div class="portfolio-specimen" data-specimen="proposed">${proposedInner}</div>`;
+    const compare = (asset.referenceCrops || [])
+      .map((crop) => `<div class="portfolio-specimen" data-specimen="compare">${renderApprovedReferenceCard(crop)}</div>`)
+      .join('');
+    return `
+      <div class="specimen-capture" data-live-screen="specimen-${escapeText(id)}-${escapeText(only)}">
+        ${only !== 'compare' ? proposed : ''}
+        ${only !== 'proposed' ? compare : ''}
+      </div>`;
+  }
+
+  function renderMainAssetReview() {
+    const portfolioAssets = mainMenuPortfolioAssets().map((asset) => {
       const reviewStatus = mainMenuReviewStatusFor(asset.id, asset.baseStatus);
       const reviewMeta = mainMenuReviewMeta(reviewStatus);
       return {
@@ -3589,6 +3619,8 @@ import './style.css';
         menuLayer.innerHTML = renderArtScreen('main');
       } else if (shouldShowMainAssets()) {
         menuLayer.innerHTML = renderMainAssetReview();
+      } else if (shouldShowMainSpecimen()) {
+        menuLayer.innerHTML = renderSpecimenCapture();
       } else {
         menuLayer.innerHTML = renderMainMenuSkeleton();
       }
