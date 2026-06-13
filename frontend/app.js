@@ -3381,6 +3381,7 @@
           ${renderMainMenuDockButton('settings', 'Achievements')}
           ${renderMainMenuDockButton('campaigns', 'Campaigns')}
           ${renderMainMenuDockButton('lobbies', 'Lobbies')}
+          ${renderMainMenuDockButton('design-review', 'Review')}
           ${renderMainMenuDockButton('settings', 'Collection')}
         </div>
       </div>`;
@@ -3746,6 +3747,10 @@
     if (button.dataset.action === 'campaigns') {
       setScreen('campaigns');
       void loadCampaigns();
+    }
+    if (button.dataset.action === 'design-review') {
+      window.location.href = '/?screen=main-assets#acceptance-ledger';
+      return;
     }
     if (button.dataset.action === 'new-campaign') void createCampaign();
     if (button.dataset.action === 'select-campaign' && button.dataset.campaignId) {
