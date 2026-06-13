@@ -5,7 +5,9 @@ bridge and what still needs review. Keep `/?screen=main-assets` aligned with
 this file.
 
 The browser-facing visual ledger lives at
-`/?screen=main-assets#acceptance-ledger`.
+`/?screen=main-assets#acceptance-ledger`. Its `Accept`, `Needs Review`, and
+`Reject` controls are a browser-local draft layer. A decision is only committed
+when this file is updated.
 
 ## Settled / Locked
 

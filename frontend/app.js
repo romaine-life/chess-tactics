@@ -25,6 +25,56 @@
   const MISC_ZONE_TYPES = [
     { id: 'falling-rock', label: 'Falling Rock' },
   ];
+  const MAIN_MENU_REVIEW_STORAGE_KEY = 'chess-tactics-main-menu-review-draft-v1';
+  const MAIN_MENU_REVIEW_STATUSES = {
+    accepted: { label: 'Accepted', cardClass: 'accepted', columnClass: 'settled' },
+    review: { label: 'Needs Review', cardClass: 'review', columnClass: 'review' },
+    rejected: { label: 'Rejected', cardClass: 'rejected', columnClass: 'rejected' },
+  };
+  const MAIN_MENU_LEDGER_ITEMS = [
+    {
+      id: 'mode-buttons',
+      label: 'Mode button stack',
+      note: 'Accepted painted crop and transparent hit targets.',
+      baseStatus: 'accepted',
+    },
+    {
+      id: 'brand-chrome',
+      label: 'Brand/title banner',
+      note: 'Accepted upper-left crest and title crop.',
+      baseStatus: 'accepted',
+    },
+    {
+      id: 'bridge-approach',
+      label: 'Art-backed bridge',
+      note: 'Keep live DOM controls over game-native chrome.',
+      baseStatus: 'accepted',
+    },
+    {
+      id: 'profile-chrome',
+      label: 'Profile/status panel',
+      note: 'Identity, sign-in/account, counters, and chrome.',
+      baseStatus: 'review',
+    },
+    {
+      id: 'news-chrome',
+      label: 'Daily/news panel',
+      note: 'Daily line, campaign tools copy, reusable panel art.',
+      baseStatus: 'review',
+    },
+    {
+      id: 'dock-chrome',
+      label: 'Bottom dock',
+      note: 'Icons, labels/tooltips, focus states, and priority.',
+      baseStatus: 'review',
+    },
+    {
+      id: 'battlefield-plate',
+      label: 'Battlefield plate',
+      note: 'Frame, status labels, depth, and responsive fit.',
+      baseStatus: 'review',
+    },
+  ];
   const ZONE_COLORS = [
     { fill: 'rgba(255,210,74,0.24)', stroke: '#ffd24a' },
     { fill: 'rgba(174,230,255,0.22)', stroke: '#aee6ff' },
@@ -319,6 +369,33 @@
     originY: 54,
   };
 
+  function loadMainMenuReviewDraft() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(MAIN_MENU_REVIEW_STORAGE_KEY) || '{}');
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+      return Object.fromEntries(Object.entries(parsed).filter(([id, status]) => (
+        MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === id) && MAIN_MENU_REVIEW_STATUSES[status]
+      )));
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveMainMenuReviewDraft(draft) {
+    try {
+      const cleanDraft = Object.fromEntries(Object.entries(draft || {}).filter(([id, status]) => (
+        MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === id) && MAIN_MENU_REVIEW_STATUSES[status]
+      )));
+      if (Object.keys(cleanDraft).length) {
+        window.localStorage.setItem(MAIN_MENU_REVIEW_STORAGE_KEY, JSON.stringify(cleanDraft));
+      } else {
+        window.localStorage.removeItem(MAIN_MENU_REVIEW_STORAGE_KEY);
+      }
+    } catch (error) {
+      // Review buttons are a convenience layer; storage failures should not block the screen.
+    }
+  }
+
   const state = {
     screen: 'main',
     turn: 'player',
@@ -354,6 +431,7 @@
     gridStartY: 0,
     gridEndX: 7,
     gridEndY: 11,
+    mainMenuReviewDraft: loadMainMenuReviewDraft(),
   };
 
   const ART_SCREENS = {
@@ -2785,6 +2863,37 @@
       </article>`;
   }
 
+  function mainMenuReviewStatusFor(id, fallbackStatus) {
+    const draftStatus = state.mainMenuReviewDraft[id];
+    return MAIN_MENU_REVIEW_STATUSES[draftStatus] ? draftStatus : fallbackStatus;
+  }
+
+  function mainMenuReviewMeta(status) {
+    return MAIN_MENU_REVIEW_STATUSES[status] || MAIN_MENU_REVIEW_STATUSES.review;
+  }
+
+  function renderReviewStatusControls(id, label, currentStatus) {
+    const actions = [
+      { status: 'accepted', label: 'Accept' },
+      { status: 'review', label: 'Needs Review' },
+      { status: 'rejected', label: 'Reject' },
+    ];
+
+    return `
+      <div class="review-status-controls" role="group" aria-label="Review status for ${escapeText(label)}">
+        ${actions.map((action) => `
+          <button
+            type="button"
+            class="${action.status === currentStatus ? 'is-active' : ''}"
+            data-action="set-main-menu-review-status"
+            data-review-id="${escapeText(id)}"
+            data-review-status="${escapeText(action.status)}"
+            aria-pressed="${action.status === currentStatus ? 'true' : 'false'}"
+          >${escapeText(action.label)}</button>
+        `).join('')}
+      </div>`;
+  }
+
   function renderPortfolioAsset(asset, index) {
     const openAttr = index === 0 ? ' open' : '';
     return `
@@ -2817,6 +2926,10 @@
               <a href="/">Live menu</a>
               <a href="/?screen=main-concept">Render reference</a>
             </div>
+            <div class="portfolio-review-draft">
+              <span>Browser draft</span>
+              ${renderReviewStatusControls(asset.id, asset.title, asset.reviewStatus)}
+            </div>
           </div>
           <figure class="portfolio-asset-figure">
             <div class="portfolio-asset-image-wrap ${asset.overlayLabel ? 'accepted-brand-preview' : ''} ${asset.cropClass ? escapeText(asset.cropClass) : ''}">
@@ -2830,40 +2943,24 @@
   }
 
   function renderMainAssetReview() {
+    const reviewItems = MAIN_MENU_LEDGER_ITEMS.map((item) => ({
+      ...item,
+      status: mainMenuReviewStatusFor(item.id, item.baseStatus),
+    }));
     const acceptanceColumns = [
-      {
-        className: 'settled',
-        title: 'Settled / Locked',
-        items: [
-          { label: 'Mode button stack', note: 'Accepted painted crop and transparent hit targets.' },
-          { label: 'Brand/title banner', note: 'Accepted upper-left crest and title crop.' },
-          { label: 'Art-backed bridge', note: 'Keep live DOM controls over game-native chrome.' },
-        ],
-      },
-      {
-        className: 'review',
-        title: 'Needs Review',
-        items: [
-          { label: 'Profile/status panel', note: 'Identity, sign-in/account, counters, and chrome.' },
-          { label: 'Daily/news panel', note: 'Daily line, campaign tools copy, reusable panel art.' },
-          { label: 'Bottom dock', note: 'Icons, labels/tooltips, focus states, and priority.' },
-          { label: 'Battlefield plate', note: 'Frame, status labels, depth, and responsive fit.' },
-        ],
-      },
-      {
-        className: 'rejected',
-        title: 'Rejected / Do Not Use',
-        items: [
-          { label: 'None yet', note: 'Rejected treatments will be tracked here.' },
-        ],
-      },
-    ];
+      { status: 'accepted', className: 'settled', title: 'Settled / Locked', emptyLabel: 'None accepted yet', emptyNote: 'Accepted treatments will appear here.' },
+      { status: 'review', className: 'review', title: 'Needs Review', emptyLabel: 'Nothing pending', emptyNote: 'Open design questions will appear here.' },
+      { status: 'rejected', className: 'rejected', title: 'Rejected / Do Not Use', emptyLabel: 'None yet', emptyNote: 'Rejected treatments will be tracked here.' },
+    ].map((column) => ({
+      ...column,
+      items: reviewItems.filter((item) => item.status === column.status),
+    }));
+    const hasReviewDraft = Object.keys(state.mainMenuReviewDraft).length > 0;
     const portfolioAssets = [
       {
         id: 'mode-buttons',
         title: 'Mode Button Family',
-        status: 'Approved',
-        statusClass: 'approved',
+        baseStatus: 'accepted',
         file: '/assets/ui/main-menu-aspirational.png',
         cropClass: 'portfolio-button-crop',
         alt: 'Approved main menu render showing the five painted mode buttons',
@@ -2876,8 +2973,7 @@
       {
         id: 'brand-chrome',
         title: 'Title / Brand Plate',
-        status: 'Accepted',
-        statusClass: 'approved',
+        baseStatus: 'accepted',
         file: '/assets/ui/main-menu-brand-title-only-v1.png',
         alt: 'Accepted main menu title plate crop with crest, Chess Tactics title, and divider',
         caption: 'Title-only crop. The console label and subtitle have been removed so the lockup is just the game title.',
@@ -2889,7 +2985,7 @@
       {
         id: 'profile-chrome',
         title: 'Profile / Status Panel',
-        status: 'Needs Review',
+        baseStatus: 'review',
         file: '/assets/ui/main-menu-profile-chrome-v1.png',
         alt: 'Generated pixel art profile and status chrome for the main menu',
         caption: 'Right-rail profile source for player identity, force counters, and the sign-in/account action slot.',
@@ -2901,7 +2997,7 @@
       {
         id: 'news-chrome',
         title: 'Daily / News Panel',
-        status: 'Needs Review',
+        baseStatus: 'review',
         file: '/assets/ui/main-menu-news-chrome-v1.png',
         alt: 'Generated pixel art daily and news panel chrome for the main menu',
         caption: 'Reusable panel source for the daily line and right-side campaign/news notes.',
@@ -2913,7 +3009,7 @@
       {
         id: 'dock-chrome',
         title: 'Bottom Dock',
-        status: 'Needs Review',
+        baseStatus: 'review',
         file: '/assets/ui/main-menu-dock-chrome-v1.png',
         alt: 'Generated pixel art bottom dock chrome for the main menu',
         caption: 'Bottom quick-link dock source for secondary navigation buttons.',
@@ -2922,7 +3018,16 @@
         liveUse: 'Used behind four live quick-link hotspots near the bottom-center of the main menu.',
         decision: 'Approve, reduce visual weight, or defer until the main menu needs those secondary features.',
       },
-    ];
+    ].map((asset) => {
+      const reviewStatus = mainMenuReviewStatusFor(asset.id, asset.baseStatus);
+      const reviewMeta = mainMenuReviewMeta(reviewStatus);
+      return {
+        ...asset,
+        reviewStatus,
+        status: reviewMeta.label,
+        statusClass: reviewMeta.cardClass,
+      };
+    });
 
     return `
       <div class="main-assets-screen" data-live-screen="main-assets">
@@ -2945,18 +3050,24 @@
 
         <section id="acceptance-ledger" class="acceptance-ledger" aria-label="Main menu acceptance ledger">
           <div class="acceptance-ledger-heading">
-            <strong>Acceptance Ledger</strong>
-            <span>Source of truth for what is locked and what still needs design review.</span>
+            <div>
+              <strong>Acceptance Ledger</strong>
+              <span>Committed profile plus browser-local review draft. Promote decisions to the profile when they are final.</span>
+            </div>
+            <button type="button" data-action="reset-main-menu-review-draft" ${hasReviewDraft ? '' : 'disabled'}>${hasReviewDraft ? 'Reset Draft' : 'No Draft'}</button>
           </div>
           <div class="acceptance-ledger-columns">
             ${acceptanceColumns.map((column) => `
               <article class="acceptance-column ${escapeText(column.className)}">
                 <h3>${escapeText(column.title)}</h3>
                 <ul>
-                  ${column.items.map((item) => `
+                  ${(column.items.length ? column.items : [{ id: `${column.status}-empty`, label: column.emptyLabel, note: column.emptyNote, empty: true, status: column.status }]).map((item) => `
                     <li>
-                      <strong>${escapeText(item.label)}</strong>
-                      <span>${escapeText(item.note)}</span>
+                      <div class="acceptance-item-copy">
+                        <strong>${escapeText(item.label)}</strong>
+                        <span>${escapeText(item.note)}</span>
+                      </div>
+                      ${item.empty ? '' : renderReviewStatusControls(item.id, item.label, item.status)}
                     </li>
                   `).join('')}
                 </ul>
@@ -3381,6 +3492,28 @@
     const button = event.target.closest('button');
     if (!button) return;
     if (button.dataset.action === 'noop') return;
+    if (button.dataset.action === 'set-main-menu-review-status') {
+      const reviewId = button.dataset.reviewId;
+      const reviewStatus = button.dataset.reviewStatus;
+      if (
+        MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === reviewId)
+        && MAIN_MENU_REVIEW_STATUSES[reviewStatus]
+      ) {
+        state.mainMenuReviewDraft = {
+          ...state.mainMenuReviewDraft,
+          [reviewId]: reviewStatus,
+        };
+        saveMainMenuReviewDraft(state.mainMenuReviewDraft);
+        render();
+      }
+      return;
+    }
+    if (button.dataset.action === 'reset-main-menu-review-draft') {
+      state.mainMenuReviewDraft = {};
+      saveMainMenuReviewDraft(state.mainMenuReviewDraft);
+      render();
+      return;
+    }
     if (button.dataset.action === 'end-turn') {
       if (state.screen === 'game' && state.turn === 'player' && !state.animating) {
         state.turn = 'enemy';

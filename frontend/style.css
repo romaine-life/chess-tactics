@@ -1569,6 +1569,12 @@ h1 {
   min-width: 0;
 }
 
+.acceptance-ledger-heading > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .acceptance-ledger-heading strong,
 .acceptance-column h3 {
   color: #47a9ff;
@@ -1582,7 +1588,31 @@ h1 {
   color: #bfd5dc;
   font-size: 1.04rem;
   line-height: 1.12;
-  text-align: right;
+}
+
+.acceptance-ledger-heading button {
+  background: #07131d;
+  border: 2px solid rgba(63, 95, 111, .82);
+  color: #e8d4a6;
+  flex: 0 0 auto;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .48rem;
+  letter-spacing: 0;
+  min-height: 36px;
+  padding: 10px;
+  text-transform: uppercase;
+}
+
+.acceptance-ledger-heading button:not(:disabled):hover,
+.acceptance-ledger-heading button:not(:disabled):focus-visible {
+  border-color: var(--asset-cyan);
+  color: #f4ead0;
+  outline: none;
+}
+
+.acceptance-ledger-heading button:disabled {
+  cursor: default;
+  opacity: .48;
 }
 
 .acceptance-ledger-columns {
@@ -1639,8 +1669,13 @@ h1 {
 .acceptance-column li {
   border-left: 2px solid rgba(80, 129, 151, .5);
   display: grid;
-  gap: 4px;
+  gap: 8px;
   padding-left: 10px;
+}
+
+.acceptance-item-copy {
+  display: grid;
+  gap: 4px;
 }
 
 .acceptance-column li strong {
@@ -1655,6 +1690,51 @@ h1 {
   color: #bfd5dc;
   font-size: 1rem;
   line-height: 1.08;
+}
+
+.review-status-controls {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.review-status-controls button {
+  background: rgba(7, 19, 29, .94);
+  border: 2px solid rgba(63, 95, 111, .82);
+  color: #c2d3d9;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: 0;
+  line-height: 1.25;
+  min-height: 34px;
+  min-width: 0;
+  padding: 8px 6px;
+  text-transform: uppercase;
+}
+
+.review-status-controls button:hover,
+.review-status-controls button:focus-visible {
+  border-color: var(--asset-cyan);
+  color: #f4ead0;
+  outline: none;
+}
+
+.review-status-controls button.is-active {
+  background: rgba(12, 44, 63, .94);
+  border-color: rgba(37, 199, 255, .84);
+  color: #8ee7ff;
+}
+
+.review-status-controls button[data-review-status="review"].is-active {
+  background: rgba(61, 43, 12, .86);
+  border-color: rgba(233, 184, 92, .84);
+  color: #f1d084;
+}
+
+.review-status-controls button[data-review-status="rejected"].is-active {
+  background: rgba(37, 45, 51, .88);
+  border-color: rgba(157, 172, 181, .7);
+  color: #c6d0d5;
 }
 
 .asset-reference-panel {
@@ -1712,8 +1792,17 @@ h1 {
   scroll-margin-top: 24px;
 }
 
-.portfolio-asset.approved {
+.portfolio-asset.approved,
+.portfolio-asset.accepted {
   border-color: rgba(37, 199, 255, .76);
+}
+
+.portfolio-asset.review {
+  border-color: rgba(233, 184, 92, .7);
+}
+
+.portfolio-asset.rejected {
+  border-color: rgba(109, 126, 138, .64);
 }
 
 .portfolio-asset summary {
@@ -1780,8 +1869,17 @@ h1 {
   line-height: 1.2;
 }
 
-.portfolio-asset.approved .portfolio-asset-status {
+.portfolio-asset.approved .portfolio-asset-status,
+.portfolio-asset.accepted .portfolio-asset-status {
   color: #8ee7ff;
+}
+
+.portfolio-asset.review .portfolio-asset-status {
+  color: #f1d084;
+}
+
+.portfolio-asset.rejected .portfolio-asset-status {
+  color: #9fb0b7;
 }
 
 .portfolio-asset-body {
@@ -1850,6 +1948,23 @@ h1 {
   border-color: var(--asset-cyan);
   color: #f4ead0;
   outline: none;
+}
+
+.portfolio-review-draft {
+  background: rgba(2, 7, 11, .48);
+  border-left: 2px solid rgba(233, 184, 92, .54);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.portfolio-review-draft > span {
+  color: #f1d084;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .48rem;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: uppercase;
 }
 
 .portfolio-asset-figure {
