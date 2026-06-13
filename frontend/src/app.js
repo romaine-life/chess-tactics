@@ -3132,9 +3132,13 @@ import './style.css';
       </div>`;
   }
 
-  function renderApprovedReferenceCard(crop) {
+  function renderApprovedReferenceCard(crop, bare = false) {
     const key = crop.key || crop.cropClass || '';
     const selection = mainMenuReferenceSelection(key);
+    const frame = `<span class="portfolio-reference-frame" style="${escapeText(mainMenuReferencePreviewStyle(selection))}">
+          <img src="${APPROVED_RENDER_SRC}" alt="" aria-hidden="true" draggable="false">
+        </span>`;
+    if (bare) return frame;
     return `
       <button
         class="portfolio-reference-picker"
@@ -3144,9 +3148,7 @@ import './style.css';
         data-crop-title="${escapeText(crop.title || 'Approved Render Crop')}"
         aria-label="${escapeText(`Open full render crop picker for ${crop.title || 'approved render crop'}`)}"
       >
-        <span class="portfolio-reference-frame" style="${escapeText(mainMenuReferencePreviewStyle(selection))}">
-          <img src="${APPROVED_RENDER_SRC}" alt="" aria-hidden="true" draggable="false">
-        </span>
+        ${frame}
       </button>`;
   }
 
@@ -3391,7 +3393,7 @@ import './style.css';
       || (asset.file ? `<img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt || '')}" draggable="false" style="display:block;width:100%">` : '<span>No standalone component for this slot.</span>');
     const proposed = `<div class="portfolio-specimen" data-specimen="proposed">${proposedInner}</div>`;
     const compare = (asset.referenceCrops || [])
-      .map((crop) => `<div class="portfolio-specimen" data-specimen="compare">${renderApprovedReferenceCard(crop)}</div>`)
+      .map((crop) => `<div class="portfolio-specimen" data-specimen="compare">${renderApprovedReferenceCard(crop, true)}</div>`)
       .join('');
     return `
       <div class="specimen-capture" data-live-screen="specimen-${escapeText(id)}-${escapeText(only)}">
