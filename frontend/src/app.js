@@ -1,3 +1,5 @@
+import './style.css';
+
 (function () {
   const COLS = 8;
   const ROWS = 12;

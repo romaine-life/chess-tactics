@@ -11,7 +11,7 @@ These tasks can start in parallel after reading the contract.
 ### Board Rendering
 
 **Ownership:** board terrain, grid, cliff, water, battlefield background, and
-overlay rendering in `frontend/app.js`.
+overlay rendering in `frontend/src/app.js`.
 
 **Task:** Rework the canvas board toward moonlit grassland: readable dark grass,
 cool water, cliffs, stone paths, rocks, trees, clear tile boundaries, cyan move
@@ -40,8 +40,9 @@ styling.
 
 ### HUD And Sidebar
 
-**Ownership:** `frontend/index.html` and CSS for the top HUD, selected-unit
-panel, actions, roster, legend, meters, account area, and event log.
+**Ownership:** `frontend/index.html` plus `frontend/src` CSS for the top HUD,
+selected-unit panel, actions, roster, legend, meters, account area, and event
+log.
 
 **Task:** Rebuild the shell as dark low-glare tactical UI: dark navy/charcoal
 surfaces, off-white text, cobalt player/action emphasis, red/orange threat
@@ -95,7 +96,7 @@ integrated visual pass.
 
 ## Integration Notes
 
-- Board Rendering and Piece Style both touch `frontend/app.js`; keep edits in
+- Board Rendering and Piece Style both touch `frontend/src/app.js`; keep edits in
   their owned function areas and avoid broad refactors.
 - HUD And Sidebar should not assume a white panel just because some concept art
   used light UI.

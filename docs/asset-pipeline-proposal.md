@@ -44,7 +44,7 @@ exports.
 Use a small manifest-driven layout when production assets are introduced:
 
 ```text
-frontend/assets/
+frontend/public/assets/
   manifest.json
   tiles/
     moonlit-grassland.png

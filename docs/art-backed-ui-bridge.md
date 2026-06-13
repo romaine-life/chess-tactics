@@ -12,19 +12,20 @@ not the final component system.
 ## Contract
 
 - `docs/ui-art-direction.md` remains the binding art direction source.
-- `frontend/assets/ui/*.png` are the web-visible concept screens.
+- `frontend/public/assets/ui/*.png` are the Vite public concept screens served
+  at `/assets/ui/*`.
 - `docs/art/ui-screen-concepts/*.png` are the saved source references.
-- `frontend/assets/ui/main-menu-aspirational.png` provides the approved
+- `frontend/public/assets/ui/main-menu-aspirational.png` provides the approved
   painted crop for the live main menu mode button stack, including its labels.
-- `frontend/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
+- `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
-- `frontend/assets/ui/main-menu-*-chrome-v1.png` are generated bitmap sources
-  for the live main menu profile/status, news/daily, and dock chrome.
-- `frontend/assets/ui/main-menu-button-art-*.png` also includes generated
+- `frontend/public/assets/ui/main-menu-*-chrome-v1.png` are generated bitmap
+  sources for the live main menu profile/status, news/daily, and dock chrome.
+- `frontend/public/assets/ui/main-menu-button-art-*.png` also includes generated
   no-text button candidates used by the main menu asset review board.
-- `frontend/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
+- `frontend/src/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
   action wiring.
-- `frontend/style.css` owns hotspot geometry and art-screen presentation.
+- `frontend/src/style.css` owns hotspot geometry and art-screen presentation.
 
 Do not add a new one-off screen path for future concepts. Add the screen to
 `ART_SCREENS`, define hotspot classes, and style those classes as percentage
@@ -81,7 +82,7 @@ Hotspots are percentage-positioned so they scale with the artboard. Use this
 loop when adjusting them:
 
 1. Open the target URL with `hotspots=1`.
-2. Adjust the matching selector in `frontend/style.css`.
+2. Adjust the matching selector in `frontend/src/style.css`.
 3. Hot-swap the frontend into the test slot.
 4. Inspect normal mode and hotspot mode.
 

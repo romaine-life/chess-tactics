@@ -147,6 +147,16 @@ async function main() {
   if (fallback.statusCode !== 200 || !fallback.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
   }
+  const missingAsset = await get('/assets/missing.png');
+  if (missingAsset.statusCode !== 404) {
+    throw new Error(`Missing asset-like routes should return 404: ${missingAsset.statusCode}`);
+  }
+  for (const migratedAssetPath of ['/app.js', '/style.css']) {
+    const response = await get(migratedAssetPath);
+    if (response.statusCode !== 404) {
+      throw new Error(`Migrated raw asset path should be gone for ${migratedAssetPath}: ${response.statusCode}`);
+    }
+  }
 
   const reviewUrls = [
     '/?screen=main',

@@ -225,17 +225,17 @@ questions. Does not implement UI.
 ### Board Rendering
 
 Owns terrain, grid, cliff, water, background, and overlay rendering in
-`frontend/app.js`. Avoids piece redesign and non-board UI layout.
+`frontend/src/app.js`. Avoids piece redesign and non-board UI layout.
 
 ### Piece Style
 
-Owns piece silhouette/rendering in `frontend/app.js` or future piece assets.
+Owns piece silhouette/rendering in `frontend/src/app.js` or future piece assets.
 Avoids terrain palette and side panel layout.
 
 ### HUD And Sidebar
 
-Owns `frontend/index.html` and shell/panel CSS for the top HUD, selected unit,
-actions, roster, legend, and log. Avoids canvas rendering.
+Owns `frontend/index.html` and `frontend/src` shell/panel CSS for the top HUD,
+selected unit, actions, roster, legend, and log. Avoids canvas rendering.
 
 ### Menus And Editor
 
