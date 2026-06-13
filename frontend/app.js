@@ -536,6 +536,7 @@
     mainMenuReviewSaveError: '',
     mainMenuReviewRevision: 0,
     mainMenuReviewUpdatedAt: '',
+    mainMenuReviewFocusId: 'profile-chrome',
   };
 
   const ART_SCREENS = {
@@ -2976,6 +2977,11 @@
     return MAIN_MENU_REVIEW_STATUSES[status] || MAIN_MENU_REVIEW_STATUSES.review;
   }
 
+  function renderReviewStatusBadge(status, label) {
+    const meta = mainMenuReviewMeta(status);
+    return `<span class="review-status-badge ${escapeText(meta.cardClass)}">${escapeText(label || meta.label)}</span>`;
+  }
+
   function renderReviewStatusControls(id, label, currentStatus) {
     const actions = [
       { status: 'accepted', label: 'Accept' },
@@ -2994,6 +3000,79 @@
             data-review-status="${escapeText(action.status)}"
             aria-pressed="${action.status === currentStatus ? 'true' : 'false'}"
           >${escapeText(action.label)}</button>
+        `).join('')}
+      </div>`;
+  }
+
+  function renderApprovalQueue(items, focusedId) {
+    return `
+      <div class="approval-queue" aria-label="Review queue">
+        <div class="approval-panel-head">
+          <strong>Review Queue</strong>
+          <span>${escapeText(String(items.length))} targets</span>
+        </div>
+        <div class="approval-queue-list">
+          ${items.map((item) => {
+            const meta = mainMenuReviewMeta(item.status);
+            const isFocused = item.id === focusedId;
+            const hasDraftOverride = Object.hasOwn(state.mainMenuReviewDraft, item.id);
+            return `
+              <button
+                type="button"
+                class="approval-queue-item ${escapeText(meta.cardClass)} ${isFocused ? 'is-active' : ''}"
+                data-action="focus-main-menu-review-item"
+                data-review-id="${escapeText(item.id)}"
+                aria-pressed="${isFocused ? 'true' : 'false'}"
+              >
+                ${renderReviewStatusBadge(item.status)}
+                <strong>${escapeText(item.label)}</strong>
+                <span>${escapeText(item.note)}</span>
+                ${hasDraftOverride ? '<small>Draft override</small>' : ''}
+              </button>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  function renderApprovalDecisionPanel(item) {
+    const baseMeta = mainMenuReviewMeta(item.baseStatus);
+    const hasDraftOverride = Object.hasOwn(state.mainMenuReviewDraft, item.id);
+    return `
+      <article class="approval-decision-panel ${escapeText(mainMenuReviewMeta(item.status).cardClass)}" aria-label="Selected review target">
+        <div class="approval-decision-heading">
+          <span>Decision Target</span>
+          <h3>${escapeText(item.label)}</h3>
+          ${renderReviewStatusBadge(item.status)}
+        </div>
+        <p>${escapeText(item.note)}</p>
+        <dl>
+          <div>
+            <dt>Committed profile</dt>
+            <dd>${escapeText(baseMeta.label)}</dd>
+          </div>
+          <div>
+            <dt>Draft state</dt>
+            <dd>${hasDraftOverride ? 'Saved as a slot draft override.' : 'No draft override.'}</dd>
+          </div>
+          <div>
+            <dt>Promotion rule</dt>
+            <dd>Use the draft to review. Update the profile doc to lock it in git.</dd>
+          </div>
+        </dl>
+        <div class="approval-decision-actions">
+          ${renderReviewStatusControls(item.id, item.label, item.status)}
+        </div>
+      </article>`;
+  }
+
+  function renderApprovalSummary(columns) {
+    return `
+      <div class="approval-summary" aria-label="Review status counts">
+        ${columns.map((column) => `
+          <span class="${escapeText(column.status)}">
+            <strong>${escapeText(String(column.items.length))}</strong>
+            <small>${escapeText(column.title)}</small>
+          </span>
         `).join('')}
       </div>`;
   }
@@ -3059,6 +3138,9 @@
       ...column,
       items: reviewItems.filter((item) => item.status === column.status),
     }));
+    const focusedReviewItem = reviewItems.find((item) => item.id === state.mainMenuReviewFocusId)
+      || reviewItems.find((item) => item.status === 'review')
+      || reviewItems[0];
     const hasReviewDraft = Object.keys(state.mainMenuReviewDraft).length > 0;
     const portfolioAssets = [
       {
@@ -3155,11 +3237,16 @@
         <section id="acceptance-ledger" class="acceptance-ledger" aria-label="Main menu acceptance ledger">
           <div class="acceptance-ledger-heading">
             <div>
-              <strong>Acceptance Ledger</strong>
-              <span>Saved portfolio draft for active review. Promote decisions to the profile when they are final.</span>
+              <strong>Approval Workbench</strong>
+              <span>Pick one target, make a draft decision, then promote accepted decisions to the profile when they are final.</span>
               <small>${escapeText(mainMenuReviewSaveLabel())}</small>
             </div>
             <button type="button" data-action="reset-main-menu-review-draft" ${hasReviewDraft ? '' : 'disabled'}>${hasReviewDraft ? 'Reset Draft' : 'No Draft'}</button>
+          </div>
+          ${renderApprovalSummary(acceptanceColumns)}
+          <div class="approval-workbench">
+            ${renderApprovalQueue(reviewItems, focusedReviewItem.id)}
+            ${renderApprovalDecisionPanel(focusedReviewItem)}
           </div>
           <div class="acceptance-ledger-columns">
             ${acceptanceColumns.map((column) => `
@@ -3172,7 +3259,7 @@
                         <strong>${escapeText(item.label)}</strong>
                         <span>${escapeText(item.note)}</span>
                       </div>
-                      ${item.empty ? '' : renderReviewStatusControls(item.id, item.label, item.status)}
+                      ${item.empty ? '' : renderReviewStatusBadge(item.status)}
                     </li>
                   `).join('')}
                 </ul>
@@ -3597,6 +3684,14 @@
     const button = event.target.closest('button');
     if (!button) return;
     if (button.dataset.action === 'noop') return;
+    if (button.dataset.action === 'focus-main-menu-review-item') {
+      const reviewId = button.dataset.reviewId;
+      if (MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === reviewId)) {
+        state.mainMenuReviewFocusId = reviewId;
+        render();
+      }
+      return;
+    }
     if (button.dataset.action === 'set-main-menu-review-status') {
       const reviewId = button.dataset.reviewId;
       const reviewStatus = button.dataset.reviewStatus;
@@ -3604,6 +3699,7 @@
         MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === reviewId)
         && MAIN_MENU_REVIEW_STATUSES[reviewStatus]
       ) {
+        state.mainMenuReviewFocusId = reviewId;
         void saveMainMenuReviewDraft(nextMainMenuReviewDraft(reviewId, reviewStatus));
       }
       return;
