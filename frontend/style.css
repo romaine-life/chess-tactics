@@ -1183,26 +1183,37 @@ h1 {
 
 .main-menu-profile-art {
   display: block;
-  min-height: clamp(132px, 15vh, 174px);
+  min-height: clamp(132px, 15vh, 176px);
   padding: 0;
 }
 
 .main-menu-profile-art .main-menu-avatar {
-  height: 18%;
-  left: 8.4%;
+  height: 31%;
+  left: 8.5%;
   min-height: 42px;
   min-width: 42px;
   position: absolute;
-  top: 29%;
-  width: 14%;
+  top: 31%;
+  width: 16%;
   z-index: 1;
 }
 
-.main-menu-profile-art > div:nth-of-type(2) {
-  left: 27%;
+.main-menu-profile-art .main-menu-avatar img,
+.main-menu-profile-art .main-menu-avatar span {
+  border-radius: 2px;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.main-menu-profile-identity {
+  display: grid;
+  gap: 5px;
+  left: 26.8%;
   position: absolute;
-  top: 28%;
-  width: 48%;
+  top: 31.6%;
+  width: 51%;
   z-index: 1;
 }
 
@@ -1215,12 +1226,12 @@ h1 {
 }
 
 .main-menu-profile-stats {
-  bottom: 16%;
+  bottom: 18.8%;
   display: flex;
-  gap: 8px;
-  left: 27%;
+  gap: 6%;
+  left: 32.6%;
   position: absolute;
-  width: 48%;
+  width: 43.4%;
   z-index: 1;
 }
 
@@ -1228,19 +1239,17 @@ h1 {
   align-items: center;
   color: #d8e6ec;
   display: flex;
-  gap: 5px;
+  flex: 1 1 0;
   min-width: 0;
-}
-
-.main-menu-profile-stats b {
-  color: #e7b95a;
-  font-family: Georgia, serif;
-  font-size: 1.05rem;
+  overflow: hidden;
 }
 
 .main-menu-profile-stats strong {
   color: #f0eadb;
-  font-size: clamp(.42rem, .62vw, .58rem);
+  font-size: clamp(.42rem, .56vw, .54rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .main-menu-profile-art button {
@@ -1249,15 +1258,25 @@ h1 {
   box-shadow: none;
   color: #d9f4ff;
   font-size: clamp(.42rem, .58vw, .54rem);
-  height: 30%;
+  height: 27%;
   min-height: 36px;
   min-width: 0;
   padding: 0;
   position: absolute;
-  right: 6.8%;
-  top: 39%;
-  width: 15%;
+  right: 7.2%;
+  top: 42.5%;
+  width: 14%;
   z-index: 2;
+}
+
+.main-menu-profile-art button span {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .main-menu-profile-art button:hover,
@@ -3827,6 +3846,29 @@ h1 {
 
   .main-menu-profile button:last-child {
     display: none;
+  }
+
+  .main-menu-profile-art {
+    display: block;
+    grid-template-columns: none;
+    min-height: 132px;
+  }
+
+  .main-menu-profile-art button:last-child {
+    display: block;
+  }
+
+  .main-menu-profile-art .main-menu-avatar {
+    height: 31%;
+    width: 16%;
+  }
+
+  .main-menu-profile-identity {
+    top: 31%;
+  }
+
+  .main-menu-profile-stats strong {
+    font-size: .42rem;
   }
 
   .main-menu-counts {

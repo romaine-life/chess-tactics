@@ -2943,6 +2943,10 @@
     const signedIn = Boolean(currentUser);
     const displayName = signedIn ? (currentUser.name || currentUser.email || 'Player') : 'Guest';
     const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
+    const accountInitial = signedIn ? displayName.trim().charAt(0).toUpperCase() : '?';
+    const avatarMarkup = signedIn && currentUser.avatar_url
+      ? `<img src="${escapeText(currentUser.avatar_url)}" alt="" draggable="false">`
+      : `<span aria-hidden="true">${escapeText(accountInitial || 'P')}</span>`;
     return `
       <div class="main-menu-screen main-menu-live-screen main-menu-skeleton-screen" data-live-screen="main-skeleton">
         <section class="main-menu-left" aria-label="Main navigation">
@@ -2985,16 +2989,18 @@
         <aside class="main-menu-right" aria-label="Profile and status">
           <div class="main-menu-profile main-menu-profile-art">
             <img src="/assets/ui/main-menu-profile-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-            <div class="main-menu-avatar" aria-hidden="true">${signedIn ? 'P' : '?'}</div>
-            <div>
+            <div class="main-menu-avatar" aria-hidden="true">${avatarMarkup}</div>
+            <div class="main-menu-profile-identity">
               <strong>${escapeText(displayName)}</strong>
               <span>${escapeText(email)}</span>
             </div>
             <div class="main-menu-profile-stats" aria-label="Preview force count">
-              <span><b aria-hidden="true">A</b><strong>6 Allies</strong></span>
-              <span><b aria-hidden="true">T</b><strong>5 Threats</strong></span>
+              <span><strong>6 Allies</strong></span>
+              <span><strong>5 Threats</strong></span>
             </div>
-            <button type="button" data-action="${signedIn ? 'settings' : 'sign-in'}">${signedIn ? 'Account' : 'Sign In'}</button>
+            <button type="button" data-action="${signedIn ? 'settings' : 'sign-in'}" aria-label="${signedIn ? 'Account settings' : 'Sign in'}">
+              <span>${signedIn ? 'Account' : 'Sign In'}</span>
+            </button>
           </div>
 
           <div class="main-menu-news main-menu-news-art">
