@@ -2848,26 +2848,27 @@
       {
         id: 'brand-chrome',
         title: 'Title / Brand Plate',
-        status: 'Needs Review',
+        status: 'Accepted',
+        statusClass: 'approved',
         file: '/assets/ui/main-menu-brand-title-only-v1.png',
         alt: 'Accepted main menu title plate crop with crest, Chess Tactics title, and divider',
         caption: 'Title-only crop. The console label and subtitle have been removed so the lockup is just the game title.',
         description: 'The title plate is now reduced to the actual game brand: crest, Chess Tactics, and the lower divider from the accepted render.',
-        target: 'Confirm the title-only lockup feels cleaner and still belongs with the approved main menu direction.',
+        target: 'Keep this as the locked upper-left brand/title plate unless a later layout change exposes a fit issue.',
         liveUse: 'Used as the visible live brand plate in the upper-left main menu column.',
-        decision: 'Approve this as the main title lockup, request crop/spacing changes, or ask for a rebuilt browser-native version.',
+        decision: 'Accepted as the main title lockup.',
       },
       {
         id: 'profile-chrome',
         title: 'Profile / Status Panel',
-        status: 'Needs Review',
+        status: 'Polished',
         file: '/assets/ui/main-menu-profile-chrome-v1.png',
         alt: 'Generated pixel art profile and status chrome for the main menu',
-        caption: 'Right-rail profile source for player identity, counters, and sign-in plate.',
-        description: 'A compact status module intended to keep account state and force preview visible without returning to generic app-card UI.',
-        target: 'Check whether it feels useful and game-native rather than dashboard-like.',
-        liveUse: 'Used behind the Guest/profile block, allies/threat counters, and sign-in hotspot on the live menu.',
-        decision: 'Approve, simplify, or split into smaller profile and counter-specific assets.',
+        caption: 'Right-rail profile source for player identity, force counters, and the sign-in/account action slot.',
+        description: 'The live overlay now follows the painted chrome slots: avatar tile, identity strip, sword/crown force counters, and arrow-button action target.',
+        target: 'Review the polished overlay fit before calling this panel accepted.',
+        liveUse: 'Used behind the Guest/profile block, allies/threat counters, and sign-in/account hotspot on the live menu.',
+        decision: 'Keep the current slot-aligned overlay unless review asks for a new crop, stronger text contrast, or a split profile/counter asset.',
       },
       {
         id: 'news-chrome',
@@ -2934,7 +2935,7 @@
         </section>
 
         <footer class="asset-review-footer">
-          <span>The buttons and battlefield plate are now wired into the live menu. The next decision is whether the brand, profile, news, and dock chrome deserve approval, revision, or removal before editor and skirmish extraction begins.</span>
+          <span>The buttons and upper-left brand plate are accepted. The profile panel is polished for review; next decisions are news/daily, dock, and deeper battlefield plate refinement.</span>
         </footer>
       </div>`;
   }
