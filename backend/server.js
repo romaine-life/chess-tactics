@@ -7,12 +7,15 @@ const app = express();
 const port = process.env.PORT || 3000;
 const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend');
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
+const hotBackendDir = process.env.HOT_BACKEND_DIR || '';
+const designPortfolioStorePath = process.env.DESIGN_PORTFOLIO_STORE_PATH
+  || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-design-portfolios.json');
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 const lobbies = new Map();
 const campaigns = new Map();
 
-app.use(express.json({ limit: '64kb' }));
+app.use(express.json({ limit: '256kb' }));
 
 const LEVEL_ROLES = new Set(['player', 'enemy', 'terrain']);
 const LEVEL_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen']);
@@ -21,6 +24,8 @@ const MISC_ZONE_TYPES = new Set(['falling-rock']);
 const PLAYER_SPAWN_MIN_CELLS = 3;
 const PLAYER_1_SPAWN_ZONE_ID = 'player-1-spawn';
 const PLAYER_2_SPAWN_ZONE_ID = 'player-2-spawn';
+const DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION = 1;
+const DESIGN_PORTFOLIO_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
 
 function safeReturnPath(raw) {
   if (!raw || typeof raw !== 'string') return '/';
@@ -87,6 +92,57 @@ function publicLobby(lobby, viewerEmail) {
       total: 2,
     },
     viewer_role: viewerEmail === lobby.host.email ? 'host' : (lobby.guest && viewerEmail === lobby.guest.email ? 'guest' : 'observer'),
+  };
+}
+
+function isObjectRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function designPortfolioId(raw) {
+  const id = String(raw || '').trim();
+  return DESIGN_PORTFOLIO_ID_PATTERN.test(id) ? id : null;
+}
+
+function emptyDesignPortfolioStore() {
+  return {
+    store_schema_version: DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION,
+    documents: {},
+  };
+}
+
+function readDesignPortfolioStore() {
+  try {
+    const raw = fs.readFileSync(designPortfolioStorePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!isObjectRecord(parsed) || !isObjectRecord(parsed.documents)) return emptyDesignPortfolioStore();
+    return {
+      store_schema_version: parsed.store_schema_version || DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION,
+      documents: parsed.documents,
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') return emptyDesignPortfolioStore();
+    throw error;
+  }
+}
+
+function writeDesignPortfolioStore(store) {
+  fs.mkdirSync(path.dirname(designPortfolioStorePath), { recursive: true });
+  const tempPath = `${designPortfolioStorePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tempPath, `${JSON.stringify(store, null, 2)}\n`);
+  fs.renameSync(tempPath, designPortfolioStorePath);
+}
+
+function publicDesignPortfolioDocument(id, document) {
+  return {
+    id,
+    data: isObjectRecord(document && document.data) ? document.data : {},
+    client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
+    metadata: isObjectRecord(document && document.metadata) ? document.metadata : {},
+    revision: Number.isInteger(document && document.revision) ? document.revision : 0,
+    created_at: document && document.created_at ? document.created_at : null,
+    updated_at: document && document.updated_at ? document.updated_at : null,
+    updated_by: document && document.updated_by ? document.updated_by : null,
   };
 }
 
@@ -487,6 +543,18 @@ async function requireUser(req, res) {
   return user;
 }
 
+async function requireDesignPortfolioWriter(req, res) {
+  const host = req.get('host') || '';
+  if (host.includes('.tank.dev.romaine.life')) {
+    return {
+      email: 'test-slot@chess-tactics.local',
+      name: 'Test Slot',
+      role: 'designer',
+    };
+  }
+  return requireUser(req, res);
+}
+
 function activeLobbies() {
   return Array.from(lobbies.values())
     .filter((lobby) => lobby.phase !== 'closed')
@@ -779,6 +847,65 @@ app.delete('/api/campaigns/:id/levels/:levelId', async (req, res) => {
   campaign.levels.splice(index, 1);
   campaign.updatedAt = new Date().toISOString();
   res.status(200).json({ campaign: campaignSummary(campaign) });
+});
+
+app.get('/api/design-portfolios/:id', (req, res) => {
+  const id = designPortfolioId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_design_portfolio_id' });
+    return;
+  }
+  try {
+    const store = readDesignPortfolioStore();
+    res.status(200).json({
+      portfolio: publicDesignPortfolioDocument(id, store.documents[id]),
+      store_schema_version: store.store_schema_version,
+    });
+  } catch (error) {
+    console.error('design portfolio read failed:', error);
+    res.status(503).json({ error: 'design_portfolio_store_unavailable' });
+  }
+});
+
+app.put('/api/design-portfolios/:id', async (req, res) => {
+  const user = await requireDesignPortfolioWriter(req, res);
+  if (!user) return;
+  const id = designPortfolioId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_design_portfolio_id' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!isObjectRecord(raw.data)) {
+    res.status(400).json({ error: 'design_portfolio_data_object_required' });
+    return;
+  }
+
+  try {
+    const store = readDesignPortfolioStore();
+    const existing = isObjectRecord(store.documents[id]) ? store.documents[id] : {};
+    const now = new Date().toISOString();
+    const document = {
+      id,
+      data: raw.data,
+      client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
+      metadata: isObjectRecord(raw.metadata) ? raw.metadata : {},
+      revision: (Number.isInteger(existing.revision) ? existing.revision : 0) + 1,
+      created_at: existing.created_at || now,
+      updated_at: now,
+      updated_by: user.email,
+    };
+    store.store_schema_version = DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION;
+    store.documents[id] = document;
+    writeDesignPortfolioStore(store);
+    res.status(200).json({
+      portfolio: publicDesignPortfolioDocument(id, document),
+      store_schema_version: store.store_schema_version,
+    });
+  } catch (error) {
+    console.error('design portfolio write failed:', error);
+    res.status(503).json({ error: 'design_portfolio_store_unavailable' });
+  }
 });
 
 app.get('/api/auth/sign-in', (req, res) => {

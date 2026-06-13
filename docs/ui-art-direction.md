@@ -163,6 +163,56 @@ Do not begin with a full asset pipeline unless the code-rendered prototype
 cannot reach an acceptable style. The first production pass should prove the
 style with the existing architecture.
 
+## Current Screen Concept References
+
+The June 2026 screen concepts are binding visual references for the UI overhaul:
+
+- [Main menu aspirational concept](art/ui-screen-concepts/01-main-menu-aspirational.png)
+- [Campaign editor concept](art/ui-screen-concepts/02-campaign-editor.png)
+- [Level editor concept](art/ui-screen-concepts/03-level-editor.png)
+- [Skirmish concept](art/ui-screen-concepts/04-skirmish.png)
+
+Use these as direction targets, not literal implementation screenshots. The
+production UI should preserve their mood, hierarchy, low-glare shell, rich
+isometric board presence, and tactical information density while adapting to the
+actual app architecture.
+
+The main menu concept is intentionally aspirational. Keep the saved image as a
+growth reference for future features such as profile state, news, daily
+challenge, lobbies, achievements, and richer account/status panels. The first
+implementation pass may reduce the main menu to the modes the app actually has
+today.
+
+The level editor and skirmish concepts are the immediate product targets. They
+should drive the first concrete UI sweep because they define the practical tool
+layout, HUD structure, tile palette, brush controls, roster, selected-unit
+panel, threat language, and low-glare chrome.
+
+The current implementation uses a skeleton-first [art-backed UI bridge](art-backed-ui-bridge.md).
+The app routes should show live DOM skeletons by default because the old
+utility UI is below the intended quality bar. Approved renders remain available
+as explicit concept references, not as the normal app surface.
+
+The default work surfaces are `/`, `/?screen=main`, `/?screen=campaigns`,
+`/?screen=level-editor`, and `/?screen=skirmish`. They show live DOM bridge
+surfaces with unfinished asset slots labeled in place. The approved main menu
+render is the source for the five-button mode stack so its painted lettering
+stays intact. The main menu title/brand plate uses an accepted crop from the
+approved main menu render, the profile/status, news/daily, and dock surfaces
+use generated bitmap chrome with live HTML labels and click targets, and the
+main menu battlefield plate uses the live moonlit canvas board inside CSS
+chrome. `*-concept` routes preserve the approved renders for comparison:
+`/?screen=main-concept`, `/?screen=campaigns-concept`,
+`/?screen=level-editor-concept`, and `/?screen=skirmish-concept`.
+`/?screen=main-assets` remains the asset review board for comparing candidate
+asset families before wiring them into a bridge.
+
+The main menu acceptance state lives in
+[main-menu-acceptance.md](main-menu-acceptance.md). As of the current pass, the
+mode button stack, upper-left brand/title banner, and art-backed live bridge
+approach are settled. Profile/status, daily/news, bottom dock, and battlefield
+plate details still need review.
+
 ## Parallel Work Boundaries
 
 Use these boundaries when delegating to agents.

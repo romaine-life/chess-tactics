@@ -25,6 +25,72 @@
   const MISC_ZONE_TYPES = [
     { id: 'falling-rock', label: 'Falling Rock' },
   ];
+  const DESIGN_PORTFOLIO_ID = 'main-menu-acceptance';
+  const DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION = 1;
+  const MAIN_MENU_REVIEW_STORAGE_KEY = 'chess-tactics-main-menu-review-draft-v1';
+  const MAIN_MENU_REFERENCE_STORAGE_KEY = 'chess-tactics-main-menu-reference-crops-v1';
+  const APPROVED_RENDER_SRC = '/assets/ui/main-menu-aspirational.png';
+  const APPROVED_RENDER_WIDTH = 1586;
+  const APPROVED_RENDER_HEIGHT = 992;
+  const REFERENCE_CROP_MIN_SIZE = 8;
+  const MAIN_MENU_REVIEW_STATUSES = {
+    accepted: { label: 'Accepted', cardClass: 'accepted', columnClass: 'settled' },
+    review: { label: 'Needs Review', cardClass: 'review', columnClass: 'review' },
+    rejected: { label: 'Rejected', cardClass: 'rejected', columnClass: 'rejected' },
+  };
+  const MAIN_MENU_LEDGER_ITEMS = [
+    {
+      id: 'mode-buttons',
+      label: 'Mode button stack',
+      note: 'Accepted painted crop and transparent hit targets.',
+      baseStatus: 'accepted',
+    },
+    {
+      id: 'brand-chrome',
+      label: 'Brand/title banner',
+      note: 'Accepted upper-left crest and title crop.',
+      baseStatus: 'accepted',
+    },
+    {
+      id: 'bridge-approach',
+      label: 'Art-backed bridge',
+      note: 'Keep live DOM controls over game-native chrome.',
+      baseStatus: 'accepted',
+    },
+    {
+      id: 'profile-chrome',
+      label: 'Profile/status panel',
+      note: 'Identity, sign-in/account, counters, and chrome.',
+      baseStatus: 'review',
+    },
+    {
+      id: 'news-chrome',
+      label: 'Daily/news panel',
+      note: 'Daily line, campaign tools copy, reusable panel art.',
+      baseStatus: 'review',
+    },
+    {
+      id: 'dock-chrome',
+      label: 'Bottom dock',
+      note: 'Icons, labels/tooltips, focus states, and priority.',
+      baseStatus: 'review',
+    },
+    {
+      id: 'battlefield-plate',
+      label: 'Battlefield plate',
+      note: 'Frame, status labels, depth, and responsive fit.',
+      baseStatus: 'review',
+    },
+  ];
+  const MAIN_MENU_REFERENCE_CROP_DEFAULTS = {
+    'mode-buttons': { x: 42, y: 247, w: 492, h: 487 },
+    'brand-chrome': { x: 38, y: 35, w: 625, h: 170 },
+    'profile-chrome': { x: 1175, y: 26, w: 393, h: 162 },
+    'daily-panel': { x: 29, y: 763, w: 485, h: 180 },
+    'news-panel': { x: 1176, y: 763, w: 392, h: 190 },
+    'dock-chrome': { x: 548, y: 810, w: 410, h: 136 },
+    'battlefield-plate': { x: 538, y: 175, w: 930, h: 682 },
+  };
   const ZONE_COLORS = [
     { fill: 'rgba(255,210,74,0.24)', stroke: '#ffd24a' },
     { fill: 'rgba(174,230,255,0.22)', stroke: '#aee6ff' },
@@ -217,6 +283,7 @@
   const menuLayer = document.getElementById('menuLayer');
   const gamePanel = document.getElementById('gamePanel');
   const levelEditorPanel = document.getElementById('levelEditorPanel');
+  const shellEl = document.querySelector('.shell');
   const accountEl = document.getElementById('account');
   const accountAvatarEl = document.getElementById('accountAvatar');
   const accountNameEl = document.getElementById('accountName');
@@ -318,6 +385,254 @@
     originY: 54,
   };
 
+  function loadMainMenuReviewDraft() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(MAIN_MENU_REVIEW_STORAGE_KEY) || '{}');
+      return normalizeMainMenuReviewDraft(parsed);
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function loadMainMenuReferenceSelections() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(MAIN_MENU_REFERENCE_STORAGE_KEY) || '{}');
+      return normalizeMainMenuReferenceSelections(parsed);
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function normalizeMainMenuReviewDraft(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).filter(([id, status]) => (
+      MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === id) && MAIN_MENU_REVIEW_STATUSES[status]
+    )));
+  }
+
+  function mainMenuReviewDraftFromPortfolioData(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+    return normalizeMainMenuReviewDraft(data.review_statuses || data.statuses || {});
+  }
+
+  function mainMenuReferenceSelectionsFromPortfolioData(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+    return normalizeMainMenuReferenceSelections(data.reference_crops || data.referenceCrops || {});
+  }
+
+  function mainMenuReviewPortfolioData(draft, referenceSelections) {
+    return {
+      kind: 'main-menu-design-portfolio',
+      document_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
+      review_statuses: normalizeMainMenuReviewDraft(draft),
+      reference_crops: normalizeMainMenuReferenceSelections(referenceSelections),
+    };
+  }
+
+  function saveMainMenuReviewDraftLocal(draft) {
+    try {
+      const cleanDraft = normalizeMainMenuReviewDraft(draft);
+      if (Object.keys(cleanDraft).length) {
+        window.localStorage.setItem(MAIN_MENU_REVIEW_STORAGE_KEY, JSON.stringify(cleanDraft));
+      } else {
+        window.localStorage.removeItem(MAIN_MENU_REVIEW_STORAGE_KEY);
+      }
+    } catch (error) {
+      // Review persistence is a convenience layer; storage failures should not block the screen.
+    }
+  }
+
+  function saveMainMenuReferenceSelectionsLocal(selections) {
+    try {
+      const cleanSelections = normalizeMainMenuReferenceSelections(selections);
+      if (Object.keys(cleanSelections).length) {
+        window.localStorage.setItem(MAIN_MENU_REFERENCE_STORAGE_KEY, JSON.stringify(cleanSelections));
+      } else {
+        window.localStorage.removeItem(MAIN_MENU_REFERENCE_STORAGE_KEY);
+      }
+    } catch (error) {
+      // Reference crop persistence is a convenience layer; storage failures should not block the screen.
+    }
+  }
+
+  async function loadMainMenuReviewDraftRemote() {
+    state.mainMenuReviewSaveState = 'loading';
+    render();
+    try {
+      const body = await apiRequest(`/api/design-portfolios/${encodeURIComponent(DESIGN_PORTFOLIO_ID)}`);
+      const portfolio = body && body.portfolio;
+      const remoteDraft = mainMenuReviewDraftFromPortfolioData(portfolio && portfolio.data);
+      const remoteReferenceSelections = mainMenuReferenceSelectionsFromPortfolioData(portfolio && portfolio.data);
+      state.mainMenuReviewDraft = remoteDraft;
+      state.mainMenuReferenceSelections = remoteReferenceSelections;
+      state.mainMenuReviewRevision = portfolio && portfolio.revision ? portfolio.revision : 0;
+      state.mainMenuReviewUpdatedAt = portfolio && portfolio.updated_at ? portfolio.updated_at : '';
+      state.mainMenuReviewSaveState = state.mainMenuReviewRevision ? 'saved' : 'ready';
+      state.mainMenuReviewSaveError = '';
+      saveMainMenuReviewDraftLocal(remoteDraft);
+      saveMainMenuReferenceSelectionsLocal(remoteReferenceSelections);
+    } catch (error) {
+      state.mainMenuReviewSaveState = 'local';
+      state.mainMenuReviewSaveError = 'Slot save unavailable; using this browser only.';
+    } finally {
+      render();
+    }
+  }
+
+  async function saveMainMenuReviewDraft(draft) {
+    const cleanDraft = normalizeMainMenuReviewDraft(draft);
+    state.mainMenuReviewDraft = cleanDraft;
+    state.mainMenuReviewSaveState = 'saving';
+    state.mainMenuReviewSaveError = '';
+    saveMainMenuReviewDraftLocal(cleanDraft);
+    render();
+
+    try {
+      const body = await apiRequest(`/api/design-portfolios/${encodeURIComponent(DESIGN_PORTFOLIO_ID)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          client_schema_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
+          metadata: {
+            screen: 'main-assets',
+            source: 'design-portfolio-card',
+          },
+          data: mainMenuReviewPortfolioData(cleanDraft, state.mainMenuReferenceSelections),
+        }),
+      });
+      const portfolio = body && body.portfolio;
+      const persistedDraft = mainMenuReviewDraftFromPortfolioData(portfolio && portfolio.data);
+      const persistedReferenceSelections = mainMenuReferenceSelectionsFromPortfolioData(portfolio && portfolio.data);
+      state.mainMenuReviewDraft = persistedDraft;
+      state.mainMenuReferenceSelections = persistedReferenceSelections;
+      state.mainMenuReviewRevision = portfolio && portfolio.revision ? portfolio.revision : 0;
+      state.mainMenuReviewUpdatedAt = portfolio && portfolio.updated_at ? portfolio.updated_at : '';
+      state.mainMenuReviewSaveState = 'saved';
+      saveMainMenuReviewDraftLocal(persistedDraft);
+      saveMainMenuReferenceSelectionsLocal(persistedReferenceSelections);
+    } catch (error) {
+      state.mainMenuReviewSaveState = 'local';
+      state.mainMenuReviewSaveError = 'Could not save to slot; kept browser copy.';
+    } finally {
+      render();
+    }
+  }
+
+  function mainMenuReviewBaseStatus(id) {
+    const item = MAIN_MENU_LEDGER_ITEMS.find((entry) => entry.id === id);
+    return item ? item.baseStatus : 'review';
+  }
+
+  function nextMainMenuReviewDraft(id, status) {
+    const draft = { ...state.mainMenuReviewDraft };
+    if (status === mainMenuReviewBaseStatus(id)) {
+      delete draft[id];
+    } else {
+      draft[id] = status;
+    }
+    return normalizeMainMenuReviewDraft(draft);
+  }
+
+  function clampReferenceNumber(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function normalizeMainMenuReferenceSelection(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const x = Number(raw.x);
+    const y = Number(raw.y);
+    const w = Number(raw.w);
+    const h = Number(raw.h);
+    if (![x, y, w, h].every(Number.isFinite)) return null;
+    const cleanX = clampReferenceNumber(x, 0, APPROVED_RENDER_WIDTH - REFERENCE_CROP_MIN_SIZE);
+    const cleanY = clampReferenceNumber(y, 0, APPROVED_RENDER_HEIGHT - REFERENCE_CROP_MIN_SIZE);
+    const cleanW = clampReferenceNumber(w, REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_WIDTH - cleanX);
+    const cleanH = clampReferenceNumber(h, REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_HEIGHT - cleanY);
+    return {
+      x: Math.round(cleanX),
+      y: Math.round(cleanY),
+      w: Math.round(cleanW),
+      h: Math.round(cleanH),
+    };
+  }
+
+  function normalizeMainMenuReferenceSelections(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).map(([key, selection]) => (
+      [key, normalizeMainMenuReferenceSelection(selection)]
+    )).filter(([key, selection]) => MAIN_MENU_REFERENCE_CROP_DEFAULTS[key] && selection));
+  }
+
+  function mainMenuReferenceSelection(key) {
+    return normalizeMainMenuReferenceSelection(state.mainMenuReferenceSelections[key])
+      || MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]
+      || { x: 0, y: 0, w: APPROVED_RENDER_WIDTH, h: APPROVED_RENDER_HEIGHT };
+  }
+
+  function mainMenuReferenceSelectionStyle(selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!cleanSelection) return '';
+    return [
+      `left:${(cleanSelection.x / APPROVED_RENDER_WIDTH) * 100}%`,
+      `top:${(cleanSelection.y / APPROVED_RENDER_HEIGHT) * 100}%`,
+      `width:${(cleanSelection.w / APPROVED_RENDER_WIDTH) * 100}%`,
+      `height:${(cleanSelection.h / APPROVED_RENDER_HEIGHT) * 100}%`,
+    ].join(';');
+  }
+
+  function mainMenuReferencePreviewStyle(selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!cleanSelection) return '';
+    return [
+      `--crop-x:${cleanSelection.x}`,
+      `--crop-y:${cleanSelection.y}`,
+      `--crop-w:${cleanSelection.w}`,
+      `--crop-h:${cleanSelection.h}`,
+    ].join(';');
+  }
+
+  async function saveMainMenuReferenceSelection(key, selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!MAIN_MENU_REFERENCE_CROP_DEFAULTS[key] || !cleanSelection) return;
+    const cleanSelections = normalizeMainMenuReferenceSelections({
+      ...state.mainMenuReferenceSelections,
+      [key]: cleanSelection,
+    });
+    state.mainMenuReferenceSelections = cleanSelections;
+    state.mainMenuReviewSaveState = 'saving';
+    state.mainMenuReviewSaveError = '';
+    saveMainMenuReferenceSelectionsLocal(cleanSelections);
+    render();
+
+    try {
+      const body = await apiRequest(`/api/design-portfolios/${encodeURIComponent(DESIGN_PORTFOLIO_ID)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          client_schema_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
+          metadata: {
+            screen: 'main-assets',
+            source: 'design-portfolio-reference-picker',
+          },
+          data: mainMenuReviewPortfolioData(state.mainMenuReviewDraft, cleanSelections),
+        }),
+      });
+      const portfolio = body && body.portfolio;
+      const persistedDraft = mainMenuReviewDraftFromPortfolioData(portfolio && portfolio.data);
+      const persistedReferenceSelections = mainMenuReferenceSelectionsFromPortfolioData(portfolio && portfolio.data);
+      state.mainMenuReviewDraft = persistedDraft;
+      state.mainMenuReferenceSelections = persistedReferenceSelections;
+      state.mainMenuReviewRevision = portfolio && portfolio.revision ? portfolio.revision : 0;
+      state.mainMenuReviewUpdatedAt = portfolio && portfolio.updated_at ? portfolio.updated_at : '';
+      state.mainMenuReviewSaveState = 'saved';
+      saveMainMenuReviewDraftLocal(persistedDraft);
+      saveMainMenuReferenceSelectionsLocal(persistedReferenceSelections);
+    } catch (error) {
+      state.mainMenuReviewSaveState = 'local';
+      state.mainMenuReviewSaveError = 'Could not save reference crop to slot; kept browser copy.';
+    } finally {
+      render();
+    }
+  }
+
   const state = {
     screen: 'main',
     turn: 'player',
@@ -353,7 +668,132 @@
     gridStartY: 0,
     gridEndX: 7,
     gridEndY: 11,
+    mainMenuReviewDraft: loadMainMenuReviewDraft(),
+    mainMenuReferenceSelections: loadMainMenuReferenceSelections(),
+    mainMenuReviewSaveState: 'ready',
+    mainMenuReviewSaveError: '',
+    mainMenuReviewRevision: 0,
+    mainMenuReviewUpdatedAt: '',
+    mainMenuReviewFocusId: 'profile-chrome',
+    mainMenuReferenceEditor: null,
+    mainMenuReferenceDrag: null,
   };
+
+  const ART_SCREENS = {
+    main: {
+      label: 'Chess Tactics main menu',
+      src: '/assets/ui/main-menu-aspirational.png',
+      shellClass: 'main-menu-screen main-menu-art-screen',
+      boardClass: 'main-menu-artboard',
+      hotspotClass: 'main-menu-hotspot',
+      hotspots: [
+        { className: 'solo', action: 'party', label: 'Solo Skirmish' },
+        { className: 'campaigns', action: 'campaigns', label: 'Campaign Editor' },
+        { className: 'editor', action: 'level-editor-preview', label: 'Level Editor' },
+        { className: 'lobbies', action: 'lobbies', label: 'Lobbies' },
+        { className: 'settings', action: 'settings', label: 'Settings' },
+        { className: 'signin', action: 'auth-dynamic', label: 'Sign In' },
+        { className: 'account-settings', action: 'settings', label: 'Account settings' },
+        { className: 'dock-achievements', action: 'settings', label: 'Achievements roadmap' },
+        { className: 'dock-campaigns', action: 'campaigns', label: 'Campaigns' },
+        { className: 'dock-lobbies', action: 'lobbies', label: 'Lobbies' },
+        { className: 'dock-collection', action: 'settings', label: 'Collection roadmap' },
+      ],
+    },
+    campaigns: {
+      label: 'Campaign editor',
+      src: '/assets/ui/campaign-editor-concept.png',
+      shellClass: 'screen-concept screen-concept-campaign',
+      boardClass: 'screen-concept-artboard',
+      hotspotClass: 'screen-hotspot',
+      hotspots: [
+        { className: 'campaign-home', action: 'main', label: 'Main menu' },
+        { className: 'campaign-new', action: 'new-campaign', label: 'New campaign' },
+        { className: 'campaign-edit-board', action: 'edit-level-board', label: 'Edit board' },
+        { className: 'campaign-test', action: 'party', label: 'Test play' },
+        { className: 'campaign-save', action: 'save-campaign', label: 'Save campaign' },
+        { className: 'campaign-duplicate', action: 'add-level', label: 'Duplicate or add level' },
+        { className: 'campaign-delete', action: 'delete-campaign', label: 'Delete campaign' },
+        { className: 'campaign-settings', action: 'settings', label: 'Settings' },
+      ],
+    },
+    'level-editor': {
+      label: 'Level editor',
+      src: '/assets/ui/level-editor-concept.png',
+      shellClass: 'screen-concept screen-concept-level-editor',
+      boardClass: 'screen-concept-artboard',
+      hotspotClass: 'screen-hotspot',
+      hotspots: [
+        { className: 'level-home', action: 'back-to-campaigns', label: 'Back to campaign editor' },
+        { className: 'level-board-tab', action: 'set-level-editor-mode', mode: 'board', label: 'Board mode' },
+        { className: 'level-zones-tab', action: 'set-level-editor-mode', mode: 'zones', label: 'Zones mode' },
+        { className: 'level-test', action: 'party', label: 'Test level' },
+        { className: 'level-save', action: 'save-level-editor', label: 'Save level' },
+        { className: 'level-menu', action: 'back-to-campaigns', label: 'Editor menu' },
+        { className: 'level-tiles', action: 'set-level-editor-mode', mode: 'board', label: 'Tiles' },
+        { className: 'level-pieces', action: 'set-level-editor-mode', mode: 'board', label: 'Pieces' },
+      ],
+    },
+    skirmish: {
+      label: 'Skirmish',
+      src: '/assets/ui/skirmish-concept.png',
+      shellClass: 'screen-concept screen-concept-skirmish',
+      boardClass: 'screen-concept-artboard',
+      hotspotClass: 'screen-hotspot',
+      hotspots: [
+        { className: 'skirmish-main', action: 'main', label: 'Main menu' },
+        { className: 'skirmish-settings', action: 'settings', label: 'Settings' },
+        { className: 'skirmish-end', action: 'end-turn', label: 'End turn' },
+        { className: 'skirmish-move', action: 'noop', label: 'Move' },
+        { className: 'skirmish-power', action: 'noop', label: 'Power' },
+        { className: 'skirmish-wait', action: 'end-turn', label: 'Wait' },
+      ],
+    },
+  };
+
+  function applyInitialScreenParam() {
+    const params = new URLSearchParams(window.location.search);
+    const screen = params.get('screen');
+    if (screen === 'main' || screen === 'menu' || screen === 'main-concept' || screen === 'main-skeleton' || screen === 'main-assets') {
+      state.screen = 'main';
+    } else if (screen === 'campaigns' || screen === 'campaigns-skeleton' || screen === 'campaigns-concept' || screen === 'campaign-editor-concept') {
+      state.screen = 'campaigns';
+    } else if (screen === 'level-editor' || screen === 'level-editor-skeleton' || screen === 'level-editor-concept') {
+      state.screen = 'level-editor';
+      state.turn = 'editor';
+    } else if (screen === 'skirmish' || screen === 'skirmish-skeleton' || screen === 'skirmish-concept' || screen === 'game-concept') {
+      state.screen = 'game';
+      state.turn = 'player';
+    }
+  }
+
+  const MAIN_MENU_PREVIEW_PIECES = [
+    { id: 'menu-blue-rook-left', side: 'player', type: 'rook', mark: 'R', name: 'Allied Rook', role: 'Fortress anchor', x: 0, y: 8, alive: true },
+    { id: 'menu-blue-knight', side: 'player', type: 'knight', mark: 'N', name: 'Allied Knight', role: 'L-shaped jumper', x: 2, y: 7, alive: true },
+    { id: 'menu-blue-bishop', side: 'player', type: 'bishop', mark: 'B', name: 'Allied Bishop', role: 'Diagonal runner', x: 3, y: 9, alive: true },
+    { id: 'menu-blue-rook-center', side: 'player', type: 'rook', mark: 'R', name: 'Allied Rook', role: 'Command tower', x: 4, y: 8, alive: true },
+    { id: 'menu-blue-pawn-a', side: 'player', type: 'pawn', mark: 'P', name: 'Allied Pawn', role: 'Forward sentry', x: 1, y: 10, alive: true },
+    { id: 'menu-blue-pawn-b', side: 'player', type: 'pawn', mark: 'P', name: 'Allied Pawn', role: 'Forward sentry', x: 5, y: 10, alive: true },
+    { id: 'menu-red-rook-left', side: 'enemy', type: 'rook', mark: 'R', name: 'Enemy Rook', role: 'Tower guard', x: 1, y: 1, alive: true },
+    { id: 'menu-red-bishop', side: 'enemy', type: 'bishop', mark: 'B', name: 'Enemy Bishop', role: 'Signal piece', x: 3, y: 2, alive: true },
+    { id: 'menu-red-queen', side: 'enemy', type: 'queen', mark: 'Q', name: 'Enemy Queen', role: 'Command piece', x: 5, y: 2, alive: true },
+    { id: 'menu-red-knight', side: 'enemy', type: 'knight', mark: 'N', name: 'Enemy Knight', role: 'Shock jumper', x: 6, y: 4, alive: true },
+    { id: 'menu-red-rook-right', side: 'enemy', type: 'rook', mark: 'R', name: 'Enemy Rook', role: 'Tower guard', x: 7, y: 1, alive: true },
+    { id: 'menu-rock-a', side: 'neutral', type: 'rock', mark: 'O', name: 'Ruins', role: 'Ancient stone', x: 0, y: 4, alive: true },
+    { id: 'menu-rock-b', side: 'neutral', type: 'rock', mark: 'O', name: 'Ruins', role: 'Ancient stone', x: 6, y: 6, alive: true },
+    { id: 'menu-rock-c', side: 'neutral', type: 'rock', mark: 'O', name: 'Ruins', role: 'Ancient stone', x: 2, y: 3, alive: true },
+  ];
+
+  Object.values(IMAGES).forEach((spriteSet) => {
+    Object.values(spriteSet).forEach((image) => {
+      const redraw = () => drawBoard();
+      if (image.complete) {
+        window.setTimeout(redraw, 0);
+      } else {
+        image.addEventListener('load', redraw, { once: true });
+      }
+    });
+  });
 
   function rand(max) {
     return Math.floor(Math.random() * max);
@@ -2070,6 +2510,21 @@
     }
   }
 
+  function drawMainMenuBoardAccents(metrics) {
+    if (state.screen !== 'main') return;
+    [
+      [1, 7], [2, 7], [3, 7],
+      [1, 8], [2, 8], [3, 8], [4, 8],
+      [2, 9], [3, 9], [4, 9],
+    ].forEach(([x, y]) => drawDiamondFill(x, y, 'rgba(37,199,255,0.20)', 'rgba(37,199,255,0.72)', metrics));
+    [
+      [3, 2], [4, 2], [5, 2],
+      [4, 3], [5, 3], [6, 3],
+      [5, 4], [6, 4],
+    ].forEach(([x, y]) => drawDiamondFill(x, y, 'rgba(255,95,73,0.14)', 'rgba(255,95,73,0.52)', metrics));
+    [[2, 7], [4, 8]].forEach(([x, y]) => drawDiamondFill(x, y, 'rgba(255,255,255,0.16)', '#e8f8ff', metrics));
+  }
+
   function drawBoard() {
     const metrics = boardMetrics();
     syncCanvasSize(metrics);
@@ -2090,6 +2545,7 @@
       if (metrics.rows > 1) drawDiamondFill(x, metrics.rows - 2, 'rgba(19,211,255,0.08)', null, metrics);
     }
     drawZoneOverlays(metrics);
+    drawMainMenuBoardAccents(metrics);
     const selected = state.battleAnimating ? null : selectedPiece();
     if (state.screen === 'game' && state.showThreats) {
       getEnemyThreats().forEach((sq) => {
@@ -2145,7 +2601,8 @@
       }
     }
     
-    const activePieces = state.pieces
+    const piecesForRender = state.screen === 'main' ? MAIN_MENU_PREVIEW_PIECES : state.pieces;
+    const activePieces = piecesForRender
       .filter((piece) => piece.alive)
       .sort((a, b) => {
         const posA = getPieceRenderPos(a);
@@ -2372,26 +2829,684 @@
       </div>`;
   }
 
+  function shouldShowMainConcept() {
+    const params = new URLSearchParams(window.location.search);
+    const screen = params.get('screen');
+    return screen === 'main-concept' || screen === 'main-art';
+  }
+
+  function shouldShowMainSkeleton() {
+    const params = new URLSearchParams(window.location.search);
+    const screen = params.get('screen');
+    return !screen || screen === 'main' || screen === 'menu' || screen === 'main-skeleton';
+  }
+
+  function shouldShowMainAssets() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('screen') === 'main-assets';
+  }
+
+  function shouldShowScreenConcept(screenId) {
+    const params = new URLSearchParams(window.location.search);
+    const screen = params.get('screen');
+    const aliases = [`${screenId}-concept`, `${screenId}-art`];
+    if (screenId === 'campaigns') aliases.push('campaign-editor-concept', 'campaign-concept');
+    if (screenId === 'skirmish') aliases.push('game-concept');
+    return aliases.includes(screen);
+  }
+
+  function renderSkeletonTag(label, stateLabel = 'Unfilled') {
+    return `<span class="skeleton-tag"><b>${escapeText(stateLabel)}</b>${escapeText(label)}</span>`;
+  }
+
+  function renderSkeletonButton(action, label, options = {}) {
+    const attrs = [
+      `type="button"`,
+      `data-action="${escapeText(action)}"`,
+      options.mode ? `data-mode="${escapeText(options.mode)}"` : '',
+      options.disabled ? 'disabled' : '',
+    ].filter(Boolean).join(' ');
+    return `<button ${attrs}>${escapeText(label)}</button>`;
+  }
+
+  function renderSkeletonPanel(panel) {
+    return `
+      <article class="app-skeleton-panel ${escapeText(panel.className || '')}">
+        ${renderSkeletonTag(panel.slot, panel.state || 'Asset slot')}
+        <div>
+          <p>${escapeText(panel.kicker || '')}</p>
+          <h3>${escapeText(panel.title)}</h3>
+          <span>${escapeText(panel.copy)}</span>
+        </div>
+        ${panel.items && panel.items.length ? `
+          <ul>
+            ${panel.items.map((item) => `<li>${escapeText(item)}</li>`).join('')}
+          </ul>
+        ` : ''}
+        ${panel.actions && panel.actions.length ? `
+          <div class="app-skeleton-actions">
+            ${panel.actions.map((action) => renderSkeletonButton(action.action, action.label, action)).join('')}
+          </div>
+        ` : ''}
+      </article>`;
+  }
+
+  function renderAppSkeletonScreen(config) {
+    return `
+      <div class="app-skeleton-screen app-skeleton-${escapeText(config.screenId)}" data-live-screen="${escapeText(config.screenId)}-skeleton">
+        <header class="app-skeleton-header">
+          <div>
+            <p>Skeleton mode</p>
+            <h2>${escapeText(config.title)}</h2>
+            <span>${escapeText(config.summary)}</span>
+          </div>
+          <nav aria-label="${escapeText(config.title)} review links">
+            <a href="/?screen=${escapeText(config.conceptRoute)}">Render reference</a>
+            <button type="button" data-action="main">Main Menu</button>
+          </nav>
+        </header>
+        <main class="app-skeleton-layout">
+          ${config.panels.map(renderSkeletonPanel).join('')}
+        </main>
+      </div>`;
+  }
+
+  function renderCampaignSkeleton() {
+    return renderAppSkeletonScreen({
+      screenId: 'campaigns',
+      title: 'Campaign Editor',
+      summary: 'The old campaign editor is hidden behind this planning skeleton until each surface gets approved art.',
+      conceptRoute: 'campaigns-concept',
+      panels: [
+        {
+          className: 'rail',
+          state: 'Pending art',
+          slot: 'Campaign list rail, filters, selected campaign cards',
+          kicker: 'Left rail',
+          title: 'Campaign Library',
+          copy: 'Needs a dark pixel frame, compact save state, and selected campaign treatment.',
+          items: ['Search/filter strip', 'Campaign cards', 'Create campaign affordance'],
+          actions: [{ action: 'new-campaign', label: 'New Campaign' }],
+        },
+        {
+          className: 'primary',
+          state: 'Pending art',
+          slot: 'Mission chain map, level tiles, encounter preview',
+          kicker: 'Primary canvas',
+          title: 'Campaign Flow',
+          copy: 'This becomes the playable level sequence surface, not a generic form panel.',
+          items: ['Node chain', 'Selected level preview', 'Difficulty/objective badges'],
+          actions: [{ action: 'edit-level-board', label: 'Edit Level' }, { action: 'party', label: 'Test Play' }],
+        },
+        {
+          className: 'inspector',
+          state: 'Pending art',
+          slot: 'Campaign metadata inspector and level settings frame',
+          kicker: 'Inspector',
+          title: 'Campaign Details',
+          copy: 'Live fields will move here after the frame and hierarchy are settled.',
+          items: ['Title and description', 'Level objective', 'Difficulty and notes'],
+          actions: [{ action: 'save-campaign', label: 'Save Campaign' }],
+        },
+        {
+          className: 'footer',
+          state: 'Pending art',
+          slot: 'Bottom command bar, destructive actions, sync status',
+          kicker: 'Command strip',
+          title: 'Save / Duplicate / Delete',
+          copy: 'Keep the controls available, but hold the visual treatment until the asset pass.',
+          actions: [{ action: 'add-level', label: 'Add Level' }, { action: 'delete-campaign', label: 'Delete Campaign' }],
+        },
+      ],
+    });
+  }
+
+  function renderLevelEditorSkeleton() {
+    return renderAppSkeletonScreen({
+      screenId: 'level-editor',
+      title: 'Level Editor',
+      summary: 'This is the workbench skeleton for tilesets, brushes, zones, and board validation.',
+      conceptRoute: 'level-editor-concept',
+      panels: [
+        {
+          className: 'toolbar',
+          state: 'Pending art',
+          slot: 'Mode tabs, save/test controls, editor title bar',
+          kicker: 'Toolbar',
+          title: 'Board / Tiles / Pieces / Zones',
+          copy: 'The mode hierarchy is preserved while the visual chrome is rebuilt.',
+          actions: [
+            { action: 'set-level-editor-mode', label: 'Board', mode: 'board' },
+            { action: 'set-level-editor-mode', label: 'Zones', mode: 'zones' },
+            { action: 'save-level-editor', label: 'Save' },
+          ],
+        },
+        {
+          className: 'primary',
+          state: 'Pending tileset',
+          slot: 'Editable battlefield plate, grid, terrain, doodads, lighting',
+          kicker: 'Board work area',
+          title: 'Tile Canvas',
+          copy: 'This is where the approved tileset will be judged in-browser before pieces are finalized.',
+          items: ['Isometric field', 'Terrain doodads', 'Selection/threat overlays'],
+        },
+        {
+          className: 'rail',
+          state: 'Pending art',
+          slot: 'Brush palette, terrain categories, piece palette',
+          kicker: 'Palette',
+          title: 'Tiles And Pieces',
+          copy: 'Needs small pixel swatches and mode-specific brush controls.',
+          items: ['Grass/water/path', 'Rocks and blockers', 'Player/enemy pieces'],
+        },
+        {
+          className: 'inspector',
+          state: 'Pending art',
+          slot: 'Zone inspector, misc events, level dimensions',
+          kicker: 'Inspector',
+          title: 'Level Rules',
+          copy: 'The data model stays live, but the current utilitarian controls are not the target UI.',
+          actions: [{ action: 'back-to-campaigns', label: 'Back To Campaigns' }],
+        },
+      ],
+    });
+  }
+
+  function renderSkirmishSkeleton() {
+    return renderAppSkeletonScreen({
+      screenId: 'skirmish',
+      title: 'Skirmish',
+      summary: 'The playable combat UI is skeletonized until HUD, board, piece, and action assets are approved.',
+      conceptRoute: 'skirmish-concept',
+      panels: [
+        {
+          className: 'toolbar',
+          state: 'Pending art',
+          slot: 'Mission header, turn meters, objective strip',
+          kicker: 'Combat HUD',
+          title: 'Turn State',
+          copy: 'Needs compact readable status with dark-theme contrast.',
+          items: ['Player/enemy phase', 'Anchor and threat meters', 'Objective copy'],
+        },
+        {
+          className: 'primary',
+          state: 'Pending tileset',
+          slot: 'Combat battlefield, pieces, threat overlays, animation framing',
+          kicker: 'Battlefield',
+          title: 'Tactics Board',
+          copy: 'This will reuse the level-editor tile work once the tileset is approved.',
+          items: ['Selected move cells', 'Enemy danger cells', 'Piece silhouettes'],
+        },
+        {
+          className: 'rail',
+          state: 'Pending art',
+          slot: 'Roster, initiative, captured/lost piece state',
+          kicker: 'Squads',
+          title: 'Roster Rail',
+          copy: 'Needs chess-readable pieces with small tactical metadata.',
+        },
+        {
+          className: 'inspector',
+          state: 'Pending art',
+          slot: 'Selected piece card, action buttons, combat log',
+          kicker: 'Actions',
+          title: 'Move / Power / Wait',
+          copy: 'Controls stay clickable while their final art is designed.',
+          actions: [
+            { action: 'noop', label: 'Move' },
+            { action: 'noop', label: 'Power' },
+            { action: 'end-turn', label: 'Wait' },
+          ],
+        },
+      ],
+    });
+  }
+
+  function renderMainMenuAction(action, iconClass, icon, label, active = false, skeletonLabel = '') {
+    return `
+      <button class="main-menu-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}">
+        <span class="main-menu-action-icon ${escapeText(iconClass)}">${escapeText(icon)}</span>
+        <span>${escapeText(label)}</span>
+        <i aria-hidden="true">&gt;</i>
+        ${skeletonLabel ? renderSkeletonTag(skeletonLabel) : ''}
+      </button>`;
+  }
+
+  function renderMainMenuArtAction(action, label, active = false) {
+    return `
+      <button class="main-menu-art-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">
+        <span>${escapeText(label)}</span>
+      </button>`;
+  }
+
+  function renderMainMenuDockButton(action, label) {
+    return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}"><span>${escapeText(label.slice(0, 3).toUpperCase())}</span></button>`;
+  }
+
+  function mainMenuReviewStatusFor(id, fallbackStatus) {
+    const draftStatus = state.mainMenuReviewDraft[id];
+    return MAIN_MENU_REVIEW_STATUSES[draftStatus] ? draftStatus : fallbackStatus;
+  }
+
+  function mainMenuReviewMeta(status) {
+    return MAIN_MENU_REVIEW_STATUSES[status] || MAIN_MENU_REVIEW_STATUSES.review;
+  }
+
+  function renderReviewStatusBadge(status, label) {
+    const meta = mainMenuReviewMeta(status);
+    return `<span class="review-status-badge ${escapeText(meta.cardClass)}">${escapeText(label || meta.label)}</span>`;
+  }
+
+  function renderReviewStatusControls(id, label, currentStatus) {
+    const actions = [
+      { status: 'accepted', label: 'Accept' },
+      { status: 'review', label: 'Needs Review' },
+      { status: 'rejected', label: 'Reject' },
+    ];
+
+    return `
+      <div class="review-status-controls" role="group" aria-label="Review status for ${escapeText(label)}">
+        ${actions.map((action) => `
+          <button
+            type="button"
+            class="${action.status === currentStatus ? 'is-active' : ''}"
+            data-action="set-main-menu-review-status"
+            data-review-id="${escapeText(id)}"
+            data-review-status="${escapeText(action.status)}"
+            aria-pressed="${action.status === currentStatus ? 'true' : 'false'}"
+          >${escapeText(action.label)}</button>
+        `).join('')}
+      </div>`;
+  }
+
+  function renderApprovedReferenceCard(crop) {
+    const key = crop.key || crop.cropClass || '';
+    const selection = mainMenuReferenceSelection(key);
+    return `
+      <button
+        class="portfolio-reference-picker"
+        type="button"
+        data-action="open-reference-crop-picker"
+        data-crop-key="${escapeText(key)}"
+        data-crop-title="${escapeText(crop.title || 'Approved Render Crop')}"
+        aria-label="${escapeText(`Open full render crop picker for ${crop.title || 'approved render crop'}`)}"
+      >
+        <span class="portfolio-reference-frame" style="${escapeText(mainMenuReferencePreviewStyle(selection))}">
+          <img src="${APPROVED_RENDER_SRC}" alt="" aria-hidden="true" draggable="false">
+        </span>
+      </button>`;
+  }
+
+  function renderReferenceCropEditor() {
+    if (!state.mainMenuReferenceEditor) return '';
+    const key = state.mainMenuReferenceEditor.key;
+    const selection = normalizeMainMenuReferenceSelection(state.mainMenuReferenceEditor.selection)
+      || mainMenuReferenceSelection(key);
+    const handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+    return `
+      <div class="reference-crop-modal" role="dialog" aria-modal="true" aria-label="Approved render crop picker">
+        <div class="reference-crop-dialog">
+          <header>
+            <div>
+              <strong>${escapeText(state.mainMenuReferenceEditor.title || 'Approved Render Crop')}</strong>
+              <span>${escapeText(`${selection.x}, ${selection.y}, ${selection.w} x ${selection.h}`)}</span>
+            </div>
+            <button type="button" data-action="close-reference-crop-picker">Close</button>
+          </header>
+          <div class="reference-crop-stage" data-crop-key="${escapeText(key)}">
+            <img src="${APPROVED_RENDER_SRC}" alt="Approved main menu render" draggable="false">
+            <span class="reference-crop-selection" style="${escapeText(mainMenuReferenceSelectionStyle(selection))}">
+              ${handles.map((handle) => `
+                <span
+                  class="reference-crop-handle reference-crop-handle-${escapeText(handle)}"
+                  data-crop-handle="${escapeText(handle)}"
+                  aria-hidden="true"
+                ></span>
+              `).join('')}
+            </span>
+          </div>
+          <footer>
+            <button type="button" data-action="reset-reference-crop-picker" data-crop-key="${escapeText(key)}">Reset</button>
+            <button type="button" data-action="close-reference-crop-picker">Done</button>
+          </footer>
+        </div>
+      </div>`;
+  }
+
+  function renderPortfolioAsset(asset, index) {
+    const openAttr = index === 0 ? ' open' : '';
+    const referenceCrops = asset.referenceCrops || [];
+    return `
+      <details class="portfolio-asset ${asset.statusClass || ''}" id="${escapeText(asset.id)}"${openAttr}>
+        <summary>
+          <span class="portfolio-asset-index">${escapeText(String(index + 1).padStart(2, '0'))}</span>
+          <span class="portfolio-asset-title">${escapeText(asset.title)}</span>
+          <span class="portfolio-asset-status">${escapeText(asset.status)}</span>
+        </summary>
+        <div class="portfolio-asset-body">
+          <div class="portfolio-asset-copy">
+            <p>${escapeText(asset.description)}</p>
+            <dl>
+              <div>
+                <dt>Review target</dt>
+                <dd>${escapeText(asset.target)}</dd>
+              </div>
+              <div>
+                <dt>Live use</dt>
+                <dd>${escapeText(asset.liveUse)}</dd>
+              </div>
+              <div>
+                <dt>Decision</dt>
+                <dd>${escapeText(asset.decision)}</dd>
+              </div>
+            </dl>
+            <div class="portfolio-asset-links">
+              <a href="/?screen=main-assets#${escapeText(asset.id)}">Section link</a>
+              ${asset.file ? `<a href="${escapeText(asset.file)}" target="_blank" rel="noreferrer">Open image</a>` : ''}
+              <a href="/">Live menu</a>
+              <a href="/?screen=main-concept">Render reference</a>
+            </div>
+            <div class="portfolio-review-draft">
+              <span>Saved draft</span>
+              ${renderReviewStatusControls(asset.id, asset.title, asset.reviewStatus)}
+            </div>
+          </div>
+          <figure class="portfolio-asset-figure">
+            <div class="portfolio-comparison">
+              ${asset.file ? `
+                <div class="portfolio-comparison-card">
+                  <strong>Current Candidate</strong>
+                  <div class="portfolio-asset-image-wrap ${asset.overlayLabel ? 'accepted-brand-preview' : ''} ${asset.cropClass ? escapeText(asset.cropClass) : ''}">
+                    <img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt)}" draggable="false">
+                    ${asset.overlayLabel ? `<span>${escapeText(asset.overlayLabel)}</span>` : ''}
+                  </div>
+                </div>
+              ` : ''}
+              ${referenceCrops.map((crop) => `
+                <div class="portfolio-comparison-card">
+                  <strong>${escapeText(crop.title || 'Approved Render Crop')}</strong>
+                  ${renderApprovedReferenceCard(crop)}
+                </div>
+              `).join('')}
+            </div>
+            <figcaption>${escapeText(asset.caption)}</figcaption>
+          </figure>
+        </div>
+      </details>`;
+  }
+
+  function renderMainAssetReview() {
+    const portfolioAssets = [
+      {
+        id: 'brand-chrome',
+        title: 'Title / Brand Plate',
+        baseStatus: 'accepted',
+        file: '/assets/ui/main-menu-brand-title-only-v1.png',
+        alt: 'Accepted main menu title plate crop with crest, Chess Tactics title, and divider',
+        caption: 'Title-only crop. The console label and subtitle have been removed so the lockup is just the game title.',
+        description: 'The title plate is now reduced to the actual game brand: crest, Chess Tactics, and the lower divider from the accepted render.',
+        target: 'Keep this as the locked upper-left brand/title plate unless a later layout change exposes a fit issue.',
+        liveUse: 'Used as the visible live brand plate in the upper-left main menu column.',
+        decision: 'Accepted as the main title lockup.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            key: 'brand-chrome',
+            alt: 'Approved render crop of the upper-left main menu brand and title area',
+          },
+        ],
+      },
+      {
+        id: 'profile-chrome',
+        title: 'Profile / Status Panel',
+        baseStatus: 'review',
+        file: '/assets/ui/main-menu-profile-chrome-v1.png',
+        alt: 'Generated pixel art profile and status chrome for the main menu',
+        caption: 'Right-rail profile source for player identity, force counters, and the sign-in/account action slot.',
+        description: 'This panel is still under review: player identity, guest/sign-in/account affordance, allies/threat counters, and the surrounding chrome are not settled.',
+        target: 'Decide whether this profile/status treatment should be accepted, revised, rebuilt from a new crop, or split into smaller assets.',
+        liveUse: 'Used behind the Guest/profile block, allies/threat counters, and sign-in/account hotspot on the live menu.',
+        decision: 'Needs review. Do not treat the current overlay or generated chrome as accepted.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            key: 'profile-chrome',
+            alt: 'Approved render crop of the upper-right profile and force status panels',
+          },
+        ],
+      },
+      {
+        id: 'news-chrome',
+        title: 'Daily / News Panel',
+        baseStatus: 'review',
+        file: '/assets/ui/main-menu-news-chrome-v1.png',
+        alt: 'Generated pixel art daily and news panel chrome for the main menu',
+        caption: 'Reusable panel source for the daily line and right-side campaign/news notes.',
+        description: 'A smaller command-panel treatment for rotating copy, daily challenge text, or future campaign updates.',
+        target: 'Decide whether this panel should be calmer, more military, more chesslike, or stay as-is.',
+        liveUse: 'Used twice on the live menu: the left daily preview and the right campaign-tools/news block.',
+        decision: 'Approve the reusable panel, or request separate art for daily and news states.',
+        referenceCrops: [
+          {
+            title: 'Daily Render Crop',
+            key: 'daily-panel',
+            alt: 'Approved render crop of the bottom-left daily challenge panel',
+          },
+          {
+            title: 'News Render Crop',
+            key: 'news-panel',
+            alt: 'Approved render crop of the bottom-right news panel',
+          },
+        ],
+      },
+      {
+        id: 'dock-chrome',
+        title: 'Bottom Dock',
+        baseStatus: 'review',
+        file: '/assets/ui/main-menu-dock-chrome-v1.png',
+        alt: 'Generated pixel art bottom dock chrome for the main menu',
+        caption: 'Bottom quick-link dock source for secondary navigation buttons.',
+        description: 'A lower-priority navigation strip for achievements, campaigns, lobbies, collection, and future utility links.',
+        target: 'Check if the dock belongs on the first pass, and whether its ornament level competes with the main buttons.',
+        liveUse: 'Used behind four live quick-link hotspots near the bottom-center of the main menu.',
+        decision: 'Approve, reduce visual weight, or defer until the main menu needs those secondary features.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            key: 'dock-chrome',
+            alt: 'Approved render crop of the bottom-center icon dock',
+          },
+        ],
+      },
+      {
+        id: 'battlefield-plate',
+        title: 'Battlefield Plate',
+        baseStatus: 'review',
+        file: '',
+        alt: '',
+        caption: 'Approved render crop for the central board plate. Compare this against the live menu battlefield before accepting the frame, depth, and label treatment.',
+        description: 'The current live menu uses the canvas battlefield inside CSS chrome. The central board plate details, label treatment, depth, and responsive fit still need review.',
+        target: 'Decide whether the live battlefield plate is close enough to the approved render framing, or needs another pass before it is locked.',
+        liveUse: 'Used as the central main-menu battlefield preview behind the live moonlit board.',
+        decision: 'Needs review. The board itself is live, but the surrounding plate treatment is not accepted yet.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            key: 'battlefield-plate',
+            alt: 'Approved render crop of the central main menu battlefield plate',
+          },
+        ],
+      },
+    ].map((asset) => {
+      const reviewStatus = mainMenuReviewStatusFor(asset.id, asset.baseStatus);
+      const reviewMeta = mainMenuReviewMeta(reviewStatus);
+      return {
+        ...asset,
+        reviewStatus,
+        status: reviewMeta.label,
+        statusClass: reviewMeta.cardClass,
+      };
+    });
+
+    return `
+      <div class="main-assets-screen" data-live-screen="main-assets">
+        <header class="main-assets-header">
+          <div>
+            <p>Main menu design portfolio</p>
+            <h2>Chrome Asset Review</h2>
+          </div>
+        </header>
+
+        <section class="portfolio-asset-list" aria-label="Main menu chrome portfolio">
+          ${portfolioAssets.map(renderPortfolioAsset).join('')}
+        </section>
+
+        <footer class="asset-review-footer">
+          <span>Settled: upper-left brand/title banner and the art-backed live bridge approach. Needs review: profile/status, daily/news, bottom dock, and battlefield plate details.</span>
+        </footer>
+        ${renderReferenceCropEditor()}
+      </div>`;
+  }
+
+  function renderMainMenuSkeleton() {
+    const signedIn = Boolean(currentUser);
+    const displayName = signedIn ? (currentUser.name || currentUser.email || 'Player') : 'Guest';
+    const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
+    const accountInitial = signedIn ? displayName.trim().charAt(0).toUpperCase() : '?';
+    const avatarMarkup = signedIn && currentUser.avatar_url
+      ? `<img src="${escapeText(currentUser.avatar_url)}" alt="" draggable="false">`
+      : `<span aria-hidden="true">${escapeText(accountInitial || 'P')}</span>`;
+    return `
+      <div class="main-menu-screen main-menu-live-screen main-menu-skeleton-screen" data-live-screen="main-skeleton">
+        <section class="main-menu-left" aria-label="Main navigation">
+          <div class="main-menu-brand main-menu-brand-art accepted-brand-crop" aria-label="Chess Tactics">
+            <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" aria-hidden="true" draggable="false">
+          </div>
+
+          <section class="main-menu-battlefield-plate" aria-label="Moonlit grassland battlefield preview">
+            <div class="main-menu-battlefield-meta">
+              <span>Moonlit Grassland</span>
+              <span>Skirmish Preview</span>
+            </div>
+            <div class="main-menu-battlefield-status" aria-hidden="true">
+              <span>6 Allies</span>
+              <span>5 Threats</span>
+              <span>Bridge Hold</span>
+            </div>
+          </section>
+
+          <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">
+            <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
+            ${renderMainMenuArtAction('party', 'Solo Skirmish', true)}
+            ${renderMainMenuArtAction('campaigns', 'Campaign Editor')}
+            ${renderMainMenuArtAction('level-editor-preview', 'Level Editor')}
+            ${renderMainMenuArtAction('lobbies', 'Lobbies')}
+            ${renderMainMenuArtAction('settings', 'Settings')}
+          </nav>
+
+          <div class="main-menu-daily main-menu-news-art">
+            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
+            <div class="main-menu-daily-content">
+              <strong>Daily Line</strong>
+              <small>Preview</small>
+              <p>Hold the bridge, trade cleanly, and keep the king lane sealed.</p>
+              <span>Generated board target</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="main-menu-right" aria-label="Profile and status">
+          <div class="main-menu-profile main-menu-profile-art">
+            <img src="/assets/ui/main-menu-profile-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
+            <div class="main-menu-avatar" aria-hidden="true">${avatarMarkup}</div>
+            <div class="main-menu-profile-identity">
+              <strong>${escapeText(displayName)}</strong>
+              <span>${escapeText(email)}</span>
+            </div>
+            <div class="main-menu-profile-stats" aria-label="Preview force count">
+              <span><strong>6 Allies</strong></span>
+              <span><strong>5 Threats</strong></span>
+            </div>
+            <button type="button" data-action="${signedIn ? 'settings' : 'sign-in'}" aria-label="${signedIn ? 'Account settings' : 'Sign in'}">
+              <span>${signedIn ? 'Account' : 'Sign In'}</span>
+            </button>
+          </div>
+
+          <div class="main-menu-news main-menu-news-art">
+            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
+            <div class="main-menu-news-content">
+              <strong>Campaign tools</strong>
+              <p><span aria-hidden="true">&gt;</span> Editor shell is moving from render reference to live browser UI.</p>
+              <p><span aria-hidden="true">&gt;</span> Tile and piece extraction follow this main-menu slice.</p>
+            </div>
+          </div>
+        </aside>
+
+        <div class="main-menu-dock main-menu-dock-art" aria-label="Quick links">
+          <img src="/assets/ui/main-menu-dock-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
+          ${renderMainMenuDockButton('settings', 'Achievements')}
+          ${renderMainMenuDockButton('campaigns', 'Campaigns')}
+          ${renderMainMenuDockButton('lobbies', 'Lobbies')}
+          ${renderMainMenuDockButton('settings', 'Collection')}
+        </div>
+      </div>`;
+  }
+
+  function renderArtHotspot(screenId, screen, hotspot) {
+    const signedIn = Boolean(currentUser);
+    const action = hotspot.action === 'auth-dynamic'
+      ? (signedIn ? 'settings' : 'sign-in')
+      : hotspot.action;
+    const label = hotspot.action === 'auth-dynamic'
+      ? (signedIn ? 'Signed In' : 'Sign In')
+      : hotspot.label;
+    const modeAttr = hotspot.mode ? ` data-mode="${escapeText(hotspot.mode)}"` : '';
+    return `<button class="${screen.hotspotClass} ${hotspot.className}" type="button" data-screen="${screenId}" data-action="${escapeText(action)}"${modeAttr} data-label="${escapeText(label)}" aria-label="${escapeText(label)}"></button>`;
+  }
+
+  function renderArtScreen(screenId) {
+    const screen = ART_SCREENS[screenId];
+    if (!screen) return '';
+    return `
+      <div class="${screen.shellClass}" data-art-screen="${screenId}">
+        <div class="${screen.boardClass}" aria-label="${escapeText(screen.label)}">
+          <img src="${escapeText(screen.src)}" alt="" aria-hidden="true" decoding="async" draggable="false">
+          ${screen.hotspots.map((hotspot) => renderArtHotspot(screenId, screen, hotspot)).join('')}
+        </div>
+      </div>`;
+  }
+
   function renderMenu() {
+    if (shellEl) shellEl.classList.toggle('main-menu-active', state.screen === 'main');
+    if (shellEl) shellEl.classList.toggle('concept-screen-active', ['campaigns', 'level-editor', 'game'].includes(state.screen));
+    if (shellEl) {
+      const params = new URLSearchParams(window.location.search);
+      shellEl.classList.toggle('show-art-hotspots', params.get('hotspots') === '1' || params.get('debug') === 'hotspots');
+    }
     if (boardWrapEl) boardWrapEl.classList.toggle('level-editor-active', state.screen === 'level-editor');
     if (boardScrollEl) boardScrollEl.classList.toggle('level-editor-scroll', state.screen === 'level-editor');
-    menuLayer.classList.toggle('level-editor-layer', state.screen === 'level-editor');
-    if (state.screen === 'game' || state.screen === 'level-editor') {
-      menuLayer.innerHTML = '';
-      menuLayer.hidden = true;
+    menuLayer.classList.toggle('main-menu-layer', state.screen === 'main');
+    menuLayer.classList.toggle('concept-screen-layer', ['campaigns', 'level-editor', 'game'].includes(state.screen));
+    menuLayer.classList.toggle('level-editor-layer', false);
+    if (state.screen === 'level-editor') {
+      menuLayer.hidden = false;
+      menuLayer.innerHTML = shouldShowScreenConcept('level-editor') ? renderArtScreen('level-editor') : renderLevelEditorSkeleton();
+      return;
+    }
+    if (state.screen === 'game') {
+      menuLayer.hidden = false;
+      menuLayer.innerHTML = shouldShowScreenConcept('skirmish') ? renderArtScreen('skirmish') : renderSkirmishSkeleton();
       return;
     }
     menuLayer.hidden = false;
     if (state.screen === 'main') {
-      menuLayer.innerHTML = `
-        <div class="game-menu">
-          <p class="eyebrow">12 x 8 chess skirmish</p>
-          <h2>Chess Tactics</h2>
-          <button type="button" data-action="party">Solo Skirmish</button>
-          <button type="button" data-action="lobbies">Lobbies</button>
-          <button type="button" data-action="campaigns">Campaign Editor</button>
-          <button type="button" data-action="settings">Settings</button>
-        </div>`;
+      if (shouldShowMainConcept()) {
+        menuLayer.innerHTML = renderArtScreen('main');
+      } else if (shouldShowMainAssets()) {
+        menuLayer.innerHTML = renderMainAssetReview();
+      } else {
+        menuLayer.innerHTML = renderMainMenuSkeleton();
+      }
     } else if (state.screen === 'lobbies') {
       const visibleLobbies = state.lobbies.filter((lobby) => !state.lobby || lobby.id !== state.lobby.id);
       menuLayer.innerHTML = `
@@ -2465,7 +3580,7 @@
           <button type="button" data-action="main">Back</button>
         </div>`;
     } else if (state.screen === 'campaigns') {
-      menuLayer.innerHTML = renderCampaignEditor();
+      menuLayer.innerHTML = shouldShowScreenConcept('campaigns') ? renderArtScreen('campaigns') : renderCampaignSkeleton();
     } else {
       menuLayer.innerHTML = `
         <div class="game-menu">
@@ -2624,13 +3739,225 @@
   function render() {
     drawBoard();
     renderMenu();
+    openPortfolioHashTarget();
     renderPanel();
     syncIdleAnimationLoop();
+  }
+
+  function openPortfolioHashTarget() {
+    if (!window.location.hash) return;
+    const id = window.decodeURIComponent(window.location.hash.slice(1));
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (!target || !target.matches('details.portfolio-asset')) return;
+    target.open = true;
+    window.requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+  }
+
+  function approvedRenderPointFromEvent(event, stage) {
+    const image = stage && stage.querySelector('img');
+    if (!image) return null;
+    const rect = image.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return {
+      x: clampReferenceNumber(((event.clientX - rect.left) / rect.width) * APPROVED_RENDER_WIDTH, 0, APPROVED_RENDER_WIDTH),
+      y: clampReferenceNumber(((event.clientY - rect.top) / rect.height) * APPROVED_RENDER_HEIGHT, 0, APPROVED_RENDER_HEIGHT),
+    };
+  }
+
+  function referenceSelectionFromPoints(start, end) {
+    if (!start || !end) return null;
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const w = Math.abs(end.x - start.x);
+    const h = Math.abs(end.y - start.y);
+    return normalizeMainMenuReferenceSelection({ x, y, w, h });
+  }
+
+  function referenceSelectionFromMove(initial, start, end) {
+    const cleanInitial = normalizeMainMenuReferenceSelection(initial);
+    if (!cleanInitial || !start || !end) return null;
+    const nextX = cleanInitial.x + (end.x - start.x);
+    const nextY = cleanInitial.y + (end.y - start.y);
+    return normalizeMainMenuReferenceSelection({
+      ...cleanInitial,
+      x: clampReferenceNumber(nextX, 0, APPROVED_RENDER_WIDTH - cleanInitial.w),
+      y: clampReferenceNumber(nextY, 0, APPROVED_RENDER_HEIGHT - cleanInitial.h),
+    });
+  }
+
+  function referenceSelectionFromResize(initial, start, end, handle) {
+    const cleanInitial = normalizeMainMenuReferenceSelection(initial);
+    if (!cleanInitial || !start || !end || !handle) return null;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    let left = cleanInitial.x;
+    let top = cleanInitial.y;
+    let right = cleanInitial.x + cleanInitial.w;
+    let bottom = cleanInitial.y + cleanInitial.h;
+
+    if (handle.includes('w')) {
+      left = clampReferenceNumber(cleanInitial.x + dx, 0, right - REFERENCE_CROP_MIN_SIZE);
+    }
+    if (handle.includes('e')) {
+      right = clampReferenceNumber(cleanInitial.x + cleanInitial.w + dx, left + REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_WIDTH);
+    }
+    if (handle.includes('n')) {
+      top = clampReferenceNumber(cleanInitial.y + dy, 0, bottom - REFERENCE_CROP_MIN_SIZE);
+    }
+    if (handle.includes('s')) {
+      bottom = clampReferenceNumber(cleanInitial.y + cleanInitial.h + dy, top + REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_HEIGHT);
+    }
+
+    return normalizeMainMenuReferenceSelection({
+      x: left,
+      y: top,
+      w: right - left,
+      h: bottom - top,
+    });
+  }
+
+  function updateReferenceCropStageSelection(stage, selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!stage || !cleanSelection) return;
+    const box = stage.querySelector('.reference-crop-selection');
+    if (box) box.setAttribute('style', mainMenuReferenceSelectionStyle(cleanSelection));
+    const readout = stage.closest('.reference-crop-dialog') && stage.closest('.reference-crop-dialog').querySelector('header span');
+    if (readout) readout.textContent = `${cleanSelection.x}, ${cleanSelection.y}, ${cleanSelection.w} x ${cleanSelection.h}`;
+  }
+
+  function beginReferenceCropDrag(event) {
+    const stage = event.target.closest('.reference-crop-stage');
+    if (!stage || !state.mainMenuReferenceEditor) return;
+    const key = stage.dataset.cropKey;
+    if (!MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) return;
+    const start = approvedRenderPointFromEvent(event, stage);
+    if (!start) return;
+    const currentSelection = normalizeMainMenuReferenceSelection(state.mainMenuReferenceEditor.selection)
+      || mainMenuReferenceSelection(key);
+    const resizeHandle = event.target.closest('.reference-crop-handle');
+    const selectionBox = event.target.closest('.reference-crop-selection');
+    const mode = resizeHandle ? 'resize' : (selectionBox ? 'move' : 'draw');
+    event.preventDefault();
+    stage.setPointerCapture(event.pointerId);
+    state.mainMenuReferenceDrag = {
+      key,
+      mode,
+      handle: resizeHandle ? resizeHandle.dataset.cropHandle : '',
+      pointerId: event.pointerId,
+      start,
+      initial: currentSelection,
+    };
+    if (mode === 'draw') {
+      const selection = normalizeMainMenuReferenceSelection({
+        x: start.x,
+        y: start.y,
+        w: REFERENCE_CROP_MIN_SIZE,
+        h: REFERENCE_CROP_MIN_SIZE,
+      });
+      state.mainMenuReferenceEditor.selection = selection;
+      updateReferenceCropStageSelection(stage, selection);
+    }
+  }
+
+  function updateReferenceCropDrag(event) {
+    const drag = state.mainMenuReferenceDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const stage = menuLayer.querySelector('.reference-crop-stage');
+    if (!stage) return;
+    const end = approvedRenderPointFromEvent(event, stage);
+    const selection = drag.mode === 'move'
+      ? referenceSelectionFromMove(drag.initial, drag.start, end)
+      : drag.mode === 'resize'
+        ? referenceSelectionFromResize(drag.initial, drag.start, end, drag.handle)
+        : referenceSelectionFromPoints(drag.start, end);
+    if (!selection) return;
+    event.preventDefault();
+    state.mainMenuReferenceEditor.selection = selection;
+    updateReferenceCropStageSelection(stage, selection);
+  }
+
+  function finishReferenceCropDrag(event) {
+    const drag = state.mainMenuReferenceDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const stage = menuLayer.querySelector('.reference-crop-stage');
+    const selection = state.mainMenuReferenceEditor && state.mainMenuReferenceEditor.selection;
+    state.mainMenuReferenceDrag = null;
+    if (stage && stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+    if (selection) void saveMainMenuReferenceSelection(drag.key, selection);
   }
 
   function handleMenuClick(event) {
     const button = event.target.closest('button');
     if (!button) return;
+    if (button.dataset.action === 'noop') return;
+    if (button.dataset.action === 'open-reference-crop-picker') {
+      const key = button.dataset.cropKey;
+      if (MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) {
+        state.mainMenuReferenceEditor = {
+          key,
+          title: button.dataset.cropTitle || 'Approved Render Crop',
+          selection: mainMenuReferenceSelection(key),
+        };
+        state.mainMenuReferenceDrag = null;
+        render();
+      }
+      return;
+    }
+    if (button.dataset.action === 'close-reference-crop-picker') {
+      state.mainMenuReferenceEditor = null;
+      state.mainMenuReferenceDrag = null;
+      render();
+      return;
+    }
+    if (button.dataset.action === 'reset-reference-crop-picker') {
+      const key = button.dataset.cropKey;
+      if (MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) {
+        state.mainMenuReferenceEditor = {
+          key,
+          title: state.mainMenuReferenceEditor ? state.mainMenuReferenceEditor.title : 'Approved Render Crop',
+          selection: MAIN_MENU_REFERENCE_CROP_DEFAULTS[key],
+        };
+        void saveMainMenuReferenceSelection(key, MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]);
+      }
+      return;
+    }
+    if (button.dataset.action === 'focus-main-menu-review-item') {
+      const reviewId = button.dataset.reviewId;
+      if (MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === reviewId)) {
+        state.mainMenuReviewFocusId = reviewId;
+        render();
+      }
+      return;
+    }
+    if (button.dataset.action === 'set-main-menu-review-status') {
+      const reviewId = button.dataset.reviewId;
+      const reviewStatus = button.dataset.reviewStatus;
+      if (
+        MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === reviewId)
+        && MAIN_MENU_REVIEW_STATUSES[reviewStatus]
+      ) {
+        state.mainMenuReviewFocusId = reviewId;
+        void saveMainMenuReviewDraft(nextMainMenuReviewDraft(reviewId, reviewStatus));
+      }
+      return;
+    }
+    if (button.dataset.action === 'end-turn') {
+      if (state.screen === 'game' && state.turn === 'player' && !state.animating) {
+        state.turn = 'enemy';
+        state.selected = null;
+        render();
+        window.setTimeout(enemyTurn, 280);
+      }
+      return;
+    }
+    if (button.dataset.action === 'level-editor-preview') {
+      state.screen = 'level-editor';
+      state.turn = 'editor';
+      state.selected = null;
+      render();
+      return;
+    }
     const picker = button.closest('.piece-picker');
     if (picker && button.dataset.piece) {
       state.party[Number(picker.dataset.slot)] = button.dataset.piece;
@@ -2737,7 +4064,14 @@
     if (button.dataset.action === 'save-level') void saveCampaignLevel();
     if (button.dataset.action === 'edit-level-board') {
       state.levelEditorMode = 'board';
-      enterLevelEditor();
+      if (selectedCampaign() && selectedLevel(selectedCampaign())) {
+        enterLevelEditor();
+      } else {
+        state.screen = 'level-editor';
+        state.turn = 'editor';
+        state.selected = null;
+        render();
+      }
     }
     if (button.dataset.action === 'save-level-editor') void saveLevelEditor();
     if (button.dataset.action === 'toggle-level-editor-panel') {
@@ -2800,6 +4134,10 @@
   levelEditorPanel.addEventListener('click', handleMenuClick);
   menuLayer.addEventListener('input', handleMenuInput);
   levelEditorPanel.addEventListener('input', handleMenuInput);
+  menuLayer.addEventListener('pointerdown', beginReferenceCropDrag);
+  menuLayer.addEventListener('pointermove', updateReferenceCropDrag);
+  menuLayer.addEventListener('pointerup', finishReferenceCropDrag);
+  menuLayer.addEventListener('pointercancel', finishReferenceCropDrag);
 
   menuLayer.addEventListener('wheel', (event) => {
     if (state.screen !== 'level-editor' || !boardScrollEl) return;
@@ -2927,6 +4265,7 @@
     }
   });
 
+  applyInitialScreenParam();
   initAuth();
   lobbyPollTimer = window.setInterval(() => {
     if (currentUser && (state.screen === 'lobbies' || state.screen === 'lobby')) {
@@ -2936,5 +4275,7 @@
   window.addEventListener('beforeunload', () => {
     if (lobbyPollTimer) window.clearInterval(lobbyPollTimer);
   });
+  window.addEventListener('hashchange', openPortfolioHashTarget);
   render();
+  void loadMainMenuReviewDraftRemote();
 }());

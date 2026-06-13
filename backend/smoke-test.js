@@ -64,6 +64,7 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     PUBLIC_ORIGIN: 'https://chess.romaine.life',
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
+    DESIGN_PORTFOLIO_STORE_PATH: path.join(hotRoot, 'design-portfolios.json'),
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -147,6 +148,52 @@ async function main() {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
   }
 
+  const reviewUrls = [
+    '/?screen=main',
+    '/?screen=main-concept',
+    '/?screen=main-skeleton',
+    '/?screen=main-assets',
+    '/?screen=campaigns',
+    '/?screen=campaigns-skeleton',
+    '/?screen=campaigns-concept',
+    '/?screen=level-editor',
+    '/?screen=level-editor-skeleton',
+    '/?screen=level-editor-concept',
+    '/?screen=skirmish',
+    '/?screen=skirmish-skeleton',
+    '/?screen=skirmish-concept',
+    '/?screen=main-concept&hotspots=1',
+    '/?screen=campaigns-concept&hotspots=1',
+    '/?screen=level-editor-concept&hotspots=1',
+    '/?screen=skirmish-concept&hotspots=1',
+  ];
+  for (const reviewUrl of reviewUrls) {
+    const response = await get(reviewUrl);
+    if (response.statusCode !== 200 || !response.body.includes('Chess Tactics')) {
+      throw new Error(`Unexpected review URL response for ${reviewUrl}: ${response.statusCode}`);
+    }
+  }
+
+  const artAssets = [
+    '/assets/ui/main-menu-aspirational.png',
+    '/assets/ui/campaign-editor-concept.png',
+    '/assets/ui/level-editor-concept.png',
+    '/assets/ui/skirmish-concept.png',
+    '/assets/ui/main-menu-button-art-five-mode.png',
+    '/assets/ui/main-menu-button-art-three-state.png',
+    '/assets/ui/main-menu-brand-title-only-v1.png',
+    '/assets/ui/main-menu-brand-chrome-v1.png',
+    '/assets/ui/main-menu-profile-chrome-v1.png',
+    '/assets/ui/main-menu-news-chrome-v1.png',
+    '/assets/ui/main-menu-dock-chrome-v1.png',
+  ];
+  for (const assetPath of artAssets) {
+    const response = await get(assetPath);
+    if (response.statusCode !== 200 || !String(response.headers['content-type'] || '').includes('image/png')) {
+      throw new Error(`Unexpected art asset response for ${assetPath}: ${response.statusCode} ${response.headers['content-type'] || ''}`);
+    }
+  }
+
   const anonymous = await get('/api/auth/me');
   if (anonymous.statusCode !== 200 || JSON.parse(anonymous.body).signed_in !== false) {
     throw new Error(`Unexpected anonymous auth response: ${anonymous.statusCode} ${anonymous.body}`);
@@ -170,6 +217,79 @@ async function main() {
   const anonymousCampaigns = await get('/api/campaigns');
   if (anonymousCampaigns.statusCode !== 401) {
     throw new Error(`Anonymous campaign list should require sign-in: ${anonymousCampaigns.statusCode}`);
+  }
+
+  const emptyPortfolio = await get('/api/design-portfolios/main-menu-acceptance');
+  const emptyPortfolioBody = JSON.parse(emptyPortfolio.body);
+  if (emptyPortfolio.statusCode !== 200 || emptyPortfolioBody.portfolio.revision !== 0 || Object.keys(emptyPortfolioBody.portfolio.data).length !== 0) {
+    throw new Error(`Unexpected empty design portfolio response: ${emptyPortfolio.statusCode} ${emptyPortfolio.body}`);
+  }
+
+  const anonymousPortfolioWrite = await request(
+    'PUT',
+    '/api/design-portfolios/main-menu-acceptance',
+    { 'content-type': 'application/json' },
+    JSON.stringify({ data: { review_statuses: { 'profile-chrome': 'accepted' } } }),
+  );
+  if (anonymousPortfolioWrite.statusCode !== 401) {
+    throw new Error(`Production-style anonymous design portfolio write should require sign-in: ${anonymousPortfolioWrite.statusCode} ${anonymousPortfolioWrite.body}`);
+  }
+
+  const invalidPortfolioId = await get('/api/design-portfolios/Bad%20ID');
+  if (invalidPortfolioId.statusCode !== 400) {
+    throw new Error(`Invalid design portfolio id should fail: ${invalidPortfolioId.statusCode} ${invalidPortfolioId.body}`);
+  }
+
+  const signedPortfolioWrite = await request(
+    'PUT',
+    '/api/design-portfolios/main-menu-acceptance',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      client_schema_version: 7,
+      metadata: { source: 'smoke-test', future_unknown_field: { ok: true } },
+      data: {
+        kind: 'main-menu-acceptance-ledger',
+        future_document_shape: { nested: ['allowed'] },
+        review_statuses: {
+          'profile-chrome': 'accepted',
+          'dock-chrome': 'rejected',
+        },
+      },
+    }),
+  );
+  const signedPortfolioWriteBody = JSON.parse(signedPortfolioWrite.body);
+  if (
+    signedPortfolioWrite.statusCode !== 200 ||
+    signedPortfolioWriteBody.portfolio.revision !== 1 ||
+    signedPortfolioWriteBody.portfolio.data.future_document_shape.nested[0] !== 'allowed' ||
+    signedPortfolioWriteBody.portfolio.updated_by !== 'player@example.com'
+  ) {
+    throw new Error(`Unexpected signed design portfolio write: ${signedPortfolioWrite.statusCode} ${signedPortfolioWrite.body}`);
+  }
+
+  const savedPortfolio = await get('/api/design-portfolios/main-menu-acceptance');
+  const savedPortfolioBody = JSON.parse(savedPortfolio.body);
+  if (
+    savedPortfolio.statusCode !== 200 ||
+    savedPortfolioBody.portfolio.revision !== 1 ||
+    savedPortfolioBody.portfolio.data.review_statuses['profile-chrome'] !== 'accepted'
+  ) {
+    throw new Error(`Design portfolio did not persist: ${savedPortfolio.statusCode} ${savedPortfolio.body}`);
+  }
+
+  const testSlotPortfolioWrite = await request(
+    'PUT',
+    '/api/design-portfolios/main-menu-acceptance',
+    { host: 'chess-tactics-1.tank.dev.romaine.life', 'content-type': 'application/json' },
+    JSON.stringify({ data: { review_statuses: { 'news-chrome': 'accepted' } } }),
+  );
+  const testSlotPortfolioWriteBody = JSON.parse(testSlotPortfolioWrite.body);
+  if (
+    testSlotPortfolioWrite.statusCode !== 200 ||
+    testSlotPortfolioWriteBody.portfolio.revision !== 2 ||
+    testSlotPortfolioWriteBody.portfolio.updated_by !== 'test-slot@chess-tactics.local'
+  ) {
+    throw new Error(`Test-slot design portfolio write should not require sign-in: ${testSlotPortfolioWrite.statusCode} ${testSlotPortfolioWrite.body}`);
   }
 
   const createdCampaign = await request(
