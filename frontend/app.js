@@ -2751,7 +2751,7 @@
 
   function renderMainMenuArtAction(action, label, active = false) {
     return `
-      <button class="main-menu-art-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}">
+      <button class="main-menu-art-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">
         <span>${escapeText(label)}</span>
       </button>`;
   }
@@ -2819,7 +2819,7 @@
             </div>
           </div>
           <figure class="portfolio-asset-figure">
-            <div class="portfolio-asset-image-wrap ${asset.overlayLabel ? 'accepted-brand-preview' : ''}">
+            <div class="portfolio-asset-image-wrap ${asset.overlayLabel ? 'accepted-brand-preview' : ''} ${asset.cropClass ? escapeText(asset.cropClass) : ''}">
               <img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt)}" draggable="false">
               ${asset.overlayLabel ? `<span>${escapeText(asset.overlayLabel)}</span>` : ''}
             </div>
@@ -2836,12 +2836,13 @@
         title: 'Mode Button Family',
         status: 'Approved',
         statusClass: 'approved',
-        file: '/assets/ui/main-menu-button-art-five-mode.png',
-        alt: 'Approved generated pixel art for the five main menu mode buttons',
-        caption: 'Approved button source. This is already wired into the live menu.',
-        description: 'The settled button art: cyan-lit pixel frames, warm dark fill, selected state, compact icon tile, and five stacked mode choices.',
+        file: '/assets/ui/main-menu-aspirational.png',
+        cropClass: 'portfolio-button-crop',
+        alt: 'Approved main menu render showing the five painted mode buttons',
+        caption: 'Approved portfolio crop. This is wired into the live menu so the lettering stays painted with the source.',
+        description: 'The live button stack now uses the concept render crop directly: cyan-lit selected frame, warm dark fill, compact icon tile, painted labels, and five stacked mode choices.',
         target: 'Confirm the already-approved button family still anchors the menu.',
-        liveUse: 'Live labels and click targets are overlaid on this bitmap in the main menu skeleton.',
+        liveUse: 'Transparent live click targets sit over the painted crop; browser text is not redrawn over the buttons.',
         decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
       },
       {
@@ -2957,7 +2958,7 @@
           </div>
 
           <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">
-            <img src="/assets/ui/main-menu-button-art-five-mode.png" alt="" aria-hidden="true" draggable="false">
+            <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
             ${renderMainMenuArtAction('party', 'Solo Skirmish', true)}
             ${renderMainMenuArtAction('campaigns', 'Campaign Editor')}
             ${renderMainMenuArtAction('level-editor-preview', 'Level Editor')}

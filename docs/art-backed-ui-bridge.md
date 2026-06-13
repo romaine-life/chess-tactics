@@ -14,14 +14,14 @@ not the final component system.
 - `docs/ui-art-direction.md` remains the binding art direction source.
 - `frontend/assets/ui/*.png` are the web-visible concept screens.
 - `docs/art/ui-screen-concepts/*.png` are the saved source references.
-- `frontend/assets/ui/main-menu-button-art-five-mode.png` is the approved
-  bitmap source for the live main menu mode button stack.
+- `frontend/assets/ui/main-menu-aspirational.png` provides the approved
+  painted crop for the live main menu mode button stack, including its labels.
 - `frontend/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
 - `frontend/assets/ui/main-menu-*-chrome-v1.png` are generated bitmap sources
   for the live main menu profile/status, news/daily, and dock chrome.
 - `frontend/assets/ui/main-menu-button-art-*.png` also includes generated
-  candidates used by the main menu asset review board.
+  no-text button candidates used by the main menu asset review board.
 - `frontend/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
   action wiring.
 - `frontend/style.css` owns hotspot geometry and art-screen presentation.
@@ -85,10 +85,10 @@ Replace the bridge from the inside out:
 
 1. Maintain a clear skeleton for each screen so unfinished asset slots remain
    visible during decomposition. Skeletons are the default app surfaces.
-2. Fill one main menu asset family at a time. The button row uses
-   `main-menu-button-art-five-mode.png`; the title/brand plate uses
-   `main-menu-brand-title-only-v1.png` from the approved render; the
-   profile/status, news/daily, and dock chrome use generated
+2. Fill one main menu asset family at a time. The button row uses a crop from
+   `main-menu-aspirational.png` so the approved painted labels stay intact; the
+   title/brand plate uses `main-menu-brand-title-only-v1.png` from the approved
+   render; the profile/status, news/daily, and dock chrome use generated
    `main-menu-*-chrome-v1.png` assets; the battlefield plate is still
    intentionally labeled as pending art. Use
    `/?screen=main-assets` to compare candidates against the approved render
