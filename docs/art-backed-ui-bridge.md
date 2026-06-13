@@ -62,13 +62,11 @@ bitmap art with live HTML labels and click targets overlaid. The main menu
 battlefield plate uses the live canvas board as its visual core with CSS chrome
 and game-native labels. Other labeled slots are intentionally unfinished.
 
-Current main menu design state:
-- Accepted: painted mode button stack and upper-left brand/title crop.
-- Polished for review: right-rail profile/status panel. Its live overlay should
-  stay aligned to the painted avatar tile, identity strip, sword/crown force
-  counter wells, and arrow action plate.
-- Next candidates: daily/news panel, bottom dock, then deeper battlefield plate
-  refinement.
+Current main menu acceptance state is tracked in
+[main-menu-acceptance.md](main-menu-acceptance.md). In short: the painted mode
+button stack, upper-left brand/title crop, and art-backed live bridge approach
+are settled; profile/status, daily/news, bottom dock, and battlefield plate
+details still need review.
 
 The concept routes keep real buttons layered over the saved renders. The
 hotspots route back into existing app actions such as menu navigation, campaign

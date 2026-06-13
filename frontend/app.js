@@ -2861,14 +2861,14 @@
       {
         id: 'profile-chrome',
         title: 'Profile / Status Panel',
-        status: 'Polished',
+        status: 'Needs Review',
         file: '/assets/ui/main-menu-profile-chrome-v1.png',
         alt: 'Generated pixel art profile and status chrome for the main menu',
         caption: 'Right-rail profile source for player identity, force counters, and the sign-in/account action slot.',
-        description: 'The live overlay now follows the painted chrome slots: avatar tile, identity strip, sword/crown force counters, and arrow-button action target.',
-        target: 'Review the polished overlay fit before calling this panel accepted.',
+        description: 'This panel is still under review: player identity, guest/sign-in/account affordance, allies/threat counters, and the surrounding chrome are not settled.',
+        target: 'Decide whether this profile/status treatment should be accepted, revised, rebuilt from a new crop, or split into smaller assets.',
         liveUse: 'Used behind the Guest/profile block, allies/threat counters, and sign-in/account hotspot on the live menu.',
-        decision: 'Keep the current slot-aligned overlay unless review asks for a new crop, stronger text contrast, or a split profile/counter asset.',
+        decision: 'Needs review. Do not treat the current overlay or generated chrome as accepted.',
       },
       {
         id: 'news-chrome',
@@ -2935,7 +2935,7 @@
         </section>
 
         <footer class="asset-review-footer">
-          <span>The buttons and upper-left brand plate are accepted. The profile panel is polished for review; next decisions are news/daily, dock, and deeper battlefield plate refinement.</span>
+          <span>Settled: mode buttons, upper-left brand/title banner, and the art-backed live bridge approach. Needs review: profile/status, daily/news, bottom dock, and battlefield plate details.</span>
         </footer>
       </div>`;
   }

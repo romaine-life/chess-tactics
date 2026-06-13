@@ -207,13 +207,11 @@ chrome. `*-concept` routes preserve the approved renders for comparison:
 `/?screen=main-assets` remains the asset review board for comparing candidate
 asset families before wiring them into a bridge.
 
-As of the profile/status pass, the main menu mode buttons and upper-left
-brand/title plate are accepted and should be treated as locked. The
-profile/status panel is the current polished review target: keep the generated
-chrome image, align live identity text to the top strip, keep force-count text
-inside the painted sword/crown wells, and use the arrow plate as the
-sign-in/account hit target. Do not add generic card UI or duplicate glyphs on
-top of the painted stat icons.
+The main menu acceptance state lives in
+[main-menu-acceptance.md](main-menu-acceptance.md). As of the current pass, the
+mode button stack, upper-left brand/title banner, and art-backed live bridge
+approach are settled. Profile/status, daily/news, bottom dock, and battlefield
+plate details still need review.
 
 ## Parallel Work Boundaries
 
