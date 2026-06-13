@@ -1,3 +1,5 @@
+import './style.css';
+
 (function () {
   const COLS = 8;
   const ROWS = 12;
@@ -493,7 +495,7 @@
         body: JSON.stringify({
           client_schema_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
           metadata: {
-            screen: 'main-assets',
+            route: '/design/main-menu',
             source: 'design-portfolio-card',
           },
           data: mainMenuReviewPortfolioData(cleanDraft, state.mainMenuReferenceSelections),
@@ -609,7 +611,7 @@
         body: JSON.stringify({
           client_schema_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
           metadata: {
-            screen: 'main-assets',
+            route: '/design/main-menu',
             source: 'design-portfolio-reference-picker',
           },
           data: mainMenuReviewPortfolioData(state.mainMenuReviewDraft, cleanSelections),
@@ -751,20 +753,40 @@
     },
   };
 
-  function applyInitialScreenParam() {
-    const params = new URLSearchParams(window.location.search);
-    const screen = params.get('screen');
-    if (screen === 'main' || screen === 'menu' || screen === 'main-concept' || screen === 'main-skeleton' || screen === 'main-assets') {
-      state.screen = 'main';
-    } else if (screen === 'campaigns' || screen === 'campaigns-skeleton' || screen === 'campaigns-concept' || screen === 'campaign-editor-concept') {
-      state.screen = 'campaigns';
-    } else if (screen === 'level-editor' || screen === 'level-editor-skeleton' || screen === 'level-editor-concept') {
-      state.screen = 'level-editor';
-      state.turn = 'editor';
-    } else if (screen === 'skirmish' || screen === 'skirmish-skeleton' || screen === 'skirmish-concept' || screen === 'game-concept') {
-      state.screen = 'game';
-      state.turn = 'player';
-    }
+  const APP_ROUTES = {
+    '/': { screen: 'main', mainMenuView: 'skeleton' },
+    '/main-menu': { screen: 'main', mainMenuView: 'skeleton' },
+    '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
+    '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
+    '/design/main-menu/render': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main' },
+    '/design/main-menu/render/hotspots': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main', hotspots: true },
+    '/campaigns': { screen: 'campaigns' },
+    '/campaigns/skeleton': { screen: 'campaigns' },
+    '/design/campaigns/render': { screen: 'campaigns', conceptScreen: 'campaigns' },
+    '/design/campaigns/render/hotspots': { screen: 'campaigns', conceptScreen: 'campaigns', hotspots: true },
+    '/level-editor': { screen: 'level-editor', turn: 'editor' },
+    '/level-editor/skeleton': { screen: 'level-editor', turn: 'editor' },
+    '/design/level-editor/render': { screen: 'level-editor', turn: 'editor', conceptScreen: 'level-editor' },
+    '/design/level-editor/render/hotspots': { screen: 'level-editor', turn: 'editor', conceptScreen: 'level-editor', hotspots: true },
+    '/skirmish': { screen: 'game', turn: 'player' },
+    '/skirmish/skeleton': { screen: 'game', turn: 'player' },
+    '/design/skirmish/render': { screen: 'game', turn: 'player', conceptScreen: 'skirmish' },
+    '/design/skirmish/render/hotspots': { screen: 'game', turn: 'player', conceptScreen: 'skirmish', hotspots: true },
+  };
+
+  function currentPath() {
+    const path = window.location.pathname || '/';
+    return path === '/' ? path : path.replace(/\/+$/, '');
+  }
+
+  function currentRoute() {
+    return APP_ROUTES[currentPath()] || APP_ROUTES['/'];
+  }
+
+  function applyInitialRoute() {
+    const route = currentRoute();
+    state.screen = route.screen;
+    if (route.turn) state.turn = route.turn;
   }
 
   const MAIN_MENU_PREVIEW_PIECES = [
@@ -2830,29 +2852,19 @@
   }
 
   function shouldShowMainConcept() {
-    const params = new URLSearchParams(window.location.search);
-    const screen = params.get('screen');
-    return screen === 'main-concept' || screen === 'main-art';
+    return currentRoute().mainMenuView === 'concept';
   }
 
   function shouldShowMainSkeleton() {
-    const params = new URLSearchParams(window.location.search);
-    const screen = params.get('screen');
-    return !screen || screen === 'main' || screen === 'menu' || screen === 'main-skeleton';
+    return currentRoute().mainMenuView === 'skeleton';
   }
 
   function shouldShowMainAssets() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('screen') === 'main-assets';
+    return currentRoute().mainMenuView === 'assets';
   }
 
   function shouldShowScreenConcept(screenId) {
-    const params = new URLSearchParams(window.location.search);
-    const screen = params.get('screen');
-    const aliases = [`${screenId}-concept`, `${screenId}-art`];
-    if (screenId === 'campaigns') aliases.push('campaign-editor-concept', 'campaign-concept');
-    if (screenId === 'skirmish') aliases.push('game-concept');
-    return aliases.includes(screen);
+    return currentRoute().conceptScreen === screenId;
   }
 
   function renderSkeletonTag(label, stateLabel = 'Unfilled') {
@@ -2901,7 +2913,7 @@
             <span>${escapeText(config.summary)}</span>
           </div>
           <nav aria-label="${escapeText(config.title)} review links">
-            <a href="/?screen=${escapeText(config.conceptRoute)}">Render reference</a>
+            <a href="${escapeText(config.conceptPath)}">Render reference</a>
             <button type="button" data-action="main">Main Menu</button>
           </nav>
         </header>
@@ -2916,7 +2928,7 @@
       screenId: 'campaigns',
       title: 'Campaign Editor',
       summary: 'The old campaign editor is hidden behind this planning skeleton until each surface gets approved art.',
-      conceptRoute: 'campaigns-concept',
+      conceptPath: '/design/campaigns/render',
       panels: [
         {
           className: 'rail',
@@ -2966,7 +2978,7 @@
       screenId: 'level-editor',
       title: 'Level Editor',
       summary: 'This is the workbench skeleton for tilesets, brushes, zones, and board validation.',
-      conceptRoute: 'level-editor-concept',
+      conceptPath: '/design/level-editor/render',
       panels: [
         {
           className: 'toolbar',
@@ -3017,7 +3029,7 @@
       screenId: 'skirmish',
       title: 'Skirmish',
       summary: 'The playable combat UI is skeletonized until HUD, board, piece, and action assets are approved.',
-      conceptRoute: 'skirmish-concept',
+      conceptPath: '/design/skirmish/render',
       panels: [
         {
           className: 'toolbar',
@@ -3201,10 +3213,10 @@
               </div>
             </dl>
             <div class="portfolio-asset-links">
-              <a href="/?screen=main-assets#${escapeText(asset.id)}">Section link</a>
+              <a href="/design/main-menu#${escapeText(asset.id)}">Section link</a>
               ${asset.file ? `<a href="${escapeText(asset.file)}" target="_blank" rel="noreferrer">Open image</a>` : ''}
-              <a href="/">Live menu</a>
-              <a href="/?screen=main-concept">Render reference</a>
+              <a href="/main-menu">Live menu</a>
+              <a href="/design/main-menu/render">Render reference</a>
             </div>
             <div class="portfolio-review-draft">
               <span>Saved draft</span>
@@ -3237,6 +3249,26 @@
 
   function renderMainAssetReview() {
     const portfolioAssets = [
+      {
+        id: 'mode-buttons',
+        title: 'Mode Button Family',
+        baseStatus: 'accepted',
+        file: '/assets/ui/main-menu-aspirational.png',
+        cropClass: 'portfolio-button-crop',
+        alt: 'Approved main menu render showing the five painted mode buttons',
+        caption: 'Approved portfolio crop. This is wired into the live menu so the lettering stays painted with the source.',
+        description: 'The live button stack uses the concept render crop directly: cyan-lit selected frame, warm dark fill, compact icon tile, painted labels, and five stacked mode choices.',
+        target: 'Confirm the already-approved button family still anchors the menu.',
+        liveUse: 'Transparent live click targets sit over the painted crop; browser text is not redrawn over the buttons.',
+        decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            key: 'mode-buttons',
+            alt: 'Approved render crop of the left-side main menu mode button stack',
+          },
+        ],
+      },
       {
         id: 'brand-chrome',
         title: 'Title / Brand Plate',
@@ -3361,9 +3393,6 @@
           ${portfolioAssets.map(renderPortfolioAsset).join('')}
         </section>
 
-        <footer class="asset-review-footer">
-          <span>Settled: upper-left brand/title banner and the art-backed live bridge approach. Needs review: profile/status, daily/news, bottom dock, and battlefield plate details.</span>
-        </footer>
         ${renderReferenceCropEditor()}
       </div>`;
   }
@@ -3480,8 +3509,7 @@
     if (shellEl) shellEl.classList.toggle('main-menu-active', state.screen === 'main');
     if (shellEl) shellEl.classList.toggle('concept-screen-active', ['campaigns', 'level-editor', 'game'].includes(state.screen));
     if (shellEl) {
-      const params = new URLSearchParams(window.location.search);
-      shellEl.classList.toggle('show-art-hotspots', params.get('hotspots') === '1' || params.get('debug') === 'hotspots');
+      shellEl.classList.toggle('show-art-hotspots', Boolean(currentRoute().hotspots));
     }
     if (boardWrapEl) boardWrapEl.classList.toggle('level-editor-active', state.screen === 'level-editor');
     if (boardScrollEl) boardScrollEl.classList.toggle('level-editor-scroll', state.screen === 'level-editor');
@@ -4265,7 +4293,7 @@
     }
   });
 
-  applyInitialScreenParam();
+  applyInitialRoute();
   initAuth();
   lobbyPollTimer = window.setInterval(() => {
     if (currentUser && (state.screen === 'lobbies' || state.screen === 'lobby')) {

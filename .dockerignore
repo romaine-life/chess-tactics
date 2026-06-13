@@ -3,3 +3,4 @@ npm-debug.log
 .git
 .github
 README.md
+frontend/dist

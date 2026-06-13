@@ -5,7 +5,7 @@ const express = require('express');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend');
+const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const hotBackendDir = process.env.HOT_BACKEND_DIR || '';
 const designPortfolioStorePath = process.env.DESIGN_PORTFOLIO_STORE_PATH
@@ -26,6 +26,7 @@ const PLAYER_1_SPAWN_ZONE_ID = 'player-1-spawn';
 const PLAYER_2_SPAWN_ZONE_ID = 'player-2-spawn';
 const DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION = 1;
 const DESIGN_PORTFOLIO_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+const MIGRATED_RAW_ASSET_PATHS = new Set(['/app.js', '/style.css']);
 
 function safeReturnPath(raw) {
   if (!raw || typeof raw !== 'string') return '/';
@@ -948,12 +949,30 @@ app.post('/api/auth/sign-out', async (req, res) => {
   res.status(204).end();
 });
 
+app.use((req, res, next) => {
+  if (Object.hasOwn(req.query || {}, 'screen')) {
+    res.status(404).send('not found');
+    return;
+  }
+  next();
+});
 if (staticFrontendDir) {
   app.use(express.static(staticFrontendDir));
 }
+app.use((req, res, next) => {
+  if (MIGRATED_RAW_ASSET_PATHS.has(req.path)) {
+    res.status(404).send('not found');
+    return;
+  }
+  next();
+});
 app.use(express.static(frontendDir));
 
-app.use((_req, res) => {
+app.use((req, res) => {
+  if (path.extname(req.path)) {
+    res.status(404).send('not found');
+    return;
+  }
   res.sendFile(frontendIndexFile());
 });
 

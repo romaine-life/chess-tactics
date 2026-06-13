@@ -3,7 +3,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const bakedServer = path.join(__dirname, 'server.js');
-const bakedFrontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend');
+const bakedFrontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '/var/run/chess-tactics-static-override';
 const hotBackendDir = process.env.HOT_BACKEND_DIR || '/var/run/chess-tactics-hot';
 const hotServer = path.join(hotBackendDir, 'server.js');

@@ -147,25 +147,41 @@ async function main() {
   if (fallback.statusCode !== 200 || !fallback.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
   }
+  const missingAsset = await get('/assets/missing.png');
+  if (missingAsset.statusCode !== 404) {
+    throw new Error(`Missing asset-like routes should return 404: ${missingAsset.statusCode}`);
+  }
+  for (const migratedAssetPath of ['/app.js', '/style.css']) {
+    const response = await get(migratedAssetPath);
+    if (response.statusCode !== 404) {
+      throw new Error(`Migrated raw asset path should be gone for ${migratedAssetPath}: ${response.statusCode}`);
+    }
+  }
+  for (const migratedScreenPath of ['/?screen=main-assets', '/?screen=main-concept&hotspots=1']) {
+    const response = await get(migratedScreenPath);
+    if (response.statusCode !== 404) {
+      throw new Error(`Migrated query-screen route should be gone for ${migratedScreenPath}: ${response.statusCode}`);
+    }
+  }
 
   const reviewUrls = [
-    '/?screen=main',
-    '/?screen=main-concept',
-    '/?screen=main-skeleton',
-    '/?screen=main-assets',
-    '/?screen=campaigns',
-    '/?screen=campaigns-skeleton',
-    '/?screen=campaigns-concept',
-    '/?screen=level-editor',
-    '/?screen=level-editor-skeleton',
-    '/?screen=level-editor-concept',
-    '/?screen=skirmish',
-    '/?screen=skirmish-skeleton',
-    '/?screen=skirmish-concept',
-    '/?screen=main-concept&hotspots=1',
-    '/?screen=campaigns-concept&hotspots=1',
-    '/?screen=level-editor-concept&hotspots=1',
-    '/?screen=skirmish-concept&hotspots=1',
+    '/main-menu',
+    '/main-menu/skeleton',
+    '/design/main-menu',
+    '/design/main-menu/render',
+    '/design/main-menu/render/hotspots',
+    '/campaigns',
+    '/campaigns/skeleton',
+    '/design/campaigns/render',
+    '/design/campaigns/render/hotspots',
+    '/level-editor',
+    '/level-editor/skeleton',
+    '/design/level-editor/render',
+    '/design/level-editor/render/hotspots',
+    '/skirmish',
+    '/skirmish/skeleton',
+    '/design/skirmish/render',
+    '/design/skirmish/render/hotspots',
   ];
   for (const reviewUrl of reviewUrls) {
     const response = await get(reviewUrl);
