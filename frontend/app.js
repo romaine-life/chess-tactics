@@ -3086,6 +3086,7 @@
 
   function renderPortfolioAsset(asset, index) {
     const openAttr = index === 0 ? ' open' : '';
+    const referenceCrops = asset.referenceCrops || [];
     return `
       <details class="portfolio-asset ${asset.statusClass || ''}" id="${escapeText(asset.id)}"${openAttr}>
         <summary>
@@ -3112,7 +3113,7 @@
             </dl>
             <div class="portfolio-asset-links">
               <a href="/?screen=main-assets#${escapeText(asset.id)}">Section link</a>
-              <a href="${escapeText(asset.file)}" target="_blank" rel="noreferrer">Open image</a>
+              ${asset.file ? `<a href="${escapeText(asset.file)}" target="_blank" rel="noreferrer">Open image</a>` : ''}
               <a href="/">Live menu</a>
               <a href="/?screen=main-concept">Render reference</a>
             </div>
@@ -3122,9 +3123,24 @@
             </div>
           </div>
           <figure class="portfolio-asset-figure">
-            <div class="portfolio-asset-image-wrap ${asset.overlayLabel ? 'accepted-brand-preview' : ''} ${asset.cropClass ? escapeText(asset.cropClass) : ''}">
-              <img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt)}" draggable="false">
-              ${asset.overlayLabel ? `<span>${escapeText(asset.overlayLabel)}</span>` : ''}
+            <div class="portfolio-comparison">
+              ${asset.file ? `
+                <div class="portfolio-comparison-card">
+                  <strong>Current Candidate</strong>
+                  <div class="portfolio-asset-image-wrap ${asset.overlayLabel ? 'accepted-brand-preview' : ''} ${asset.cropClass ? escapeText(asset.cropClass) : ''}">
+                    <img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt)}" draggable="false">
+                    ${asset.overlayLabel ? `<span>${escapeText(asset.overlayLabel)}</span>` : ''}
+                  </div>
+                </div>
+              ` : ''}
+              ${referenceCrops.map((crop) => `
+                <div class="portfolio-comparison-card">
+                  <strong>${escapeText(crop.title || 'Approved Render Crop')}</strong>
+                  <div class="portfolio-approved-crop ${escapeText(crop.cropClass)}" role="img" aria-label="${escapeText(crop.alt)}">
+                    <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
+                  </div>
+                </div>
+              `).join('')}
             </div>
             <figcaption>${escapeText(asset.caption)}</figcaption>
           </figure>
@@ -3163,6 +3179,13 @@
         target: 'Confirm the already-approved button family still anchors the menu.',
         liveUse: 'Transparent live click targets sit over the painted crop; browser text is not redrawn over the buttons.',
         decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            cropClass: 'approved-crop-mode-buttons',
+            alt: 'Approved render crop of the left-side main menu mode button stack',
+          },
+        ],
       },
       {
         id: 'brand-chrome',
@@ -3175,6 +3198,13 @@
         target: 'Keep this as the locked upper-left brand/title plate unless a later layout change exposes a fit issue.',
         liveUse: 'Used as the visible live brand plate in the upper-left main menu column.',
         decision: 'Accepted as the main title lockup.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            cropClass: 'approved-crop-brand',
+            alt: 'Approved render crop of the upper-left main menu brand and title area',
+          },
+        ],
       },
       {
         id: 'profile-chrome',
@@ -3187,6 +3217,13 @@
         target: 'Decide whether this profile/status treatment should be accepted, revised, rebuilt from a new crop, or split into smaller assets.',
         liveUse: 'Used behind the Guest/profile block, allies/threat counters, and sign-in/account hotspot on the live menu.',
         decision: 'Needs review. Do not treat the current overlay or generated chrome as accepted.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            cropClass: 'approved-crop-profile',
+            alt: 'Approved render crop of the upper-right profile and force status panels',
+          },
+        ],
       },
       {
         id: 'news-chrome',
@@ -3199,6 +3236,18 @@
         target: 'Decide whether this panel should be calmer, more military, more chesslike, or stay as-is.',
         liveUse: 'Used twice on the live menu: the left daily preview and the right campaign-tools/news block.',
         decision: 'Approve the reusable panel, or request separate art for daily and news states.',
+        referenceCrops: [
+          {
+            title: 'Daily Render Crop',
+            cropClass: 'approved-crop-daily',
+            alt: 'Approved render crop of the bottom-left daily challenge panel',
+          },
+          {
+            title: 'News Render Crop',
+            cropClass: 'approved-crop-news',
+            alt: 'Approved render crop of the bottom-right news panel',
+          },
+        ],
       },
       {
         id: 'dock-chrome',
@@ -3211,6 +3260,32 @@
         target: 'Check if the dock belongs on the first pass, and whether its ornament level competes with the main buttons.',
         liveUse: 'Used behind four live quick-link hotspots near the bottom-center of the main menu.',
         decision: 'Approve, reduce visual weight, or defer until the main menu needs those secondary features.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            cropClass: 'approved-crop-dock',
+            alt: 'Approved render crop of the bottom-center icon dock',
+          },
+        ],
+      },
+      {
+        id: 'battlefield-plate',
+        title: 'Battlefield Plate',
+        baseStatus: 'review',
+        file: '',
+        alt: '',
+        caption: 'Approved render crop for the central board plate. Compare this against the live menu battlefield before accepting the frame, depth, and label treatment.',
+        description: 'The current live menu uses the canvas battlefield inside CSS chrome. The central board plate details, label treatment, depth, and responsive fit still need review.',
+        target: 'Decide whether the live battlefield plate is close enough to the approved render framing, or needs another pass before it is locked.',
+        liveUse: 'Used as the central main-menu battlefield preview behind the live moonlit board.',
+        decision: 'Needs review. The board itself is live, but the surrounding plate treatment is not accepted yet.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            cropClass: 'approved-crop-battlefield',
+            alt: 'Approved render crop of the central main menu battlefield plate',
+          },
+        ],
       },
     ].map((asset) => {
       const reviewStatus = mainMenuReviewStatusFor(asset.id, asset.baseStatus);
@@ -3237,6 +3312,7 @@
             <a href="/?screen=main-assets#profile-chrome">Profile</a>
             <a href="/?screen=main-assets#news-chrome">News</a>
             <a href="/?screen=main-assets#dock-chrome">Dock</a>
+            <a href="/?screen=main-assets#battlefield-plate">Battlefield</a>
             <a href="/">Live menu</a>
             <a href="/?screen=main-concept">Render reference</a>
           </nav>

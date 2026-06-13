@@ -2252,6 +2252,36 @@ h1 {
   min-width: 0;
 }
 
+.portfolio-comparison {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.portfolio-comparison-card {
+  align-content: start;
+  background: rgba(2, 7, 11, .42);
+  border: 2px solid rgba(80, 129, 151, .42);
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.portfolio-comparison-card:only-child {
+  grid-column: 1 / -1;
+}
+
+.portfolio-comparison-card strong {
+  color: #47a9ff;
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
 .portfolio-asset-image-wrap {
   background: #02070b;
   border: 2px solid rgba(37, 199, 255, .28);
@@ -2281,6 +2311,78 @@ h1 {
   position: absolute;
   top: -50%;
   width: 319.76%;
+}
+
+.portfolio-approved-crop {
+  --crop-x: 0;
+  --crop-y: 0;
+  --crop-w: 1586;
+  --crop-h: 992;
+  aspect-ratio: var(--crop-w) / var(--crop-h);
+  background: #02070b;
+  border: 2px solid rgba(233, 184, 92, .42);
+  overflow: hidden;
+  position: relative;
+}
+
+.portfolio-approved-crop img {
+  height: auto;
+  left: calc(-100% * var(--crop-x) / var(--crop-w));
+  max-height: none;
+  max-width: none;
+  object-fit: initial;
+  position: absolute;
+  top: calc(-100% * var(--crop-y) / var(--crop-h));
+  width: calc(100% * 1586 / var(--crop-w));
+}
+
+.approved-crop-mode-buttons {
+  --crop-x: 42;
+  --crop-y: 247;
+  --crop-w: 492;
+  --crop-h: 487;
+}
+
+.approved-crop-brand {
+  --crop-x: 38;
+  --crop-y: 35;
+  --crop-w: 625;
+  --crop-h: 170;
+}
+
+.approved-crop-profile {
+  --crop-x: 1175;
+  --crop-y: 26;
+  --crop-w: 393;
+  --crop-h: 162;
+}
+
+.approved-crop-daily {
+  --crop-x: 29;
+  --crop-y: 763;
+  --crop-w: 485;
+  --crop-h: 180;
+}
+
+.approved-crop-news {
+  --crop-x: 1176;
+  --crop-y: 763;
+  --crop-w: 392;
+  --crop-h: 190;
+}
+
+.approved-crop-dock {
+  --crop-x: 548;
+  --crop-y: 810;
+  --crop-w: 410;
+  --crop-h: 136;
+}
+
+.approved-crop-battlefield {
+  --crop-x: 538;
+  --crop-y: 175;
+  --crop-w: 930;
+  --crop-h: 682;
 }
 
 .portfolio-asset-figure figcaption {
@@ -4220,6 +4322,10 @@ h1 {
   }
 
   .portfolio-asset-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portfolio-comparison {
     grid-template-columns: minmax(0, 1fr);
   }
 
