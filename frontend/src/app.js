@@ -3225,6 +3225,12 @@ import './style.css';
           </div>
           <figure class="portfolio-asset-figure">
             <div class="portfolio-comparison">
+              ${asset.specimen ? `
+                <div class="portfolio-comparison-card">
+                  <strong>Live Component</strong>
+                  <div class="portfolio-specimen" inert>${asset.specimen}</div>
+                </div>
+              ` : ''}
               ${asset.file ? `
                 <div class="portfolio-comparison-card">
                   <strong>Current Candidate</strong>
@@ -3292,7 +3298,7 @@ import './style.css';
         id: 'profile-chrome',
         title: 'Profile / Status Panel',
         baseStatus: 'review',
-        file: '/assets/ui/main-menu-profile-chrome-v1.png',
+        specimen: renderProfileStatus(),
         alt: 'Generated pixel art profile and status chrome for the main menu',
         caption: 'Right-rail profile source for player identity, force counters, and the sign-in/account action slot.',
         description: 'This panel is still under review: player identity, guest/sign-in/account affordance, allies/threat counters, and the surrounding chrome are not settled.',
@@ -3311,7 +3317,7 @@ import './style.css';
         id: 'news-chrome',
         title: 'Daily / News Panel',
         baseStatus: 'review',
-        file: '/assets/ui/main-menu-news-chrome-v1.png',
+        specimen: renderNewsPanel({ variant: 'news', title: 'Campaign tools', lines: ['Editor shell is moving from render reference to live browser UI.', 'Tile and piece extraction follow this main-menu slice.'] }),
         alt: 'Generated pixel art daily and news panel chrome for the main menu',
         caption: 'Reusable panel source for the daily line and right-side campaign/news notes.',
         description: 'A smaller command-panel treatment for rotating copy, daily challenge text, or future campaign updates.',
@@ -3335,7 +3341,7 @@ import './style.css';
         id: 'dock-chrome',
         title: 'Bottom Dock',
         baseStatus: 'review',
-        file: '/assets/ui/main-menu-dock-chrome-v1.png',
+        specimen: renderDock(),
         alt: 'Generated pixel art bottom dock chrome for the main menu',
         caption: 'Bottom quick-link dock source for secondary navigation buttons.',
         description: 'A lower-priority navigation strip for achievements, campaigns, lobbies, collection, and future utility links.',
@@ -3397,14 +3403,104 @@ import './style.css';
       </div>`;
   }
 
-  function renderMainMenuSkeleton() {
+  function menuForceCounts() {
+    let allies = 0;
+    let enemies = 0;
+    MAIN_MENU_PREVIEW_PIECES.forEach((piece) => {
+      if (piece.alive === false) return;
+      if (piece.side === 'player') allies += 1;
+      else if (piece.side === 'enemy') enemies += 1;
+    });
+    return { allies, enemies };
+  }
+
+  function renderGearIcon() {
+    const teeth = [0, 60, 120, 180, 240, 300]
+      .map((a) => `<rect x="7.25" y="0.8" width="1.5" height="3" rx="0.4" transform="rotate(${a} 8 8)"></rect>`)
+      .join('');
+    return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">${teeth}<circle cx="8" cy="8" r="4.4"></circle><circle cx="8" cy="8" r="1.9" fill="var(--panel)"></circle></svg>`;
+  }
+
+  function renderForceStat(side, label, count) {
+    return `
+      <div class="force-stat force-stat-${side}">
+        <dt><span class="force-stat-icon" aria-hidden="true">${getPieceSvg('rook', side)}</span>${escapeText(label)}</dt>
+        <dd>${escapeText(String(count))}</dd>
+      </div>`;
+  }
+
+  function renderProfileStatus() {
     const signedIn = Boolean(currentUser);
     const displayName = signedIn ? (currentUser.name || currentUser.email || 'Player') : 'Guest';
-    const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
-    const accountInitial = signedIn ? displayName.trim().charAt(0).toUpperCase() : '?';
+    const detail = signedIn ? (currentUser.email || 'Signed in') : 'Offline skirmish ready';
+    const accountInitial = (signedIn ? displayName.trim().charAt(0) : 'G').toUpperCase() || 'P';
     const avatarMarkup = signedIn && currentUser.avatar_url
       ? `<img src="${escapeText(currentUser.avatar_url)}" alt="" draggable="false">`
-      : `<span aria-hidden="true">${escapeText(accountInitial || 'P')}</span>`;
+      : `<span aria-hidden="true">${escapeText(accountInitial)}</span>`;
+    const forces = menuForceCounts();
+    return `
+      <section class="menu-panel profile-panel" aria-label="Commander profile and skirmish forces">
+        <div class="profile-panel-identity">
+          <span class="profile-panel-avatar">${avatarMarkup}</span>
+          <span class="profile-panel-name">
+            <strong>${escapeText(displayName)}</strong>
+            <span>${escapeText(detail)}</span>
+          </span>
+          <button class="profile-panel-action" type="button" data-action="${signedIn ? 'settings' : 'sign-in'}" aria-label="${signedIn ? 'Account settings' : 'Sign in'}">
+            ${signedIn ? renderGearIcon() : ''}<span>${signedIn ? 'Account' : 'Sign In'}</span>
+          </button>
+        </div>
+        <dl class="profile-panel-forces" aria-label="Skirmish preview forces">
+          ${renderForceStat('player', 'Allies', forces.allies)}
+          ${renderForceStat('enemy', 'Enemies', forces.enemies)}
+        </dl>
+      </section>`;
+  }
+
+  function renderNewsPanel(opts) {
+    const lines = opts.lines || [];
+    const items = lines.map((line) => `<li>${escapeText(line)}</li>`).join('');
+    return `
+      <section class="menu-panel news-panel news-panel-${escapeText(opts.variant)}" aria-label="${escapeText(opts.title)}">
+        <header class="news-panel-head">
+          <strong>${escapeText(opts.title)}</strong>
+          ${opts.kicker ? `<small>${escapeText(opts.kicker)}</small>` : ''}
+        </header>
+        ${items ? `<ul class="news-panel-lines">${items}</ul>` : ''}
+        ${opts.footer ? `<p class="news-panel-foot">${escapeText(opts.footer)}</p>` : ''}
+      </section>`;
+  }
+
+  const DOCK_ICONS = {
+    award: '<circle cx="8" cy="6" r="3.6"></circle><rect x="6.6" y="9" width="2.8" height="3.4"></rect><rect x="4.4" y="12.2" width="7.2" height="1.8"></rect>',
+    flag: '<rect x="3" y="2" width="1.5" height="12"></rect><path d="M4.5 2.4H13l-2.1 2.7L13 7.8H4.5z"></path>',
+    users: '<circle cx="5.6" cy="5.6" r="2.1"></circle><circle cx="10.4" cy="5.6" r="2.1"></circle><path d="M2.2 13c0-2.1 1.6-3.4 3.4-3.4S9 10.9 9 13z"></path><path d="M7 13c0-2.1 1.6-3.4 3.4-3.4S13.8 10.9 13.8 13z"></path>',
+    grid: '<rect x="2.6" y="2.6" width="4.4" height="4.4"></rect><rect x="9" y="2.6" width="4.4" height="4.4"></rect><rect x="2.6" y="9" width="4.4" height="4.4"></rect><rect x="9" y="9" width="4.4" height="4.4"></rect>',
+  };
+
+  function renderDockIcon(name) {
+    return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">${DOCK_ICONS[name] || ''}</svg>`;
+  }
+
+  function renderDockButton(action, label, icon) {
+    return `
+      <button class="dock-button" type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">
+        <span class="dock-button-icon" aria-hidden="true">${renderDockIcon(icon)}</span>
+        <span class="dock-button-label">${escapeText(label)}</span>
+      </button>`;
+  }
+
+  function renderDock() {
+    return `
+      <nav class="menu-dock" aria-label="Quick links">
+        ${renderDockButton('settings', 'Achievements', 'award')}
+        ${renderDockButton('campaigns', 'Campaigns', 'flag')}
+        ${renderDockButton('lobbies', 'Lobbies', 'users')}
+        ${renderDockButton('settings', 'Collection', 'grid')}
+      </nav>`;
+  }
+
+  function renderMainMenuSkeleton() {
     return `
       <div class="main-menu-screen main-menu-live-screen main-menu-skeleton-screen" data-live-screen="main-skeleton">
         <section class="main-menu-left" aria-label="Main navigation">
@@ -3433,51 +3529,16 @@ import './style.css';
             ${renderMainMenuArtAction('settings', 'Settings')}
           </nav>
 
-          <div class="main-menu-daily main-menu-news-art">
-            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-            <div class="main-menu-daily-content">
-              <strong>Daily Line</strong>
-              <small>Preview</small>
-              <p>Hold the bridge, trade cleanly, and keep the king lane sealed.</p>
-              <span>Generated board target</span>
-            </div>
-          </div>
+          ${renderNewsPanel({ variant: 'daily', title: 'Daily Line', kicker: 'Preview', lines: ['Hold the bridge, trade cleanly, and keep the king lane sealed.'], footer: 'Generated board target' })}
         </section>
 
         <aside class="main-menu-right" aria-label="Profile and status">
-          <div class="main-menu-profile main-menu-profile-art">
-            <img src="/assets/ui/main-menu-profile-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-            <div class="main-menu-avatar" aria-hidden="true">${avatarMarkup}</div>
-            <div class="main-menu-profile-identity">
-              <strong>${escapeText(displayName)}</strong>
-              <span>${escapeText(email)}</span>
-            </div>
-            <div class="main-menu-profile-stats" aria-label="Preview force count">
-              <span><strong>6 Allies</strong></span>
-              <span><strong>5 Threats</strong></span>
-            </div>
-            <button type="button" data-action="${signedIn ? 'settings' : 'sign-in'}" aria-label="${signedIn ? 'Account settings' : 'Sign in'}">
-              <span>${signedIn ? 'Account' : 'Sign In'}</span>
-            </button>
-          </div>
+          ${renderProfileStatus()}
 
-          <div class="main-menu-news main-menu-news-art">
-            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-            <div class="main-menu-news-content">
-              <strong>Campaign tools</strong>
-              <p><span aria-hidden="true">&gt;</span> Editor shell is moving from render reference to live browser UI.</p>
-              <p><span aria-hidden="true">&gt;</span> Tile and piece extraction follow this main-menu slice.</p>
-            </div>
-          </div>
+          ${renderNewsPanel({ variant: 'news', title: 'Campaign tools', lines: ['Editor shell is moving from render reference to live browser UI.', 'Tile and piece extraction follow this main-menu slice.'] })}
         </aside>
 
-        <div class="main-menu-dock main-menu-dock-art" aria-label="Quick links">
-          <img src="/assets/ui/main-menu-dock-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-          ${renderMainMenuDockButton('settings', 'Achievements')}
-          ${renderMainMenuDockButton('campaigns', 'Campaigns')}
-          ${renderMainMenuDockButton('lobbies', 'Lobbies')}
-          ${renderMainMenuDockButton('settings', 'Collection')}
-        </div>
+        ${renderDock()}
       </div>`;
   }
 
