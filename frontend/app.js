@@ -2945,12 +2945,8 @@
     const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
     return `
       <div class="main-menu-screen main-menu-live-screen main-menu-skeleton-screen" data-live-screen="main-skeleton">
-        <div class="main-menu-skeleton-banner">
-          <strong>Skeleton mode</strong>
-          <span>Live structure only. Labeled slots still need approved art.</span>
-        </div>
         <div class="main-menu-skeleton-board-callout">
-          ${renderSkeletonTag('Battlefield plate, lighting, terrain richness, and hero board composition', 'Pending art')}
+          ${renderSkeletonTag('Battlefield plate, lighting, terrain richness, and hero board composition', 'Next asset')}
         </div>
         <section class="main-menu-left" aria-label="Main navigation">
           <div class="main-menu-brand main-menu-brand-art accepted-brand-crop" aria-label="Chess Tactics">

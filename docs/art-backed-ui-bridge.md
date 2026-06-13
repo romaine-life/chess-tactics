@@ -3,7 +3,7 @@
 This document describes the current bridge between the approved screen renders
 and the production web app.
 
-The UI overhaul is intentionally using live skeleton screens as the normal app
+The UI overhaul is intentionally using live bridge screens as the normal app
 surface while approved renders remain available as explicit references. This
 keeps the work browser-first, lets reviewers see unfinished slots clearly, and
 prevents the old utility UI from being mistaken for the target experience. It is
@@ -32,11 +32,11 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` shows the live DOM main menu skeleton, with approved/generated bitmap
+- `/` shows the live DOM main menu bridge, with approved/generated bitmap
   families filled for buttons, brand, profile/status, news/daily, and dock
   chrome. Remaining unfinished asset slots stay labeled in place.
-- `/?screen=main` explicitly opens the live DOM main menu skeleton.
-- `/?screen=main-skeleton` also opens the live DOM main menu skeleton.
+- `/?screen=main` explicitly opens the live DOM main menu bridge.
+- `/?screen=main-skeleton` also opens the live DOM main menu bridge.
 - `/?screen=main-concept` opens the saved main menu concept render.
 - `/?screen=main-assets` opens the main menu asset review board. It compares
   the approved render crop against candidate live asset families before any
@@ -54,8 +54,8 @@ For example, use `/?screen=main-concept&hotspots=1` or
 
 ## What Is Live
 
-The main menu, campaign editor, level editor, and skirmish now use live
-skeletons as their default surfaces. The main menu mode button family, brand
+The main menu, campaign editor, level editor, and skirmish now use live bridge
+surfaces by default. The main menu mode button family, brand
 lockup, profile/status panel, news/daily panels, and dock strip use generated
 bitmap art with live HTML labels and click targets overlaid. Other labeled
 slots are intentionally unfinished.

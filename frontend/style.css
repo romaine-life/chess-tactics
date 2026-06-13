@@ -1269,39 +1269,9 @@ h1 {
 
 .main-menu-skeleton-screen::before {
   background:
-    repeating-linear-gradient(135deg, rgba(74, 128, 151, .08) 0 10px, transparent 10px 20px),
+    radial-gradient(circle at 46% 42%, rgba(27, 88, 121, .2), transparent 28%),
     linear-gradient(90deg, rgba(2, 7, 11, .94) 0%, rgba(2, 7, 11, .72) 32%, rgba(2, 7, 11, .18) 58%, rgba(2, 7, 11, .74) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .5));
-}
-
-.main-menu-skeleton-banner {
-  align-items: center;
-  background: rgba(7, 20, 30, .94);
-  border: 2px dashed rgba(255, 216, 122, .72);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .66);
-  color: #f1e3b3;
-  display: flex;
-  gap: 12px;
-  left: 58%;
-  max-width: 390px;
-  padding: 10px 14px;
-  pointer-events: none;
-  position: absolute;
-  top: 34px;
-  transform: translateX(-50%);
-  text-transform: uppercase;
-  z-index: 7;
-}
-
-.main-menu-skeleton-banner strong {
-  color: #ffd87a;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .58rem;
-}
-
-.main-menu-skeleton-banner span {
-  color: #bfd5dc;
-  font-size: 1.05rem;
 }
 
 .main-menu-skeleton-board-callout {
@@ -1312,6 +1282,17 @@ h1 {
   top: 48%;
   transform: translate(-50%, -50%);
   z-index: 5;
+}
+
+.main-menu-skeleton-board-callout .skeleton-tag {
+  background: rgba(2, 9, 14, .72);
+  border-color: rgba(57, 158, 204, .5);
+  box-shadow: 0 0 28px rgba(37, 199, 255, .08);
+  color: #cfe1e7;
+}
+
+.main-menu-skeleton-board-callout .skeleton-tag b {
+  color: #47cfff;
 }
 
 .skeleton-tag {
