@@ -2945,21 +2945,22 @@
     const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
     return `
       <div class="main-menu-screen main-menu-live-screen main-menu-skeleton-screen" data-live-screen="main-skeleton">
-        <section class="main-menu-battlefield-plate" aria-label="Moonlit grassland battlefield preview">
-          <div class="main-menu-battlefield-meta">
-            <span>Moonlit Grassland</span>
-            <span>Skirmish Preview</span>
-          </div>
-          <div class="main-menu-battlefield-status" aria-hidden="true">
-            <span>6 Allies</span>
-            <span>5 Threats</span>
-            <span>Bridge Hold</span>
-          </div>
-        </section>
         <section class="main-menu-left" aria-label="Main navigation">
           <div class="main-menu-brand main-menu-brand-art accepted-brand-crop" aria-label="Chess Tactics">
             <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" aria-hidden="true" draggable="false">
           </div>
+
+          <section class="main-menu-battlefield-plate" aria-label="Moonlit grassland battlefield preview">
+            <div class="main-menu-battlefield-meta">
+              <span>Moonlit Grassland</span>
+              <span>Skirmish Preview</span>
+            </div>
+            <div class="main-menu-battlefield-status" aria-hidden="true">
+              <span>6 Allies</span>
+              <span>5 Threats</span>
+              <span>Bridge Hold</span>
+            </div>
+          </section>
 
           <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">
             <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
