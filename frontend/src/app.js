@@ -3457,26 +3457,37 @@ import './style.css';
       </div>`;
   }
 
+  function renderCrest() {
+    const mane = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
+      .map((a) => `<path d="M24 13 L26.4 20 L21.6 20 Z" transform="rotate(${a} 24 27)"></path>`)
+      .join('');
+    return `<svg class="profile-crest" viewBox="0 0 48 56" aria-hidden="true" focusable="false">
+        <defs><linearGradient id="crestFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d4f86"></stop><stop offset="1" stop-color="#0a2547"></stop></linearGradient></defs>
+        <path d="M5 4 H43 V29 C43 43 34 49 24 53 C14 49 5 43 5 29 Z" fill="url(#crestFill)" stroke="var(--gold)" stroke-width="2.4"></path>
+        <g fill="#dbe7f2">${mane}<circle cx="24" cy="27" r="7.4"></circle></g>
+        <circle cx="21.2" cy="26" r="1.1" fill="#0a2547"></circle>
+        <circle cx="26.8" cy="26" r="1.1" fill="#0a2547"></circle>
+        <path d="M21.6 30 Q24 32.6 26.4 30" fill="none" stroke="#0a2547" stroke-width="1.1" stroke-linecap="round"></path>
+      </svg>`;
+  }
+
   function renderProfileStatus() {
     const signedIn = Boolean(currentUser);
-    const displayName = signedIn ? (currentUser.name || currentUser.email || 'Player') : 'Guest';
-    const detail = signedIn ? (currentUser.email || 'Signed in') : 'Offline skirmish ready';
-    const accountInitial = (signedIn ? displayName.trim().charAt(0) : 'G').toUpperCase() || 'P';
-    const avatarMarkup = signedIn && currentUser.avatar_url
-      ? `<img src="${escapeText(currentUser.avatar_url)}" alt="" draggable="false">`
-      : `<span aria-hidden="true">${escapeText(accountInitial)}</span>`;
+    const name = signedIn ? (currentUser.name || currentUser.email || 'Commander') : 'Commander';
+    const rank = 'Rank 12'; // placeholder rank for concept fidelity; pending a durable rank source
     const forces = menuForceCounts();
     return `
       <section class="menu-panel profile-panel" aria-label="Commander profile and skirmish forces">
         <div class="profile-panel-identity">
-          <span class="profile-panel-avatar">${avatarMarkup}</span>
+          <span class="profile-panel-crest">${renderCrest()}</span>
           <span class="profile-panel-name">
-            <strong>${escapeText(displayName)}</strong>
-            <span>${escapeText(detail)}</span>
+            <strong>${escapeText(name)}</strong>
+            <span>${escapeText(rank)}</span>
           </span>
-          <button class="profile-panel-action" type="button" data-action="${signedIn ? 'settings' : 'sign-in'}" aria-label="${signedIn ? 'Account settings' : 'Sign in'}">
-            ${signedIn ? renderGearIcon() : ''}<span>${signedIn ? 'Account' : 'Sign In'}</span>
-          </button>
+          <span class="profile-panel-actions">
+            <button class="profile-panel-action" type="button" data-action="${signedIn ? 'settings' : 'sign-in'}"><span>${signedIn ? 'Account' : 'Sign In'}</span></button>
+            <button class="profile-panel-gear" type="button" data-action="settings" aria-label="Settings">${renderGearIcon()}</button>
+          </span>
         </div>
         <dl class="profile-panel-forces" aria-label="Skirmish preview forces">
           ${renderForceStat('player', 'Allies', forces.allies)}
