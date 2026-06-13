@@ -26,6 +26,10 @@ draft endpoint contract.
 
 ## Needs Review
 
+The profile/status, daily/news, and dock chrome are now token-driven live DOM +
+inline-SVG components (the generated bitmap candidates were retired). What
+remains under review is their visual treatment, not the asset format.
+
 - Profile/status panel.
   Includes the right-rail player identity, guest/sign-in/account affordance,
   allies/threat counters, and related chrome.

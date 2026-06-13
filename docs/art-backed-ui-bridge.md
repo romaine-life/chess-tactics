@@ -19,8 +19,11 @@ not the final component system.
   painted crop for the live main menu mode button stack, including its labels.
 - `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
-- `frontend/public/assets/ui/main-menu-*-chrome-v1.png` are generated bitmap
-  sources for the live main menu profile/status, news/daily, and dock chrome.
+- The main menu profile/status, news/daily, and dock chrome are token-driven
+  live DOM + inline-SVG components in `frontend/src/app.js` and
+  `frontend/src/style.css`. The earlier generated `main-menu-*-chrome-v1.png`
+  bitmaps were retired end-to-end (guarded by
+  `frontend/scripts/check-no-chrome-bitmaps.mjs`).
 - `frontend/public/assets/ui/main-menu-button-art-*.png` also includes generated
   no-text button candidates used by the main menu asset review board.
 - `frontend/src/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
@@ -39,9 +42,9 @@ rectangles over the 16:10 artboard.
   Remaining unfinished asset slots stay labeled in place.
 - `/main-menu/skeleton` also opens the live DOM main menu bridge.
 - `/design/main-menu/render` opens the saved main menu concept render.
-- `/design/main-menu` opens the main menu asset review board. It compares
-  the approved render crop against candidate live asset families before any
-  candidate replaces a skeleton slot.
+- `/design/main-menu` opens the main menu chrome review board. It renders each
+  converted slot's live component as a specimen next to its approved render
+  crop, rather than comparing a candidate bitmap.
 - `/campaigns` opens the live campaign editor skeleton.
 - `/level-editor` opens the live level editor skeleton.
 - `/skirmish` opens the live skirmish skeleton.
@@ -56,10 +59,10 @@ map. For example, use `/design/main-menu/render/hotspots` or
 ## What Is Live
 
 The main menu, campaign editor, level editor, and skirmish now use live bridge
-surfaces by default. The main menu mode button family, brand
-lockup, profile/status panel, news/daily panels, and dock strip use generated
-bitmap art with live HTML labels and click targets overlaid. The main menu
-battlefield plate uses the live canvas board as its visual core with CSS chrome
+surfaces by default. The main menu mode button family and brand lockup use
+approved render crops with live HTML labels overlaid; the profile/status panel,
+news/daily panels, and dock strip are token-driven DOM + inline-SVG components.
+The main menu battlefield plate uses the live canvas board as its visual core with CSS chrome
 and game-native labels. Other labeled slots are intentionally unfinished.
 
 Current main menu acceptance state is tracked in

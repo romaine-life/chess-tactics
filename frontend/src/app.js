@@ -3091,10 +3091,6 @@ import './style.css';
       </button>`;
   }
 
-  function renderMainMenuDockButton(action, label) {
-    return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}"><span>${escapeText(label.slice(0, 3).toUpperCase())}</span></button>`;
-  }
-
   function mainMenuReviewStatusFor(id, fallbackStatus) {
     const draftStatus = state.mainMenuReviewDraft[id];
     return MAIN_MENU_REVIEW_STATUSES[draftStatus] ? draftStatus : fallbackStatus;

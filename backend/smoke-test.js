@@ -199,14 +199,25 @@ async function main() {
     '/assets/ui/main-menu-button-art-three-state.png',
     '/assets/ui/main-menu-brand-title-only-v1.png',
     '/assets/ui/main-menu-brand-chrome-v1.png',
-    '/assets/ui/main-menu-profile-chrome-v1.png',
-    '/assets/ui/main-menu-news-chrome-v1.png',
-    '/assets/ui/main-menu-dock-chrome-v1.png',
   ];
   for (const assetPath of artAssets) {
     const response = await get(assetPath);
     if (response.statusCode !== 200 || !String(response.headers['content-type'] || '').includes('image/png')) {
       throw new Error(`Unexpected art asset response for ${assetPath}: ${response.statusCode} ${response.headers['content-type'] || ''}`);
+    }
+  }
+
+  // Migration guard: the profile/news/dock chrome bitmaps were retired in favor
+  // of live DOM components and must no longer be served.
+  const retiredChrome = [
+    '/assets/ui/main-menu-profile-chrome-v1.png',
+    '/assets/ui/main-menu-news-chrome-v1.png',
+    '/assets/ui/main-menu-dock-chrome-v1.png',
+  ];
+  for (const assetPath of retiredChrome) {
+    const response = await get(assetPath);
+    if (response.statusCode !== 404) {
+      throw new Error(`Retired chrome bitmap still served (expected 404) for ${assetPath}: ${response.statusCode}`);
     }
   }
 
