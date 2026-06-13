@@ -3238,6 +3238,26 @@
   function renderMainAssetReview() {
     const portfolioAssets = [
       {
+        id: 'mode-buttons',
+        title: 'Mode Button Family',
+        baseStatus: 'accepted',
+        file: '/assets/ui/main-menu-aspirational.png',
+        cropClass: 'portfolio-button-crop',
+        alt: 'Approved main menu render showing the five painted mode buttons',
+        caption: 'Approved portfolio crop. This is wired into the live menu so the lettering stays painted with the source.',
+        description: 'The live button stack uses the concept render crop directly: cyan-lit selected frame, warm dark fill, compact icon tile, painted labels, and five stacked mode choices.',
+        target: 'Confirm the already-approved button family still anchors the menu.',
+        liveUse: 'Transparent live click targets sit over the painted crop; browser text is not redrawn over the buttons.',
+        decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
+        referenceCrops: [
+          {
+            title: 'Approved Render Crop',
+            key: 'mode-buttons',
+            alt: 'Approved render crop of the left-side main menu mode button stack',
+          },
+        ],
+      },
+      {
         id: 'brand-chrome',
         title: 'Title / Brand Plate',
         baseStatus: 'accepted',
