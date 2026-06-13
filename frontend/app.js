@@ -394,7 +394,7 @@
 
   function mainMenuReviewPortfolioData(draft) {
     return {
-      kind: 'main-menu-acceptance-ledger',
+      kind: 'main-menu-design-portfolio',
       document_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
       review_statuses: normalizeMainMenuReviewDraft(draft),
     };
@@ -449,7 +449,7 @@
           client_schema_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
           metadata: {
             screen: 'main-assets',
-            source: 'visual-acceptance-ledger',
+            source: 'design-portfolio-card',
           },
           data: mainMenuReviewPortfolioData(cleanDraft),
         }),
@@ -482,18 +482,6 @@
       draft[id] = status;
     }
     return normalizeMainMenuReviewDraft(draft);
-  }
-
-  function mainMenuReviewSaveLabel() {
-    if (state.mainMenuReviewSaveState === 'loading') return 'Loading saved review state...';
-    if (state.mainMenuReviewSaveState === 'saving') return 'Saving to test slot...';
-    if (state.mainMenuReviewSaveState === 'saved') {
-      return state.mainMenuReviewRevision
-        ? `Saved to test slot, revision ${state.mainMenuReviewRevision}.`
-        : 'Saved to test slot.';
-    }
-    if (state.mainMenuReviewSaveState === 'local') return state.mainMenuReviewSaveError || 'Using browser-local fallback.';
-    return 'Ready to save to the test slot.';
   }
 
   const state = {
@@ -3004,18 +2992,6 @@
       </div>`;
   }
 
-  function renderApprovalSummary(columns) {
-    return `
-      <div class="approval-summary" aria-label="Review status counts">
-        ${columns.map((column) => `
-          <span class="${escapeText(column.status)}">
-            <strong>${escapeText(String(column.items.length))}</strong>
-            <small>${escapeText(column.title)}</small>
-          </span>
-        `).join('')}
-      </div>`;
-  }
-
   function renderPortfolioAsset(asset, index) {
     const openAttr = index === 0 ? ' open' : '';
     const referenceCrops = asset.referenceCrops || [];
@@ -3081,19 +3057,6 @@
   }
 
   function renderMainAssetReview() {
-    const reviewItems = MAIN_MENU_LEDGER_ITEMS.map((item) => ({
-      ...item,
-      status: mainMenuReviewStatusFor(item.id, item.baseStatus),
-    }));
-    const acceptanceColumns = [
-      { status: 'accepted', className: 'settled', title: 'Settled / Locked', emptyLabel: 'None accepted yet', emptyNote: 'Accepted treatments will appear here.' },
-      { status: 'review', className: 'review', title: 'Needs Review', emptyLabel: 'Nothing pending', emptyNote: 'Open design questions will appear here.' },
-      { status: 'rejected', className: 'rejected', title: 'Rejected / Do Not Use', emptyLabel: 'None yet', emptyNote: 'Rejected treatments will be tracked here.' },
-    ].map((column) => ({
-      ...column,
-      items: reviewItems.filter((item) => item.status === column.status),
-    }));
-    const hasReviewDraft = Object.keys(state.mainMenuReviewDraft).length > 0;
     const portfolioAssets = [
       {
         id: 'mode-buttons',
@@ -3234,7 +3197,6 @@
             <h2>Chrome Asset Review</h2>
           </div>
           <nav aria-label="Main menu review links">
-            <a href="/?screen=main-assets#acceptance-ledger">Ledger</a>
             <a href="/?screen=main-assets#mode-buttons">Buttons</a>
             <a href="/?screen=main-assets#brand-chrome">Brand</a>
             <a href="/?screen=main-assets#profile-chrome">Profile</a>
@@ -3245,36 +3207,6 @@
             <a href="/?screen=main-concept">Render reference</a>
           </nav>
         </header>
-
-        <section id="acceptance-ledger" class="acceptance-ledger" aria-label="Main menu acceptance ledger">
-          <div class="acceptance-ledger-heading">
-            <div>
-              <strong>Approval Workbench</strong>
-              <span>Pick one target, make a draft decision, then promote accepted decisions to the profile when they are final.</span>
-              <small>${escapeText(mainMenuReviewSaveLabel())}</small>
-            </div>
-            <button type="button" data-action="reset-main-menu-review-draft" ${hasReviewDraft ? '' : 'disabled'}>${hasReviewDraft ? 'Reset Draft' : 'No Draft'}</button>
-          </div>
-          ${renderApprovalSummary(acceptanceColumns)}
-          <div class="acceptance-ledger-columns">
-            ${acceptanceColumns.map((column) => `
-              <article class="acceptance-column ${escapeText(column.className)}">
-                <h3>${escapeText(column.title)}</h3>
-                <ul>
-                  ${(column.items.length ? column.items : [{ id: `${column.status}-empty`, label: column.emptyLabel, note: column.emptyNote, empty: true, status: column.status }]).map((item) => `
-                    <li>
-                      <div class="acceptance-item-copy">
-                        <strong>${escapeText(item.label)}</strong>
-                        <span>${escapeText(item.note)}</span>
-                      </div>
-                      ${item.empty ? '' : renderReviewStatusBadge(item.status)}
-                    </li>
-                  `).join('')}
-                </ul>
-              </article>
-            `).join('')}
-          </div>
-        </section>
 
         <section class="asset-reference-panel" aria-label="Approved render reference">
           <div class="asset-reference-copy">
@@ -3710,10 +3642,6 @@
         state.mainMenuReviewFocusId = reviewId;
         void saveMainMenuReviewDraft(nextMainMenuReviewDraft(reviewId, reviewStatus));
       }
-      return;
-    }
-    if (button.dataset.action === 'reset-main-menu-review-draft') {
-      void saveMainMenuReviewDraft({});
       return;
     }
     if (button.dataset.action === 'end-turn') {
