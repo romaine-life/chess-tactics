@@ -2785,16 +2785,126 @@
       </article>`;
   }
 
+  function renderPortfolioAsset(asset, index) {
+    const openAttr = index === 0 ? ' open' : '';
+    return `
+      <details class="portfolio-asset ${asset.statusClass || ''}" id="${escapeText(asset.id)}"${openAttr}>
+        <summary>
+          <span class="portfolio-asset-index">${escapeText(String(index + 1).padStart(2, '0'))}</span>
+          <span class="portfolio-asset-title">${escapeText(asset.title)}</span>
+          <span class="portfolio-asset-status">${escapeText(asset.status)}</span>
+        </summary>
+        <div class="portfolio-asset-body">
+          <div class="portfolio-asset-copy">
+            <p>${escapeText(asset.description)}</p>
+            <dl>
+              <div>
+                <dt>Review target</dt>
+                <dd>${escapeText(asset.target)}</dd>
+              </div>
+              <div>
+                <dt>Live use</dt>
+                <dd>${escapeText(asset.liveUse)}</dd>
+              </div>
+              <div>
+                <dt>Decision</dt>
+                <dd>${escapeText(asset.decision)}</dd>
+              </div>
+            </dl>
+            <div class="portfolio-asset-links">
+              <a href="/?screen=main-assets#${escapeText(asset.id)}">Section link</a>
+              <a href="${escapeText(asset.file)}" target="_blank" rel="noreferrer">Open image</a>
+              <a href="/">Live menu</a>
+              <a href="/?screen=main-concept">Render reference</a>
+            </div>
+          </div>
+          <figure class="portfolio-asset-figure">
+            <img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt)}" draggable="false">
+            <figcaption>${escapeText(asset.caption)}</figcaption>
+          </figure>
+        </div>
+      </details>`;
+  }
+
   function renderMainAssetReview() {
+    const portfolioAssets = [
+      {
+        id: 'mode-buttons',
+        title: 'Mode Button Family',
+        status: 'Approved',
+        statusClass: 'approved',
+        file: '/assets/ui/main-menu-button-art-five-mode.png',
+        alt: 'Approved generated pixel art for the five main menu mode buttons',
+        caption: 'Approved button source. This is already wired into the live menu.',
+        description: 'The settled button art: cyan-lit pixel frames, warm dark fill, selected state, compact icon tile, and five stacked mode choices.',
+        target: 'Confirm the already-approved button family still anchors the menu.',
+        liveUse: 'Live labels and click targets are overlaid on this bitmap in the main menu skeleton.',
+        decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
+      },
+      {
+        id: 'brand-chrome',
+        title: 'Title / Brand Plate',
+        status: 'Needs Review',
+        file: '/assets/ui/main-menu-brand-chrome-v1.png',
+        alt: 'Generated pixel art brand and title chrome for the main menu',
+        caption: 'Brand plate source for the crest, eyebrow, title, and subtitle area.',
+        description: 'A compact moonlit command-title plate meant to make the menu feel like a real game screen without over-brightening the dark theme.',
+        target: 'Judge whether the crest, title framing, cyan glow, and gold trim match the approved render direction.',
+        liveUse: 'Used behind the live title, eyebrow, and subtitle text in the upper-left main menu column.',
+        decision: 'Approve, revise palette/shape, or replace with a more restrained Chessmaster-style title plate.',
+      },
+      {
+        id: 'profile-chrome',
+        title: 'Profile / Status Panel',
+        status: 'Needs Review',
+        file: '/assets/ui/main-menu-profile-chrome-v1.png',
+        alt: 'Generated pixel art profile and status chrome for the main menu',
+        caption: 'Right-rail profile source for player identity, counters, and sign-in plate.',
+        description: 'A compact status module intended to keep account state and force preview visible without returning to generic app-card UI.',
+        target: 'Check whether it feels useful and game-native rather than dashboard-like.',
+        liveUse: 'Used behind the Guest/profile block, allies/threat counters, and sign-in hotspot on the live menu.',
+        decision: 'Approve, simplify, or split into smaller profile and counter-specific assets.',
+      },
+      {
+        id: 'news-chrome',
+        title: 'Daily / News Panel',
+        status: 'Needs Review',
+        file: '/assets/ui/main-menu-news-chrome-v1.png',
+        alt: 'Generated pixel art daily and news panel chrome for the main menu',
+        caption: 'Reusable panel source for the daily line and right-side campaign/news notes.',
+        description: 'A smaller command-panel treatment for rotating copy, daily challenge text, or future campaign updates.',
+        target: 'Decide whether this panel should be calmer, more military, more chesslike, or stay as-is.',
+        liveUse: 'Used twice on the live menu: the left daily preview and the right campaign-tools/news block.',
+        decision: 'Approve the reusable panel, or request separate art for daily and news states.',
+      },
+      {
+        id: 'dock-chrome',
+        title: 'Bottom Dock',
+        status: 'Needs Review',
+        file: '/assets/ui/main-menu-dock-chrome-v1.png',
+        alt: 'Generated pixel art bottom dock chrome for the main menu',
+        caption: 'Bottom quick-link dock source for secondary navigation buttons.',
+        description: 'A lower-priority navigation strip for achievements, campaigns, lobbies, collection, and future utility links.',
+        target: 'Check if the dock belongs on the first pass, and whether its ornament level competes with the main buttons.',
+        liveUse: 'Used behind four live quick-link hotspots near the bottom-center of the main menu.',
+        decision: 'Approve, reduce visual weight, or defer until the main menu needs those secondary features.',
+      },
+    ];
+
     return `
       <div class="main-assets-screen" data-live-screen="main-assets">
         <header class="main-assets-header">
           <div>
-            <p>Main menu asset review</p>
-            <h2>Mode Button Family</h2>
+            <p>Main menu design portfolio</p>
+            <h2>Chrome Asset Review</h2>
           </div>
           <nav aria-label="Main menu review links">
-            <a href="/">Skeleton</a>
+            <a href="/?screen=main-assets#mode-buttons">Buttons</a>
+            <a href="/?screen=main-assets#brand-chrome">Brand</a>
+            <a href="/?screen=main-assets#profile-chrome">Profile</a>
+            <a href="/?screen=main-assets#news-chrome">News</a>
+            <a href="/?screen=main-assets#dock-chrome">Dock</a>
+            <a href="/">Live menu</a>
             <a href="/?screen=main-concept">Render reference</a>
           </nav>
         </header>
@@ -2809,52 +2919,8 @@
           </div>
         </section>
 
-        <section class="asset-artwork-panel" aria-label="Generated bitmap button artwork">
-          <article class="asset-artwork-card primary">
-            <div class="asset-card-head">
-              <strong>Generated Artwork 1 - Approved</strong>
-              <span>Complete five-button menu family now wired into the skeleton as the live button source.</span>
-            </div>
-            <img src="/assets/ui/main-menu-button-art-five-mode.png" alt="Generated pixel art menu button family with five button plates">
-          </article>
-          <article class="asset-artwork-card">
-            <div class="asset-card-head">
-              <strong>Generated Artwork 2</strong>
-              <span>Three-state material study for selected, default, and muted button treatment.</span>
-            </div>
-            <img src="/assets/ui/main-menu-button-art-three-state.png" alt="Generated pixel art menu button material study with three button plates">
-          </article>
-        </section>
-
-        <section class="asset-chrome-panel" aria-label="Generated main menu chrome artwork">
-          <article class="asset-artwork-card primary">
-            <div class="asset-card-head">
-              <strong>Brand Chrome - Wired</strong>
-              <span>Crest and title plate with live HTML title text overlaid.</span>
-            </div>
-            <img src="/assets/ui/main-menu-brand-chrome-v1.png" alt="Generated pixel art brand and title chrome">
-          </article>
-          <article class="asset-artwork-card">
-            <div class="asset-card-head">
-              <strong>Profile Chrome - Wired</strong>
-              <span>Account, compact status counters, and sign-in plate.</span>
-            </div>
-            <img src="/assets/ui/main-menu-profile-chrome-v1.png" alt="Generated pixel art account and status chrome">
-          </article>
-          <article class="asset-artwork-card">
-            <div class="asset-card-head">
-              <strong>News Chrome - Wired</strong>
-              <span>Reusable panel source for daily and right-rail news/status.</span>
-            </div>
-            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="Generated pixel art news and daily panel chrome">
-          </article>
-          <article class="asset-artwork-card">
-            <div class="asset-card-head">
-              <strong>Dock Chrome - Wired</strong>
-              <span>Bottom quick-link dock with live navigation hit targets.</span>
-            </div>
-            <img src="/assets/ui/main-menu-dock-chrome-v1.png" alt="Generated pixel art bottom dock chrome">
-          </article>
+        <section class="portfolio-asset-list" aria-label="Main menu chrome portfolio">
+          ${portfolioAssets.map(renderPortfolioAsset).join('')}
         </section>
 
         <section class="asset-variants" aria-label="Button style candidates">
@@ -2864,7 +2930,7 @@
         </section>
 
         <footer class="asset-review-footer">
-          <span>Generated Artwork 1 is the current approved button source. The skeleton route uses it with live labels and click targets overlaid.</span>
+          <span>The buttons are treated as settled. The next decision is whether the new brand, profile, news, and dock chrome deserve approval, revision, or removal before I fill more of the main menu.</span>
         </footer>
       </div>`;
   }
@@ -3234,8 +3300,19 @@
   function render() {
     drawBoard();
     renderMenu();
+    openPortfolioHashTarget();
     renderPanel();
     syncIdleAnimationLoop();
+  }
+
+  function openPortfolioHashTarget() {
+    if (!window.location.hash) return;
+    const id = window.decodeURIComponent(window.location.hash.slice(1));
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (!target || !target.matches('details.portfolio-asset')) return;
+    target.open = true;
+    window.requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
   }
 
   function handleMenuClick(event) {
@@ -3571,5 +3648,6 @@
   window.addEventListener('beforeunload', () => {
     if (lobbyPollTimer) window.clearInterval(lobbyPollTimer);
   });
+  window.addEventListener('hashchange', openPortfolioHashTarget);
   render();
 }());
