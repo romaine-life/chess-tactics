@@ -433,12 +433,12 @@
     const screen = params.get('screen');
     if (screen === 'main' || screen === 'menu' || screen === 'main-concept' || screen === 'main-skeleton' || screen === 'main-assets') {
       state.screen = 'main';
-    } else if (screen === 'campaigns') {
+    } else if (screen === 'campaigns' || screen === 'campaigns-skeleton' || screen === 'campaigns-concept' || screen === 'campaign-editor-concept') {
       state.screen = 'campaigns';
-    } else if (screen === 'level-editor') {
+    } else if (screen === 'level-editor' || screen === 'level-editor-skeleton' || screen === 'level-editor-concept') {
       state.screen = 'level-editor';
       state.turn = 'editor';
-    } else if (screen === 'skirmish') {
+    } else if (screen === 'skirmish' || screen === 'skirmish-skeleton' || screen === 'skirmish-concept' || screen === 'game-concept') {
       state.screen = 'game';
       state.turn = 'player';
     }
@@ -2523,8 +2523,220 @@
     return params.get('screen') === 'main-assets';
   }
 
+  function shouldShowScreenConcept(screenId) {
+    const params = new URLSearchParams(window.location.search);
+    const screen = params.get('screen');
+    const aliases = [`${screenId}-concept`, `${screenId}-art`];
+    if (screenId === 'campaigns') aliases.push('campaign-editor-concept', 'campaign-concept');
+    if (screenId === 'skirmish') aliases.push('game-concept');
+    return aliases.includes(screen);
+  }
+
   function renderSkeletonTag(label, stateLabel = 'Unfilled') {
     return `<span class="skeleton-tag"><b>${escapeText(stateLabel)}</b>${escapeText(label)}</span>`;
+  }
+
+  function renderSkeletonButton(action, label, options = {}) {
+    const attrs = [
+      `type="button"`,
+      `data-action="${escapeText(action)}"`,
+      options.mode ? `data-mode="${escapeText(options.mode)}"` : '',
+      options.disabled ? 'disabled' : '',
+    ].filter(Boolean).join(' ');
+    return `<button ${attrs}>${escapeText(label)}</button>`;
+  }
+
+  function renderSkeletonPanel(panel) {
+    return `
+      <article class="app-skeleton-panel ${escapeText(panel.className || '')}">
+        ${renderSkeletonTag(panel.slot, panel.state || 'Asset slot')}
+        <div>
+          <p>${escapeText(panel.kicker || '')}</p>
+          <h3>${escapeText(panel.title)}</h3>
+          <span>${escapeText(panel.copy)}</span>
+        </div>
+        ${panel.items && panel.items.length ? `
+          <ul>
+            ${panel.items.map((item) => `<li>${escapeText(item)}</li>`).join('')}
+          </ul>
+        ` : ''}
+        ${panel.actions && panel.actions.length ? `
+          <div class="app-skeleton-actions">
+            ${panel.actions.map((action) => renderSkeletonButton(action.action, action.label, action)).join('')}
+          </div>
+        ` : ''}
+      </article>`;
+  }
+
+  function renderAppSkeletonScreen(config) {
+    return `
+      <div class="app-skeleton-screen app-skeleton-${escapeText(config.screenId)}" data-live-screen="${escapeText(config.screenId)}-skeleton">
+        <header class="app-skeleton-header">
+          <div>
+            <p>Skeleton mode</p>
+            <h2>${escapeText(config.title)}</h2>
+            <span>${escapeText(config.summary)}</span>
+          </div>
+          <nav aria-label="${escapeText(config.title)} review links">
+            <a href="/?screen=${escapeText(config.conceptRoute)}">Render reference</a>
+            <button type="button" data-action="main">Main Menu</button>
+          </nav>
+        </header>
+        <main class="app-skeleton-layout">
+          ${config.panels.map(renderSkeletonPanel).join('')}
+        </main>
+      </div>`;
+  }
+
+  function renderCampaignSkeleton() {
+    return renderAppSkeletonScreen({
+      screenId: 'campaigns',
+      title: 'Campaign Editor',
+      summary: 'The old campaign editor is hidden behind this planning skeleton until each surface gets approved art.',
+      conceptRoute: 'campaigns-concept',
+      panels: [
+        {
+          className: 'rail',
+          state: 'Pending art',
+          slot: 'Campaign list rail, filters, selected campaign cards',
+          kicker: 'Left rail',
+          title: 'Campaign Library',
+          copy: 'Needs a dark pixel frame, compact save state, and selected campaign treatment.',
+          items: ['Search/filter strip', 'Campaign cards', 'Create campaign affordance'],
+          actions: [{ action: 'new-campaign', label: 'New Campaign' }],
+        },
+        {
+          className: 'primary',
+          state: 'Pending art',
+          slot: 'Mission chain map, level tiles, encounter preview',
+          kicker: 'Primary canvas',
+          title: 'Campaign Flow',
+          copy: 'This becomes the playable level sequence surface, not a generic form panel.',
+          items: ['Node chain', 'Selected level preview', 'Difficulty/objective badges'],
+          actions: [{ action: 'edit-level-board', label: 'Edit Level' }, { action: 'party', label: 'Test Play' }],
+        },
+        {
+          className: 'inspector',
+          state: 'Pending art',
+          slot: 'Campaign metadata inspector and level settings frame',
+          kicker: 'Inspector',
+          title: 'Campaign Details',
+          copy: 'Live fields will move here after the frame and hierarchy are settled.',
+          items: ['Title and description', 'Level objective', 'Difficulty and notes'],
+          actions: [{ action: 'save-campaign', label: 'Save Campaign' }],
+        },
+        {
+          className: 'footer',
+          state: 'Pending art',
+          slot: 'Bottom command bar, destructive actions, sync status',
+          kicker: 'Command strip',
+          title: 'Save / Duplicate / Delete',
+          copy: 'Keep the controls available, but hold the visual treatment until the asset pass.',
+          actions: [{ action: 'add-level', label: 'Add Level' }, { action: 'delete-campaign', label: 'Delete Campaign' }],
+        },
+      ],
+    });
+  }
+
+  function renderLevelEditorSkeleton() {
+    return renderAppSkeletonScreen({
+      screenId: 'level-editor',
+      title: 'Level Editor',
+      summary: 'This is the workbench skeleton for tilesets, brushes, zones, and board validation.',
+      conceptRoute: 'level-editor-concept',
+      panels: [
+        {
+          className: 'toolbar',
+          state: 'Pending art',
+          slot: 'Mode tabs, save/test controls, editor title bar',
+          kicker: 'Toolbar',
+          title: 'Board / Tiles / Pieces / Zones',
+          copy: 'The mode hierarchy is preserved while the visual chrome is rebuilt.',
+          actions: [
+            { action: 'set-level-editor-mode', label: 'Board', mode: 'board' },
+            { action: 'set-level-editor-mode', label: 'Zones', mode: 'zones' },
+            { action: 'save-level-editor', label: 'Save' },
+          ],
+        },
+        {
+          className: 'primary',
+          state: 'Pending tileset',
+          slot: 'Editable battlefield plate, grid, terrain, doodads, lighting',
+          kicker: 'Board work area',
+          title: 'Tile Canvas',
+          copy: 'This is where the approved tileset will be judged in-browser before pieces are finalized.',
+          items: ['Isometric field', 'Terrain doodads', 'Selection/threat overlays'],
+        },
+        {
+          className: 'rail',
+          state: 'Pending art',
+          slot: 'Brush palette, terrain categories, piece palette',
+          kicker: 'Palette',
+          title: 'Tiles And Pieces',
+          copy: 'Needs small pixel swatches and mode-specific brush controls.',
+          items: ['Grass/water/path', 'Rocks and blockers', 'Player/enemy pieces'],
+        },
+        {
+          className: 'inspector',
+          state: 'Pending art',
+          slot: 'Zone inspector, misc events, level dimensions',
+          kicker: 'Inspector',
+          title: 'Level Rules',
+          copy: 'The data model stays live, but the current utilitarian controls are not the target UI.',
+          actions: [{ action: 'back-to-campaigns', label: 'Back To Campaigns' }],
+        },
+      ],
+    });
+  }
+
+  function renderSkirmishSkeleton() {
+    return renderAppSkeletonScreen({
+      screenId: 'skirmish',
+      title: 'Skirmish',
+      summary: 'The playable combat UI is skeletonized until HUD, board, piece, and action assets are approved.',
+      conceptRoute: 'skirmish-concept',
+      panels: [
+        {
+          className: 'toolbar',
+          state: 'Pending art',
+          slot: 'Mission header, turn meters, objective strip',
+          kicker: 'Combat HUD',
+          title: 'Turn State',
+          copy: 'Needs compact readable status with dark-theme contrast.',
+          items: ['Player/enemy phase', 'Anchor and threat meters', 'Objective copy'],
+        },
+        {
+          className: 'primary',
+          state: 'Pending tileset',
+          slot: 'Combat battlefield, pieces, threat overlays, animation framing',
+          kicker: 'Battlefield',
+          title: 'Tactics Board',
+          copy: 'This will reuse the level-editor tile work once the tileset is approved.',
+          items: ['Selected move cells', 'Enemy danger cells', 'Piece silhouettes'],
+        },
+        {
+          className: 'rail',
+          state: 'Pending art',
+          slot: 'Roster, initiative, captured/lost piece state',
+          kicker: 'Squads',
+          title: 'Roster Rail',
+          copy: 'Needs chess-readable pieces with small tactical metadata.',
+        },
+        {
+          className: 'inspector',
+          state: 'Pending art',
+          slot: 'Selected piece card, action buttons, combat log',
+          kicker: 'Actions',
+          title: 'Move / Power / Wait',
+          copy: 'Controls stay clickable while their final art is designed.',
+          actions: [
+            { action: 'noop', label: 'Move' },
+            { action: 'noop', label: 'Power' },
+            { action: 'end-turn', label: 'Wait' },
+          ],
+        },
+      ],
+    });
   }
 
   function renderMainMenuAction(action, iconClass, icon, label, active = false, skeletonLabel = '') {
@@ -2745,12 +2957,12 @@
     menuLayer.classList.toggle('level-editor-layer', false);
     if (state.screen === 'level-editor') {
       menuLayer.hidden = false;
-      menuLayer.innerHTML = renderArtScreen('level-editor');
+      menuLayer.innerHTML = shouldShowScreenConcept('level-editor') ? renderArtScreen('level-editor') : renderLevelEditorSkeleton();
       return;
     }
     if (state.screen === 'game') {
       menuLayer.hidden = false;
-      menuLayer.innerHTML = renderArtScreen('skirmish');
+      menuLayer.innerHTML = shouldShowScreenConcept('skirmish') ? renderArtScreen('skirmish') : renderSkirmishSkeleton();
       return;
     }
     menuLayer.hidden = false;
@@ -2835,7 +3047,7 @@
           <button type="button" data-action="main">Back</button>
         </div>`;
     } else if (state.screen === 'campaigns') {
-      menuLayer.innerHTML = renderArtScreen('campaigns');
+      menuLayer.innerHTML = shouldShowScreenConcept('campaigns') ? renderArtScreen('campaigns') : renderCampaignSkeleton();
     } else {
       menuLayer.innerHTML = `
         <div class="game-menu">

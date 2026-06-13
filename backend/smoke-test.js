@@ -153,12 +153,18 @@ async function main() {
     '/?screen=main-skeleton',
     '/?screen=main-assets',
     '/?screen=campaigns',
+    '/?screen=campaigns-skeleton',
+    '/?screen=campaigns-concept',
     '/?screen=level-editor',
+    '/?screen=level-editor-skeleton',
+    '/?screen=level-editor-concept',
     '/?screen=skirmish',
+    '/?screen=skirmish-skeleton',
+    '/?screen=skirmish-concept',
     '/?screen=main-concept&hotspots=1',
-    '/?screen=campaigns&hotspots=1',
-    '/?screen=level-editor&hotspots=1',
-    '/?screen=skirmish&hotspots=1',
+    '/?screen=campaigns-concept&hotspots=1',
+    '/?screen=level-editor-concept&hotspots=1',
+    '/?screen=skirmish-concept&hotspots=1',
   ];
   for (const reviewUrl of reviewUrls) {
     const response = await get(reviewUrl);

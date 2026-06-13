@@ -35,27 +35,30 @@ rectangles over the 16:10 artboard.
 - `/?screen=main-assets` opens the main menu asset review board. It compares
   the approved render crop against candidate live asset families before any
   candidate replaces a skeleton slot.
-- `/?screen=campaigns` opens the campaign editor concept.
-- `/?screen=level-editor` opens the level editor concept.
-- `/?screen=skirmish` opens the skirmish concept.
+- `/?screen=campaigns` opens the live campaign editor skeleton.
+- `/?screen=level-editor` opens the live level editor skeleton.
+- `/?screen=skirmish` opens the live skirmish skeleton.
+- `/?screen=campaigns-concept` opens the campaign editor concept render.
+- `/?screen=level-editor-concept` opens the level editor concept render.
+- `/?screen=skirmish-concept` opens the skirmish concept render.
 
-Append `&hotspots=1` to any review URL to show the clickable overlay map. For
-the concept main menu, use `/?screen=main-concept&hotspots=1`.
+Append `&hotspots=1` to concept review URLs to show the clickable overlay map.
+For example, use `/?screen=main-concept&hotspots=1` or
+`/?screen=level-editor-concept&hotspots=1`.
 
 ## What Is Live
 
-The main menu has two review surfaces: the live skeleton is the default work
-surface, and the approved render remains visible as a reference. The mode
-button family uses the approved generated bitmap art with live HTML labels and
-click targets overlaid. Other labeled slots are intentionally unfinished.
+The main menu, campaign editor, level editor, and skirmish now use live
+skeletons as their default surfaces. The main menu mode button family uses the
+approved generated bitmap art with live HTML labels and click targets overlaid.
+Other labeled slots are intentionally unfinished.
 
-The remaining art-backed screens have real buttons layered over the render. The
+The concept routes keep real buttons layered over the saved renders. The
 hotspots route back into existing app actions such as menu navigation, campaign
 creation, level editor preview, sign-in, settings, and skirmish end-turn.
 
 The visible editor controls, skirmish roster, and skirmish HUD inside the
-remaining art-backed screens are still part of the render. They should be
-treated as approved visual targets, not as finished live UI.
+concept renders are approved visual targets, not finished live UI.
 
 ## Tuning Hotspots
 
@@ -74,7 +77,7 @@ Keep hotspot labels short because they are also used as accessibility labels.
 Replace the bridge from the inside out:
 
 1. Maintain a clear skeleton for each screen so unfinished asset slots remain
-   visible during decomposition. The main menu skeleton is the first slice.
+   visible during decomposition. Skeletons are the default app surfaces.
 2. Fill one main menu asset family at a time: logo/crest, profile panel, dock
    icons, status/news panels, and battlefield plate. The button row is the
    first filled family and uses `main-menu-button-art-five-mode.png`. Use

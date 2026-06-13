@@ -188,19 +188,21 @@ should drive the first concrete UI sweep because they define the practical tool
 layout, HUD structure, tile palette, brush controls, roster, selected-unit
 panel, threat language, and low-glare chrome.
 
-The current implementation uses an [art-backed UI bridge](art-backed-ui-bridge.md)
-to display the approved renders in the app while live hotspots are tuned on top.
-That bridge is a temporary production aid, not a replacement for decomposing the
-screens into reusable browser-rendered UI, board, tile, and piece systems.
+The current implementation uses a skeleton-first [art-backed UI bridge](art-backed-ui-bridge.md).
+The app routes should show live DOM skeletons by default because the old
+utility UI is below the intended quality bar. Approved renders remain available
+as explicit concept references, not as the normal app surface.
 
-The main menu has begun that decomposition with the skeleton as the default work
-surface: `/`, `/?screen=main`, and `/?screen=main-skeleton` show the live DOM
-shell with unfinished asset slots labeled in place. Generated Artwork 1 is the
-approved bitmap source for the five-button mode stack and is now wired into the
-skeleton with live HTML labels and click targets. `/?screen=main-concept`
-preserves the exact approved main menu render for comparison.
-`/?screen=main-assets` remains the asset review board for comparing candidate
-asset families against the render before wiring them into the skeleton.
+The default work surfaces are `/`, `/?screen=main`, `/?screen=campaigns`,
+`/?screen=level-editor`, and `/?screen=skirmish`. They show live DOM skeletons
+with unfinished asset slots labeled in place. Generated Artwork 1 is the
+approved bitmap source for the main menu five-button mode stack and is wired
+into that skeleton with live HTML labels and click targets. `*-concept` routes
+preserve the approved renders for comparison: `/?screen=main-concept`,
+`/?screen=campaigns-concept`, `/?screen=level-editor-concept`, and
+`/?screen=skirmish-concept`. `/?screen=main-assets` remains the asset review
+board for comparing candidate asset families before wiring them into a
+skeleton.
 
 ## Parallel Work Boundaries
 
