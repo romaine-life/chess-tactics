@@ -28,6 +28,11 @@
   const DESIGN_PORTFOLIO_ID = 'main-menu-acceptance';
   const DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION = 1;
   const MAIN_MENU_REVIEW_STORAGE_KEY = 'chess-tactics-main-menu-review-draft-v1';
+  const MAIN_MENU_REFERENCE_STORAGE_KEY = 'chess-tactics-main-menu-reference-crops-v1';
+  const APPROVED_RENDER_SRC = '/assets/ui/main-menu-aspirational.png';
+  const APPROVED_RENDER_WIDTH = 1586;
+  const APPROVED_RENDER_HEIGHT = 992;
+  const REFERENCE_CROP_MIN_SIZE = 8;
   const MAIN_MENU_REVIEW_STATUSES = {
     accepted: { label: 'Accepted', cardClass: 'accepted', columnClass: 'settled' },
     review: { label: 'Needs Review', cardClass: 'review', columnClass: 'review' },
@@ -77,6 +82,15 @@
       baseStatus: 'review',
     },
   ];
+  const MAIN_MENU_REFERENCE_CROP_DEFAULTS = {
+    'mode-buttons': { x: 42, y: 247, w: 492, h: 487 },
+    'brand-chrome': { x: 38, y: 35, w: 625, h: 170 },
+    'profile-chrome': { x: 1175, y: 26, w: 393, h: 162 },
+    'daily-panel': { x: 29, y: 763, w: 485, h: 180 },
+    'news-panel': { x: 1176, y: 763, w: 392, h: 190 },
+    'dock-chrome': { x: 548, y: 810, w: 410, h: 136 },
+    'battlefield-plate': { x: 538, y: 175, w: 930, h: 682 },
+  };
   const ZONE_COLORS = [
     { fill: 'rgba(255,210,74,0.24)', stroke: '#ffd24a' },
     { fill: 'rgba(174,230,255,0.22)', stroke: '#aee6ff' },
@@ -380,6 +394,15 @@
     }
   }
 
+  function loadMainMenuReferenceSelections() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(MAIN_MENU_REFERENCE_STORAGE_KEY) || '{}');
+      return normalizeMainMenuReferenceSelections(parsed);
+    } catch (error) {
+      return {};
+    }
+  }
+
   function normalizeMainMenuReviewDraft(raw) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
     return Object.fromEntries(Object.entries(raw).filter(([id, status]) => (
@@ -392,11 +415,17 @@
     return normalizeMainMenuReviewDraft(data.review_statuses || data.statuses || {});
   }
 
-  function mainMenuReviewPortfolioData(draft) {
+  function mainMenuReferenceSelectionsFromPortfolioData(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+    return normalizeMainMenuReferenceSelections(data.reference_crops || data.referenceCrops || {});
+  }
+
+  function mainMenuReviewPortfolioData(draft, referenceSelections) {
     return {
       kind: 'main-menu-design-portfolio',
       document_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
       review_statuses: normalizeMainMenuReviewDraft(draft),
+      reference_crops: normalizeMainMenuReferenceSelections(referenceSelections),
     };
   }
 
@@ -413,6 +442,19 @@
     }
   }
 
+  function saveMainMenuReferenceSelectionsLocal(selections) {
+    try {
+      const cleanSelections = normalizeMainMenuReferenceSelections(selections);
+      if (Object.keys(cleanSelections).length) {
+        window.localStorage.setItem(MAIN_MENU_REFERENCE_STORAGE_KEY, JSON.stringify(cleanSelections));
+      } else {
+        window.localStorage.removeItem(MAIN_MENU_REFERENCE_STORAGE_KEY);
+      }
+    } catch (error) {
+      // Reference crop persistence is a convenience layer; storage failures should not block the screen.
+    }
+  }
+
   async function loadMainMenuReviewDraftRemote() {
     state.mainMenuReviewSaveState = 'loading';
     render();
@@ -420,12 +462,15 @@
       const body = await apiRequest(`/api/design-portfolios/${encodeURIComponent(DESIGN_PORTFOLIO_ID)}`);
       const portfolio = body && body.portfolio;
       const remoteDraft = mainMenuReviewDraftFromPortfolioData(portfolio && portfolio.data);
+      const remoteReferenceSelections = mainMenuReferenceSelectionsFromPortfolioData(portfolio && portfolio.data);
       state.mainMenuReviewDraft = remoteDraft;
+      state.mainMenuReferenceSelections = remoteReferenceSelections;
       state.mainMenuReviewRevision = portfolio && portfolio.revision ? portfolio.revision : 0;
       state.mainMenuReviewUpdatedAt = portfolio && portfolio.updated_at ? portfolio.updated_at : '';
       state.mainMenuReviewSaveState = state.mainMenuReviewRevision ? 'saved' : 'ready';
       state.mainMenuReviewSaveError = '';
       saveMainMenuReviewDraftLocal(remoteDraft);
+      saveMainMenuReferenceSelectionsLocal(remoteReferenceSelections);
     } catch (error) {
       state.mainMenuReviewSaveState = 'local';
       state.mainMenuReviewSaveError = 'Slot save unavailable; using this browser only.';
@@ -451,16 +496,19 @@
             screen: 'main-assets',
             source: 'design-portfolio-card',
           },
-          data: mainMenuReviewPortfolioData(cleanDraft),
+          data: mainMenuReviewPortfolioData(cleanDraft, state.mainMenuReferenceSelections),
         }),
       });
       const portfolio = body && body.portfolio;
       const persistedDraft = mainMenuReviewDraftFromPortfolioData(portfolio && portfolio.data);
+      const persistedReferenceSelections = mainMenuReferenceSelectionsFromPortfolioData(portfolio && portfolio.data);
       state.mainMenuReviewDraft = persistedDraft;
+      state.mainMenuReferenceSelections = persistedReferenceSelections;
       state.mainMenuReviewRevision = portfolio && portfolio.revision ? portfolio.revision : 0;
       state.mainMenuReviewUpdatedAt = portfolio && portfolio.updated_at ? portfolio.updated_at : '';
       state.mainMenuReviewSaveState = 'saved';
       saveMainMenuReviewDraftLocal(persistedDraft);
+      saveMainMenuReferenceSelectionsLocal(persistedReferenceSelections);
     } catch (error) {
       state.mainMenuReviewSaveState = 'local';
       state.mainMenuReviewSaveError = 'Could not save to slot; kept browser copy.';
@@ -482,6 +530,107 @@
       draft[id] = status;
     }
     return normalizeMainMenuReviewDraft(draft);
+  }
+
+  function clampReferenceNumber(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function normalizeMainMenuReferenceSelection(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const x = Number(raw.x);
+    const y = Number(raw.y);
+    const w = Number(raw.w);
+    const h = Number(raw.h);
+    if (![x, y, w, h].every(Number.isFinite)) return null;
+    const cleanX = clampReferenceNumber(x, 0, APPROVED_RENDER_WIDTH - REFERENCE_CROP_MIN_SIZE);
+    const cleanY = clampReferenceNumber(y, 0, APPROVED_RENDER_HEIGHT - REFERENCE_CROP_MIN_SIZE);
+    const cleanW = clampReferenceNumber(w, REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_WIDTH - cleanX);
+    const cleanH = clampReferenceNumber(h, REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_HEIGHT - cleanY);
+    return {
+      x: Math.round(cleanX),
+      y: Math.round(cleanY),
+      w: Math.round(cleanW),
+      h: Math.round(cleanH),
+    };
+  }
+
+  function normalizeMainMenuReferenceSelections(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).map(([key, selection]) => (
+      [key, normalizeMainMenuReferenceSelection(selection)]
+    )).filter(([key, selection]) => MAIN_MENU_REFERENCE_CROP_DEFAULTS[key] && selection));
+  }
+
+  function mainMenuReferenceSelection(key) {
+    return normalizeMainMenuReferenceSelection(state.mainMenuReferenceSelections[key])
+      || MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]
+      || { x: 0, y: 0, w: APPROVED_RENDER_WIDTH, h: APPROVED_RENDER_HEIGHT };
+  }
+
+  function mainMenuReferenceSelectionStyle(selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!cleanSelection) return '';
+    return [
+      `left:${(cleanSelection.x / APPROVED_RENDER_WIDTH) * 100}%`,
+      `top:${(cleanSelection.y / APPROVED_RENDER_HEIGHT) * 100}%`,
+      `width:${(cleanSelection.w / APPROVED_RENDER_WIDTH) * 100}%`,
+      `height:${(cleanSelection.h / APPROVED_RENDER_HEIGHT) * 100}%`,
+    ].join(';');
+  }
+
+  function mainMenuReferencePreviewStyle(selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!cleanSelection) return '';
+    return [
+      `--crop-x:${cleanSelection.x}`,
+      `--crop-y:${cleanSelection.y}`,
+      `--crop-w:${cleanSelection.w}`,
+      `--crop-h:${cleanSelection.h}`,
+    ].join(';');
+  }
+
+  async function saveMainMenuReferenceSelection(key, selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!MAIN_MENU_REFERENCE_CROP_DEFAULTS[key] || !cleanSelection) return;
+    const cleanSelections = normalizeMainMenuReferenceSelections({
+      ...state.mainMenuReferenceSelections,
+      [key]: cleanSelection,
+    });
+    state.mainMenuReferenceSelections = cleanSelections;
+    state.mainMenuReviewSaveState = 'saving';
+    state.mainMenuReviewSaveError = '';
+    saveMainMenuReferenceSelectionsLocal(cleanSelections);
+    render();
+
+    try {
+      const body = await apiRequest(`/api/design-portfolios/${encodeURIComponent(DESIGN_PORTFOLIO_ID)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          client_schema_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
+          metadata: {
+            screen: 'main-assets',
+            source: 'design-portfolio-reference-picker',
+          },
+          data: mainMenuReviewPortfolioData(state.mainMenuReviewDraft, cleanSelections),
+        }),
+      });
+      const portfolio = body && body.portfolio;
+      const persistedDraft = mainMenuReviewDraftFromPortfolioData(portfolio && portfolio.data);
+      const persistedReferenceSelections = mainMenuReferenceSelectionsFromPortfolioData(portfolio && portfolio.data);
+      state.mainMenuReviewDraft = persistedDraft;
+      state.mainMenuReferenceSelections = persistedReferenceSelections;
+      state.mainMenuReviewRevision = portfolio && portfolio.revision ? portfolio.revision : 0;
+      state.mainMenuReviewUpdatedAt = portfolio && portfolio.updated_at ? portfolio.updated_at : '';
+      state.mainMenuReviewSaveState = 'saved';
+      saveMainMenuReviewDraftLocal(persistedDraft);
+      saveMainMenuReferenceSelectionsLocal(persistedReferenceSelections);
+    } catch (error) {
+      state.mainMenuReviewSaveState = 'local';
+      state.mainMenuReviewSaveError = 'Could not save reference crop to slot; kept browser copy.';
+    } finally {
+      render();
+    }
   }
 
   const state = {
@@ -520,11 +669,14 @@
     gridEndX: 7,
     gridEndY: 11,
     mainMenuReviewDraft: loadMainMenuReviewDraft(),
+    mainMenuReferenceSelections: loadMainMenuReferenceSelections(),
     mainMenuReviewSaveState: 'ready',
     mainMenuReviewSaveError: '',
     mainMenuReviewRevision: 0,
     mainMenuReviewUpdatedAt: '',
     mainMenuReviewFocusId: 'profile-chrome',
+    mainMenuReferenceEditor: null,
+    mainMenuReferenceDrag: null,
   };
 
   const ART_SCREENS = {
@@ -2967,6 +3119,60 @@
       </div>`;
   }
 
+  function renderApprovedReferenceCard(crop) {
+    const key = crop.key || crop.cropClass || '';
+    const selection = mainMenuReferenceSelection(key);
+    return `
+      <button
+        class="portfolio-reference-picker"
+        type="button"
+        data-action="open-reference-crop-picker"
+        data-crop-key="${escapeText(key)}"
+        data-crop-title="${escapeText(crop.title || 'Approved Render Crop')}"
+        aria-label="${escapeText(`Open full render crop picker for ${crop.title || 'approved render crop'}`)}"
+      >
+        <span class="portfolio-reference-frame" style="${escapeText(mainMenuReferencePreviewStyle(selection))}">
+          <img src="${APPROVED_RENDER_SRC}" alt="" aria-hidden="true" draggable="false">
+        </span>
+      </button>`;
+  }
+
+  function renderReferenceCropEditor() {
+    if (!state.mainMenuReferenceEditor) return '';
+    const key = state.mainMenuReferenceEditor.key;
+    const selection = normalizeMainMenuReferenceSelection(state.mainMenuReferenceEditor.selection)
+      || mainMenuReferenceSelection(key);
+    const handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+    return `
+      <div class="reference-crop-modal" role="dialog" aria-modal="true" aria-label="Approved render crop picker">
+        <div class="reference-crop-dialog">
+          <header>
+            <div>
+              <strong>${escapeText(state.mainMenuReferenceEditor.title || 'Approved Render Crop')}</strong>
+              <span>${escapeText(`${selection.x}, ${selection.y}, ${selection.w} x ${selection.h}`)}</span>
+            </div>
+            <button type="button" data-action="close-reference-crop-picker">Close</button>
+          </header>
+          <div class="reference-crop-stage" data-crop-key="${escapeText(key)}">
+            <img src="${APPROVED_RENDER_SRC}" alt="Approved main menu render" draggable="false">
+            <span class="reference-crop-selection" style="${escapeText(mainMenuReferenceSelectionStyle(selection))}">
+              ${handles.map((handle) => `
+                <span
+                  class="reference-crop-handle reference-crop-handle-${escapeText(handle)}"
+                  data-crop-handle="${escapeText(handle)}"
+                  aria-hidden="true"
+                ></span>
+              `).join('')}
+            </span>
+          </div>
+          <footer>
+            <button type="button" data-action="reset-reference-crop-picker" data-crop-key="${escapeText(key)}">Reset</button>
+            <button type="button" data-action="close-reference-crop-picker">Done</button>
+          </footer>
+        </div>
+      </div>`;
+  }
+
   function renderPortfolioAsset(asset, index) {
     const openAttr = index === 0 ? ' open' : '';
     const referenceCrops = asset.referenceCrops || [];
@@ -3019,9 +3225,7 @@
               ${referenceCrops.map((crop) => `
                 <div class="portfolio-comparison-card">
                   <strong>${escapeText(crop.title || 'Approved Render Crop')}</strong>
-                  <div class="portfolio-approved-crop ${escapeText(crop.cropClass)}" role="img" aria-label="${escapeText(crop.alt)}">
-                    <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
-                  </div>
+                  ${renderApprovedReferenceCard(crop)}
                 </div>
               `).join('')}
             </div>
@@ -3047,7 +3251,7 @@
         referenceCrops: [
           {
             title: 'Approved Render Crop',
-            cropClass: 'approved-crop-brand',
+            key: 'brand-chrome',
             alt: 'Approved render crop of the upper-left main menu brand and title area',
           },
         ],
@@ -3066,7 +3270,7 @@
         referenceCrops: [
           {
             title: 'Approved Render Crop',
-            cropClass: 'approved-crop-profile',
+            key: 'profile-chrome',
             alt: 'Approved render crop of the upper-right profile and force status panels',
           },
         ],
@@ -3085,12 +3289,12 @@
         referenceCrops: [
           {
             title: 'Daily Render Crop',
-            cropClass: 'approved-crop-daily',
+            key: 'daily-panel',
             alt: 'Approved render crop of the bottom-left daily challenge panel',
           },
           {
             title: 'News Render Crop',
-            cropClass: 'approved-crop-news',
+            key: 'news-panel',
             alt: 'Approved render crop of the bottom-right news panel',
           },
         ],
@@ -3109,7 +3313,7 @@
         referenceCrops: [
           {
             title: 'Approved Render Crop',
-            cropClass: 'approved-crop-dock',
+            key: 'dock-chrome',
             alt: 'Approved render crop of the bottom-center icon dock',
           },
         ],
@@ -3128,7 +3332,7 @@
         referenceCrops: [
           {
             title: 'Approved Render Crop',
-            cropClass: 'approved-crop-battlefield',
+            key: 'battlefield-plate',
             alt: 'Approved render crop of the central main menu battlefield plate',
           },
         ],
@@ -3160,6 +3364,7 @@
         <footer class="asset-review-footer">
           <span>Settled: upper-left brand/title banner and the art-backed live bridge approach. Needs review: profile/status, daily/news, bottom dock, and battlefield plate details.</span>
         </footer>
+        ${renderReferenceCropEditor()}
       </div>`;
   }
 
@@ -3549,10 +3754,174 @@
     window.requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
   }
 
+  function approvedRenderPointFromEvent(event, stage) {
+    const image = stage && stage.querySelector('img');
+    if (!image) return null;
+    const rect = image.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return {
+      x: clampReferenceNumber(((event.clientX - rect.left) / rect.width) * APPROVED_RENDER_WIDTH, 0, APPROVED_RENDER_WIDTH),
+      y: clampReferenceNumber(((event.clientY - rect.top) / rect.height) * APPROVED_RENDER_HEIGHT, 0, APPROVED_RENDER_HEIGHT),
+    };
+  }
+
+  function referenceSelectionFromPoints(start, end) {
+    if (!start || !end) return null;
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const w = Math.abs(end.x - start.x);
+    const h = Math.abs(end.y - start.y);
+    return normalizeMainMenuReferenceSelection({ x, y, w, h });
+  }
+
+  function referenceSelectionFromMove(initial, start, end) {
+    const cleanInitial = normalizeMainMenuReferenceSelection(initial);
+    if (!cleanInitial || !start || !end) return null;
+    const nextX = cleanInitial.x + (end.x - start.x);
+    const nextY = cleanInitial.y + (end.y - start.y);
+    return normalizeMainMenuReferenceSelection({
+      ...cleanInitial,
+      x: clampReferenceNumber(nextX, 0, APPROVED_RENDER_WIDTH - cleanInitial.w),
+      y: clampReferenceNumber(nextY, 0, APPROVED_RENDER_HEIGHT - cleanInitial.h),
+    });
+  }
+
+  function referenceSelectionFromResize(initial, start, end, handle) {
+    const cleanInitial = normalizeMainMenuReferenceSelection(initial);
+    if (!cleanInitial || !start || !end || !handle) return null;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    let left = cleanInitial.x;
+    let top = cleanInitial.y;
+    let right = cleanInitial.x + cleanInitial.w;
+    let bottom = cleanInitial.y + cleanInitial.h;
+
+    if (handle.includes('w')) {
+      left = clampReferenceNumber(cleanInitial.x + dx, 0, right - REFERENCE_CROP_MIN_SIZE);
+    }
+    if (handle.includes('e')) {
+      right = clampReferenceNumber(cleanInitial.x + cleanInitial.w + dx, left + REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_WIDTH);
+    }
+    if (handle.includes('n')) {
+      top = clampReferenceNumber(cleanInitial.y + dy, 0, bottom - REFERENCE_CROP_MIN_SIZE);
+    }
+    if (handle.includes('s')) {
+      bottom = clampReferenceNumber(cleanInitial.y + cleanInitial.h + dy, top + REFERENCE_CROP_MIN_SIZE, APPROVED_RENDER_HEIGHT);
+    }
+
+    return normalizeMainMenuReferenceSelection({
+      x: left,
+      y: top,
+      w: right - left,
+      h: bottom - top,
+    });
+  }
+
+  function updateReferenceCropStageSelection(stage, selection) {
+    const cleanSelection = normalizeMainMenuReferenceSelection(selection);
+    if (!stage || !cleanSelection) return;
+    const box = stage.querySelector('.reference-crop-selection');
+    if (box) box.setAttribute('style', mainMenuReferenceSelectionStyle(cleanSelection));
+    const readout = stage.closest('.reference-crop-dialog') && stage.closest('.reference-crop-dialog').querySelector('header span');
+    if (readout) readout.textContent = `${cleanSelection.x}, ${cleanSelection.y}, ${cleanSelection.w} x ${cleanSelection.h}`;
+  }
+
+  function beginReferenceCropDrag(event) {
+    const stage = event.target.closest('.reference-crop-stage');
+    if (!stage || !state.mainMenuReferenceEditor) return;
+    const key = stage.dataset.cropKey;
+    if (!MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) return;
+    const start = approvedRenderPointFromEvent(event, stage);
+    if (!start) return;
+    const currentSelection = normalizeMainMenuReferenceSelection(state.mainMenuReferenceEditor.selection)
+      || mainMenuReferenceSelection(key);
+    const resizeHandle = event.target.closest('.reference-crop-handle');
+    const selectionBox = event.target.closest('.reference-crop-selection');
+    const mode = resizeHandle ? 'resize' : (selectionBox ? 'move' : 'draw');
+    event.preventDefault();
+    stage.setPointerCapture(event.pointerId);
+    state.mainMenuReferenceDrag = {
+      key,
+      mode,
+      handle: resizeHandle ? resizeHandle.dataset.cropHandle : '',
+      pointerId: event.pointerId,
+      start,
+      initial: currentSelection,
+    };
+    if (mode === 'draw') {
+      const selection = normalizeMainMenuReferenceSelection({
+        x: start.x,
+        y: start.y,
+        w: REFERENCE_CROP_MIN_SIZE,
+        h: REFERENCE_CROP_MIN_SIZE,
+      });
+      state.mainMenuReferenceEditor.selection = selection;
+      updateReferenceCropStageSelection(stage, selection);
+    }
+  }
+
+  function updateReferenceCropDrag(event) {
+    const drag = state.mainMenuReferenceDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const stage = menuLayer.querySelector('.reference-crop-stage');
+    if (!stage) return;
+    const end = approvedRenderPointFromEvent(event, stage);
+    const selection = drag.mode === 'move'
+      ? referenceSelectionFromMove(drag.initial, drag.start, end)
+      : drag.mode === 'resize'
+        ? referenceSelectionFromResize(drag.initial, drag.start, end, drag.handle)
+        : referenceSelectionFromPoints(drag.start, end);
+    if (!selection) return;
+    event.preventDefault();
+    state.mainMenuReferenceEditor.selection = selection;
+    updateReferenceCropStageSelection(stage, selection);
+  }
+
+  function finishReferenceCropDrag(event) {
+    const drag = state.mainMenuReferenceDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const stage = menuLayer.querySelector('.reference-crop-stage');
+    const selection = state.mainMenuReferenceEditor && state.mainMenuReferenceEditor.selection;
+    state.mainMenuReferenceDrag = null;
+    if (stage && stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+    if (selection) void saveMainMenuReferenceSelection(drag.key, selection);
+  }
+
   function handleMenuClick(event) {
     const button = event.target.closest('button');
     if (!button) return;
     if (button.dataset.action === 'noop') return;
+    if (button.dataset.action === 'open-reference-crop-picker') {
+      const key = button.dataset.cropKey;
+      if (MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) {
+        state.mainMenuReferenceEditor = {
+          key,
+          title: button.dataset.cropTitle || 'Approved Render Crop',
+          selection: mainMenuReferenceSelection(key),
+        };
+        state.mainMenuReferenceDrag = null;
+        render();
+      }
+      return;
+    }
+    if (button.dataset.action === 'close-reference-crop-picker') {
+      state.mainMenuReferenceEditor = null;
+      state.mainMenuReferenceDrag = null;
+      render();
+      return;
+    }
+    if (button.dataset.action === 'reset-reference-crop-picker') {
+      const key = button.dataset.cropKey;
+      if (MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) {
+        state.mainMenuReferenceEditor = {
+          key,
+          title: state.mainMenuReferenceEditor ? state.mainMenuReferenceEditor.title : 'Approved Render Crop',
+          selection: MAIN_MENU_REFERENCE_CROP_DEFAULTS[key],
+        };
+        void saveMainMenuReferenceSelection(key, MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]);
+      }
+      return;
+    }
     if (button.dataset.action === 'focus-main-menu-review-item') {
       const reviewId = button.dataset.reviewId;
       if (MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === reviewId)) {
@@ -3765,6 +4134,10 @@
   levelEditorPanel.addEventListener('click', handleMenuClick);
   menuLayer.addEventListener('input', handleMenuInput);
   levelEditorPanel.addEventListener('input', handleMenuInput);
+  menuLayer.addEventListener('pointerdown', beginReferenceCropDrag);
+  menuLayer.addEventListener('pointermove', updateReferenceCropDrag);
+  menuLayer.addEventListener('pointerup', finishReferenceCropDrag);
+  menuLayer.addEventListener('pointercancel', finishReferenceCropDrag);
 
   menuLayer.addEventListener('wheel', (event) => {
     if (state.screen !== 'level-editor' || !boardScrollEl) return;
