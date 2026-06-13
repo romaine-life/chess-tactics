@@ -64,6 +64,7 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     PUBLIC_ORIGIN: 'https://chess.romaine.life',
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
+    DESIGN_PORTFOLIO_STORE_PATH: path.join(hotRoot, 'design-portfolios.json'),
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -216,6 +217,79 @@ async function main() {
   const anonymousCampaigns = await get('/api/campaigns');
   if (anonymousCampaigns.statusCode !== 401) {
     throw new Error(`Anonymous campaign list should require sign-in: ${anonymousCampaigns.statusCode}`);
+  }
+
+  const emptyPortfolio = await get('/api/design-portfolios/main-menu-acceptance');
+  const emptyPortfolioBody = JSON.parse(emptyPortfolio.body);
+  if (emptyPortfolio.statusCode !== 200 || emptyPortfolioBody.portfolio.revision !== 0 || Object.keys(emptyPortfolioBody.portfolio.data).length !== 0) {
+    throw new Error(`Unexpected empty design portfolio response: ${emptyPortfolio.statusCode} ${emptyPortfolio.body}`);
+  }
+
+  const anonymousPortfolioWrite = await request(
+    'PUT',
+    '/api/design-portfolios/main-menu-acceptance',
+    { 'content-type': 'application/json' },
+    JSON.stringify({ data: { review_statuses: { 'profile-chrome': 'accepted' } } }),
+  );
+  if (anonymousPortfolioWrite.statusCode !== 401) {
+    throw new Error(`Production-style anonymous design portfolio write should require sign-in: ${anonymousPortfolioWrite.statusCode} ${anonymousPortfolioWrite.body}`);
+  }
+
+  const invalidPortfolioId = await get('/api/design-portfolios/Bad%20ID');
+  if (invalidPortfolioId.statusCode !== 400) {
+    throw new Error(`Invalid design portfolio id should fail: ${invalidPortfolioId.statusCode} ${invalidPortfolioId.body}`);
+  }
+
+  const signedPortfolioWrite = await request(
+    'PUT',
+    '/api/design-portfolios/main-menu-acceptance',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      client_schema_version: 7,
+      metadata: { source: 'smoke-test', future_unknown_field: { ok: true } },
+      data: {
+        kind: 'main-menu-acceptance-ledger',
+        future_document_shape: { nested: ['allowed'] },
+        review_statuses: {
+          'profile-chrome': 'accepted',
+          'dock-chrome': 'rejected',
+        },
+      },
+    }),
+  );
+  const signedPortfolioWriteBody = JSON.parse(signedPortfolioWrite.body);
+  if (
+    signedPortfolioWrite.statusCode !== 200 ||
+    signedPortfolioWriteBody.portfolio.revision !== 1 ||
+    signedPortfolioWriteBody.portfolio.data.future_document_shape.nested[0] !== 'allowed' ||
+    signedPortfolioWriteBody.portfolio.updated_by !== 'player@example.com'
+  ) {
+    throw new Error(`Unexpected signed design portfolio write: ${signedPortfolioWrite.statusCode} ${signedPortfolioWrite.body}`);
+  }
+
+  const savedPortfolio = await get('/api/design-portfolios/main-menu-acceptance');
+  const savedPortfolioBody = JSON.parse(savedPortfolio.body);
+  if (
+    savedPortfolio.statusCode !== 200 ||
+    savedPortfolioBody.portfolio.revision !== 1 ||
+    savedPortfolioBody.portfolio.data.review_statuses['profile-chrome'] !== 'accepted'
+  ) {
+    throw new Error(`Design portfolio did not persist: ${savedPortfolio.statusCode} ${savedPortfolio.body}`);
+  }
+
+  const testSlotPortfolioWrite = await request(
+    'PUT',
+    '/api/design-portfolios/main-menu-acceptance',
+    { host: 'chess-tactics-1.tank.dev.romaine.life', 'content-type': 'application/json' },
+    JSON.stringify({ data: { review_statuses: { 'news-chrome': 'accepted' } } }),
+  );
+  const testSlotPortfolioWriteBody = JSON.parse(testSlotPortfolioWrite.body);
+  if (
+    testSlotPortfolioWrite.statusCode !== 200 ||
+    testSlotPortfolioWriteBody.portfolio.revision !== 2 ||
+    testSlotPortfolioWriteBody.portfolio.updated_by !== 'test-slot@chess-tactics.local'
+  ) {
+    throw new Error(`Test-slot design portfolio write should not require sign-in: ${testSlotPortfolioWrite.statusCode} ${testSlotPortfolioWrite.body}`);
   }
 
   const createdCampaign = await request(

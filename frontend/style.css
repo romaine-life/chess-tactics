@@ -1590,6 +1590,12 @@ h1 {
   line-height: 1.12;
 }
 
+.acceptance-ledger-heading small {
+  color: #d9c28a;
+  font-size: .92rem;
+  line-height: 1.12;
+}
+
 .acceptance-ledger-heading button {
   background: #07131d;
   border: 2px solid rgba(63, 95, 111, .82);

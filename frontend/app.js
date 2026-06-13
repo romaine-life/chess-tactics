@@ -25,6 +25,8 @@
   const MISC_ZONE_TYPES = [
     { id: 'falling-rock', label: 'Falling Rock' },
   ];
+  const DESIGN_PORTFOLIO_ID = 'main-menu-acceptance';
+  const DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION = 1;
   const MAIN_MENU_REVIEW_STORAGE_KEY = 'chess-tactics-main-menu-review-draft-v1';
   const MAIN_MENU_REVIEW_STATUSES = {
     accepted: { label: 'Accepted', cardClass: 'accepted', columnClass: 'settled' },
@@ -372,28 +374,126 @@
   function loadMainMenuReviewDraft() {
     try {
       const parsed = JSON.parse(window.localStorage.getItem(MAIN_MENU_REVIEW_STORAGE_KEY) || '{}');
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-      return Object.fromEntries(Object.entries(parsed).filter(([id, status]) => (
-        MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === id) && MAIN_MENU_REVIEW_STATUSES[status]
-      )));
+      return normalizeMainMenuReviewDraft(parsed);
     } catch (error) {
       return {};
     }
   }
 
-  function saveMainMenuReviewDraft(draft) {
+  function normalizeMainMenuReviewDraft(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).filter(([id, status]) => (
+      MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === id) && MAIN_MENU_REVIEW_STATUSES[status]
+    )));
+  }
+
+  function mainMenuReviewDraftFromPortfolioData(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+    return normalizeMainMenuReviewDraft(data.review_statuses || data.statuses || {});
+  }
+
+  function mainMenuReviewPortfolioData(draft) {
+    return {
+      kind: 'main-menu-acceptance-ledger',
+      document_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
+      review_statuses: normalizeMainMenuReviewDraft(draft),
+    };
+  }
+
+  function saveMainMenuReviewDraftLocal(draft) {
     try {
-      const cleanDraft = Object.fromEntries(Object.entries(draft || {}).filter(([id, status]) => (
-        MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === id) && MAIN_MENU_REVIEW_STATUSES[status]
-      )));
+      const cleanDraft = normalizeMainMenuReviewDraft(draft);
       if (Object.keys(cleanDraft).length) {
         window.localStorage.setItem(MAIN_MENU_REVIEW_STORAGE_KEY, JSON.stringify(cleanDraft));
       } else {
         window.localStorage.removeItem(MAIN_MENU_REVIEW_STORAGE_KEY);
       }
     } catch (error) {
-      // Review buttons are a convenience layer; storage failures should not block the screen.
+      // Review persistence is a convenience layer; storage failures should not block the screen.
     }
+  }
+
+  async function loadMainMenuReviewDraftRemote() {
+    state.mainMenuReviewSaveState = 'loading';
+    render();
+    try {
+      const body = await apiRequest(`/api/design-portfolios/${encodeURIComponent(DESIGN_PORTFOLIO_ID)}`);
+      const portfolio = body && body.portfolio;
+      const remoteDraft = mainMenuReviewDraftFromPortfolioData(portfolio && portfolio.data);
+      state.mainMenuReviewDraft = remoteDraft;
+      state.mainMenuReviewRevision = portfolio && portfolio.revision ? portfolio.revision : 0;
+      state.mainMenuReviewUpdatedAt = portfolio && portfolio.updated_at ? portfolio.updated_at : '';
+      state.mainMenuReviewSaveState = state.mainMenuReviewRevision ? 'saved' : 'ready';
+      state.mainMenuReviewSaveError = '';
+      saveMainMenuReviewDraftLocal(remoteDraft);
+    } catch (error) {
+      state.mainMenuReviewSaveState = 'local';
+      state.mainMenuReviewSaveError = 'Slot save unavailable; using this browser only.';
+    } finally {
+      render();
+    }
+  }
+
+  async function saveMainMenuReviewDraft(draft) {
+    const cleanDraft = normalizeMainMenuReviewDraft(draft);
+    state.mainMenuReviewDraft = cleanDraft;
+    state.mainMenuReviewSaveState = 'saving';
+    state.mainMenuReviewSaveError = '';
+    saveMainMenuReviewDraftLocal(cleanDraft);
+    render();
+
+    try {
+      const body = await apiRequest(`/api/design-portfolios/${encodeURIComponent(DESIGN_PORTFOLIO_ID)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          client_schema_version: DESIGN_PORTFOLIO_CLIENT_SCHEMA_VERSION,
+          metadata: {
+            screen: 'main-assets',
+            source: 'visual-acceptance-ledger',
+          },
+          data: mainMenuReviewPortfolioData(cleanDraft),
+        }),
+      });
+      const portfolio = body && body.portfolio;
+      const persistedDraft = mainMenuReviewDraftFromPortfolioData(portfolio && portfolio.data);
+      state.mainMenuReviewDraft = persistedDraft;
+      state.mainMenuReviewRevision = portfolio && portfolio.revision ? portfolio.revision : 0;
+      state.mainMenuReviewUpdatedAt = portfolio && portfolio.updated_at ? portfolio.updated_at : '';
+      state.mainMenuReviewSaveState = 'saved';
+      saveMainMenuReviewDraftLocal(persistedDraft);
+    } catch (error) {
+      state.mainMenuReviewSaveState = 'local';
+      state.mainMenuReviewSaveError = 'Could not save to slot; kept browser copy.';
+    } finally {
+      render();
+    }
+  }
+
+  function mainMenuReviewBaseStatus(id) {
+    const item = MAIN_MENU_LEDGER_ITEMS.find((entry) => entry.id === id);
+    return item ? item.baseStatus : 'review';
+  }
+
+  function nextMainMenuReviewDraft(id, status) {
+    const draft = { ...state.mainMenuReviewDraft };
+    if (status === mainMenuReviewBaseStatus(id)) {
+      delete draft[id];
+    } else {
+      draft[id] = status;
+    }
+    return normalizeMainMenuReviewDraft(draft);
+  }
+
+  function mainMenuReviewSaveLabel() {
+    if (state.mainMenuReviewSaveState === 'loading') return 'Loading saved review state...';
+    if (state.mainMenuReviewSaveState === 'saving') return 'Saving to test slot...';
+    if (state.mainMenuReviewSaveState === 'saved') {
+      return state.mainMenuReviewRevision
+        ? `Saved to test slot, revision ${state.mainMenuReviewRevision}.`
+        : 'Saved to test slot.';
+    }
+    if (state.mainMenuReviewSaveState === 'local') return state.mainMenuReviewSaveError || 'Using browser-local fallback.';
+    return 'Ready to save to the test slot.';
   }
 
   const state = {
@@ -432,6 +532,10 @@
     gridEndX: 7,
     gridEndY: 11,
     mainMenuReviewDraft: loadMainMenuReviewDraft(),
+    mainMenuReviewSaveState: 'ready',
+    mainMenuReviewSaveError: '',
+    mainMenuReviewRevision: 0,
+    mainMenuReviewUpdatedAt: '',
   };
 
   const ART_SCREENS = {
@@ -2927,7 +3031,7 @@
               <a href="/?screen=main-concept">Render reference</a>
             </div>
             <div class="portfolio-review-draft">
-              <span>Browser draft</span>
+              <span>Saved draft</span>
               ${renderReviewStatusControls(asset.id, asset.title, asset.reviewStatus)}
             </div>
           </div>
@@ -3052,7 +3156,8 @@
           <div class="acceptance-ledger-heading">
             <div>
               <strong>Acceptance Ledger</strong>
-              <span>Committed profile plus browser-local review draft. Promote decisions to the profile when they are final.</span>
+              <span>Saved portfolio draft for active review. Promote decisions to the profile when they are final.</span>
+              <small>${escapeText(mainMenuReviewSaveLabel())}</small>
             </div>
             <button type="button" data-action="reset-main-menu-review-draft" ${hasReviewDraft ? '' : 'disabled'}>${hasReviewDraft ? 'Reset Draft' : 'No Draft'}</button>
           </div>
@@ -3499,19 +3604,12 @@
         MAIN_MENU_LEDGER_ITEMS.some((item) => item.id === reviewId)
         && MAIN_MENU_REVIEW_STATUSES[reviewStatus]
       ) {
-        state.mainMenuReviewDraft = {
-          ...state.mainMenuReviewDraft,
-          [reviewId]: reviewStatus,
-        };
-        saveMainMenuReviewDraft(state.mainMenuReviewDraft);
-        render();
+        void saveMainMenuReviewDraft(nextMainMenuReviewDraft(reviewId, reviewStatus));
       }
       return;
     }
     if (button.dataset.action === 'reset-main-menu-review-draft') {
-      state.mainMenuReviewDraft = {};
-      saveMainMenuReviewDraft(state.mainMenuReviewDraft);
-      render();
+      void saveMainMenuReviewDraft({});
       return;
     }
     if (button.dataset.action === 'end-turn') {
@@ -3845,4 +3943,5 @@
   });
   window.addEventListener('hashchange', openPortfolioHashTarget);
   render();
+  void loadMainMenuReviewDraftRemote();
 }());

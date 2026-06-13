@@ -6,8 +6,11 @@ this file.
 
 The browser-facing visual ledger lives at
 `/?screen=main-assets#acceptance-ledger`. Its `Accept`, `Needs Review`, and
-`Reject` controls are a browser-local draft layer. A decision is only committed
-when this file is updated.
+`Reject` controls save a design-portfolio draft through
+`/api/design-portfolios/main-menu-acceptance` when that endpoint is available,
+with browser-local storage as a fallback. A decision is only committed to git
+when this file is updated. See `docs/design-portfolio-persistence.md` for the
+draft endpoint contract.
 
 ## Settled / Locked
 
