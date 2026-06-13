@@ -757,6 +757,7 @@ import './style.css';
     '/': { screen: 'main', mainMenuView: 'skeleton' },
     '/main-menu': { screen: 'main', mainMenuView: 'skeleton' },
     '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
+    '/design': { screen: 'main', mainMenuView: 'design-index' },
     '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
     '/design/main-menu/render': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main' },
     '/design/main-menu/render/hotspots': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main', hotspots: true },
@@ -2863,6 +2864,10 @@ import './style.css';
     return currentRoute().mainMenuView === 'assets';
   }
 
+  function shouldShowMainDesignIndex() {
+    return currentRoute().mainMenuView === 'design-index';
+  }
+
   function shouldShowScreenConcept(screenId) {
     return currentRoute().conceptScreen === screenId;
   }
@@ -3247,6 +3252,65 @@ import './style.css';
       </details>`;
   }
 
+  function renderDesignIndex() {
+    const areas = [
+      {
+        href: '/design/main-menu',
+        kicker: 'Asset review',
+        title: 'Main Menu',
+        copy: 'Six chrome regions checked against the approved render — accept, flag, or reject each as the live build converges.',
+        go: 'Open review',
+      },
+      {
+        href: '/design/main-menu/render',
+        kicker: 'Concept render',
+        title: 'Main Menu — Render',
+        copy: 'The aspirational painted main-menu render, with the clickable hotspot map.',
+        go: 'View render',
+      },
+      {
+        href: '/design/campaigns/render',
+        kicker: 'Concept render',
+        title: 'Campaign Editor',
+        copy: 'Concept render for the campaign editor surface and its tools.',
+        go: 'View render',
+      },
+      {
+        href: '/design/level-editor/render',
+        kicker: 'Concept render',
+        title: 'Level Editor',
+        copy: 'Concept render for the level editor — tile palette, brush controls, board frame.',
+        go: 'View render',
+      },
+      {
+        href: '/design/skirmish/render',
+        kicker: 'Concept render',
+        title: 'Skirmish',
+        copy: 'Concept render for the in-match skirmish HUD, roster, and board.',
+        go: 'View render',
+      },
+    ];
+    return `
+      <div class="main-assets-screen design-hub-screen" data-live-screen="design-index">
+        <header class="main-assets-header">
+          <p class="eyebrow">Design portfolio</p>
+          <h2>Design</h2>
+          <p class="main-assets-intro">Aspirational concept renders for each surface, plus the asset review that tracks the live build toward them. Jump into any area below.</p>
+        </header>
+
+        <section class="design-hub-grid" aria-label="Design areas">
+          ${areas.map((area) => `
+            <a class="design-hub-card" href="${escapeText(area.href)}">
+              <span class="design-hub-kicker">${escapeText(area.kicker)}</span>
+              <h3>${escapeText(area.title)}</h3>
+              <p>${escapeText(area.copy)}</p>
+              <span class="design-hub-go">${escapeText(area.go)} &rarr;</span>
+            </a>
+          `).join('')}
+        </section>
+      </div>`;
+  }
+
   function renderMainAssetReview() {
     const portfolioAssets = [
       {
@@ -3380,12 +3444,22 @@ import './style.css';
       };
     });
 
+    const accepted = portfolioAssets.filter((a) => a.reviewStatus === 'accepted').length;
+    const inReview = portfolioAssets.filter((a) => a.reviewStatus === 'review').length;
+    const rejected = portfolioAssets.filter((a) => a.reviewStatus === 'rejected').length;
+
     return `
       <div class="main-assets-screen" data-live-screen="main-assets">
         <header class="main-assets-header">
-          <div>
-            <p>Main menu design portfolio</p>
-            <h2>Chrome Asset Review</h2>
+          <a class="design-back" href="/design">&larr; Design</a>
+          <p class="eyebrow">Main menu · design portfolio</p>
+          <h2>Chrome Asset Review</h2>
+          <p class="main-assets-intro">Each main-menu region is checked against the approved render crop before it replaces a skeleton slot. Accept it, flag it for review, or send it back — per row.</p>
+          <div class="main-assets-summary">
+            <span class="count-accepted"><b>${accepted}</b> accepted</span>
+            <span class="count-review"><b>${inReview}</b> in review</span>
+            ${rejected ? `<span class="count-rejected"><b>${rejected}</b> rejected</span>` : ''}
+            <span><b>${portfolioAssets.length}</b> total</span>
           </div>
         </header>
 
@@ -3498,6 +3572,7 @@ import './style.css';
     if (!screen) return '';
     return `
       <div class="${screen.shellClass}" data-art-screen="${screenId}">
+        <a class="design-back design-back--art" href="/design">&larr; Design</a>
         <div class="${screen.boardClass}" aria-label="${escapeText(screen.label)}">
           <img src="${escapeText(screen.src)}" alt="" aria-hidden="true" decoding="async" draggable="false">
           ${screen.hotspots.map((hotspot) => renderArtHotspot(screenId, screen, hotspot)).join('')}
@@ -3532,6 +3607,8 @@ import './style.css';
         menuLayer.innerHTML = renderArtScreen('main');
       } else if (shouldShowMainAssets()) {
         menuLayer.innerHTML = renderMainAssetReview();
+      } else if (shouldShowMainDesignIndex()) {
+        menuLayer.innerHTML = renderDesignIndex();
       } else {
         menuLayer.innerHTML = renderMainMenuSkeleton();
       }
