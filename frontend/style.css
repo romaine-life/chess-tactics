@@ -554,7 +554,7 @@ h1 {
   grid-column: 1;
   grid-row: 1 / 4;
   grid-template-rows: auto auto 1fr;
-  gap: clamp(14px, 2.3vh, 26px);
+  gap: clamp(12px, 1.7vh, 18px);
   max-width: 540px;
   min-width: 0;
 }
@@ -705,7 +705,7 @@ h1 {
   display: block;
   max-width: 100%;
   position: relative;
-  width: min(100%, 390px);
+  width: min(100%, 410px);
 }
 
 .main-menu-actions-art img {
@@ -725,7 +725,7 @@ h1 {
   box-shadow: none;
   color: #f1ead7;
   display: flex;
-  font-size: clamp(.5rem, .86vw, .82rem);
+  font-size: clamp(.56rem, .94vw, .9rem);
   height: 14.8%;
   left: 6.6%;
   min-height: 0;
@@ -733,8 +733,10 @@ h1 {
   position: absolute;
   text-align: left;
   text-shadow:
-    0 2px 0 #020507,
-    0 0 12px rgba(37, 199, 255, .18);
+    0 2px 0 #010407,
+    2px 0 0 rgba(1, 4, 7, .82),
+    -1px 0 0 rgba(1, 4, 7, .72),
+    0 0 10px rgba(255, 239, 201, .1);
   text-transform: uppercase;
   top: calc(var(--row-center) - 7.4%);
   width: 87%;
@@ -759,9 +761,12 @@ h1 {
 
 .main-menu-art-action span {
   display: block;
-  margin-left: 29%;
-  max-width: 48%;
-  overflow-wrap: anywhere;
+  letter-spacing: 0;
+  line-height: 1.38;
+  margin-left: 26.5%;
+  max-width: 62%;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .main-menu-art-action.active span,
@@ -1038,29 +1043,6 @@ h1 {
 .main-menu-brand-art.accepted-brand-crop > img {
   object-fit: contain;
   object-position: left top;
-}
-
-.main-menu-brand-art.accepted-brand-crop::before {
-  background: linear-gradient(90deg, #020b12 0%, #03101a 62%, rgba(3, 16, 26, .88) 100%);
-  content: "";
-  height: 24px;
-  inset: 0 0 auto 0;
-  pointer-events: none;
-  position: absolute;
-  z-index: 1;
-}
-
-.accepted-brand-label {
-  color: #3f8fe2;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.46rem, .65vw, .66rem);
-  left: 0;
-  line-height: 1;
-  position: absolute;
-  text-shadow: 0 1px 0 rgba(1, 6, 10, .82);
-  text-transform: uppercase;
-  top: 2%;
-  z-index: 1;
 }
 
 .main-menu-brand-copy {
@@ -1703,32 +1685,6 @@ h1 {
   max-height: 390px;
   object-fit: contain;
   width: 100%;
-}
-
-.portfolio-asset-image-wrap.accepted-brand-preview span {
-  color: #3f8fe2;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.44rem, .74vw, .7rem);
-  left: 0;
-  line-height: 1;
-  position: absolute;
-  text-shadow: 0 1px 0 rgba(1, 6, 10, .82);
-  text-transform: uppercase;
-  top: 2%;
-}
-
-.portfolio-asset-image-wrap.accepted-brand-preview::before {
-  background: linear-gradient(90deg, #020b12 0%, #03101a 62%, rgba(3, 16, 26, .88) 100%);
-  content: "";
-  height: 12%;
-  inset: 0 0 auto 0;
-  pointer-events: none;
-  position: absolute;
-  z-index: 1;
-}
-
-.portfolio-asset-image-wrap.accepted-brand-preview span {
-  z-index: 2;
 }
 
 .portfolio-asset-figure figcaption {

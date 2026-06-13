@@ -2848,14 +2848,13 @@
         id: 'brand-chrome',
         title: 'Title / Brand Plate',
         status: 'Needs Review',
-        file: '/assets/ui/main-menu-brand-clean-v2.png',
-        alt: 'Accepted main menu title and brand plate crop with crest, title, subtitle, and divider',
-        overlayLabel: 'Tactical Breach Console',
-        caption: 'Accepted render crop. This restores the exact title lockup from the approved main menu screenshot.',
-        description: 'The title plate is now sourced directly from the accepted main menu render: same crest, title typography, subtitle, moonlit background, and divider.',
-        target: 'Confirm this is back in line with the approved main menu screenshot before treating the title plate as settled.',
-        liveUse: 'Used as the visible live brand plate in the upper-left main menu column, without a duplicate HTML title overlay.',
-        decision: 'Approve this crop as the first pass, request a tighter crop, or ask for a rebuilt browser-native version that matches this exact lockup.',
+        file: '/assets/ui/main-menu-brand-title-only-v1.png',
+        alt: 'Accepted main menu title plate crop with crest, Chess Tactics title, and divider',
+        caption: 'Title-only crop. The console label and subtitle have been removed so the lockup is just the game title.',
+        description: 'The title plate is now reduced to the actual game brand: crest, Chess Tactics, and the lower divider from the accepted render.',
+        target: 'Confirm the title-only lockup feels cleaner and still belongs with the approved main menu direction.',
+        liveUse: 'Used as the visible live brand plate in the upper-left main menu column.',
+        decision: 'Approve this as the main title lockup, request crop/spacing changes, or ask for a rebuilt browser-native version.',
       },
       {
         id: 'profile-chrome',
@@ -2953,9 +2952,8 @@
           ${renderSkeletonTag('Battlefield plate, lighting, terrain richness, and hero board composition', 'Pending art')}
         </div>
         <section class="main-menu-left" aria-label="Main navigation">
-          <div class="main-menu-brand main-menu-brand-art accepted-brand-crop" aria-label="Chess Tactics, tactical chess, infinite possibilities">
-            <img src="/assets/ui/main-menu-brand-clean-v2.png" alt="" aria-hidden="true" draggable="false">
-            <span class="accepted-brand-label" aria-hidden="true">Tactical Breach Console</span>
+          <div class="main-menu-brand main-menu-brand-art accepted-brand-crop" aria-label="Chess Tactics">
+            <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" aria-hidden="true" draggable="false">
           </div>
 
           <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">

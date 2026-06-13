@@ -180,7 +180,7 @@ async function main() {
     '/assets/ui/skirmish-concept.png',
     '/assets/ui/main-menu-button-art-five-mode.png',
     '/assets/ui/main-menu-button-art-three-state.png',
-    '/assets/ui/main-menu-brand-clean-v2.png',
+    '/assets/ui/main-menu-brand-title-only-v1.png',
     '/assets/ui/main-menu-brand-chrome-v1.png',
     '/assets/ui/main-menu-profile-chrome-v1.png',
     '/assets/ui/main-menu-news-chrome-v1.png',
