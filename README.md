@@ -15,6 +15,10 @@ npm start
 
 Open `http://localhost:3000`.
 
+## Production Links
+
+- Main menu design portfolio: <https://chess.romaine.life/?screen=main-assets>
+
 ## Agent Preview Contract
 
 Agents and session tooling should start preview through the repo-owned launcher:
