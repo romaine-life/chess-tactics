@@ -1043,80 +1043,144 @@ h1 {
   color: var(--menu-red);
 }
 
-/* News / daily panel — live DOM component (element 04) */
+/* Daily / News panels — element 04: DOM + live text + clean SVG icons (text never baked). */
+.daily-panel,
 .news-panel {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   padding: 14px 16px;
-}
-
-.news-panel-daily {
   align-self: end;
 }
 
-.news-panel-news {
-  align-self: end;
+.news-panel {
   margin-top: auto;
 }
 
-.news-panel-head {
+.daily-head,
+.news-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.news-panel-head strong {
+.daily-head strong,
+.news-head strong {
   color: var(--cobalt-bright);
   font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .58rem;
-  line-height: 1.4;
+  font-size: .56rem;
+  letter-spacing: .03em;
   text-transform: uppercase;
 }
 
-.news-panel-head small {
+.daily-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--muted);
   font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .5rem;
+}
+
+.daily-timer .ui-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.daily-body {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.daily-reticle {
+  flex: none;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  color: var(--cobalt-bright);
+}
+
+.daily-reticle .ui-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.daily-body p {
+  margin: 0;
+  color: var(--ink);
+  font-size: .92rem;
+  line-height: 1.2;
+}
+
+.daily-reward {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.daily-reward-label {
+  color: var(--cobalt);
+  font-family: "Press Start 2P", "VT323", monospace;
   font-size: .46rem;
+  letter-spacing: .04em;
   text-transform: uppercase;
 }
 
-.news-panel-lines {
+.daily-gem {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  color: var(--cobalt-bright);
+}
+
+.daily-gem .ui-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.daily-reward strong {
+  color: var(--ink-strong);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .56rem;
+}
+
+.news-list {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 9px;
   list-style: none;
 }
 
-.news-panel-lines li {
+.news-line {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
   color: var(--ink);
-  font-size: .95rem;
-  line-height: 1.25;
+  font-size: .9rem;
+  line-height: 1.2;
 }
 
-.news-panel-lines li::before {
-  content: ">";
-  color: var(--cobalt);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .6rem;
+.news-ico {
+  display: grid;
+  width: 14px;
+  height: 14px;
 }
 
-.news-panel-foot {
-  margin: 0;
-  color: var(--cobalt);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .5rem;
-  text-transform: uppercase;
+.news-ico .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
-/* Bottom dock — live DOM component (element 05) */
+.news-line-cobalt .news-ico { color: var(--cobalt-bright); }
+.news-line-gold .news-ico { color: var(--menu-gold); }
+.news-line-red .news-ico { color: var(--menu-red); }
+
+/* Bottom dock — element 05, art-backed (icon-only pixel art, no baked text):
+   crop of dock-chrome {x:548,y:810,w:410,h:136} + transparent live hit-targets. */
 .menu-dock {
-  display: flex;
-  gap: 12px;
   grid-column: 2;
   grid-row: 3;
   align-self: end;
@@ -1124,45 +1188,32 @@ h1 {
   padding-bottom: 22px;
 }
 
-.dock-button {
-  display: grid;
-  gap: 6px;
-  place-items: center;
-  width: 76px;
-  min-height: 76px;
-  padding: 10px 6px;
-  border: 2px solid var(--line);
-  background: var(--panel-2);
-  color: var(--muted);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .5);
+.menu-dock-art {
+  position: relative;
+  width: 410px;
+  max-width: 32vw;
+  aspect-ratio: 410 / 136;
+  background-image: url("/assets/ui/main-menu-aspirational.png");
+  background-repeat: no-repeat;
+  background-size: 386.83% 729.41%;
+  background-position: 46.60% 94.63%;
+  image-rendering: pixelated;
+}
+
+.dock-hit {
+  position: absolute;
+  top: 6%;
+  width: 22%;
+  height: 88%;
+  border: 0;
+  background: transparent;
   cursor: pointer;
 }
 
-.dock-button-icon {
-  width: 24px;
-  height: 24px;
-  display: block;
-  color: var(--gold);
-}
-
-.dock-button-label {
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .4rem;
-  letter-spacing: .02em;
-  text-transform: uppercase;
-}
-
-.dock-button:hover,
-.dock-button:focus-visible {
-  outline: none;
-  border-color: var(--focus-ring);
-  background: var(--panel-3);
-  color: var(--ink);
-}
-
-.dock-button:hover .dock-button-icon,
-.dock-button:focus-visible .dock-button-icon {
-  color: var(--cobalt-bright);
+.dock-hit:hover,
+.dock-hit:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 /* Live component specimens on the design portfolio */
@@ -3541,7 +3592,7 @@ h1 {
   .main-menu-left,
   .main-menu-brand,
   .main-menu-actions,
-  .news-panel-daily,
+  .daily-panel,
   .main-menu-battlefield-plate,
   .main-menu-right,
   .menu-dock {
@@ -3569,7 +3620,7 @@ h1 {
     grid-row: 3;
   }
 
-  .news-panel-daily {
+  .daily-panel {
     grid-column: 1;
     grid-row: 4;
   }
@@ -3586,7 +3637,7 @@ h1 {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .news-panel-news {
+  .news-panel {
     margin-top: 0;
   }
 
@@ -3847,14 +3898,9 @@ h1 {
     font-size: .52rem;
   }
 
-  .menu-dock {
-    gap: 8px;
-    width: 100%;
-  }
-
-  .dock-button {
-    flex: 1;
-    width: auto;
+  .menu-dock-art {
+    width: min(320px, 80vw);
+    max-width: none;
   }
 
   .shell.main-menu-active .board-scroll {

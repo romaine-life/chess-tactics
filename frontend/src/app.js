@@ -3320,7 +3320,7 @@ import './style.css';
         id: 'news-chrome',
         title: 'Daily / News Panel',
         baseStatus: 'review',
-        specimen: renderNewsPanel({ variant: 'news', title: 'Campaign tools', lines: ['Editor shell is moving from render reference to live browser UI.', 'Tile and piece extraction follow this main-menu slice.'] }),
+        specimen: renderDailyPanel() + renderNewsPanel(),
         alt: 'Generated pixel art daily and news panel chrome for the main menu',
         caption: 'Reusable panel source for the daily line and right-side campaign/news notes.',
         description: 'A smaller command-panel treatment for rotating copy, daily challenge text, or future campaign updates.',
@@ -3478,47 +3478,68 @@ import './style.css';
       </section>`;
   }
 
-  function renderNewsPanel(opts) {
-    const lines = opts.lines || [];
-    const items = lines.map((line) => `<li>${escapeText(line)}</li>`).join('');
+  function renderDailyPanel() {
+    // Element 04 (daily) — DOM + live text + clean SVG icons (text is never baked).
     return `
-      <section class="menu-panel news-panel news-panel-${escapeText(opts.variant)}" aria-label="${escapeText(opts.title)}">
-        <header class="news-panel-head">
-          <strong>${escapeText(opts.title)}</strong>
-          ${opts.kicker ? `<small>${escapeText(opts.kicker)}</small>` : ''}
+      <section class="menu-panel daily-panel" aria-label="Daily challenge">
+        <header class="daily-head">
+          <strong>Daily Challenge</strong>
+          <span class="daily-timer"><svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M3.5 1.5h9v3L9 8l3.5 3.5v3h-9v-3L7 8 3.5 4.5z"></path></svg>12h 45m</span>
         </header>
-        ${items ? `<ul class="news-panel-lines">${items}</ul>` : ''}
-        ${opts.footer ? `<p class="news-panel-foot">${escapeText(opts.footer)}</p>` : ''}
+        <div class="daily-body">
+          <span class="daily-reticle" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" focusable="false"><circle cx="8" cy="8" r="5.4"></circle><path d="M8 .9v2.6M8 12.5v2.6M.9 8h2.6M12.5 8h2.6"></path><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"></circle></svg></span>
+          <p>Capture the enemy King</p>
+        </div>
+        <footer class="daily-reward">
+          <span class="daily-reward-label">Reward</span>
+          <span class="daily-gem" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" focusable="false"><path d="M4 2.2h8l2.8 3.9L8 14.2 1.2 6.1z"></path></svg></span>
+          <strong>50</strong>
+        </footer>
       </section>`;
   }
 
-  const DOCK_ICONS = {
-    award: '<circle cx="8" cy="6" r="3.6"></circle><rect x="6.6" y="9" width="2.8" height="3.4"></rect><rect x="4.4" y="12.2" width="7.2" height="1.8"></rect>',
-    flag: '<rect x="3" y="2" width="1.5" height="12"></rect><path d="M4.5 2.4H13l-2.1 2.7L13 7.8H4.5z"></path>',
-    users: '<circle cx="5.6" cy="5.6" r="2.1"></circle><circle cx="10.4" cy="5.6" r="2.1"></circle><path d="M2.2 13c0-2.1 1.6-3.4 3.4-3.4S9 10.9 9 13z"></path><path d="M7 13c0-2.1 1.6-3.4 3.4-3.4S13.8 10.9 13.8 13z"></path>',
-    grid: '<rect x="2.6" y="2.6" width="4.4" height="4.4"></rect><rect x="9" y="2.6" width="4.4" height="4.4"></rect><rect x="2.6" y="9" width="4.4" height="4.4"></rect><rect x="9" y="9" width="4.4" height="4.4"></rect>',
-  };
-
-  function renderDockIcon(name) {
-    return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">${DOCK_ICONS[name] || ''}</svg>`;
+  function renderNewsBullet(tone) {
+    if (tone === 'gold') {
+      return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M2 12.5h12L13 5.5l-3 2.6L8 3 6 8.1l-3-2.6z"></path></svg>`;
+    }
+    if (tone === 'red') {
+      return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><rect x="3" y="3" width="10" height="10" rx="1"></rect></svg>`;
+    }
+    return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 1.5l5.5 6.5L8 14.5 2.5 8z"></path></svg>`;
   }
 
-  function renderDockButton(action, label, icon) {
+  function renderNewsPanel() {
+    // Element 04 (news) — DOM + live text + clean SVG bullets (text is never baked).
+    const items = [
+      { tone: 'cobalt', text: 'v1.2.0 Balance Update' },
+      { tone: 'gold', text: 'New official maps added' },
+      { tone: 'red', text: 'Community Spotlight: Top Tactics' },
+    ];
+    const lines = items.map((it) =>
+      `<li class="news-line news-line-${it.tone}"><span class="news-ico" aria-hidden="true">${renderNewsBullet(it.tone)}</span><span>${escapeText(it.text)}</span></li>`
+    ).join('');
     return `
-      <button class="dock-button" type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">
-        <span class="dock-button-icon" aria-hidden="true">${renderDockIcon(icon)}</span>
-        <span class="dock-button-label">${escapeText(label)}</span>
-      </button>`;
+      <section class="menu-panel news-panel" aria-label="News">
+        <header class="news-head"><strong>News</strong></header>
+        <ul class="news-list">${lines}</ul>
+      </section>`;
   }
+
+  const DOCK_ITEMS = [
+    { action: 'settings', label: 'Achievements' },
+    { action: 'campaigns', label: 'Campaigns' },
+    { action: 'lobbies', label: 'Lobbies' },
+    { action: 'settings', label: 'Collection' },
+  ];
 
   function renderDock() {
-    return `
-      <nav class="menu-dock" aria-label="Quick links">
-        ${renderDockButton('settings', 'Achievements', 'award')}
-        ${renderDockButton('campaigns', 'Campaigns', 'flag')}
-        ${renderDockButton('lobbies', 'Lobbies', 'users')}
-        ${renderDockButton('settings', 'Collection', 'grid')}
-      </nav>`;
+    // Element 05 — art-backed: the concept dock is icon-only pixel art with no baked
+    // text, so crop the dock strip from the render (dock-chrome {x:548,y:810,w:410,h:136})
+    // and overlay transparent live hit-targets — the accepted mode-button (01) pattern.
+    const targets = DOCK_ITEMS.map((item, i) =>
+      `<button class="dock-hit" style="left:${(i * 24.6 + 1.4).toFixed(2)}%" type="button" data-action="${escapeText(item.action)}" aria-label="${escapeText(item.label)}" title="${escapeText(item.label)}"></button>`
+    ).join('');
+    return `<nav class="menu-dock menu-dock-art" aria-label="Quick links">${targets}</nav>`;
   }
 
   function renderMainMenuSkeleton() {
@@ -3550,13 +3571,13 @@ import './style.css';
             ${renderMainMenuArtAction('settings', 'Settings')}
           </nav>
 
-          ${renderNewsPanel({ variant: 'daily', title: 'Daily Line', kicker: 'Preview', lines: ['Hold the bridge, trade cleanly, and keep the king lane sealed.'], footer: 'Generated board target' })}
+          ${renderDailyPanel()}
         </section>
 
         <aside class="main-menu-right" aria-label="Profile and status">
           ${renderProfileStatus()}
 
-          ${renderNewsPanel({ variant: 'news', title: 'Campaign tools', lines: ['Editor shell is moving from render reference to live browser UI.', 'Tile and piece extraction follow this main-menu slice.'] })}
+          ${renderNewsPanel()}
         </aside>
 
         ${renderDock()}
