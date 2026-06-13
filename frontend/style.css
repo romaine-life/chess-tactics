@@ -1927,76 +1927,137 @@ h1 {
   width: 319.76%;
 }
 
-.portfolio-approved-crop {
-  --crop-x: 0;
-  --crop-y: 0;
-  --crop-w: 1586;
-  --crop-h: 992;
-  aspect-ratio: var(--crop-w) / var(--crop-h);
+.portfolio-reference-picker {
+  appearance: none;
   background: #02070b;
   border: 2px solid rgba(233, 184, 92, .42);
+  color: inherit;
+  cursor: crosshair;
+  display: block;
+  padding: 0;
+  width: 100%;
+}
+
+.portfolio-reference-picker:hover,
+.portfolio-reference-picker:focus-visible {
+  border-color: #f1d084;
+  outline: none;
+}
+
+.portfolio-reference-frame {
+  aspect-ratio: 1586 / 992;
+  display: block;
   overflow: hidden;
   position: relative;
 }
 
-.portfolio-approved-crop img {
+.portfolio-reference-frame img {
   height: auto;
-  left: calc(-100% * var(--crop-x) / var(--crop-w));
   max-height: none;
-  max-width: none;
-  object-fit: initial;
+  width: 100%;
+}
+
+.portfolio-reference-selection,
+.reference-crop-selection {
+  border: 2px solid #f1d084;
+  box-shadow:
+    0 0 0 9999px rgba(2, 7, 11, .46),
+    0 0 18px rgba(241, 208, 132, .42),
+    inset 0 0 0 1px rgba(2, 7, 11, .82);
+  pointer-events: none;
   position: absolute;
-  top: calc(-100% * var(--crop-y) / var(--crop-h));
-  width: calc(100% * 1586 / var(--crop-w));
 }
 
-.approved-crop-mode-buttons {
-  --crop-x: 42;
-  --crop-y: 247;
-  --crop-w: 492;
-  --crop-h: 487;
+.reference-crop-modal {
+  align-items: center;
+  background: rgba(0, 0, 0, .84);
+  display: grid;
+  inset: 0;
+  padding: 18px;
+  position: fixed;
+  z-index: 50;
 }
 
-.approved-crop-brand {
-  --crop-x: 38;
-  --crop-y: 35;
-  --crop-w: 625;
-  --crop-h: 170;
+.reference-crop-dialog {
+  background: rgba(5, 15, 23, .98);
+  border: 2px solid rgba(80, 129, 151, .82);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .74);
+  display: grid;
+  gap: 12px;
+  justify-self: center;
+  max-height: calc(100dvh - 36px);
+  min-height: 0;
+  padding: 12px;
+  width: min(1500px, calc(100vw - 36px));
 }
 
-.approved-crop-profile {
-  --crop-x: 1175;
-  --crop-y: 26;
-  --crop-w: 393;
-  --crop-h: 162;
+.reference-crop-dialog header,
+.reference-crop-dialog footer {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
 }
 
-.approved-crop-daily {
-  --crop-x: 29;
-  --crop-y: 763;
-  --crop-w: 485;
-  --crop-h: 180;
+.reference-crop-dialog header div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
-.approved-crop-news {
-  --crop-x: 1176;
-  --crop-y: 763;
-  --crop-w: 392;
-  --crop-h: 190;
+.reference-crop-dialog strong,
+.reference-crop-dialog span,
+.reference-crop-dialog button {
+  font-family: "Press Start 2P", "VT323", monospace;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
-.approved-crop-dock {
-  --crop-x: 548;
-  --crop-y: 810;
-  --crop-w: 410;
-  --crop-h: 136;
+.reference-crop-dialog strong {
+  color: #47a9ff;
+  font-size: .62rem;
+  line-height: 1.4;
 }
 
-.approved-crop-battlefield {
-  --crop-x: 538;
-  --crop-y: 175;
-  --crop-w: 930;
-  --crop-h: 682;
+.reference-crop-dialog span {
+  color: #d9c28a;
+  font-size: .46rem;
+}
+
+.reference-crop-dialog button {
+  background: #07131d;
+  border: 2px solid rgba(63, 95, 111, .82);
+  color: #e8d4a6;
+  font-size: .52rem;
+  min-height: 38px;
+  padding: 10px 12px;
+}
+
+.reference-crop-dialog button:hover,
+.reference-crop-dialog button:focus-visible {
+  border-color: var(--asset-cyan);
+  color: #f4ead0;
+  outline: none;
+}
+
+.reference-crop-stage {
+  aspect-ratio: 1586 / 992;
+  background: #02070b;
+  border: 2px solid rgba(233, 184, 92, .54);
+  cursor: crosshair;
+  justify-self: center;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+  width: min(100%, calc((100dvh - 156px) * 1586 / 992));
+}
+
+.reference-crop-stage img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 
 .portfolio-asset-figure figcaption {
