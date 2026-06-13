@@ -3380,12 +3380,21 @@ import './style.css';
       };
     });
 
+    const accepted = portfolioAssets.filter((a) => a.reviewStatus === 'accepted').length;
+    const inReview = portfolioAssets.filter((a) => a.reviewStatus === 'review').length;
+    const rejected = portfolioAssets.filter((a) => a.reviewStatus === 'rejected').length;
+
     return `
       <div class="main-assets-screen" data-live-screen="main-assets">
         <header class="main-assets-header">
-          <div>
-            <p>Main menu design portfolio</p>
-            <h2>Chrome Asset Review</h2>
+          <p class="eyebrow">Main menu · design portfolio</p>
+          <h2>Chrome Asset Review</h2>
+          <p class="main-assets-intro">Each main-menu region is checked against the approved render crop before it replaces a skeleton slot. Accept it, flag it for review, or send it back — per row.</p>
+          <div class="main-assets-summary">
+            <span class="count-accepted"><b>${accepted}</b> accepted</span>
+            <span class="count-review"><b>${inReview}</b> in review</span>
+            ${rejected ? `<span class="count-rejected"><b>${rejected}</b> rejected</span>` : ''}
+            <span><b>${portfolioAssets.length}</b> total</span>
           </div>
         </header>
 
