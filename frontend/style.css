@@ -1360,11 +1360,10 @@ h1 {
   z-index: 2;
 }
 
-.main-menu-dock-art button:nth-of-type(1) { left: 20%; }
-.main-menu-dock-art button:nth-of-type(2) { left: 35%; }
-.main-menu-dock-art button:nth-of-type(3) { left: 50%; }
-.main-menu-dock-art button:nth-of-type(4) { left: 65%; }
-.main-menu-dock-art button:nth-of-type(5) { left: 80%; }
+.main-menu-dock-art button:nth-of-type(1) { left: 25%; }
+.main-menu-dock-art button:nth-of-type(2) { left: 41.6%; }
+.main-menu-dock-art button:nth-of-type(3) { left: 58.4%; }
+.main-menu-dock-art button:nth-of-type(4) { left: 75%; }
 
 .main-menu-dock-art button span {
   background: rgba(2, 7, 11, .72);
