@@ -4,6 +4,9 @@ This ledger is the source of truth for what is settled in the main menu UI
 bridge and what still needs review. Keep `/?screen=main-assets` aligned with
 this file.
 
+The browser-facing visual ledger lives at
+`/?screen=main-assets#acceptance-ledger`.
+
 ## Settled / Locked
 
 - Main menu mode button stack.

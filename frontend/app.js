@@ -2830,6 +2830,34 @@
   }
 
   function renderMainAssetReview() {
+    const acceptanceColumns = [
+      {
+        className: 'settled',
+        title: 'Settled / Locked',
+        items: [
+          { label: 'Mode button stack', note: 'Accepted painted crop and transparent hit targets.' },
+          { label: 'Brand/title banner', note: 'Accepted upper-left crest and title crop.' },
+          { label: 'Art-backed bridge', note: 'Keep live DOM controls over game-native chrome.' },
+        ],
+      },
+      {
+        className: 'review',
+        title: 'Needs Review',
+        items: [
+          { label: 'Profile/status panel', note: 'Identity, sign-in/account, counters, and chrome.' },
+          { label: 'Daily/news panel', note: 'Daily line, campaign tools copy, reusable panel art.' },
+          { label: 'Bottom dock', note: 'Icons, labels/tooltips, focus states, and priority.' },
+          { label: 'Battlefield plate', note: 'Frame, status labels, depth, and responsive fit.' },
+        ],
+      },
+      {
+        className: 'rejected',
+        title: 'Rejected / Do Not Use',
+        items: [
+          { label: 'None yet', note: 'Rejected treatments will be tracked here.' },
+        ],
+      },
+    ];
     const portfolioAssets = [
       {
         id: 'mode-buttons',
@@ -2904,6 +2932,7 @@
             <h2>Chrome Asset Review</h2>
           </div>
           <nav aria-label="Main menu review links">
+            <a href="/?screen=main-assets#acceptance-ledger">Ledger</a>
             <a href="/?screen=main-assets#mode-buttons">Buttons</a>
             <a href="/?screen=main-assets#brand-chrome">Brand</a>
             <a href="/?screen=main-assets#profile-chrome">Profile</a>
@@ -2913,6 +2942,28 @@
             <a href="/?screen=main-concept">Render reference</a>
           </nav>
         </header>
+
+        <section id="acceptance-ledger" class="acceptance-ledger" aria-label="Main menu acceptance ledger">
+          <div class="acceptance-ledger-heading">
+            <strong>Acceptance Ledger</strong>
+            <span>Source of truth for what is locked and what still needs design review.</span>
+          </div>
+          <div class="acceptance-ledger-columns">
+            ${acceptanceColumns.map((column) => `
+              <article class="acceptance-column ${escapeText(column.className)}">
+                <h3>${escapeText(column.title)}</h3>
+                <ul>
+                  ${column.items.map((item) => `
+                    <li>
+                      <strong>${escapeText(item.label)}</strong>
+                      <span>${escapeText(item.note)}</span>
+                    </li>
+                  `).join('')}
+                </ul>
+              </article>
+            `).join('')}
+          </div>
+        </section>
 
         <section class="asset-reference-panel" aria-label="Approved render reference">
           <div class="asset-reference-copy">
