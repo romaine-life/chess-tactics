@@ -194,17 +194,18 @@ utility UI is below the intended quality bar. Approved renders remain available
 as explicit concept references, not as the normal app surface.
 
 The default work surfaces are `/`, `/?screen=main`, `/?screen=campaigns`,
-`/?screen=level-editor`, and `/?screen=skirmish`. They show live DOM skeletons
-with unfinished asset slots labeled in place. The approved main menu render is
-the source for the five-button mode stack so its painted lettering stays intact.
-The main menu title/brand plate uses an accepted crop from the approved main
-menu render, and the profile/status, news/daily, and dock surfaces use
-generated bitmap chrome with live HTML labels and click targets. `*-concept`
-routes preserve the approved renders for comparison: `/?screen=main-concept`,
-`/?screen=campaigns-concept`, `/?screen=level-editor-concept`, and
-`/?screen=skirmish-concept`. `/?screen=main-assets` remains the asset review
-board for comparing candidate asset families before wiring them into a
-skeleton.
+`/?screen=level-editor`, and `/?screen=skirmish`. They show live DOM bridge
+surfaces with unfinished asset slots labeled in place. The approved main menu
+render is the source for the five-button mode stack so its painted lettering
+stays intact. The main menu title/brand plate uses an accepted crop from the
+approved main menu render, the profile/status, news/daily, and dock surfaces
+use generated bitmap chrome with live HTML labels and click targets, and the
+main menu battlefield plate uses the live moonlit canvas board inside CSS
+chrome. `*-concept` routes preserve the approved renders for comparison:
+`/?screen=main-concept`, `/?screen=campaigns-concept`,
+`/?screen=level-editor-concept`, and `/?screen=skirmish-concept`.
+`/?screen=main-assets` remains the asset review board for comparing candidate
+asset families before wiring them into a bridge.
 
 ## Parallel Work Boundaries
 

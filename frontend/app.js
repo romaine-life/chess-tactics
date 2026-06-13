@@ -2934,7 +2934,7 @@
         </section>
 
         <footer class="asset-review-footer">
-          <span>The buttons are treated as settled. The next decision is whether the new brand, profile, news, and dock chrome deserve approval, revision, or removal before I fill more of the main menu.</span>
+          <span>The buttons and battlefield plate are now wired into the live menu. The next decision is whether the brand, profile, news, and dock chrome deserve approval, revision, or removal before editor and skirmish extraction begins.</span>
         </footer>
       </div>`;
   }
@@ -2945,9 +2945,17 @@
     const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
     return `
       <div class="main-menu-screen main-menu-live-screen main-menu-skeleton-screen" data-live-screen="main-skeleton">
-        <div class="main-menu-skeleton-board-callout">
-          ${renderSkeletonTag('Battlefield plate, lighting, terrain richness, and hero board composition', 'Next asset')}
-        </div>
+        <section class="main-menu-battlefield-plate" aria-label="Moonlit grassland battlefield preview">
+          <div class="main-menu-battlefield-meta">
+            <span>Moonlit Grassland</span>
+            <span>Skirmish Preview</span>
+          </div>
+          <div class="main-menu-battlefield-status" aria-hidden="true">
+            <span>6 Allies</span>
+            <span>5 Threats</span>
+            <span>Bridge Hold</span>
+          </div>
+        </section>
         <section class="main-menu-left" aria-label="Main navigation">
           <div class="main-menu-brand main-menu-brand-art accepted-brand-crop" aria-label="Chess Tactics">
             <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" aria-hidden="true" draggable="false">

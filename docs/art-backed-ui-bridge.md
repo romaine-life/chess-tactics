@@ -34,7 +34,8 @@ rectangles over the 16:10 artboard.
 
 - `/` shows the live DOM main menu bridge, with approved/generated bitmap
   families filled for buttons, brand, profile/status, news/daily, and dock
-  chrome. Remaining unfinished asset slots stay labeled in place.
+  chrome, plus a CSS-framed moonlit battlefield plate over the live canvas.
+  Remaining unfinished asset slots stay labeled in place.
 - `/?screen=main` explicitly opens the live DOM main menu bridge.
 - `/?screen=main-skeleton` also opens the live DOM main menu bridge.
 - `/?screen=main-concept` opens the saved main menu concept render.
@@ -57,8 +58,9 @@ For example, use `/?screen=main-concept&hotspots=1` or
 The main menu, campaign editor, level editor, and skirmish now use live bridge
 surfaces by default. The main menu mode button family, brand
 lockup, profile/status panel, news/daily panels, and dock strip use generated
-bitmap art with live HTML labels and click targets overlaid. Other labeled
-slots are intentionally unfinished.
+bitmap art with live HTML labels and click targets overlaid. The main menu
+battlefield plate uses the live canvas board as its visual core with CSS chrome
+and game-native labels. Other labeled slots are intentionally unfinished.
 
 The concept routes keep real buttons layered over the saved renders. The
 hotspots route back into existing app actions such as menu navigation, campaign
@@ -89,10 +91,10 @@ Replace the bridge from the inside out:
    `main-menu-aspirational.png` so the approved painted labels stay intact; the
    title/brand plate uses `main-menu-brand-title-only-v1.png` from the approved
    render; the profile/status, news/daily, and dock chrome use generated
-   `main-menu-*-chrome-v1.png` assets; the battlefield plate is still
-   intentionally labeled as pending art. Use
-   `/?screen=main-assets` to compare candidates against the approved render
-   before wiring them into the skeleton.
+   `main-menu-*-chrome-v1.png` assets; the battlefield plate uses the live
+   moonlit canvas board inside CSS chrome. Use `/?screen=main-assets` to
+   compare candidates against the approved render before wiring them into the
+   bridge.
 3. Extract editor and skirmish side panels as real DOM components.
 4. Replace remaining rendered board imagery with canvas terrain tiles and overlays that
    match the concepts.
