@@ -2931,31 +2931,6 @@
     return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}"><span>${escapeText(label.slice(0, 3).toUpperCase())}</span></button>`;
   }
 
-  function renderAssetButton(variant, label, icon, stateClass = '') {
-    return `
-      <button class="asset-button ${escapeText(variant)} ${escapeText(stateClass)}" type="button">
-        <span class="asset-button-icon">${escapeText(icon)}</span>
-        <span class="asset-button-label">${escapeText(label)}</span>
-        <i aria-hidden="true">&gt;</i>
-      </button>`;
-  }
-
-  function renderButtonVariantCard(variant, title, note) {
-    return `
-      <article class="asset-variant-card">
-        <div class="asset-card-head">
-          <strong>${escapeText(title)}</strong>
-          <span>${escapeText(note)}</span>
-        </div>
-        <div class="asset-button-stack">
-          ${renderAssetButton(variant, 'Solo Skirmish', 'N', 'is-active')}
-          ${renderAssetButton(variant, 'Campaign Editor', 'C')}
-          ${renderAssetButton(variant, 'Level Editor', 'LV', 'is-hover')}
-          ${renderAssetButton(variant, 'Lobbies', 'P2', 'is-muted')}
-        </div>
-      </article>`;
-  }
-
   function mainMenuReviewStatusFor(id, fallbackStatus) {
     const draftStatus = state.mainMenuReviewDraft[id];
     return MAIN_MENU_REVIEW_STATUSES[draftStatus] ? draftStatus : fallbackStatus;
@@ -3058,26 +3033,6 @@
 
   function renderMainAssetReview() {
     const portfolioAssets = [
-      {
-        id: 'mode-buttons',
-        title: 'Mode Button Family',
-        baseStatus: 'accepted',
-        file: '/assets/ui/main-menu-aspirational.png',
-        cropClass: 'portfolio-button-crop',
-        alt: 'Approved main menu render showing the five painted mode buttons',
-        caption: 'Approved portfolio crop. This is wired into the live menu so the lettering stays painted with the source.',
-        description: 'The live button stack now uses the concept render crop directly: cyan-lit selected frame, warm dark fill, compact icon tile, painted labels, and five stacked mode choices.',
-        target: 'Confirm the already-approved button family still anchors the menu.',
-        liveUse: 'Transparent live click targets sit over the painted crop; browser text is not redrawn over the buttons.',
-        decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
-        referenceCrops: [
-          {
-            title: 'Approved Render Crop',
-            cropClass: 'approved-crop-mode-buttons',
-            alt: 'Approved render crop of the left-side main menu mode button stack',
-          },
-        ],
-      },
       {
         id: 'brand-chrome',
         title: 'Title / Brand Plate',
@@ -3196,40 +3151,14 @@
             <p>Main menu design portfolio</p>
             <h2>Chrome Asset Review</h2>
           </div>
-          <nav aria-label="Main menu review links">
-            <a href="/?screen=main-assets#mode-buttons">Buttons</a>
-            <a href="/?screen=main-assets#brand-chrome">Brand</a>
-            <a href="/?screen=main-assets#profile-chrome">Profile</a>
-            <a href="/?screen=main-assets#news-chrome">News</a>
-            <a href="/?screen=main-assets#dock-chrome">Dock</a>
-            <a href="/?screen=main-assets#battlefield-plate">Battlefield</a>
-            <a href="/">Live menu</a>
-            <a href="/?screen=main-concept">Render reference</a>
-          </nav>
         </header>
-
-        <section class="asset-reference-panel" aria-label="Approved render reference">
-          <div class="asset-reference-copy">
-            <strong>Approved render crop</strong>
-            <span>Targeting the left-side mode buttons: heavy pixel frame, luminous selected state, compact icon tile, and dark low-glare fill.</span>
-          </div>
-          <div class="asset-reference-crop">
-            <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
-          </div>
-        </section>
 
         <section class="portfolio-asset-list" aria-label="Main menu chrome portfolio">
           ${portfolioAssets.map(renderPortfolioAsset).join('')}
         </section>
 
-        <section class="asset-variants" aria-label="Button style candidates">
-          ${renderButtonVariantCard('render-match', 'A. Render Match', 'Closest to the approved image: brighter cyan frame, glassy blue selected state.')}
-          ${renderButtonVariantCard('moon-steel', 'B. Moon Steel', 'Lower glare and more tactical; keeps the pixel silhouette but calms the glow.')}
-          ${renderButtonVariantCard('gold-inlay', 'C. Gold Inlay', 'More Chessmaster restraint: warm bevels, noble frame, less arcade energy.')}
-        </section>
-
         <footer class="asset-review-footer">
-          <span>Settled: mode buttons, upper-left brand/title banner, and the art-backed live bridge approach. Needs review: profile/status, daily/news, bottom dock, and battlefield plate details.</span>
+          <span>Settled: upper-left brand/title banner and the art-backed live bridge approach. Needs review: profile/status, daily/news, bottom dock, and battlefield plate details.</span>
         </footer>
       </div>`;
   }
