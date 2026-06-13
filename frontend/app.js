@@ -2845,13 +2845,13 @@
         id: 'brand-chrome',
         title: 'Title / Brand Plate',
         status: 'Needs Review',
-        file: '/assets/ui/main-menu-brand-chrome-v1.png',
-        alt: 'Generated pixel art brand and title chrome for the main menu',
-        caption: 'Brand plate source for the crest, eyebrow, title, and subtitle area.',
-        description: 'A compact moonlit command-title plate meant to make the menu feel like a real game screen without over-brightening the dark theme.',
-        target: 'Judge whether the crest, title framing, cyan glow, and gold trim match the approved render direction.',
-        liveUse: 'Used behind the live title, eyebrow, and subtitle text in the upper-left main menu column.',
-        decision: 'Approve, revise palette/shape, or replace with a more restrained Chessmaster-style title plate.',
+        file: '/assets/ui/main-menu-brand-accepted-crop-v1.png',
+        alt: 'Accepted main menu title and brand plate crop with crest, title, subtitle, and divider',
+        caption: 'Accepted render crop. This restores the exact title lockup from the approved main menu screenshot.',
+        description: 'The title plate is now sourced directly from the accepted main menu render: same crest, title typography, subtitle, moonlit background, and divider.',
+        target: 'Confirm this is back in line with the approved main menu screenshot before treating the title plate as settled.',
+        liveUse: 'Used as the visible live brand plate in the upper-left main menu column, without a duplicate HTML title overlay.',
+        decision: 'Approve this crop as the first pass, request a tighter crop, or ask for a rebuilt browser-native version that matches this exact lockup.',
       },
       {
         id: 'profile-chrome',
@@ -2949,13 +2949,8 @@
           ${renderSkeletonTag('Battlefield plate, lighting, terrain richness, and hero board composition', 'Pending art')}
         </div>
         <section class="main-menu-left" aria-label="Main navigation">
-          <div class="main-menu-brand main-menu-brand-art">
-            <img src="/assets/ui/main-menu-brand-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-            <div class="main-menu-brand-copy">
-              <p class="main-menu-eyebrow">Moonlit campaign tactics</p>
-              <h2>Chess Tactics</h2>
-              <p>Small-board strategy. Readable threats. Pixel command.</p>
-            </div>
+          <div class="main-menu-brand main-menu-brand-art accepted-brand-crop" aria-label="Chess Tactics, tactical chess, infinite possibilities">
+            <img src="/assets/ui/main-menu-brand-accepted-crop-v1.png" alt="" aria-hidden="true" draggable="false">
           </div>
 
           <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">

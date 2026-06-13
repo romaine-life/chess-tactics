@@ -1035,6 +1035,11 @@ h1 {
   padding: 0;
 }
 
+.main-menu-brand-art.accepted-brand-crop > img {
+  object-fit: contain;
+  object-position: left top;
+}
+
 .main-menu-brand-copy {
   display: grid;
   gap: 7px;
