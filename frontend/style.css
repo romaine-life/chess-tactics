@@ -1516,8 +1516,7 @@ h1 {
 
 .asset-reference-panel,
 .asset-artwork-card,
-.asset-chrome-panel,
-.asset-review-footer {
+.asset-chrome-panel {
   background: var(--asset-panel);
   border: 2px solid var(--asset-line);
   box-shadow:
@@ -2116,8 +2115,7 @@ h1 {
   gap: 8px;
 }
 
-.asset-reference-copy span,
-.asset-review-footer {
+.asset-reference-copy span {
   color: #bfd5dc;
   font-size: 1.08rem;
   line-height: 1.18;
@@ -2136,12 +2134,6 @@ h1 {
   height: auto;
   object-fit: contain;
   width: 100%;
-}
-
-.asset-review-footer {
-  grid-column: 1 / -1;
-  grid-row: 3;
-  padding: 12px 16px;
 }
 
 .app-skeleton-screen {
@@ -3834,8 +3826,7 @@ h1 {
 
   .asset-reference-panel,
   .asset-artwork-panel,
-  .portfolio-asset-list,
-  .asset-review-footer {
+  .portfolio-asset-list {
     grid-column: 1;
     grid-row: auto;
   }

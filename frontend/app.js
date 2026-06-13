@@ -3361,9 +3361,6 @@
           ${portfolioAssets.map(renderPortfolioAsset).join('')}
         </section>
 
-        <footer class="asset-review-footer">
-          <span>Settled: upper-left brand/title banner and the art-backed live bridge approach. Needs review: profile/status, daily/news, bottom dock, and battlefield plate details.</span>
-        </footer>
         ${renderReferenceCropEditor()}
       </div>`;
   }
