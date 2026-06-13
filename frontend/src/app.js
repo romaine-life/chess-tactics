@@ -3431,19 +3431,50 @@ import './style.css';
       </div>`;
   }
 
+  function renderCogIcon() {
+    // Material settings gear: fat teeth + center hole read unambiguously as a cog at
+    // icon size (thin radial strokes read as a sunburst, so avoid them).
+    return `<svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
+    </svg>`;
+  }
+
+  function renderRookIcon() {
+    return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M3.4 2.6h2.1v1.5h1.4V2.6h1.4v1.5h1.4V2.6h2.1v3.1l-1.2 1 .6 4.9 1.1 1.5v1.2H3.1v-1.2l1.1-1.5.6-4.9-1.2-1z"></path>
+    </svg>`;
+  }
+
   function renderProfileStatus() {
     const signedIn = Boolean(currentUser);
-    // Element 03 is rich rendered artwork. Use the approved render crop as the art
-    // layer (like accepted elements 01/02) and overlay only a transparent live control,
-    // instead of redrawing the lion/cog/panel in DOM/SVG.
+    const name = signedIn
+      ? escapeText(currentUser.displayName || currentUser.name || currentUser.username || 'Commander')
+      : 'Commander';
+    // Element 03 hybrid (render-fidelity + text rule, docs/ui-art-direction.md):
+    // art-crop the painterly lion crest from the approved render; clean SVG for the
+    // geometric cog and rook silhouettes; every word and number is live DOM text
+    // (localizable, accessible, scalable) — never baked into the image.
     return `
-      <section class="main-menu-profile-art" aria-label="Commander profile and skirmish forces">
-        <button
-          class="profile-art-hotspot"
-          type="button"
-          data-action="${signedIn ? 'settings' : 'sign-in'}"
-          aria-label="${signedIn ? 'Account settings' : 'Sign in'}"
-        ></button>
+      <section class="profile-panel" aria-label="Commander profile and skirmish forces">
+        <div class="profile-bar profile-identity">
+          <span class="profile-crest" role="img" aria-label="Commander crest"></span>
+          <span class="profile-name">
+            <strong>${name}</strong>
+            <small>Rank 12</small>
+          </span>
+          <button class="profile-auth" type="button" data-action="${signedIn ? 'settings' : 'sign-in'}">${signedIn ? 'Account' : 'Sign In'}</button>
+          <button class="profile-gear" type="button" data-action="settings" aria-label="Settings">${renderCogIcon()}</button>
+        </div>
+        <dl class="profile-bar profile-forces">
+          <div class="force force-allies">
+            <span class="force-icon" aria-hidden="true">${renderRookIcon()}</span>
+            <dt>Allies</dt><dd>3</dd>
+          </div>
+          <div class="force force-enemies">
+            <span class="force-icon" aria-hidden="true">${renderRookIcon()}</span>
+            <dt>Enemies</dt><dd>3</dd>
+          </div>
+        </dl>
       </section>`;
   }
 

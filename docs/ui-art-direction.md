@@ -176,6 +176,15 @@ art, a crest, lighting, illustration:
   not rendered artwork, and hand-drawn SVG cannot match a rendered lion crest.
 - **Simple / text / utilitarian chrome → DOM/CSS** (news/daily, dock, HUD labels,
   forms). These have no rendered detail to lose.
+- **Text is always live, never baked.** Even inside an art-backed element, keep
+  copy and numbers as live DOM text (a webfont matching the concept's type)
+  overlaid on the art — never painted into the image. Baking text breaks
+  localization, accessibility (resize / screen readers), crisp scaling, and
+  dynamic content (live counts, rotating news). Art-back the *visuals* (crest,
+  icons, frame, background); render the *words and numbers* live. The only baked
+  text allowed is stylized logo/title lettering that is itself part of the art
+  identity (e.g. the painted mode-button labels). Confirmed by game-UI
+  localization and accessibility guidance.
 
 Test: would redrawing it in code lose rendered detail visible in the concept? If
 yes, keep the art. (Origin of this rule: element 03 was rebuilt in DOM/SVG and

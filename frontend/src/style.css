@@ -902,39 +902,146 @@ h1 {
   box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(216, 240, 246, .05);
 }
 
-/* Element 03 — art-backed: a crop of the approved render (main-menu-aspirational.png)
-   with a transparent live hotspot, matching accepted elements 01/02. Crop region
-   profile-chrome {x:1175,y:26,w:393,h:162} of the 1586x992 render. */
-.main-menu-profile-art {
-  position: relative;
+/* Element 03 — hybrid (render-fidelity + text rule, docs/ui-art-direction.md):
+   art-crop the painterly lion crest from main-menu-aspirational.png; clean SVG cog/rook
+   silhouettes; all copy + counts are live DOM text. Two stacked bars matching the concept. */
+.profile-panel {
   align-self: start;
-  aspect-ratio: 393 / 162;
+  display: grid;
+  gap: 8px;
+}
+
+.profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 2px solid var(--menu-line);
+  background: var(--menu-panel);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(216, 240, 246, .05);
+}
+
+/* Crest: crop of the lion shield from the render (~{x:1188,y:42,w:58,h:56} of 1586x992). */
+.profile-crest {
+  flex: none;
+  width: 34px;
+  height: 33px;
   background-image: url("/assets/ui/main-menu-aspirational.png");
   background-repeat: no-repeat;
-  background-size: 403.56% 612.35%;
-  background-position: 98.49% 3.13%;
+  background-size: 2734.5% 1771.4%;
+  background-position: 77.75% 4.49%;
   image-rendering: pixelated;
 }
 
-.profile-art-hotspot {
-  position: absolute;
-  top: 20%;
-  right: 3.5%;
-  width: 36%;
-  height: 52%;
-  border: 0;
-  background: transparent;
+.profile-name {
+  display: grid;
+  line-height: 1.2;
+}
+
+.profile-name strong {
+  color: var(--ink-strong);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .62rem;
+}
+
+.profile-name small {
+  margin-top: 4px;
+  color: var(--cobalt-bright);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.profile-auth {
+  margin-left: auto;
+  padding: 6px 10px;
+  border: 2px solid var(--menu-line);
+  background: var(--panel-inset, #0a131b);
+  color: var(--ink);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
-.profile-art-hotspot:hover,
-.profile-art-hotspot:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+.profile-auth:hover,
+.profile-auth:focus-visible {
+  border-color: var(--cobalt-bright);
+  color: var(--ink-strong);
 }
 
-/* Element 03 profile chrome is art-backed (.main-menu-profile-art above); the old
-   DOM/SVG rebuild of it was removed per the render-fidelity rule in ui-art-direction.md. */
+.profile-gear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--menu-line);
+  background: var(--panel-inset, #0a131b);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.profile-gear .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.profile-gear:hover,
+.profile-gear:focus-visible {
+  border-color: var(--cobalt-bright);
+  color: var(--cobalt-bright);
+}
+
+.profile-forces {
+  margin: 0;
+  justify-content: space-between;
+}
+
+.force {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.force dt {
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .5rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.force dd {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .62rem;
+}
+
+.force-icon {
+  flex: none;
+  display: grid;
+  width: 18px;
+  height: 20px;
+}
+
+.force-icon .ui-icon {
+  width: 18px;
+  height: 20px;
+}
+
+.force-allies dt,
+.force-allies .force-icon {
+  color: var(--cobalt-bright);
+}
+
+.force-enemies dt,
+.force-enemies .force-icon {
+  color: var(--menu-red);
+}
 
 /* News / daily panel — live DOM component (element 04) */
 .news-panel {
