@@ -19,15 +19,17 @@ not the final component system.
   painted crop for the live main menu mode button stack, including its labels.
 - `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
-- The main menu profile/status chrome (03) is **art-backed**: a percentage-cropped
-  region of the approved render `main-menu-aspirational.png`, with a transparent live
-  hotspot overlaid — the same pattern as the accepted mode buttons (01) and brand
-  plate (02), because it carries rendered detail (the lion crest, the cog) that cannot
-  be redrawn faithfully in DOM/SVG. The news/daily (04) and dock (05) chrome are simple
-  text/icon panels with no rendered detail to lose, so they stay token-driven DOM
-  components. The earlier *generated* `main-menu-*-chrome-v1.png` bitmaps (regenerated
-  approximations that had drifted from the concept) were retired end-to-end (guarded by
-  `frontend/scripts/check-no-chrome-bitmaps.mjs`).
+- The remaining main menu elements follow the render-fidelity + text-live rules in
+  `docs/ui-art-direction.md` (art for rendered visuals; live DOM for all copy and numbers):
+  profile/status (03) is a **hybrid** — an art-crop of the painterly lion crest plus clean
+  SVG cog/rook silhouettes plus live DOM text for the name/rank/counters; daily/news (04) is
+  **DOM + live text** with small SVG icons (reticle, gem, bulleted news); the dock (05) is
+  **art-backed** — the concept dock is icon-only pixel art with no baked text, so it is a crop
+  of the dock strip plus transparent live hit-targets (the mode-button pattern); the
+  battlefield (06) menu preview is **art-backed** with the concept board crop (the live canvas
+  board returns in actual gameplay). The earlier *generated* `main-menu-*-chrome-v1.png` bitmaps
+  (regenerated approximations that had drifted from the concept) were retired end-to-end
+  (guarded by `frontend/scripts/check-no-chrome-bitmaps.mjs`).
 - `frontend/public/assets/ui/main-menu-button-art-*.png` also includes generated
   no-text button candidates used by the main menu asset review board.
 - `frontend/src/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
@@ -64,10 +66,12 @@ map. For example, use `/design/main-menu/render/hotspots` or
 
 The main menu, campaign editor, level editor, and skirmish now use live bridge
 surfaces by default. The main menu mode button family and brand lockup use
-approved render crops with live HTML labels overlaid; the profile/status panel,
-news/daily panels, and dock strip are token-driven DOM + inline-SVG components.
-The main menu battlefield plate uses the live canvas board as its visual core with CSS chrome
-and game-native labels. Other labeled slots are intentionally unfinished.
+approved render crops with live HTML labels overlaid; the profile/status panel is a
+hybrid (art-crop crest + live DOM text/counters); the daily/news panels are DOM with
+live text and SVG icons; the dock is an art-crop of the icon strip with transparent
+hit-targets; and the battlefield preview is the concept board crop (the live canvas
+board returns for actual gameplay). Other labeled slots on the editor and skirmish
+screens are intentionally unfinished.
 
 Current main menu acceptance state is tracked in
 [main-menu-acceptance.md](main-menu-acceptance.md). In short: the painted mode
