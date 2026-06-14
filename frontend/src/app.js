@@ -811,7 +811,7 @@ import assetCatalog from './asset-catalog.json';
         mainMenuView: 'asset-catalog',
         catalogMode: 'widgets',
         widgetFamily: decodeURIComponent(widgetMatch[1]),
-        widgetAction: widgetMatch[2] ? decodeURIComponent(widgetMatch[2]) : '',
+        widgetSlug: widgetMatch[2] ? decodeURIComponent(widgetMatch[2]) : '',
       };
     }
     const assetRouteTypes = {
@@ -2945,12 +2945,15 @@ import assetCatalog from './asset-catalog.json';
   // the ART comes from the asset catalog (button-9slice.main-menu + the
   // button-icon.main-menu assets). Each row is assembled at render time:
   // 9-slice state + composited icon + live label + action — the catalog model.
+  // `action` is the live menu's dispatch code (DOM behavior); `slug` is the
+  // widget's stable identity in catalog URLs. They are intentionally separate:
+  // the URL should read solo-skirmish, not the internal "party" action.
   const MENU_MODES = [
-    { action: 'party', icon: 'button-icon.main-menu.sword', label: 'Solo Skirmish' },
-    { action: 'campaigns', icon: 'button-icon.main-menu.crown', label: 'Campaign Editor' },
-    { action: 'level-editor-preview', icon: 'button-icon.main-menu.scroll', label: 'Level Editor' },
-    { action: 'lobbies', icon: 'button-icon.main-menu.people', label: 'Lobbies' },
-    { action: 'settings', icon: 'button-icon.main-menu.gear', label: 'Settings' },
+    { action: 'party', slug: 'solo-skirmish', icon: 'button-icon.main-menu.sword', label: 'Solo Skirmish' },
+    { action: 'campaigns', slug: 'campaign-editor', icon: 'button-icon.main-menu.crown', label: 'Campaign Editor' },
+    { action: 'level-editor-preview', slug: 'level-editor', icon: 'button-icon.main-menu.scroll', label: 'Level Editor' },
+    { action: 'lobbies', slug: 'lobbies', icon: 'button-icon.main-menu.people', label: 'Lobbies' },
+    { action: 'settings', slug: 'settings', icon: 'button-icon.main-menu.gear', label: 'Settings' },
   ];
 
   function renderModeButton(mode, { active = false } = {}) {
@@ -3827,10 +3830,10 @@ import assetCatalog from './asset-catalog.json';
         </div>`;
     }
     if (route.catalogMode === 'widgets') {
-      const modes = route.widgetAction
-        ? MENU_MODES.filter((mode) => mode.action === route.widgetAction)
+      const modes = route.widgetSlug
+        ? MENU_MODES.filter((mode) => mode.slug === route.widgetSlug)
         : MENU_MODES;
-      const single = Boolean(route.widgetAction) && modes.length === 1;
+      const single = Boolean(route.widgetSlug) && modes.length === 1;
       const title = single ? modes[0].label : 'Main Menu Buttons';
       const intro = single
         ? 'A completed widget, shown live on the catalog page — assembled from a catalog 9-slice (in a state) + an icon + a live label + an action.'
@@ -3936,9 +3939,9 @@ import assetCatalog from './asset-catalog.json';
               label: 'Main Menu',
               href: '/design/assets/widgets/main-menu',
               children: [
-                { label: 'Solo Skirmish', href: '/design/assets/widgets/main-menu/party' },
-                { label: 'Campaign Editor', href: '/design/assets/widgets/main-menu/campaigns' },
-                { label: 'Level Editor', href: '/design/assets/widgets/main-menu/level-editor-preview' },
+                { label: 'Solo Skirmish', href: '/design/assets/widgets/main-menu/solo-skirmish' },
+                { label: 'Campaign Editor', href: '/design/assets/widgets/main-menu/campaign-editor' },
+                { label: 'Level Editor', href: '/design/assets/widgets/main-menu/level-editor' },
                 { label: 'Lobbies', href: '/design/assets/widgets/main-menu/lobbies' },
                 { label: 'Settings', href: '/design/assets/widgets/main-menu/settings' },
               ],
