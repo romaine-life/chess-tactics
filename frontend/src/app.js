@@ -3016,7 +3016,7 @@ import assetCatalog from './asset-catalog.json';
     const iconStyle = icon ? `${insetStyle(rules.iconSlot, stateDef.rect)};${frameStyleForAsset(icon, icon.rect)}` : '';
     const labelStyle = insetStyle(rules.textInset, stateDef.rect);
     return `
-      <button class="mode-button ${active ? 'is-active' : ''}${specimen ? ' is-specimen' : ''}" type="button" data-action="${escapeText(specimen ? 'noop' : mode.action)}" aria-label="${escapeText(mode.label)}"${active ? ' aria-current="true"' : ''}${specimen ? ' tabindex="-1"' : ''} style="--asset-aspect:${stateDef.rect.w} / ${stateDef.rect.h}">
+      <button class="mode-button ${active ? 'is-active' : ''}${specimen ? ' is-specimen' : ''}" type="button" data-action="${escapeText(specimen ? 'demo-toggle' : mode.action)}" aria-label="${escapeText(mode.label)}"${active ? ' aria-current="true"' : ''} style="--asset-aspect:${stateDef.rect.w} / ${stateDef.rect.h}">
         <span class="mode-button-9slice" style="${frameStyle}" aria-hidden="true"></span>
         ${icon ? `<span class="mode-button-icon" style="${iconStyle}" aria-hidden="true"></span>` : ''}
         <span class="mode-button-label" style="${labelStyle}">${escapeText(mode.label)}</span>
@@ -3037,15 +3037,14 @@ import assetCatalog from './asset-catalog.json';
   // assembled from catalog assets (a 9-slice state + an icon) + a live label +
   // an action. Distinct from the asset catalog (which holds the parts).
   function renderWidgetCard(mode) {
-    const active = mode.action === 'party';
     const iconAsset = assetById(mode.icon);
     const iconName = iconAsset ? (iconAsset.title || mode.icon) : mode.icon;
     return `
       <article class="widget-card">
-        <div class="widget-card-preview main-menu-actions-assets">${renderModeButton(mode, { active, specimen: true })}</div>
+        <div class="widget-card-preview main-menu-actions-assets">${renderModeButton(mode, { active: false, specimen: true })}</div>
         <div class="widget-card-meta">
           <h3>${escapeText(mode.label)}</h3>
-          <p>${active ? 'pressed' : 'normal'} 9-slice + ${escapeText(iconName)} + live label + <code>${escapeText(mode.action)}</code> action</p>
+          <p>9-slice + ${escapeText(iconName)} + live label + <code>${escapeText(mode.action)}</code> action · click to press</p>
         </div>
       </article>`;
   }
@@ -4841,6 +4840,17 @@ import assetCatalog from './asset-catalog.json';
     const button = event.target.closest('button');
     if (!button) return;
     if (button.dataset.action === 'noop') return;
+    if (button.dataset.action === 'demo-toggle') {
+      // Catalog specimen: demonstrate the widget's press state in place — swap the
+      // 9-slice art between normal/pressed. No game navigation.
+      const pressed = button.getAttribute('aria-pressed') !== 'true';
+      button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      const nineSlice = assetById('button-9slice.main-menu');
+      const sd = nineSlice && (nineSlice.states || {})[pressed ? 'pressed' : 'normal'];
+      const slice = button.querySelector('.mode-button-9slice');
+      if (nineSlice && sd && slice) slice.setAttribute('style', frameStyleForAsset(nineSlice, sd.rect));
+      return;
+    }
     if (button.dataset.action === 'open-reference-crop-picker') {
       const key = button.dataset.cropKey;
       if (MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) {

@@ -959,15 +959,8 @@ h1 {
   outline-offset: -3px;
 }
 
-/* Catalog/gallery specimens are for viewing, not live menu controls. */
-.mode-button.is-specimen {
-  cursor: default;
-}
-
-.mode-button.is-specimen:hover {
-  transform: none;
-  filter: none;
-}
+/* Catalog/gallery specimens are interactive demos: they hover and press (the
+   press toggles the 9-slice art in JS) but never fire the live menu action. */
 
 .mode-button-label {
   position: absolute;
