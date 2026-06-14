@@ -3496,7 +3496,6 @@ import assetCatalog from './asset-catalog.json';
 
   function renderButtonAssetCard(asset) {
     const stateEntries = Object.entries(asset.states || {});
-    const examples = asset.examples || [];
     const rules = asset.rules || {};
     return `
       <article class="catalog-asset-card" id="${escapeText(asset.id)}">
@@ -3528,16 +3527,6 @@ import assetCatalog from './asset-catalog.json';
           <div><h4>Text Slot</h4><code>${escapeText(JSON.stringify(rules.textInset || {}))}</code></div>
           <div><h4>Arrow Slot</h4><code>${escapeText(JSON.stringify(rules.arrowSlot || {}))}</code></div>
           <div><h4>Hitbox</h4><code>${escapeText(JSON.stringify(rules.hitbox || {}))}</code></div>
-        </section>
-
-        <section class="catalog-preview-stack" aria-label="Widget examples">
-          <h4>Widget Examples</h4>
-          ${examples.map((example) => `
-            <button class="catalog-button-preview" type="button">
-              ${renderAssetFrame(asset, example.state, example.label)}
-              <span class="catalog-widget-caption">${escapeText(example.label)} = ${escapeText(example.state)} 9-slice + ${escapeText(example.icon)} + live text</span>
-            </button>
-          `).join('')}
         </section>
 
         <section class="catalog-rule-grid" aria-label="Asset rules">

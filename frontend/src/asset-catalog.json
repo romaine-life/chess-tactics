@@ -41,14 +41,7 @@
           "The 9-slice is icon-less: the icon slot is transparent and a button-icon.main-menu asset is composited into it at runtime.",
           "Labels, icons, and actions stay live/attached at runtime."
         ]
-      },
-      "examples": [
-        { "label": "Solo Skirmish", "state": "pressed", "icon": "button-icon.main-menu.sword" },
-        { "label": "Campaign Editor", "state": "normal", "icon": "button-icon.main-menu.crown" },
-        { "label": "Level Editor", "state": "normal", "icon": "button-icon.main-menu.scroll" },
-        { "label": "Lobbies", "state": "normal", "icon": "button-icon.main-menu.people" },
-        { "label": "Settings", "state": "normal", "icon": "button-icon.main-menu.gear" }
-      ]
+      }
     },
     {
       "id": "button-icon.main-menu.sword",
