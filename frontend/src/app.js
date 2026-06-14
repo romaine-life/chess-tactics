@@ -841,9 +841,50 @@ import assetCatalog from './asset-catalog.json';
   // Client-side navigation: update the URL + re-render in place, no full reload.
   function navigateTo(href) {
     if (!href) return;
+    const prev = currentRoute();
     window.history.pushState({}, '', href);
     applyInitialRoute();
-    render();
+    const next = currentRoute();
+    // Moving between catalog views that share the same tree: swap only the
+    // header + content pane and re-highlight the active node, leaving the left
+    // nav DOM (its expand state + scroll) untouched -- no flicker / reload.
+    const sameTree = prev.mainMenuView === 'asset-catalog'
+      && next.mainMenuView === 'asset-catalog'
+      && (prev.catalogMode === 'glossary') === (next.catalogMode === 'glossary');
+    const screenEl = sameTree ? menuLayer.querySelector('.asset-catalog-screen') : null;
+    if (screenEl) {
+      swapCatalogContent(screenEl);
+    } else {
+      render();
+    }
+  }
+
+  // Partial catalog update: replace the header + content pane and re-highlight
+  // the active tree node, but keep the existing left rail DOM intact.
+  function swapCatalogContent(screenEl) {
+    const scratch = document.createElement('div');
+    scratch.innerHTML = renderAssetCatalog();
+    const fresh = scratch.firstElementChild;
+    if (!fresh) { render(); return; }
+    const oldHeader = screenEl.querySelector('.main-assets-header');
+    const newHeader = fresh.querySelector('.main-assets-header');
+    if (oldHeader && newHeader) oldHeader.replaceWith(newHeader);
+    const oldContent = screenEl.querySelector('.prototype-tree-content');
+    const newContent = fresh.querySelector('.prototype-tree-content');
+    if (oldContent && newContent) oldContent.replaceWith(newContent);
+    const rail = screenEl.querySelector('.prototype-tree-panel');
+    if (!rail) return;
+    rail.querySelectorAll('.active').forEach((el) => el.classList.remove('active'));
+    const activeHref = currentPath();
+    rail.querySelectorAll('a[href]').forEach((a) => {
+      if (a.getAttribute('href') !== activeHref) return;
+      if (a.classList.contains('prototype-tree-launch')) {
+        const det = a.closest('details.prototype-tree-branch');
+        if (det) det.classList.add('active');
+      } else {
+        a.classList.add('active');
+      }
+    });
   }
 
   const MAIN_MENU_PREVIEW_PIECES = [
