@@ -3735,51 +3735,48 @@ import assetCatalog from './asset-catalog.json';
       </div>`;
   }
 
+  // The catalog is a classification of our entities by object type (is-a),
+  // vague class at top -> specific entity at the leaf. The classes/terms are the
+  // glossary's object types; the leaves are the specific entities you find/build.
+  // (Anatomy terms like state/slot/rect are the per-entity "made-of" view, not
+  // here; usage terms like template/instance/catalog/type are not entities.)
   const ASSET_TREE_PROTOTYPE = [
     {
-      label: 'Buttons',
-      href: '/design/assets/buttons',
+      label: 'asset',
+      href: '/design/assets',
       children: [
         {
-          label: 'Main Menu Buttons',
+          label: '9-slice',
           href: '/design/assets/main-menu-buttons',
           children: [
             { label: 'Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
           ],
         },
-        { label: 'Plain Buttons', href: '#', planned: true },
-      ],
-    },
-    {
-      label: 'Icons',
-      href: '#',
-      children: [
         {
-          label: 'Main Menu Button Icons',
+          label: 'icon',
           href: '/design/assets/main-menu-button-icons',
           children: [
             { label: 'Sword Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.sword' },
             { label: 'Crown Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.crown' },
+            { label: 'Scroll Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.scroll' },
+            { label: 'Players Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.people' },
+            { label: 'Gear Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.gear' },
           ],
         },
+        { label: 'sprite atlas', href: '#', planned: true },
       ],
     },
     {
-      label: 'Board',
+      label: 'widget',
       href: '#',
-      planned: true,
       children: [
-        { label: 'Tiles', href: '#', planned: true },
-        { label: 'Highlights', href: '#', planned: true },
-      ],
-    },
-    {
-      label: 'Pieces',
-      href: '#',
-      planned: true,
-      children: [
-        { label: 'Chess Units', href: '#', planned: true },
-        { label: 'Status FX', href: '#', planned: true },
+        {
+          label: 'button',
+          href: '#',
+          children: [
+            { label: 'Main Menu Button', href: '/main-menu' },
+          ],
+        },
       ],
     },
   ];
