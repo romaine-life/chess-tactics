@@ -4,13 +4,13 @@
 // Hybrid pipeline (method "c"): generated concept art -> mechanical cleanup ->
 // reusable, swappable game assets in the DECOMPOSED catalog model.
 //
-//   button-frame.png  : a 2-state frame sheet (unpressed on top, pressed below)
+//   button-9slice.png  : a 2-state 9-slice sheet (normal on top, pressed below)
 //                       built from the five-mode sheet, background flood-keyed
 //                       transparent and the icon badge punched out so the frame
 //                       family is icon-less.
 //   icon-<id>.png/@2x : standalone icon badges cropped from the SAME five-mode
 //                       rows (sword/crown/scroll/people/gear). Composited into
-//                       the frame icon slot at assembly time + live label + action.
+//                       the icon slot at runtime + live label + action.
 //   contact-sheet.png : review tiles on a checkerboard.
 //
 // Frame + icons come from the same sheet and the same badge geometry, so the
@@ -35,7 +35,7 @@ const FIVE = path.join(UI_DIR, 'main-menu-button-art-five-mode.png');
 const FLOOD_TOL = 10;
 const ICON_PX = 220; // icon export size
 // Five-mode rows top-to-bottom -> icon ids. Row 0 (sword, glowing) also seeds
-// the pressed/selected frame state; a plain row seeds the unpressed state.
+// the pressed/selected frame state; a plain row seeds the normal state.
 const ICON_IDS = ['sword', 'crown', 'scroll', 'people', 'gear'];
 
 function readPNG(p) {
@@ -304,12 +304,12 @@ function main() {
     punchRect(c, localBadge);
     return c;
   };
-  const unpressed = cropState(bands[1], false); // plain
+  const normal = cropState(bands[1], false); // plain
   const pressed = cropState(bands[0], true); // glowing -> selected, halo cropped off
   const frameSheet = makeImg(plateW, plateH * 2);
-  copyInto(frameSheet, unpressed, 0, 0);
+  copyInto(frameSheet, normal, 0, 0);
   copyInto(frameSheet, pressed, 0, plateH);
-  writePNG(frameSheet, path.join(OUT_DIR, 'button-frame.png'));
+  writePNG(frameSheet, path.join(OUT_DIR, 'button-9slice.png'));
 
   // --- icons (same badge geometry -> they fill the punched hole) ---
   bands.forEach((b, i) => {
@@ -340,16 +340,16 @@ function main() {
   const cw = plateW + pad * 2;
   const ch = pad * 3 + plateH * 2 + Math.round(ICON_PX * 0.6);
   const cs = checkerboard(cw, ch);
-  over(cs, unpressed, pad, pad);
+  over(cs, normal, pad, pad);
   over(cs, pressed, pad, pad * 2 + plateH);
   const isz = Math.round(ICON_PX * 0.6);
   ICON_IDS.forEach((id, i) => over(cs, resize(readPNG(path.join(OUT_DIR, `icon-${id}.png`)), isz, isz), pad + i * (isz + 8), pad * 3 + plateH * 2));
   writePNG(cs, path.join(OUT_DIR, 'contact-sheet.png'));
 
-  console.log('\n=== paste into asset-catalog.json (button.main-menu.frame) ===');
-  console.log(`sheet: { image: "/assets/ui/main-menu/button-frame.png", width: ${plateW}, height: ${plateH * 2} }`);
-  console.log(`states.unpressed.frame: { x: 0, y: 0, w: ${plateW}, h: ${plateH} }`);
-  console.log(`states.pressed.frame:   { x: 0, y: ${plateH}, w: ${plateW}, h: ${plateH} }`);
+  console.log('\n=== paste into asset-catalog.json (button-9slice.main-menu) ===');
+  console.log(`sheet: { image: "/assets/ui/main-menu/button-9slice.png", width: ${plateW}, height: ${plateH * 2} }`);
+  console.log(`states.normal.rect: { x: 0, y: 0, w: ${plateW}, h: ${plateH} }`);
+  console.log(`states.pressed.rect:   { x: 0, y: ${plateH}, w: ${plateW}, h: ${plateH} }`);
   console.log(`rules.iconSlot:  ${JSON.stringify(localBadge)}`);
   console.log(`rules.textInset: ${JSON.stringify(textInset)}`);
   console.log(`rules.arrowSlot: ${JSON.stringify(arrowSlot)}`);
