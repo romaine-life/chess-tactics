@@ -2786,6 +2786,12 @@ h1 {
   overflow-y: auto;
 }
 
+/* The rail is full-height, but the tree must size to its content and pack at the
+   top — otherwise the grid stretches its rows to fill and the nodes float apart. */
+.asset-catalog-tree-layout .prototype-tree-list {
+  align-content: start;
+}
+
 /* Left rail = combined controls bar over the scrolling tree panel. */
 .catalog-rail {
   display: flex;
