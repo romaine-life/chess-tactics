@@ -764,6 +764,7 @@ import assetCatalog from './asset-catalog.json';
     '/design/glossary': { screen: 'main', mainMenuView: 'glossary' },
     '/design/widgets': { screen: 'main', mainMenuView: 'widgets' },
     '/design/catalog': { screen: 'main', mainMenuView: 'asset-catalog' },
+    '/design/stack-probe': { screen: 'main', mainMenuView: 'stack-probe' },
     '/design/catalog/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
     '/design/catalog/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
     '/design/catalog/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
@@ -2985,6 +2986,10 @@ import assetCatalog from './asset-catalog.json';
     return currentRoute().mainMenuView === 'glossary';
   }
 
+  function shouldShowStackProbe() {
+    return currentRoute().mainMenuView === 'stack-probe';
+  }
+
   function shouldShowWidgets() {
     return currentRoute().mainMenuView === 'widgets';
   }
@@ -4408,6 +4413,14 @@ import assetCatalog from './asset-catalog.json';
       </div>`;
   }
 
+  // Phase 0 walking skeleton: lazily load the TS+React+Pixi island so the game
+  // bundle stays lean; it is mounted only for the stack-probe view.
+  let stackProbeModule = null;
+  function withStackProbe(cb) {
+    if (stackProbeModule) { cb(stackProbeModule); return; }
+    import('./stack-probe/mount').then((m) => { stackProbeModule = m; cb(m); });
+  }
+
   function renderMenu() {
     if (shellEl) shellEl.classList.toggle('main-menu-active', state.screen === 'main');
     if (shellEl) shellEl.classList.toggle('concept-screen-active', ['campaigns', 'level-editor', 'game'].includes(state.screen));
@@ -4419,6 +4432,9 @@ import assetCatalog from './asset-catalog.json';
     menuLayer.classList.toggle('main-menu-layer', state.screen === 'main');
     menuLayer.classList.toggle('concept-screen-layer', ['campaigns', 'level-editor', 'game'].includes(state.screen));
     menuLayer.classList.toggle('level-editor-layer', false);
+    if (!(state.screen === 'main' && shouldShowStackProbe()) && stackProbeModule) {
+      stackProbeModule.unmountStackProbe();
+    }
     if (state.screen === 'level-editor') {
       menuLayer.hidden = false;
       menuLayer.innerHTML = renderArtScreen('level-editor');
@@ -4431,7 +4447,9 @@ import assetCatalog from './asset-catalog.json';
     }
     menuLayer.hidden = false;
     if (state.screen === 'main') {
-      if (shouldShowMainConcept()) {
+      if (shouldShowStackProbe()) {
+        withStackProbe((m) => { if (shouldShowStackProbe()) m.mountStackProbe(menuLayer); });
+      } else if (shouldShowMainConcept()) {
         menuLayer.innerHTML = renderArtScreen('main');
       } else if (shouldShowMainAssets()) {
         menuLayer.innerHTML = renderMainAssetReview();
