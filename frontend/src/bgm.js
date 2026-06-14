@@ -122,14 +122,19 @@ export function initBgm() {
 
   function beginPlayback() {
     if (!state.ready || state.muted) return;
-    if (!state.started && !state.queue.length) refreshQueue();
-    if (audio.src && audio.paused && state.started) {
-      const attempt = audio.play();
-      if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
-      updateControl();
-      return;
+    if (audio.src) {
+      // A track is already cued (possibly from a blocked autoplay attempt) —
+      // resume/retry it. Do NOT gate on state.started: a blocked autoplay
+      // leaves src set with started=false, and this is exactly the path a user
+      // gesture must be able to recover.
+      if (audio.paused) {
+        const attempt = audio.play();
+        if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+      }
+    } else {
+      playNext();
     }
-    if (!audio.src) playNext();
+    updateControl();
   }
 
   function toggleMute() {
@@ -154,16 +159,27 @@ export function initBgm() {
       if (!state.muted) playNext();
     }, ERROR_SKIP_DELAY_MS);
   });
-  audio.addEventListener('playing', updateControl);
+  audio.addEventListener('playing', () => {
+    // Playback truly started — only now is it safe to stop listening for the
+    // arming gesture (a gesture fired while the manifest was still loading, or
+    // an autoplay that the browser blocked, must not disarm us prematurely).
+    state.started = true;
+    disarmGesture();
+    updateControl();
+  });
   audio.addEventListener('pause', updateControl);
 
-  // ---- arm on first user gesture (autoplay policy) -------------------------
+  // ---- arm on user gesture (autoplay policy) -------------------------------
+  // Browsers block audible autoplay until a user gesture. Keep listening on
+  // every gesture until playback actually begins, then disarm.
   const armEvents = ['pointerdown', 'keydown', 'touchstart'];
-  function onFirstGesture() {
-    armEvents.forEach((evt) => window.removeEventListener(evt, onFirstGesture));
+  function onGesture() {
     beginPlayback();
   }
-  armEvents.forEach((evt) => window.addEventListener(evt, onFirstGesture, { once: false, passive: true }));
+  function disarmGesture() {
+    armEvents.forEach((evt) => window.removeEventListener(evt, onGesture));
+  }
+  armEvents.forEach((evt) => window.addEventListener(evt, onGesture, { passive: true }));
 
   // ---- mute control UI -----------------------------------------------------
   function buildControl() {
