@@ -2,6 +2,13 @@ import './style.css';
 // Generated asset families (frontend/scripts/normalize-mode-buttons.mjs) are
 // described by the asset catalog and assembled at render time.
 import assetCatalog from './asset-catalog.json';
+// Movement/threat rules are owned by the deterministic pure-TS core
+// (src/core/rules.ts). The wrappers below delegate to it (Phase 1 migration).
+import {
+  legalMoves as coreLegalMoves,
+  attackedSquares as coreAttackedSquares,
+  enemyThreats as coreEnemyThreats,
+} from './core/rules';
 
 (function () {
   const COLS = 8;
@@ -2043,114 +2050,17 @@ import assetCatalog from './asset-catalog.json';
     battleAnimFrameId = requestAnimationFrame(animate);
   }
 
-  function rayMoves(piece, dirs) {
-    const moves = [];
-    dirs.forEach(([dx, dy]) => {
-      for (let step = 1; ; step += 1) {
-        const x = piece.x + dx * step;
-        const y = piece.y + dy * step;
-        if (!inBounds(x, y)) break;
-        const occupant = pieceAt(x, y);
-        if (occupant) {
-          if (isEnemy(piece, occupant)) moves.push({ x, y, capture: occupant.id });
-          break;
-        }
-        moves.push({ x, y });
-      }
-    });
-    return moves;
-  }
-
-  function stepMoves(piece, deltas) {
-    return deltas
-      .map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
-      .filter((move) => {
-        if (!inBounds(move.x, move.y)) return false;
-        const occupant = pieceAt(move.x, move.y);
-        if (!occupant) return true;
-        if (!isEnemy(piece, occupant)) return false;
-        move.capture = occupant.id;
-        return true;
-      });
-  }
-
-  function pawnMoves(piece) {
-    const dir = piece.side === 'player' ? -1 : 1;
-    const moves = [];
-    const one = { x: piece.x, y: piece.y + dir };
-    if (inBounds(one.x, one.y) && !pieceAt(one.x, one.y)) {
-      moves.push(one);
-      const two = { x: piece.x, y: piece.y + dir * 2 };
-      if (piece.y === piece.startY && inBounds(two.x, two.y) && !pieceAt(two.x, two.y)) moves.push(two);
-    }
-    [-1, 1].forEach((dx) => {
-      const x = piece.x + dx;
-      const y = piece.y + dir;
-      const occupant = inBounds(x, y) && pieceAt(x, y);
-      if (isEnemy(piece, occupant)) moves.push({ x, y, capture: occupant.id });
-    });
-    return moves;
-  }
-
   function legalMoves(piece) {
-    if (!piece || !piece.alive || piece.type === 'rock' || state.screen !== 'game') return [];
-    if (piece.type === 'pawn') return pawnMoves(piece);
-    if (piece.type === 'knight') {
-      return stepMoves(piece, [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]);
-    }
-    if (piece.type === 'bishop') return rayMoves(piece, [[1, 1], [1, -1], [-1, 1], [-1, -1]]);
-    if (piece.type === 'rook') return rayMoves(piece, [[1, 0], [-1, 0], [0, 1], [0, -1]]);
-    return rayMoves(piece, [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
+    if (state.screen !== 'game') return [];
+    return coreLegalMoves(piece, state.pieces, currentBoardSize());
   }
 
   function attackedSquares(piece) {
-    if (!piece || !piece.alive || piece.type === 'rock') return [];
-    if (piece.type === 'pawn') {
-      const dir = piece.side === 'player' ? -1 : 1;
-      const squares = [];
-      [-1, 1].forEach((dx) => {
-        const x = piece.x + dx;
-        const y = piece.y + dir;
-        if (inBounds(x, y)) {
-          squares.push({ x, y });
-        }
-      });
-      return squares;
-    }
-    if (piece.type === 'knight') {
-      const deltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
-      return deltas
-        .map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
-        .filter((pos) => inBounds(pos.x, pos.y));
-    }
-    const dirs = piece.type === 'bishop'
-      ? [[1, 1], [1, -1], [-1, 1], [-1, -1]]
-      : piece.type === 'rook'
-        ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
-        : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-    
-    const squares = [];
-    dirs.forEach(([dx, dy]) => {
-      for (let step = 1; ; step += 1) {
-        const x = piece.x + dx * step;
-        const y = piece.y + dy * step;
-        if (!inBounds(x, y)) break;
-        squares.push({ x, y });
-        if (pieceAt(x, y)) break;
-      }
-    });
-    return squares;
+    return coreAttackedSquares(piece, state.pieces, currentBoardSize());
   }
 
   function getEnemyThreats() {
-    const threats = new Map();
-    livingPieces('enemy').forEach((piece) => {
-      attackedSquares(piece).forEach((sq) => {
-        const key = `${sq.x},${sq.y}`;
-        threats.set(key, sq);
-      });
-    });
-    return Array.from(threats.values());
+    return coreEnemyThreats(state.pieces, currentBoardSize());
   }
 
   function promoteIfNeeded(piece) {
