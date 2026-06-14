@@ -766,7 +766,7 @@ import assetCatalog from './asset-catalog.json';
     '/design/assets/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
     '/design/assets/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
     '/design/assets/buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetGroup: 'buttons' },
-    '/design/assets/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button.main-menu' },
+    '/design/assets/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-frame.main-menu' },
     '/design/assets/main-menu-button-icons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-icon.main-menu' },
     '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
     '/design/main-menu/assets': { screen: 'main', mainMenuView: 'asset-lab' },
@@ -796,7 +796,7 @@ import assetCatalog from './asset-catalog.json';
     const path = currentPath();
     if (APP_ROUTES[path]) return APP_ROUTES[path];
     const assetRouteTypes = {
-      'main-menu-buttons': 'button.main-menu',
+      'main-menu-buttons': 'button-frame.main-menu',
       'main-menu-button-icons': 'button-icon.main-menu',
     };
     const assetMatch = path.match(/^\/design\/assets\/([^/]+)(?:\/([^/]+))?$/);
@@ -2915,7 +2915,7 @@ import assetCatalog from './asset-catalog.json';
 
 
   // Live main-menu mode list. Actions and labels are app concerns (live DOM);
-  // the ART comes from the asset catalog (button.main-menu.frame + the
+  // the ART comes from the asset catalog (button-frame.main-menu.frame + the
   // button-icon.main-menu assets). Each row is assembled at render time:
   // frame state + composited icon + live label + action — the catalog model.
   const MENU_MODES = [
@@ -2927,7 +2927,7 @@ import assetCatalog from './asset-catalog.json';
   ];
 
   function renderModeButton(mode, { active = false } = {}) {
-    const frame = assetById('button.main-menu.frame');
+    const frame = assetById('button-frame.main-menu.frame');
     if (!frame) return '';
     const rules = frame.rules || {};
     const stateDef = (frame.states || {})[active ? 'pressed' : 'unpressed'] || (frame.states || {}).unpressed;
@@ -3196,7 +3196,7 @@ import assetCatalog from './asset-catalog.json';
         file: '/assets/ui/main-menu/contact-sheet.png',
         alt: 'Contact sheet of the icon-less button frame (unpressed + pressed) and the five icon badges on a transparency checkerboard',
         caption: 'Phase-1 asset family, aligned to the asset catalog: generated art normalized into an icon-less button frame (2 states) plus 5 standalone icon badges. Replace any PNG in place to upgrade the art with no code change.',
-        description: 'The live button stack is assembled per the asset catalog (button.main-menu.frame + button-icon.main-menu.*): an icon-less frame state, a composited icon badge in the icon slot, and a live DOM label in the text slot — not a single painted crop. See the full breakdown in the Asset Catalog.',
+        description: 'The live button stack is assembled per the asset catalog (button-frame.main-menu.frame + button-icon.main-menu.*): an icon-less frame state, a composited icon badge in the icon slot, and a live DOM label in the text slot — not a single painted crop. See the full breakdown in the Asset Catalog.',
         target: 'Accept the catalog-aligned family (correct decomposition, bridge-grade art) as the live mode stack, or flag art-quality items for the next art pass.',
         liveUse: 'Drives the live main menu mode stack at / and /main-menu — each button = frame state + composited icon + live label + action.',
         decision: 'New this pass — supersedes the painted-crop bridge. Pending your accept/reject.',
@@ -3525,13 +3525,13 @@ import assetCatalog from './asset-catalog.json';
   }
 
   function assetTypeLabel(type) {
-    if (type === 'button.main-menu') return 'Main Menu Button';
+    if (type === 'button-frame.main-menu') return 'Main Menu Button Frame';
     if (type === 'button-icon.main-menu') return 'Main Menu Button Icon';
     return `${type[0].toUpperCase()}${type.slice(1)}`;
   }
 
   function assetTypePath(type) {
-    if (type === 'button.main-menu') return '/design/assets/main-menu-buttons';
+    if (type === 'button-frame.main-menu') return '/design/assets/main-menu-buttons';
     if (type === 'button-icon.main-menu') return '/design/assets/main-menu-button-icons';
     return `/design/assets/${type}s`;
   }
@@ -3541,7 +3541,7 @@ import assetCatalog from './asset-catalog.json';
   }
 
   function renderCatalogAssetCard(asset) {
-    if (asset.type === 'button.main-menu') return renderButtonAssetCard(asset);
+    if (asset.type === 'button-frame.main-menu') return renderButtonAssetCard(asset);
     if (asset.type === 'button-icon.main-menu') return renderIconAssetCard(asset);
     return '';
   }
@@ -3556,7 +3556,7 @@ import assetCatalog from './asset-catalog.json';
         href: '/design/assets/main-menu-buttons',
         title: 'Main Menu Buttons',
         summary: 'Menu-row button frames with live labels, an icon slot, arrow affordance, binary states, and hitbox rules.',
-        count: countsByType['button.main-menu'] || 0,
+        count: countsByType['button-frame.main-menu'] || 0,
         status: 'draft',
       },
       {
@@ -3587,7 +3587,7 @@ import assetCatalog from './asset-catalog.json';
     return `
       <section class="catalog-family-grid" aria-label="Asset categories">
         <a class="catalog-family-card" href="/design/assets/buttons">
-          <span class="design-hub-kicker">category · ${countsByType['button.main-menu'] || 0} assets</span>
+          <span class="design-hub-kicker">category · ${countsByType['button-frame.main-menu'] || 0} assets</span>
           <h3>Buttons</h3>
           <p>Button families grouped by interaction pattern, visual family, and slot rules.</p>
         </a>
@@ -3673,7 +3673,7 @@ import assetCatalog from './asset-catalog.json';
           label: 'Main Menu Buttons',
           href: '/design/assets/main-menu-buttons',
           children: [
-            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button-frame.main-menu.frame' },
           ],
         },
         { label: 'Plain Buttons', href: '#', planned: true },
@@ -3788,7 +3788,7 @@ import assetCatalog from './asset-catalog.json';
           { label: 'Plain Buttons', href: '#', planned: true },
         ])}
         ${renderPrototypePreviewCard('Main Menu Buttons', 'The type page has the dropdown/search picker and one full inspection card.', [
-          { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+          { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button-frame.main-menu.frame' },
         ])}
       </section>`;
   }
@@ -3800,7 +3800,7 @@ import assetCatalog from './asset-catalog.json';
         <div class="prototype-tree-content">
           ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons'])}
           ${renderPrototypePreviewCard('Main Menu Buttons', 'The tree stays visible while the right panel swaps to the selected category, type, or asset page.', [
-            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button-frame.main-menu.frame' },
           ])}
         </div>
       </section>`;
@@ -3809,13 +3809,13 @@ import assetCatalog from './asset-catalog.json';
   function renderHybridPrototype() {
     return `
       <section class="prototype-tree-layout prototype-hybrid-layout">
-        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons/button.main-menu.frame')}
+        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons/button-frame.main-menu.frame')}
         <div class="prototype-tree-content">
           ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons', 'Main Menu Button Frame'])}
           <div class="prototype-hybrid-grid">
             ${renderPrototypePreviewCard('Main Menu Buttons', 'Type-level controls live here: search, dropdown, status filters, and family notes.', [
               { label: 'Search within Main Menu Buttons', href: '#' },
-              { label: 'Selected: Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+              { label: 'Selected: Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button-frame.main-menu.frame' },
             ])}
             ${renderPrototypePreviewCard('Inspection Card', 'The selected asset still gets a dedicated full card, but the tree keeps the larger catalog context visible.', [
               { label: 'States: pressed, unpressed', href: '#' },

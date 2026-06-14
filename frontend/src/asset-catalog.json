@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "assets": [
     {
-      "id": "button.main-menu.frame",
-      "type": "button.main-menu",
+      "id": "button-frame.main-menu.frame",
+      "type": "button-frame.main-menu",
       "status": "promoted",
       "title": "Main Menu Button Frame",
       "summary": "Reusable icon-less main-menu button frame with binary states. Icons and labels attach at assembly time.",
@@ -65,7 +65,7 @@
       "sheet": { "image": "/assets/ui/main-menu/icon-sword.png", "width": 220, "height": 220 },
       "frame": { "x": 0, "y": 0, "w": 220, "h": 220 },
       "rules": {
-        "fitsSlot": "button.main-menu.frame.rules.iconSlot",
+        "fitsSlot": "button-frame.main-menu.frame.rules.iconSlot",
         "background": "transparent-required",
         "notes": ["Composited onto the main-menu button frame icon slot."]
       }
@@ -85,7 +85,7 @@
       "sheet": { "image": "/assets/ui/main-menu/icon-crown.png", "width": 220, "height": 220 },
       "frame": { "x": 0, "y": 0, "w": 220, "h": 220 },
       "rules": {
-        "fitsSlot": "button.main-menu.frame.rules.iconSlot",
+        "fitsSlot": "button-frame.main-menu.frame.rules.iconSlot",
         "background": "transparent-required",
         "notes": ["Composited onto the main-menu button frame icon slot."]
       }
@@ -105,7 +105,7 @@
       "sheet": { "image": "/assets/ui/main-menu/icon-scroll.png", "width": 220, "height": 220 },
       "frame": { "x": 0, "y": 0, "w": 220, "h": 220 },
       "rules": {
-        "fitsSlot": "button.main-menu.frame.rules.iconSlot",
+        "fitsSlot": "button-frame.main-menu.frame.rules.iconSlot",
         "background": "transparent-required",
         "notes": ["Composited onto the main-menu button frame icon slot."]
       }
@@ -125,7 +125,7 @@
       "sheet": { "image": "/assets/ui/main-menu/icon-people.png", "width": 220, "height": 220 },
       "frame": { "x": 0, "y": 0, "w": 220, "h": 220 },
       "rules": {
-        "fitsSlot": "button.main-menu.frame.rules.iconSlot",
+        "fitsSlot": "button-frame.main-menu.frame.rules.iconSlot",
         "background": "transparent-required",
         "notes": ["Composited onto the main-menu button frame icon slot."]
       }
@@ -145,7 +145,7 @@
       "sheet": { "image": "/assets/ui/main-menu/icon-gear.png", "width": 220, "height": 220 },
       "frame": { "x": 0, "y": 0, "w": 220, "h": 220 },
       "rules": {
-        "fitsSlot": "button.main-menu.frame.rules.iconSlot",
+        "fitsSlot": "button-frame.main-menu.frame.rules.iconSlot",
         "background": "transparent-required",
         "notes": ["Composited onto the main-menu button frame icon slot."]
       }

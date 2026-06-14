@@ -5,7 +5,8 @@ agents and humans producing production assets. The goal is an actual browser
 game that looks like the approved generated pixel art, not a web layout that
 roughly gestures at it.
 
-Use this contract together with `docs/ui-art-direction.md` and
+Use this contract together with `docs/asset-terminology.md` (the vocabulary:
+asset, frame, part, slot, state, assembly), `docs/ui-art-direction.md`, and
 `docs/asset-pipeline-proposal.md`.
 
 ## Core Decision
