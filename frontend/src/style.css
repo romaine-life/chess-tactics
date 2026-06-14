@@ -2833,31 +2833,36 @@ h1 {
 }
 
 /* Top toolbar: back link on the left, view toggle + tree zoom on the right. */
+/* Fixed-height control bar: toggle pill + stacked +/- both fill 34px, so the
+   heights match and the fully-rounded pill never stretches into an oval. */
 .catalog-controls {
-  align-items: center;
+  align-items: stretch;
   display: flex;
   gap: 8px;
+  height: 34px;
 }
 
-/* Expand/collapse as a compact stacked +/- matching the toggle height. */
 .tree-zoom {
-  align-self: stretch;
   display: grid;
   gap: 2px;
   grid-template-rows: 1fr 1fr;
 }
 
 .tree-zoom button {
+  align-items: center;
   background: rgba(255, 255, 255, .025);
   border: 1px solid var(--c-line);
   border-radius: 6px;
   color: var(--c-ink-2);
   cursor: pointer;
+  display: flex;
   font: inherit;
   font-size: .8rem;
+  justify-content: center;
   line-height: 1;
+  min-height: 0;
   min-width: 26px;
-  padding: 0 6px;
+  padding: 0 8px;
 }
 
 .tree-zoom button:hover,
