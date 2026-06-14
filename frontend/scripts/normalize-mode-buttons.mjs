@@ -33,6 +33,7 @@ const OUT_DIR = path.join(UI_DIR, 'main-menu');
 const FIVE = path.join(UI_DIR, 'main-menu-button-art-five-mode.png');
 
 const FLOOD_TOL = 10;
+const ICON_KEY_TOL = 60; // keying the navy plate from around the icon badge
 const ICON_PX = 220; // icon export size
 // Five-mode rows top-to-bottom -> icon ids. Row 0 (sword, glowing) also seeds
 // the pressed/selected frame state; a plain row seeds the normal state.
@@ -172,13 +173,31 @@ function floodKey(img, bg, tol) {
     push(x, y - 1);
   }
 }
-function punchRect(img, rect) {
+function fillRect(img, rect, color) {
   for (let y = rect.y; y < rect.y + rect.h; y++) {
     for (let x = rect.x; x < rect.x + rect.w; x++) {
       if (x < 0 || y < 0 || x >= img.w || y >= img.h) continue;
-      img.data[gp(img, x, y) + 3] = 0;
+      const i = gp(img, x, y);
+      img.data[i] = color.r;
+      img.data[i + 1] = color.g;
+      img.data[i + 2] = color.b;
+      img.data[i + 3] = 255;
     }
   }
+}
+// Average colour of opaque pixels in a rect — used to sample the plate fill/key.
+function sampleColor(img, x0, y0, x1, y1) {
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      if (x < 0 || y < 0 || x >= img.w || y >= img.h) continue;
+      const i = gp(img, x, y);
+      if (img.data[i + 3] < 200) continue;
+      r += img.data[i]; g += img.data[i + 1]; b += img.data[i + 2]; n++;
+    }
+  }
+  if (!n) return { r: 0, g: 0, b: 0 };
+  return { r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) };
 }
 function copyInto(dst, src, ox, oy) {
   for (let y = 0; y < src.h; y++) {
@@ -301,7 +320,11 @@ function main() {
     const cy = glow ? Math.round((band[0] + band[1]) / 2 - plateH / 2) : band[0];
     const c = crop(sheet, plateX0, cy, plateW, plateH);
     floodKey(c, bg, FLOOD_TOL);
-    punchRect(c, localBadge);
+    // Fill the icon area with this state's plate colour (sampled from clean plate
+    // above the label) rather than punching a transparent hole, so a
+    // transparent-background badge composites onto continuous plate -> no seam.
+    const plate = sampleColor(c, Math.round(plateW * 0.42), 16, Math.round(plateW * 0.58), 42);
+    fillRect(c, localBadge, plate);
     return c;
   };
   const normal = cropState(bands[1], false); // plain
@@ -321,6 +344,11 @@ function main() {
     if (!id) return;
     const cy = Math.round((b[0] + b[1]) / 2 - badge.h / 2);
     const badgeImg = crop(sheet, badge.x, cy, badge.w, badge.h);
+    // Transparent-background badge: flood-key the navy plate from the corners so
+    // only the emblem remains (its border stops the flood). Composites cleanly
+    // onto the plate-filled frame — no square seam.
+    const plate = sampleColor(badgeImg, 0, 0, Math.round(badge.w * 0.1), Math.round(badge.h * 0.1));
+    floodKey(badgeImg, plate, ICON_KEY_TOL);
     writePNG(resize(badgeImg, ICON_PX, ICON_PX), path.join(OUT_DIR, `icon-${id}.png`));
     writePNG(resize(badgeImg, ICON_PX * 2, ICON_PX * 2), path.join(OUT_DIR, `icon-${id}@2x.png`));
   });
