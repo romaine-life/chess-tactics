@@ -5,6 +5,9 @@ assets for the browser game. It follows the locked target from
 `docs/ui-art-direction.md`: a moonlit grassland Dark Strategy Pixel battlefield
 inside a dark low-glare app shell.
 
+For task-level instructions that prevent agents from replacing pixel art with
+CSS approximations, see `docs/asset-generation-contract.md`.
+
 The recommendation is to keep the first visual implementation code-rendered
 until the board, pieces, and HUD prove the style at gameplay scale. When sprite
 assets become useful, generated art should enter a normalization pipeline before
