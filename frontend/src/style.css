@@ -2776,15 +2776,29 @@ h1 {
 }
 
 .asset-catalog-tree-layout {
+  align-items: stretch;
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 24px;
+  height: 100%;
+  min-height: 0;
   max-width: 1320px;
 }
 
-/* Locked left rail: a self-scrolling sticky component, not page-flow content. */
+/* Locked rail: a full-height pane fixed beside the scrolling content (it
+   scrolls internally only if the tree is taller than the viewport). */
 .asset-catalog-tree-layout .prototype-tree-panel {
-  max-height: calc(100vh - 88px);
-  overflow: auto;
+  position: static;
+  align-self: stretch;
+  height: 100%;
+  max-height: none;
+  overflow-y: auto;
+}
+
+/* Only the content pane scrolls; the header and rail stay put. */
+.asset-catalog-tree-layout .prototype-tree-content {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Catalog is a two-pane tool: tighter than the article-style design pages, and
@@ -2792,7 +2806,11 @@ h1 {
    narrow above a wide grid. */
 .asset-catalog-screen {
   gap: 16px;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
   padding-top: clamp(16px, 2.4vw, 26px);
+  padding-bottom: clamp(14px, 2vw, 22px);
 }
 
 /* Compact tool header: the catalog is a working surface, not an editorial page.
