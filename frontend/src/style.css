@@ -1609,24 +1609,70 @@ h1 {
 }
 
 
+/* ── Design-system token layer ────────────────────────────────────────────
+   Single source of truth for the design surfaces (catalog, glossary, widgets)
+   and future Shadow-DOM components, which inherit these from :root. The warm
+   editorial palette today; the chess-tactics art style swaps these in one place. */
+:root {
+  /* color */
+  --ds-canvas: #1B1814;
+  --ds-surface: #262119;
+  --ds-ink: #F2EEE4;
+  --ds-ink-2: #CBC4B6;
+  --ds-ink-3: #948C7E;
+  --ds-line: #353029;
+  --ds-line-2: #494339;
+  --ds-accent: #D2805C;
+  --ds-accent-soft: rgba(210, 128, 92, .15);
+  --ds-accepted: #A6B06F;
+  --ds-accepted-soft: rgba(166, 176, 111, .14);
+  --ds-review: #D2A65C;
+  --ds-review-soft: rgba(210, 166, 92, .14);
+  --ds-reject: #948C7E;
+  --ds-select: rgba(37, 199, 255, .08);
+  --ds-select-line: rgba(37, 199, 255, .38);
+  /* type */
+  --ds-font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --ds-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --ds-text-xs: .72rem;
+  --ds-text-sm: .85rem;
+  --ds-text-md: 1rem;
+  --ds-text-lg: 1.3rem;
+  /* space */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 24px;
+  --ds-space-6: 32px;
+  /* radius */
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 8px;
+  --ds-radius-lg: 12px;
+  --ds-radius-pill: 999px;
+  /* chrome metrics */
+  --ds-rail-w: 300px;
+  --ds-control-h: 34px;
+}
+
 .main-assets-screen {
-  /* Claude / Anthropic-inspired warm editorial system — dark */
-  --c-canvas: #1B1814;
-  --c-surface: #262119;
-  --c-ink: #F2EEE4;
-  --c-ink-2: #CBC4B6;
-  --c-ink-3: #948C7E;
-  --c-line: #353029;
-  --c-line-2: #494339;
-  --c-accent: #D2805C;
-  --c-accent-soft: rgba(210, 128, 92, .15);
-  --c-accepted: #A6B06F;
-  --c-accepted-soft: rgba(166, 176, 111, .14);
-  --c-review: #D2A65C;
-  --c-review-soft: rgba(210, 166, 92, .14);
-  --c-reject: #948C7E;
-  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  /* Warm editorial system — sourced from the :root design tokens above. */
+  --c-canvas: var(--ds-canvas);
+  --c-surface: var(--ds-surface);
+  --c-ink: var(--ds-ink);
+  --c-ink-2: var(--ds-ink-2);
+  --c-ink-3: var(--ds-ink-3);
+  --c-line: var(--ds-line);
+  --c-line-2: var(--ds-line-2);
+  --c-accent: var(--ds-accent);
+  --c-accent-soft: var(--ds-accent-soft);
+  --c-accepted: var(--ds-accepted);
+  --c-accepted-soft: var(--ds-accepted-soft);
+  --c-review: var(--ds-review);
+  --c-review-soft: var(--ds-review-soft);
+  --c-reject: var(--ds-reject);
+  --font-serif: var(--ds-font-serif);
+  --font-sans: var(--ds-font-sans);
   background: var(--c-canvas);
   color: var(--c-ink-2);
   color-scheme: dark;
@@ -2769,8 +2815,8 @@ h1 {
 
 .asset-catalog-tree-layout {
   align-items: stretch;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: var(--ds-rail-w) minmax(0, 1fr);
+  gap: var(--ds-space-5);
   height: 100%;
   min-height: 0;
   max-width: 1320px;
@@ -2844,8 +2890,8 @@ h1 {
 .catalog-controls {
   align-items: stretch;
   display: flex;
-  gap: 8px;
-  height: 34px;
+  gap: var(--ds-space-2);
+  height: var(--ds-control-h);
 }
 
 .tree-zoom {
