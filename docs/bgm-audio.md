@@ -57,20 +57,16 @@ new track joins the shuffle — no code change, no redeploy.
 
 ## Provisioning runbook (one time)
 
-The raw tracks live on the `nelson/songs` branch under `songs/`.
+The raw tracks live on the `nelson/songs` branch under `songs/`. CI lives in
+`.github/workflows/`: `tofu.yaml` (plan/apply) and `upload-bgm.yml` (upload).
 
-0. **Install the CI workflows** (needs `workflows` permission): move
-   `docs/ci/tofu.yaml` and `docs/ci/upload-bgm.yml` into `.github/workflows/`.
-   They live under `docs/ci/` because the Tank GitHub App that pushes session
-   branches lacks the `workflows` scope and cannot write `.github/workflows/`.
 1. **Enable app-owned tofu** (infra-bootstrap, one line): add `chess-tactics` to
    `local.runs_own_tofu_apps` in `tofu/main.tf`. Merging grants this repo's CI
    service principal state access + Contributor + RBAC-admin and sets the
    `TFSTATE_STORAGE_ACCOUNT` repo variable.
-2. **Apply this repo's tofu** — merge this PR (workflows installed). The
-   `Infrastructure` workflow plans on PR and applies on merge to `main`, creating
-   the storage account, the `bgm` container, and the CI SP's `Storage Blob Data
-   Contributor` role.
+2. **Apply this repo's tofu** — the `Infrastructure` workflow plans on PR and
+   applies on merge to `main`, creating the storage account, the `bgm`
+   container, and the CI SP's `Storage Blob Data Contributor` role.
 3. **Upload the tracks** — run the **Upload BGM** workflow (`workflow_dispatch`).
    It slugs the raw tracks, writes `index.json`, and uploads both into the `bgm`
    container.
