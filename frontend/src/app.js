@@ -804,6 +804,16 @@ import assetCatalog from './asset-catalog.json';
     if (glossaryTermMatch) {
       return { screen: 'main', mainMenuView: 'asset-catalog', catalogMode: 'glossary', glossaryTerm: decodeURIComponent(glossaryTermMatch[1]) };
     }
+    const widgetMatch = path.match(/^\/design\/assets\/widgets\/([^/]+)(?:\/([^/]+))?$/);
+    if (widgetMatch) {
+      return {
+        screen: 'main',
+        mainMenuView: 'asset-catalog',
+        catalogMode: 'widgets',
+        widgetFamily: decodeURIComponent(widgetMatch[1]),
+        widgetAction: widgetMatch[2] ? decodeURIComponent(widgetMatch[2]) : '',
+      };
+    }
     const assetRouteTypes = {
       'main-menu-buttons': 'button-9slice.main-menu',
       'main-menu-button-icons': 'button-icon.main-menu',
@@ -2974,20 +2984,22 @@ import assetCatalog from './asset-catalog.json';
   // Completed widgets gallery: the finished main-menu button widgets, each
   // assembled from catalog assets (a 9-slice state + an icon) + a live label +
   // an action. Distinct from the asset catalog (which holds the parts).
+  function renderWidgetCard(mode) {
+    const active = mode.action === 'party';
+    const iconAsset = assetById(mode.icon);
+    const iconName = iconAsset ? (iconAsset.title || mode.icon) : mode.icon;
+    return `
+      <article class="widget-card">
+        <div class="widget-card-preview main-menu-actions-assets">${renderModeButton(mode, { active })}</div>
+        <div class="widget-card-meta">
+          <h3>${escapeText(mode.label)}</h3>
+          <p>${active ? 'pressed' : 'normal'} 9-slice + ${escapeText(iconName)} + live label + <code>${escapeText(mode.action)}</code> action</p>
+        </div>
+      </article>`;
+  }
+
   function renderWidgets() {
-    const cards = MENU_MODES.map((mode) => {
-      const active = mode.action === 'party';
-      const iconAsset = assetById(mode.icon);
-      const iconName = iconAsset ? (iconAsset.title || mode.icon) : mode.icon;
-      return `
-        <article class="widget-card">
-          <div class="widget-card-preview main-menu-actions-assets">${renderModeButton(mode, { active })}</div>
-          <div class="widget-card-meta">
-            <h3>${escapeText(mode.label)}</h3>
-            <p>${active ? 'pressed' : 'normal'} 9-slice + ${escapeText(iconName)} + live label + <code>${escapeText(mode.action)}</code> action</p>
-          </div>
-        </article>`;
-    }).join('');
+    const cards = MENU_MODES.map(renderWidgetCard).join('');
     return `
       <div class="main-assets-screen widgets-screen" data-live-screen="widgets">
         <header class="main-assets-header">
@@ -3814,6 +3826,36 @@ import assetCatalog from './asset-catalog.json';
           </section>
         </div>`;
     }
+    if (route.catalogMode === 'widgets') {
+      const modes = route.widgetAction
+        ? MENU_MODES.filter((mode) => mode.action === route.widgetAction)
+        : MENU_MODES;
+      const single = Boolean(route.widgetAction) && modes.length === 1;
+      const title = single ? modes[0].label : 'Main Menu Buttons';
+      const intro = single
+        ? 'A completed widget, shown live on the catalog page — assembled from a catalog 9-slice (in a state) + an icon + a live label + an action.'
+        : 'The completed Main Menu button widgets, shown live on the catalog page. Each is assembled from a catalog 9-slice (in a state) + an icon + a live label + an action.';
+      const cards = modes.length
+        ? `<section class="widget-gallery" aria-label="Widgets">${modes.map(renderWidgetCard).join('')}</section>`
+        : '<p class="catalog-empty">No widgets in this family yet.</p>';
+      return `
+        <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
+          <header class="main-assets-header">
+            <a class="design-back" href="/design">&larr; Design</a>
+            <p class="eyebrow">Design system</p>
+            <h2>${escapeText(title)}</h2>
+            <p class="main-assets-intro">${escapeText(intro)}</p>
+            ${renderCatalogModeToggle('catalog')}
+          </header>
+
+          <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
+            ${renderPrototypeTreePanel(activeHref)}
+            <div class="prototype-tree-content">
+              ${cards}
+            </div>
+          </section>
+        </div>`;
+    }
     const selectedType = route.assetType || '';
     const selectedGroup = route.assetGroup || '';
     const assets = (assetCatalog.assets || []).filter((asset) => !selectedType || asset.type === selectedType);
@@ -3890,7 +3932,17 @@ import assetCatalog from './asset-catalog.json';
           label: 'button',
           href: '#',
           children: [
-            { label: 'Main Menu', href: '/design/widgets' },
+            {
+              label: 'Main Menu',
+              href: '/design/assets/widgets/main-menu',
+              children: [
+                { label: 'Solo Skirmish', href: '/design/assets/widgets/main-menu/party' },
+                { label: 'Campaign Editor', href: '/design/assets/widgets/main-menu/campaigns' },
+                { label: 'Level Editor', href: '/design/assets/widgets/main-menu/level-editor-preview' },
+                { label: 'Lobbies', href: '/design/assets/widgets/main-menu/lobbies' },
+                { label: 'Settings', href: '/design/assets/widgets/main-menu/settings' },
+              ],
+            },
           ],
         },
       ],
