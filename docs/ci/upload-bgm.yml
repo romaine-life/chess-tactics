@@ -1,0 +1,70 @@
+name: Upload BGM
+
+# One-time / occasional population of the public BGM blob container with the raw
+# tracks held on the `nelson/songs` branch. Run manually after the tofu storage
+# is provisioned, or whenever the soundtrack changes.
+#
+# The blob names are produced by tools/bgm/generate.mjs from the raw filenames,
+# the same way the committed manifest is generated, and verified against that
+# manifest before upload — so every uploaded track is reachable under the exact
+# URL the player requests.
+
+on:
+  workflow_dispatch:
+    inputs:
+      songs_ref:
+        description: 'Git ref holding the raw songs/ directory'
+        required: false
+        default: 'nelson/songs'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (generator + committed manifest)
+        uses: actions/checkout@v4
+
+      - name: Checkout raw songs ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.songs_ref }}
+          path: songs-src
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Stage slugged tracks + verify against manifest
+        run: node tools/bgm/generate.mjs --src songs-src/songs --out staged --check frontend/public/assets/audio/bgm-manifest.json
+
+      - name: Derive blob target from manifest baseUrl
+        id: target
+        run: |
+          BASE=$(node -e "console.log(require('./frontend/public/assets/audio/bgm-manifest.json').baseUrl)")
+          BASE=${BASE%/}
+          echo "account=$(echo "$BASE" | sed -E 's#^https://([^.]+)\..*#\1#')" >> "$GITHUB_OUTPUT"
+          echo "container=${BASE##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Upload tracks to blob
+        run: |
+          az storage blob upload-batch \
+            --account-name "${{ steps.target.outputs.account }}" \
+            --auth-mode login \
+            --destination "${{ steps.target.outputs.container }}" \
+            --source staged \
+            --pattern "*.mp3" \
+            --content-type "audio/mpeg" \
+            --overwrite true
+          echo "### Uploaded BGM to ${{ steps.target.outputs.account }}/${{ steps.target.outputs.container }}" >> "$GITHUB_STEP_SUMMARY"

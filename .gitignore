@@ -2,3 +2,8 @@ node_modules/
 frontend/dist/
 npm-debug.log
 .DS_Store
+
+# BGM / large media is hosted in Azure Blob Storage (see tofu/ + docs/bgm-audio.md),
+# never committed to the repo or baked into the image. The committed manifest
+# (frontend/public/assets/audio/bgm-manifest.json) points at the blob container.
+*.mp3
