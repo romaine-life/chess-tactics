@@ -3818,15 +3818,36 @@ import assetCatalog from './asset-catalog.json';
       </aside>`;
   }
 
-  function renderCatalogModeToggle(active) {
+  function renderCatalogModeToggle(active, { treeControls = false } = {}) {
     const tabs = [['catalog', 'Catalog', '/design/catalog'], ['glossary', 'Glossary', '/design/catalog/glossary']];
     // The active tab is inert (you are already in that view); only the inactive
     // tab is a link, so clicking the current mode never reloads you to its root.
-    return `<nav class="catalog-mode-toggle" aria-label="Catalog view mode">
+    const toggle = `<nav class="catalog-mode-toggle" aria-label="Catalog view mode">
       ${tabs.map(([key, label, href]) => (active === key
         ? `<span class="active" aria-current="page">${escapeText(label)}</span>`
         : `<a href="${escapeText(href)}">${escapeText(label)}</a>`)).join('')}
     </nav>`;
+    // Expand/collapse as a compact stacked +/- beside the toggle (only when the
+    // tree has branches; the glossary tree is flat with nothing to expand).
+    const zoom = treeControls ? `<div class="tree-zoom" aria-label="Tree controls">
+      <button type="button" data-action="expand-prototype-tree" title="Expand all" aria-label="Expand all">+</button>
+      <button type="button" data-action="collapse-prototype-tree" title="Collapse all" aria-label="Collapse all">&minus;</button>
+    </div>` : '';
+    return `<div class="catalog-controls">${toggle}${zoom}</div>`;
+  }
+
+  // Compact catalog header: a single toolbar row (back + view toggle + tree
+  // zoom), then the title and a short intro. introHtml is raw HTML.
+  function renderCatalogHeader(title, introHtml, mode, treeControls) {
+    return `
+      <header class="main-assets-header catalog-header">
+        <div class="catalog-topbar">
+          <a class="design-back" href="/design">&larr; Design</a>
+          ${renderCatalogModeToggle(mode, { treeControls })}
+        </div>
+        <h2>${escapeText(title)}</h2>
+        <p class="main-assets-intro">${introHtml}</p>
+      </header>`;
   }
 
   // Glossary mode reuses the classification tree but drops the specific-entity
@@ -3865,13 +3886,7 @@ import assetCatalog from './asset-catalog.json';
       const termHref = `/design/catalog/glossary/${encodeURIComponent(term)}`;
       return `
         <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
-          <header class="main-assets-header">
-            <a class="design-back" href="/design">&larr; Design</a>
-            <p class="eyebrow">Design system</p>
-            <h2>Glossary</h2>
-            <p class="main-assets-intro">The same classification, read as a glossary: pick a type to see what it means. The full vocabulary lives in the <a href="/design/glossary">Glossary</a>.</p>
-            ${renderCatalogModeToggle('glossary')}
-          </header>
+          ${renderCatalogHeader('Glossary', 'The same classification, read as a glossary: pick a type to see what it means. The full vocabulary lives in the <a href="/design/glossary">Glossary</a>.', 'glossary', false)}
 
           <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Glossary explorer">
             ${renderPrototypeTreePanel(termHref, pruneTreeToTerms(ASSET_TREE_PROTOTYPE), { flat: true })}
@@ -3895,16 +3910,10 @@ import assetCatalog from './asset-catalog.json';
         : '<p class="catalog-empty">No widgets in this family yet.</p>';
       return `
         <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
-          <header class="main-assets-header">
-            <a class="design-back" href="/design">&larr; Design</a>
-            <p class="eyebrow">Design system</p>
-            <h2>${escapeText(title)}</h2>
-            <p class="main-assets-intro">${escapeText(intro)}</p>
-            ${renderCatalogModeToggle('catalog')}
-          </header>
+          ${renderCatalogHeader(title, escapeText(intro), 'catalog', true)}
 
           <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
-            ${renderPrototypeTreePanel(activeHref)}
+            ${renderPrototypeTreePanel(activeHref, undefined, { hideTools: true })}
             <div class="prototype-tree-content">
               ${cards}
             </div>
@@ -3931,16 +3940,10 @@ import assetCatalog from './asset-catalog.json';
         : renderAssetCatalogHome(countsByType);
     return `
       <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
-        <header class="main-assets-header">
-          <a class="design-back" href="/design">&larr; Design</a>
-          <p class="eyebrow">Design system</p>
-          <h2>${selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Catalog'}</h2>
-          <p class="main-assets-intro">Buildable game entities, grouped by type. Open one to inspect its states, slots, source art, and previews.</p>
-          ${renderCatalogModeToggle('catalog')}
-        </header>
+        ${renderCatalogHeader(selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Catalog', 'Buildable game entities, grouped by type. Open one to inspect its states, slots, source art, and previews.', 'catalog', true)}
 
         <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
-          ${renderPrototypeTreePanel(activeHref)}
+          ${renderPrototypeTreePanel(activeHref, undefined, { hideTools: true })}
           <div class="prototype-tree-content">
             ${content}
           </div>
@@ -4059,7 +4062,7 @@ import assetCatalog from './asset-catalog.json';
   function renderPrototypeTreePanel(activeHref, nodes = ASSET_TREE_PROTOTYPE, opts = {}) {
     return `
       <aside class="prototype-tree-panel">
-        ${opts.flat ? '' : `<div class="prototype-tree-tools" aria-label="Tree controls">
+        ${opts.flat || opts.hideTools ? '' : `<div class="prototype-tree-tools" aria-label="Tree controls">
           <button type="button" data-action="expand-prototype-tree">Expand all</button>
           <button type="button" data-action="collapse-prototype-tree">Collapse all</button>
         </div>`}
