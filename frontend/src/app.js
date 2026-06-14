@@ -4912,7 +4912,10 @@ import assetCatalog from './asset-catalog.json';
       return;
     }
     if (button.dataset.action === 'expand-prototype-tree' || button.dataset.action === 'collapse-prototype-tree') {
-      const panel = button.closest('.prototype-tree-panel');
+      // The +/- now live in .catalog-rail (a sibling of the panel); fall back to
+      // the enclosing panel for the other prototype pages that keep them inside.
+      const rail = button.closest('.catalog-rail');
+      const panel = (rail && rail.querySelector('.prototype-tree-panel')) || button.closest('.prototype-tree-panel');
       if (panel) {
         const open = button.dataset.action === 'expand-prototype-tree';
         panel.querySelectorAll('details.prototype-tree-branch').forEach((branch) => {
