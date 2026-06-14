@@ -1,4 +1,5 @@
 import './style.css';
+import assetCatalog from './asset-catalog.json';
 
 (function () {
   const COLS = 8;
@@ -758,7 +759,15 @@ import './style.css';
     '/main-menu': { screen: 'main', mainMenuView: 'skeleton' },
     '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
     '/design': { screen: 'main', mainMenuView: 'design-index' },
+    '/design/assets': { screen: 'main', mainMenuView: 'asset-catalog' },
+    '/design/assets/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
+    '/design/assets/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
+    '/design/assets/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
+    '/design/assets/buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetGroup: 'buttons' },
+    '/design/assets/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button.main-menu' },
+    '/design/assets/main-menu-button-icons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-icon.main-menu' },
     '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
+    '/design/main-menu/assets': { screen: 'main', mainMenuView: 'asset-lab' },
     '/design/main-menu/specimen': { screen: 'main', mainMenuView: 'specimen' },
     '/design/main-menu/render': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main' },
     '/design/main-menu/render/hotspots': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main', hotspots: true },
@@ -782,7 +791,24 @@ import './style.css';
   }
 
   function currentRoute() {
-    return APP_ROUTES[currentPath()] || APP_ROUTES['/'];
+    const path = currentPath();
+    if (APP_ROUTES[path]) return APP_ROUTES[path];
+    const assetRouteTypes = {
+      'main-menu-buttons': 'button.main-menu',
+      'main-menu-button-icons': 'button-icon.main-menu',
+    };
+    const assetMatch = path.match(/^\/design\/assets\/([^/]+)(?:\/([^/]+))?$/);
+    if (assetMatch) {
+      const assetType = assetRouteTypes[assetMatch[1]];
+      if (!assetType) return APP_ROUTES['/'];
+      return {
+        screen: 'main',
+        mainMenuView: 'asset-catalog',
+        assetType,
+        assetId: assetMatch[2] ? decodeURIComponent(assetMatch[2]) : '',
+      };
+    }
+    return APP_ROUTES['/'];
   }
 
   function applyInitialRoute() {
@@ -2865,6 +2891,18 @@ import './style.css';
     return currentRoute().mainMenuView === 'assets';
   }
 
+  function shouldShowMainAssetLab() {
+    return currentRoute().mainMenuView === 'asset-lab';
+  }
+
+  function shouldShowAssetCatalog() {
+    return currentRoute().mainMenuView === 'asset-catalog';
+  }
+
+  function shouldShowAssetNavigationPrototype() {
+    return currentRoute().mainMenuView === 'asset-nav-prototype';
+  }
+
   function shouldShowMainSpecimen() {
     return currentRoute().mainMenuView === 'specimen';
   }
@@ -3044,11 +3082,25 @@ import './style.css';
   function renderDesignIndex() {
     const areas = [
       {
+        href: '/design/assets',
+        kicker: 'Asset catalog',
+        title: 'Assets',
+        copy: 'Programmatic catalog for reusable game assets: contracts, states, frame rules, source art, and previews.',
+        go: 'Open catalog',
+      },
+      {
         href: '/design/main-menu',
-        kicker: 'Asset review',
+        kicker: 'Artwork review',
         title: 'Main Menu',
         copy: 'Six chrome regions checked against the approved render — accept, flag, or reject each as the live build converges.',
         go: 'Open review',
+      },
+      {
+        href: '/design/main-menu/assets',
+        kicker: 'Asset lab',
+        title: 'Main Menu — Assets',
+        copy: 'A sibling page for decomposing accepted render crops into reusable button, icon, frame, and state assets.',
+        go: 'Open lab',
       },
       {
         href: '/design/main-menu/render',
@@ -3084,7 +3136,7 @@ import './style.css';
         <header class="main-assets-header">
           <p class="eyebrow">Design portfolio</p>
           <h2>Design</h2>
-          <p class="main-assets-intro">Aspirational concept renders for each surface, plus the asset review that tracks the live build toward them. Jump into any area below.</p>
+          <p class="main-assets-intro">Artwork references and reusable asset contracts live side by side. Art shows the target; the asset catalog defines what the game can operate on.</p>
         </header>
 
         <section class="design-hub-grid" aria-label="Design areas">
@@ -3282,6 +3334,555 @@ import './style.css';
         </section>
 
         ${renderReferenceCropEditor()}
+      </div>`;
+  }
+
+  function frameStyleForAsset(asset, frame) {
+    const sheet = asset.sheet || {};
+    const sheetWidth = Number(sheet.width) || frame.w || 1;
+    const sheetHeight = Number(sheet.height) || frame.h || 1;
+    const scaleX = (sheetWidth / frame.w) * 100;
+    const scaleY = (sheetHeight / frame.h) * 100;
+    const maxX = Math.max(1, sheetWidth - frame.w);
+    const maxY = Math.max(1, sheetHeight - frame.h);
+    const posX = maxX === 1 ? 0 : (frame.x / maxX) * 100;
+    const posY = maxY === 1 ? 0 : (frame.y / maxY) * 100;
+    const imageUrl = String(sheet.image || '').replace(/["'\\\n\r]/g, '');
+    return [
+      `--asset-image: url(${imageUrl})`,
+      `--asset-bg-x: ${posX.toFixed(4)}%`,
+      `--asset-bg-y: ${posY.toFixed(4)}%`,
+      `--asset-bg-w: ${scaleX.toFixed(4)}%`,
+      `--asset-bg-h: ${scaleY.toFixed(4)}%`,
+      `--asset-aspect: ${frame.w} / ${frame.h}`,
+    ].join('; ');
+  }
+
+  function insetStyle(inset, frame) {
+    if (!inset) return '';
+    const frameWidth = Number(frame && frame.w) || 1;
+    const frameHeight = Number(frame && frame.h) || 1;
+    return [
+      `left:${(inset.x / frameWidth * 100).toFixed(3)}%`,
+      `top:${(inset.y / frameHeight * 100).toFixed(3)}%`,
+      `width:${(inset.w / frameWidth * 100).toFixed(3)}%`,
+      `height:${(inset.h / frameHeight * 100).toFixed(3)}%`,
+    ].join(';');
+  }
+
+  function assetById(id) {
+    return (assetCatalog.assets || []).find((asset) => asset.id === id);
+  }
+
+  function renderCatalogFrame(asset, frame, content = '') {
+    return `
+      <div class="catalog-frame" style="${frameStyleForAsset(asset, frame)}">
+        ${content}
+      </div>`;
+  }
+
+  function renderAssetFrame(asset, stateKey, sampleLabel = '') {
+    const state = asset.states[stateKey];
+    const textInset = asset.rules && asset.rules.textInset;
+    const label = sampleLabel ? `<span class="catalog-frame-label" style="${insetStyle(textInset, state.frame)}">${escapeText(sampleLabel)}</span>` : '';
+    return renderCatalogFrame(asset, state.frame, label);
+  }
+
+  function renderButtonAssetCard(asset) {
+    const stateEntries = Object.entries(asset.states || {});
+    const assemblies = asset.assemblies || [];
+    const rules = asset.rules || {};
+    return `
+      <article class="catalog-asset-card" id="${escapeText(asset.id)}">
+        <header class="catalog-asset-head">
+          <span class="design-hub-kicker">${escapeText(asset.type)} · ${escapeText(asset.status || 'draft')}</span>
+          <h3>${escapeText(asset.title || asset.id)}</h3>
+          <p>${escapeText(asset.summary || '')}</p>
+        </header>
+
+        <section class="catalog-asset-meta" aria-label="Asset metadata">
+          <div><dt>ID</dt><dd>${escapeText(asset.id)}</dd></div>
+          <div><dt>Source</dt><dd>${escapeText(asset.source?.kind || 'unknown')}</dd></div>
+          <div><dt>Text</dt><dd>${escapeText(rules.text || 'unknown')}</dd></div>
+          <div><dt>Sizing</dt><dd>${escapeText(rules.sizing || 'unknown')}</dd></div>
+        </section>
+
+        <section class="catalog-state-grid" aria-label="Button states">
+          ${stateEntries.map(([stateKey, state]) => `
+            <div class="catalog-state-card">
+              <strong>${escapeText(state.label || stateKey)}</strong>
+              ${renderAssetFrame(asset, stateKey)}
+              <code>x:${state.frame.x} y:${state.frame.y} w:${state.frame.w} h:${state.frame.h}</code>
+            </div>
+          `).join('')}
+        </section>
+
+        <section class="catalog-slot-grid" aria-label="Button slots">
+          <div><h4>Icon Slot</h4><code>${escapeText(JSON.stringify(rules.iconSlot || {}))}</code></div>
+          <div><h4>Text Slot</h4><code>${escapeText(JSON.stringify(rules.textInset || {}))}</code></div>
+          <div><h4>Arrow Slot</h4><code>${escapeText(JSON.stringify(rules.arrowSlot || {}))}</code></div>
+          <div><h4>Hitbox</h4><code>${escapeText(JSON.stringify(rules.hitbox || {}))}</code></div>
+        </section>
+
+        <section class="catalog-preview-stack" aria-label="Assembly examples">
+          <h4>Assembly Examples</h4>
+          ${assemblies.map((assembly) => `
+            <button class="catalog-button-preview" type="button">
+              ${renderAssetFrame(asset, assembly.state, assembly.label)}
+              <span class="catalog-assembly-caption">${escapeText(assembly.label)} = ${escapeText(assembly.state)} frame + ${escapeText(assembly.icon)} + live text</span>
+            </button>
+          `).join('')}
+        </section>
+
+        <section class="catalog-rule-grid" aria-label="Asset rules">
+          <div>
+            <h4>Text Inset</h4>
+            <code>${escapeText(JSON.stringify(rules.textInset || {}))}</code>
+          </div>
+          <div>
+            <h4>Hitbox</h4>
+            <code>${escapeText(JSON.stringify(rules.hitbox || {}))}</code>
+          </div>
+          <div>
+            <h4>States</h4>
+            <code>${escapeText((rules.states || []).join(', '))}</code>
+          </div>
+          <div>
+            <h4>Notes</h4>
+            <ul>${(rules.notes || []).map((note) => `<li>${escapeText(note)}</li>`).join('')}</ul>
+          </div>
+        </section>
+      </article>`;
+  }
+
+  function renderIconAssetCard(asset) {
+    const rules = asset.rules || {};
+    return `
+      <article class="catalog-asset-card" id="${escapeText(asset.id)}">
+        <header class="catalog-asset-head">
+          <span class="design-hub-kicker">${escapeText(asset.type)} · ${escapeText(asset.status || 'draft')}</span>
+          <h3>${escapeText(asset.title || asset.id)}</h3>
+          <p>${escapeText(asset.summary || '')}</p>
+        </header>
+
+        <section class="catalog-asset-meta" aria-label="Asset metadata">
+          <div><dt>ID</dt><dd>${escapeText(asset.id)}</dd></div>
+          <div><dt>Source</dt><dd>${escapeText(asset.source?.kind || 'unknown')}</dd></div>
+          <div><dt>Fits Slot</dt><dd>${escapeText(rules.fitsSlot || 'unknown')}</dd></div>
+          <div><dt>Background</dt><dd>${escapeText(rules.background || 'unknown')}</dd></div>
+        </section>
+
+        <section class="catalog-icon-preview" aria-label="Icon preview">
+          <div class="catalog-state-card">
+            <strong>Icon Crop</strong>
+            ${renderCatalogFrame(asset, asset.frame)}
+            <code>x:${asset.frame.x} y:${asset.frame.y} w:${asset.frame.w} h:${asset.frame.h}</code>
+          </div>
+        </section>
+
+        <section class="catalog-rule-grid" aria-label="Asset rules">
+          <div>
+            <h4>Notes</h4>
+            <ul>${(rules.notes || []).map((note) => `<li>${escapeText(note)}</li>`).join('')}</ul>
+          </div>
+        </section>
+      </article>`;
+  }
+
+  function assetTypeLabel(type) {
+    if (type === 'button.main-menu') return 'Main Menu Button';
+    if (type === 'button-icon.main-menu') return 'Main Menu Button Icon';
+    return `${type[0].toUpperCase()}${type.slice(1)}`;
+  }
+
+  function assetTypePath(type) {
+    if (type === 'button.main-menu') return '/design/assets/main-menu-buttons';
+    if (type === 'button-icon.main-menu') return '/design/assets/main-menu-button-icons';
+    return `/design/assets/${type}s`;
+  }
+
+  function assetPath(asset) {
+    return `${assetTypePath(asset.type)}/${encodeURIComponent(asset.id)}`;
+  }
+
+  function renderCatalogAssetCard(asset) {
+    if (asset.type === 'button.main-menu') return renderButtonAssetCard(asset);
+    if (asset.type === 'button-icon.main-menu') return renderIconAssetCard(asset);
+    return '';
+  }
+
+  function buttonFamilySummaries() {
+    const countsByType = (assetCatalog.assets || []).reduce((acc, asset) => {
+      acc[asset.type] = (acc[asset.type] || 0) + 1;
+      return acc;
+    }, {});
+    return [
+      {
+        href: '/design/assets/main-menu-buttons',
+        title: 'Main Menu Buttons',
+        summary: 'Menu-row button frames with live labels, an icon slot, arrow affordance, binary states, and hitbox rules.',
+        count: countsByType['button.main-menu'] || 0,
+        status: 'draft',
+      },
+      {
+        href: '#',
+        title: 'Plain Buttons',
+        summary: 'Future bucket for buttons without menu icon slots, such as dialog actions, small controls, or art-only buttons.',
+        count: 0,
+        status: 'planned',
+      },
+    ];
+  }
+
+  function renderButtonTypeCatalog() {
+    const families = buttonFamilySummaries();
+    return `
+      <section class="catalog-family-grid" aria-label="Button types">
+        ${families.map((family) => `
+          <a class="catalog-family-card ${family.href === '#' ? 'disabled' : ''}" href="${escapeText(family.href)}" ${family.href === '#' ? 'aria-disabled="true"' : ''}>
+            <span class="design-hub-kicker">${escapeText(family.status)} · ${family.count} asset${family.count === 1 ? '' : 's'}</span>
+            <h3>${escapeText(family.title)}</h3>
+            <p>${escapeText(family.summary)}</p>
+          </a>
+        `).join('')}
+      </section>`;
+  }
+
+  function renderAssetCatalogHome(countsByType) {
+    return `
+      <section class="catalog-family-grid" aria-label="Asset categories">
+        <a class="catalog-family-card" href="/design/assets/buttons">
+          <span class="design-hub-kicker">category · ${countsByType['button.main-menu'] || 0} assets</span>
+          <h3>Buttons</h3>
+          <p>Button families grouped by interaction pattern, visual family, and slot rules.</p>
+        </a>
+        <a class="catalog-family-card" href="/design/assets/main-menu-button-icons">
+          <span class="design-hub-kicker">type · ${countsByType['button-icon.main-menu'] || 0} assets</span>
+          <h3>Main Menu Button Icons</h3>
+          <p>Standalone icon assets designed to fit into main-menu button icon slots.</p>
+        </a>
+      </section>`;
+  }
+
+  function renderAssetTypePicker(assets, selectedAsset) {
+    if (!assets.length) return '';
+    const selectedId = selectedAsset && selectedAsset.id;
+    const typeLabel = assetTypeLabel(assets[0].type);
+    return `
+      <aside class="catalog-picker" aria-label="${escapeText(typeLabel)} assets">
+        <div class="catalog-picker-head">
+          <h3>${escapeText(typeLabel)} Assets</h3>
+          <span>${assets.length}</span>
+        </div>
+        <label class="catalog-picker-control">
+          <span>Selected ${escapeText(typeLabel.toLowerCase())}</span>
+          <select data-catalog-asset-select>
+            ${assets.map((asset) => `
+              <option value="${assetPath(asset)}" data-catalog-search="${escapeText(`${asset.title || ''} ${asset.id}`.toLowerCase())}" ${asset.id === selectedId ? 'selected' : ''}>${escapeText(asset.title || asset.id)}</option>
+            `).join('')}
+          </select>
+        </label>
+        <label class="catalog-picker-control">
+          <span>Search ${escapeText(typeLabel.toLowerCase())} assets</span>
+          <input type="search" data-catalog-asset-search placeholder="Filter by name or id" autocomplete="off">
+        </label>
+        <p class="catalog-picker-count" data-catalog-match-count>${assets.length} matches</p>
+      </aside>`;
+  }
+
+  function renderAssetCatalog() {
+    const route = currentRoute();
+    const selectedType = route.assetType || '';
+    const selectedGroup = route.assetGroup || '';
+    const assets = (assetCatalog.assets || []).filter((asset) => !selectedType || asset.type === selectedType);
+    const selectedAsset = assets.find((asset) => asset.id === route.assetId) || assets[0];
+    const countsByType = (assetCatalog.assets || []).reduce((acc, asset) => {
+      acc[asset.type] = (acc[asset.type] || 0) + 1;
+      return acc;
+    }, {});
+    const activeHref = currentPath();
+    const content = selectedGroup === 'buttons'
+      ? renderButtonTypeCatalog()
+      : selectedType
+        ? `<section class="catalog-browser" aria-label="Catalog asset browser">
+            ${renderAssetTypePicker(assets, selectedAsset)}
+            <div class="catalog-selected-asset">
+              ${selectedAsset ? renderCatalogAssetCard(selectedAsset) : '<p class="catalog-empty">No assets in this section yet.</p>'}
+            </div>
+          </section>`
+        : renderAssetCatalogHome(countsByType);
+    return `
+      <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
+        <header class="main-assets-header">
+          <a class="design-back" href="/design">&larr; Design</a>
+          <p class="eyebrow">Asset catalog</p>
+          <h2>${selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Assets'}</h2>
+          <p class="main-assets-intro">Every reusable runtime asset should eventually appear here with its states, frame bounds, rules, source art, and sample previews before it is wired into the game.</p>
+        </header>
+
+        <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
+          ${renderPrototypeTreePanel(activeHref)}
+          <div class="prototype-tree-content">
+            ${content}
+          </div>
+        </section>
+      </div>`;
+  }
+
+  const ASSET_TREE_PROTOTYPE = [
+    {
+      label: 'Buttons',
+      href: '/design/assets/buttons',
+      children: [
+        {
+          label: 'Main Menu Buttons',
+          href: '/design/assets/main-menu-buttons',
+          children: [
+            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+          ],
+        },
+        { label: 'Plain Buttons', href: '#', planned: true },
+      ],
+    },
+    {
+      label: 'Icons',
+      href: '#',
+      children: [
+        {
+          label: 'Main Menu Button Icons',
+          href: '/design/assets/main-menu-button-icons',
+          children: [
+            { label: 'Sword Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.sword' },
+            { label: 'Crown Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.crown' },
+          ],
+        },
+      ],
+    },
+    {
+      label: 'Board',
+      href: '#',
+      planned: true,
+      children: [
+        { label: 'Tiles', href: '#', planned: true },
+        { label: 'Highlights', href: '#', planned: true },
+      ],
+    },
+    {
+      label: 'Pieces',
+      href: '#',
+      planned: true,
+      children: [
+        { label: 'Chess Units', href: '#', planned: true },
+        { label: 'Status FX', href: '#', planned: true },
+      ],
+    },
+  ];
+
+  function prototypeLinks(active) {
+    const links = [
+      ['drilldown', 'Page Drilldown', '/design/assets/navigation-drilldown'],
+      ['tree', 'Tree Sidebar', '/design/assets/navigation-tree'],
+      ['hybrid', 'Hybrid', '/design/assets/navigation-hybrid'],
+    ];
+    return `<nav class="prototype-switcher" aria-label="Asset navigation prototypes">
+      ${links.map(([key, label, href]) => `<a class="${active === key ? 'active' : ''}" href="${href}">${label}</a>`).join('')}
+    </nav>`;
+  }
+
+  function renderTreeList(nodes, activeHref = '', depth = 0) {
+    return `
+      <ul class="prototype-tree-list depth-${depth}">
+        ${nodes.map((node) => `
+          <li>
+            ${node.children ? `
+              <details class="prototype-tree-branch ${activeHref === node.href ? 'active' : ''}" open>
+                <summary>
+                  <span>${escapeText(node.label)}</span>
+                  ${node.planned ? '<em>planned</em>' : ''}
+                  <a class="prototype-tree-launch" href="${escapeText(node.href)}" data-tree-launch aria-label="Open ${escapeText(node.label)}">↗</a>
+                </summary>
+                ${renderTreeList(node.children, activeHref, depth + 1)}
+              </details>
+            ` : `
+              <a class="${activeHref === node.href ? 'active' : ''} ${node.planned ? 'planned' : ''}" href="${escapeText(node.href)}">
+                <span>${escapeText(node.label)}</span>
+                ${node.planned ? '<em>planned</em>' : ''}
+              </a>
+            `}
+          </li>
+        `).join('')}
+      </ul>`;
+  }
+
+  function renderPrototypeTreePanel(activeHref) {
+    return `
+      <aside class="prototype-tree-panel">
+        <div class="prototype-tree-tools" aria-label="Tree controls">
+          <button type="button" data-action="expand-prototype-tree">Expand all</button>
+          <button type="button" data-action="collapse-prototype-tree">Collapse all</button>
+        </div>
+        ${renderTreeList(ASSET_TREE_PROTOTYPE, activeHref)}
+      </aside>`;
+  }
+
+  function renderAssetBreadcrumb(parts) {
+    return `<div class="prototype-crumbs">${parts.map((part, index) => `<span>${escapeText(part)}</span>${index < parts.length - 1 ? '<b>/</b>' : ''}`).join('')}</div>`;
+  }
+
+  function renderPrototypePreviewCard(title, copy, items = []) {
+    return `
+      <article class="prototype-preview-card">
+        <span class="design-hub-kicker">Selected node</span>
+        <h3>${escapeText(title)}</h3>
+        <p>${escapeText(copy)}</p>
+        ${items.length ? `<div class="prototype-mini-list">${items.map((item) => `<a href="${escapeText(item.href || '#')}" class="${item.planned ? 'planned' : ''}">${escapeText(item.label)}</a>`).join('')}</div>` : ''}
+      </article>`;
+  }
+
+  function renderDrilldownPrototype() {
+    return `
+      <section class="prototype-drill-grid">
+        ${renderPrototypePreviewCard('Assets', 'Start at the root. Each card sends you to a new page one level deeper.', [
+          { label: 'Buttons', href: '/design/assets/buttons' },
+          { label: 'Icons', href: '#' },
+          { label: 'Board', href: '#', planned: true },
+          { label: 'Pieces', href: '#', planned: true },
+        ])}
+        ${renderPrototypePreviewCard('Buttons', 'The button category page lists button families, not individual button assets.', [
+          { label: 'Main Menu Buttons', href: '/design/assets/main-menu-buttons' },
+          { label: 'Plain Buttons', href: '#', planned: true },
+        ])}
+        ${renderPrototypePreviewCard('Main Menu Buttons', 'The type page has the dropdown/search picker and one full inspection card.', [
+          { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+        ])}
+      </section>`;
+  }
+
+  function renderTreePrototype() {
+    return `
+      <section class="prototype-tree-layout">
+        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons')}
+        <div class="prototype-tree-content">
+          ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons'])}
+          ${renderPrototypePreviewCard('Main Menu Buttons', 'The tree stays visible while the right panel swaps to the selected category, type, or asset page.', [
+            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+          ])}
+        </div>
+      </section>`;
+  }
+
+  function renderHybridPrototype() {
+    return `
+      <section class="prototype-tree-layout prototype-hybrid-layout">
+        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons/button.main-menu.frame')}
+        <div class="prototype-tree-content">
+          ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons', 'Main Menu Button Frame'])}
+          <div class="prototype-hybrid-grid">
+            ${renderPrototypePreviewCard('Main Menu Buttons', 'Type-level controls live here: search, dropdown, status filters, and family notes.', [
+              { label: 'Search within Main Menu Buttons', href: '#' },
+              { label: 'Selected: Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+            ])}
+            ${renderPrototypePreviewCard('Inspection Card', 'The selected asset still gets a dedicated full card, but the tree keeps the larger catalog context visible.', [
+              { label: 'States: pressed, unpressed', href: '#' },
+              { label: 'Slots: icon, text, arrow, hitbox', href: '#' },
+            ])}
+          </div>
+        </div>
+      </section>`;
+  }
+
+  function renderAssetNavigationPrototype() {
+    const prototype = currentRoute().prototype || 'drilldown';
+    const titles = {
+      drilldown: 'Navigation Prototype: Page Drilldown',
+      tree: 'Navigation Prototype: Tree Sidebar',
+      hybrid: 'Navigation Prototype: Hybrid',
+    };
+    const bodies = {
+      drilldown: renderDrilldownPrototype(),
+      tree: renderTreePrototype(),
+      hybrid: renderHybridPrototype(),
+    };
+    return `
+      <div class="main-assets-screen asset-catalog-screen asset-prototype-screen" data-live-screen="asset-nav-prototype">
+        <header class="main-assets-header">
+          <a class="design-back" href="/design/assets">&larr; Asset Catalog</a>
+          <p class="eyebrow">Asset navigation study</p>
+          <h2>${titles[prototype]}</h2>
+          <p class="main-assets-intro">Quick structural mocks for comparing how a large asset catalog might be explored. These pages are intentionally rough.</p>
+          ${prototypeLinks(prototype)}
+        </header>
+        ${bodies[prototype]}
+      </div>`;
+  }
+
+  function renderModeButtonAssetLab() {
+    const liveRows = [
+      { label: 'Solo Skirmish', className: 'is-active' },
+      { label: 'Campaign Editor' },
+      { label: 'Level Editor' },
+      { label: 'Lobbies' },
+      { label: 'Settings' },
+    ];
+    return `
+      <div class="main-assets-screen main-menu-asset-lab" data-live-screen="main-menu-assets">
+        <header class="main-assets-header">
+          <a class="design-back" href="/design">&larr; Design</a>
+          <p class="eyebrow">Main menu · asset lab</p>
+          <h2>Render Crop vs Reusable Assets</h2>
+          <p class="main-assets-intro">This page keeps the accepted menu crop intact and puts candidate button asset sheets beside it. Use it to feel the difference before replacing anything in the live menu.</p>
+          <div class="main-assets-summary">
+            <span><b>01</b> accepted crop baseline</span>
+            <span><b>02</b> reusable button-sheet candidates</span>
+            <span><b>01</b> live-text assembly mock</span>
+          </div>
+        </header>
+
+        <section class="asset-lab-grid" aria-label="Main menu button asset comparison">
+          <article class="asset-lab-card asset-lab-card-wide">
+            <header>
+              <span class="design-hub-kicker">Current live approach</span>
+              <h3>Accepted Render Crop</h3>
+              <p>The live menu clips the complete concept render and places transparent buttons over the painted labels.</p>
+            </header>
+            <div class="asset-lab-render-crop">
+              <img src="/assets/ui/main-menu-aspirational.png" alt="Approved main menu render crop containing the five painted mode buttons" draggable="false">
+            </div>
+          </article>
+
+          <article class="asset-lab-card">
+            <header>
+              <span class="design-hub-kicker">Candidate source</span>
+              <h3>Five-Mode Button Sheet</h3>
+              <p>No-text pixel button rows with icons and states. This is closer to a reusable asset source.</p>
+            </header>
+            <img class="asset-lab-sheet" src="/assets/ui/main-menu-button-art-five-mode.png" alt="No-text five-mode button art sheet" draggable="false">
+          </article>
+
+          <article class="asset-lab-card">
+            <header>
+              <span class="design-hub-kicker">Candidate source</span>
+              <h3>Three-State Button Sheet</h3>
+              <p>A tighter state sheet for selected, normal, and alternate rows. It can feed a future slicer/manifest.</p>
+            </header>
+            <img class="asset-lab-sheet" src="/assets/ui/main-menu-button-art-three-state.png" alt="No-text three-state button art sheet" draggable="false">
+          </article>
+
+          <article class="asset-lab-card asset-lab-card-wide">
+            <header>
+              <span class="design-hub-kicker">Assembly mock</span>
+              <h3>Sliced Rows + Live Text</h3>
+              <p>Here the same source sheet is treated as five independent row assets. The text is separate, so the renderer can change labels, state, spacing, and hit targets without repainting the art.</p>
+            </header>
+            <div class="asset-kit-rows" aria-label="Reusable button rows with live text">
+              ${liveRows.map((row, index) => `
+                <button class="asset-kit-row ${row.className || ''}" style="--asset-row: ${index};" type="button">
+                  <span>${escapeText(row.label)}</span>
+                </button>
+              `).join('')}
+            </div>
+          </article>
+        </section>
       </div>`;
   }
 
@@ -3490,6 +4091,12 @@ import './style.css';
         menuLayer.innerHTML = renderArtScreen('main');
       } else if (shouldShowMainAssets()) {
         menuLayer.innerHTML = renderMainAssetReview();
+      } else if (shouldShowMainAssetLab()) {
+        menuLayer.innerHTML = renderModeButtonAssetLab();
+      } else if (shouldShowAssetNavigationPrototype()) {
+        menuLayer.innerHTML = renderAssetNavigationPrototype();
+      } else if (shouldShowAssetCatalog()) {
+        menuLayer.innerHTML = renderAssetCatalog();
       } else if (shouldShowMainSpecimen()) {
         menuLayer.innerHTML = renderSpecimenCapture();
       } else if (shouldShowMainDesignIndex()) {
@@ -3878,6 +4485,14 @@ import './style.css';
   }
 
   function handleMenuClick(event) {
+    const treeLaunch = event.target.closest('[data-tree-launch]');
+    if (treeLaunch) {
+      event.preventDefault();
+      event.stopPropagation();
+      const href = treeLaunch.getAttribute('href');
+      if (href && href !== '#') window.location.href = href;
+      return;
+    }
     const button = event.target.closest('button');
     if (!button) return;
     if (button.dataset.action === 'noop') return;
@@ -3929,6 +4544,16 @@ import './style.css';
       ) {
         state.mainMenuReviewFocusId = reviewId;
         void saveMainMenuReviewDraft(nextMainMenuReviewDraft(reviewId, reviewStatus));
+      }
+      return;
+    }
+    if (button.dataset.action === 'expand-prototype-tree' || button.dataset.action === 'collapse-prototype-tree') {
+      const panel = button.closest('.prototype-tree-panel');
+      if (panel) {
+        const open = button.dataset.action === 'expand-prototype-tree';
+        panel.querySelectorAll('details.prototype-tree-branch').forEach((branch) => {
+          branch.open = open;
+        });
       }
       return;
     }
@@ -4086,6 +4711,26 @@ import './style.css';
 
   function handleMenuInput(event) {
     const target = event.target;
+    if (target.matches('[data-catalog-asset-select]')) {
+      if (target.value) window.location.href = target.value;
+      return;
+    }
+    if (target.matches('[data-catalog-asset-search]')) {
+      const picker = target.closest('.catalog-picker');
+      const query = String(target.value || '').trim().toLowerCase();
+      if (picker) {
+        let matches = 0;
+        picker.querySelectorAll('[data-catalog-asset-select] option').forEach((option) => {
+          const haystack = option.dataset.catalogSearch || '';
+          const isMatch = query ? haystack.includes(query) : true;
+          option.hidden = !isMatch;
+          if (isMatch) matches += 1;
+        });
+        const count = picker.querySelector('[data-catalog-match-count]');
+        if (count) count.textContent = `${matches} ${matches === 1 ? 'match' : 'matches'}`;
+      }
+      return;
+    }
     if (target.id === 'levelWidth' || target.id === 'levelHeight' || target.id === 'levelEnemyBudget') {
       const campaign = selectedCampaign();
       const level = selectedLevel(campaign);
@@ -4123,7 +4768,9 @@ import './style.css';
   menuLayer.addEventListener('click', handleMenuClick);
   levelEditorPanel.addEventListener('click', handleMenuClick);
   menuLayer.addEventListener('input', handleMenuInput);
+  menuLayer.addEventListener('change', handleMenuInput);
   levelEditorPanel.addEventListener('input', handleMenuInput);
+  levelEditorPanel.addEventListener('change', handleMenuInput);
   menuLayer.addEventListener('pointerdown', beginReferenceCropDrag);
   menuLayer.addEventListener('pointermove', updateReferenceCropDrag);
   menuLayer.addEventListener('pointerup', finishReferenceCropDrag);

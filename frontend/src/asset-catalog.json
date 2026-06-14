@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "button.main-menu.frame",
+      "type": "button.main-menu",
+      "status": "draft",
+      "title": "Main Menu Button Frame",
+      "summary": "Reusable binary-state main-menu button family. Icons and labels are attached at assembly time.",
+      "source": {
+        "kind": "generated-sheet",
+        "image": "/assets/ui/main-menu-button-art-three-state.png",
+        "reference": "/assets/ui/main-menu-aspirational.png",
+        "note": "Temporary sheet still includes baked icons. Final promoted frame art should have empty icon and text slots."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu-button-art-three-state.png",
+        "width": 1619,
+        "height": 971
+      },
+      "states": {
+        "pressed": {
+          "label": "Pressed",
+          "frame": { "x": 0, "y": 0, "w": 1619, "h": 292 }
+        },
+        "unpressed": {
+          "label": "Unpressed",
+          "frame": { "x": 0, "y": 331, "w": 1619, "h": 237 }
+        }
+      },
+      "rules": {
+        "textInset": { "x": 420, "y": 68, "w": 860, "h": 96 },
+        "iconSlot": { "x": 96, "y": 42, "w": 210, "h": 210 },
+        "arrowSlot": { "x": 1330, "y": 82, "w": 170, "h": 130 },
+        "hitbox": { "x": 0, "y": 0, "w": 1619, "h": 292 },
+        "states": ["unpressed", "pressed"],
+        "text": "live",
+        "sizing": "fixed-frame",
+        "notes": [
+          "This is the reusable button-family contract, not one menu row.",
+          "Final frame art should remove baked icons from the state frames.",
+          "Labels, icons, and actions must stay live/attached at assembly time."
+        ]
+      },
+      "assemblies": [
+        { "label": "Solo Skirmish", "state": "pressed", "icon": "button-icon.main-menu.sword" },
+        { "label": "Campaign Editor", "state": "unpressed", "icon": "button-icon.main-menu.crown" }
+      ]
+    },
+    {
+      "id": "button-icon.main-menu.sword",
+      "type": "button-icon.main-menu",
+      "status": "draft",
+      "title": "Sword Icon",
+      "summary": "Main-menu button icon candidate for skirmish or combat actions.",
+      "source": {
+        "kind": "generated-sheet",
+        "image": "/assets/ui/main-menu-button-art-three-state.png",
+        "reference": "/assets/ui/main-menu-aspirational.png",
+        "note": "Temporary crop from the current button sheet. Final icon art should be exported as a standalone transparent asset."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu-button-art-three-state.png",
+        "width": 1619,
+        "height": 971
+      },
+      "frame": { "x": 96, "y": 42, "w": 210, "h": 210 },
+      "rules": {
+        "fitsSlot": "button.main-menu.frame.rules.iconSlot",
+        "background": "transparent-required",
+        "notes": [
+          "This icon should be composited onto the main-menu button frame.",
+          "The current crop is a placeholder because the source sheet still bakes icons into button frames."
+        ]
+      }
+    },
+    {
+      "id": "button-icon.main-menu.crown",
+      "type": "button-icon.main-menu",
+      "status": "draft",
+      "title": "Crown Icon",
+      "summary": "Main-menu button icon candidate for campaign or ranked actions.",
+      "source": {
+        "kind": "generated-sheet",
+        "image": "/assets/ui/main-menu-button-art-three-state.png",
+        "reference": "/assets/ui/main-menu-aspirational.png",
+        "note": "Temporary crop from the current button sheet. Final icon art should be exported as a standalone transparent asset."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu-button-art-three-state.png",
+        "width": 1619,
+        "height": 971
+      },
+      "frame": { "x": 96, "y": 373, "w": 210, "h": 210 },
+      "rules": {
+        "fitsSlot": "button.main-menu.frame.rules.iconSlot",
+        "background": "transparent-required",
+        "notes": [
+          "This icon should be composited onto the main-menu button frame.",
+          "The current crop is a placeholder because the source sheet still bakes icons into button frames."
+        ]
+      }
+    }
+  ]
+}
