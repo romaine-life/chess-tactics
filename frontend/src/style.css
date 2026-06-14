@@ -2780,10 +2780,18 @@ h1 {
    scrolls internally only if the tree is taller than the viewport). */
 .asset-catalog-tree-layout .prototype-tree-panel {
   position: static;
-  align-self: stretch;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   max-height: none;
   overflow-y: auto;
+}
+
+/* Left rail = combined controls bar over the scrolling tree panel. */
+.catalog-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
 }
 
 /* Only the content pane scrolls; the header and rail stay put. */
@@ -2825,21 +2833,15 @@ h1 {
 }
 
 /* Top toolbar: back link on the left, view toggle + tree zoom on the right. */
-.catalog-topbar {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-}
-
 .catalog-controls {
-  align-items: stretch;
+  align-items: center;
   display: flex;
   gap: 8px;
 }
 
 /* Expand/collapse as a compact stacked +/- matching the toggle height. */
 .tree-zoom {
+  align-self: stretch;
   display: grid;
   gap: 2px;
   grid-template-rows: 1fr 1fr;

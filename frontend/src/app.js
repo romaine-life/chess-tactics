@@ -3836,15 +3836,12 @@ import assetCatalog from './asset-catalog.json';
     return `<div class="catalog-controls">${toggle}${zoom}</div>`;
   }
 
-  // Compact catalog header: a single toolbar row (back + view toggle + tree
-  // zoom), then the title and a short intro. introHtml is raw HTML.
-  function renderCatalogHeader(title, introHtml, mode, treeControls) {
+  // Compact catalog header: back link, title, short intro. The view toggle +
+  // tree zoom live over the tree (in .catalog-rail), not here. introHtml is raw.
+  function renderCatalogHeader(title, introHtml) {
     return `
       <header class="main-assets-header catalog-header">
-        <div class="catalog-topbar">
-          <a class="design-back" href="/design">&larr; Design</a>
-          ${renderCatalogModeToggle(mode, { treeControls })}
-        </div>
+        <a class="design-back" href="/design">&larr; Design</a>
         <h2>${escapeText(title)}</h2>
         <p class="main-assets-intro">${introHtml}</p>
       </header>`;
@@ -3886,10 +3883,13 @@ import assetCatalog from './asset-catalog.json';
       const termHref = `/design/catalog/glossary/${encodeURIComponent(term)}`;
       return `
         <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
-          ${renderCatalogHeader('Glossary', 'The same classification, read as a glossary: pick a type to see what it means. The full vocabulary lives in the <a href="/design/glossary">Glossary</a>.', 'glossary', false)}
+          ${renderCatalogHeader('Glossary', 'The same classification, read as a glossary: pick a type to see what it means. The full vocabulary lives in the <a href="/design/glossary">Glossary</a>.')}
 
           <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Glossary explorer">
-            ${renderPrototypeTreePanel(termHref, pruneTreeToTerms(ASSET_TREE_PROTOTYPE), { flat: true })}
+            <div class="catalog-rail">
+              ${renderCatalogModeToggle('glossary', { treeControls: false })}
+              ${renderPrototypeTreePanel(termHref, pruneTreeToTerms(ASSET_TREE_PROTOTYPE), { flat: true })}
+            </div>
             <div class="prototype-tree-content">
               ${renderGlossaryEntry(term)}
             </div>
@@ -3910,10 +3910,13 @@ import assetCatalog from './asset-catalog.json';
         : '<p class="catalog-empty">No widgets in this family yet.</p>';
       return `
         <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
-          ${renderCatalogHeader(title, escapeText(intro), 'catalog', true)}
+          ${renderCatalogHeader(title, escapeText(intro))}
 
           <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
-            ${renderPrototypeTreePanel(activeHref, undefined, { hideTools: true })}
+            <div class="catalog-rail">
+              ${renderCatalogModeToggle('catalog', { treeControls: true })}
+              ${renderPrototypeTreePanel(activeHref, undefined, { hideTools: true })}
+            </div>
             <div class="prototype-tree-content">
               ${cards}
             </div>
@@ -3940,10 +3943,13 @@ import assetCatalog from './asset-catalog.json';
         : renderAssetCatalogHome(countsByType);
     return `
       <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
-        ${renderCatalogHeader(selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Catalog', 'Buildable game entities, grouped by type. Open one to inspect its states, slots, source art, and previews.', 'catalog', true)}
+        ${renderCatalogHeader(selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Catalog', 'Buildable game entities, grouped by type. Open one to inspect its states, slots, source art, and previews.')}
 
         <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
-          ${renderPrototypeTreePanel(activeHref, undefined, { hideTools: true })}
+          <div class="catalog-rail">
+            ${renderCatalogModeToggle('catalog', { treeControls: true })}
+            ${renderPrototypeTreePanel(activeHref, undefined, { hideTools: true })}
+          </div>
           <div class="prototype-tree-content">
             ${content}
           </div>
