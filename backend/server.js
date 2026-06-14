@@ -968,8 +968,18 @@ app.use((req, res, next) => {
 });
 app.use(express.static(frontendDir));
 
+// SPA fallback: serve index.html for client routes. Only 404 for genuine
+// static-asset extensions (a missing .png/.js/etc.) — NOT for app routes whose
+// last path segment merely contains dots, e.g.
+// /design/assets/main-menu-buttons/button.main-menu.frame.
+const STATIC_ASSET_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg', '.ico',
+  '.css', '.js', '.mjs', '.map', '.json', '.wasm', '.txt', '.xml',
+  '.woff', '.woff2', '.ttf', '.eot', '.webmanifest',
+  '.mp3', '.wav', '.ogg', '.mp4', '.webm',
+]);
 app.use((req, res) => {
-  if (path.extname(req.path)) {
+  if (STATIC_ASSET_EXTENSIONS.has(path.extname(req.path).toLowerCase())) {
     res.status(404).send('not found');
     return;
   }
