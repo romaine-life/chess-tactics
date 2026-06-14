@@ -1077,8 +1077,8 @@ h1 {
 /* Completed widgets gallery (/design/widgets) */
 .widget-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
 }
 .widget-card {
   border: 1px solid var(--line);
@@ -2776,7 +2776,27 @@ h1 {
 }
 
 .asset-catalog-tree-layout {
-  max-width: 1380px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 24px;
+  max-width: 1320px;
+}
+
+/* Locked left rail: a self-scrolling sticky component, not page-flow content. */
+.asset-catalog-tree-layout .prototype-tree-panel {
+  max-height: calc(100vh - 88px);
+  overflow: auto;
+}
+
+/* Catalog is a two-pane tool: tighter than the article-style design pages, and
+   the header aligns to the grid (same width/left edge) instead of centering
+   narrow above a wide grid. */
+.asset-catalog-screen {
+  gap: 22px;
+  padding-top: clamp(20px, 3.5vw, 36px);
+}
+
+.asset-catalog-screen .main-assets-header {
+  max-width: 1320px;
 }
 
 .prototype-tree-list a {

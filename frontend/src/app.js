@@ -838,6 +838,14 @@ import assetCatalog from './asset-catalog.json';
     if (route.turn) state.turn = route.turn;
   }
 
+  // Client-side navigation: update the URL + re-render in place, no full reload.
+  function navigateTo(href) {
+    if (!href) return;
+    window.history.pushState({}, '', href);
+    applyInitialRoute();
+    render();
+  }
+
   const MAIN_MENU_PREVIEW_PIECES = [
     { id: 'menu-blue-rook-left', side: 'player', type: 'rook', mark: 'R', name: 'Allied Rook', role: 'Fortress anchor', x: 0, y: 8, alive: true },
     { id: 'menu-blue-knight', side: 'player', type: 'knight', mark: 'N', name: 'Allied Knight', role: 'L-shaped jumper', x: 2, y: 7, alive: true },
@@ -4776,13 +4784,18 @@ import assetCatalog from './asset-catalog.json';
   }
 
   function handleMenuClick(event) {
-    const treeLaunch = event.target.closest('[data-tree-launch]');
-    if (treeLaunch) {
-      event.preventDefault();
-      event.stopPropagation();
-      const href = treeLaunch.getAttribute('href');
-      if (href && href !== '#') window.location.href = href;
-      return;
+    // In-app design navigation stays client-side — no full page reload (which
+    // reboots the SPA and flashes the game screen). Modified clicks / new-tab
+    // intents fall through to the browser.
+    const link = event.target.closest('a[href]');
+    if (link && event.button === 0 && !event.metaKey && !event.ctrlKey
+        && !event.shiftKey && !event.altKey && link.target !== '_blank') {
+      const href = link.getAttribute('href');
+      if (href && href.startsWith('/design')) {
+        event.preventDefault();
+        navigateTo(href);
+        return;
+      }
     }
     const button = event.target.closest('button');
     if (!button) return;
@@ -5058,6 +5071,11 @@ import assetCatalog from './asset-catalog.json';
 
   menuLayer.addEventListener('click', handleMenuClick);
   levelEditorPanel.addEventListener('click', handleMenuClick);
+  // Back/forward should re-render in place too, matching client-side navigation.
+  window.addEventListener('popstate', () => {
+    applyInitialRoute();
+    render();
+  });
   menuLayer.addEventListener('input', handleMenuInput);
   menuLayer.addEventListener('change', handleMenuInput);
   levelEditorPanel.addEventListener('input', handleMenuInput);
