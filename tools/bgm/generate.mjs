@@ -1,31 +1,26 @@
 #!/usr/bin/env node
-// BGM asset slugger + manifest generator.
+// BGM asset slugger + index generator.
 //
 // Single source of truth that keeps three things in lockstep:
 //   - the blob names uploaded to Azure Storage,
-//   - the `file` entries in frontend/public/assets/audio/bgm-manifest.json,
+//   - the `file` entries in the container's index.json (read by GET /api/bgm),
 //   - the display titles shown in the player.
 //
-// Deterministic: same input directory -> identical slugs, ordering, and
-// manifest. That lets the upload workflow regenerate slugged copies of the raw
-// tracks and `--check` them against the committed manifest before uploading, so
-// a track can never be live under a name the player doesn't request.
+// The blob container is the source of truth: this writes both the slugged track
+// copies AND the index.json that is uploaded *into* the container next to them.
+// The backend reads that index and prepends BGM_BASE_URL, so the index stores
+// only {title, file} — never a base URL or absolute path. Deterministic: the
+// same input directory yields identical slugs, ordering, and index.
 //
 // Usage:
-//   node tools/bgm/generate.mjs --src <dir> [--out <dir>] [--base <url>]
-//        [--write-manifest <path>] [--check <manifest.json>]
-//
-//   --src             directory of raw .mp3 files (required)
-//   --out             copy slugged files here (for upload); optional
-//   --base            manifest baseUrl (default: the prod blob container URL)
-//   --write-manifest  write the generated manifest JSON to this path
-//   --check           compare generated manifest tracks against an existing
-//                     manifest file; exit non-zero on any mismatch
+//   node tools/bgm/generate.mjs --src <dir> [--out <dir>] [--check <index.json>]
+//     --src    directory of raw .mp3 files (required)
+//     --out    write slugged track copies + index.json here (ready to upload)
+//     --check  compare generated track files against an existing index.json and
+//              exit non-zero on any mismatch
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-
-const DEFAULT_BASE = 'https://chesstacticsmedia.blob.core.windows.net/bgm/';
 
 function parseArgs(argv) {
   const args = {};
@@ -60,43 +55,34 @@ function main() {
     console.error('error: --src <dir> is required');
     process.exit(2);
   }
-  const base = args.base || DEFAULT_BASE;
   const entries = buildTracks(args.src);
-  const manifest = {
-    schemaVersion: 1,
-    baseUrl: base,
-    tracks: entries.map(({ title, file }) => ({ title, file })),
-  };
-  const json = `${JSON.stringify(manifest, null, 2)}\n`;
+  const index = { schemaVersion: 1, tracks: entries.map(({ title, file }) => ({ title, file })) };
+  const json = `${JSON.stringify(index, null, 2)}\n`;
 
   if (args.out) {
     fs.rmSync(args.out, { recursive: true, force: true });
     fs.mkdirSync(args.out, { recursive: true });
     for (const e of entries) fs.copyFileSync(path.join(args.src, e.src), path.join(args.out, e.file));
-  }
-
-  if (args['write-manifest']) {
-    fs.mkdirSync(path.dirname(args['write-manifest']), { recursive: true });
-    fs.writeFileSync(args['write-manifest'], json);
-    console.log(`wrote manifest -> ${args['write-manifest']}`);
+    fs.writeFileSync(path.join(args.out, 'index.json'), json);
+    console.log(`wrote ${entries.length} tracks + index.json -> ${args.out}`);
   }
 
   if (args.check) {
     const existing = JSON.parse(fs.readFileSync(args.check, 'utf8'));
-    const got = manifest.tracks.map((t) => t.file).sort();
+    const got = entries.map((e) => e.file).sort();
     const want = (existing.tracks || []).map((t) => t.file).sort();
     const missing = want.filter((f) => !got.includes(f));
     const extra = got.filter((f) => !want.includes(f));
     if (missing.length || extra.length) {
-      console.error('manifest mismatch vs', args.check);
-      if (missing.length) console.error('  in manifest but not generated:', missing);
-      if (extra.length) console.error('  generated but not in manifest:', extra);
+      console.error('index mismatch vs', args.check);
+      if (missing.length) console.error('  in index but not generated:', missing);
+      if (extra.length) console.error('  generated but not in index:', extra);
       process.exit(1);
     }
-    console.log(`manifest check OK: ${got.length} tracks match ${args.check}`);
+    console.log(`index check OK: ${got.length} tracks match ${args.check}`);
   }
 
-  if (!args['write-manifest'] && !args.check) process.stdout.write(json);
+  if (!args.out && !args.check) process.stdout.write(json);
 }
 
 main();

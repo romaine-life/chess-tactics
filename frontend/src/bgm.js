@@ -7,15 +7,16 @@
 //     the track that is currently playing, one at a time, via HTTP range
 //     requests. The browser never downloads the whole library up front, so a
 //     20-track / ~150MB soundtrack costs the listener only the current song.
-//   - Hosting-agnostic: track URLs are resolved from a small JSON manifest, so
-//     the audio can live on object storage (blob/CDN) in production or be served
-//     same-origin in a test slot without any code change.
+//   - App-owned contract: the track list comes from the backend's /api/bgm
+//     endpoint ({tracks:[{title,url}]}). The blob storage account stays under the
+//     backend and is never exposed to the client; URLs arrive absolute and are
+//     streamed as-is.
 //   - Autoplay-safe: browsers block audible autoplay until a user gesture, so
 //     playback is armed on the first interaction instead of fighting the policy.
 //   - User control: a persisted mute toggle; muting pauses (no silent
 //     background streaming) and unmuting resumes.
 
-const MANIFEST_URL = '/assets/audio/bgm-manifest.json';
+const BGM_API_URL = '/api/bgm';
 const MUTE_STORAGE_KEY = 'chess-tactics-bgm-muted-v1';
 const DEFAULT_VOLUME = 0.5;
 // If a track 404s or fails to decode, wait briefly then skip to the next one so
@@ -62,19 +63,6 @@ export function planShuffleCycle(length, lastIndex) {
   return order;
 }
 
-// Resolve a manifest entry to an absolute URL. Absolute `file` values are used
-// as-is; otherwise the file is resolved against the manifest baseUrl (which may
-// itself be relative to the document, e.g. "/assets/audio/").
-function resolveTrackUrl(file, baseUrl) {
-  try {
-    if (/^https?:\/\//i.test(file)) return file;
-    const base = new URL(baseUrl || '', window.location.href);
-    return new URL(file, base).href;
-  } catch {
-    return file;
-  }
-}
-
 export function initBgm() {
   const audio = new Audio();
   audio.preload = 'none';
@@ -90,7 +78,8 @@ export function initBgm() {
     currentTitle: '',
     muted: readMuted(),
     started: false,    // playback has begun at least once
-    ready: false,      // manifest loaded
+    ready: false,      // playlist loaded with at least one track
+    loaded: false,     // /api/bgm fetch settled (success or failure)
     errorStreak: 0,    // consecutive load/decode failures
     unavailable: false, // whole library unreachable — stop retrying
   };
@@ -220,6 +209,12 @@ export function initBgm() {
 
   function updateControl() {
     const el = control.el;
+    if (state.loaded && !state.tracks.length) {
+      // No BGM configured for this environment — don't show a dead control.
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
     if (state.unavailable && !state.muted) {
       el.classList.remove('is-playing');
       el.classList.add('is-muted');
@@ -239,30 +234,28 @@ export function initBgm() {
       : `${now} — click to mute`;
   }
 
-  // ---- load manifest -------------------------------------------------------
-  fetch(MANIFEST_URL, { cache: 'no-cache' })
+  // ---- load playlist from the app-owned /api/bgm contract ------------------
+  fetch(BGM_API_URL, { cache: 'no-cache' })
     .then((res) => {
-      if (!res.ok) throw new Error(`manifest ${res.status}`);
+      if (!res.ok) throw new Error(`bgm ${res.status}`);
       return res.json();
     })
-    .then((manifest) => {
-      const list = Array.isArray(manifest?.tracks) ? manifest.tracks : [];
+    .then((payload) => {
+      const list = Array.isArray(payload && payload.tracks) ? payload.tracks : [];
       state.tracks = list
-        .filter((t) => t && t.file)
-        .map((t) => ({
-          title: t.title || t.file,
-          url: resolveTrackUrl(t.file, manifest.baseUrl),
-        }));
+        .filter((t) => t && t.url)
+        .map((t) => ({ title: t.title || t.url, url: t.url }));
       state.ready = state.tracks.length > 0;
+      state.loaded = true;
       refreshQueue();
       updateControl();
-      // If the user already interacted before the manifest finished loading,
-      // playback won't be armed; the next gesture handles it. If autoplay is
-      // permitted (e.g. returning user), try immediately.
+      // If the user already interacted before the list finished loading, the
+      // next gesture arms playback; if autoplay is permitted, start now.
       if (state.ready && !state.muted) beginPlayback();
     })
     .catch(() => {
       state.ready = false;
+      state.loaded = true;
       updateControl();
     });
 
