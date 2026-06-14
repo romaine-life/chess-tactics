@@ -1,0 +1,114 @@
+{
+  "schema": "asset-family/v1",
+  "family": "main-menu-mode-button",
+  "note": "Phase-1 hybrid (c) assets: generated concept art mechanically normalized. Bridge-grade — replace the PNGs in place to upgrade the art with no code change. The `label` slot is the live-DOM-text handshake.",
+  "generatedFrom": [
+    "main-menu-button-art-five-mode.png",
+    "main-menu-button-art-three-state.png"
+  ],
+  "frame": {
+    "w": 480,
+    "h": 130,
+    "gutter": 2
+  },
+  "slots": {
+    "icon": {
+      "x": 2.5,
+      "y": 12,
+      "w": 21,
+      "h": 76
+    },
+    "label": {
+      "x": 27,
+      "y": 17,
+      "w": 58,
+      "h": 66
+    },
+    "chevron": {
+      "x": 87.5,
+      "y": 32,
+      "w": 10,
+      "h": 36
+    }
+  },
+  "states": [
+    "default",
+    "disabled"
+  ],
+  "modes": [
+    {
+      "id": "skirmish",
+      "icon": "sword",
+      "action": "party",
+      "label": "Solo Skirmish",
+      "frames": {
+        "default": "mode-button-skirmish.png",
+        "disabled": "mode-button-skirmish-disabled.png"
+      },
+      "frames2x": {
+        "default": "mode-button-skirmish@2x.png",
+        "disabled": "mode-button-skirmish-disabled@2x.png"
+      }
+    },
+    {
+      "id": "campaign",
+      "icon": "crown",
+      "action": "campaigns",
+      "label": "Campaign Editor",
+      "frames": {
+        "default": "mode-button-campaign.png",
+        "disabled": "mode-button-campaign-disabled.png"
+      },
+      "frames2x": {
+        "default": "mode-button-campaign@2x.png",
+        "disabled": "mode-button-campaign-disabled@2x.png"
+      }
+    },
+    {
+      "id": "editor",
+      "icon": "scroll",
+      "action": "level-editor-preview",
+      "label": "Level Editor",
+      "frames": {
+        "default": "mode-button-editor.png",
+        "disabled": "mode-button-editor-disabled.png"
+      },
+      "frames2x": {
+        "default": "mode-button-editor@2x.png",
+        "disabled": "mode-button-editor-disabled@2x.png"
+      }
+    },
+    {
+      "id": "multiplayer",
+      "icon": "people",
+      "action": "lobbies",
+      "label": "Lobbies",
+      "frames": {
+        "default": "mode-button-multiplayer.png",
+        "disabled": "mode-button-multiplayer-disabled.png"
+      },
+      "frames2x": {
+        "default": "mode-button-multiplayer@2x.png",
+        "disabled": "mode-button-multiplayer-disabled@2x.png"
+      }
+    },
+    {
+      "id": "settings",
+      "icon": "gear",
+      "action": "settings",
+      "label": "Settings",
+      "frames": {
+        "default": "mode-button-settings.png",
+        "disabled": "mode-button-settings-disabled.png"
+      },
+      "frames2x": {
+        "default": "mode-button-settings@2x.png",
+        "disabled": "mode-button-settings-disabled@2x.png"
+      }
+    }
+  ],
+  "contactSheet": {
+    "x1": "contact-sheet.png",
+    "x2": "contact-sheet@2x.png"
+  }
+}

@@ -1,4 +1,7 @@
 import './style.css';
+// Generated asset family (frontend/scripts/normalize-mode-buttons.mjs).
+// The manifest is the handshake: the frame list + the live-DOM-text `label` slot.
+import modeButtonsManifest from '../public/assets/ui/main-menu/mode-buttons.manifest.json';
 
 (function () {
   const COLS = 8;
@@ -2874,11 +2877,42 @@ import './style.css';
   }
 
 
-  function renderMainMenuArtAction(action, label, active = false) {
+  function modeButtonAssetUrl(file) {
+    return `/assets/ui/main-menu/${file}`;
+  }
+
+  // Asset-backed mode button: a transparent PNG frame from the manifest with a
+  // LIVE DOM label composited into the manifest `label` slot. Swapping the PNG
+  // (e.g. a hand-authored upgrade) changes the look with zero code change.
+  function renderModeButton(mode, { active = false, disabled = false } = {}) {
+    const stateKey = disabled ? 'disabled' : 'default';
+    const frames2x = mode.frames2x || {};
+    const url1 = modeButtonAssetUrl(mode.frames[stateKey]);
+    const url2 = modeButtonAssetUrl(frames2x[stateKey] || mode.frames[stateKey]);
+    const slot = modeButtonsManifest.slots.label;
+    const labelStyle = `left:${slot.x}%;top:${slot.y}%;width:${slot.w}%;height:${slot.h}%`;
+    const frameStyle = `--frame-1x:url('${url1}');--frame-2x:url('${url2}')`;
+    const classes = ['mode-button'];
+    if (active) classes.push('is-active');
+    if (disabled) classes.push('is-disabled');
     return `
-      <button class="main-menu-art-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">
-        <span>${escapeText(label)}</span>
+      <button class="${classes.join(' ')}" type="button" data-action="${escapeText(mode.action)}" style="${frameStyle}" aria-label="${escapeText(mode.label)}"${disabled ? ' aria-disabled="true"' : ''}${active ? ' aria-current="true"' : ''}>
+        <span class="mode-button-label" style="${labelStyle}">${escapeText(mode.label)}</span>
       </button>`;
+  }
+
+  function renderModeButtonStack({ activeAction = 'party', disabledActions = [] } = {}) {
+    const ar = `${modeButtonsManifest.frame.w} / ${modeButtonsManifest.frame.h}`;
+    const buttons = modeButtonsManifest.modes
+      .map((mode) => renderModeButton(mode, {
+        active: mode.action === activeAction,
+        disabled: disabledActions.includes(mode.action),
+      }))
+      .join('');
+    return `
+      <nav class="main-menu-actions main-menu-actions-assets" aria-label="Play modes" style="--mode-ar:${ar}">
+        ${buttons}
+      </nav>`;
   }
 
   function mainMenuReviewStatusFor(id, fallbackStatus) {
@@ -3105,15 +3139,15 @@ import './style.css';
       {
         id: 'mode-buttons',
         title: 'Mode Button Family',
-        baseStatus: 'accepted',
-        file: '/assets/ui/main-menu-aspirational.png',
-        cropClass: 'portfolio-button-crop',
-        alt: 'Approved main menu render showing the five painted mode buttons',
-        caption: 'Approved portfolio crop. This is wired into the live menu so the lettering stays painted with the source.',
-        description: 'The live button stack uses the concept render crop directly: cyan-lit selected frame, warm dark fill, compact icon tile, painted labels, and five stacked mode choices.',
-        target: 'Confirm the already-approved button family still anchors the menu.',
-        liveUse: 'Transparent live click targets sit over the painted crop; browser text is not redrawn over the buttons.',
-        decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
+        baseStatus: 'review',
+        file: '/assets/ui/main-menu/contact-sheet.png',
+        alt: 'Contact sheet of the five normalized mode-button frames in default and disabled states on a transparency checkerboard',
+        caption: 'Phase-1 asset family: generated concept art mechanically normalized (flood-fill keyed, trimmed, 2px gutter, @1x/@2x) into transparent frames. Replace any PNG in place to upgrade the art with no code change.',
+        description: 'The live button stack is now assembled from real per-button assets (mode-buttons.manifest.json) with live DOM labels composited into the manifest label slot — not a single painted crop. Empty plates plus live text keep labels localizable, accessible, and dynamic.',
+        target: 'Accept the asset-backed family (correct pipeline, bridge-grade art) as the live mode stack, or flag art-quality items for the next art pass.',
+        liveUse: 'Drives the live main menu mode stack at / and /main-menu — each button is a frame PNG + live label + click target.',
+        decision: 'New this pass — supersedes the painted-crop bridge. Pending your accept/reject.',
+        specimen: renderModeButtonStack({ activeAction: 'party' }),
         referenceCrops: [
           {
             title: 'Approved Render Crop',
@@ -3416,14 +3450,7 @@ import './style.css';
             </div>
           </section>
 
-          <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">
-            <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
-            ${renderMainMenuArtAction('party', 'Solo Skirmish', true)}
-            ${renderMainMenuArtAction('campaigns', 'Campaign Editor')}
-            ${renderMainMenuArtAction('level-editor-preview', 'Level Editor')}
-            ${renderMainMenuArtAction('lobbies', 'Lobbies')}
-            ${renderMainMenuArtAction('settings', 'Settings')}
-          </nav>
+          ${renderModeButtonStack({ activeAction: 'party' })}
 
           ${renderDailyPanel()}
         </section>
