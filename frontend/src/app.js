@@ -761,6 +761,7 @@ import assetCatalog from './asset-catalog.json';
     '/main-menu': { screen: 'main', mainMenuView: 'skeleton' },
     '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
     '/design': { screen: 'main', mainMenuView: 'design-index' },
+    '/design/glossary': { screen: 'main', mainMenuView: 'glossary' },
     '/design/assets': { screen: 'main', mainMenuView: 'asset-catalog' },
     '/design/assets/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
     '/design/assets/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
@@ -2913,6 +2914,10 @@ import assetCatalog from './asset-catalog.json';
     return currentRoute().mainMenuView === 'design-index';
   }
 
+  function shouldShowGlossary() {
+    return currentRoute().mainMenuView === 'glossary';
+  }
+
 
   // Live main-menu mode list. Actions and labels are app concerns (live DOM);
   // the ART comes from the asset catalog (button-9slice.main-menu + the
@@ -3114,14 +3119,79 @@ import assetCatalog from './asset-catalog.json';
       </details>`;
   }
 
+  const GLOSSARY = [
+    { term: 'asset', tag: '', def: 'A reusable image plus contract the game operates on: it renders, state-switches, slots into, or swaps it.', src: 'Unity / Unreal' },
+    { term: '9-slice', tag: 'asset', def: 'A texture that scales while its corners stay fixed and the middle stretches; the reusable, icon-less button or panel background.', src: 'Unity 9-slicing · Godot NinePatchRect' },
+    { term: 'icon', tag: 'asset', def: 'A standalone image composited into a slot.', src: 'universal' },
+    { term: 'sprite atlas', tag: 'asset', def: 'One image packing several unrelated sprites (our source sheets).', src: 'Unity Sprite Atlas' },
+    { term: 'catalog', tag: '', def: 'The library of all assets, browsed sorted by type. It holds assets, not widgets.', src: 'project' },
+    { term: 'type', tag: '', def: 'An inventory shelf: a kind of asset (9-slice, icon). The catalog tree top levels.', src: 'project' },
+    { term: 'state', tag: '', def: 'A named visual variant: normal, pressed (later highlighted, selected, disabled).', src: 'Unity UI transitions' },
+    { term: 'slot', tag: '', def: 'A labelled region of a 9-slice filled at runtime by an asset (icon) or live text: iconSlot, textInset, arrowSlot.', src: 'Unreal UMG' },
+    { term: 'rect', tag: '', def: 'A pixel rectangle {x, y, w, h}; the bounds of a state or slot.', src: 'Unity Rect · Godot region_rect' },
+    { term: 'patch margins', tag: '', def: 'The fixed border thicknesses of a 9-slice: the parts that do not stretch.', src: 'Unity / Godot' },
+    { term: 'widget', tag: 'not an asset', def: 'An interactive element the player manipulates (a button); assembled at runtime from assets. Also called a control.', src: 'Unreal UMG · Wikipedia' },
+    { term: 'template', tag: 'not an asset', def: 'The reusable definition a widget instance is built from.', src: 'Unreal UI Template · Unity Prefab' },
+    { term: 'instance', tag: 'not an asset', def: 'A specific live widget produced from a template.', src: 'all engines' },
+  ];
+
+  function renderGlossaryTag(tag) {
+    if (!tag) return '';
+    const cls = tag === 'asset' ? 'is-asset' : 'is-not-asset';
+    return `<span class="glossary-tag ${cls}">${escapeText(tag)}</span>`;
+  }
+
+  function renderGlossary() {
+    return `
+      <div class="main-assets-screen glossary-screen" data-live-screen="glossary">
+        <header class="main-assets-header">
+          <a class="design-back" href="/design">&larr; Design</a>
+          <p class="eyebrow">Design system</p>
+          <h2>Glossary</h2>
+          <p class="main-assets-intro">The shared vocabulary for the asset catalog. Every term is attested by engine documentation (Unity, Unreal, Godot).</p>
+        </header>
+
+        <section class="glossary-callout" aria-label="Core distinction">
+          <p><strong>Two structures, kept separate.</strong> The <b>catalog</b> is an inventory of assets sorted by type (Buttons, Icons, Board, Pieces). A <b>button</b> is a <b>widget</b> &mdash; a composition of assets assembled at runtime &mdash; not an inventory item.</p>
+        </section>
+
+        <dl class="glossary-list">
+          ${GLOSSARY.map((g) => `
+            <div class="glossary-row">
+              <dt>
+                <span class="glossary-term">${escapeText(g.term)}</span>
+                ${renderGlossaryTag(g.tag)}
+              </dt>
+              <dd>
+                <p>${escapeText(g.def)}</p>
+                <span class="glossary-src">${escapeText(g.src)}</span>
+              </dd>
+            </div>
+          `).join('')}
+        </dl>
+
+        <section class="glossary-example" aria-label="Worked example">
+          <h3>Worked example</h3>
+          <p>The on-screen <b>Solo Skirmish</b> button is a <b>widget</b>: the <code>button-9slice.main-menu</code> 9-slice (in its <code>pressed</code> state) + the <code>button-icon.main-menu.sword</code> icon (in the <code>iconSlot</code>) + the live label &ldquo;Solo Skirmish&rdquo; (in the <code>textInset</code>) + the <code>party</code> action. The 9-slice and icon are assets in the catalog; the button itself is not.</p>
+        </section>
+      </div>`;
+  }
+
   function renderDesignIndex() {
     const areas = [
       {
         href: '/design/assets',
         kicker: 'Asset catalog',
         title: 'Assets',
-        copy: 'Programmatic catalog for reusable game assets: contracts, states, frame rules, source art, and previews.',
+        copy: 'Programmatic catalog for reusable game assets: contracts, states, slot rules, source art, and previews.',
         go: 'Open catalog',
+      },
+      {
+        href: '/design/glossary',
+        kicker: 'Design system',
+        title: 'Glossary',
+        copy: 'The shared vocabulary — asset, 9-slice, icon, slot, state, widget, template — each attested by engine docs.',
+        go: 'Open glossary',
       },
       {
         href: '/design/main-menu',
@@ -4127,6 +4197,8 @@ import assetCatalog from './asset-catalog.json';
         menuLayer.innerHTML = renderAssetCatalog();
       } else if (shouldShowMainSpecimen()) {
         menuLayer.innerHTML = renderSpecimenCapture();
+      } else if (shouldShowGlossary()) {
+        menuLayer.innerHTML = renderGlossary();
       } else if (shouldShowMainDesignIndex()) {
         menuLayer.innerHTML = renderDesignIndex();
       } else {
