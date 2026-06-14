@@ -91,6 +91,8 @@ export function initBgm() {
     muted: readMuted(),
     started: false,    // playback has begun at least once
     ready: false,      // manifest loaded
+    errorStreak: 0,    // consecutive load/decode failures
+    unavailable: false, // whole library unreachable — stop retrying
   };
 
   const control = buildControl();
@@ -143,6 +145,9 @@ export function initBgm() {
     if (state.muted) {
       audio.pause();
     } else {
+      // Unmuting is also the "retry" affordance if the library was unreachable.
+      state.unavailable = false;
+      state.errorStreak = 0;
       beginPlayback();
     }
     updateControl();
@@ -150,11 +155,21 @@ export function initBgm() {
 
   // ---- audio element events ------------------------------------------------
   audio.addEventListener('ended', () => {
+    state.errorStreak = 0;
     if (state.muted) return;
     playNext();
   });
   audio.addEventListener('error', () => {
     if (state.muted) return;
+    state.errorStreak += 1;
+    // If a whole shuffle cycle's worth of tracks fails in a row (e.g. the blob
+    // container isn't populated yet), stop retrying so we don't churn endless
+    // 404s in the background. Unmuting resets and retries.
+    if (state.tracks.length && state.errorStreak >= state.tracks.length) {
+      state.unavailable = true;
+      updateControl();
+      return;
+    }
     window.setTimeout(() => {
       if (!state.muted) playNext();
     }, ERROR_SKIP_DELAY_MS);
@@ -164,6 +179,8 @@ export function initBgm() {
     // arming gesture (a gesture fired while the manifest was still loading, or
     // an autoplay that the browser blocked, must not disarm us prematurely).
     state.started = true;
+    state.errorStreak = 0;
+    state.unavailable = false;
     disarmGesture();
     updateControl();
   });
@@ -188,13 +205,29 @@ export function initBgm() {
     el.className = 'bgm-control';
     el.addEventListener('click', (event) => {
       event.preventDefault();
-      toggleMute();
+      if (state.unavailable && !state.muted) {
+        // In the unavailable state the button is a retry affordance.
+        state.unavailable = false;
+        state.errorStreak = 0;
+        beginPlayback();
+        updateControl();
+      } else {
+        toggleMute();
+      }
     });
     return { el };
   }
 
   function updateControl() {
     const el = control.el;
+    if (state.unavailable && !state.muted) {
+      el.classList.remove('is-playing');
+      el.classList.add('is-muted');
+      el.textContent = '🔈';
+      el.setAttribute('aria-label', 'Background music unavailable — click to retry');
+      el.title = 'Background music unavailable — click to retry';
+      return;
+    }
     const playing = !audio.paused && state.started && !state.muted;
     el.classList.toggle('is-muted', state.muted);
     el.classList.toggle('is-playing', playing);

@@ -62,8 +62,11 @@ live in production is four ordered steps:
    into the `bgm` container.
 
 After step 3, production streams BGM straight from blob. Until then, the feature
-is dormant in prod (the manifest 404s harmlessly); test slots stage the audio
-locally (see below), so the shuffle UX is fully testable before provisioning.
+is dormant in prod: the committed manifest still serves (200), but the blob
+tracks 404, so the player stops after one failed shuffle cycle and shows a
+"retry" control — no console errors, no endless background requests. Test slots
+stage the audio locally (see below), so the shuffle UX is fully testable before
+provisioning.
 
 ## Testing in a Glimmung slot
 
