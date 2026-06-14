@@ -1,7 +1,7 @@
 # Asset Terminology
 
 Canonical vocabulary for the asset catalog (`frontend/src/asset-catalog.json`,
-explored at `/design/assets`). **Every term here is attested by an engine
+explored at `/design/catalog`). **Every term here is attested by an engine
 authority** (Unity, Unreal, or Godot documentation) — no informal terms. Pairs
 with `docs/asset-generation-contract.md` (what *becomes* an asset) and
 `docs/asset-pipeline-proposal.md` (how art is normalized).

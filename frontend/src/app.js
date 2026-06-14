@@ -763,13 +763,13 @@ import assetCatalog from './asset-catalog.json';
     '/design': { screen: 'main', mainMenuView: 'design-index' },
     '/design/glossary': { screen: 'main', mainMenuView: 'glossary' },
     '/design/widgets': { screen: 'main', mainMenuView: 'widgets' },
-    '/design/assets': { screen: 'main', mainMenuView: 'asset-catalog' },
-    '/design/assets/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
-    '/design/assets/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
-    '/design/assets/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
-    '/design/assets/buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetGroup: 'buttons' },
-    '/design/assets/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-9slice.main-menu' },
-    '/design/assets/main-menu-button-icons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-icon.main-menu' },
+    '/design/catalog': { screen: 'main', mainMenuView: 'asset-catalog' },
+    '/design/catalog/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
+    '/design/catalog/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
+    '/design/catalog/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
+    '/design/catalog/buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetGroup: 'buttons' },
+    '/design/catalog/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-9slice.main-menu' },
+    '/design/catalog/main-menu-button-icons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-icon.main-menu' },
     '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
     '/design/main-menu/assets': { screen: 'main', mainMenuView: 'asset-lab' },
     '/design/main-menu/specimen': { screen: 'main', mainMenuView: 'specimen' },
@@ -797,14 +797,14 @@ import assetCatalog from './asset-catalog.json';
   function currentRoute() {
     const path = currentPath();
     if (APP_ROUTES[path]) return APP_ROUTES[path];
-    if (path === '/design/assets/glossary') {
+    if (path === '/design/catalog/glossary') {
       return { screen: 'main', mainMenuView: 'asset-catalog', catalogMode: 'glossary' };
     }
-    const glossaryTermMatch = path.match(/^\/design\/assets\/glossary\/(.+)$/);
+    const glossaryTermMatch = path.match(/^\/design\/catalog\/glossary\/(.+)$/);
     if (glossaryTermMatch) {
       return { screen: 'main', mainMenuView: 'asset-catalog', catalogMode: 'glossary', glossaryTerm: decodeURIComponent(glossaryTermMatch[1]) };
     }
-    const widgetMatch = path.match(/^\/design\/assets\/widgets\/([^/]+)(?:\/([^/]+))?$/);
+    const widgetMatch = path.match(/^\/design\/catalog\/widgets\/([^/]+)(?:\/([^/]+))?$/);
     if (widgetMatch) {
       return {
         screen: 'main',
@@ -818,7 +818,7 @@ import assetCatalog from './asset-catalog.json';
       'main-menu-buttons': 'button-9slice.main-menu',
       'main-menu-button-icons': 'button-icon.main-menu',
     };
-    const assetMatch = path.match(/^\/design\/assets\/([^/]+)(?:\/([^/]+))?$/);
+    const assetMatch = path.match(/^\/design\/catalog\/([^/]+)(?:\/([^/]+))?$/);
     if (assetMatch) {
       const assetType = assetRouteTypes[assetMatch[1]];
       if (!assetType) return APP_ROUTES['/'];
@@ -3239,7 +3239,7 @@ import assetCatalog from './asset-catalog.json';
   function renderDesignIndex() {
     const areas = [
       {
-        href: '/design/assets',
+        href: '/design/catalog',
         kicker: 'Design system',
         title: 'Catalog',
         copy: 'Classified catalog of the game’s buildable entities — assets (9-slice, icon) and widgets (button) — with contracts, states, slot rules, source art, and previews.',
@@ -3656,9 +3656,9 @@ import assetCatalog from './asset-catalog.json';
   }
 
   function assetTypePath(type) {
-    if (type === 'button-9slice.main-menu') return '/design/assets/main-menu-buttons';
-    if (type === 'button-icon.main-menu') return '/design/assets/main-menu-button-icons';
-    return `/design/assets/${type}s`;
+    if (type === 'button-9slice.main-menu') return '/design/catalog/main-menu-buttons';
+    if (type === 'button-icon.main-menu') return '/design/catalog/main-menu-button-icons';
+    return `/design/catalog/${type}s`;
   }
 
   function assetPath(asset) {
@@ -3678,7 +3678,7 @@ import assetCatalog from './asset-catalog.json';
     }, {});
     return [
       {
-        href: '/design/assets/main-menu-buttons',
+        href: '/design/catalog/main-menu-buttons',
         title: 'Main Menu Buttons',
         summary: 'Menu-row button frames with live labels, an icon slot, arrow affordance, binary states, and hitbox rules.',
         count: countsByType['button-9slice.main-menu'] || 0,
@@ -3713,8 +3713,8 @@ import assetCatalog from './asset-catalog.json';
       {
         label: 'asset',
         kinds: [
-          { title: '9-slice', href: '/design/assets/main-menu-buttons', count: countsByType['button-9slice.main-menu'] || 0, summary: 'Scalable, icon-less frames whose corners stay fixed while the middle stretches.' },
-          { title: 'icon', href: '/design/assets/main-menu-button-icons', count: countsByType['button-icon.main-menu'] || 0, summary: 'Standalone images composited into a slot.' },
+          { title: '9-slice', href: '/design/catalog/main-menu-buttons', count: countsByType['button-9slice.main-menu'] || 0, summary: 'Scalable, icon-less frames whose corners stay fixed while the middle stretches.' },
+          { title: 'icon', href: '/design/catalog/main-menu-button-icons', count: countsByType['button-icon.main-menu'] || 0, summary: 'Standalone images composited into a slot.' },
           { title: 'sprite atlas', href: '#', count: 0, planned: true, summary: 'One image packing several unrelated sprites.' },
         ],
       },
@@ -3771,7 +3771,7 @@ import assetCatalog from './asset-catalog.json';
   }
 
   function renderCatalogModeToggle(active) {
-    const tabs = [['catalog', 'Catalog', '/design/assets'], ['glossary', 'Glossary', '/design/assets/glossary']];
+    const tabs = [['catalog', 'Catalog', '/design/catalog'], ['glossary', 'Glossary', '/design/catalog/glossary']];
     // The active tab is inert (you are already in that view); only the inactive
     // tab is a link, so clicking the current mode never reloads you to its root.
     return `<nav class="catalog-mode-toggle" aria-label="Catalog view mode">
@@ -3788,7 +3788,7 @@ import assetCatalog from './asset-catalog.json';
       .filter((node) => GLOSSARY.some((g) => g.term === node.label))
       .map((node) => {
         const kids = node.children ? pruneTreeToTerms(node.children) : [];
-        const out = { label: node.label, href: `/design/assets/glossary/${encodeURIComponent(node.label)}` };
+        const out = { label: node.label, href: `/design/catalog/glossary/${encodeURIComponent(node.label)}` };
         if (kids.length) out.children = kids;
         return out;
       });
@@ -3814,7 +3814,7 @@ import assetCatalog from './asset-catalog.json';
     const activeHref = currentPath();
     if (route.catalogMode === 'glossary') {
       const term = route.glossaryTerm || 'asset';
-      const termHref = `/design/assets/glossary/${encodeURIComponent(term)}`;
+      const termHref = `/design/catalog/glossary/${encodeURIComponent(term)}`;
       return `
         <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
           <header class="main-assets-header">
@@ -3908,24 +3908,24 @@ import assetCatalog from './asset-catalog.json';
   const ASSET_TREE_PROTOTYPE = [
     {
       label: 'asset',
-      href: '/design/assets',
+      href: '/design/catalog',
       children: [
         {
           label: '9-slice',
-          href: '/design/assets/main-menu-buttons',
+          href: '/design/catalog/main-menu-buttons',
           children: [
-            { label: 'Main Menu', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
+            { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
           ],
         },
         {
           label: 'icon',
-          href: '/design/assets/main-menu-button-icons',
+          href: '/design/catalog/main-menu-button-icons',
           children: [
-            { label: 'Sword', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.sword' },
-            { label: 'Crown', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.crown' },
-            { label: 'Scroll', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.scroll' },
-            { label: 'Players', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.people' },
-            { label: 'Gear', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.gear' },
+            { label: 'Sword', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.sword' },
+            { label: 'Crown', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.crown' },
+            { label: 'Scroll', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.scroll' },
+            { label: 'Players', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.people' },
+            { label: 'Gear', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.gear' },
           ],
         },
         { label: 'sprite atlas', href: '#', planned: true },
@@ -3933,21 +3933,21 @@ import assetCatalog from './asset-catalog.json';
     },
     {
       label: 'widget',
-      href: '/design/assets/widgets/main-menu',
+      href: '/design/catalog/widgets/main-menu',
       children: [
         {
           label: 'button',
-          href: '/design/assets/widgets/main-menu',
+          href: '/design/catalog/widgets/main-menu',
           children: [
             {
               label: 'Main Menu',
-              href: '/design/assets/widgets/main-menu',
+              href: '/design/catalog/widgets/main-menu',
               children: [
-                { label: 'Solo Skirmish', href: '/design/assets/widgets/main-menu/solo-skirmish' },
-                { label: 'Campaign Editor', href: '/design/assets/widgets/main-menu/campaign-editor' },
-                { label: 'Level Editor', href: '/design/assets/widgets/main-menu/level-editor' },
-                { label: 'Lobbies', href: '/design/assets/widgets/main-menu/lobbies' },
-                { label: 'Settings', href: '/design/assets/widgets/main-menu/settings' },
+                { label: 'Solo Skirmish', href: '/design/catalog/widgets/main-menu/solo-skirmish' },
+                { label: 'Campaign Editor', href: '/design/catalog/widgets/main-menu/campaign-editor' },
+                { label: 'Level Editor', href: '/design/catalog/widgets/main-menu/level-editor' },
+                { label: 'Lobbies', href: '/design/catalog/widgets/main-menu/lobbies' },
+                { label: 'Settings', href: '/design/catalog/widgets/main-menu/settings' },
               ],
             },
           ],
@@ -3958,9 +3958,9 @@ import assetCatalog from './asset-catalog.json';
 
   function prototypeLinks(active) {
     const links = [
-      ['drilldown', 'Page Drilldown', '/design/assets/navigation-drilldown'],
-      ['tree', 'Tree Sidebar', '/design/assets/navigation-tree'],
-      ['hybrid', 'Hybrid', '/design/assets/navigation-hybrid'],
+      ['drilldown', 'Page Drilldown', '/design/catalog/navigation-drilldown'],
+      ['tree', 'Tree Sidebar', '/design/catalog/navigation-tree'],
+      ['hybrid', 'Hybrid', '/design/catalog/navigation-hybrid'],
     ];
     return `<nav class="prototype-switcher" aria-label="Asset navigation prototypes">
       ${links.map(([key, label, href]) => `<a class="${active === key ? 'active' : ''}" href="${href}">${label}</a>`).join('')}
@@ -4037,17 +4037,17 @@ import assetCatalog from './asset-catalog.json';
     return `
       <section class="prototype-drill-grid">
         ${renderPrototypePreviewCard('Assets', 'Start at the root. Each card sends you to a new page one level deeper.', [
-          { label: 'Buttons', href: '/design/assets/buttons' },
+          { label: 'Buttons', href: '/design/catalog/buttons' },
           { label: 'Icons', href: '#' },
           { label: 'Board', href: '#', planned: true },
           { label: 'Pieces', href: '#', planned: true },
         ])}
         ${renderPrototypePreviewCard('Buttons', 'The button category page lists button families, not individual button assets.', [
-          { label: 'Main Menu Buttons', href: '/design/assets/main-menu-buttons' },
+          { label: 'Main Menu Buttons', href: '/design/catalog/main-menu-buttons' },
           { label: 'Plain Buttons', href: '#', planned: true },
         ])}
         ${renderPrototypePreviewCard('Main Menu Buttons', 'The type page has the dropdown/search picker and one full inspection card.', [
-          { label: 'Main Menu', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
+          { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
         ])}
       </section>`;
   }
@@ -4055,11 +4055,11 @@ import assetCatalog from './asset-catalog.json';
   function renderTreePrototype() {
     return `
       <section class="prototype-tree-layout">
-        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons')}
+        ${renderPrototypeTreePanel('/design/catalog/main-menu-buttons')}
         <div class="prototype-tree-content">
           ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons'])}
           ${renderPrototypePreviewCard('Main Menu Buttons', 'The tree stays visible while the right panel swaps to the selected category, type, or asset page.', [
-            { label: 'Main Menu', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
+            { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
           ])}
         </div>
       </section>`;
@@ -4068,13 +4068,13 @@ import assetCatalog from './asset-catalog.json';
   function renderHybridPrototype() {
     return `
       <section class="prototype-tree-layout prototype-hybrid-layout">
-        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons/button-9slice.main-menu')}
+        ${renderPrototypeTreePanel('/design/catalog/main-menu-buttons/button-9slice.main-menu')}
         <div class="prototype-tree-content">
           ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons', 'Main Menu Button 9-Slice'])}
           <div class="prototype-hybrid-grid">
             ${renderPrototypePreviewCard('Main Menu Buttons', 'Type-level controls live here: search, dropdown, status filters, and family notes.', [
               { label: 'Search within Main Menu Buttons', href: '#' },
-              { label: 'Selected: Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
+              { label: 'Selected: Main Menu Button 9-Slice', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
             ])}
             ${renderPrototypePreviewCard('Inspection Card', 'The selected asset still gets a dedicated full card, but the tree keeps the larger catalog context visible.', [
               { label: 'States: pressed, normal', href: '#' },
@@ -4100,7 +4100,7 @@ import assetCatalog from './asset-catalog.json';
     return `
       <div class="main-assets-screen asset-catalog-screen asset-prototype-screen" data-live-screen="asset-nav-prototype">
         <header class="main-assets-header">
-          <a class="design-back" href="/design/assets">&larr; Asset Catalog</a>
+          <a class="design-back" href="/design/catalog">&larr; Asset Catalog</a>
           <p class="eyebrow">Asset navigation study</p>
           <h2>${titles[prototype]}</h2>
           <p class="main-assets-intro">Quick structural mocks for comparing how a large asset catalog might be explored. These pages are intentionally rough.</p>
