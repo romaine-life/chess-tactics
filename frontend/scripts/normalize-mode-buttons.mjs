@@ -311,12 +311,16 @@ function main() {
   copyInto(frameSheet, pressed, 0, plateH);
   writePNG(frameSheet, path.join(OUT_DIR, 'button-9slice.png'));
 
-  // --- icons (same badge geometry -> they fill the punched hole) ---
+  // --- icons: crop every badge with the SAME plain-plate geometry (`badge`),
+  // centered on each band's plate. The selected row (sword) has a taller inked
+  // band because of its glow halo; using per-band height there inflated the crop
+  // and baked the halo into the icon. Centering the fixed-size badge on the plate
+  // excludes the halo so every icon matches.
   bands.forEach((b, i) => {
     const id = ICON_IDS[i];
     if (!id) return;
-    const r = badgeRectFor(b, colInkRange(sheet, bg, FLOOD_TOL, b[0], b[1]).x0);
-    const badgeImg = crop(sheet, r.x, r.y, r.w, r.h);
+    const cy = Math.round((b[0] + b[1]) / 2 - badge.h / 2);
+    const badgeImg = crop(sheet, badge.x, cy, badge.w, badge.h);
     writePNG(resize(badgeImg, ICON_PX, ICON_PX), path.join(OUT_DIR, `icon-${id}.png`));
     writePNG(resize(badgeImg, ICON_PX * 2, ICON_PX * 2), path.join(OUT_DIR, `icon-${id}@2x.png`));
   });
