@@ -3772,8 +3772,12 @@ import assetCatalog from './asset-catalog.json';
 
   function renderCatalogModeToggle(active) {
     const tabs = [['catalog', 'Catalog', '/design/assets'], ['glossary', 'Glossary', '/design/assets/glossary']];
+    // The active tab is inert (you are already in that view); only the inactive
+    // tab is a link, so clicking the current mode never reloads you to its root.
     return `<nav class="catalog-mode-toggle" aria-label="Catalog view mode">
-      ${tabs.map(([key, label, href]) => `<a class="${active === key ? 'active' : ''}" href="${escapeText(href)}">${escapeText(label)}</a>`).join('')}
+      ${tabs.map(([key, label, href]) => (active === key
+        ? `<span class="active" aria-current="page">${escapeText(label)}</span>`
+        : `<a href="${escapeText(href)}">${escapeText(label)}</a>`)).join('')}
     </nav>`;
   }
 

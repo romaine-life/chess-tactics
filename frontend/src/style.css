@@ -1119,16 +1119,18 @@ h1 {
   border-radius: 999px;
   padding: 3px;
 }
-.catalog-mode-toggle a {
+.catalog-mode-toggle a,
+.catalog-mode-toggle .active {
   padding: 5px 16px;
   border-radius: 999px;
   font-size: 13px;
   color: #968f82;
   text-decoration: none;
 }
-.catalog-mode-toggle a.active {
+.catalog-mode-toggle .active {
   background: rgba(210, 128, 92, .18);
   color: #f2eee4;
+  cursor: default;
 }
 
 /* Glossary entry (glossary mode of the catalog) */
