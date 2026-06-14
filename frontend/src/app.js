@@ -3655,19 +3655,39 @@ import assetCatalog from './asset-catalog.json';
   }
 
   function renderAssetCatalogHome(countsByType) {
+    const classes = [
+      {
+        label: 'asset',
+        kinds: [
+          { title: '9-slice', href: '/design/assets/main-menu-buttons', count: countsByType['button-9slice.main-menu'] || 0, summary: 'Scalable, icon-less frames whose corners stay fixed while the middle stretches.' },
+          { title: 'icon', href: '/design/assets/main-menu-button-icons', count: countsByType['button-icon.main-menu'] || 0, summary: 'Standalone images composited into a slot.' },
+          { title: 'sprite atlas', href: '#', count: 0, planned: true, summary: 'One image packing several unrelated sprites.' },
+        ],
+      },
+      {
+        label: 'widget',
+        kinds: [
+          { title: 'button', href: '#', count: 0, planned: true, summary: 'Interactive element assembled from a 9-slice + icon + live label.' },
+        ],
+      },
+    ];
     return `
-      <section class="catalog-family-grid" aria-label="Asset categories">
-        <a class="catalog-family-card" href="/design/assets/buttons">
-          <span class="design-hub-kicker">category · ${countsByType['button-9slice.main-menu'] || 0} assets</span>
-          <h3>Buttons</h3>
-          <p>Button families grouped by interaction pattern, visual family, and slot rules.</p>
-        </a>
-        <a class="catalog-family-card" href="/design/assets/main-menu-button-icons">
-          <span class="design-hub-kicker">type · ${countsByType['button-icon.main-menu'] || 0} assets</span>
-          <h3>Main Menu Button Icons</h3>
-          <p>Standalone icon assets designed to fit into main-menu button icon slots.</p>
-        </a>
-      </section>`;
+      <div class="catalog-home">
+        ${classes.map((cls) => `
+          <section class="catalog-home-class" aria-label="${escapeText(cls.label)}">
+            <h3 class="catalog-home-class-label">${escapeText(cls.label)}</h3>
+            <div class="catalog-family-grid">
+              ${cls.kinds.map((k) => `
+                <a class="catalog-family-card ${k.planned ? 'disabled' : ''}" href="${escapeText(k.href)}"${k.planned ? ' aria-disabled="true"' : ''}>
+                  <span class="design-hub-kicker">${k.planned ? 'planned' : `${k.count} entit${k.count === 1 ? 'y' : 'ies'}`}</span>
+                  <h4>${escapeText(k.title)}</h4>
+                  <p>${escapeText(k.summary)}</p>
+                </a>
+              `).join('')}
+            </div>
+          </section>
+        `).join('')}
+      </div>`;
   }
 
   function renderAssetTypePicker(assets, selectedAsset) {
@@ -3749,18 +3769,18 @@ import assetCatalog from './asset-catalog.json';
           label: '9-slice',
           href: '/design/assets/main-menu-buttons',
           children: [
-            { label: 'Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
+            { label: 'Main Menu', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
           ],
         },
         {
           label: 'icon',
           href: '/design/assets/main-menu-button-icons',
           children: [
-            { label: 'Sword Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.sword' },
-            { label: 'Crown Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.crown' },
-            { label: 'Scroll Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.scroll' },
-            { label: 'Players Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.people' },
-            { label: 'Gear Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.gear' },
+            { label: 'Sword', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.sword' },
+            { label: 'Crown', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.crown' },
+            { label: 'Scroll', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.scroll' },
+            { label: 'Players', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.people' },
+            { label: 'Gear', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.gear' },
           ],
         },
         { label: 'sprite atlas', href: '#', planned: true },
@@ -3774,7 +3794,7 @@ import assetCatalog from './asset-catalog.json';
           label: 'button',
           href: '#',
           children: [
-            { label: 'Main Menu Button', href: '/main-menu' },
+            { label: 'Main Menu', href: '/main-menu' },
           ],
         },
       ],
@@ -3856,7 +3876,7 @@ import assetCatalog from './asset-catalog.json';
           { label: 'Plain Buttons', href: '#', planned: true },
         ])}
         ${renderPrototypePreviewCard('Main Menu Buttons', 'The type page has the dropdown/search picker and one full inspection card.', [
-          { label: 'Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
+          { label: 'Main Menu', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
         ])}
       </section>`;
   }
@@ -3868,7 +3888,7 @@ import assetCatalog from './asset-catalog.json';
         <div class="prototype-tree-content">
           ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons'])}
           ${renderPrototypePreviewCard('Main Menu Buttons', 'The tree stays visible while the right panel swaps to the selected category, type, or asset page.', [
-            { label: 'Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
+            { label: 'Main Menu', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
           ])}
         </div>
       </section>`;
