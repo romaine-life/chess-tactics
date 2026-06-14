@@ -1,7 +1,6 @@
 import './style.css';
-// Generated asset family (frontend/scripts/normalize-mode-buttons.mjs).
-// The manifest is the handshake: the frame list + the live-DOM-text `label` slot.
-import modeButtonsManifest from '../public/assets/ui/main-menu/mode-buttons.manifest.json';
+// Generated asset families (frontend/scripts/normalize-mode-buttons.mjs) are
+// described by the asset catalog and assembled at render time.
 import assetCatalog from './asset-catalog.json';
 
 (function () {
@@ -2915,40 +2914,42 @@ import assetCatalog from './asset-catalog.json';
   }
 
 
-  function modeButtonAssetUrl(file) {
-    return `/assets/ui/main-menu/${file}`;
-  }
+  // Live main-menu mode list. Actions and labels are app concerns (live DOM);
+  // the ART comes from the asset catalog (button.main-menu.frame + the
+  // button-icon.main-menu assets). Each row is assembled at render time:
+  // frame state + composited icon + live label + action — the catalog model.
+  const MENU_MODES = [
+    { action: 'party', icon: 'button-icon.main-menu.sword', label: 'Solo Skirmish' },
+    { action: 'campaigns', icon: 'button-icon.main-menu.crown', label: 'Campaign Editor' },
+    { action: 'level-editor-preview', icon: 'button-icon.main-menu.scroll', label: 'Level Editor' },
+    { action: 'lobbies', icon: 'button-icon.main-menu.people', label: 'Lobbies' },
+    { action: 'settings', icon: 'button-icon.main-menu.gear', label: 'Settings' },
+  ];
 
-  // Asset-backed mode button: a transparent PNG frame from the manifest with a
-  // LIVE DOM label composited into the manifest `label` slot. Swapping the PNG
-  // (e.g. a hand-authored upgrade) changes the look with zero code change.
-  function renderModeButton(mode, { active = false, disabled = false } = {}) {
-    const stateKey = disabled ? 'disabled' : 'default';
-    const frames2x = mode.frames2x || {};
-    const url1 = modeButtonAssetUrl(mode.frames[stateKey]);
-    const url2 = modeButtonAssetUrl(frames2x[stateKey] || mode.frames[stateKey]);
-    const slot = modeButtonsManifest.slots.label;
-    const labelStyle = `left:${slot.x}%;top:${slot.y}%;width:${slot.w}%;height:${slot.h}%`;
-    const frameStyle = `--frame-1x:url('${url1}');--frame-2x:url('${url2}')`;
-    const classes = ['mode-button'];
-    if (active) classes.push('is-active');
-    if (disabled) classes.push('is-disabled');
+  function renderModeButton(mode, { active = false } = {}) {
+    const frame = assetById('button.main-menu.frame');
+    if (!frame) return '';
+    const rules = frame.rules || {};
+    const stateDef = (frame.states || {})[active ? 'pressed' : 'unpressed'] || (frame.states || {}).unpressed;
+    if (!stateDef) return '';
+    const icon = assetById(mode.icon);
+    const frameStyle = frameStyleForAsset(frame, stateDef.frame);
+    const iconStyle = icon ? `${insetStyle(rules.iconSlot, stateDef.frame)};${frameStyleForAsset(icon, icon.frame)}` : '';
+    const labelStyle = insetStyle(rules.textInset, stateDef.frame);
     return `
-      <button class="${classes.join(' ')}" type="button" data-action="${escapeText(mode.action)}" style="${frameStyle}" aria-label="${escapeText(mode.label)}"${disabled ? ' aria-disabled="true"' : ''}${active ? ' aria-current="true"' : ''}>
+      <button class="mode-button ${active ? 'is-active' : ''}" type="button" data-action="${escapeText(mode.action)}" aria-label="${escapeText(mode.label)}"${active ? ' aria-current="true"' : ''} style="--asset-aspect:${stateDef.frame.w} / ${stateDef.frame.h}">
+        <span class="mode-button-frame" style="${frameStyle}" aria-hidden="true"></span>
+        ${icon ? `<span class="mode-button-icon" style="${iconStyle}" aria-hidden="true"></span>` : ''}
         <span class="mode-button-label" style="${labelStyle}">${escapeText(mode.label)}</span>
       </button>`;
   }
 
-  function renderModeButtonStack({ activeAction = 'party', disabledActions = [] } = {}) {
-    const ar = `${modeButtonsManifest.frame.w} / ${modeButtonsManifest.frame.h}`;
-    const buttons = modeButtonsManifest.modes
-      .map((mode) => renderModeButton(mode, {
-        active: mode.action === activeAction,
-        disabled: disabledActions.includes(mode.action),
-      }))
+  function renderModeButtonStack({ activeAction = 'party' } = {}) {
+    const buttons = MENU_MODES
+      .map((mode) => renderModeButton(mode, { active: mode.action === activeAction }))
       .join('');
     return `
-      <nav class="main-menu-actions main-menu-actions-assets" aria-label="Play modes" style="--mode-ar:${ar}">
+      <nav class="main-menu-actions main-menu-actions-assets" aria-label="Play modes">
         ${buttons}
       </nav>`;
   }
@@ -3193,11 +3194,11 @@ import assetCatalog from './asset-catalog.json';
         title: 'Mode Button Family',
         baseStatus: 'review',
         file: '/assets/ui/main-menu/contact-sheet.png',
-        alt: 'Contact sheet of the five normalized mode-button frames in default and disabled states on a transparency checkerboard',
-        caption: 'Phase-1 asset family: generated concept art mechanically normalized (flood-fill keyed, trimmed, 2px gutter, @1x/@2x) into transparent frames. Replace any PNG in place to upgrade the art with no code change.',
-        description: 'The live button stack is now assembled from real per-button assets (mode-buttons.manifest.json) with live DOM labels composited into the manifest label slot — not a single painted crop. Empty plates plus live text keep labels localizable, accessible, and dynamic.',
-        target: 'Accept the asset-backed family (correct pipeline, bridge-grade art) as the live mode stack, or flag art-quality items for the next art pass.',
-        liveUse: 'Drives the live main menu mode stack at / and /main-menu — each button is a frame PNG + live label + click target.',
+        alt: 'Contact sheet of the icon-less button frame (unpressed + pressed) and the five icon badges on a transparency checkerboard',
+        caption: 'Phase-1 asset family, aligned to the asset catalog: generated art normalized into an icon-less button frame (2 states) plus 5 standalone icon badges. Replace any PNG in place to upgrade the art with no code change.',
+        description: 'The live button stack is assembled per the asset catalog (button.main-menu.frame + button-icon.main-menu.*): an icon-less frame state, a composited icon badge in the icon slot, and a live DOM label in the text slot — not a single painted crop. See the full breakdown in the Asset Catalog.',
+        target: 'Accept the catalog-aligned family (correct decomposition, bridge-grade art) as the live mode stack, or flag art-quality items for the next art pass.',
+        liveUse: 'Drives the live main menu mode stack at / and /main-menu — each button = frame state + composited icon + live label + action.',
         decision: 'New this pass — supersedes the painted-crop bridge. Pending your accept/reject.',
         specimen: renderModeButtonStack({ activeAction: 'party' }),
         referenceCrops: [

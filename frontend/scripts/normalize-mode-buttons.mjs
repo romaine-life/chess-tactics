@@ -1,21 +1,24 @@
-// Phase-1 asset normalizer for the `main-menu-mode-button` family.
+// Phase-1 asset normalizer for the main-menu button family, aligned to the
+// asset catalog (frontend/src/asset-catalog.json).
 //
 // Hybrid pipeline (method "c"): generated concept art -> mechanical cleanup ->
-// reviewable, swappable game assets. This script is the reusable phase-1
-// template; later families (icons, tiles, pieces) follow the same shape.
+// reusable, swappable game assets in the DECOMPOSED catalog model.
 //
-// Input  : frontend/public/assets/ui/main-menu-button-art-five-mode.png
-//          (state-language reference: main-menu-button-art-three-state.png)
-// Output : frontend/public/assets/ui/main-menu/
-//            mode-button-<id>.png / @2x          default state
-//            mode-button-<id>-disabled.png / @2x mechanical disabled transform
-//            contact-sheet.png / @2x             review tiles on a checkerboard
-//            mode-buttons.manifest.json          frames + live-text "label" slot
+//   button-frame.png  : a 2-state frame sheet (unpressed on top, pressed below)
+//                       built from the five-mode sheet, background flood-keyed
+//                       transparent and the icon badge punched out so the frame
+//                       family is icon-less.
+//   icon-<id>.png/@2x : standalone icon badges cropped from the SAME five-mode
+//                       rows (sword/crown/scroll/people/gear). Composited into
+//                       the frame icon slot at assembly time + live label + action.
+//   contact-sheet.png : review tiles on a checkerboard.
 //
-// Why flood-fill keying: the buttons sit on a dark background that is nearly the
-// same colour as the dark plate, so a naive global colour key eats the plate.
-// Instead transparency floods IN from the crop border and stops at the brighter
-// frame edge, which preserves the plate interior while removing the surround.
+// Frame + icons come from the same sheet and the same badge geometry, so the
+// punched hole and the icon asset line up by construction (no hand-measured
+// coordinates to drift). The script PRINTS the slot rects to paste into the
+// catalog. Background keying uses a low flood tolerance because the dark plate
+// sits only ~14-20 units from the near-black background while the bright frame
+// edge is 60+ away.
 //
 // Deterministic and re-runnable. Run: node scripts/normalize-mode-buttons.mjs
 
@@ -29,30 +32,11 @@ const UI_DIR = path.resolve(__dirname, '../public/assets/ui');
 const OUT_DIR = path.join(UI_DIR, 'main-menu');
 const FIVE = path.join(UI_DIR, 'main-menu-button-art-five-mode.png');
 
-// Top-to-bottom order MUST match the buttons in the five-mode sheet.
-const MODES = [
-  { id: 'skirmish', icon: 'sword', action: 'party', label: 'Solo Skirmish' },
-  { id: 'campaign', icon: 'crown', action: 'campaigns', label: 'Campaign Editor' },
-  { id: 'editor', icon: 'scroll', action: 'level-editor-preview', label: 'Level Editor' },
-  { id: 'multiplayer', icon: 'people', action: 'lobbies', label: 'Lobbies' },
-  { id: 'settings', icon: 'gear', action: 'settings', label: 'Settings' },
-];
-
-// Low tolerance is deliberate: the dark plate sits only ~14-20 units from the
-// near-black background (gaps ~0-3), while the bright metal frame edge is 60+
-// away. At tol ~10 the flood removes the margin + rounded-corner triangles but
-// physically cannot cross the bright frame to reach (and erase) the plate.
-const FLOOD_TOL = 10; // background flood-fill colour tolerance
-const GUTTER = 2;     // transparent gutter px around each @1x frame
-const FRAME_W = 480;  // @1x runtime frame width
-
-// Reference rects as % of the frame. `label` is the live-DOM-text slot — the
-// handshake the renderer (and future artists) build against.
-const SLOTS = {
-  icon: { x: 2.5, y: 12, w: 21, h: 76 },
-  label: { x: 27, y: 17, w: 58, h: 66 },
-  chevron: { x: 87.5, y: 32, w: 10, h: 36 },
-};
+const FLOOD_TOL = 10;
+const ICON_PX = 220; // icon export size
+// Five-mode rows top-to-bottom -> icon ids. Row 0 (sword, glowing) also seeds
+// the pressed/selected frame state; a plain row seeds the unpressed state.
+const ICON_IDS = ['sword', 'crown', 'scroll', 'people', 'gear'];
 
 function readPNG(p) {
   const png = PNG.sync.read(fs.readFileSync(p));
@@ -70,52 +54,47 @@ function dist2(d, i, r, g, b) {
   const db = d[i + 2] - b;
   return dr * dr + dg * dg + db * db;
 }
-
+function median(nums) {
+  const s = [...nums].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
 function sampleBg(img) {
   const s = 12;
   const corners = [[0, 0], [img.w - s, 0], [0, img.h - s], [img.w - s, img.h - s]];
-  const pts = corners.map(([cx, cy]) => {
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    let n = 0;
-    for (let y = cy; y < cy + s; y++) {
-      for (let x = cx; x < cx + s; x++) {
-        const i = gp(img, x, y);
-        r += img.data[i];
-        g += img.data[i + 1];
-        b += img.data[i + 2];
-        n++;
+  const avg = corners.reduce(
+    (a, [cx, cy]) => {
+      for (let y = cy; y < cy + s; y++) {
+        for (let x = cx; x < cx + s; x++) {
+          const i = gp(img, x, y);
+          a[0] += img.data[i];
+          a[1] += img.data[i + 1];
+          a[2] += img.data[i + 2];
+          a[3] += 1;
+        }
       }
-    }
-    return [r / n, g / n, b / n];
-  });
-  const avg = pts.reduce((a, p) => [a[0] + p[0], a[1] + p[1], a[2] + p[2]], [0, 0, 0]);
-  return { r: avg[0] / 4, g: avg[1] / 4, b: avg[2] / 4, corners: pts };
+      return a;
+    },
+    [0, 0, 0, 0],
+  );
+  return { r: avg[0] / avg[3], g: avg[1] / avg[3], b: avg[2] / avg[3] };
 }
-
 function rowInk(img, bg, tol) {
   const t2 = tol * tol;
   const prof = new Array(img.h).fill(0);
   for (let y = 0; y < img.h; y++) {
     let c = 0;
-    for (let x = 0; x < img.w; x++) {
-      if (dist2(img.data, gp(img, x, y), bg.r, bg.g, bg.b) > t2) c++;
-    }
+    for (let x = 0; x < img.w; x++) if (dist2(img.data, gp(img, x, y), bg.r, bg.g, bg.b) > t2) c++;
     prof[y] = c;
   }
   return prof;
 }
-
 function colInkRange(img, bg, tol, y0, y1) {
   const t2 = tol * tol;
   let x0 = img.w;
   let x1 = -1;
   for (let x = 0; x < img.w; x++) {
     let c = 0;
-    for (let y = y0; y < y1; y++) {
-      if (dist2(img.data, gp(img, x, y), bg.r, bg.g, bg.b) > t2) c++;
-    }
+    for (let y = y0; y < y1; y++) if (dist2(img.data, gp(img, x, y), bg.r, bg.g, bg.b) > t2) c++;
     if (c > (y1 - y0) * 0.06) {
       if (x < x0) x0 = x;
       if (x > x1) x1 = x;
@@ -123,16 +102,15 @@ function colInkRange(img, bg, tol, y0, y1) {
   }
   return { x0, x1 };
 }
-
-function detectBands(prof, w, { minFrac = 0.12, gapMerge = 14, minBand = 24 } = {}) {
+function detectBands(prof, w, { minFrac = 0.12, gapMerge = 10, minBand = 24 } = {}) {
   const thr = w * minFrac;
-  const active = prof.map((v) => v > thr);
   const bands = [];
   let s = -1;
-  for (let y = 0; y < active.length; y++) {
-    if (active[y] && s < 0) s = y;
-    if ((!active[y] || y === active.length - 1) && s >= 0) {
-      bands.push([s, active[y] ? y : y - 1]);
+  for (let y = 0; y < prof.length; y++) {
+    const active = prof[y] > thr;
+    if (active && s < 0) s = y;
+    if ((!active || y === prof.length - 1) && s >= 0) {
+      bands.push([s, active ? y : y - 1]);
       s = -1;
     }
   }
@@ -144,14 +122,14 @@ function detectBands(prof, w, { minFrac = 0.12, gapMerge = 14, minBand = 24 } = 
   }
   return merged.filter((b) => b[1] - b[0] + 1 >= minBand);
 }
-
-function crop(img, x0, y0, x1, y1) {
-  const w = x1 - x0 + 1;
-  const h = y1 - y0 + 1;
+function crop(img, x0, y0, w, h) {
   const out = makeImg(w, h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const si = gp(img, x0 + x, y0 + y);
+      const sx = x0 + x;
+      const sy = y0 + y;
+      if (sx < 0 || sy < 0 || sx >= img.w || sy >= img.h) continue;
+      const si = gp(img, sx, sy);
       const di = gp(out, x, y);
       out.data[di] = img.data[si];
       out.data[di + 1] = img.data[si + 1];
@@ -161,8 +139,6 @@ function crop(img, x0, y0, x1, y1) {
   }
   return out;
 }
-
-// Transparency flows in from the border and stops at the brighter frame edge.
 function floodKey(img, bg, tol) {
   const t2 = tol * tol;
   const { w, h, data } = img;
@@ -185,11 +161,9 @@ function floodKey(img, bg, tol) {
     push(0, y);
     push(w - 1, y);
   }
-  let keyed = 0;
   while (stack.length) {
     const p = stack.pop();
     data[p * 4 + 3] = 0;
-    keyed++;
     const x = p % w;
     const y = (p - x) / w;
     push(x + 1, y);
@@ -197,30 +171,30 @@ function floodKey(img, bg, tol) {
     push(x, y + 1);
     push(x, y - 1);
   }
-  return keyed / (w * h);
 }
-
-function trim(img) {
-  const { w, h, data } = img;
-  let x0 = w;
-  let y0 = h;
-  let x1 = -1;
-  let y1 = -1;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (data[gp(img, x, y) + 3] > 8) {
-        if (x < x0) x0 = x;
-        if (x > x1) x1 = x;
-        if (y < y0) y0 = y;
-        if (y > y1) y1 = y;
-      }
+function punchRect(img, rect) {
+  for (let y = rect.y; y < rect.y + rect.h; y++) {
+    for (let x = rect.x; x < rect.x + rect.w; x++) {
+      if (x < 0 || y < 0 || x >= img.w || y >= img.h) continue;
+      img.data[gp(img, x, y) + 3] = 0;
     }
   }
-  if (x1 < 0) return img;
-  return crop(img, x0, y0, x1, y1);
 }
-
-// Premultiplied-alpha box average; handles up/down scaling without dark fringe.
+function copyInto(dst, src, ox, oy) {
+  for (let y = 0; y < src.h; y++) {
+    for (let x = 0; x < src.w; x++) {
+      const dx = ox + x;
+      const dy = oy + y;
+      if (dx < 0 || dy < 0 || dx >= dst.w || dy >= dst.h) continue;
+      const si = gp(src, x, y);
+      const di = gp(dst, dx, dy);
+      dst.data[di] = src.data[si];
+      dst.data[di + 1] = src.data[si + 1];
+      dst.data[di + 2] = src.data[si + 2];
+      dst.data[di + 3] = src.data[si + 3];
+    }
+  }
+}
 function resize(img, tw, th) {
   const out = makeImg(tw, th);
   const { w, h, data } = img;
@@ -256,41 +230,11 @@ function resize(img, tw, th) {
   }
   return out;
 }
-
-function gutter(img, g) {
-  const out = makeImg(img.w + 2 * g, img.h + 2 * g);
-  for (let y = 0; y < img.h; y++) {
-    for (let x = 0; x < img.w; x++) {
-      const si = gp(img, x, y);
-      const di = gp(out, x + g, y + g);
-      out.data[di] = img.data[si];
-      out.data[di + 1] = img.data[si + 1];
-      out.data[di + 2] = img.data[si + 2];
-      out.data[di + 3] = img.data[si + 3];
-    }
-  }
-  return out;
-}
-
-function disabledOf(img) {
-  const out = makeImg(img.w, img.h);
-  const { data } = img;
-  for (let i = 0; i < data.length; i += 4) {
-    const gray = Math.round(0.3 * data[i] + 0.59 * data[i + 1] + 0.11 * data[i + 2]);
-    out.data[i] = Math.round(gray * 0.55 + data[i] * 0.1);
-    out.data[i + 1] = Math.round(gray * 0.55 + data[i + 1] * 0.1);
-    out.data[i + 2] = Math.round(gray * 0.55 + data[i + 2] * 0.1);
-    out.data[i + 3] = Math.round(data[i + 3] * 0.85);
-  }
-  return out;
-}
-
 function writePNG(img, p) {
   const png = new PNG({ width: img.w, height: img.h });
   img.data.copy(png.data);
   fs.writeFileSync(p, PNG.sync.write(png));
 }
-
 function checkerboard(w, h, cell = 12) {
   const img = makeImg(w, h);
   for (let y = 0; y < h; y++) {
@@ -305,7 +249,6 @@ function checkerboard(w, h, cell = 12) {
   }
   return img;
 }
-
 function over(dst, src, ox, oy) {
   for (let y = 0; y < src.h; y++) {
     for (let x = 0; x < src.w; x++) {
@@ -324,94 +267,93 @@ function over(dst, src, ox, oy) {
   }
 }
 
+// Badge rect (sheet coords) for a detected band, given the band's plate left x.
+function badgeRectFor(band, plateX0) {
+  const bandH = band[1] - band[0] + 1;
+  const size = Math.round(bandH * 0.92);
+  return {
+    x: plateX0 + Math.round(bandH * 0.05),
+    y: Math.round((band[0] + band[1]) / 2 - size / 2),
+    w: size,
+    h: size,
+  };
+}
+
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const sheet = readPNG(FIVE);
-  console.log(`five-mode sheet ${sheet.w}x${sheet.h}`);
   const bg = sampleBg(sheet);
-  console.log(
-    `bg ~ rgb(${bg.r.toFixed(0)},${bg.g.toFixed(0)},${bg.b.toFixed(0)})  corners ${bg.corners
-      .map((c) => c.map((v) => v.toFixed(0)).join(','))
-      .join(' | ')}`,
-  );
-  const prof = rowInk(sheet, bg, FLOOD_TOL);
-  const bands = detectBands(prof, sheet.w, { gapMerge: 10 });
-  console.log(`detected ${bands.length} bands: ${bands.map((b) => `${b[0]}-${b[1]}`).join(', ')}`);
-  if (bands.length !== MODES.length) {
-    console.warn(`WARN expected ${MODES.length} bands, got ${bands.length} — tune thresholds`);
-  }
+  const bands = detectBands(rowInk(sheet, bg, FLOOD_TOL), sheet.w);
+  if (bands.length < 5) throw new Error(`expected 5 bands, got ${bands.length}`);
+  console.log(`five-mode ${sheet.w}x${sheet.h}: ${bands.length} bands`);
 
-  const raws = bands.map((b, idx) => {
-    const pad = 8;
-    const y0 = Math.max(0, b[0] - pad);
-    const y1 = Math.min(sheet.h - 1, b[1] + pad);
-    const { x0, x1 } = colInkRange(sheet, bg, FLOOD_TOL, b[0], b[1]);
-    const cx0 = Math.max(0, x0 - pad);
-    const cx1 = Math.min(sheet.w - 1, x1 + pad);
-    let c = crop(sheet, cx0, y0, cx1, y1);
-    const frac = floodKey(c, bg, FLOOD_TOL);
-    c = trim(c);
-    console.log(
-      `band ${idx} (${MODES[idx]?.id || '?'}) x[${cx0}-${cx1}] y[${y0}-${y1}] keyed ${(frac * 100).toFixed(1)}% -> ${c.w}x${c.h}`,
-    );
+  // Plate geometry from a plain row (band 1) so the glow on band 0 is excluded.
+  const plain = colInkRange(sheet, bg, FLOOD_TOL, bands[1][0], bands[1][1]);
+  const plateX0 = plain.x0;
+  const plateW = plain.x1 - plain.x0 + 1;
+  const plateH = median(bands.slice(1).map((b) => b[1] - b[0] + 1));
+  const badge = badgeRectFor(bands[1], plateX0);
+  const localBadge = { x: badge.x - plateX0, y: Math.round((plateH - badge.h) / 2), w: badge.w, h: badge.h };
+  console.log(`plate ${plateW}x${plateH} @x${plateX0}; icon slot (local) ${JSON.stringify(localBadge)}`);
+
+  // --- frame states (icon-less) ---
+  const cropState = (band, glow) => {
+    const cy = glow ? Math.round((band[0] + band[1]) / 2 - plateH / 2) : band[0];
+    const c = crop(sheet, plateX0, cy, plateW, plateH);
+    floodKey(c, bg, FLOOD_TOL);
+    punchRect(c, localBadge);
     return c;
-  });
-
-  const aspects = raws.map((r) => r.h / r.w).sort((a, b) => a - b);
-  const medAspect = aspects[Math.floor(aspects.length / 2)];
-  const FRAME_H = Math.round(FRAME_W * medAspect);
-  console.log(`frame ${FRAME_W}x${FRAME_H} (median aspect ${medAspect.toFixed(3)})`);
-
-  const modesOut = [];
-  raws.forEach((raw, idx) => {
-    const m = MODES[idx];
-    if (!m) return;
-    const name = (suffix, x2) => `mode-button-${m.id}${suffix}${x2 ? '@2x' : ''}.png`;
-    writePNG(gutter(resize(raw, FRAME_W, FRAME_H), GUTTER), path.join(OUT_DIR, name('', false)));
-    writePNG(gutter(resize(raw, FRAME_W * 2, FRAME_H * 2), GUTTER * 2), path.join(OUT_DIR, name('', true)));
-    writePNG(gutter(disabledOf(resize(raw, FRAME_W, FRAME_H)), GUTTER), path.join(OUT_DIR, name('-disabled', false)));
-    writePNG(gutter(disabledOf(resize(raw, FRAME_W * 2, FRAME_H * 2)), GUTTER * 2), path.join(OUT_DIR, name('-disabled', true)));
-    modesOut.push({
-      id: m.id,
-      icon: m.icon,
-      action: m.action,
-      label: m.label,
-      frames: { default: name('', false), disabled: name('-disabled', false) },
-      frames2x: { default: name('', true), disabled: name('-disabled', true) },
-    });
-  });
-
-  const pad = 18;
-  const fw = FRAME_W + 2 * GUTTER;
-  const fh = FRAME_H + 2 * GUTTER;
-  const cw = pad + 2 * (fw + pad);
-  const ch = pad + modesOut.length * (fh + pad);
-  const cs = checkerboard(cw, ch);
-  modesOut.forEach((m, r) => {
-    over(cs, readPNG(path.join(OUT_DIR, m.frames.default)), pad, pad + r * (fh + pad));
-    over(cs, readPNG(path.join(OUT_DIR, m.frames.disabled)), pad + (fw + pad), pad + r * (fh + pad));
-  });
-  writePNG(cs, path.join(OUT_DIR, 'contact-sheet.png'));
-  writePNG(resize(cs, cw * 2, ch * 2), path.join(OUT_DIR, 'contact-sheet@2x.png'));
-
-  const manifest = {
-    schema: 'asset-family/v1',
-    family: 'main-menu-mode-button',
-    note:
-      'Phase-1 hybrid (c) assets: generated concept art mechanically normalized. ' +
-      'Bridge-grade — replace the PNGs in place to upgrade the art with no code change. ' +
-      'The `label` slot is the live-DOM-text handshake.',
-    generatedFrom: ['main-menu-button-art-five-mode.png', 'main-menu-button-art-three-state.png'],
-    frame: { w: FRAME_W, h: FRAME_H, gutter: GUTTER },
-    slots: SLOTS,
-    states: ['default', 'disabled'],
-    modes: modesOut,
-    contactSheet: { x1: 'contact-sheet.png', x2: 'contact-sheet@2x.png' },
   };
-  fs.writeFileSync(path.join(OUT_DIR, 'mode-buttons.manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log(
-    `wrote ${modesOut.length} modes x ${manifest.states.length} states + contact sheet + manifest -> ${path.relative(process.cwd(), OUT_DIR)}`,
-  );
+  const unpressed = cropState(bands[1], false); // plain
+  const pressed = cropState(bands[0], true); // glowing -> selected, halo cropped off
+  const frameSheet = makeImg(plateW, plateH * 2);
+  copyInto(frameSheet, unpressed, 0, 0);
+  copyInto(frameSheet, pressed, 0, plateH);
+  writePNG(frameSheet, path.join(OUT_DIR, 'button-frame.png'));
+
+  // --- icons (same badge geometry -> they fill the punched hole) ---
+  bands.forEach((b, i) => {
+    const id = ICON_IDS[i];
+    if (!id) return;
+    const r = badgeRectFor(b, colInkRange(sheet, bg, FLOOD_TOL, b[0], b[1]).x0);
+    const badgeImg = crop(sheet, r.x, r.y, r.w, r.h);
+    writePNG(resize(badgeImg, ICON_PX, ICON_PX), path.join(OUT_DIR, `icon-${id}.png`));
+    writePNG(resize(badgeImg, ICON_PX * 2, ICON_PX * 2), path.join(OUT_DIR, `icon-${id}@2x.png`));
+  });
+
+  // --- slot rects for the catalog (state-local coords) ---
+  const arrowSlot = {
+    x: Math.round(plateW * 0.875),
+    y: Math.round(plateH * 0.32),
+    w: Math.round(plateW * 0.085),
+    h: Math.round(plateH * 0.36),
+  };
+  const textInset = {
+    x: localBadge.x + localBadge.w + Math.round(plateW * 0.02),
+    y: Math.round(plateH * 0.2),
+    w: arrowSlot.x - (localBadge.x + localBadge.w) - Math.round(plateW * 0.04),
+    h: Math.round(plateH * 0.6),
+  };
+
+  // --- contact sheet ---
+  const pad = 16;
+  const cw = plateW + pad * 2;
+  const ch = pad * 3 + plateH * 2 + Math.round(ICON_PX * 0.6);
+  const cs = checkerboard(cw, ch);
+  over(cs, unpressed, pad, pad);
+  over(cs, pressed, pad, pad * 2 + plateH);
+  const isz = Math.round(ICON_PX * 0.6);
+  ICON_IDS.forEach((id, i) => over(cs, resize(readPNG(path.join(OUT_DIR, `icon-${id}.png`)), isz, isz), pad + i * (isz + 8), pad * 3 + plateH * 2));
+  writePNG(cs, path.join(OUT_DIR, 'contact-sheet.png'));
+
+  console.log('\n=== paste into asset-catalog.json (button.main-menu.frame) ===');
+  console.log(`sheet: { image: "/assets/ui/main-menu/button-frame.png", width: ${plateW}, height: ${plateH * 2} }`);
+  console.log(`states.unpressed.frame: { x: 0, y: 0, w: ${plateW}, h: ${plateH} }`);
+  console.log(`states.pressed.frame:   { x: 0, y: ${plateH}, w: ${plateW}, h: ${plateH} }`);
+  console.log(`rules.iconSlot:  ${JSON.stringify(localBadge)}`);
+  console.log(`rules.textInset: ${JSON.stringify(textInset)}`);
+  console.log(`rules.arrowSlot: ${JSON.stringify(arrowSlot)}`);
+  console.log(`done -> ${path.relative(process.cwd(), OUT_DIR)} (frame + ${ICON_IDS.length} icons + contact sheet)`);
 }
 
 main();
