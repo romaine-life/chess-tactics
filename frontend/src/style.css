@@ -959,6 +959,16 @@ h1 {
   outline-offset: -3px;
 }
 
+/* Catalog/gallery specimens are for viewing, not live menu controls. */
+.mode-button.is-specimen {
+  cursor: default;
+}
+
+.mode-button.is-specimen:hover {
+  transform: none;
+  filter: none;
+}
+
 .mode-button-label {
   position: absolute;
   display: flex;

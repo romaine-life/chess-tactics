@@ -2956,7 +2956,7 @@ import assetCatalog from './asset-catalog.json';
     { action: 'settings', slug: 'settings', icon: 'button-icon.main-menu.gear', label: 'Settings' },
   ];
 
-  function renderModeButton(mode, { active = false } = {}) {
+  function renderModeButton(mode, { active = false, specimen = false } = {}) {
     const nineSlice = assetById('button-9slice.main-menu');
     if (!nineSlice) return '';
     const rules = nineSlice.rules || {};
@@ -2967,7 +2967,7 @@ import assetCatalog from './asset-catalog.json';
     const iconStyle = icon ? `${insetStyle(rules.iconSlot, stateDef.rect)};${frameStyleForAsset(icon, icon.rect)}` : '';
     const labelStyle = insetStyle(rules.textInset, stateDef.rect);
     return `
-      <button class="mode-button ${active ? 'is-active' : ''}" type="button" data-action="${escapeText(mode.action)}" aria-label="${escapeText(mode.label)}"${active ? ' aria-current="true"' : ''} style="--asset-aspect:${stateDef.rect.w} / ${stateDef.rect.h}">
+      <button class="mode-button ${active ? 'is-active' : ''}${specimen ? ' is-specimen' : ''}" type="button" data-action="${escapeText(specimen ? 'noop' : mode.action)}" aria-label="${escapeText(mode.label)}"${active ? ' aria-current="true"' : ''}${specimen ? ' tabindex="-1"' : ''} style="--asset-aspect:${stateDef.rect.w} / ${stateDef.rect.h}">
         <span class="mode-button-9slice" style="${frameStyle}" aria-hidden="true"></span>
         ${icon ? `<span class="mode-button-icon" style="${iconStyle}" aria-hidden="true"></span>` : ''}
         <span class="mode-button-label" style="${labelStyle}">${escapeText(mode.label)}</span>
@@ -2993,7 +2993,7 @@ import assetCatalog from './asset-catalog.json';
     const iconName = iconAsset ? (iconAsset.title || mode.icon) : mode.icon;
     return `
       <article class="widget-card">
-        <div class="widget-card-preview main-menu-actions-assets">${renderModeButton(mode, { active })}</div>
+        <div class="widget-card-preview main-menu-actions-assets">${renderModeButton(mode, { active, specimen: true })}</div>
         <div class="widget-card-meta">
           <h3>${escapeText(mode.label)}</h3>
           <p>${active ? 'pressed' : 'normal'} 9-slice + ${escapeText(iconName)} + live label + <code>${escapeText(mode.action)}</code> action</p>
@@ -3929,11 +3929,11 @@ import assetCatalog from './asset-catalog.json';
     },
     {
       label: 'widget',
-      href: '#',
+      href: '/design/assets/widgets/main-menu',
       children: [
         {
           label: 'button',
-          href: '#',
+          href: '/design/assets/widgets/main-menu',
           children: [
             {
               label: 'Main Menu',
