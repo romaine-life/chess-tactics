@@ -177,6 +177,42 @@ the asset task, branch, PR, checks, screenshots, contact sheets, and portfolio
 route. The human review decision belongs there; agents should not treat a
 mechanically valid sheet as artistically accepted.
 
+## Asset Catalog Shape
+
+The asset catalog should be explored as a tree, not as a flat list of tabs.
+Use this hierarchy:
+
+```text
+category/
+  asset type or family/
+    individual asset
+```
+
+For example:
+
+```text
+buttons/
+  main menu/
+    main menu button frame
+  textless/
+    planned button family
+icons/
+  main menu button icons/
+    sword icon
+    crown icon
+```
+
+Category and type/family rows may be collapsible tree nodes. If a node also has
+its own review page, expose a small launch affordance for opening that page
+without toggling the branch. Do not add duplicate "overview" child rows just to
+make a category clickable.
+
+Keep related families grouped, but do not force composited UI into one asset.
+For main menu buttons, the reusable button frame is a `button.main-menu` asset
+family with state frames and slots. The icons that fit those slots are sibling
+`button-icon.main-menu` assets. A rendered row is an assembly of frame state,
+icon asset, live label, and action.
+
 ## Acceptance Checks
 
 Before an asset family is wired into production routes, require:
