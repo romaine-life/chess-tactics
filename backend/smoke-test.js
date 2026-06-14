@@ -7,6 +7,7 @@ const path = require('path');
 
 const port = 31337;
 const authPort = 31338;
+const bgmPort = 31339;
 const hotRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'chess-tactics-hot-'));
 const hotBackendDir = path.join(hotRoot, 'backend');
 const hotStaticDir = path.join(hotRoot, 'static');
@@ -55,6 +56,24 @@ const mockAuth = http.createServer((req, res) => {
   res.end('not found');
 });
 
+// Stand in for the public BGM blob container: serves the index.json the backend
+// reads for GET /api/bgm.
+const mockBgm = http.createServer((req, res) => {
+  if (req.url === '/index.json') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({
+      schemaVersion: 1,
+      tracks: [
+        { title: 'Alpha', file: 'alpha.mp3' },
+        { title: 'Bravo', file: 'bravo.mp3' },
+      ],
+    }));
+    return;
+  }
+  res.writeHead(404);
+  res.end('not found');
+});
+
 const child = spawn(process.execPath, ['supervisor.js'], {
   cwd: __dirname,
   env: {
@@ -62,6 +81,7 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     AUTH_BASE_URL: `http://127.0.0.1:${authPort}`,
     PORT: String(port),
     PUBLIC_ORIGIN: 'https://chess.romaine.life',
+    BGM_BASE_URL: `http://127.0.0.1:${bgmPort}`,
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
     DESIGN_PORTFOLIO_STORE_PATH: path.join(hotRoot, 'design-portfolios.json'),
@@ -131,6 +151,7 @@ async function waitForHotBackend() {
 
 async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
+  await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
@@ -234,6 +255,20 @@ async function main() {
   const playerHash = crypto.createHash('md5').update('player@example.com').digest('hex');
   if (!String(signedInBody.gravatar_url).includes(`/avatar/${playerHash}`) || signedInBody.avatar_url !== signedInBody.gravatar_url) {
     throw new Error(`Signed-in user did not include Gravatar avatar data: ${signedIn.body}`);
+  }
+
+  // BGM playlist: the backend reads the (mocked) blob index.json and resolves
+  // each track to an absolute URL under BGM_BASE_URL.
+  const bgm = await get('/api/bgm');
+  const bgmBody = JSON.parse(bgm.body);
+  if (
+    bgm.statusCode !== 200 ||
+    !Array.isArray(bgmBody.tracks) ||
+    bgmBody.tracks.length !== 2 ||
+    bgmBody.tracks[0].title !== 'Alpha' ||
+    bgmBody.tracks[0].url !== `http://127.0.0.1:${bgmPort}/alpha.mp3`
+  ) {
+    throw new Error(`Unexpected /api/bgm response: ${bgm.statusCode} ${bgm.body}`);
   }
 
   const anonymousLobbies = await get('/api/lobbies');
@@ -565,6 +600,7 @@ main()
   .finally(() => {
     child.kill();
     mockAuth.close();
+    mockBgm.close();
     fs.rmSync(hotRoot, { recursive: true, force: true });
   })
   .catch((error) => {

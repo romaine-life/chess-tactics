@@ -1,5 +1,6 @@
 import './style.css';
 import assetCatalog from './asset-catalog.json';
+import { initBgm } from './bgm.js';
 
 (function () {
   const COLS = 8;
@@ -4904,6 +4905,9 @@ import assetCatalog from './asset-catalog.json';
 
   applyInitialRoute();
   initAuth();
+  // Expose a small handle for debugging / automated validation of the shuffle
+  // playlist; harmless in production.
+  window.__chessBgm = initBgm();
   lobbyPollTimer = window.setInterval(() => {
     if (currentUser && (state.screen === 'lobbies' || state.screen === 'lobby')) {
       void loadLobbies(true);

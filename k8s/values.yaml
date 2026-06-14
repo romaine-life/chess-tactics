@@ -22,8 +22,17 @@ testEnv:
   slotName: ""
 
 # Plain service account — chess-tactics is a static server and needs no Azure
-# access, so there is no workload-identity federation here.
+# access, so there is no workload-identity federation here. The backend reads
+# the public BGM index/tracks over plain HTTPS (see bgm.baseUrl), so it still
+# needs no Azure credentials.
 serviceAccount: chess-tactics
+
+# Background music: public blob container base URL provisioned by tofu/
+# (storage account `chesstacticsmedia`, container `bgm`). The backend reads
+# <baseUrl>/index.json and serves the playlist at /api/bgm; tracks stream from
+# <baseUrl>/<file>. Empty disables BGM (e.g. before the container is populated).
+bgm:
+  baseUrl: "https://chesstacticsmedia.blob.core.windows.net/bgm"
 
 ingress:
   gatewayName: main
