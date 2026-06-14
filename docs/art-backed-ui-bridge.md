@@ -51,9 +51,9 @@ rectangles over the 16:10 artboard.
 - `/design/main-menu` opens the main menu chrome review board. It renders each
   converted slot's live component as a specimen next to its approved render
   crop, rather than comparing a candidate bitmap.
-- `/campaigns` opens the live campaign editor skeleton.
-- `/level-editor` opens the live level editor skeleton.
-- `/skirmish` opens the live skirmish skeleton.
+- `/campaigns` opens the art-backed campaign editor (concept render + live hotspots).
+- `/level-editor` opens the art-backed level editor (concept render + live hotspots).
+- `/skirmish` opens the art-backed skirmish screen (concept render + live hotspots).
 - `/design/campaigns/render` opens the campaign editor concept render.
 - `/design/level-editor/render` opens the level editor concept render.
 - `/design/skirmish/render` opens the skirmish concept render.
@@ -102,8 +102,10 @@ Keep hotspot labels short because they are also used as accessibility labels.
 
 Replace the bridge from the inside out:
 
-1. Maintain a clear skeleton for each screen so unfinished asset slots remain
-   visible during decomposition. Skeletons are the default app surfaces.
+1. The editor and skirmish screens are art-backed bridges: the approved concept
+   render with live hotspots over the working controls (the placeholder skeletons
+   were removed). Decompose them into real DOM components from the inside out,
+   preserving the hotspot behavior until each slice is genuinely live.
 2. Fill one main menu asset family at a time. The button row uses a crop from
    `main-menu-aspirational.png` so the approved painted labels stay intact; the
    title/brand plate uses `main-menu-brand-title-only-v1.png` from the approved

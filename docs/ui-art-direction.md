@@ -216,20 +216,22 @@ should drive the first concrete UI sweep because they define the practical tool
 layout, HUD structure, tile palette, brush controls, roster, selected-unit
 panel, threat language, and low-glare chrome.
 
-The current implementation uses a skeleton-first [art-backed UI bridge](art-backed-ui-bridge.md).
-The app routes should show live DOM skeletons by default because the old
-utility UI is below the intended quality bar. Approved renders remain available
-as explicit concept references, not as the normal app surface.
+The current implementation uses an [art-backed UI bridge](art-backed-ui-bridge.md).
+The app routes render the approved concept art with live DOM controls/hotspots
+overlaid — the main menu as decomposed elements (art crops, a hybrid profile, DOM
+panels), and the campaign editor, level editor, and skirmish as their full concept
+renders with live hotspots — instead of the old utility UI, which was below the
+intended quality bar. The earlier placeholder skeletons were removed end to end.
 
 The default work surfaces are `/`, `/main-menu`, `/campaigns`,
 `/level-editor`, and `/skirmish`. They show live DOM bridge
 surfaces with unfinished asset slots labeled in place. The approved main menu
 render is the source for the five-button mode stack so its painted lettering
 stays intact. The main menu title/brand plate uses an accepted crop from the
-approved main menu render, the profile/status, news/daily, and dock surfaces
-use generated bitmap chrome with live HTML labels and click targets, and the
-main menu battlefield plate uses the live moonlit canvas board inside CSS
-chrome. `/design/*/render` routes preserve the approved renders for comparison:
+approved render; the profile/status is a hybrid (art crest + live DOM text); the
+daily/news panels are live DOM with SVG icons; the dock is an art-crop of the
+icon strip with live hit-targets; and the battlefield preview is an art-crop of
+the concept board (the live canvas returns for actual gameplay). `/design/*/render` routes preserve the approved renders for comparison:
 `/design/main-menu/render`, `/design/campaigns/render`,
 `/design/level-editor/render`, and `/design/skirmish/render`.
 `/design/main-menu` remains the asset review board for comparing candidate
