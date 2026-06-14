@@ -1064,6 +1064,98 @@ h1 {
   }
 }
 
+/* Completed widgets gallery (/design/widgets) */
+.widget-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+.widget-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px;
+  background: rgba(255, 255, 255, .02);
+}
+.widget-card-preview {
+  width: 100%;
+  margin: 0 0 14px;
+}
+.widget-card-meta h3 {
+  margin: 0 0 4px;
+  font-family: "Newsreader", Georgia, serif;
+  font-weight: 500;
+  color: #f2eee4;
+}
+.widget-card-meta p {
+  margin: 0;
+  font-size: 12px;
+  color: #968f82;
+}
+.widget-card-meta code,
+.glossary-entry code {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .92em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .05);
+}
+
+/* Catalog / Glossary toggle */
+.catalog-mode-toggle {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+}
+.catalog-mode-toggle a {
+  padding: 5px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #968f82;
+  text-decoration: none;
+}
+.catalog-mode-toggle a.active {
+  background: rgba(210, 128, 92, .18);
+  color: #f2eee4;
+}
+
+/* Glossary entry (glossary mode of the catalog) */
+.glossary-entry {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 20px 22px;
+  background: rgba(255, 255, 255, .02);
+  max-width: 640px;
+}
+.glossary-entry header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.glossary-entry h3 {
+  margin: 0;
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 26px;
+  font-weight: 500;
+  color: #f2eee4;
+}
+.glossary-entry-def {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.glossary-entry-src {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #968f82;
+}
+.glossary-entry-more {
+  margin: 0;
+  font-size: 13px;
+}
+
 .main-menu-right {
   align-content: start;
   display: grid;

@@ -762,6 +762,7 @@ import assetCatalog from './asset-catalog.json';
     '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
     '/design': { screen: 'main', mainMenuView: 'design-index' },
     '/design/glossary': { screen: 'main', mainMenuView: 'glossary' },
+    '/design/widgets': { screen: 'main', mainMenuView: 'widgets' },
     '/design/assets': { screen: 'main', mainMenuView: 'asset-catalog' },
     '/design/assets/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
     '/design/assets/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
@@ -796,6 +797,13 @@ import assetCatalog from './asset-catalog.json';
   function currentRoute() {
     const path = currentPath();
     if (APP_ROUTES[path]) return APP_ROUTES[path];
+    if (path === '/design/assets/glossary') {
+      return { screen: 'main', mainMenuView: 'asset-catalog', catalogMode: 'glossary' };
+    }
+    const glossaryTermMatch = path.match(/^\/design\/assets\/glossary\/(.+)$/);
+    if (glossaryTermMatch) {
+      return { screen: 'main', mainMenuView: 'asset-catalog', catalogMode: 'glossary', glossaryTerm: decodeURIComponent(glossaryTermMatch[1]) };
+    }
     const assetRouteTypes = {
       'main-menu-buttons': 'button-9slice.main-menu',
       'main-menu-button-icons': 'button-icon.main-menu',
@@ -2918,6 +2926,10 @@ import assetCatalog from './asset-catalog.json';
     return currentRoute().mainMenuView === 'glossary';
   }
 
+  function shouldShowWidgets() {
+    return currentRoute().mainMenuView === 'widgets';
+  }
+
 
   // Live main-menu mode list. Actions and labels are app concerns (live DOM);
   // the ART comes from the asset catalog (button-9slice.main-menu + the
@@ -2933,7 +2945,7 @@ import assetCatalog from './asset-catalog.json';
 
   function renderModeButton(mode, { active = false } = {}) {
     const nineSlice = assetById('button-9slice.main-menu');
-    if (!frame) return '';
+    if (!nineSlice) return '';
     const rules = nineSlice.rules || {};
     const stateDef = (nineSlice.states || {})[active ? 'pressed' : 'normal'] || (nineSlice.states || {}).normal;
     if (!stateDef) return '';
@@ -2957,6 +2969,37 @@ import assetCatalog from './asset-catalog.json';
       <nav class="main-menu-actions main-menu-actions-assets" aria-label="Play modes">
         ${buttons}
       </nav>`;
+  }
+
+  // Completed widgets gallery: the finished main-menu button widgets, each
+  // assembled from catalog assets (a 9-slice state + an icon) + a live label +
+  // an action. Distinct from the asset catalog (which holds the parts).
+  function renderWidgets() {
+    const cards = MENU_MODES.map((mode) => {
+      const active = mode.action === 'party';
+      const iconAsset = assetById(mode.icon);
+      const iconName = iconAsset ? (iconAsset.title || mode.icon) : mode.icon;
+      return `
+        <article class="widget-card">
+          <div class="widget-card-preview main-menu-actions-assets">${renderModeButton(mode, { active })}</div>
+          <div class="widget-card-meta">
+            <h3>${escapeText(mode.label)}</h3>
+            <p>${active ? 'pressed' : 'normal'} 9-slice + ${escapeText(iconName)} + live label + <code>${escapeText(mode.action)}</code> action</p>
+          </div>
+        </article>`;
+    }).join('');
+    return `
+      <div class="main-assets-screen widgets-screen" data-live-screen="widgets">
+        <header class="main-assets-header">
+          <a class="design-back" href="/design">&larr; Design</a>
+          <p class="eyebrow">Design system · completed widgets</p>
+          <h2>Widgets</h2>
+          <p class="main-assets-intro">Finished, assembled widgets — each built from catalog assets (a 9-slice in a state + an icon) plus a live label and an action. This is the main-menu button family, live in the game.</p>
+        </header>
+        <section class="widget-gallery" aria-label="Completed widgets">
+          ${cards}
+        </section>
+      </div>`;
   }
 
   function mainMenuReviewStatusFor(id, fallbackStatus) {
@@ -3193,6 +3236,13 @@ import assetCatalog from './asset-catalog.json';
         title: 'Glossary',
         copy: 'The shared vocabulary — asset, 9-slice, icon, slot, state, widget, template — each attested by engine docs.',
         go: 'Open glossary',
+      },
+      {
+        href: '/design/widgets',
+        kicker: 'Components',
+        title: 'Widgets',
+        copy: 'Completed, assembled widgets — the main-menu button family, built from catalog assets plus live labels and actions.',
+        go: 'Open widgets',
       },
       {
         href: '/design/main-menu',
@@ -3705,8 +3755,64 @@ import assetCatalog from './asset-catalog.json';
       </aside>`;
   }
 
+  function renderCatalogModeToggle(active) {
+    const tabs = [['catalog', 'Catalog', '/design/assets'], ['glossary', 'Glossary', '/design/assets/glossary']];
+    return `<nav class="catalog-mode-toggle" aria-label="Catalog view mode">
+      ${tabs.map(([key, label, href]) => `<a class="${active === key ? 'active' : ''}" href="${escapeText(href)}">${escapeText(label)}</a>`).join('')}
+    </nav>`;
+  }
+
+  // Glossary mode reuses the classification tree but drops the specific-entity
+  // leaves, leaving only the glossary-term nodes; each links to its definition.
+  function pruneTreeToTerms(nodes) {
+    return nodes
+      .filter((node) => GLOSSARY.some((g) => g.term === node.label))
+      .map((node) => {
+        const kids = node.children ? pruneTreeToTerms(node.children) : [];
+        const out = { label: node.label, href: `/design/assets/glossary/${encodeURIComponent(node.label)}` };
+        if (kids.length) out.children = kids;
+        return out;
+      });
+  }
+
+  function renderGlossaryEntry(term) {
+    const g = GLOSSARY.find((e) => e.term === term);
+    if (!g) return '<p class="catalog-empty">Pick a term from the tree to read its definition.</p>';
+    return `
+      <article class="glossary-entry">
+        <header>
+          <h3>${escapeText(g.term)}</h3>
+          ${renderGlossaryTag(g.tag)}
+        </header>
+        <p class="glossary-entry-def">${escapeText(g.def)}</p>
+        <p class="glossary-entry-src">${escapeText(g.src)}</p>
+        <p class="glossary-entry-more"><a href="/design/glossary">Full glossary &rarr;</a></p>
+      </article>`;
+  }
+
   function renderAssetCatalog() {
     const route = currentRoute();
+    const activeHref = currentPath();
+    if (route.catalogMode === 'glossary') {
+      const term = route.glossaryTerm || 'asset';
+      return `
+        <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
+          <header class="main-assets-header">
+            <a class="design-back" href="/design">&larr; Design</a>
+            <p class="eyebrow">Asset catalog</p>
+            <h2>Glossary</h2>
+            <p class="main-assets-intro">The same classification, read as a glossary: pick a type to see what it means. The full vocabulary lives in the <a href="/design/glossary">Glossary</a>.</p>
+            ${renderCatalogModeToggle('glossary')}
+          </header>
+
+          <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Glossary explorer">
+            ${renderPrototypeTreePanel(activeHref, pruneTreeToTerms(ASSET_TREE_PROTOTYPE))}
+            <div class="prototype-tree-content">
+              ${renderGlossaryEntry(term)}
+            </div>
+          </section>
+        </div>`;
+    }
     const selectedType = route.assetType || '';
     const selectedGroup = route.assetGroup || '';
     const assets = (assetCatalog.assets || []).filter((asset) => !selectedType || asset.type === selectedType);
@@ -3715,7 +3821,6 @@ import assetCatalog from './asset-catalog.json';
       acc[asset.type] = (acc[asset.type] || 0) + 1;
       return acc;
     }, {});
-    const activeHref = currentPath();
     const content = selectedGroup === 'buttons'
       ? renderButtonTypeCatalog()
       : selectedType
@@ -3733,6 +3838,7 @@ import assetCatalog from './asset-catalog.json';
           <p class="eyebrow">Asset catalog</p>
           <h2>${selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Assets'}</h2>
           <p class="main-assets-intro">Every reusable runtime asset should eventually appear here with its states, frame bounds, rules, source art, and sample previews before it is wired into the game.</p>
+          ${renderCatalogModeToggle('catalog')}
         </header>
 
         <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
@@ -3783,7 +3889,7 @@ import assetCatalog from './asset-catalog.json';
           label: 'button',
           href: '#',
           children: [
-            { label: 'Main Menu', href: '/main-menu' },
+            { label: 'Main Menu', href: '/design/widgets' },
           ],
         },
       ],
@@ -3826,14 +3932,14 @@ import assetCatalog from './asset-catalog.json';
       </ul>`;
   }
 
-  function renderPrototypeTreePanel(activeHref) {
+  function renderPrototypeTreePanel(activeHref, nodes = ASSET_TREE_PROTOTYPE) {
     return `
       <aside class="prototype-tree-panel">
         <div class="prototype-tree-tools" aria-label="Tree controls">
           <button type="button" data-action="expand-prototype-tree">Expand all</button>
           <button type="button" data-action="collapse-prototype-tree">Collapse all</button>
         </div>
-        ${renderTreeList(ASSET_TREE_PROTOTYPE, activeHref)}
+        ${renderTreeList(nodes, activeHref)}
       </aside>`;
   }
 
@@ -4204,6 +4310,8 @@ import assetCatalog from './asset-catalog.json';
         menuLayer.innerHTML = renderAssetCatalog();
       } else if (shouldShowMainSpecimen()) {
         menuLayer.innerHTML = renderSpecimenCapture();
+      } else if (shouldShowWidgets()) {
+        menuLayer.innerHTML = renderWidgets();
       } else if (shouldShowGlossary()) {
         menuLayer.innerHTML = renderGlossary();
       } else if (shouldShowMainDesignIndex()) {
