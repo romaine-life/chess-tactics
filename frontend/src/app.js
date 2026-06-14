@@ -3895,7 +3895,7 @@ import assetCatalog from './asset-catalog.json';
           <a class="design-back" href="/design">&larr; Design</a>
           <p class="eyebrow">Design system</p>
           <h2>${selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Catalog'}</h2>
-          <p class="main-assets-intro">Every reusable runtime asset should eventually appear here with its states, frame bounds, rules, source art, and sample previews before it is wired into the game.</p>
+          <p class="main-assets-intro">Buildable game entities, grouped by type. Open one to inspect its states, slots, source art, and previews.</p>
           ${renderCatalogModeToggle('catalog')}
         </header>
 

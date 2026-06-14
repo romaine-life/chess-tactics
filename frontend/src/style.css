@@ -2791,12 +2791,31 @@ h1 {
    the header aligns to the grid (same width/left edge) instead of centering
    narrow above a wide grid. */
 .asset-catalog-screen {
-  gap: 22px;
-  padding-top: clamp(20px, 3.5vw, 36px);
+  gap: 16px;
+  padding-top: clamp(16px, 2.4vw, 26px);
 }
 
+/* Compact tool header: the catalog is a working surface, not an editorial page.
+   The chrome stays small and out of the way so the tree + items lead. */
 .asset-catalog-screen .main-assets-header {
+  gap: 7px;
   max-width: 1320px;
+  padding-bottom: 14px;
+}
+
+.asset-catalog-screen .main-assets-header .eyebrow {
+  font-size: .68rem;
+}
+
+.asset-catalog-screen .main-assets-header h2 {
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.asset-catalog-screen .main-assets-header .main-assets-intro {
+  font-size: .9rem;
+  line-height: 1.5;
+  max-width: 74ch;
 }
 
 .prototype-tree-list a {
