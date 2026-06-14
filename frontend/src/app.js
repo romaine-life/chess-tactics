@@ -772,6 +772,7 @@ import {
     '/design/widgets': { screen: 'main', mainMenuView: 'widgets' },
     '/design/catalog': { screen: 'main', mainMenuView: 'asset-catalog' },
     '/design/stack-probe': { screen: 'main', mainMenuView: 'stack-probe' },
+    '/play': { screen: 'main', mainMenuView: 'skirmish-next' },
     '/design/catalog/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
     '/design/catalog/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
     '/design/catalog/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
@@ -2900,6 +2901,10 @@ import {
     return currentRoute().mainMenuView === 'stack-probe';
   }
 
+  function shouldShowSkirmishNext() {
+    return currentRoute().mainMenuView === 'skirmish-next';
+  }
+
   function shouldShowWidgets() {
     return currentRoute().mainMenuView === 'widgets';
   }
@@ -4331,6 +4336,13 @@ import {
     import('./stack-probe/mount').then((m) => { stackProbeModule = m; cb(m); });
   }
 
+  // Phase 2 skirmish slice: React + Pixi board on the pure core, lazily loaded.
+  let skirmishModule = null;
+  function withSkirmish(cb) {
+    if (skirmishModule) { cb(skirmishModule); return; }
+    import('./ui/mount').then((m) => { skirmishModule = m; cb(m); });
+  }
+
   function renderMenu() {
     if (shellEl) shellEl.classList.toggle('main-menu-active', state.screen === 'main');
     if (shellEl) shellEl.classList.toggle('concept-screen-active', ['campaigns', 'level-editor', 'game'].includes(state.screen));
@@ -4344,6 +4356,9 @@ import {
     menuLayer.classList.toggle('level-editor-layer', false);
     if (!(state.screen === 'main' && shouldShowStackProbe()) && stackProbeModule) {
       stackProbeModule.unmountStackProbe();
+    }
+    if (!(state.screen === 'main' && shouldShowSkirmishNext()) && skirmishModule) {
+      skirmishModule.unmountSkirmish();
     }
     if (state.screen === 'level-editor') {
       menuLayer.hidden = false;
@@ -4359,6 +4374,8 @@ import {
     if (state.screen === 'main') {
       if (shouldShowStackProbe()) {
         withStackProbe((m) => { if (shouldShowStackProbe()) m.mountStackProbe(menuLayer); });
+      } else if (shouldShowSkirmishNext()) {
+        withSkirmish((m) => { if (shouldShowSkirmishNext()) m.mountSkirmish(menuLayer); });
       } else if (shouldShowMainConcept()) {
         menuLayer.innerHTML = renderArtScreen('main');
       } else if (shouldShowMainAssets()) {
