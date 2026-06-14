@@ -773,6 +773,7 @@ import {
     '/design/catalog': { screen: 'main', mainMenuView: 'asset-catalog' },
     '/design/stack-probe': { screen: 'main', mainMenuView: 'stack-probe' },
     '/play': { screen: 'main', mainMenuView: 'skirmish-next' },
+    '/edit': { screen: 'main', mainMenuView: 'level-editor-next' },
     '/design/catalog/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
     '/design/catalog/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
     '/design/catalog/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
@@ -2905,6 +2906,10 @@ import {
     return currentRoute().mainMenuView === 'skirmish-next';
   }
 
+  function shouldShowLevelEditorNext() {
+    return currentRoute().mainMenuView === 'level-editor-next';
+  }
+
   function shouldShowWidgets() {
     return currentRoute().mainMenuView === 'widgets';
   }
@@ -4343,6 +4348,12 @@ import {
     import('./ui/mount').then((m) => { skirmishModule = m; cb(m); });
   }
 
+  let editorModule = null;
+  function withEditor(cb) {
+    if (editorModule) { cb(editorModule); return; }
+    import('./ui/editorMount').then((m) => { editorModule = m; cb(m); });
+  }
+
   function renderMenu() {
     if (shellEl) shellEl.classList.toggle('main-menu-active', state.screen === 'main');
     if (shellEl) shellEl.classList.toggle('concept-screen-active', ['campaigns', 'level-editor', 'game'].includes(state.screen));
@@ -4360,6 +4371,9 @@ import {
     if (!(state.screen === 'main' && shouldShowSkirmishNext()) && skirmishModule) {
       skirmishModule.unmountSkirmish();
     }
+    if (!(state.screen === 'main' && shouldShowLevelEditorNext()) && editorModule) {
+      editorModule.unmountLevelEditor();
+    }
     if (state.screen === 'level-editor') {
       menuLayer.hidden = false;
       menuLayer.innerHTML = renderArtScreen('level-editor');
@@ -4376,6 +4390,8 @@ import {
         withStackProbe((m) => { if (shouldShowStackProbe()) m.mountStackProbe(menuLayer); });
       } else if (shouldShowSkirmishNext()) {
         withSkirmish((m) => { if (shouldShowSkirmishNext()) m.mountSkirmish(menuLayer); });
+      } else if (shouldShowLevelEditorNext()) {
+        withEditor((m) => { if (shouldShowLevelEditorNext()) m.mountLevelEditor(menuLayer); });
       } else if (shouldShowMainConcept()) {
         menuLayer.innerHTML = renderArtScreen('main');
       } else if (shouldShowMainAssets()) {
