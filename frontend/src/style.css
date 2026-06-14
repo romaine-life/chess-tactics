@@ -1247,6 +1247,7 @@ h1 {
   grid-row: auto;
   justify-self: start;
   padding-bottom: 0;
+  max-width: 100%;
 }
 
 /* Isolated specimen capture surface — one component per page, for exact screenshots */
@@ -1739,7 +1740,7 @@ h1 {
 .portfolio-asset-body {
   display: grid;
   gap: 30px;
-  grid-template-columns: minmax(250px, .85fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(240px, .72fr) minmax(360px, 1.15fr);
   padding: 24px 22px 28px;
 }
 
@@ -1842,6 +1843,12 @@ h1 {
   gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
+}
+
+/* Live DOM specimens (profile, daily/news, dock) are wider than an image crop, so
+   stack the comparison for them — the component gets the full figure width. */
+.portfolio-comparison-live {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .portfolio-comparison-card {

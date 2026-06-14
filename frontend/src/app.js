@@ -3012,7 +3012,7 @@ import './style.css';
             </div>
           </div>
           <figure class="portfolio-asset-figure">
-            <div class="portfolio-comparison">
+            <div class="portfolio-comparison ${asset.specimen ? 'portfolio-comparison-live' : ''}">
               ${asset.specimen ? `
                 <div class="portfolio-comparison-card">
                   <strong>Live Component</strong>
