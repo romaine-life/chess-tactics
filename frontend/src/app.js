@@ -759,6 +759,7 @@ import './style.css';
     '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
     '/design': { screen: 'main', mainMenuView: 'design-index' },
     '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
+    '/design/main-menu/specimen': { screen: 'main', mainMenuView: 'specimen' },
     '/design/main-menu/render': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main' },
     '/design/main-menu/render/hotspots': { screen: 'main', mainMenuView: 'concept', conceptScreen: 'main', hotspots: true },
     '/campaigns': { screen: 'campaigns' },
@@ -2864,240 +2865,20 @@ import './style.css';
     return currentRoute().mainMenuView === 'assets';
   }
 
+  function shouldShowMainSpecimen() {
+    return currentRoute().mainMenuView === 'specimen';
+  }
+
   function shouldShowMainDesignIndex() {
     return currentRoute().mainMenuView === 'design-index';
   }
 
-  function shouldShowScreenConcept(screenId) {
-    return currentRoute().conceptScreen === screenId;
-  }
-
-  function renderSkeletonTag(label, stateLabel = 'Unfilled') {
-    return `<span class="skeleton-tag"><b>${escapeText(stateLabel)}</b>${escapeText(label)}</span>`;
-  }
-
-  function renderSkeletonButton(action, label, options = {}) {
-    const attrs = [
-      `type="button"`,
-      `data-action="${escapeText(action)}"`,
-      options.mode ? `data-mode="${escapeText(options.mode)}"` : '',
-      options.disabled ? 'disabled' : '',
-    ].filter(Boolean).join(' ');
-    return `<button ${attrs}>${escapeText(label)}</button>`;
-  }
-
-  function renderSkeletonPanel(panel) {
-    return `
-      <article class="app-skeleton-panel ${escapeText(panel.className || '')}">
-        ${renderSkeletonTag(panel.slot, panel.state || 'Asset slot')}
-        <div>
-          <p>${escapeText(panel.kicker || '')}</p>
-          <h3>${escapeText(panel.title)}</h3>
-          <span>${escapeText(panel.copy)}</span>
-        </div>
-        ${panel.items && panel.items.length ? `
-          <ul>
-            ${panel.items.map((item) => `<li>${escapeText(item)}</li>`).join('')}
-          </ul>
-        ` : ''}
-        ${panel.actions && panel.actions.length ? `
-          <div class="app-skeleton-actions">
-            ${panel.actions.map((action) => renderSkeletonButton(action.action, action.label, action)).join('')}
-          </div>
-        ` : ''}
-      </article>`;
-  }
-
-  function renderAppSkeletonScreen(config) {
-    return `
-      <div class="app-skeleton-screen app-skeleton-${escapeText(config.screenId)}" data-live-screen="${escapeText(config.screenId)}-skeleton">
-        <header class="app-skeleton-header">
-          <div>
-            <p>Skeleton mode</p>
-            <h2>${escapeText(config.title)}</h2>
-            <span>${escapeText(config.summary)}</span>
-          </div>
-          <nav aria-label="${escapeText(config.title)} review links">
-            <a href="${escapeText(config.conceptPath)}">Render reference</a>
-            <button type="button" data-action="main">Main Menu</button>
-          </nav>
-        </header>
-        <main class="app-skeleton-layout">
-          ${config.panels.map(renderSkeletonPanel).join('')}
-        </main>
-      </div>`;
-  }
-
-  function renderCampaignSkeleton() {
-    return renderAppSkeletonScreen({
-      screenId: 'campaigns',
-      title: 'Campaign Editor',
-      summary: 'The old campaign editor is hidden behind this planning skeleton until each surface gets approved art.',
-      conceptPath: '/design/campaigns/render',
-      panels: [
-        {
-          className: 'rail',
-          state: 'Pending art',
-          slot: 'Campaign list rail, filters, selected campaign cards',
-          kicker: 'Left rail',
-          title: 'Campaign Library',
-          copy: 'Needs a dark pixel frame, compact save state, and selected campaign treatment.',
-          items: ['Search/filter strip', 'Campaign cards', 'Create campaign affordance'],
-          actions: [{ action: 'new-campaign', label: 'New Campaign' }],
-        },
-        {
-          className: 'primary',
-          state: 'Pending art',
-          slot: 'Mission chain map, level tiles, encounter preview',
-          kicker: 'Primary canvas',
-          title: 'Campaign Flow',
-          copy: 'This becomes the playable level sequence surface, not a generic form panel.',
-          items: ['Node chain', 'Selected level preview', 'Difficulty/objective badges'],
-          actions: [{ action: 'edit-level-board', label: 'Edit Level' }, { action: 'party', label: 'Test Play' }],
-        },
-        {
-          className: 'inspector',
-          state: 'Pending art',
-          slot: 'Campaign metadata inspector and level settings frame',
-          kicker: 'Inspector',
-          title: 'Campaign Details',
-          copy: 'Live fields will move here after the frame and hierarchy are settled.',
-          items: ['Title and description', 'Level objective', 'Difficulty and notes'],
-          actions: [{ action: 'save-campaign', label: 'Save Campaign' }],
-        },
-        {
-          className: 'footer',
-          state: 'Pending art',
-          slot: 'Bottom command bar, destructive actions, sync status',
-          kicker: 'Command strip',
-          title: 'Save / Duplicate / Delete',
-          copy: 'Keep the controls available, but hold the visual treatment until the asset pass.',
-          actions: [{ action: 'add-level', label: 'Add Level' }, { action: 'delete-campaign', label: 'Delete Campaign' }],
-        },
-      ],
-    });
-  }
-
-  function renderLevelEditorSkeleton() {
-    return renderAppSkeletonScreen({
-      screenId: 'level-editor',
-      title: 'Level Editor',
-      summary: 'This is the workbench skeleton for tilesets, brushes, zones, and board validation.',
-      conceptPath: '/design/level-editor/render',
-      panels: [
-        {
-          className: 'toolbar',
-          state: 'Pending art',
-          slot: 'Mode tabs, save/test controls, editor title bar',
-          kicker: 'Toolbar',
-          title: 'Board / Tiles / Pieces / Zones',
-          copy: 'The mode hierarchy is preserved while the visual chrome is rebuilt.',
-          actions: [
-            { action: 'set-level-editor-mode', label: 'Board', mode: 'board' },
-            { action: 'set-level-editor-mode', label: 'Zones', mode: 'zones' },
-            { action: 'save-level-editor', label: 'Save' },
-          ],
-        },
-        {
-          className: 'primary',
-          state: 'Pending tileset',
-          slot: 'Editable battlefield plate, grid, terrain, doodads, lighting',
-          kicker: 'Board work area',
-          title: 'Tile Canvas',
-          copy: 'This is where the approved tileset will be judged in-browser before pieces are finalized.',
-          items: ['Isometric field', 'Terrain doodads', 'Selection/threat overlays'],
-        },
-        {
-          className: 'rail',
-          state: 'Pending art',
-          slot: 'Brush palette, terrain categories, piece palette',
-          kicker: 'Palette',
-          title: 'Tiles And Pieces',
-          copy: 'Needs small pixel swatches and mode-specific brush controls.',
-          items: ['Grass/water/path', 'Rocks and blockers', 'Player/enemy pieces'],
-        },
-        {
-          className: 'inspector',
-          state: 'Pending art',
-          slot: 'Zone inspector, misc events, level dimensions',
-          kicker: 'Inspector',
-          title: 'Level Rules',
-          copy: 'The data model stays live, but the current utilitarian controls are not the target UI.',
-          actions: [{ action: 'back-to-campaigns', label: 'Back To Campaigns' }],
-        },
-      ],
-    });
-  }
-
-  function renderSkirmishSkeleton() {
-    return renderAppSkeletonScreen({
-      screenId: 'skirmish',
-      title: 'Skirmish',
-      summary: 'The playable combat UI is skeletonized until HUD, board, piece, and action assets are approved.',
-      conceptPath: '/design/skirmish/render',
-      panels: [
-        {
-          className: 'toolbar',
-          state: 'Pending art',
-          slot: 'Mission header, turn meters, objective strip',
-          kicker: 'Combat HUD',
-          title: 'Turn State',
-          copy: 'Needs compact readable status with dark-theme contrast.',
-          items: ['Player/enemy phase', 'Anchor and threat meters', 'Objective copy'],
-        },
-        {
-          className: 'primary',
-          state: 'Pending tileset',
-          slot: 'Combat battlefield, pieces, threat overlays, animation framing',
-          kicker: 'Battlefield',
-          title: 'Tactics Board',
-          copy: 'This will reuse the level-editor tile work once the tileset is approved.',
-          items: ['Selected move cells', 'Enemy danger cells', 'Piece silhouettes'],
-        },
-        {
-          className: 'rail',
-          state: 'Pending art',
-          slot: 'Roster, initiative, captured/lost piece state',
-          kicker: 'Squads',
-          title: 'Roster Rail',
-          copy: 'Needs chess-readable pieces with small tactical metadata.',
-        },
-        {
-          className: 'inspector',
-          state: 'Pending art',
-          slot: 'Selected piece card, action buttons, combat log',
-          kicker: 'Actions',
-          title: 'Move / Power / Wait',
-          copy: 'Controls stay clickable while their final art is designed.',
-          actions: [
-            { action: 'noop', label: 'Move' },
-            { action: 'noop', label: 'Power' },
-            { action: 'end-turn', label: 'Wait' },
-          ],
-        },
-      ],
-    });
-  }
-
-  function renderMainMenuAction(action, iconClass, icon, label, active = false, skeletonLabel = '') {
-    return `
-      <button class="main-menu-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}">
-        <span class="main-menu-action-icon ${escapeText(iconClass)}">${escapeText(icon)}</span>
-        <span>${escapeText(label)}</span>
-        <i aria-hidden="true">&gt;</i>
-        ${skeletonLabel ? renderSkeletonTag(skeletonLabel) : ''}
-      </button>`;
-  }
 
   function renderMainMenuArtAction(action, label, active = false) {
     return `
       <button class="main-menu-art-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">
         <span>${escapeText(label)}</span>
       </button>`;
-  }
-
-  function renderMainMenuDockButton(action, label) {
-    return `<button type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}"><span>${escapeText(label.slice(0, 3).toUpperCase())}</span></button>`;
   }
 
   function mainMenuReviewStatusFor(id, fallbackStatus) {
@@ -3136,9 +2917,13 @@ import './style.css';
       </div>`;
   }
 
-  function renderApprovedReferenceCard(crop) {
+  function renderApprovedReferenceCard(crop, bare = false) {
     const key = crop.key || crop.cropClass || '';
     const selection = mainMenuReferenceSelection(key);
+    const frame = `<span class="portfolio-reference-frame" style="${escapeText(mainMenuReferencePreviewStyle(selection))}">
+          <img src="${APPROVED_RENDER_SRC}" alt="" aria-hidden="true" draggable="false">
+        </span>`;
+    if (bare) return frame;
     return `
       <button
         class="portfolio-reference-picker"
@@ -3148,9 +2933,7 @@ import './style.css';
         data-crop-title="${escapeText(crop.title || 'Approved Render Crop')}"
         aria-label="${escapeText(`Open full render crop picker for ${crop.title || 'approved render crop'}`)}"
       >
-        <span class="portfolio-reference-frame" style="${escapeText(mainMenuReferencePreviewStyle(selection))}">
-          <img src="${APPROVED_RENDER_SRC}" alt="" aria-hidden="true" draggable="false">
-        </span>
+        ${frame}
       </button>`;
   }
 
@@ -3229,7 +3012,13 @@ import './style.css';
             </div>
           </div>
           <figure class="portfolio-asset-figure">
-            <div class="portfolio-comparison">
+            <div class="portfolio-comparison ${asset.specimen ? 'portfolio-comparison-live' : ''}">
+              ${asset.specimen ? `
+                <div class="portfolio-comparison-card">
+                  <strong>Live Component</strong>
+                  <div class="portfolio-specimen" inert>${asset.specimen}</div>
+                </div>
+              ` : ''}
               ${asset.file ? `
                 <div class="portfolio-comparison-card">
                   <strong>Current Candidate</strong>
@@ -3311,8 +3100,8 @@ import './style.css';
       </div>`;
   }
 
-  function renderMainAssetReview() {
-    const portfolioAssets = [
+  function mainMenuPortfolioAssets() {
+    return [
       {
         id: 'mode-buttons',
         title: 'Mode Button Family',
@@ -3356,7 +3145,7 @@ import './style.css';
         id: 'profile-chrome',
         title: 'Profile / Status Panel',
         baseStatus: 'review',
-        file: '/assets/ui/main-menu-profile-chrome-v1.png',
+        specimen: renderProfileStatus(),
         alt: 'Generated pixel art profile and status chrome for the main menu',
         caption: 'Right-rail profile source for player identity, force counters, and the sign-in/account action slot.',
         description: 'This panel is still under review: player identity, guest/sign-in/account affordance, allies/threat counters, and the surrounding chrome are not settled.',
@@ -3375,7 +3164,7 @@ import './style.css';
         id: 'news-chrome',
         title: 'Daily / News Panel',
         baseStatus: 'review',
-        file: '/assets/ui/main-menu-news-chrome-v1.png',
+        specimen: renderDailyPanel() + renderNewsPanel(),
         alt: 'Generated pixel art daily and news panel chrome for the main menu',
         caption: 'Reusable panel source for the daily line and right-side campaign/news notes.',
         description: 'A smaller command-panel treatment for rotating copy, daily challenge text, or future campaign updates.',
@@ -3399,7 +3188,7 @@ import './style.css';
         id: 'dock-chrome',
         title: 'Bottom Dock',
         baseStatus: 'review',
-        file: '/assets/ui/main-menu-dock-chrome-v1.png',
+        specimen: renderDock(),
         alt: 'Generated pixel art bottom dock chrome for the main menu',
         caption: 'Bottom quick-link dock source for secondary navigation buttons.',
         description: 'A lower-priority navigation strip for achievements, campaigns, lobbies, collection, and future utility links.',
@@ -3433,7 +3222,32 @@ import './style.css';
           },
         ],
       },
-    ].map((asset) => {
+    ];
+  }
+
+  function renderSpecimenCapture() {
+    const params = new URLSearchParams(window.location.search || '');
+    const id = params.get('id') || '';
+    const only = params.get('only') || 'both';
+    const asset = mainMenuPortfolioAssets().find((entry) => entry.id === id);
+    if (!asset) {
+      return `<div class="specimen-capture" data-live-screen="specimen-missing"><div class="portfolio-specimen">Unknown specimen id: ${escapeText(id)}</div></div>`;
+    }
+    const proposedInner = asset.specimen
+      || (asset.file ? `<img src="${escapeText(asset.file)}" alt="${escapeText(asset.alt || '')}" draggable="false" style="display:block;width:100%">` : '<span>No standalone component for this slot.</span>');
+    const proposed = `<div class="portfolio-specimen" data-specimen="proposed">${proposedInner}</div>`;
+    const compare = (asset.referenceCrops || [])
+      .map((crop) => `<div class="portfolio-specimen" data-specimen="compare">${renderApprovedReferenceCard(crop, true)}</div>`)
+      .join('');
+    return `
+      <div class="specimen-capture" data-live-screen="specimen-${escapeText(id)}-${escapeText(only)}">
+        ${only !== 'compare' ? proposed : ''}
+        ${only !== 'proposed' ? compare : ''}
+      </div>`;
+  }
+
+  function renderMainAssetReview() {
+    const portfolioAssets = mainMenuPortfolioAssets().map((asset) => {
       const reviewStatus = mainMenuReviewStatusFor(asset.id, asset.baseStatus);
       const reviewMeta = mainMenuReviewMeta(reviewStatus);
       return {
@@ -3471,14 +3285,118 @@ import './style.css';
       </div>`;
   }
 
-  function renderMainMenuSkeleton() {
+  function renderCogIcon() {
+    // Material settings gear: fat teeth + center hole read unambiguously as a cog at
+    // icon size (thin radial strokes read as a sunburst, so avoid them).
+    return `<svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"></path>
+    </svg>`;
+  }
+
+  function renderRookIcon() {
+    return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M3.4 2.6h2.1v1.5h1.4V2.6h1.4v1.5h1.4V2.6h2.1v3.1l-1.2 1 .6 4.9 1.1 1.5v1.2H3.1v-1.2l1.1-1.5.6-4.9-1.2-1z"></path>
+    </svg>`;
+  }
+
+  function renderProfileStatus() {
     const signedIn = Boolean(currentUser);
-    const displayName = signedIn ? (currentUser.name || currentUser.email || 'Player') : 'Guest';
-    const email = signedIn ? currentUser.email || 'Signed in' : 'Offline skirmish ready';
-    const accountInitial = signedIn ? displayName.trim().charAt(0).toUpperCase() : '?';
-    const avatarMarkup = signedIn && currentUser.avatar_url
-      ? `<img src="${escapeText(currentUser.avatar_url)}" alt="" draggable="false">`
-      : `<span aria-hidden="true">${escapeText(accountInitial || 'P')}</span>`;
+    const name = signedIn
+      ? escapeText(currentUser.displayName || currentUser.name || currentUser.username || 'Commander')
+      : 'Commander';
+    // Element 03 hybrid (render-fidelity + text rule, docs/ui-art-direction.md):
+    // art-crop the painterly lion crest from the approved render; clean SVG for the
+    // geometric cog and rook silhouettes; every word and number is live DOM text
+    // (localizable, accessible, scalable) — never baked into the image.
+    return `
+      <section class="profile-panel" aria-label="Commander profile and skirmish forces">
+        <div class="profile-bar profile-identity">
+          <span class="profile-crest" role="img" aria-label="Commander crest"></span>
+          <span class="profile-name">
+            <strong>${name}</strong>
+            <small>Rank 12</small>
+          </span>
+          <button class="profile-auth" type="button" data-action="${signedIn ? 'settings' : 'sign-in'}">${signedIn ? 'Account' : 'Sign In'}</button>
+          <button class="profile-gear" type="button" data-action="settings" aria-label="Settings">${renderCogIcon()}</button>
+        </div>
+        <dl class="profile-bar profile-forces">
+          <div class="force force-allies">
+            <span class="force-icon" aria-hidden="true">${renderRookIcon()}</span>
+            <dt>Allies</dt><dd>3</dd>
+          </div>
+          <div class="force force-enemies">
+            <span class="force-icon" aria-hidden="true">${renderRookIcon()}</span>
+            <dt>Enemies</dt><dd>3</dd>
+          </div>
+        </dl>
+      </section>`;
+  }
+
+  function renderDailyPanel() {
+    // Element 04 (daily) — DOM + live text + clean SVG icons (text is never baked).
+    return `
+      <section class="menu-panel daily-panel" aria-label="Daily challenge">
+        <header class="daily-head">
+          <strong>Daily Challenge</strong>
+          <span class="daily-timer"><svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M3.5 1.5h9v3L9 8l3.5 3.5v3h-9v-3L7 8 3.5 4.5z"></path></svg>12h 45m</span>
+        </header>
+        <div class="daily-body">
+          <span class="daily-reticle" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" focusable="false"><circle cx="8" cy="8" r="5.4"></circle><path d="M8 .9v2.6M8 12.5v2.6M.9 8h2.6M12.5 8h2.6"></path><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"></circle></svg></span>
+          <p>Capture the enemy King</p>
+        </div>
+        <footer class="daily-reward">
+          <span class="daily-reward-label">Reward</span>
+          <span class="daily-gem" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" focusable="false"><path d="M4 2.2h8l2.8 3.9L8 14.2 1.2 6.1z"></path></svg></span>
+          <strong>50</strong>
+        </footer>
+      </section>`;
+  }
+
+  function renderNewsBullet(tone) {
+    if (tone === 'gold') {
+      return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M2 12.5h12L13 5.5l-3 2.6L8 3 6 8.1l-3-2.6z"></path></svg>`;
+    }
+    if (tone === 'red') {
+      return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><rect x="3" y="3" width="10" height="10" rx="1"></rect></svg>`;
+    }
+    return `<svg class="ui-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 1.5l5.5 6.5L8 14.5 2.5 8z"></path></svg>`;
+  }
+
+  function renderNewsPanel() {
+    // Element 04 (news) — DOM + live text + clean SVG bullets (text is never baked).
+    const items = [
+      { tone: 'cobalt', text: 'v1.2.0 Balance Update' },
+      { tone: 'gold', text: 'New official maps added' },
+      { tone: 'red', text: 'Community Spotlight: Top Tactics' },
+    ];
+    const lines = items.map((it) =>
+      `<li class="news-line news-line-${it.tone}"><span class="news-ico" aria-hidden="true">${renderNewsBullet(it.tone)}</span><span>${escapeText(it.text)}</span></li>`
+    ).join('');
+    return `
+      <section class="menu-panel news-panel" aria-label="News">
+        <header class="news-head"><strong>News</strong></header>
+        <ul class="news-list">${lines}</ul>
+      </section>`;
+  }
+
+  const DOCK_ITEMS = [
+    { action: 'settings', label: 'Achievements' },
+    { action: 'campaigns', label: 'Campaigns' },
+    { action: 'lobbies', label: 'Lobbies' },
+    { action: 'settings', label: 'Collection' },
+  ];
+
+  function renderDock() {
+    // Element 05 — art-backed: the concept dock is icon-only pixel art with no baked
+    // text, so crop the dock strip from the render (dock-chrome {x:548,y:810,w:410,h:136})
+    // and overlay transparent live hit-targets — the accepted mode-button (01) pattern.
+    const targets = DOCK_ITEMS.map((item, i) =>
+      `<button class="dock-hit" style="left:${(i * 24.6 + 1.4).toFixed(2)}%" type="button" data-action="${escapeText(item.action)}" aria-label="${escapeText(item.label)}" title="${escapeText(item.label)}"></button>`
+    ).join('');
+    return `<nav class="menu-dock menu-dock-art" aria-label="Quick links">${targets}</nav>`;
+  }
+
+  function renderMainMenuSkeleton() {
     return `
       <div class="main-menu-screen main-menu-live-screen main-menu-skeleton-screen" data-live-screen="main-skeleton">
         <section class="main-menu-left" aria-label="Main navigation">
@@ -3486,7 +3404,7 @@ import './style.css';
             <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" aria-hidden="true" draggable="false">
           </div>
 
-          <section class="main-menu-battlefield-plate" aria-label="Moonlit grassland battlefield preview">
+          <section class="main-menu-battlefield-plate main-menu-battlefield-art" aria-label="Moonlit grassland battlefield preview">
             <div class="main-menu-battlefield-meta">
               <span>Moonlit Grassland</span>
               <span>Skirmish Preview</span>
@@ -3507,51 +3425,16 @@ import './style.css';
             ${renderMainMenuArtAction('settings', 'Settings')}
           </nav>
 
-          <div class="main-menu-daily main-menu-news-art">
-            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-            <div class="main-menu-daily-content">
-              <strong>Daily Line</strong>
-              <small>Preview</small>
-              <p>Hold the bridge, trade cleanly, and keep the king lane sealed.</p>
-              <span>Generated board target</span>
-            </div>
-          </div>
+          ${renderDailyPanel()}
         </section>
 
         <aside class="main-menu-right" aria-label="Profile and status">
-          <div class="main-menu-profile main-menu-profile-art">
-            <img src="/assets/ui/main-menu-profile-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-            <div class="main-menu-avatar" aria-hidden="true">${avatarMarkup}</div>
-            <div class="main-menu-profile-identity">
-              <strong>${escapeText(displayName)}</strong>
-              <span>${escapeText(email)}</span>
-            </div>
-            <div class="main-menu-profile-stats" aria-label="Preview force count">
-              <span><strong>6 Allies</strong></span>
-              <span><strong>5 Threats</strong></span>
-            </div>
-            <button type="button" data-action="${signedIn ? 'settings' : 'sign-in'}" aria-label="${signedIn ? 'Account settings' : 'Sign in'}">
-              <span>${signedIn ? 'Account' : 'Sign In'}</span>
-            </button>
-          </div>
+          ${renderProfileStatus()}
 
-          <div class="main-menu-news main-menu-news-art">
-            <img src="/assets/ui/main-menu-news-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-            <div class="main-menu-news-content">
-              <strong>Campaign tools</strong>
-              <p><span aria-hidden="true">&gt;</span> Editor shell is moving from render reference to live browser UI.</p>
-              <p><span aria-hidden="true">&gt;</span> Tile and piece extraction follow this main-menu slice.</p>
-            </div>
-          </div>
+          ${renderNewsPanel()}
         </aside>
 
-        <div class="main-menu-dock main-menu-dock-art" aria-label="Quick links">
-          <img src="/assets/ui/main-menu-dock-chrome-v1.png" alt="" aria-hidden="true" draggable="false">
-          ${renderMainMenuDockButton('settings', 'Achievements')}
-          ${renderMainMenuDockButton('campaigns', 'Campaigns')}
-          ${renderMainMenuDockButton('lobbies', 'Lobbies')}
-          ${renderMainMenuDockButton('settings', 'Collection')}
-        </div>
+        ${renderDock()}
       </div>`;
   }
 
@@ -3593,12 +3476,12 @@ import './style.css';
     menuLayer.classList.toggle('level-editor-layer', false);
     if (state.screen === 'level-editor') {
       menuLayer.hidden = false;
-      menuLayer.innerHTML = shouldShowScreenConcept('level-editor') ? renderArtScreen('level-editor') : renderLevelEditorSkeleton();
+      menuLayer.innerHTML = renderArtScreen('level-editor');
       return;
     }
     if (state.screen === 'game') {
       menuLayer.hidden = false;
-      menuLayer.innerHTML = shouldShowScreenConcept('skirmish') ? renderArtScreen('skirmish') : renderSkirmishSkeleton();
+      menuLayer.innerHTML = renderArtScreen('skirmish');
       return;
     }
     menuLayer.hidden = false;
@@ -3607,6 +3490,8 @@ import './style.css';
         menuLayer.innerHTML = renderArtScreen('main');
       } else if (shouldShowMainAssets()) {
         menuLayer.innerHTML = renderMainAssetReview();
+      } else if (shouldShowMainSpecimen()) {
+        menuLayer.innerHTML = renderSpecimenCapture();
       } else if (shouldShowMainDesignIndex()) {
         menuLayer.innerHTML = renderDesignIndex();
       } else {
@@ -3685,7 +3570,7 @@ import './style.css';
           <button type="button" data-action="main">Back</button>
         </div>`;
     } else if (state.screen === 'campaigns') {
-      menuLayer.innerHTML = shouldShowScreenConcept('campaigns') ? renderArtScreen('campaigns') : renderCampaignSkeleton();
+      menuLayer.innerHTML = renderArtScreen('campaigns');
     } else {
       menuLayer.innerHTML = `
         <div class="game-menu">

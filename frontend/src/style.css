@@ -19,6 +19,12 @@
   --threat-hot: #ff5f49;
   --threat-dim: #5a211d;
 
+  /* Chrome accents — DOM panel components (low-glare, on art-direction spec) */
+  --gold: #c9a44c;
+  --gold-dim: #6e5a2a;
+  --panel-inset: #0a131b;
+  --focus-ring: var(--cobalt-bright);
+
   /* Grass-island tile field */
   --grass-a: #84ab61;
   --grass-b: #729653;
@@ -546,15 +552,13 @@ h1 {
 }
 
 .main-menu-left,
-.main-menu-right,
-.main-menu-dock {
+.main-menu-right {
   pointer-events: auto;
   z-index: 3;
 }
 
 .main-menu-brand,
-.main-menu-actions,
-.main-menu-daily {
+.main-menu-actions {
   grid-column: 1;
   justify-self: stretch;
   max-width: 540px;
@@ -582,10 +586,6 @@ h1 {
 .main-menu-actions {
   align-self: start;
   grid-row: 2;
-}
-
-.main-menu-daily {
-  grid-row: 3;
 }
 
 .main-menu-battlefield-plate {
@@ -628,6 +628,20 @@ h1 {
     0 0 36px rgba(37, 199, 255, .1);
 }
 
+/* Element 06 — the menu battlefield preview is art-backed with the concept board crop
+   (battlefield region of the render). The live canvas board returns in actual gameplay. */
+.main-menu-battlefield-art {
+  background-image: url("/assets/ui/main-menu-aspirational.png");
+  background-repeat: no-repeat;
+  background-size: 170.91% 171.03%;
+  background-position: 81.46% 43.69%;
+  image-rendering: pixelated;
+}
+
+.shell.main-menu-active .board-scroll {
+  display: none;
+}
+
 .main-menu-battlefield-meta,
 .main-menu-battlefield-status {
   align-items: center;
@@ -637,6 +651,7 @@ h1 {
   letter-spacing: 0;
   position: absolute;
   text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .92), 0 0 7px rgba(0, 0, 0, .72);
   z-index: 1;
 }
 
@@ -887,59 +902,6 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(255, 216, 122, .74);
 }
 
-.main-menu-daily {
-  align-self: end;
-  display: grid;
-  gap: 10px;
-  min-height: 118px;
-  padding: 14px 18px;
-  border: 2px solid var(--menu-line);
-  background: var(--menu-panel);
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .65),
-    inset 0 1px 0 rgba(216, 240, 246, .05);
-}
-
-.main-menu-daily div,
-.main-menu-counts,
-.main-menu-profile {
-  display: flex;
-  align-items: center;
-}
-
-.main-menu-daily div {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.main-menu-daily strong,
-.main-menu-news strong {
-  color: #47a9ff;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .64rem;
-  line-height: 1.45;
-  text-transform: uppercase;
-}
-
-.main-menu-daily small {
-  color: #9fb0b7;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .5rem;
-}
-
-.main-menu-daily p {
-  color: #d5e0e4;
-  font-size: 1.12rem;
-  line-height: 1.2;
-}
-
-.main-menu-daily span {
-  color: #3da5ff;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .58rem;
-  text-transform: uppercase;
-}
-
 .main-menu-right {
   align-content: start;
   display: grid;
@@ -950,170 +912,363 @@ h1 {
   justify-self: stretch;
 }
 
-.main-menu-profile {
-  gap: 12px;
-  min-height: 86px;
-  padding: 12px;
+/* Profile / status panel — live DOM component (element 03) */
+.menu-panel {
   border: 2px solid var(--menu-line);
-  background: var(--menu-panel-strong);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .66), inset 0 1px 0 rgba(216, 240, 246, .05);
+  background: var(--menu-panel);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(216, 240, 246, .05);
 }
 
-.main-menu-avatar {
+/* Element 03 — hybrid (render-fidelity + text rule, docs/ui-art-direction.md):
+   art-crop the painterly lion crest from main-menu-aspirational.png; clean SVG cog/rook
+   silhouettes; all copy + counts are live DOM text. Two stacked bars matching the concept. */
+.profile-panel {
+  align-self: start;
+  display: grid;
+  gap: 8px;
+}
+
+.profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 2px solid var(--menu-line);
+  background: var(--menu-panel);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(216, 240, 246, .05);
+}
+
+/* Crest: crop of the lion shield from the render (~{x:1188,y:42,w:58,h:56} of 1586x992). */
+.profile-crest {
+  flex: none;
+  width: 34px;
+  height: 33px;
+  background-image: url("/assets/ui/main-menu-aspirational.png");
+  background-repeat: no-repeat;
+  background-size: 2734.5% 1771.4%;
+  background-position: 77.75% 4.49%;
+  image-rendering: pixelated;
+}
+
+.profile-name {
+  display: grid;
+  line-height: 1.2;
+}
+
+.profile-name strong {
+  color: var(--ink-strong);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .62rem;
+}
+
+.profile-name small {
+  margin-top: 4px;
+  color: var(--cobalt-bright);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.profile-auth {
+  margin-left: auto;
+  padding: 6px 10px;
+  border: 2px solid var(--menu-line);
+  background: var(--panel-inset, #0a131b);
+  color: var(--ink);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.profile-auth:hover,
+.profile-auth:focus-visible {
+  border-color: var(--cobalt-bright);
+  color: var(--ink-strong);
+}
+
+.profile-gear {
+  flex: none;
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  border: 2px solid #5cb7ff;
-  background: linear-gradient(180deg, #153a67, #071c34);
-  color: #f0eadb;
-  font-family: Georgia, serif;
-  font-size: 2rem;
-  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--menu-line);
+  background: var(--panel-inset, #0a131b);
+  color: var(--ink);
+  cursor: pointer;
 }
 
-.main-menu-profile div:nth-child(2) {
-  min-width: 0;
-  flex: 1;
+.profile-gear .ui-icon {
+  width: 16px;
+  height: 16px;
 }
 
-.main-menu-profile strong,
-.main-menu-profile span {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.profile-gear:hover,
+.profile-gear:focus-visible {
+  border-color: var(--cobalt-bright);
+  color: var(--cobalt-bright);
 }
 
-.main-menu-profile strong {
-  color: #f0eadb;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .7rem;
-  line-height: 1.45;
-  text-transform: uppercase;
-}
-
-.main-menu-profile span {
-  color: #3da5ff;
-  font-size: 1.2rem;
-  text-transform: uppercase;
-}
-
-.main-menu-profile button {
-  min-height: 48px;
-  min-width: 54px;
-  border-radius: 0;
-  border-color: rgba(63, 95, 111, .82);
-  background: #06111a;
-  color: #41d3ff;
-  font-size: .54rem;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.main-menu-counts {
+.profile-forces {
+  margin: 0;
   justify-content: space-between;
-  gap: 0;
-  min-height: 62px;
-  border: 2px solid var(--menu-line);
-  background: var(--menu-panel);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .66);
 }
 
-.main-menu-counts span {
-  align-items: center;
-  color: #d8e6ec;
+.force {
   display: flex;
-  flex: 1;
-  gap: 10px;
-  justify-content: center;
-  min-width: 0;
-  padding: 12px;
+  align-items: center;
+  gap: 8px;
+}
+
+.force dt {
   font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .58rem;
+  font-size: .5rem;
+  letter-spacing: .04em;
   text-transform: uppercase;
 }
 
-.main-menu-counts span + span {
-  border-left: 1px solid rgba(80, 129, 151, .48);
+.force dd {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .62rem;
 }
 
-.main-menu-counts b {
-  color: #4ab8ff;
-  font-family: Georgia, serif;
-  font-size: 1.25rem;
-}
-
-.main-menu-counts span:last-child b {
-  color: #e06945;
-}
-
-.main-menu-counts strong {
-  color: #f0eadb;
-  font-size: .72rem;
-}
-
-.main-menu-news {
-  align-self: end;
+.force-icon {
+  flex: none;
   display: grid;
-  gap: 14px;
+  width: 18px;
+  height: 20px;
+}
+
+.force-icon .ui-icon {
+  width: 18px;
+  height: 20px;
+}
+
+.force-allies dt,
+.force-allies .force-icon {
+  color: var(--cobalt-bright);
+}
+
+.force-enemies dt,
+.force-enemies .force-icon {
+  color: var(--menu-red);
+}
+
+/* Daily / News panels — element 04: DOM + live text + clean SVG icons (text never baked). */
+.daily-panel,
+.news-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  align-self: end;
+}
+
+.news-panel {
   margin-top: auto;
-  padding: 18px;
-  border: 2px solid var(--menu-line);
-  background: var(--menu-panel);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .66), inset 0 1px 0 rgba(216, 240, 246, .05);
 }
 
-.main-menu-news p {
-  align-items: center;
-  color: #c6d5da;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 20px minmax(0, 1fr);
-  font-size: 1.13rem;
-  line-height: 1.1;
-}
-
-.main-menu-news span {
-  color: #3da5ff;
-}
-
-.main-menu-dock {
-  align-self: end;
+.daily-head,
+.news-head {
   display: flex;
-  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.daily-head strong,
+.news-head strong {
+  color: var(--cobalt-bright);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .56rem;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.daily-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .5rem;
+}
+
+.daily-timer .ui-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.daily-body {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.daily-reticle {
+  flex: none;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  color: var(--cobalt-bright);
+}
+
+.daily-reticle .ui-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.daily-body p {
+  margin: 0;
+  color: var(--ink);
+  font-size: .92rem;
+  line-height: 1.2;
+}
+
+.daily-reward {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.daily-reward-label {
+  color: var(--cobalt);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.daily-gem {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  color: var(--cobalt-bright);
+}
+
+.daily-gem .ui-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.daily-reward strong {
+  color: var(--ink-strong);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .56rem;
+}
+
+.news-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+  list-style: none;
+}
+
+.news-line {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+  font-size: .9rem;
+  line-height: 1.2;
+}
+
+.news-ico {
+  display: grid;
+  width: 14px;
+  height: 14px;
+}
+
+.news-ico .ui-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.news-line-cobalt .news-ico { color: var(--cobalt-bright); }
+.news-line-gold .news-ico { color: var(--menu-gold); }
+.news-line-red .news-ico { color: var(--menu-red); }
+
+/* Bottom dock — element 05, art-backed (icon-only pixel art, no baked text):
+   crop of dock-chrome {x:548,y:810,w:410,h:136} + transparent live hit-targets. */
+.menu-dock {
   grid-column: 2;
   grid-row: 3;
+  align-self: end;
   justify-self: center;
   padding-bottom: 22px;
 }
 
-.main-menu-dock button {
+.menu-dock-art {
+  position: relative;
+  width: 410px;
+  max-width: 32vw;
+  aspect-ratio: 410 / 136;
+  background-image: url("/assets/ui/main-menu-aspirational.png");
+  background-repeat: no-repeat;
+  background-size: 386.83% 729.41%;
+  background-position: 46.60% 94.63%;
+  image-rendering: pixelated;
+}
+
+.dock-hit {
+  position: absolute;
+  top: 6%;
+  width: 22%;
+  height: 88%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dock-hit:hover,
+.dock-hit:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* Live component specimens on the design portfolio */
+.portfolio-specimen {
   display: grid;
-  place-items: center;
-  width: 74px;
-  height: 74px;
-  min-height: 74px;
-  border-radius: 0;
-  border: 2px solid rgba(63, 95, 111, .82);
-  background: linear-gradient(180deg, rgba(13, 28, 39, .94), rgba(5, 12, 18, .96));
-  color: #e8d4a6;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: 1rem;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .66), inset 0 -8px 0 rgba(0, 0, 0, .22);
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--shell);
 }
 
-.main-menu-dock button:hover,
-.main-menu-dock button:focus-visible {
-  border-color: var(--menu-cyan);
-  color: #f4ead0;
+.portfolio-specimen .menu-dock {
+  grid-column: auto;
+  grid-row: auto;
+  justify-self: start;
+  padding-bottom: 0;
+  max-width: 100%;
 }
 
-.main-menu-brand-art,
-.main-menu-profile-art,
-.main-menu-news-art,
-.main-menu-dock-art {
+/* Isolated specimen capture surface — one component per page, for exact screenshots */
+.specimen-capture {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  grid-auto-flow: column;
+  gap: 28px;
+  place-content: center;
+  align-items: center;
+  padding: 40px;
+  background: var(--shell);
+}
+
+.specimen-capture .portfolio-specimen {
+  width: min(520px, 92vw);
+}
+
+.main-menu-brand-art {
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -1121,10 +1276,7 @@ h1 {
   position: relative;
 }
 
-.main-menu-brand-art > img,
-.main-menu-profile-art > img,
-.main-menu-news-art > img,
-.main-menu-dock-art > img {
+.main-menu-brand-art > img {
   display: block;
   height: 100%;
   inset: 0;
@@ -1183,212 +1335,11 @@ h1 {
   grid-template-rows: auto auto auto;
 }
 
-.main-menu-profile-art {
-  display: block;
-  min-height: clamp(132px, 15vh, 176px);
-  padding: 0;
-}
-
-.main-menu-profile-art .main-menu-avatar {
-  height: 31%;
-  left: 8.5%;
-  min-height: 42px;
-  min-width: 42px;
-  position: absolute;
-  top: 31%;
-  width: 16%;
-  z-index: 1;
-}
-
-.main-menu-profile-art .main-menu-avatar img,
-.main-menu-profile-art .main-menu-avatar span {
-  border-radius: 2px;
-  display: block;
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-.main-menu-profile-identity {
-  display: grid;
-  gap: 5px;
-  left: 26.8%;
-  position: absolute;
-  top: 31.6%;
-  width: 51%;
-  z-index: 1;
-}
-
-.main-menu-profile-art strong {
-  font-size: clamp(.5rem, .72vw, .68rem);
-}
-
-.main-menu-profile-art span {
-  font-size: clamp(.82rem, 1vw, 1.08rem);
-}
-
-.main-menu-profile-stats {
-  bottom: 18.8%;
-  display: flex;
-  gap: 6%;
-  left: 32.6%;
-  position: absolute;
-  width: 43.4%;
-  z-index: 1;
-}
-
-.main-menu-profile-stats span {
-  align-items: center;
-  color: #d8e6ec;
-  display: flex;
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.main-menu-profile-stats strong {
-  color: #f0eadb;
-  font-size: clamp(.42rem, .56vw, .54rem);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.main-menu-profile-art button {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  color: #d9f4ff;
-  font-size: clamp(.42rem, .58vw, .54rem);
-  height: 27%;
-  min-height: 36px;
-  min-width: 0;
-  padding: 0;
-  position: absolute;
-  right: 7.2%;
-  top: 42.5%;
-  width: 14%;
-  z-index: 2;
-}
-
-.main-menu-profile-art button span {
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
-
-.main-menu-profile-art button:hover,
-.main-menu-profile-art button:focus-visible {
-  background: rgba(37, 199, 255, .08);
-  box-shadow: inset 0 0 0 2px rgba(37, 199, 255, .56);
-}
-
 .main-menu-right {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.main-menu-news-art {
-  min-height: clamp(168px, 24vh, 260px);
-  padding: 0;
-}
-
-.main-menu-daily.main-menu-news-art {
-  align-self: end;
-  height: clamp(122px, 14vh, 146px);
-  min-height: 0;
-}
-
-.main-menu-news-content,
-.main-menu-daily-content {
-  display: grid;
-  gap: 7px;
-  left: 8%;
-  max-width: 82%;
-  position: absolute;
-  top: 25%;
-  z-index: 1;
-}
-
-.main-menu-news-content p,
-.main-menu-daily-content p {
-  color: #d5e0e4;
-  font-size: clamp(.94rem, 1.16vw, 1.12rem);
-  line-height: 1.08;
-}
-
-.main-menu-news-content strong,
-.main-menu-daily-content strong {
-  color: #47a9ff;
-}
-
-.main-menu-daily-content small {
-  color: #e9b85c;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .46rem;
-  text-transform: uppercase;
-}
-
-.main-menu-daily-content span {
-  color: #3da5ff;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .5rem;
-  text-transform: uppercase;
-}
-
-.main-menu-dock-art {
-  aspect-ratio: 1792 / 1024;
-  display: block;
-  min-height: 112px;
-  padding: 0;
-  width: min(38vw, 500px);
-}
-
-.main-menu-dock-art button {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  color: #f4ead0;
-  height: 28%;
-  min-height: 0;
-  padding: 0;
-  position: absolute;
-  top: 47%;
-  transform: translate(-50%, -50%);
-  width: 15%;
-  z-index: 2;
-}
-
-.main-menu-dock-art button:nth-of-type(1) { left: 25%; }
-.main-menu-dock-art button:nth-of-type(2) { left: 41.6%; }
-.main-menu-dock-art button:nth-of-type(3) { left: 58.4%; }
-.main-menu-dock-art button:nth-of-type(4) { left: 75%; }
-
-.main-menu-dock-art button span {
-  background: rgba(2, 7, 11, .72);
-  bottom: -24px;
-  font-size: clamp(.42rem, .6vw, .58rem);
-  left: 50%;
-  padding: 3px 5px;
-  position: absolute;
-  transform: translateX(-50%);
-}
-
-.main-menu-dock-art button:hover,
-.main-menu-dock-art button:focus-visible {
-  background: rgba(37, 199, 255, .08);
-  box-shadow: inset 0 0 0 2px rgba(37, 199, 255, .55);
-  outline: none;
-}
-
-.main-menu-skeleton-screen .main-menu-brand-art,
-.main-menu-skeleton-screen .main-menu-daily.main-menu-news-art,
-.main-menu-skeleton-screen .main-menu-profile-art,
-.main-menu-skeleton-screen .main-menu-news-art,
-.main-menu-skeleton-screen .main-menu-dock-art {
+.main-menu-skeleton-screen .main-menu-brand-art {
   outline: 0 !important;
 }
 
@@ -1399,63 +1350,6 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .5));
 }
 
-.skeleton-tag {
-  align-items: center;
-  background: rgba(2, 7, 11, .94);
-  border: 1px dashed rgba(255, 216, 122, .82);
-  color: #d8e6ec;
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  letter-spacing: 0;
-  line-height: 1.08;
-  max-width: min(100%, 360px);
-  padding: 4px 6px;
-  pointer-events: none;
-  text-transform: uppercase;
-  white-space: normal;
-}
-
-.skeleton-tag b {
-  flex: 0 0 auto;
-  color: #ffd87a;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .44rem;
-}
-
-.main-menu-skeleton-screen .main-menu-brand,
-.main-menu-skeleton-screen .main-menu-action,
-.main-menu-skeleton-screen .main-menu-daily,
-.main-menu-skeleton-screen .main-menu-profile,
-.main-menu-skeleton-screen .main-menu-counts,
-.main-menu-skeleton-screen .main-menu-news,
-.main-menu-skeleton-screen .main-menu-dock {
-  outline: 2px dashed rgba(255, 216, 122, .46);
-  outline-offset: 4px;
-  position: relative;
-}
-
-.main-menu-skeleton-screen .main-menu-brand > .skeleton-tag,
-.main-menu-skeleton-screen .main-menu-daily > .skeleton-tag,
-.main-menu-skeleton-screen .main-menu-profile > .skeleton-tag,
-.main-menu-skeleton-screen .main-menu-counts > .skeleton-tag,
-.main-menu-skeleton-screen .main-menu-news > .skeleton-tag,
-.main-menu-skeleton-screen .main-menu-dock > .skeleton-tag {
-  left: 10px;
-  max-width: calc(100% - 20px);
-  position: absolute;
-  top: -16px;
-  z-index: 4;
-}
-
-.main-menu-action .skeleton-tag {
-  bottom: 6px;
-  font-size: .9rem;
-  left: 80px;
-  max-width: calc(100% - 104px);
-  position: absolute;
-  z-index: 3;
-}
 
 .main-assets-screen {
   /* Claude / Anthropic-inspired warm editorial system — dark */
@@ -1846,7 +1740,7 @@ h1 {
 .portfolio-asset-body {
   display: grid;
   gap: 30px;
-  grid-template-columns: minmax(250px, .85fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(240px, .72fr) minmax(360px, 1.15fr);
   padding: 24px 22px 28px;
 }
 
@@ -1949,6 +1843,12 @@ h1 {
   gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
+}
+
+/* Live DOM specimens (profile, daily/news, dock) are wider than an image crop, so
+   stack the comparison for them — the component gets the full figure width. */
+.portfolio-comparison-live {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .portfolio-comparison-card {
@@ -2248,240 +2148,6 @@ h1 {
   width: 100%;
 }
 
-.app-skeleton-screen {
-  color: #e8edf0;
-  display: grid;
-  gap: clamp(14px, 1.8vw, 24px);
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 100%;
-  padding: clamp(18px, 2.5vw, 36px);
-  pointer-events: auto;
-  position: relative;
-  width: 100%;
-  z-index: 5;
-}
-
-.app-skeleton-screen::before {
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .94) 0%, rgba(2, 7, 11, .68) 42%, rgba(2, 7, 11, .84) 100%),
-    repeating-linear-gradient(135deg, rgba(74, 128, 151, .08) 0 10px, transparent 10px 20px);
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-  z-index: -1;
-}
-
-.app-skeleton-header {
-  align-items: center;
-  background: rgba(3, 10, 16, .86);
-  border: 2px solid rgba(80, 129, 151, .62);
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .66),
-    inset 0 1px 0 rgba(216, 240, 246, .05);
-  display: flex;
-  gap: 18px;
-  justify-content: space-between;
-  min-width: 0;
-  padding: 14px 18px;
-}
-
-.app-skeleton-header p,
-.app-skeleton-panel p {
-  color: #47a9ff;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .58rem;
-  line-height: 1.45;
-  text-transform: uppercase;
-}
-
-.app-skeleton-header h2 {
-  color: #f0eadb;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: clamp(1.05rem, 2vw, 1.8rem);
-  line-height: 1.2;
-  margin-top: 6px;
-  text-transform: uppercase;
-}
-
-.app-skeleton-header span,
-.app-skeleton-panel span,
-.app-skeleton-panel li {
-  color: #c4d2d8;
-  font-size: 1.08rem;
-  line-height: 1.22;
-}
-
-.app-skeleton-header nav,
-.app-skeleton-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.app-skeleton-header a,
-.app-skeleton-header button,
-.app-skeleton-actions button {
-  background: #07131d;
-  border: 2px solid rgba(63, 95, 111, .82);
-  color: #e8d4a6;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .54rem;
-  min-height: 40px;
-  padding: 10px 12px;
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
-.app-skeleton-header a:hover,
-.app-skeleton-header a:focus-visible,
-.app-skeleton-header button:hover,
-.app-skeleton-header button:focus-visible,
-.app-skeleton-actions button:hover,
-.app-skeleton-actions button:focus-visible {
-  border-color: #25c7ff;
-  color: #f4ead0;
-  outline: none;
-}
-
-.app-skeleton-layout {
-  display: grid;
-  gap: clamp(12px, 1.4vw, 18px);
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: repeat(8, minmax(48px, 1fr));
-  min-height: 0;
-}
-
-.app-skeleton-panel {
-  align-content: start;
-  background:
-    linear-gradient(180deg, rgba(7, 20, 30, .9), rgba(3, 9, 15, .9));
-  border: 2px dashed rgba(255, 216, 122, .58);
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .64),
-    inset 0 1px 0 rgba(216, 240, 246, .05);
-  display: grid;
-  gap: 14px;
-  min-height: 0;
-  overflow: hidden;
-  padding: 18px;
-  position: relative;
-}
-
-.app-skeleton-panel > .skeleton-tag {
-  max-width: calc(100% - 20px);
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  z-index: 3;
-}
-
-.app-skeleton-panel > div:first-of-type {
-  display: grid;
-  gap: 8px;
-  margin-top: 34px;
-  min-width: 0;
-}
-
-.app-skeleton-panel h3 {
-  color: #f0eadb;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.74rem, 1vw, 1rem);
-  line-height: 1.35;
-  text-transform: uppercase;
-}
-
-.app-skeleton-panel ul {
-  display: grid;
-  gap: 7px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.app-skeleton-panel li {
-  border-left: 3px solid rgba(37, 199, 255, .48);
-  padding-left: 8px;
-}
-
-.app-skeleton-panel.primary {
-  grid-column: 4 / 10;
-  grid-row: 2 / 9;
-}
-
-.app-skeleton-panel.primary::after {
-  align-self: end;
-  aspect-ratio: 16 / 9;
-  background:
-    linear-gradient(135deg, rgba(101, 184, 255, .16), transparent 1px) 0 0 / 26px 26px,
-    linear-gradient(45deg, rgba(255, 216, 122, .12), transparent 1px) 0 0 / 26px 26px,
-    radial-gradient(ellipse at center, rgba(37, 199, 255, .14), transparent 64%);
-  border: 2px solid rgba(80, 129, 151, .48);
-  content: "";
-  display: block;
-  min-height: 180px;
-  width: 100%;
-}
-
-.app-skeleton-panel.rail {
-  grid-column: 1 / 4;
-  grid-row: 2 / 9;
-}
-
-.app-skeleton-panel.inspector {
-  grid-column: 10 / 13;
-  grid-row: 2 / 9;
-}
-
-.app-skeleton-panel.toolbar {
-  grid-column: 1 / -1;
-  grid-row: 1 / 2;
-}
-
-.app-skeleton-panel.toolbar > div:first-of-type {
-  margin-top: 22px;
-  max-width: 760px;
-}
-
-.app-skeleton-panel.toolbar ul {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.app-skeleton-panel.toolbar .app-skeleton-actions {
-  margin-top: 2px;
-  position: static;
-}
-
-.app-skeleton-panel.footer {
-  grid-column: 4 / 13;
-  grid-row: 7 / 9;
-}
-
-.app-skeleton-level-editor .app-skeleton-panel.primary,
-.app-skeleton-skirmish .app-skeleton-panel.primary {
-  grid-row: 3 / 9;
-}
-
-.app-skeleton-level-editor .app-skeleton-panel.rail,
-.app-skeleton-level-editor .app-skeleton-panel.inspector,
-.app-skeleton-skirmish .app-skeleton-panel.rail,
-.app-skeleton-skirmish .app-skeleton-panel.inspector {
-  grid-row: 3 / 9;
-}
-
-.app-skeleton-level-editor .app-skeleton-panel.toolbar,
-.app-skeleton-skirmish .app-skeleton-panel.toolbar {
-  grid-row: 1 / 3;
-}
-
-.app-skeleton-campaigns .app-skeleton-panel.primary {
-  grid-row: 2 / 6;
-}
-
-.app-skeleton-campaigns .app-skeleton-panel.footer {
-  grid-row: 6 / 9;
-}
 
 .main-menu-art-screen {
   display: grid;
@@ -3779,10 +3445,10 @@ h1 {
   .main-menu-left,
   .main-menu-brand,
   .main-menu-actions,
-  .main-menu-daily,
+  .daily-panel,
   .main-menu-battlefield-plate,
   .main-menu-right,
-  .main-menu-dock {
+  .menu-dock {
     grid-column: 1;
     grid-row: auto;
     max-width: none;
@@ -3807,7 +3473,7 @@ h1 {
     grid-row: 3;
   }
 
-  .main-menu-daily {
+  .daily-panel {
     grid-column: 1;
     grid-row: 4;
   }
@@ -3816,7 +3482,7 @@ h1 {
     grid-row: 5;
   }
 
-  .main-menu-dock {
+  .menu-dock {
     grid-row: 6;
   }
 
@@ -3824,7 +3490,7 @@ h1 {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .main-menu-news {
+  .news-panel {
     margin-top: 0;
   }
 
@@ -3892,7 +3558,7 @@ h1 {
     width: auto;
   }
 
-  .main-menu-dock {
+  .menu-dock {
     justify-self: start;
     padding-bottom: 0;
   }
@@ -4085,70 +3751,9 @@ h1 {
     font-size: .52rem;
   }
 
-  .main-menu-profile {
-    align-items: stretch;
-    display: grid;
-    grid-template-columns: 46px minmax(0, 1fr) auto;
-  }
-
-  .main-menu-avatar {
-    height: 46px;
-    width: 46px;
-  }
-
-  .main-menu-profile button:last-child {
-    display: none;
-  }
-
-  .main-menu-profile-art {
-    display: block;
-    grid-template-columns: none;
-    min-height: 132px;
-  }
-
-  .main-menu-profile-art button:last-child {
-    display: block;
-  }
-
-  .main-menu-profile-art .main-menu-avatar {
-    height: 31%;
-    width: 16%;
-  }
-
-  .main-menu-profile-identity {
-    top: 31%;
-  }
-
-  .main-menu-profile-stats strong {
-    font-size: .42rem;
-  }
-
-  .main-menu-counts {
-    display: grid;
-  }
-
-  .main-menu-counts span + span {
-    border-left: 0;
-    border-top: 1px solid rgba(80, 129, 151, .48);
-  }
-
-  .main-menu-dock {
-    gap: 8px;
-    width: 100%;
-  }
-
-  .main-menu-dock button {
-    flex: 1;
-    height: 54px;
-    min-height: 54px;
-    width: auto;
-  }
-
-  .main-menu-dock-art button {
-    flex: none;
-    height: 28%;
-    min-height: 0;
-    width: 15%;
+  .menu-dock-art {
+    width: min(320px, 80vw);
+    max-width: none;
   }
 
   .shell.main-menu-active .board-scroll {
@@ -4232,38 +3837,6 @@ h1 {
   padding: 4px;
 }
 
-@media (max-width: 980px) {
-  .app-skeleton-screen {
-    overflow: auto;
-  }
-
-  .app-skeleton-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .app-skeleton-header nav {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .app-skeleton-layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: none;
-  }
-
-  .app-skeleton-panel,
-  .app-skeleton-panel.primary,
-  .app-skeleton-panel.rail,
-  .app-skeleton-panel.inspector,
-  .app-skeleton-panel.toolbar,
-  .app-skeleton-panel.footer {
-    grid-column: auto;
-    grid-row: auto;
-    min-height: 220px;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; }

@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "check": "node --check src/app.js"
+    "check": "node --check src/app.js && node scripts/check-no-chrome-bitmaps.mjs"
   },
   "devDependencies": {
     "vite": "^8.0.16"

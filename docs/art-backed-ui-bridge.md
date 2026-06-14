@@ -19,8 +19,17 @@ not the final component system.
   painted crop for the live main menu mode button stack, including its labels.
 - `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
-- `frontend/public/assets/ui/main-menu-*-chrome-v1.png` are generated bitmap
-  sources for the live main menu profile/status, news/daily, and dock chrome.
+- The remaining main menu elements follow the render-fidelity + text-live rules in
+  `docs/ui-art-direction.md` (art for rendered visuals; live DOM for all copy and numbers):
+  profile/status (03) is a **hybrid** — an art-crop of the painterly lion crest plus clean
+  SVG cog/rook silhouettes plus live DOM text for the name/rank/counters; daily/news (04) is
+  **DOM + live text** with small SVG icons (reticle, gem, bulleted news); the dock (05) is
+  **art-backed** — the concept dock is icon-only pixel art with no baked text, so it is a crop
+  of the dock strip plus transparent live hit-targets (the mode-button pattern); the
+  battlefield (06) menu preview is **art-backed** with the concept board crop (the live canvas
+  board returns in actual gameplay). The earlier *generated* `main-menu-*-chrome-v1.png` bitmaps
+  (regenerated approximations that had drifted from the concept) were retired end-to-end
+  (guarded by `frontend/scripts/check-no-chrome-bitmaps.mjs`).
 - `frontend/public/assets/ui/main-menu-button-art-*.png` also includes generated
   no-text button candidates used by the main menu asset review board.
 - `frontend/src/app.js` owns the `ART_SCREENS` manifest, image paths, and hotspot
@@ -39,12 +48,12 @@ rectangles over the 16:10 artboard.
   Remaining unfinished asset slots stay labeled in place.
 - `/main-menu/skeleton` also opens the live DOM main menu bridge.
 - `/design/main-menu/render` opens the saved main menu concept render.
-- `/design/main-menu` opens the main menu asset review board. It compares
-  the approved render crop against candidate live asset families before any
-  candidate replaces a skeleton slot.
-- `/campaigns` opens the live campaign editor skeleton.
-- `/level-editor` opens the live level editor skeleton.
-- `/skirmish` opens the live skirmish skeleton.
+- `/design/main-menu` opens the main menu chrome review board. It renders each
+  converted slot's live component as a specimen next to its approved render
+  crop, rather than comparing a candidate bitmap.
+- `/campaigns` opens the art-backed campaign editor (concept render + live hotspots).
+- `/level-editor` opens the art-backed level editor (concept render + live hotspots).
+- `/skirmish` opens the art-backed skirmish screen (concept render + live hotspots).
 - `/design/campaigns/render` opens the campaign editor concept render.
 - `/design/level-editor/render` opens the level editor concept render.
 - `/design/skirmish/render` opens the skirmish concept render.
@@ -56,11 +65,13 @@ map. For example, use `/design/main-menu/render/hotspots` or
 ## What Is Live
 
 The main menu, campaign editor, level editor, and skirmish now use live bridge
-surfaces by default. The main menu mode button family, brand
-lockup, profile/status panel, news/daily panels, and dock strip use generated
-bitmap art with live HTML labels and click targets overlaid. The main menu
-battlefield plate uses the live canvas board as its visual core with CSS chrome
-and game-native labels. Other labeled slots are intentionally unfinished.
+surfaces by default. The main menu mode button family and brand lockup use
+approved render crops with live HTML labels overlaid; the profile/status panel is a
+hybrid (art-crop crest + live DOM text/counters); the daily/news panels are DOM with
+live text and SVG icons; the dock is an art-crop of the icon strip with transparent
+hit-targets; and the battlefield preview is the concept board crop (the live canvas
+board returns for actual gameplay). Other labeled slots on the editor and skirmish
+screens are intentionally unfinished.
 
 Current main menu acceptance state is tracked in
 [main-menu-acceptance.md](main-menu-acceptance.md). In short: the painted mode
@@ -91,8 +102,10 @@ Keep hotspot labels short because they are also used as accessibility labels.
 
 Replace the bridge from the inside out:
 
-1. Maintain a clear skeleton for each screen so unfinished asset slots remain
-   visible during decomposition. Skeletons are the default app surfaces.
+1. The editor and skirmish screens are art-backed bridges: the approved concept
+   render with live hotspots over the working controls (the placeholder skeletons
+   were removed). Decompose them into real DOM components from the inside out,
+   preserving the hotspot behavior until each slice is genuinely live.
 2. Fill one main menu asset family at a time. The button row uses a crop from
    `main-menu-aspirational.png` so the approved painted labels stay intact; the
    title/brand plate uses `main-menu-brand-title-only-v1.png` from the approved
