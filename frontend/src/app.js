@@ -1,4 +1,6 @@
 import './style.css';
+// Generated asset families (frontend/scripts/normalize-mode-buttons.mjs) are
+// described by the asset catalog and assembled at render time.
 import assetCatalog from './asset-catalog.json';
 
 (function () {
@@ -759,12 +761,13 @@ import assetCatalog from './asset-catalog.json';
     '/main-menu': { screen: 'main', mainMenuView: 'skeleton' },
     '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
     '/design': { screen: 'main', mainMenuView: 'design-index' },
+    '/design/glossary': { screen: 'main', mainMenuView: 'glossary' },
     '/design/assets': { screen: 'main', mainMenuView: 'asset-catalog' },
     '/design/assets/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
     '/design/assets/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
     '/design/assets/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
     '/design/assets/buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetGroup: 'buttons' },
-    '/design/assets/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button.main-menu' },
+    '/design/assets/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-9slice.main-menu' },
     '/design/assets/main-menu-button-icons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-icon.main-menu' },
     '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
     '/design/main-menu/assets': { screen: 'main', mainMenuView: 'asset-lab' },
@@ -794,7 +797,7 @@ import assetCatalog from './asset-catalog.json';
     const path = currentPath();
     if (APP_ROUTES[path]) return APP_ROUTES[path];
     const assetRouteTypes = {
-      'main-menu-buttons': 'button.main-menu',
+      'main-menu-buttons': 'button-9slice.main-menu',
       'main-menu-button-icons': 'button-icon.main-menu',
     };
     const assetMatch = path.match(/^\/design\/assets\/([^/]+)(?:\/([^/]+))?$/);
@@ -2911,12 +2914,49 @@ import assetCatalog from './asset-catalog.json';
     return currentRoute().mainMenuView === 'design-index';
   }
 
+  function shouldShowGlossary() {
+    return currentRoute().mainMenuView === 'glossary';
+  }
 
-  function renderMainMenuArtAction(action, label, active = false) {
+
+  // Live main-menu mode list. Actions and labels are app concerns (live DOM);
+  // the ART comes from the asset catalog (button-9slice.main-menu + the
+  // button-icon.main-menu assets). Each row is assembled at render time:
+  // 9-slice state + composited icon + live label + action — the catalog model.
+  const MENU_MODES = [
+    { action: 'party', icon: 'button-icon.main-menu.sword', label: 'Solo Skirmish' },
+    { action: 'campaigns', icon: 'button-icon.main-menu.crown', label: 'Campaign Editor' },
+    { action: 'level-editor-preview', icon: 'button-icon.main-menu.scroll', label: 'Level Editor' },
+    { action: 'lobbies', icon: 'button-icon.main-menu.people', label: 'Lobbies' },
+    { action: 'settings', icon: 'button-icon.main-menu.gear', label: 'Settings' },
+  ];
+
+  function renderModeButton(mode, { active = false } = {}) {
+    const nineSlice = assetById('button-9slice.main-menu');
+    if (!frame) return '';
+    const rules = nineSlice.rules || {};
+    const stateDef = (nineSlice.states || {})[active ? 'pressed' : 'normal'] || (nineSlice.states || {}).normal;
+    if (!stateDef) return '';
+    const icon = assetById(mode.icon);
+    const frameStyle = frameStyleForAsset(nineSlice, stateDef.rect);
+    const iconStyle = icon ? `${insetStyle(rules.iconSlot, stateDef.rect)};${frameStyleForAsset(icon, icon.rect)}` : '';
+    const labelStyle = insetStyle(rules.textInset, stateDef.rect);
     return `
-      <button class="main-menu-art-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">
-        <span>${escapeText(label)}</span>
+      <button class="mode-button ${active ? 'is-active' : ''}" type="button" data-action="${escapeText(mode.action)}" aria-label="${escapeText(mode.label)}"${active ? ' aria-current="true"' : ''} style="--asset-aspect:${stateDef.rect.w} / ${stateDef.rect.h}">
+        <span class="mode-button-9slice" style="${frameStyle}" aria-hidden="true"></span>
+        ${icon ? `<span class="mode-button-icon" style="${iconStyle}" aria-hidden="true"></span>` : ''}
+        <span class="mode-button-label" style="${labelStyle}">${escapeText(mode.label)}</span>
       </button>`;
+  }
+
+  function renderModeButtonStack({ activeAction = 'party' } = {}) {
+    const buttons = MENU_MODES
+      .map((mode) => renderModeButton(mode, { active: mode.action === activeAction }))
+      .join('');
+    return `
+      <nav class="main-menu-actions main-menu-actions-assets" aria-label="Play modes">
+        ${buttons}
+      </nav>`;
   }
 
   function mainMenuReviewStatusFor(id, fallbackStatus) {
@@ -3079,14 +3119,80 @@ import assetCatalog from './asset-catalog.json';
       </details>`;
   }
 
+  const GLOSSARY = [
+    { term: 'asset', tag: '', def: 'A reusable image plus contract the game operates on: it renders, state-switches, slots into, or swaps it.', src: 'Unity / Unreal' },
+    { term: '9-slice', tag: 'asset', def: 'A texture that scales while its corners stay fixed and the middle stretches; the reusable, icon-less button or panel background.', src: 'Unity 9-slicing · Godot NinePatchRect' },
+    { term: 'icon', tag: 'asset', def: 'A standalone image composited into a slot.', src: 'universal' },
+    { term: 'sprite atlas', tag: 'asset', def: 'One image packing several unrelated sprites (our source sheets).', src: 'Unity Sprite Atlas' },
+    { term: 'catalog', tag: '', def: 'The library of all assets, browsed sorted by type. It holds assets, not widgets.', src: 'project' },
+    { term: 'type', tag: '', def: 'An inventory shelf: a kind of asset (9-slice, icon). The catalog tree top levels.', src: 'project' },
+    { term: 'state', tag: '', def: 'A named visual variant: normal, pressed (later highlighted, selected, disabled).', src: 'Unity UI transitions' },
+    { term: 'slot', tag: '', def: 'A labelled region of a 9-slice filled at runtime by an asset (icon) or live text: iconSlot, textInset, arrowSlot.', src: 'Unreal UMG' },
+    { term: 'rect', tag: '', def: 'A pixel rectangle {x, y, w, h}; the bounds of a state or slot.', src: 'Unity Rect · Godot region_rect' },
+    { term: 'patch margins', tag: '', def: 'The fixed border thicknesses of a 9-slice: the parts that do not stretch.', src: 'Unity / Godot' },
+    { term: 'widget', tag: 'not an asset', def: 'The general term for an interactive element the player manipulates; assembled at runtime from assets, not a stored asset. Also called a control.', src: 'Unreal UMG · Wikipedia' },
+    { term: 'button', tag: 'not an asset', def: 'A kind of widget: a clickable control. Widget is the general term; button is the specific kind. The Main Menu Button is the button this catalog builds from its 9-slice and icons.', src: 'Unity / Unreal / Godot Button' },
+    { term: 'template', tag: 'not an asset', def: 'The reusable definition a widget instance is built from.', src: 'Unreal UI Template · Unity Prefab' },
+    { term: 'instance', tag: 'not an asset', def: 'A specific live widget produced from a template.', src: 'all engines' },
+  ];
+
+  function renderGlossaryTag(tag) {
+    if (!tag) return '';
+    const cls = tag === 'asset' ? 'is-asset' : 'is-not-asset';
+    return `<span class="glossary-tag ${cls}">${escapeText(tag)}</span>`;
+  }
+
+  function renderGlossary() {
+    return `
+      <div class="main-assets-screen glossary-screen" data-live-screen="glossary">
+        <header class="main-assets-header">
+          <a class="design-back" href="/design">&larr; Design</a>
+          <p class="eyebrow">Design system</p>
+          <h2>Glossary</h2>
+          <p class="main-assets-intro">The shared vocabulary for the asset catalog. Every term is attested by engine documentation (Unity, Unreal, Godot).</p>
+        </header>
+
+        <section class="glossary-callout" aria-label="Core distinction">
+          <p><strong>Two structures, kept separate.</strong> The <b>catalog</b> is an inventory of assets sorted by type (Buttons, Icons, Board, Pieces). A <b>button</b> is a <b>widget</b> &mdash; a composition of assets assembled at runtime &mdash; not an inventory item.</p>
+        </section>
+
+        <dl class="glossary-list">
+          ${GLOSSARY.map((g) => `
+            <div class="glossary-row">
+              <dt>
+                <span class="glossary-term">${escapeText(g.term)}</span>
+                ${renderGlossaryTag(g.tag)}
+              </dt>
+              <dd>
+                <p>${escapeText(g.def)}</p>
+                <span class="glossary-src">${escapeText(g.src)}</span>
+              </dd>
+            </div>
+          `).join('')}
+        </dl>
+
+        <section class="glossary-example" aria-label="Worked example">
+          <h3>Worked example</h3>
+          <p>The on-screen <b>Solo Skirmish</b> button is a <b>widget</b>: the <code>button-9slice.main-menu</code> 9-slice (in its <code>pressed</code> state) + the <code>button-icon.main-menu.sword</code> icon (in the <code>iconSlot</code>) + the live label &ldquo;Solo Skirmish&rdquo; (in the <code>textInset</code>) + the <code>party</code> action. The 9-slice and icon are assets in the catalog; the button itself is not.</p>
+        </section>
+      </div>`;
+  }
+
   function renderDesignIndex() {
     const areas = [
       {
         href: '/design/assets',
         kicker: 'Asset catalog',
         title: 'Assets',
-        copy: 'Programmatic catalog for reusable game assets: contracts, states, frame rules, source art, and previews.',
+        copy: 'Programmatic catalog for reusable game assets: contracts, states, slot rules, source art, and previews.',
         go: 'Open catalog',
+      },
+      {
+        href: '/design/glossary',
+        kicker: 'Design system',
+        title: 'Glossary',
+        copy: 'The shared vocabulary — asset, 9-slice, icon, slot, state, widget, template — each attested by engine docs.',
+        go: 'Open glossary',
       },
       {
         href: '/design/main-menu',
@@ -3157,15 +3263,15 @@ import assetCatalog from './asset-catalog.json';
       {
         id: 'mode-buttons',
         title: 'Mode Button Family',
-        baseStatus: 'accepted',
-        file: '/assets/ui/main-menu-aspirational.png',
-        cropClass: 'portfolio-button-crop',
-        alt: 'Approved main menu render showing the five painted mode buttons',
-        caption: 'Approved portfolio crop. This is wired into the live menu so the lettering stays painted with the source.',
-        description: 'The live button stack uses the concept render crop directly: cyan-lit selected frame, warm dark fill, compact icon tile, painted labels, and five stacked mode choices.',
-        target: 'Confirm the already-approved button family still anchors the menu.',
-        liveUse: 'Transparent live click targets sit over the painted crop; browser text is not redrawn over the buttons.',
-        decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
+        baseStatus: 'review',
+        file: '/assets/ui/main-menu/contact-sheet.png',
+        alt: 'Contact sheet of the icon-less 9-slice (normal + pressed) and the five icon badges on a transparency checkerboard',
+        caption: 'Phase-1 asset family, aligned to the asset catalog: generated art normalized into an icon-less 9-slice (2 states) plus 5 standalone icon badges. Replace any PNG in place to upgrade the art with no code change.',
+        description: 'The live button stack is assembled per the asset catalog (button-9slice.main-menu + button-icon.main-menu.*): an icon-less 9-slice state, a composited icon badge in the icon slot, and a live DOM label in the text slot — not a single painted crop. See the full breakdown in the Asset Catalog.',
+        target: 'Accept the catalog-aligned family (correct decomposition, bridge-grade art) as the live mode stack, or flag art-quality items for the next art pass.',
+        liveUse: 'Drives the live main menu mode stack at / and /main-menu — each button = 9-slice state + composited icon + live label + action.',
+        decision: 'New this pass — supersedes the painted-crop bridge. Pending your accept/reject.',
+        specimen: renderModeButtonStack({ activeAction: 'party' }),
         referenceCrops: [
           {
             title: 'Approved Render Crop',
@@ -3384,13 +3490,13 @@ import assetCatalog from './asset-catalog.json';
   function renderAssetFrame(asset, stateKey, sampleLabel = '') {
     const state = asset.states[stateKey];
     const textInset = asset.rules && asset.rules.textInset;
-    const label = sampleLabel ? `<span class="catalog-frame-label" style="${insetStyle(textInset, state.frame)}">${escapeText(sampleLabel)}</span>` : '';
-    return renderCatalogFrame(asset, state.frame, label);
+    const label = sampleLabel ? `<span class="catalog-frame-label" style="${insetStyle(textInset, state.rect)}">${escapeText(sampleLabel)}</span>` : '';
+    return renderCatalogFrame(asset, state.rect, label);
   }
 
   function renderButtonAssetCard(asset) {
     const stateEntries = Object.entries(asset.states || {});
-    const assemblies = asset.assemblies || [];
+    const examples = asset.examples || [];
     const rules = asset.rules || {};
     return `
       <article class="catalog-asset-card" id="${escapeText(asset.id)}">
@@ -3412,7 +3518,7 @@ import assetCatalog from './asset-catalog.json';
             <div class="catalog-state-card">
               <strong>${escapeText(state.label || stateKey)}</strong>
               ${renderAssetFrame(asset, stateKey)}
-              <code>x:${state.frame.x} y:${state.frame.y} w:${state.frame.w} h:${state.frame.h}</code>
+              <code>x:${state.rect.x} y:${state.rect.y} w:${state.rect.w} h:${state.rect.h}</code>
             </div>
           `).join('')}
         </section>
@@ -3424,12 +3530,12 @@ import assetCatalog from './asset-catalog.json';
           <div><h4>Hitbox</h4><code>${escapeText(JSON.stringify(rules.hitbox || {}))}</code></div>
         </section>
 
-        <section class="catalog-preview-stack" aria-label="Assembly examples">
-          <h4>Assembly Examples</h4>
-          ${assemblies.map((assembly) => `
+        <section class="catalog-preview-stack" aria-label="Widget examples">
+          <h4>Widget Examples</h4>
+          ${examples.map((example) => `
             <button class="catalog-button-preview" type="button">
-              ${renderAssetFrame(asset, assembly.state, assembly.label)}
-              <span class="catalog-assembly-caption">${escapeText(assembly.label)} = ${escapeText(assembly.state)} frame + ${escapeText(assembly.icon)} + live text</span>
+              ${renderAssetFrame(asset, example.state, example.label)}
+              <span class="catalog-widget-caption">${escapeText(example.label)} = ${escapeText(example.state)} 9-slice + ${escapeText(example.icon)} + live text</span>
             </button>
           `).join('')}
         </section>
@@ -3475,8 +3581,8 @@ import assetCatalog from './asset-catalog.json';
         <section class="catalog-icon-preview" aria-label="Icon preview">
           <div class="catalog-state-card">
             <strong>Icon Crop</strong>
-            ${renderCatalogFrame(asset, asset.frame)}
-            <code>x:${asset.frame.x} y:${asset.frame.y} w:${asset.frame.w} h:${asset.frame.h}</code>
+            ${renderCatalogFrame(asset, asset.rect)}
+            <code>x:${asset.rect.x} y:${asset.rect.y} w:${asset.rect.w} h:${asset.rect.h}</code>
           </div>
         </section>
 
@@ -3490,13 +3596,13 @@ import assetCatalog from './asset-catalog.json';
   }
 
   function assetTypeLabel(type) {
-    if (type === 'button.main-menu') return 'Main Menu Button';
+    if (type === 'button-9slice.main-menu') return 'Main Menu Button 9-Slice';
     if (type === 'button-icon.main-menu') return 'Main Menu Button Icon';
     return `${type[0].toUpperCase()}${type.slice(1)}`;
   }
 
   function assetTypePath(type) {
-    if (type === 'button.main-menu') return '/design/assets/main-menu-buttons';
+    if (type === 'button-9slice.main-menu') return '/design/assets/main-menu-buttons';
     if (type === 'button-icon.main-menu') return '/design/assets/main-menu-button-icons';
     return `/design/assets/${type}s`;
   }
@@ -3506,7 +3612,7 @@ import assetCatalog from './asset-catalog.json';
   }
 
   function renderCatalogAssetCard(asset) {
-    if (asset.type === 'button.main-menu') return renderButtonAssetCard(asset);
+    if (asset.type === 'button-9slice.main-menu') return renderButtonAssetCard(asset);
     if (asset.type === 'button-icon.main-menu') return renderIconAssetCard(asset);
     return '';
   }
@@ -3521,7 +3627,7 @@ import assetCatalog from './asset-catalog.json';
         href: '/design/assets/main-menu-buttons',
         title: 'Main Menu Buttons',
         summary: 'Menu-row button frames with live labels, an icon slot, arrow affordance, binary states, and hitbox rules.',
-        count: countsByType['button.main-menu'] || 0,
+        count: countsByType['button-9slice.main-menu'] || 0,
         status: 'draft',
       },
       {
@@ -3552,7 +3658,7 @@ import assetCatalog from './asset-catalog.json';
     return `
       <section class="catalog-family-grid" aria-label="Asset categories">
         <a class="catalog-family-card" href="/design/assets/buttons">
-          <span class="design-hub-kicker">category · ${countsByType['button.main-menu'] || 0} assets</span>
+          <span class="design-hub-kicker">category · ${countsByType['button-9slice.main-menu'] || 0} assets</span>
           <h3>Buttons</h3>
           <p>Button families grouped by interaction pattern, visual family, and slot rules.</p>
         </a>
@@ -3638,7 +3744,7 @@ import assetCatalog from './asset-catalog.json';
           label: 'Main Menu Buttons',
           href: '/design/assets/main-menu-buttons',
           children: [
-            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+            { label: 'Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
           ],
         },
         { label: 'Plain Buttons', href: '#', planned: true },
@@ -3753,7 +3859,7 @@ import assetCatalog from './asset-catalog.json';
           { label: 'Plain Buttons', href: '#', planned: true },
         ])}
         ${renderPrototypePreviewCard('Main Menu Buttons', 'The type page has the dropdown/search picker and one full inspection card.', [
-          { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+          { label: 'Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
         ])}
       </section>`;
   }
@@ -3765,7 +3871,7 @@ import assetCatalog from './asset-catalog.json';
         <div class="prototype-tree-content">
           ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons'])}
           ${renderPrototypePreviewCard('Main Menu Buttons', 'The tree stays visible while the right panel swaps to the selected category, type, or asset page.', [
-            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+            { label: 'Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
           ])}
         </div>
       </section>`;
@@ -3774,16 +3880,16 @@ import assetCatalog from './asset-catalog.json';
   function renderHybridPrototype() {
     return `
       <section class="prototype-tree-layout prototype-hybrid-layout">
-        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons/button.main-menu.frame')}
+        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons/button-9slice.main-menu')}
         <div class="prototype-tree-content">
-          ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons', 'Main Menu Button Frame'])}
+          ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons', 'Main Menu Button 9-Slice'])}
           <div class="prototype-hybrid-grid">
             ${renderPrototypePreviewCard('Main Menu Buttons', 'Type-level controls live here: search, dropdown, status filters, and family notes.', [
               { label: 'Search within Main Menu Buttons', href: '#' },
-              { label: 'Selected: Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+              { label: 'Selected: Main Menu Button 9-Slice', href: '/design/assets/main-menu-buttons/button-9slice.main-menu' },
             ])}
             ${renderPrototypePreviewCard('Inspection Card', 'The selected asset still gets a dedicated full card, but the tree keeps the larger catalog context visible.', [
-              { label: 'States: pressed, unpressed', href: '#' },
+              { label: 'States: pressed, normal', href: '#' },
               { label: 'Slots: icon, text, arrow, hitbox', href: '#' },
             ])}
           </div>
@@ -3834,7 +3940,7 @@ import assetCatalog from './asset-catalog.json';
           <div class="main-assets-summary">
             <span><b>01</b> accepted crop baseline</span>
             <span><b>02</b> reusable button-sheet candidates</span>
-            <span><b>01</b> live-text assembly mock</span>
+            <span><b>01</b> live-text widget mock</span>
           </div>
         </header>
 
@@ -3870,7 +3976,7 @@ import assetCatalog from './asset-catalog.json';
 
           <article class="asset-lab-card asset-lab-card-wide">
             <header>
-              <span class="design-hub-kicker">Assembly mock</span>
+              <span class="design-hub-kicker">Widget mock</span>
               <h3>Sliced Rows + Live Text</h3>
               <p>Here the same source sheet is treated as five independent row assets. The text is separate, so the renderer can change labels, state, spacing, and hit targets without repainting the art.</p>
             </header>
@@ -4017,14 +4123,7 @@ import assetCatalog from './asset-catalog.json';
             </div>
           </section>
 
-          <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">
-            <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
-            ${renderMainMenuArtAction('party', 'Solo Skirmish', true)}
-            ${renderMainMenuArtAction('campaigns', 'Campaign Editor')}
-            ${renderMainMenuArtAction('level-editor-preview', 'Level Editor')}
-            ${renderMainMenuArtAction('lobbies', 'Lobbies')}
-            ${renderMainMenuArtAction('settings', 'Settings')}
-          </nav>
+          ${renderModeButtonStack({ activeAction: 'party' })}
 
           ${renderDailyPanel()}
         </section>
@@ -4099,6 +4198,8 @@ import assetCatalog from './asset-catalog.json';
         menuLayer.innerHTML = renderAssetCatalog();
       } else if (shouldShowMainSpecimen()) {
         menuLayer.innerHTML = renderSpecimenCapture();
+      } else if (shouldShowGlossary()) {
+        menuLayer.innerHTML = renderGlossary();
       } else if (shouldShowMainDesignIndex()) {
         menuLayer.innerHTML = renderDesignIndex();
       } else {
