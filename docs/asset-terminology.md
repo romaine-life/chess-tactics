@@ -78,7 +78,8 @@ definition) instantiated with specific values:
 | state | variant of a 9-slice | `normal`, `pressed` | Unity |
 | slot | region of a 9-slice | `iconSlot` | Unreal |
 | rect | a rectangle | `{x,y,w,h}` | Unity / Godot |
-| widget | no (assembled) | "Solo Skirmish" | Unreal / Wikipedia |
+| widget | no (assembled) | the general interactive element | Unreal / Wikipedia |
+| button | no (a kind of widget) | "Main Menu Button" | Unity / Unreal / Godot |
 | template / instance | no (code today) | the five menu buttons | Unreal / Unity |
 
 ## Rejected terms (do not use)
