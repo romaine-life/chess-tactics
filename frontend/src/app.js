@@ -3621,12 +3621,12 @@ import './style.css';
     menuLayer.classList.toggle('level-editor-layer', false);
     if (state.screen === 'level-editor') {
       menuLayer.hidden = false;
-      menuLayer.innerHTML = shouldShowScreenConcept('level-editor') ? renderArtScreen('level-editor') : renderLevelEditorSkeleton();
+      menuLayer.innerHTML = renderArtScreen('level-editor');
       return;
     }
     if (state.screen === 'game') {
       menuLayer.hidden = false;
-      menuLayer.innerHTML = shouldShowScreenConcept('skirmish') ? renderArtScreen('skirmish') : renderSkirmishSkeleton();
+      menuLayer.innerHTML = renderArtScreen('skirmish');
       return;
     }
     menuLayer.hidden = false;
@@ -3713,7 +3713,7 @@ import './style.css';
           <button type="button" data-action="main">Back</button>
         </div>`;
     } else if (state.screen === 'campaigns') {
-      menuLayer.innerHTML = shouldShowScreenConcept('campaigns') ? renderArtScreen('campaigns') : renderCampaignSkeleton();
+      menuLayer.innerHTML = renderArtScreen('campaigns');
     } else {
       menuLayer.innerHTML = `
         <div class="game-menu">
