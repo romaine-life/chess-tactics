@@ -2830,6 +2830,11 @@ h1 {
   outline: none;
 }
 
+.prototype-tree-list a.prototype-tree-term {
+  color: var(--c-ink);
+  font-weight: 600;
+}
+
 .prototype-tree-list a.planned {
   opacity: .52;
 }

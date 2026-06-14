@@ -3225,9 +3225,9 @@ import assetCatalog from './asset-catalog.json';
     const areas = [
       {
         href: '/design/assets',
-        kicker: 'Asset catalog',
-        title: 'Assets',
-        copy: 'Programmatic catalog for reusable game assets: contracts, states, slot rules, source art, and previews.',
+        kicker: 'Design system',
+        title: 'Catalog',
+        copy: 'Classified catalog of the game’s buildable entities — assets (9-slice, icon) and widgets (button) — with contracts, states, slot rules, source art, and previews.',
         go: 'Open catalog',
       },
       {
@@ -3795,18 +3795,19 @@ import assetCatalog from './asset-catalog.json';
     const activeHref = currentPath();
     if (route.catalogMode === 'glossary') {
       const term = route.glossaryTerm || 'asset';
+      const termHref = `/design/assets/glossary/${encodeURIComponent(term)}`;
       return `
         <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
           <header class="main-assets-header">
             <a class="design-back" href="/design">&larr; Design</a>
-            <p class="eyebrow">Asset catalog</p>
+            <p class="eyebrow">Design system</p>
             <h2>Glossary</h2>
             <p class="main-assets-intro">The same classification, read as a glossary: pick a type to see what it means. The full vocabulary lives in the <a href="/design/glossary">Glossary</a>.</p>
             ${renderCatalogModeToggle('glossary')}
           </header>
 
           <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Glossary explorer">
-            ${renderPrototypeTreePanel(activeHref, pruneTreeToTerms(ASSET_TREE_PROTOTYPE))}
+            ${renderPrototypeTreePanel(termHref, pruneTreeToTerms(ASSET_TREE_PROTOTYPE), { flat: true })}
             <div class="prototype-tree-content">
               ${renderGlossaryEntry(term)}
             </div>
@@ -3835,8 +3836,8 @@ import assetCatalog from './asset-catalog.json';
       <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
         <header class="main-assets-header">
           <a class="design-back" href="/design">&larr; Design</a>
-          <p class="eyebrow">Asset catalog</p>
-          <h2>${selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Assets'}</h2>
+          <p class="eyebrow">Design system</p>
+          <h2>${selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Catalog'}</h2>
           <p class="main-assets-intro">Every reusable runtime asset should eventually appear here with its states, frame bounds, rules, source art, and sample previews before it is wired into the game.</p>
           ${renderCatalogModeToggle('catalog')}
         </header>
@@ -3907,39 +3908,55 @@ import assetCatalog from './asset-catalog.json';
     </nav>`;
   }
 
-  function renderTreeList(nodes, activeHref = '', depth = 0) {
+  function renderTreeList(nodes, activeHref = '', depth = 0, opts = {}) {
     return `
       <ul class="prototype-tree-list depth-${depth}">
-        ${nodes.map((node) => `
-          <li>
-            ${node.children ? `
-              <details class="prototype-tree-branch ${activeHref === node.href ? 'active' : ''}" open>
-                <summary>
+        ${nodes.map((node) => {
+          const active = activeHref === node.href ? 'active' : '';
+          // Glossary (flat) mode: every node -- parents included -- is a link to
+          // its entry, with children always shown beneath. No expand/collapse.
+          if (node.children && opts.flat) {
+            return `
+              <li>
+                <a class="prototype-tree-term ${active} ${node.planned ? 'planned' : ''}" href="${escapeText(node.href)}">
                   <span>${escapeText(node.label)}</span>
                   ${node.planned ? '<em>planned</em>' : ''}
-                  <a class="prototype-tree-launch" href="${escapeText(node.href)}" data-tree-launch aria-label="Open ${escapeText(node.label)}">↗</a>
-                </summary>
-                ${renderTreeList(node.children, activeHref, depth + 1)}
-              </details>
-            ` : `
-              <a class="${activeHref === node.href ? 'active' : ''} ${node.planned ? 'planned' : ''}" href="${escapeText(node.href)}">
+                </a>
+                ${renderTreeList(node.children, activeHref, depth + 1, opts)}
+              </li>`;
+          }
+          if (node.children) {
+            return `
+              <li>
+                <details class="prototype-tree-branch ${active}" open>
+                  <summary>
+                    <span>${escapeText(node.label)}</span>
+                    ${node.planned ? '<em>planned</em>' : ''}
+                    <a class="prototype-tree-launch" href="${escapeText(node.href)}" data-tree-launch aria-label="Open ${escapeText(node.label)}">↗</a>
+                  </summary>
+                  ${renderTreeList(node.children, activeHref, depth + 1, opts)}
+                </details>
+              </li>`;
+          }
+          return `
+            <li>
+              <a class="${active} ${node.planned ? 'planned' : ''}" href="${escapeText(node.href)}">
                 <span>${escapeText(node.label)}</span>
                 ${node.planned ? '<em>planned</em>' : ''}
               </a>
-            `}
-          </li>
-        `).join('')}
+            </li>`;
+        }).join('')}
       </ul>`;
   }
 
-  function renderPrototypeTreePanel(activeHref, nodes = ASSET_TREE_PROTOTYPE) {
+  function renderPrototypeTreePanel(activeHref, nodes = ASSET_TREE_PROTOTYPE, opts = {}) {
     return `
       <aside class="prototype-tree-panel">
-        <div class="prototype-tree-tools" aria-label="Tree controls">
+        ${opts.flat ? '' : `<div class="prototype-tree-tools" aria-label="Tree controls">
           <button type="button" data-action="expand-prototype-tree">Expand all</button>
           <button type="button" data-action="collapse-prototype-tree">Collapse all</button>
-        </div>
-        ${renderTreeList(nodes, activeHref)}
+        </div>`}
+        ${renderTreeList(nodes, activeHref, 0, opts)}
       </aside>`;
   }
 
