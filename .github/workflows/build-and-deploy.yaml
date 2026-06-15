@@ -27,13 +27,29 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    name: Build image, push, bump kustomization tag
+    name: Build image, push, bump Helm values tag
     if: github.event_name == 'workflow_dispatch' || vars.ARM_CLIENT_ID != ''
     runs-on: ubuntu-latest
     environment: prod
     env:
       REGISTRY: romainecr.azurecr.io
       IMAGE: chess-tactics
+    # The backend smoke-test (npm test) exercises the Postgres-backed
+    # persistence endpoints, so the test job needs a real Postgres.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chess_tactics
+          POSTGRES_PASSWORD: chess_tactics
+          POSTGRES_DB: chess_tactics
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chess_tactics"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,6 +87,8 @@ jobs:
 
       - name: Test app
         working-directory: backend
+        env:
+          DATABASE_URL: postgres://chess_tactics:chess_tactics@localhost:5432/chess_tactics
         run: |
           npm ci
           npm test
