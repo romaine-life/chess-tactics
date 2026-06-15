@@ -1,0 +1,82 @@
+name: Upload BGM
+
+# Populate the public BGM blob container with the raw tracks held on the
+# `nelson/songs` branch. Run manually after the tofu storage is provisioned, and
+# whenever the soundtrack changes — re-running regenerates index.json so newly
+# added songs appear without any code change.
+#
+# tools/bgm/generate.mjs slugs the raw filenames and writes index.json; the
+# backend (/api/bgm) reads that index from the container. The upload target is
+# derived from k8s/values.yaml (bgm.baseUrl) so upload and serve never drift.
+
+on:
+  workflow_dispatch:
+    inputs:
+      songs_ref:
+        description: 'Git ref holding the raw songs/ directory'
+        required: false
+        default: 'nelson/songs'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (generator + values)
+        uses: actions/checkout@v4
+
+      - name: Checkout raw songs ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.songs_ref }}
+          path: songs-src
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Stage slugged tracks + index.json
+        run: node tools/bgm/generate.mjs --src songs-src/songs --out staged
+
+      - name: Derive blob target from values.yaml
+        id: target
+        run: |
+          BASE=$(sed -nE 's/^[[:space:]]*baseUrl:[[:space:]]*"?([^"[:space:]]+)"?.*$/\1/p' k8s/values.yaml | head -1)
+          BASE=${BASE%/}
+          if [ -z "$BASE" ]; then echo "could not read bgm.baseUrl from k8s/values.yaml" >&2; exit 1; fi
+          echo "account=$(echo "$BASE" | sed -E 's#^https://([^.]+)\..*#\1#')" >> "$GITHUB_OUTPUT"
+          echo "container=${BASE##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Upload tracks
+        run: |
+          az storage blob upload-batch \
+            --account-name "${{ steps.target.outputs.account }}" \
+            --auth-mode login \
+            --destination "${{ steps.target.outputs.container }}" \
+            --source staged \
+            --pattern "*.mp3" \
+            --content-type "audio/mpeg" \
+            --overwrite true
+
+      - name: Upload index.json
+        run: |
+          az storage blob upload \
+            --account-name "${{ steps.target.outputs.account }}" \
+            --auth-mode login \
+            --container-name "${{ steps.target.outputs.container }}" \
+            --name index.json \
+            --file staged/index.json \
+            --content-type "application/json" \
+            --overwrite true
+          echo "### Uploaded BGM + index.json to ${{ steps.target.outputs.account }}/${{ steps.target.outputs.container }}" >> "$GITHUB_STEP_SUMMARY"

@@ -9,6 +9,7 @@ import {
   attackedSquares as coreAttackedSquares,
   enemyThreats as coreEnemyThreats,
 } from './core/rules';
+import { initBgm } from './bgm.js';
 
 (function () {
   const COLS = 8;
@@ -5269,6 +5270,9 @@ import {
 
   applyInitialRoute();
   initAuth();
+  // Expose a small handle for debugging / automated validation of the shuffle
+  // playlist; harmless in production.
+  window.__chessBgm = initBgm();
   lobbyPollTimer = window.setInterval(() => {
     if (currentUser && (state.screen === 'lobbies' || state.screen === 'lobby')) {
       void loadLobbies(true);
