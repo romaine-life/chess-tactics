@@ -9,6 +9,8 @@
     "test": "npm --prefix ../frontend ci && npm --prefix ../frontend run check && npm --prefix ../frontend run build && node --check server.js && node --check supervisor.js && node --check smoke-test.js && sh -n ../bin/agent-preview && sh -n ../bin/agent-preview-status && node smoke-test.js"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "@azure/identity": "^4.13.1",
+    "express": "^5.2.1",
+    "pg": "^8.21.0"
   }
 }

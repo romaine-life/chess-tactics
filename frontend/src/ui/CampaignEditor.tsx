@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { useCampaigns } from '../campaign/store';
 import type { ObjectiveType } from '../core/level';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
+import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 
 const OBJECTIVES: ObjectiveType[] = ['capture-all', 'capture-king', 'survive', 'reach'];
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
@@ -20,9 +21,15 @@ export function CampaignEditor() {
   const selectedCampaignId = useCampaigns((s) => s.selectedCampaignId);
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
+  const [me, setMe] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    loadWorkspace().then((ws) => { if (ws.campaigns.length) useCampaigns.getState().hydrate(ws); }).catch(() => {});
+    let active = true;
+    fetchMe().then((user) => { if (active) setMe(user); });
+    loadWorkspace()
+      .then((ws) => { if (ws.campaigns.length) useCampaigns.getState().hydrate(ws); })
+      .catch((e) => { if (isUnauthorized(e)) setStatus('Sign in to load and save your campaigns.'); });
+    return () => { active = false; };
   }, []);
 
   const saveWorkspaceNow = async () => {
@@ -30,6 +37,7 @@ export function CampaignEditor() {
       await saveWorkspace({ campaigns: useCampaigns.getState().campaigns, levels: useCampaigns.getState().levels });
       setStatus('Saved to server');
     } catch (e) {
+      if (isUnauthorized(e)) { goSignIn(); return; }
       setStatus(`Save failed: ${(e as Error).message}`);
     }
   };
@@ -51,6 +59,9 @@ export function CampaignEditor() {
           </span>
         </div>
         {status ? <div data-testid="workspace-status" style={{ fontSize: 'var(--ds-text-xs)', color: 'var(--ds-ink-3)', marginTop: 6 }}>{status}</div> : null}
+        {me && !me.signed_in ? (
+          <a href={signInHref()} data-testid="campaign-sign-in" style={{ ...btn, display: 'inline-block', marginTop: 6, textDecoration: 'none' }}>Sign in to save</a>
+        ) : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
           {campaigns.length === 0 && <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>No campaigns yet.</span>}
           {campaigns.map((c) => (

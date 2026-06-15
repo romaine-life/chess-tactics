@@ -1,10 +1,11 @@
 import type { CSSProperties } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { EditorBoard } from '../render/EditorBoard';
 import { useEditor, type EditorTool } from '../editor/store';
 import { validateLevel, type TerrainType } from '../core/level';
 import type { PieceType, Side } from '../core/types';
-import { saveLevel, loadLevel } from '../net/levels';
+import { saveLevel, loadLevel, listLevels, type LevelSummary } from '../net/levels';
+import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 
 const TERRAINS: TerrainType[] = ['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock'];
 const SWATCH: Record<TerrainType, string> = { grass: '#356a42', water: '#2f5d86', stone: '#6b6f76', road: '#a9905f', bridge: '#7a5a36', cliff: '#3a3f46', rock: '#595e66' };
@@ -33,6 +34,26 @@ export function LevelEditor() {
   const past = useEditor((s) => s.past);
   const future = useEditor((s) => s.future);
   const [status, setStatus] = useState('');
+  const [me, setMe] = useState<AuthUser | null>(null);
+  const [savedLevels, setSavedLevels] = useState<LevelSummary[]>([]);
+
+  const refreshLevels = async () => {
+    try {
+      setSavedLevels(await listLevels());
+    } catch (e) {
+      if (isUnauthorized(e)) setSavedLevels([]);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    fetchMe().then((user) => {
+      if (!active) return;
+      setMe(user);
+      if (user.signed_in) refreshLevels();
+    });
+    return () => { active = false; };
+  }, []);
 
   const save = () => {
     const res = validateLevel(level);
@@ -45,20 +66,25 @@ export function LevelEditor() {
     try {
       const r = await saveLevel(level);
       setStatus(`Saved to server · rev ${r.revision}`);
+      refreshLevels();
     } catch (e) {
+      if (isUnauthorized(e)) { goSignIn(); return; }
       setStatus(`Save failed: ${(e as Error).message}`);
     }
   };
 
-  const loadFromServer = async () => {
+  const loadById = async (id: string) => {
     try {
-      const loaded = await loadLevel(level.id);
+      const loaded = await loadLevel(id);
       useEditor.getState().setLevel(loaded);
       setStatus(`Loaded from server · ${loaded.layers.units.length} units`);
     } catch (e) {
+      if (isUnauthorized(e)) { goSignIn(); return; }
       setStatus(`Load failed: ${(e as Error).message}`);
     }
   };
+
+  const loadFromServer = () => loadById(level.id);
 
   return (
     <div data-testid="level-editor" style={{ display: 'flex', gap: 14, padding: 14, alignItems: 'flex-start', position: 'relative', zIndex: 5, pointerEvents: 'auto', color: 'var(--ds-ink-2)', fontFamily: 'var(--ds-font-sans)' }}>
@@ -79,6 +105,25 @@ export function LevelEditor() {
       </div>
 
       <aside style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={panel} data-testid="level-library">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={eyebrow}>My levels</span>
+            {me?.signed_in ? <button type="button" data-testid="refresh-levels" style={chip(false)} onClick={refreshLevels}>Refresh</button> : null}
+          </div>
+          {me && !me.signed_in ? (
+            <a href={signInHref()} data-testid="editor-sign-in" style={{ ...chip(false), display: 'inline-block', marginTop: 6, textDecoration: 'none' }}>Sign in to save &amp; load</a>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+              {savedLevels.length === 0 && <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>No saved levels yet.</span>}
+              {savedLevels.map((s) => (
+                <button key={s.id} type="button" data-testid={`level-row-${s.id}`} onClick={() => loadById(s.id)}
+                  style={{ ...chip(s.id === level.id), textAlign: 'left' }}>
+                  {s.name || s.id}{s.cols && s.rows ? <span style={{ color: 'var(--ds-ink-3)' }}> · {s.cols}×{s.rows}</span> : null}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div style={panel}>
           <div style={eyebrow}>Tile palette</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

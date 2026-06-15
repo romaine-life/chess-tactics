@@ -20,20 +20,40 @@ spec:
     metadata:
       labels:
         app: {{ include "chess-tactics.resourceName" . }}
+        {{- if and (ne (include "chess-tactics.isTestEnv" .) "true") .Values.serviceAccountClientId }}
+        # Triggers the azure-workload-identity webhook to project a federated
+        # token for passwordless Postgres (Entra) auth. Prod only.
+        azure.workload.identity/use: "true"
+        {{- end }}
     spec:
       serviceAccountName: {{ .Values.serviceAccount }}
       containers:
         - name: {{ include "chess-tactics.resourceName" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if .Values.bgm.baseUrl }}
           env:
+            {{- if .Values.bgm.baseUrl }}
             # Public blob base for the BGM playlist. The backend reads
             # <baseUrl>/index.json server-side and serves /api/bgm; no Azure
             # credentials. Empty value disables BGM.
             - name: BGM_BASE_URL
               value: {{ .Values.bgm.baseUrl | quote }}
-          {{- end }}
+            {{- end }}
+            {{- if eq (include "chess-tactics.isTestEnv" .) "true" }}
+            # Test slot: ephemeral in-cluster Postgres (password mode, throwaway).
+            - name: DATABASE_URL
+              value: {{ printf "postgres://%s:%s@%s-postgres:5432/%s" .Values.postgres.testSlot.user .Values.postgres.testSlot.password (include "chess-tactics.resourceName" .) .Values.postgres.testSlot.database | quote }}
+            {{- else }}
+            # Prod: Azure Database for PostgreSQL, passwordless via workload
+            # identity. The backend presents a fresh AAD token as the password
+            # (see backend/server.js); host/db/user are not secrets.
+            - name: POSTGRES_HOST
+              value: {{ .Values.postgres.host | quote }}
+            - name: POSTGRES_DATABASE
+              value: {{ .Values.postgres.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.user | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 3000

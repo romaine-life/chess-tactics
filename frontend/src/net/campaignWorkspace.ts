@@ -2,6 +2,7 @@
 // one document). File-backed on the server today; swappable to a DB later.
 
 import type { Campaign, Level } from '../core/level';
+import { HttpError } from './http';
 
 export interface Workspace {
   campaigns: Campaign[];
@@ -9,8 +10,8 @@ export interface Workspace {
 }
 
 export async function loadWorkspace(): Promise<Workspace> {
-  const res = await fetch('/api/campaign-workspace');
-  if (!res.ok) throw new Error(`load failed (${res.status})`);
+  const res = await fetch('/api/campaign-workspace', { credentials: 'include' });
+  if (!res.ok) throw new HttpError('load', res.status);
   const data = (await res.json()) as Partial<Workspace>;
   return {
     campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
@@ -22,8 +23,9 @@ export async function saveWorkspace(ws: Workspace): Promise<{ ok: boolean }> {
   const res = await fetch('/api/campaign-workspace', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(ws),
   });
-  if (!res.ok) throw new Error(`save failed (${res.status})`);
+  if (!res.ok) throw new HttpError('save', res.status);
   return res.json() as Promise<{ ok: boolean }>;
 }

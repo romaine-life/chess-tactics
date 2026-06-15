@@ -73,11 +73,30 @@ Backend hot-swap writes a replacement server artifact to
 from the hot directory while still serving the baked frontend and using the
 baked `node_modules`.
 
+## Persistence
+
+Durable data (levels, campaign workspaces, design portfolios) lives in **Azure
+Database for PostgreSQL**, reached passwordless via Entra workload identity. The
+database is self-provisioned by this repo's `tofu/`. See
+[docs/persistence.md](docs/persistence.md) for the schema, auth model, backups,
+failure behavior, and the one post-`tofu apply` value to pin.
+
 ## Checks
 
 ```sh
 cd backend
 npm test
+```
+
+The backend smoke-test exercises the Postgres-backed endpoints, so it needs a
+Postgres. It uses `DATABASE_URL` if set, otherwise self-provisions a throwaway
+local Postgres from system binaries (as on the GitHub-hosted CI runners). Hosts
+without Postgres binaries should set `DATABASE_URL`. The frontend gate runs
+without a database:
+
+```sh
+cd frontend
+npm run check   # node checks + vitest + tsc
 ```
 
 ## Deploy
