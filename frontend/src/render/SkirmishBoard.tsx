@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js';
 import { useSkirmish } from '../game/store';
 import { enemyThreats } from '../core/rules';
 import { DEFAULT_ISO, depthKey, screenToTile, tileToScreen, type IsoConfig } from './iso';
+import { loadSpriteAtlas, type SpriteAtlas } from './sprites';
 
 const MARGIN = 44;
 const SIDE_COLOR: Record<string, number> = { player: 0x3b76d6, enemy: 0xc0473a, neutral: 0x6b6f76 };
@@ -28,6 +29,7 @@ export function SkirmishBoard() {
     const app = new Application();
     let cancelled = false;
     let unsub = () => {};
+    let atlas: SpriteAtlas | null = null;
 
     const diamond = (g: Graphics, cx: number, cy: number) =>
       g.poly([cx, cy - hh, cx + hw, cy, cx, cy + hh, cx - hw, cy]);
@@ -38,14 +40,29 @@ export function SkirmishBoard() {
       const threatSet = new Set(enemyThreats(game.pieces, game.size).map((s) => `${s.x},${s.y}`));
       app.stage.removeChildren();
 
-      const tiles = new Graphics();
-      for (let y = 0; y < game.size.rows; y += 1) {
-        for (let x = 0; x < game.size.cols; x += 1) {
-          const s = tileToScreen(x, y, 0, cfg);
-          diamond(tiles, s.x, s.y).fill({ color: (x + y) % 2 ? 0x2f5d3a : 0x356a42 }).stroke({ color: 0x1c3a25, width: 1 });
+      const grass = atlas?.tile('grass') ?? null;
+      if (grass) {
+        for (let y = 0; y < game.size.rows; y += 1) {
+          for (let x = 0; x < game.size.cols; x += 1) {
+            const s = tileToScreen(x, y, 0, cfg);
+            const spr = new Sprite(grass);
+            spr.anchor.set(0.5, 0.5);
+            spr.x = s.x;
+            spr.y = s.y;
+            spr.tint = (x + y) % 2 ? 0xdfe7df : 0xffffff; // faint checker
+            app.stage.addChild(spr);
+          }
         }
+      } else {
+        const tiles = new Graphics();
+        for (let y = 0; y < game.size.rows; y += 1) {
+          for (let x = 0; x < game.size.cols; x += 1) {
+            const s = tileToScreen(x, y, 0, cfg);
+            diamond(tiles, s.x, s.y).fill({ color: (x + y) % 2 ? 0x2f5d3a : 0x356a42 }).stroke({ color: 0x1c3a25, width: 1 });
+          }
+        }
+        app.stage.addChild(tiles);
       }
-      app.stage.addChild(tiles);
 
       const ov = new Graphics();
       for (const key of threatSet) {
@@ -71,18 +88,25 @@ export function SkirmishBoard() {
           diamond(sel, 0, 0).stroke({ color: 0xffffff, width: 2 });
           c.addChild(sel);
         }
-        const base = new Graphics();
-        if (p.type === 'rock' || p.type === 'random-rock') {
-          base.roundRect(-13, -16, 26, 22, 4).fill({ color: 0x595e66 }).stroke({ color: 0x2b2e33, width: 2 });
+        const tex = atlas?.piece(p.side, p.type) ?? null;
+        if (tex) {
+          const spr = new Sprite(tex);
+          spr.anchor.set(atlas!.pieceAnchor.x, atlas!.pieceAnchor.y);
+          c.addChild(spr);
         } else {
-          base.ellipse(0, 3, 14, 6).fill({ color: 0x0a131b, alpha: 0.5 });
-          base.circle(0, -9, 13).fill({ color: SIDE_COLOR[p.side] ?? 0x888888 }).stroke({ color: 0xf3efe4, width: 2 });
+          const base = new Graphics();
+          if (p.type === 'rock' || p.type === 'random-rock') {
+            base.roundRect(-13, -16, 26, 22, 4).fill({ color: 0x595e66 }).stroke({ color: 0x2b2e33, width: 2 });
+          } else {
+            base.ellipse(0, 3, 14, 6).fill({ color: 0x0a131b, alpha: 0.5 });
+            base.circle(0, -9, 13).fill({ color: SIDE_COLOR[p.side] ?? 0x888888 }).stroke({ color: 0xf3efe4, width: 2 });
+          }
+          c.addChild(base);
+          const label = new Text({ text: MARK[p.type] ?? '?', style: { fill: 0xffffff, fontFamily: 'monospace', fontSize: 13, fontWeight: 'bold' } });
+          label.anchor.set(0.5);
+          label.y = p.type === 'rock' ? -5 : -9;
+          c.addChild(label);
         }
-        c.addChild(base);
-        const label = new Text({ text: MARK[p.type] ?? '?', style: { fill: 0xffffff, fontFamily: 'monospace', fontSize: 13, fontWeight: 'bold' } });
-        label.anchor.set(0.5);
-        label.y = p.type === 'rock' ? -5 : -9;
-        c.addChild(label);
         app.stage.addChild(c);
       }
     };
@@ -91,6 +115,8 @@ export function SkirmishBoard() {
       await app.init({ width, height, background: '#0d1720', antialias: false });
       if (cancelled) { app.destroy(true); return; }
       host.appendChild(app.canvas);
+      atlas = await loadSpriteAtlas(); // null on failure -> Graphics fallback
+      if (cancelled) { app.destroy(true); return; }
       app.stage.eventMode = 'static';
       app.stage.hitArea = new Rectangle(0, 0, width, height);
       app.stage.on('pointertap', (e) => {
