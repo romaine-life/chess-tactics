@@ -4,3 +4,4 @@ export * from './rng';
 export * from './rules';
 export * from './level';
 export * from './objectives';
+export * from './terrain';

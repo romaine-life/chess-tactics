@@ -33,6 +33,15 @@ export interface Piece {
   hp?: number;
   /** Max hit points (for HUD bars). Defaults to the spawn hp. */
   maxHp?: number;
+  /**
+   * Action points remaining this turn. Opt-in: when unset, `pieceAp` defaults to
+   * 1 and the classic one-action-per-turn model holds. With AP authored and the
+   * AP-aware apply path enabled, a side keeps acting until its pieces run out of
+   * AP, then AP refreshes to `maxAp` on the next turn (Into-the-Breach-style).
+   */
+  ap?: number;
+  /** Max action points; refreshed to this at the start of the owner's turn. */
+  maxAp?: number;
 }
 
 /**
