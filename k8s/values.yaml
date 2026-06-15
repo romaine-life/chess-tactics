@@ -33,7 +33,7 @@ serviceAccount: chess-tactics
 # the value in after the first `tofu apply`; while empty the SA is left
 # un-annotated and prod persistence returns 503 until it is pinned — the game
 # itself still serves.
-serviceAccountClientId: ""
+serviceAccountClientId: "f9efb041-8b45-4cba-8f79-6a9546f73da1"
 
 # Azure Database for PostgreSQL — the durable document store (levels, campaign
 # workspaces, design portfolios). Provisioned by tofu/ (postgres.tf +
