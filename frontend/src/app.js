@@ -1,5 +1,14 @@
 import './style.css';
+// Generated asset families (frontend/scripts/normalize-mode-buttons.mjs) are
+// described by the asset catalog and assembled at render time.
 import assetCatalog from './asset-catalog.json';
+// Movement/threat rules are owned by the deterministic pure-TS core
+// (src/core/rules.ts). The wrappers below delegate to it (Phase 1 migration).
+import {
+  legalMoves as coreLegalMoves,
+  attackedSquares as coreAttackedSquares,
+  enemyThreats as coreEnemyThreats,
+} from './core/rules';
 import { initBgm } from './bgm.js';
 
 (function () {
@@ -760,13 +769,20 @@ import { initBgm } from './bgm.js';
     '/main-menu': { screen: 'main', mainMenuView: 'skeleton' },
     '/main-menu/skeleton': { screen: 'main', mainMenuView: 'skeleton' },
     '/design': { screen: 'main', mainMenuView: 'design-index' },
-    '/design/assets': { screen: 'main', mainMenuView: 'asset-catalog' },
-    '/design/assets/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
-    '/design/assets/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
-    '/design/assets/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
-    '/design/assets/buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetGroup: 'buttons' },
-    '/design/assets/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button.main-menu' },
-    '/design/assets/main-menu-button-icons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-icon.main-menu' },
+    '/design/glossary': { screen: 'main', mainMenuView: 'glossary' },
+    '/design/widgets': { screen: 'main', mainMenuView: 'widgets' },
+    '/design/catalog': { screen: 'main', mainMenuView: 'asset-catalog' },
+    '/design/stack-probe': { screen: 'main', mainMenuView: 'stack-probe' },
+    '/play': { screen: 'main', mainMenuView: 'skirmish-next' },
+    '/edit': { screen: 'main', mainMenuView: 'level-editor-next' },
+    '/campaigns-next': { screen: 'main', mainMenuView: 'campaign-editor-next' },
+    '/menu-next': { screen: 'main', mainMenuView: 'main-menu-next' },
+    '/design/catalog/navigation-drilldown': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'drilldown' },
+    '/design/catalog/navigation-tree': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'tree' },
+    '/design/catalog/navigation-hybrid': { screen: 'main', mainMenuView: 'asset-nav-prototype', prototype: 'hybrid' },
+    '/design/catalog/buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetGroup: 'buttons' },
+    '/design/catalog/main-menu-buttons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-9slice.main-menu' },
+    '/design/catalog/main-menu-button-icons': { screen: 'main', mainMenuView: 'asset-catalog', assetType: 'button-icon.main-menu' },
     '/design/main-menu': { screen: 'main', mainMenuView: 'assets' },
     '/design/main-menu/assets': { screen: 'main', mainMenuView: 'asset-lab' },
     '/design/main-menu/specimen': { screen: 'main', mainMenuView: 'specimen' },
@@ -794,11 +810,28 @@ import { initBgm } from './bgm.js';
   function currentRoute() {
     const path = currentPath();
     if (APP_ROUTES[path]) return APP_ROUTES[path];
+    if (path === '/design/catalog/glossary') {
+      return { screen: 'main', mainMenuView: 'asset-catalog', catalogMode: 'glossary' };
+    }
+    const glossaryTermMatch = path.match(/^\/design\/catalog\/glossary\/(.+)$/);
+    if (glossaryTermMatch) {
+      return { screen: 'main', mainMenuView: 'asset-catalog', catalogMode: 'glossary', glossaryTerm: decodeURIComponent(glossaryTermMatch[1]) };
+    }
+    const widgetMatch = path.match(/^\/design\/catalog\/widgets\/([^/]+)(?:\/([^/]+))?$/);
+    if (widgetMatch) {
+      return {
+        screen: 'main',
+        mainMenuView: 'asset-catalog',
+        catalogMode: 'widgets',
+        widgetFamily: decodeURIComponent(widgetMatch[1]),
+        widgetSlug: widgetMatch[2] ? decodeURIComponent(widgetMatch[2]) : '',
+      };
+    }
     const assetRouteTypes = {
-      'main-menu-buttons': 'button.main-menu',
+      'main-menu-buttons': 'button-9slice.main-menu',
       'main-menu-button-icons': 'button-icon.main-menu',
     };
-    const assetMatch = path.match(/^\/design\/assets\/([^/]+)(?:\/([^/]+))?$/);
+    const assetMatch = path.match(/^\/design\/catalog\/([^/]+)(?:\/([^/]+))?$/);
     if (assetMatch) {
       const assetType = assetRouteTypes[assetMatch[1]];
       if (!assetType) return APP_ROUTES['/'];
@@ -816,6 +849,55 @@ import { initBgm } from './bgm.js';
     const route = currentRoute();
     state.screen = route.screen;
     if (route.turn) state.turn = route.turn;
+  }
+
+  // Client-side navigation: update the URL + re-render in place, no full reload.
+  function navigateTo(href) {
+    if (!href) return;
+    const prev = currentRoute();
+    window.history.pushState({}, '', href);
+    applyInitialRoute();
+    const next = currentRoute();
+    // Moving between catalog views that share the same tree: swap only the
+    // header + content pane and re-highlight the active node, leaving the left
+    // nav DOM (its expand state + scroll) untouched -- no flicker / reload.
+    const sameTree = prev.mainMenuView === 'asset-catalog'
+      && next.mainMenuView === 'asset-catalog'
+      && (prev.catalogMode === 'glossary') === (next.catalogMode === 'glossary');
+    const screenEl = sameTree ? menuLayer.querySelector('.asset-catalog-screen') : null;
+    if (screenEl) {
+      swapCatalogContent(screenEl);
+    } else {
+      render();
+    }
+  }
+
+  // Partial catalog update: replace the header + content pane and re-highlight
+  // the active tree node, but keep the existing left rail DOM intact.
+  function swapCatalogContent(screenEl) {
+    const scratch = document.createElement('div');
+    scratch.innerHTML = renderAssetCatalog();
+    const fresh = scratch.firstElementChild;
+    if (!fresh) { render(); return; }
+    const oldHeader = screenEl.querySelector('.main-assets-header');
+    const newHeader = fresh.querySelector('.main-assets-header');
+    if (oldHeader && newHeader) oldHeader.replaceWith(newHeader);
+    const oldContent = screenEl.querySelector('.prototype-tree-content');
+    const newContent = fresh.querySelector('.prototype-tree-content');
+    if (oldContent && newContent) oldContent.replaceWith(newContent);
+    const rail = screenEl.querySelector('.prototype-tree-panel');
+    if (!rail) return;
+    rail.querySelectorAll('.active').forEach((el) => el.classList.remove('active'));
+    const activeHref = currentPath();
+    rail.querySelectorAll('a[href]').forEach((a) => {
+      if (a.getAttribute('href') !== activeHref) return;
+      if (a.classList.contains('prototype-tree-launch')) {
+        const det = a.closest('details.prototype-tree-branch');
+        if (det) det.classList.add('active');
+      } else {
+        a.classList.add('active');
+      }
+    });
   }
 
   const MAIN_MENU_PREVIEW_PIECES = [
@@ -1973,114 +2055,17 @@ import { initBgm } from './bgm.js';
     battleAnimFrameId = requestAnimationFrame(animate);
   }
 
-  function rayMoves(piece, dirs) {
-    const moves = [];
-    dirs.forEach(([dx, dy]) => {
-      for (let step = 1; ; step += 1) {
-        const x = piece.x + dx * step;
-        const y = piece.y + dy * step;
-        if (!inBounds(x, y)) break;
-        const occupant = pieceAt(x, y);
-        if (occupant) {
-          if (isEnemy(piece, occupant)) moves.push({ x, y, capture: occupant.id });
-          break;
-        }
-        moves.push({ x, y });
-      }
-    });
-    return moves;
-  }
-
-  function stepMoves(piece, deltas) {
-    return deltas
-      .map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
-      .filter((move) => {
-        if (!inBounds(move.x, move.y)) return false;
-        const occupant = pieceAt(move.x, move.y);
-        if (!occupant) return true;
-        if (!isEnemy(piece, occupant)) return false;
-        move.capture = occupant.id;
-        return true;
-      });
-  }
-
-  function pawnMoves(piece) {
-    const dir = piece.side === 'player' ? -1 : 1;
-    const moves = [];
-    const one = { x: piece.x, y: piece.y + dir };
-    if (inBounds(one.x, one.y) && !pieceAt(one.x, one.y)) {
-      moves.push(one);
-      const two = { x: piece.x, y: piece.y + dir * 2 };
-      if (piece.y === piece.startY && inBounds(two.x, two.y) && !pieceAt(two.x, two.y)) moves.push(two);
-    }
-    [-1, 1].forEach((dx) => {
-      const x = piece.x + dx;
-      const y = piece.y + dir;
-      const occupant = inBounds(x, y) && pieceAt(x, y);
-      if (isEnemy(piece, occupant)) moves.push({ x, y, capture: occupant.id });
-    });
-    return moves;
-  }
-
   function legalMoves(piece) {
-    if (!piece || !piece.alive || piece.type === 'rock' || state.screen !== 'game') return [];
-    if (piece.type === 'pawn') return pawnMoves(piece);
-    if (piece.type === 'knight') {
-      return stepMoves(piece, [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]);
-    }
-    if (piece.type === 'bishop') return rayMoves(piece, [[1, 1], [1, -1], [-1, 1], [-1, -1]]);
-    if (piece.type === 'rook') return rayMoves(piece, [[1, 0], [-1, 0], [0, 1], [0, -1]]);
-    return rayMoves(piece, [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
+    if (state.screen !== 'game') return [];
+    return coreLegalMoves(piece, state.pieces, currentBoardSize());
   }
 
   function attackedSquares(piece) {
-    if (!piece || !piece.alive || piece.type === 'rock') return [];
-    if (piece.type === 'pawn') {
-      const dir = piece.side === 'player' ? -1 : 1;
-      const squares = [];
-      [-1, 1].forEach((dx) => {
-        const x = piece.x + dx;
-        const y = piece.y + dir;
-        if (inBounds(x, y)) {
-          squares.push({ x, y });
-        }
-      });
-      return squares;
-    }
-    if (piece.type === 'knight') {
-      const deltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
-      return deltas
-        .map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
-        .filter((pos) => inBounds(pos.x, pos.y));
-    }
-    const dirs = piece.type === 'bishop'
-      ? [[1, 1], [1, -1], [-1, 1], [-1, -1]]
-      : piece.type === 'rook'
-        ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
-        : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-    
-    const squares = [];
-    dirs.forEach(([dx, dy]) => {
-      for (let step = 1; ; step += 1) {
-        const x = piece.x + dx * step;
-        const y = piece.y + dy * step;
-        if (!inBounds(x, y)) break;
-        squares.push({ x, y });
-        if (pieceAt(x, y)) break;
-      }
-    });
-    return squares;
+    return coreAttackedSquares(piece, state.pieces, currentBoardSize());
   }
 
   function getEnemyThreats() {
-    const threats = new Map();
-    livingPieces('enemy').forEach((piece) => {
-      attackedSquares(piece).forEach((sq) => {
-        const key = `${sq.x},${sq.y}`;
-        threats.set(key, sq);
-      });
-    });
-    return Array.from(threats.values());
+    return coreEnemyThreats(state.pieces, currentBoardSize());
   }
 
   function promoteIfNeeded(piece) {
@@ -2912,12 +2897,108 @@ import { initBgm } from './bgm.js';
     return currentRoute().mainMenuView === 'design-index';
   }
 
+  function shouldShowGlossary() {
+    return currentRoute().mainMenuView === 'glossary';
+  }
 
-  function renderMainMenuArtAction(action, label, active = false) {
+  function shouldShowStackProbe() {
+    return currentRoute().mainMenuView === 'stack-probe';
+  }
+
+  function shouldShowSkirmishNext() {
+    return currentRoute().mainMenuView === 'skirmish-next';
+  }
+
+  function shouldShowLevelEditorNext() {
+    return currentRoute().mainMenuView === 'level-editor-next';
+  }
+
+  function shouldShowCampaignEditorNext() {
+    return currentRoute().mainMenuView === 'campaign-editor-next';
+  }
+
+  function shouldShowMainMenuNext() {
+    return currentRoute().mainMenuView === 'main-menu-next';
+  }
+
+  function shouldShowWidgets() {
+    return currentRoute().mainMenuView === 'widgets';
+  }
+
+
+  // Live main-menu mode list. Actions and labels are app concerns (live DOM);
+  // the ART comes from the asset catalog (button-9slice.main-menu + the
+  // button-icon.main-menu assets). Each row is assembled at render time:
+  // 9-slice state + composited icon + live label + action — the catalog model.
+  // `action` is the live menu's dispatch code (DOM behavior); `slug` is the
+  // widget's stable identity in catalog URLs. They are intentionally separate:
+  // the URL should read solo-skirmish, not the internal "party" action.
+  const MENU_MODES = [
+    { action: 'party', slug: 'solo-skirmish', icon: 'button-icon.main-menu.sword', label: 'Solo Skirmish' },
+    { action: 'campaigns', slug: 'campaign-editor', icon: 'button-icon.main-menu.crown', label: 'Campaign Editor' },
+    { action: 'level-editor-preview', slug: 'level-editor', icon: 'button-icon.main-menu.scroll', label: 'Level Editor' },
+    { action: 'lobbies', slug: 'lobbies', icon: 'button-icon.main-menu.people', label: 'Lobbies' },
+    { action: 'settings', slug: 'settings', icon: 'button-icon.main-menu.gear', label: 'Settings' },
+  ];
+
+  function renderModeButton(mode, { active = false, specimen = false } = {}) {
+    const nineSlice = assetById('button-9slice.main-menu');
+    if (!nineSlice) return '';
+    const rules = nineSlice.rules || {};
+    const stateDef = (nineSlice.states || {})[active ? 'pressed' : 'normal'] || (nineSlice.states || {}).normal;
+    if (!stateDef) return '';
+    const icon = assetById(mode.icon);
+    const frameStyle = frameStyleForAsset(nineSlice, stateDef.rect);
+    const iconStyle = icon ? `${insetStyle(rules.iconSlot, stateDef.rect)};${frameStyleForAsset(icon, icon.rect)}` : '';
+    const labelStyle = insetStyle(rules.textInset, stateDef.rect);
     return `
-      <button class="main-menu-art-action ${active ? 'active' : ''}" type="button" data-action="${escapeText(action)}" aria-label="${escapeText(label)}">
-        <span>${escapeText(label)}</span>
+      <button class="mode-button ${active ? 'is-active' : ''}${specimen ? ' is-specimen' : ''}" type="button" data-action="${escapeText(specimen ? 'demo-toggle' : mode.action)}" aria-label="${escapeText(mode.label)}"${active ? ' aria-current="true"' : ''} style="--asset-aspect:${stateDef.rect.w} / ${stateDef.rect.h}">
+        <span class="mode-button-9slice" style="${frameStyle}" aria-hidden="true"></span>
+        ${icon ? `<span class="mode-button-icon" style="${iconStyle}" aria-hidden="true"></span>` : ''}
+        <span class="mode-button-label" style="${labelStyle}">${escapeText(mode.label)}</span>
       </button>`;
+  }
+
+  function renderModeButtonStack({ activeAction = 'party' } = {}) {
+    const buttons = MENU_MODES
+      .map((mode) => renderModeButton(mode, { active: mode.action === activeAction }))
+      .join('');
+    return `
+      <nav class="main-menu-actions main-menu-actions-assets" aria-label="Play modes">
+        ${buttons}
+      </nav>`;
+  }
+
+  // Completed widgets gallery: the finished main-menu button widgets, each
+  // assembled from catalog assets (a 9-slice state + an icon) + a live label +
+  // an action. Distinct from the asset catalog (which holds the parts).
+  function renderWidgetCard(mode) {
+    const iconAsset = assetById(mode.icon);
+    const iconName = iconAsset ? (iconAsset.title || mode.icon) : mode.icon;
+    return `
+      <article class="widget-card">
+        <div class="widget-card-preview main-menu-actions-assets">${renderModeButton(mode, { active: false, specimen: true })}</div>
+        <div class="widget-card-meta">
+          <h3>${escapeText(mode.label)}</h3>
+          <p>9-slice + ${escapeText(iconName)} + live label + <code>${escapeText(mode.action)}</code> action · click to press</p>
+        </div>
+      </article>`;
+  }
+
+  function renderWidgets() {
+    const cards = MENU_MODES.map(renderWidgetCard).join('');
+    return `
+      <div class="main-assets-screen widgets-screen" data-live-screen="widgets">
+        <header class="main-assets-header">
+          <a class="design-back" href="/design">&larr; Design</a>
+          <p class="eyebrow">Design system · completed widgets</p>
+          <h2>Widgets</h2>
+          <p class="main-assets-intro">Finished, assembled widgets — each built from catalog assets (a 9-slice in a state + an icon) plus a live label and an action. This is the main-menu button family, live in the game.</p>
+        </header>
+        <section class="widget-gallery" aria-label="Completed widgets">
+          ${cards}
+        </section>
+      </div>`;
   }
 
   function mainMenuReviewStatusFor(id, fallbackStatus) {
@@ -3080,14 +3161,87 @@ import { initBgm } from './bgm.js';
       </details>`;
   }
 
+  const GLOSSARY = [
+    { term: 'asset', tag: '', def: 'A reusable image plus contract the game operates on: it renders, state-switches, slots into, or swaps it.', src: 'Unity / Unreal' },
+    { term: '9-slice', tag: 'asset', def: 'A texture that scales while its corners stay fixed and the middle stretches; the reusable, icon-less button or panel background.', src: 'Unity 9-slicing · Godot NinePatchRect' },
+    { term: 'icon', tag: 'asset', def: 'A standalone image composited into a slot.', src: 'universal' },
+    { term: 'sprite atlas', tag: 'asset', def: 'One image packing several unrelated sprites (our source sheets).', src: 'Unity Sprite Atlas' },
+    { term: 'catalog', tag: '', def: 'The library of all assets, browsed sorted by type. It holds assets, not widgets.', src: 'project' },
+    { term: 'type', tag: '', def: 'An inventory shelf: a kind of asset (9-slice, icon). The catalog tree top levels.', src: 'project' },
+    { term: 'state', tag: '', def: 'A named visual variant: normal, pressed (later highlighted, selected, disabled).', src: 'Unity UI transitions' },
+    { term: 'slot', tag: '', def: 'A labelled region of a 9-slice filled at runtime by an asset (icon) or live text: iconSlot, textInset, arrowSlot.', src: 'Unreal UMG' },
+    { term: 'rect', tag: '', def: 'A pixel rectangle {x, y, w, h}; the bounds of a state or slot.', src: 'Unity Rect · Godot region_rect' },
+    { term: 'patch margins', tag: '', def: 'The fixed border thicknesses of a 9-slice: the parts that do not stretch.', src: 'Unity / Godot' },
+    { term: 'widget', tag: 'not an asset', def: 'The general term for an interactive element the player manipulates; assembled at runtime from assets, not a stored asset. Also called a control.', src: 'Unreal UMG · Wikipedia' },
+    { term: 'button', tag: 'not an asset', def: 'A kind of widget: a clickable control. Widget is the general term; button is the specific kind. The Main Menu Button is the button this catalog builds from its 9-slice and icons.', src: 'Unity / Unreal / Godot Button' },
+    { term: 'template', tag: 'not an asset', def: 'The reusable definition a widget instance is built from.', src: 'Unreal UI Template · Unity Prefab' },
+    { term: 'instance', tag: 'not an asset', def: 'A specific live widget produced from a template.', src: 'all engines' },
+  ];
+
+  function renderGlossaryTag(tag) {
+    if (!tag) return '';
+    const cls = tag === 'asset' ? 'is-asset' : 'is-not-asset';
+    return `<span class="glossary-tag ${cls}">${escapeText(tag)}</span>`;
+  }
+
+  function renderGlossary() {
+    return `
+      <div class="main-assets-screen glossary-screen" data-live-screen="glossary">
+        <header class="main-assets-header">
+          <a class="design-back" href="/design">&larr; Design</a>
+          <p class="eyebrow">Design system</p>
+          <h2>Glossary</h2>
+          <p class="main-assets-intro">The shared vocabulary for the asset catalog. Every term is attested by engine documentation (Unity, Unreal, Godot).</p>
+        </header>
+
+        <section class="glossary-callout" aria-label="Core distinction">
+          <p><strong>Two structures, kept separate.</strong> The <b>catalog</b> is an inventory of assets sorted by type (Buttons, Icons, Board, Pieces). A <b>button</b> is a <b>widget</b> &mdash; a composition of assets assembled at runtime &mdash; not an inventory item.</p>
+        </section>
+
+        <dl class="glossary-list">
+          ${GLOSSARY.map((g) => `
+            <div class="glossary-row">
+              <dt>
+                <span class="glossary-term">${escapeText(g.term)}</span>
+                ${renderGlossaryTag(g.tag)}
+              </dt>
+              <dd>
+                <p>${escapeText(g.def)}</p>
+                <span class="glossary-src">${escapeText(g.src)}</span>
+              </dd>
+            </div>
+          `).join('')}
+        </dl>
+
+        <section class="glossary-example" aria-label="Worked example">
+          <h3>Worked example</h3>
+          <p>The on-screen <b>Solo Skirmish</b> button is a <b>widget</b>: the <code>button-9slice.main-menu</code> 9-slice (in its <code>pressed</code> state) + the <code>button-icon.main-menu.sword</code> icon (in the <code>iconSlot</code>) + the live label &ldquo;Solo Skirmish&rdquo; (in the <code>textInset</code>) + the <code>party</code> action. The 9-slice and icon are assets in the catalog; the button itself is not.</p>
+        </section>
+      </div>`;
+  }
+
   function renderDesignIndex() {
     const areas = [
       {
-        href: '/design/assets',
-        kicker: 'Asset catalog',
-        title: 'Assets',
-        copy: 'Programmatic catalog for reusable game assets: contracts, states, frame rules, source art, and previews.',
+        href: '/design/catalog',
+        kicker: 'Design system',
+        title: 'Catalog',
+        copy: 'Classified catalog of the game’s buildable entities — assets (9-slice, icon) and widgets (button) — with contracts, states, slot rules, source art, and previews.',
         go: 'Open catalog',
+      },
+      {
+        href: '/design/glossary',
+        kicker: 'Design system',
+        title: 'Glossary',
+        copy: 'The shared vocabulary — asset, 9-slice, icon, slot, state, widget, template — each attested by engine docs.',
+        go: 'Open glossary',
+      },
+      {
+        href: '/design/widgets',
+        kicker: 'Components',
+        title: 'Widgets',
+        copy: 'Completed, assembled widgets — the main-menu button family, built from catalog assets plus live labels and actions.',
+        go: 'Open widgets',
       },
       {
         href: '/design/main-menu',
@@ -3158,15 +3312,15 @@ import { initBgm } from './bgm.js';
       {
         id: 'mode-buttons',
         title: 'Mode Button Family',
-        baseStatus: 'accepted',
-        file: '/assets/ui/main-menu-aspirational.png',
-        cropClass: 'portfolio-button-crop',
-        alt: 'Approved main menu render showing the five painted mode buttons',
-        caption: 'Approved portfolio crop. This is wired into the live menu so the lettering stays painted with the source.',
-        description: 'The live button stack uses the concept render crop directly: cyan-lit selected frame, warm dark fill, compact icon tile, painted labels, and five stacked mode choices.',
-        target: 'Confirm the already-approved button family still anchors the menu.',
-        liveUse: 'Transparent live click targets sit over the painted crop; browser text is not redrawn over the buttons.',
-        decision: 'Settled unless we discover a fit or readability problem while building surrounding chrome.',
+        baseStatus: 'review',
+        file: '/assets/ui/main-menu/contact-sheet.png',
+        alt: 'Contact sheet of the icon-less 9-slice (normal + pressed) and the five icon badges on a transparency checkerboard',
+        caption: 'Phase-1 asset family, aligned to the asset catalog: generated art normalized into an icon-less 9-slice (2 states) plus 5 standalone icon badges. Replace any PNG in place to upgrade the art with no code change.',
+        description: 'The live button stack is assembled per the asset catalog (button-9slice.main-menu + button-icon.main-menu.*): an icon-less 9-slice state, a composited icon badge in the icon slot, and a live DOM label in the text slot — not a single painted crop. See the full breakdown in the Asset Catalog.',
+        target: 'Accept the catalog-aligned family (correct decomposition, bridge-grade art) as the live mode stack, or flag art-quality items for the next art pass.',
+        liveUse: 'Drives the live main menu mode stack at / and /main-menu — each button = 9-slice state + composited icon + live label + action.',
+        decision: 'New this pass — supersedes the painted-crop bridge. Pending your accept/reject.',
+        specimen: renderModeButtonStack({ activeAction: 'party' }),
         referenceCrops: [
           {
             title: 'Approved Render Crop',
@@ -3385,13 +3539,12 @@ import { initBgm } from './bgm.js';
   function renderAssetFrame(asset, stateKey, sampleLabel = '') {
     const state = asset.states[stateKey];
     const textInset = asset.rules && asset.rules.textInset;
-    const label = sampleLabel ? `<span class="catalog-frame-label" style="${insetStyle(textInset, state.frame)}">${escapeText(sampleLabel)}</span>` : '';
-    return renderCatalogFrame(asset, state.frame, label);
+    const label = sampleLabel ? `<span class="catalog-frame-label" style="${insetStyle(textInset, state.rect)}">${escapeText(sampleLabel)}</span>` : '';
+    return renderCatalogFrame(asset, state.rect, label);
   }
 
   function renderButtonAssetCard(asset) {
     const stateEntries = Object.entries(asset.states || {});
-    const assemblies = asset.assemblies || [];
     const rules = asset.rules || {};
     return `
       <article class="catalog-asset-card" id="${escapeText(asset.id)}">
@@ -3413,7 +3566,7 @@ import { initBgm } from './bgm.js';
             <div class="catalog-state-card">
               <strong>${escapeText(state.label || stateKey)}</strong>
               ${renderAssetFrame(asset, stateKey)}
-              <code>x:${state.frame.x} y:${state.frame.y} w:${state.frame.w} h:${state.frame.h}</code>
+              <code>x:${state.rect.x} y:${state.rect.y} w:${state.rect.w} h:${state.rect.h}</code>
             </div>
           `).join('')}
         </section>
@@ -3423,16 +3576,6 @@ import { initBgm } from './bgm.js';
           <div><h4>Text Slot</h4><code>${escapeText(JSON.stringify(rules.textInset || {}))}</code></div>
           <div><h4>Arrow Slot</h4><code>${escapeText(JSON.stringify(rules.arrowSlot || {}))}</code></div>
           <div><h4>Hitbox</h4><code>${escapeText(JSON.stringify(rules.hitbox || {}))}</code></div>
-        </section>
-
-        <section class="catalog-preview-stack" aria-label="Assembly examples">
-          <h4>Assembly Examples</h4>
-          ${assemblies.map((assembly) => `
-            <button class="catalog-button-preview" type="button">
-              ${renderAssetFrame(asset, assembly.state, assembly.label)}
-              <span class="catalog-assembly-caption">${escapeText(assembly.label)} = ${escapeText(assembly.state)} frame + ${escapeText(assembly.icon)} + live text</span>
-            </button>
-          `).join('')}
         </section>
 
         <section class="catalog-rule-grid" aria-label="Asset rules">
@@ -3476,8 +3619,8 @@ import { initBgm } from './bgm.js';
         <section class="catalog-icon-preview" aria-label="Icon preview">
           <div class="catalog-state-card">
             <strong>Icon Crop</strong>
-            ${renderCatalogFrame(asset, asset.frame)}
-            <code>x:${asset.frame.x} y:${asset.frame.y} w:${asset.frame.w} h:${asset.frame.h}</code>
+            ${renderCatalogFrame(asset, asset.rect)}
+            <code>x:${asset.rect.x} y:${asset.rect.y} w:${asset.rect.w} h:${asset.rect.h}</code>
           </div>
         </section>
 
@@ -3491,15 +3634,15 @@ import { initBgm } from './bgm.js';
   }
 
   function assetTypeLabel(type) {
-    if (type === 'button.main-menu') return 'Main Menu Button';
+    if (type === 'button-9slice.main-menu') return 'Main Menu Button 9-Slice';
     if (type === 'button-icon.main-menu') return 'Main Menu Button Icon';
     return `${type[0].toUpperCase()}${type.slice(1)}`;
   }
 
   function assetTypePath(type) {
-    if (type === 'button.main-menu') return '/design/assets/main-menu-buttons';
-    if (type === 'button-icon.main-menu') return '/design/assets/main-menu-button-icons';
-    return `/design/assets/${type}s`;
+    if (type === 'button-9slice.main-menu') return '/design/catalog/main-menu-buttons';
+    if (type === 'button-icon.main-menu') return '/design/catalog/main-menu-button-icons';
+    return `/design/catalog/${type}s`;
   }
 
   function assetPath(asset) {
@@ -3507,7 +3650,7 @@ import { initBgm } from './bgm.js';
   }
 
   function renderCatalogAssetCard(asset) {
-    if (asset.type === 'button.main-menu') return renderButtonAssetCard(asset);
+    if (asset.type === 'button-9slice.main-menu') return renderButtonAssetCard(asset);
     if (asset.type === 'button-icon.main-menu') return renderIconAssetCard(asset);
     return '';
   }
@@ -3519,10 +3662,10 @@ import { initBgm } from './bgm.js';
     }, {});
     return [
       {
-        href: '/design/assets/main-menu-buttons',
+        href: '/design/catalog/main-menu-buttons',
         title: 'Main Menu Buttons',
         summary: 'Menu-row button frames with live labels, an icon slot, arrow affordance, binary states, and hitbox rules.',
-        count: countsByType['button.main-menu'] || 0,
+        count: countsByType['button-9slice.main-menu'] || 0,
         status: 'draft',
       },
       {
@@ -3550,19 +3693,39 @@ import { initBgm } from './bgm.js';
   }
 
   function renderAssetCatalogHome(countsByType) {
+    const classes = [
+      {
+        label: 'asset',
+        kinds: [
+          { title: '9-slice', href: '/design/catalog/main-menu-buttons', count: countsByType['button-9slice.main-menu'] || 0, summary: 'Scalable, icon-less frames whose corners stay fixed while the middle stretches.' },
+          { title: 'icon', href: '/design/catalog/main-menu-button-icons', count: countsByType['button-icon.main-menu'] || 0, summary: 'Standalone images composited into a slot.' },
+          { title: 'sprite atlas', href: '#', count: 0, planned: true, summary: 'One image packing several unrelated sprites.' },
+        ],
+      },
+      {
+        label: 'widget',
+        kinds: [
+          { title: 'button', href: '#', count: 0, planned: true, summary: 'Interactive element assembled from a 9-slice + icon + live label.' },
+        ],
+      },
+    ];
     return `
-      <section class="catalog-family-grid" aria-label="Asset categories">
-        <a class="catalog-family-card" href="/design/assets/buttons">
-          <span class="design-hub-kicker">category · ${countsByType['button.main-menu'] || 0} assets</span>
-          <h3>Buttons</h3>
-          <p>Button families grouped by interaction pattern, visual family, and slot rules.</p>
-        </a>
-        <a class="catalog-family-card" href="/design/assets/main-menu-button-icons">
-          <span class="design-hub-kicker">type · ${countsByType['button-icon.main-menu'] || 0} assets</span>
-          <h3>Main Menu Button Icons</h3>
-          <p>Standalone icon assets designed to fit into main-menu button icon slots.</p>
-        </a>
-      </section>`;
+      <div class="catalog-home">
+        ${classes.map((cls) => `
+          <section class="catalog-home-class" aria-label="${escapeText(cls.label)}">
+            <h3 class="catalog-home-class-label">${escapeText(cls.label)}</h3>
+            <div class="catalog-family-grid">
+              ${cls.kinds.map((k) => `
+                <a class="catalog-family-card ${k.planned ? 'disabled' : ''}" href="${escapeText(k.href)}"${k.planned ? ' aria-disabled="true"' : ''}>
+                  <span class="design-hub-kicker">${k.planned ? 'planned' : `${k.count} entit${k.count === 1 ? 'y' : 'ies'}`}</span>
+                  <h4>${escapeText(k.title)}</h4>
+                  <p>${escapeText(k.summary)}</p>
+                </a>
+              `).join('')}
+            </div>
+          </section>
+        `).join('')}
+      </div>`;
   }
 
   function renderAssetTypePicker(assets, selectedAsset) {
@@ -3591,8 +3754,111 @@ import { initBgm } from './bgm.js';
       </aside>`;
   }
 
+  function renderCatalogModeToggle(active, { treeControls = false } = {}) {
+    const tabs = [['catalog', 'Catalog', '/design/catalog'], ['glossary', 'Glossary', '/design/catalog/glossary']];
+    // The active tab is inert (you are already in that view); only the inactive
+    // tab is a link, so clicking the current mode never reloads you to its root.
+    const toggle = `<nav class="catalog-mode-toggle" aria-label="Catalog view mode">
+      ${tabs.map(([key, label, href]) => (active === key
+        ? `<span class="active" aria-current="page">${escapeText(label)}</span>`
+        : `<a href="${escapeText(href)}">${escapeText(label)}</a>`)).join('')}
+    </nav>`;
+    // Expand/collapse as a compact stacked +/- beside the toggle (only when the
+    // tree has branches; the glossary tree is flat with nothing to expand).
+    const zoom = treeControls ? `<div class="tree-zoom" aria-label="Tree controls">
+      <button type="button" data-action="expand-prototype-tree" title="Expand all" aria-label="Expand all">+</button>
+      <button type="button" data-action="collapse-prototype-tree" title="Collapse all" aria-label="Collapse all">&minus;</button>
+    </div>` : '';
+    return `<div class="catalog-controls">${toggle}${zoom}</div>`;
+  }
+
+  // Compact catalog header: back link, title, short intro. The view toggle +
+  // tree zoom live over the tree (in .catalog-rail), not here. introHtml is raw.
+  function renderCatalogHeader(title, introHtml) {
+    return `
+      <header class="main-assets-header catalog-header">
+        <a class="design-back" href="/design">&larr; Design</a>
+        <h2>${escapeText(title)}</h2>
+        <p class="main-assets-intro">${introHtml}</p>
+      </header>`;
+  }
+
+  // Glossary mode reuses the classification tree but drops the specific-entity
+  // leaves, leaving only the glossary-term nodes; each links to its definition.
+  function pruneTreeToTerms(nodes) {
+    return nodes
+      .filter((node) => GLOSSARY.some((g) => g.term === node.label))
+      .map((node) => {
+        const kids = node.children ? pruneTreeToTerms(node.children) : [];
+        const out = { label: node.label, href: `/design/catalog/glossary/${encodeURIComponent(node.label)}` };
+        if (kids.length) out.children = kids;
+        return out;
+      });
+  }
+
+  function renderGlossaryEntry(term) {
+    const g = GLOSSARY.find((e) => e.term === term);
+    if (!g) return '<p class="catalog-empty">Pick a term from the tree to read its definition.</p>';
+    return `
+      <article class="glossary-entry">
+        <header>
+          <h3>${escapeText(g.term)}</h3>
+          ${renderGlossaryTag(g.tag)}
+        </header>
+        <p class="glossary-entry-def">${escapeText(g.def)}</p>
+        <p class="glossary-entry-src">${escapeText(g.src)}</p>
+        <p class="glossary-entry-more"><a href="/design/glossary">Full glossary &rarr;</a></p>
+      </article>`;
+  }
+
   function renderAssetCatalog() {
     const route = currentRoute();
+    const activeHref = currentPath();
+    if (route.catalogMode === 'glossary') {
+      const term = route.glossaryTerm || 'asset';
+      const termHref = `/design/catalog/glossary/${encodeURIComponent(term)}`;
+      return `
+        <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
+          ${renderCatalogHeader('Glossary', 'The same classification, read as a glossary: pick a type to see what it means. The full vocabulary lives in the <a href="/design/glossary">Glossary</a>.')}
+
+          <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Glossary explorer">
+            <div class="catalog-rail">
+              ${renderCatalogModeToggle('glossary', { treeControls: false })}
+              ${renderPrototypeTreePanel(termHref, pruneTreeToTerms(ASSET_TREE_PROTOTYPE), { flat: true })}
+            </div>
+            <div class="prototype-tree-content">
+              ${renderGlossaryEntry(term)}
+            </div>
+          </section>
+        </div>`;
+    }
+    if (route.catalogMode === 'widgets') {
+      const modes = route.widgetSlug
+        ? MENU_MODES.filter((mode) => mode.slug === route.widgetSlug)
+        : MENU_MODES;
+      const single = Boolean(route.widgetSlug) && modes.length === 1;
+      const title = single ? modes[0].label : 'Main Menu Buttons';
+      const intro = single
+        ? 'A completed widget, shown live on the catalog page — assembled from a catalog 9-slice (in a state) + an icon + a live label + an action.'
+        : 'The completed Main Menu button widgets, shown live on the catalog page. Each is assembled from a catalog 9-slice (in a state) + an icon + a live label + an action.';
+      const cards = modes.length
+        ? `<section class="widget-gallery" aria-label="Widgets">${modes.map(renderWidgetCard).join('')}</section>`
+        : '<p class="catalog-empty">No widgets in this family yet.</p>';
+      return `
+        <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
+          ${renderCatalogHeader(title, escapeText(intro))}
+
+          <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
+            <div class="catalog-rail">
+              ${renderCatalogModeToggle('catalog', { treeControls: true })}
+              ${renderPrototypeTreePanel(activeHref, undefined, { hideTools: true })}
+            </div>
+            <div class="prototype-tree-content">
+              ${cards}
+            </div>
+          </section>
+        </div>`;
+    }
     const selectedType = route.assetType || '';
     const selectedGroup = route.assetGroup || '';
     const assets = (assetCatalog.assets || []).filter((asset) => !selectedType || asset.type === selectedType);
@@ -3601,7 +3867,6 @@ import { initBgm } from './bgm.js';
       acc[asset.type] = (acc[asset.type] || 0) + 1;
       return acc;
     }, {});
-    const activeHref = currentPath();
     const content = selectedGroup === 'buttons'
       ? renderButtonTypeCatalog()
       : selectedType
@@ -3614,15 +3879,13 @@ import { initBgm } from './bgm.js';
         : renderAssetCatalogHome(countsByType);
     return `
       <div class="main-assets-screen asset-catalog-screen" data-live-screen="asset-catalog">
-        <header class="main-assets-header">
-          <a class="design-back" href="/design">&larr; Design</a>
-          <p class="eyebrow">Asset catalog</p>
-          <h2>${selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Assets'}</h2>
-          <p class="main-assets-intro">Every reusable runtime asset should eventually appear here with its states, frame bounds, rules, source art, and sample previews before it is wired into the game.</p>
-        </header>
+        ${renderCatalogHeader(selectedGroup === 'buttons' ? 'Button Types' : selectedType ? `${assetTypeLabel(selectedType)} Assets` : 'Catalog', 'Buildable game entities, grouped by type. Open one to inspect its states, slots, source art, and previews.')}
 
         <section class="prototype-tree-layout asset-catalog-tree-layout" aria-label="Asset catalog explorer">
-          ${renderPrototypeTreePanel(activeHref)}
+          <div class="catalog-rail">
+            ${renderCatalogModeToggle('catalog', { treeControls: true })}
+            ${renderPrototypeTreePanel(activeHref, undefined, { hideTools: true })}
+          </div>
           <div class="prototype-tree-content">
             ${content}
           </div>
@@ -3630,99 +3893,122 @@ import { initBgm } from './bgm.js';
       </div>`;
   }
 
+  // The catalog is a classification of our entities by object type (is-a),
+  // vague class at top -> specific entity at the leaf. The classes/terms are the
+  // glossary's object types; the leaves are the specific entities you find/build.
+  // (Anatomy terms like state/slot/rect are the per-entity "made-of" view, not
+  // here; usage terms like template/instance/catalog/type are not entities.)
   const ASSET_TREE_PROTOTYPE = [
     {
-      label: 'Buttons',
-      href: '/design/assets/buttons',
+      label: 'asset',
+      href: '/design/catalog',
       children: [
         {
-          label: 'Main Menu Buttons',
-          href: '/design/assets/main-menu-buttons',
+          label: '9-slice',
+          href: '/design/catalog/main-menu-buttons',
           children: [
-            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+            { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
           ],
         },
-        { label: 'Plain Buttons', href: '#', planned: true },
+        {
+          label: 'icon',
+          href: '/design/catalog/main-menu-button-icons',
+          children: [
+            { label: 'Sword', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.sword' },
+            { label: 'Crown', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.crown' },
+            { label: 'Scroll', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.scroll' },
+            { label: 'Players', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.people' },
+            { label: 'Gear', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.gear' },
+          ],
+        },
+        { label: 'sprite atlas', href: '#', planned: true },
       ],
     },
     {
-      label: 'Icons',
-      href: '#',
+      label: 'widget',
+      href: '/design/catalog/widgets/main-menu',
       children: [
         {
-          label: 'Main Menu Button Icons',
-          href: '/design/assets/main-menu-button-icons',
+          label: 'button',
+          href: '/design/catalog/widgets/main-menu',
           children: [
-            { label: 'Sword Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.sword' },
-            { label: 'Crown Icon', href: '/design/assets/main-menu-button-icons/button-icon.main-menu.crown' },
+            {
+              label: 'Main Menu',
+              href: '/design/catalog/widgets/main-menu',
+              children: [
+                { label: 'Solo Skirmish', href: '/design/catalog/widgets/main-menu/solo-skirmish' },
+                { label: 'Campaign Editor', href: '/design/catalog/widgets/main-menu/campaign-editor' },
+                { label: 'Level Editor', href: '/design/catalog/widgets/main-menu/level-editor' },
+                { label: 'Lobbies', href: '/design/catalog/widgets/main-menu/lobbies' },
+                { label: 'Settings', href: '/design/catalog/widgets/main-menu/settings' },
+              ],
+            },
           ],
         },
-      ],
-    },
-    {
-      label: 'Board',
-      href: '#',
-      planned: true,
-      children: [
-        { label: 'Tiles', href: '#', planned: true },
-        { label: 'Highlights', href: '#', planned: true },
-      ],
-    },
-    {
-      label: 'Pieces',
-      href: '#',
-      planned: true,
-      children: [
-        { label: 'Chess Units', href: '#', planned: true },
-        { label: 'Status FX', href: '#', planned: true },
       ],
     },
   ];
 
   function prototypeLinks(active) {
     const links = [
-      ['drilldown', 'Page Drilldown', '/design/assets/navigation-drilldown'],
-      ['tree', 'Tree Sidebar', '/design/assets/navigation-tree'],
-      ['hybrid', 'Hybrid', '/design/assets/navigation-hybrid'],
+      ['drilldown', 'Page Drilldown', '/design/catalog/navigation-drilldown'],
+      ['tree', 'Tree Sidebar', '/design/catalog/navigation-tree'],
+      ['hybrid', 'Hybrid', '/design/catalog/navigation-hybrid'],
     ];
     return `<nav class="prototype-switcher" aria-label="Asset navigation prototypes">
       ${links.map(([key, label, href]) => `<a class="${active === key ? 'active' : ''}" href="${href}">${label}</a>`).join('')}
     </nav>`;
   }
 
-  function renderTreeList(nodes, activeHref = '', depth = 0) {
+  function renderTreeList(nodes, activeHref = '', depth = 0, opts = {}) {
     return `
       <ul class="prototype-tree-list depth-${depth}">
-        ${nodes.map((node) => `
-          <li>
-            ${node.children ? `
-              <details class="prototype-tree-branch ${activeHref === node.href ? 'active' : ''}" open>
-                <summary>
+        ${nodes.map((node) => {
+          const active = activeHref === node.href ? 'active' : '';
+          // Glossary (flat) mode: every node -- parents included -- is a link to
+          // its entry, with children always shown beneath. No expand/collapse.
+          if (node.children && opts.flat) {
+            return `
+              <li>
+                <a class="prototype-tree-term ${active} ${node.planned ? 'planned' : ''}" href="${escapeText(node.href)}">
                   <span>${escapeText(node.label)}</span>
                   ${node.planned ? '<em>planned</em>' : ''}
-                  <a class="prototype-tree-launch" href="${escapeText(node.href)}" data-tree-launch aria-label="Open ${escapeText(node.label)}">↗</a>
-                </summary>
-                ${renderTreeList(node.children, activeHref, depth + 1)}
-              </details>
-            ` : `
-              <a class="${activeHref === node.href ? 'active' : ''} ${node.planned ? 'planned' : ''}" href="${escapeText(node.href)}">
+                </a>
+                ${renderTreeList(node.children, activeHref, depth + 1, opts)}
+              </li>`;
+          }
+          if (node.children) {
+            return `
+              <li>
+                <details class="prototype-tree-branch ${active}" open>
+                  <summary>
+                    <span>${escapeText(node.label)}</span>
+                    ${node.planned ? '<em>planned</em>' : ''}
+                    <a class="prototype-tree-launch" href="${escapeText(node.href)}" data-tree-launch aria-label="Open ${escapeText(node.label)}">↗</a>
+                  </summary>
+                  ${renderTreeList(node.children, activeHref, depth + 1, opts)}
+                </details>
+              </li>`;
+          }
+          return `
+            <li>
+              <a class="${active} ${node.planned ? 'planned' : ''}" href="${escapeText(node.href)}">
                 <span>${escapeText(node.label)}</span>
                 ${node.planned ? '<em>planned</em>' : ''}
               </a>
-            `}
-          </li>
-        `).join('')}
+            </li>`;
+        }).join('')}
       </ul>`;
   }
 
-  function renderPrototypeTreePanel(activeHref) {
+  function renderPrototypeTreePanel(activeHref, nodes = ASSET_TREE_PROTOTYPE, opts = {}) {
     return `
       <aside class="prototype-tree-panel">
-        <div class="prototype-tree-tools" aria-label="Tree controls">
+        ${opts.flat || opts.hideTools ? '' : `<div class="prototype-tree-tools" aria-label="Tree controls">
           <button type="button" data-action="expand-prototype-tree">Expand all</button>
           <button type="button" data-action="collapse-prototype-tree">Collapse all</button>
-        </div>
-        ${renderTreeList(ASSET_TREE_PROTOTYPE, activeHref)}
+        </div>`}
+        ${renderTreeList(nodes, activeHref, 0, opts)}
       </aside>`;
   }
 
@@ -3744,17 +4030,17 @@ import { initBgm } from './bgm.js';
     return `
       <section class="prototype-drill-grid">
         ${renderPrototypePreviewCard('Assets', 'Start at the root. Each card sends you to a new page one level deeper.', [
-          { label: 'Buttons', href: '/design/assets/buttons' },
+          { label: 'Buttons', href: '/design/catalog/buttons' },
           { label: 'Icons', href: '#' },
           { label: 'Board', href: '#', planned: true },
           { label: 'Pieces', href: '#', planned: true },
         ])}
         ${renderPrototypePreviewCard('Buttons', 'The button category page lists button families, not individual button assets.', [
-          { label: 'Main Menu Buttons', href: '/design/assets/main-menu-buttons' },
+          { label: 'Main Menu Buttons', href: '/design/catalog/main-menu-buttons' },
           { label: 'Plain Buttons', href: '#', planned: true },
         ])}
         ${renderPrototypePreviewCard('Main Menu Buttons', 'The type page has the dropdown/search picker and one full inspection card.', [
-          { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+          { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
         ])}
       </section>`;
   }
@@ -3762,11 +4048,11 @@ import { initBgm } from './bgm.js';
   function renderTreePrototype() {
     return `
       <section class="prototype-tree-layout">
-        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons')}
+        ${renderPrototypeTreePanel('/design/catalog/main-menu-buttons')}
         <div class="prototype-tree-content">
           ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons'])}
           ${renderPrototypePreviewCard('Main Menu Buttons', 'The tree stays visible while the right panel swaps to the selected category, type, or asset page.', [
-            { label: 'Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+            { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
           ])}
         </div>
       </section>`;
@@ -3775,16 +4061,16 @@ import { initBgm } from './bgm.js';
   function renderHybridPrototype() {
     return `
       <section class="prototype-tree-layout prototype-hybrid-layout">
-        ${renderPrototypeTreePanel('/design/assets/main-menu-buttons/button.main-menu.frame')}
+        ${renderPrototypeTreePanel('/design/catalog/main-menu-buttons/button-9slice.main-menu')}
         <div class="prototype-tree-content">
-          ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons', 'Main Menu Button Frame'])}
+          ${renderAssetBreadcrumb(['Assets', 'Buttons', 'Main Menu Buttons', 'Main Menu Button 9-Slice'])}
           <div class="prototype-hybrid-grid">
             ${renderPrototypePreviewCard('Main Menu Buttons', 'Type-level controls live here: search, dropdown, status filters, and family notes.', [
               { label: 'Search within Main Menu Buttons', href: '#' },
-              { label: 'Selected: Main Menu Button Frame', href: '/design/assets/main-menu-buttons/button.main-menu.frame' },
+              { label: 'Selected: Main Menu Button 9-Slice', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
             ])}
             ${renderPrototypePreviewCard('Inspection Card', 'The selected asset still gets a dedicated full card, but the tree keeps the larger catalog context visible.', [
-              { label: 'States: pressed, unpressed', href: '#' },
+              { label: 'States: pressed, normal', href: '#' },
               { label: 'Slots: icon, text, arrow, hitbox', href: '#' },
             ])}
           </div>
@@ -3807,7 +4093,7 @@ import { initBgm } from './bgm.js';
     return `
       <div class="main-assets-screen asset-catalog-screen asset-prototype-screen" data-live-screen="asset-nav-prototype">
         <header class="main-assets-header">
-          <a class="design-back" href="/design/assets">&larr; Asset Catalog</a>
+          <a class="design-back" href="/design/catalog">&larr; Asset Catalog</a>
           <p class="eyebrow">Asset navigation study</p>
           <h2>${titles[prototype]}</h2>
           <p class="main-assets-intro">Quick structural mocks for comparing how a large asset catalog might be explored. These pages are intentionally rough.</p>
@@ -3835,7 +4121,7 @@ import { initBgm } from './bgm.js';
           <div class="main-assets-summary">
             <span><b>01</b> accepted crop baseline</span>
             <span><b>02</b> reusable button-sheet candidates</span>
-            <span><b>01</b> live-text assembly mock</span>
+            <span><b>01</b> live-text widget mock</span>
           </div>
         </header>
 
@@ -3871,7 +4157,7 @@ import { initBgm } from './bgm.js';
 
           <article class="asset-lab-card asset-lab-card-wide">
             <header>
-              <span class="design-hub-kicker">Assembly mock</span>
+              <span class="design-hub-kicker">Widget mock</span>
               <h3>Sliced Rows + Live Text</h3>
               <p>Here the same source sheet is treated as five independent row assets. The text is separate, so the renderer can change labels, state, spacing, and hit targets without repainting the art.</p>
             </header>
@@ -4018,14 +4304,7 @@ import { initBgm } from './bgm.js';
             </div>
           </section>
 
-          <nav class="main-menu-actions main-menu-actions-art" aria-label="Play modes">
-            <img src="/assets/ui/main-menu-aspirational.png" alt="" aria-hidden="true" draggable="false">
-            ${renderMainMenuArtAction('party', 'Solo Skirmish', true)}
-            ${renderMainMenuArtAction('campaigns', 'Campaign Editor')}
-            ${renderMainMenuArtAction('level-editor-preview', 'Level Editor')}
-            ${renderMainMenuArtAction('lobbies', 'Lobbies')}
-            ${renderMainMenuArtAction('settings', 'Settings')}
-          </nav>
+          ${renderModeButtonStack({ activeAction: 'party' })}
 
           ${renderDailyPanel()}
         </section>
@@ -4065,6 +4344,39 @@ import { initBgm } from './bgm.js';
       </div>`;
   }
 
+  // Phase 0 walking skeleton: lazily load the TS+React+Pixi island so the game
+  // bundle stays lean; it is mounted only for the stack-probe view.
+  let stackProbeModule = null;
+  function withStackProbe(cb) {
+    if (stackProbeModule) { cb(stackProbeModule); return; }
+    import('./stack-probe/mount').then((m) => { stackProbeModule = m; cb(m); });
+  }
+
+  // Phase 2 skirmish slice: React + Pixi board on the pure core, lazily loaded.
+  let skirmishModule = null;
+  function withSkirmish(cb) {
+    if (skirmishModule) { cb(skirmishModule); return; }
+    import('./ui/mount').then((m) => { skirmishModule = m; cb(m); });
+  }
+
+  let editorModule = null;
+  function withEditor(cb) {
+    if (editorModule) { cb(editorModule); return; }
+    import('./ui/editorMount').then((m) => { editorModule = m; cb(m); });
+  }
+
+  let campaignModule = null;
+  function withCampaignEditor(cb) {
+    if (campaignModule) { cb(campaignModule); return; }
+    import('./ui/campaignMount').then((m) => { campaignModule = m; cb(m); });
+  }
+
+  let mainMenuModule = null;
+  function withMainMenu(cb) {
+    if (mainMenuModule) { cb(mainMenuModule); return; }
+    import('./ui/menuMount').then((m) => { mainMenuModule = m; cb(m); });
+  }
+
   function renderMenu() {
     if (shellEl) shellEl.classList.toggle('main-menu-active', state.screen === 'main');
     if (shellEl) shellEl.classList.toggle('concept-screen-active', ['campaigns', 'level-editor', 'game'].includes(state.screen));
@@ -4076,6 +4388,21 @@ import { initBgm } from './bgm.js';
     menuLayer.classList.toggle('main-menu-layer', state.screen === 'main');
     menuLayer.classList.toggle('concept-screen-layer', ['campaigns', 'level-editor', 'game'].includes(state.screen));
     menuLayer.classList.toggle('level-editor-layer', false);
+    if (!(state.screen === 'main' && shouldShowStackProbe()) && stackProbeModule) {
+      stackProbeModule.unmountStackProbe();
+    }
+    if (!(state.screen === 'main' && shouldShowSkirmishNext()) && skirmishModule) {
+      skirmishModule.unmountSkirmish();
+    }
+    if (!(state.screen === 'main' && shouldShowLevelEditorNext()) && editorModule) {
+      editorModule.unmountLevelEditor();
+    }
+    if (!(state.screen === 'main' && shouldShowCampaignEditorNext()) && campaignModule) {
+      campaignModule.unmountCampaignEditor();
+    }
+    if (!(state.screen === 'main' && shouldShowMainMenuNext()) && mainMenuModule) {
+      mainMenuModule.unmountMainMenu();
+    }
     if (state.screen === 'level-editor') {
       menuLayer.hidden = false;
       menuLayer.innerHTML = renderArtScreen('level-editor');
@@ -4088,7 +4415,17 @@ import { initBgm } from './bgm.js';
     }
     menuLayer.hidden = false;
     if (state.screen === 'main') {
-      if (shouldShowMainConcept()) {
+      if (shouldShowStackProbe()) {
+        withStackProbe((m) => { if (shouldShowStackProbe()) m.mountStackProbe(menuLayer); });
+      } else if (shouldShowSkirmishNext()) {
+        withSkirmish((m) => { if (shouldShowSkirmishNext()) m.mountSkirmish(menuLayer); });
+      } else if (shouldShowLevelEditorNext()) {
+        withEditor((m) => { if (shouldShowLevelEditorNext()) m.mountLevelEditor(menuLayer); });
+      } else if (shouldShowCampaignEditorNext()) {
+        withCampaignEditor((m) => { if (shouldShowCampaignEditorNext()) m.mountCampaignEditor(menuLayer); });
+      } else if (shouldShowMainMenuNext()) {
+        withMainMenu((m) => { if (shouldShowMainMenuNext()) m.mountMainMenu(menuLayer); });
+      } else if (shouldShowMainConcept()) {
         menuLayer.innerHTML = renderArtScreen('main');
       } else if (shouldShowMainAssets()) {
         menuLayer.innerHTML = renderMainAssetReview();
@@ -4100,6 +4437,10 @@ import { initBgm } from './bgm.js';
         menuLayer.innerHTML = renderAssetCatalog();
       } else if (shouldShowMainSpecimen()) {
         menuLayer.innerHTML = renderSpecimenCapture();
+      } else if (shouldShowWidgets()) {
+        menuLayer.innerHTML = renderWidgets();
+      } else if (shouldShowGlossary()) {
+        menuLayer.innerHTML = renderGlossary();
       } else if (shouldShowMainDesignIndex()) {
         menuLayer.innerHTML = renderDesignIndex();
       } else {
@@ -4486,17 +4827,33 @@ import { initBgm } from './bgm.js';
   }
 
   function handleMenuClick(event) {
-    const treeLaunch = event.target.closest('[data-tree-launch]');
-    if (treeLaunch) {
-      event.preventDefault();
-      event.stopPropagation();
-      const href = treeLaunch.getAttribute('href');
-      if (href && href !== '#') window.location.href = href;
-      return;
+    // In-app design navigation stays client-side — no full page reload (which
+    // reboots the SPA and flashes the game screen). Modified clicks / new-tab
+    // intents fall through to the browser.
+    const link = event.target.closest('a[href]');
+    if (link && event.button === 0 && !event.metaKey && !event.ctrlKey
+        && !event.shiftKey && !event.altKey && link.target !== '_blank') {
+      const href = link.getAttribute('href');
+      if (href && href.startsWith('/design')) {
+        event.preventDefault();
+        navigateTo(href);
+        return;
+      }
     }
     const button = event.target.closest('button');
     if (!button) return;
     if (button.dataset.action === 'noop') return;
+    if (button.dataset.action === 'demo-toggle') {
+      // Catalog specimen: demonstrate the widget's press state in place — swap the
+      // 9-slice art between normal/pressed. No game navigation.
+      const pressed = button.getAttribute('aria-pressed') !== 'true';
+      button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      const nineSlice = assetById('button-9slice.main-menu');
+      const sd = nineSlice && (nineSlice.states || {})[pressed ? 'pressed' : 'normal'];
+      const slice = button.querySelector('.mode-button-9slice');
+      if (nineSlice && sd && slice) slice.setAttribute('style', frameStyleForAsset(nineSlice, sd.rect));
+      return;
+    }
     if (button.dataset.action === 'open-reference-crop-picker') {
       const key = button.dataset.cropKey;
       if (MAIN_MENU_REFERENCE_CROP_DEFAULTS[key]) {
@@ -4549,7 +4906,10 @@ import { initBgm } from './bgm.js';
       return;
     }
     if (button.dataset.action === 'expand-prototype-tree' || button.dataset.action === 'collapse-prototype-tree') {
-      const panel = button.closest('.prototype-tree-panel');
+      // The +/- now live in .catalog-rail (a sibling of the panel); fall back to
+      // the enclosing panel for the other prototype pages that keep them inside.
+      const rail = button.closest('.catalog-rail');
+      const panel = (rail && rail.querySelector('.prototype-tree-panel')) || button.closest('.prototype-tree-panel');
       if (panel) {
         const open = button.dataset.action === 'expand-prototype-tree';
         panel.querySelectorAll('details.prototype-tree-branch').forEach((branch) => {
@@ -4768,6 +5128,11 @@ import { initBgm } from './bgm.js';
 
   menuLayer.addEventListener('click', handleMenuClick);
   levelEditorPanel.addEventListener('click', handleMenuClick);
+  // Back/forward should re-render in place too, matching client-side navigation.
+  window.addEventListener('popstate', () => {
+    applyInitialRoute();
+    render();
+  });
   menuLayer.addEventListener('input', handleMenuInput);
   menuLayer.addEventListener('change', handleMenuInput);
   levelEditorPanel.addEventListener('input', handleMenuInput);

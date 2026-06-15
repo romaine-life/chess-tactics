@@ -10,6 +10,10 @@ const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const hotBackendDir = process.env.HOT_BACKEND_DIR || '';
 const designPortfolioStorePath = process.env.DESIGN_PORTFOLIO_STORE_PATH
   || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-design-portfolios.json');
+const levelStorePath = process.env.LEVEL_STORE_PATH
+  || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-levels.json');
+const campaignWorkspaceStorePath = process.env.CAMPAIGN_WORKSPACE_STORE_PATH
+  || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-campaign-workspace.json');
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 const lobbies = new Map();
@@ -1000,6 +1004,126 @@ app.post('/api/auth/sign-out', async (req, res) => {
   res.status(204).end();
 });
 
+// --- New-format level persistence (Phase 4) --------------------------------
+// Durable document store for the new Level JSON schema. File-backed today
+// (mirrors the design-portfolio store); the read/write seam here is the single
+// place to swap to Postgres JSONB (relational metadata + body column) later.
+const LEVEL_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/;
+function levelStoreId(raw) {
+  const id = String(raw || '').trim();
+  return LEVEL_ID_PATTERN.test(id) ? id : '';
+}
+function readLevelStore() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(levelStorePath, 'utf8'));
+    if (parsed && typeof parsed === 'object' && parsed.levels && typeof parsed.levels === 'object') return parsed;
+  } catch (error) { /* missing or corrupt -> start fresh */ }
+  return { store_schema_version: 1, levels: {} };
+}
+function writeLevelStore(store) {
+  fs.mkdirSync(path.dirname(levelStorePath), { recursive: true });
+  fs.writeFileSync(levelStorePath, JSON.stringify(store), 'utf8');
+}
+function isLevelBody(body) {
+  return Boolean(
+    body && typeof body === 'object' && body.board && typeof body.board.cols === 'number'
+    && typeof body.board.rows === 'number' && body.layers && typeof body.layers === 'object',
+  );
+}
+
+app.get('/api/levels', (_req, res) => {
+  try {
+    const store = readLevelStore();
+    const levels = Object.values(store.levels).map((doc) => ({
+      id: doc.id,
+      name: doc.body && doc.body.name,
+      cols: doc.body && doc.body.board && doc.body.board.cols,
+      rows: doc.body && doc.body.board && doc.body.board.rows,
+      updated_at: doc.updated_at,
+    }));
+    res.status(200).json({ levels });
+  } catch (error) {
+    console.error('level list failed:', error);
+    res.status(503).json({ error: 'level_store_unavailable' });
+  }
+});
+
+app.get('/api/levels/:id', (req, res) => {
+  const id = levelStoreId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_level_id' }); return; }
+  try {
+    const doc = readLevelStore().levels[id];
+    if (!doc) { res.status(404).json({ error: 'level_not_found' }); return; }
+    res.status(200).json({ level: doc.body, revision: doc.revision, updated_at: doc.updated_at });
+  } catch (error) {
+    console.error('level read failed:', error);
+    res.status(503).json({ error: 'level_store_unavailable' });
+  }
+});
+
+app.put('/api/levels/:id', (req, res) => {
+  const id = levelStoreId(req.params.id);
+  if (!id) { res.status(400).json({ error: 'invalid_level_id' }); return; }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!isLevelBody(raw.level)) { res.status(400).json({ error: 'invalid_level_body' }); return; }
+  try {
+    const store = readLevelStore();
+    const existing = store.levels[id] || {};
+    const now = new Date().toISOString();
+    store.levels[id] = {
+      id,
+      body: { ...raw.level, id },
+      revision: (Number.isInteger(existing.revision) ? existing.revision : 0) + 1,
+      created_at: existing.created_at || now,
+      updated_at: now,
+    };
+    writeLevelStore(store);
+    res.status(200).json({ ok: true, id, revision: store.levels[id].revision, updated_at: now });
+  } catch (error) {
+    console.error('level write failed:', error);
+    res.status(503).json({ error: 'level_store_unavailable' });
+  }
+});
+
+// Campaign-editor workspace persistence (Phase 4 cont.): the whole campaign +
+// level set as one document. File-backed; same swap-to-DB seam as levels.
+function readCampaignWorkspace() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(campaignWorkspaceStorePath, 'utf8'));
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.campaigns) && parsed.levels && typeof parsed.levels === 'object') return parsed;
+  } catch (error) { /* missing or corrupt -> empty workspace */ }
+  return { campaigns: [], levels: {} };
+}
+function writeCampaignWorkspace(ws) {
+  fs.mkdirSync(path.dirname(campaignWorkspaceStorePath), { recursive: true });
+  fs.writeFileSync(campaignWorkspaceStorePath, JSON.stringify(ws), 'utf8');
+}
+
+app.get('/api/campaign-workspace', (_req, res) => {
+  try {
+    res.status(200).json(readCampaignWorkspace());
+  } catch (error) {
+    console.error('campaign workspace read failed:', error);
+    res.status(503).json({ error: 'workspace_unavailable' });
+  }
+});
+
+app.put('/api/campaign-workspace', (req, res) => {
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!Array.isArray(raw.campaigns) || !raw.levels || typeof raw.levels !== 'object') {
+    res.status(400).json({ error: 'invalid_workspace' });
+    return;
+  }
+  try {
+    const ws = { campaigns: raw.campaigns, levels: raw.levels, updated_at: new Date().toISOString() };
+    writeCampaignWorkspace(ws);
+    res.status(200).json({ ok: true, campaigns: ws.campaigns.length, updated_at: ws.updated_at });
+  } catch (error) {
+    console.error('campaign workspace write failed:', error);
+    res.status(503).json({ error: 'workspace_unavailable' });
+  }
+});
+
 app.use((req, res, next) => {
   if (Object.hasOwn(req.query || {}, 'screen')) {
     res.status(404).send('not found');
@@ -1019,8 +1143,18 @@ app.use((req, res, next) => {
 });
 app.use(express.static(frontendDir));
 
+// SPA fallback: serve index.html for client routes. Only 404 for genuine
+// static-asset extensions (a missing .png/.js/etc.) — NOT for app routes whose
+// last path segment merely contains dots, e.g.
+// /design/catalog/main-menu-buttons/button-9slice.main-menu.
+const STATIC_ASSET_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.svg', '.ico',
+  '.css', '.js', '.mjs', '.map', '.json', '.wasm', '.txt', '.xml',
+  '.woff', '.woff2', '.ttf', '.eot', '.webmanifest',
+  '.mp3', '.wav', '.ogg', '.mp4', '.webm',
+]);
 app.use((req, res) => {
-  if (path.extname(req.path)) {
+  if (STATIC_ASSET_EXTENSIONS.has(path.extname(req.path).toLowerCase())) {
     res.status(404).send('not found');
     return;
   }
