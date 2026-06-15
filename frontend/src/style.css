@@ -1631,6 +1631,17 @@ h1 {
   --ds-reject: #948C7E;
   --ds-select: rgba(37, 199, 255, .08);
   --ds-select-line: rgba(37, 199, 255, .38);
+  /* board palette — tuned to the Track 5 isometric sprite atlas
+     (frontend/scripts/generate-sprites.mjs); single source for board-themed UI */
+  --ds-board-bg: #0d1720;
+  --ds-board-grass: #4a8f57;
+  --ds-board-water: #2f6fae;
+  --ds-board-stone: #7b7f86;
+  --ds-board-road: #b09668;
+  --ds-board-bridge: #86643c;
+  --ds-board-cliff: #4a5058;
+  --ds-board-player: #3f7fd6;
+  --ds-board-enemy: #cb4a3c;
   /* type */
   --ds-font-serif: "Newsreader", Georgia, "Times New Roman", serif;
   --ds-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;

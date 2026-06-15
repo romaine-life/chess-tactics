@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js';
 import { useEditor } from '../editor/store';
 import { DEFAULT_ISO, depthKey, screenToTile, tileToScreen, type IsoConfig } from './iso';
+import { loadSpriteAtlas, type SpriteAtlas } from './sprites';
 
 const MARGIN = 44;
 const TERRAIN: Record<string, number> = {
@@ -31,6 +32,7 @@ export function EditorBoard() {
     const app = new Application();
     let cancelled = false;
     let unsub = () => {};
+    let atlas: SpriteAtlas | null = null;
     let painting = false;
     let lastKey = '';
 
@@ -40,17 +42,31 @@ export function EditorBoard() {
       const { level, hover } = useEditor.getState();
       app.stage.removeChildren();
       const cells = level.layers.terrain.slice().sort((a, b) => a.x + a.y - (b.x + b.y));
-      const g = new Graphics();
+      // Elevation skirts stay as Graphics; the diamond top face becomes a tile
+      // sprite when the atlas loaded. Drawn back-to-front per cell so a raised
+      // tile's walls never paint over a tile behind it.
       for (const c of cells) {
         const s = tileToScreen(c.x, c.y, c.elevation, cfg);
         if (c.elevation > 0) {
           const lift = c.elevation * DEFAULT_ISO.elevationStep;
-          g.poly([s.x - hw, s.y, s.x, s.y + hh, s.x, s.y + hh + lift, s.x - hw, s.y + lift]).fill({ color: 0x20303a });
-          g.poly([s.x + hw, s.y, s.x, s.y + hh, s.x, s.y + hh + lift, s.x + hw, s.y + lift]).fill({ color: 0x16242e });
+          const w = new Graphics();
+          w.poly([s.x - hw, s.y, s.x, s.y + hh, s.x, s.y + hh + lift, s.x - hw, s.y + lift]).fill({ color: 0x20303a });
+          w.poly([s.x + hw, s.y, s.x, s.y + hh, s.x, s.y + hh + lift, s.x + hw, s.y + lift]).fill({ color: 0x16242e });
+          app.stage.addChild(w);
         }
-        diamond(g, s.x, s.y).fill({ color: TERRAIN[c.terrain] ?? 0x356a42 }).stroke({ color: 0x111a1f, width: 1 });
+        const tex = atlas?.tile(c.terrain) ?? null;
+        if (tex) {
+          const spr = new Sprite(tex);
+          spr.anchor.set(0.5, 0.5);
+          spr.x = s.x;
+          spr.y = s.y;
+          app.stage.addChild(spr);
+        } else {
+          const g = new Graphics();
+          diamond(g, s.x, s.y).fill({ color: TERRAIN[c.terrain] ?? 0x356a42 }).stroke({ color: 0x111a1f, width: 1 });
+          app.stage.addChild(g);
+        }
       }
-      app.stage.addChild(g);
 
       if (hover) {
         const c = cells.find((t) => t.x === hover.x && t.y === hover.y);
@@ -67,14 +83,21 @@ export function EditorBoard() {
         const cont = new Container();
         cont.x = s.x;
         cont.y = s.y;
-        const base = new Graphics();
-        base.ellipse(0, 3, 14, 6).fill({ color: 0x0a131b, alpha: 0.5 });
-        base.circle(0, -9, 13).fill({ color: SIDE_COLOR[u.side] ?? 0x888888 }).stroke({ color: 0xf3efe4, width: 2 });
-        cont.addChild(base);
-        const label = new Text({ text: MARK[u.type] ?? '?', style: { fill: 0xffffff, fontFamily: 'monospace', fontSize: 13, fontWeight: 'bold' } });
-        label.anchor.set(0.5);
-        label.y = -9;
-        cont.addChild(label);
+        const tex = atlas?.piece(u.side, u.type) ?? null;
+        if (tex) {
+          const spr = new Sprite(tex);
+          spr.anchor.set(atlas!.pieceAnchor.x, atlas!.pieceAnchor.y);
+          cont.addChild(spr);
+        } else {
+          const base = new Graphics();
+          base.ellipse(0, 3, 14, 6).fill({ color: 0x0a131b, alpha: 0.5 });
+          base.circle(0, -9, 13).fill({ color: SIDE_COLOR[u.side] ?? 0x888888 }).stroke({ color: 0xf3efe4, width: 2 });
+          cont.addChild(base);
+          const label = new Text({ text: MARK[u.type] ?? '?', style: { fill: 0xffffff, fontFamily: 'monospace', fontSize: 13, fontWeight: 'bold' } });
+          label.anchor.set(0.5);
+          label.y = -9;
+          cont.addChild(label);
+        }
         app.stage.addChild(cont);
       }
     };
@@ -90,6 +113,8 @@ export function EditorBoard() {
       await app.init({ width, height, background: '#0d1720', antialias: false });
       if (cancelled) { app.destroy(true); return; }
       host.appendChild(app.canvas);
+      atlas = await loadSpriteAtlas(); // null on failure -> Graphics fallback
+      if (cancelled) { app.destroy(true); return; }
       app.stage.eventMode = 'static';
       app.stage.hitArea = new Rectangle(0, 0, width, height);
       app.stage.on('pointerdown', (e) => {
