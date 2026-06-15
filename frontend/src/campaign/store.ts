@@ -18,6 +18,7 @@ export interface CampaignState {
   selectedCampaignId: string | null;
   selectedLevelId: string | null;
   counter: number;
+  hydrate: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
   newCampaign: () => void;
   deleteCampaign: (id: string) => void;
   renameCampaign: (id: string, name: string) => void;
@@ -39,6 +40,21 @@ export const useCampaigns = create<CampaignState>((set) => ({
   selectedCampaignId: null,
   selectedLevelId: null,
   counter: 1,
+
+  hydrate: (ws) => set(() => {
+    let max = 0;
+    for (const id of [...ws.campaigns.map((c) => c.id), ...Object.keys(ws.levels)]) {
+      const n = parseInt(String(id).replace(/[^0-9]/g, ''), 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    return {
+      campaigns: ws.campaigns,
+      levels: ws.levels,
+      counter: max + 1,
+      selectedCampaignId: ws.campaigns[0] ? ws.campaigns[0].id : null,
+      selectedLevelId: null,
+    };
+  }),
 
   newCampaign: () => set((s) => {
     const n = s.counter;

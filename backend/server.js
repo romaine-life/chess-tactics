@@ -12,6 +12,8 @@ const designPortfolioStorePath = process.env.DESIGN_PORTFOLIO_STORE_PATH
   || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-design-portfolios.json');
 const levelStorePath = process.env.LEVEL_STORE_PATH
   || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-levels.json');
+const campaignWorkspaceStorePath = process.env.CAMPAIGN_WORKSPACE_STORE_PATH
+  || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-campaign-workspace.json');
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 const lobbies = new Map();
@@ -1029,6 +1031,45 @@ app.put('/api/levels/:id', (req, res) => {
   } catch (error) {
     console.error('level write failed:', error);
     res.status(503).json({ error: 'level_store_unavailable' });
+  }
+});
+
+// Campaign-editor workspace persistence (Phase 4 cont.): the whole campaign +
+// level set as one document. File-backed; same swap-to-DB seam as levels.
+function readCampaignWorkspace() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(campaignWorkspaceStorePath, 'utf8'));
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.campaigns) && parsed.levels && typeof parsed.levels === 'object') return parsed;
+  } catch (error) { /* missing or corrupt -> empty workspace */ }
+  return { campaigns: [], levels: {} };
+}
+function writeCampaignWorkspace(ws) {
+  fs.mkdirSync(path.dirname(campaignWorkspaceStorePath), { recursive: true });
+  fs.writeFileSync(campaignWorkspaceStorePath, JSON.stringify(ws), 'utf8');
+}
+
+app.get('/api/campaign-workspace', (_req, res) => {
+  try {
+    res.status(200).json(readCampaignWorkspace());
+  } catch (error) {
+    console.error('campaign workspace read failed:', error);
+    res.status(503).json({ error: 'workspace_unavailable' });
+  }
+});
+
+app.put('/api/campaign-workspace', (req, res) => {
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!Array.isArray(raw.campaigns) || !raw.levels || typeof raw.levels !== 'object') {
+    res.status(400).json({ error: 'invalid_workspace' });
+    return;
+  }
+  try {
+    const ws = { campaigns: raw.campaigns, levels: raw.levels, updated_at: new Date().toISOString() };
+    writeCampaignWorkspace(ws);
+    res.status(200).json({ ok: true, campaigns: ws.campaigns.length, updated_at: ws.updated_at });
+  } catch (error) {
+    console.error('campaign workspace write failed:', error);
+    res.status(503).json({ error: 'workspace_unavailable' });
   }
 });
 

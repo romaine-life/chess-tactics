@@ -1,6 +1,7 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useCampaigns } from '../campaign/store';
 import type { ObjectiveType } from '../core/level';
+import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 
 const OBJECTIVES: ObjectiveType[] = ['capture-all', 'capture-king', 'survive', 'reach'];
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
@@ -18,6 +19,20 @@ export function CampaignEditor() {
   const levels = useCampaigns((s) => s.levels);
   const selectedCampaignId = useCampaigns((s) => s.selectedCampaignId);
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    loadWorkspace().then((ws) => { if (ws.campaigns.length) useCampaigns.getState().hydrate(ws); }).catch(() => {});
+  }, []);
+
+  const saveWorkspaceNow = async () => {
+    try {
+      await saveWorkspace({ campaigns: useCampaigns.getState().campaigns, levels: useCampaigns.getState().levels });
+      setStatus('Saved to server');
+    } catch (e) {
+      setStatus(`Save failed: ${(e as Error).message}`);
+    }
+  };
 
   const camp = campaigns.find((c) => c.id === selectedCampaignId) ?? null;
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
@@ -30,8 +45,12 @@ export function CampaignEditor() {
       <div style={{ ...panel, width: 230 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={eyebrow}>Campaigns</span>
-          <button type="button" data-testid="new-campaign" style={btn} onClick={() => useCampaigns.getState().newCampaign()}>+ New</button>
+          <span style={{ display: 'flex', gap: 6 }}>
+            <button type="button" data-testid="save-workspace" style={btn} onClick={saveWorkspaceNow}>Save</button>
+            <button type="button" data-testid="new-campaign" style={btn} onClick={() => useCampaigns.getState().newCampaign()}>+ New</button>
+          </span>
         </div>
+        {status ? <div data-testid="workspace-status" style={{ fontSize: 'var(--ds-text-xs)', color: 'var(--ds-ink-3)', marginTop: 6 }}>{status}</div> : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
           {campaigns.length === 0 && <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>No campaigns yet.</span>}
           {campaigns.map((c) => (
