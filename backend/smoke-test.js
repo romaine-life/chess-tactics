@@ -1,5 +1,5 @@
 const http = require('http');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -74,6 +74,60 @@ const mockBgm = http.createServer((req, res) => {
   res.end('not found');
 });
 
+// The persistence endpoints are Postgres-backed, so the smoke-test needs a
+// database. Prefer an externally supplied DATABASE_URL; otherwise self-provision
+// a throwaway local Postgres from system binaries (present on GitHub-hosted CI
+// runners). Hosts without Postgres binaries (e.g. the musl session pod) can't
+// run this test directly — set DATABASE_URL, or rely on the Glimmung test slot,
+// which exercises the same endpoints end to end against a real Postgres.
+let embeddedPg = null;
+
+function findPgBinary(name) {
+  const onPath = spawnSync('sh', ['-c', `command -v ${name} 2>/dev/null`], { encoding: 'utf8' });
+  if (onPath.status === 0 && onPath.stdout.trim()) return onPath.stdout.trim();
+  const located = spawnSync('sh', ['-c',
+    `ls -d /usr/lib/postgresql/*/bin/${name} /usr/local/opt/postgresql*/bin/${name} /opt/homebrew/opt/postgresql*/bin/${name} 2>/dev/null | sort -V | tail -1`,
+  ], { encoding: 'utf8' });
+  return located.status === 0 && located.stdout.trim() ? located.stdout.trim() : null;
+}
+
+function startEmbeddedPostgres() {
+  const initdb = findPgBinary('initdb');
+  const pgCtl = findPgBinary('pg_ctl');
+  const createdb = findPgBinary('createdb');
+  if (!initdb || !pgCtl || !createdb) {
+    throw new Error('smoke-test needs Postgres: set DATABASE_URL, or install Postgres so it can self-provision (initdb/pg_ctl/createdb not found).');
+  }
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-pg-'));
+  const pgPort = 55432;
+  const init = spawnSync(initdb, ['-D', dataDir, '-U', 'postgres', '--auth=trust', '-E', 'UTF8'], { encoding: 'utf8' });
+  if (init.status !== 0) throw new Error(`initdb failed: ${init.stderr || init.stdout}`);
+  const logFile = path.join(dataDir, 'pg.log');
+  const start = spawnSync(pgCtl, ['-D', dataDir, '-w', '-l', logFile, '-o', `-p ${pgPort} -h 127.0.0.1 -k ${dataDir}`, 'start'], { encoding: 'utf8' });
+  if (start.status !== 0) {
+    const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+    throw new Error(`pg_ctl start failed: ${start.stderr || start.stdout}\n${log}`);
+  }
+  embeddedPg = { dataDir, pgCtl };
+  const created = spawnSync(createdb, ['-h', '127.0.0.1', '-p', String(pgPort), '-U', 'postgres', 'chess_tactics'], { encoding: 'utf8' });
+  if (created.status !== 0) throw new Error(`createdb failed: ${created.stderr || created.stdout}`);
+  process.env.DATABASE_URL = `postgres://postgres@127.0.0.1:${pgPort}/chess_tactics`;
+}
+
+function stopEmbeddedPostgres() {
+  if (!embeddedPg) return;
+  const { dataDir, pgCtl } = embeddedPg;
+  embeddedPg = null;
+  spawnSync(pgCtl, ['-D', dataDir, '-m', 'immediate', 'stop'], { encoding: 'utf8' });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+}
+
+process.on('exit', stopEmbeddedPostgres);
+
+if (!process.env.DATABASE_URL) {
+  startEmbeddedPostgres();
+}
+
 const child = spawn(process.execPath, ['supervisor.js'], {
   cwd: __dirname,
   env: {
@@ -84,7 +138,8 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     BGM_BASE_URL: `http://127.0.0.1:${bgmPort}`,
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
-    DESIGN_PORTFOLIO_STORE_PATH: path.join(hotRoot, 'design-portfolios.json'),
+    // DATABASE_URL is set above (external or self-provisioned) and inherited
+    // here via ...process.env.
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -117,6 +172,21 @@ function request(method, path, headers = {}, body = null) {
 
 function get(path, headers) {
   return request('GET', path, headers);
+}
+
+// Reset the Postgres-backed document tables so re-runs (and a freshly migrated
+// CI database) start from a known-empty state. Tables exist by now because the
+// server applies migrations before it begins listening (and /health gates on
+// that), so waitForServer() has already returned by the time this runs.
+async function resetDb() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('TRUNCATE levels, campaign_workspaces, design_portfolios');
+  } finally {
+    await client.end();
+  }
 }
 
 async function waitForServer() {
@@ -156,6 +226,7 @@ async function main() {
   if (!fs.existsSync(path.join(hotBackendDir, 'server.js'))) {
     throw new Error('Supervisor did not initialize the hot backend entrypoint');
   }
+  await resetDb();
 
   const root = await get('/');
   if (root.statusCode !== 200 || !root.body.includes('Chess Tactics')) {
@@ -352,6 +423,143 @@ async function main() {
     testSlotPortfolioWriteBody.portfolio.updated_by !== 'test-slot@chess-tactics.local'
   ) {
     throw new Error(`Test-slot design portfolio write should not require sign-in: ${testSlotPortfolioWrite.statusCode} ${testSlotPortfolioWrite.body}`);
+  }
+
+  // --- New-format level persistence (/api/levels): per-user, DB-backed -------
+  const levelBody = { name: 'Smoke Level', board: { cols: 8, rows: 12 }, layers: { terrain: [], units: [] } };
+
+  const anonymousLevels = await get('/api/levels');
+  if (anonymousLevels.statusCode !== 401) {
+    throw new Error(`Anonymous level list should require sign-in: ${anonymousLevels.statusCode}`);
+  }
+
+  const invalidLevelId = await get('/api/levels/Bad%20Id', { cookie: 'better-auth.session=abc' });
+  if (invalidLevelId.statusCode !== 400) {
+    throw new Error(`Invalid level id should fail: ${invalidLevelId.statusCode} ${invalidLevelId.body}`);
+  }
+
+  const invalidLevelBody = await request(
+    'PUT', '/api/levels/smoke-1',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level: { nope: true } }),
+  );
+  if (invalidLevelBody.statusCode !== 400) {
+    throw new Error(`Invalid level body should fail: ${invalidLevelBody.statusCode} ${invalidLevelBody.body}`);
+  }
+
+  const savedLevel = await request(
+    'PUT', '/api/levels/smoke-1',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level: levelBody }),
+  );
+  const savedLevelBody = JSON.parse(savedLevel.body);
+  if (savedLevel.statusCode !== 200 || savedLevelBody.revision !== 1 || savedLevelBody.id !== 'smoke-1') {
+    throw new Error(`Unexpected level save: ${savedLevel.statusCode} ${savedLevel.body}`);
+  }
+
+  const playerLevels = await get('/api/levels', { cookie: 'better-auth.session=abc' });
+  const playerLevelsBody = JSON.parse(playerLevels.body);
+  if (
+    playerLevels.statusCode !== 200 ||
+    playerLevelsBody.levels.length !== 1 ||
+    playerLevelsBody.levels[0].id !== 'smoke-1' ||
+    playerLevelsBody.levels[0].name !== 'Smoke Level' ||
+    playerLevelsBody.levels[0].cols !== 8 ||
+    playerLevelsBody.levels[0].rows !== 12
+  ) {
+    throw new Error(`Unexpected player level list: ${playerLevels.statusCode} ${playerLevels.body}`);
+  }
+
+  const loadedLevel = await get('/api/levels/smoke-1', { cookie: 'better-auth.session=abc' });
+  const loadedLevelBody = JSON.parse(loadedLevel.body);
+  if (loadedLevel.statusCode !== 200 || loadedLevelBody.level.name !== 'Smoke Level' || loadedLevelBody.level.id !== 'smoke-1' || loadedLevelBody.revision !== 1) {
+    throw new Error(`Unexpected level load: ${loadedLevel.statusCode} ${loadedLevel.body}`);
+  }
+
+  const reSavedLevel = await request(
+    'PUT', '/api/levels/smoke-1',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ level: { ...levelBody, name: 'Smoke Level v2' } }),
+  );
+  const reSavedLevelBody = JSON.parse(reSavedLevel.body);
+  if (reSavedLevel.statusCode !== 200 || reSavedLevelBody.revision !== 2) {
+    throw new Error(`Level re-save should bump revision: ${reSavedLevel.statusCode} ${reSavedLevel.body}`);
+  }
+
+  // Per-user scoping: the rival sees none of the player's levels.
+  const rivalLevels = await get('/api/levels', { cookie: 'better-auth.session=rival' });
+  const rivalLevelsBody = JSON.parse(rivalLevels.body);
+  if (rivalLevels.statusCode !== 200 || rivalLevelsBody.levels.length !== 0) {
+    throw new Error(`Levels should be scoped to owner: ${rivalLevels.statusCode} ${rivalLevels.body}`);
+  }
+  const rivalLevelRead = await get('/api/levels/smoke-1', { cookie: 'better-auth.session=rival' });
+  if (rivalLevelRead.statusCode !== 404) {
+    throw new Error(`Rival should not read the player's level: ${rivalLevelRead.statusCode} ${rivalLevelRead.body}`);
+  }
+  // The rival can reuse the same id in their own namespace without colliding.
+  const rivalSave = await request(
+    'PUT', '/api/levels/smoke-1',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ level: { ...levelBody, name: 'Rival Level' } }),
+  );
+  const rivalSaveBody = JSON.parse(rivalSave.body);
+  if (rivalSave.statusCode !== 200 || rivalSaveBody.revision !== 1) {
+    throw new Error(`Rival's same-id level should be independent (revision 1): ${rivalSave.statusCode} ${rivalSave.body}`);
+  }
+  const playerLevelStillV2 = await get('/api/levels/smoke-1', { cookie: 'better-auth.session=abc' });
+  const playerLevelStillV2Body = JSON.parse(playerLevelStillV2.body);
+  if (playerLevelStillV2.statusCode !== 200 || playerLevelStillV2Body.revision !== 2 || playerLevelStillV2Body.level.name !== 'Smoke Level v2') {
+    throw new Error(`Rival's write must not affect the player's level: ${playerLevelStillV2.statusCode} ${playerLevelStillV2.body}`);
+  }
+
+  // --- Campaign workspace (/api/campaign-workspace): per-user, DB-backed -----
+  const anonymousWorkspace = await get('/api/campaign-workspace');
+  if (anonymousWorkspace.statusCode !== 401) {
+    throw new Error(`Anonymous workspace should require sign-in: ${anonymousWorkspace.statusCode}`);
+  }
+
+  const emptyWorkspace = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const emptyWorkspaceBody = JSON.parse(emptyWorkspace.body);
+  if (emptyWorkspace.statusCode !== 200 || emptyWorkspaceBody.campaigns.length !== 0 || Object.keys(emptyWorkspaceBody.levels).length !== 0) {
+    throw new Error(`Empty workspace should be empty: ${emptyWorkspace.statusCode} ${emptyWorkspace.body}`);
+  }
+
+  const invalidWorkspace = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ campaigns: 'nope' }),
+  );
+  if (invalidWorkspace.statusCode !== 400) {
+    throw new Error(`Invalid workspace should fail: ${invalidWorkspace.statusCode} ${invalidWorkspace.body}`);
+  }
+
+  const workspaceDoc = { campaigns: [{ id: 'c1', title: 'Smoke Campaign', levelIds: ['smoke-1'] }], levels: { 'smoke-1': levelBody } };
+  const savedWorkspace = await request(
+    'PUT', '/api/campaign-workspace',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify(workspaceDoc),
+  );
+  const savedWorkspaceBody = JSON.parse(savedWorkspace.body);
+  if (savedWorkspace.statusCode !== 200 || savedWorkspaceBody.ok !== true || savedWorkspaceBody.campaigns !== 1) {
+    throw new Error(`Unexpected workspace save: ${savedWorkspace.statusCode} ${savedWorkspace.body}`);
+  }
+
+  const loadedWorkspace = await get('/api/campaign-workspace', { cookie: 'better-auth.session=abc' });
+  const loadedWorkspaceBody = JSON.parse(loadedWorkspace.body);
+  if (
+    loadedWorkspace.statusCode !== 200 ||
+    loadedWorkspaceBody.campaigns.length !== 1 ||
+    loadedWorkspaceBody.campaigns[0].title !== 'Smoke Campaign' ||
+    !loadedWorkspaceBody.levels['smoke-1']
+  ) {
+    throw new Error(`Workspace did not persist: ${loadedWorkspace.statusCode} ${loadedWorkspace.body}`);
+  }
+
+  // Per-user scoping: the rival has their own (empty) workspace.
+  const rivalWorkspace = await get('/api/campaign-workspace', { cookie: 'better-auth.session=rival' });
+  const rivalWorkspaceBody = JSON.parse(rivalWorkspace.body);
+  if (rivalWorkspace.statusCode !== 200 || rivalWorkspaceBody.campaigns.length !== 0) {
+    throw new Error(`Workspace should be scoped to owner: ${rivalWorkspace.statusCode} ${rivalWorkspace.body}`);
   }
 
   const createdCampaign = await request(

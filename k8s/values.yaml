@@ -21,11 +21,39 @@ renderMode: normal
 testEnv:
   slotName: ""
 
-# Plain service account — chess-tactics is a static server and needs no Azure
-# access, so there is no workload-identity federation here. The backend reads
-# the public BGM index/tracks over plain HTTPS (see bgm.baseUrl), so it still
-# needs no Azure credentials.
+# Service account used by the app pod. In prod it carries an
+# azure.workload.identity/client-id annotation (serviceAccountClientId below) so
+# the backend can authenticate to Azure Database for PostgreSQL passwordless via
+# a federated token. Test slots use an ephemeral in-cluster Postgres and do not
+# federate. (The BGM index/tracks are still public-read over plain HTTPS.)
 serviceAccount: chess-tactics
+
+# Workload-identity client id of the chess-tactics-identity UAMI (tofu output
+# `app_identity_client_id`). That UAMI is the Postgres server's Entra admin. Copy
+# the value in after the first `tofu apply`; while empty the SA is left
+# un-annotated and prod persistence returns 503 until it is pinned — the game
+# itself still serves.
+serviceAccountClientId: ""
+
+# Azure Database for PostgreSQL — the durable document store (levels, campaign
+# workspaces, design portfolios). Provisioned by tofu/ (postgres.tf +
+# identity.tf). host/database/user are deterministic from tofu and pre-filled;
+# confirm against the outputs after apply:
+#   host     <- terraform output postgres_fqdn
+#   database <- terraform output postgres_database_name
+#   user     <- terraform output app_identity_name
+# None of these are secrets — auth is the workload-identity AAD token.
+postgres:
+  host: "chess-tactics-pg.postgres.database.azure.com"
+  database: "chess_tactics"
+  user: "chess-tactics-identity"
+  # Throwaway in-cluster Postgres for test slots only (password mode); never used
+  # in prod. Data lives on emptyDir and dies with the slot.
+  testSlot:
+    image: postgres:16-alpine
+    user: chess_tactics
+    password: chess_tactics
+    database: chess_tactics
 
 # Background music: public blob container base URL provisioned by tofu/
 # (storage account `chesstacticsmedia`, container `bgm`). The backend reads

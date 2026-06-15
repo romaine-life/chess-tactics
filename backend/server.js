@@ -2,18 +2,12 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
+const { Pool } = require('pg');
 
 const app = express();
 const port = process.env.PORT || 3000;
 const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'frontend', 'dist');
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
-const hotBackendDir = process.env.HOT_BACKEND_DIR || '';
-const designPortfolioStorePath = process.env.DESIGN_PORTFOLIO_STORE_PATH
-  || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-design-portfolios.json');
-const levelStorePath = process.env.LEVEL_STORE_PATH
-  || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-levels.json');
-const campaignWorkspaceStorePath = process.env.CAMPAIGN_WORKSPACE_STORE_PATH
-  || path.join(hotBackendDir || staticFrontendDir || process.env.XDG_RUNTIME_DIR || '/tmp', 'chess-tactics-campaign-workspace.json');
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 const lobbies = new Map();
@@ -32,6 +26,156 @@ const BGM_CACHE_TTL_MS = 5 * 60 * 1000;
 let bgmCache = { tracks: null, expiry: 0 };
 
 app.use(express.json({ limit: '256kb' }));
+
+// ---------------------------------------------------------------------------
+// Durable store: Azure Database for PostgreSQL (replaces the pod-ephemeral file
+// stores, which had no PVC and were wiped on every restart/rollout). Two
+// connection modes, chosen by environment:
+//   - DATABASE_URL set            -> password mode (CI Postgres service,
+//                                    ephemeral test-slot Postgres, local dev).
+//   - POSTGRES_HOST/DATABASE/USER -> Entra (AAD) workload-identity mode (prod):
+//                                    a fresh AAD access token is presented as
+//                                    the password on each new connection,
+//                                    acquired via DefaultAzureCredential from
+//                                    the projected ServiceAccount token. No app
+//                                    password is ever stored.
+// This lives inline on purpose: the supervisor hot-swaps only server.js, so the
+// DB layer must travel with it (pg + @azure/identity resolve from the baked
+// node_modules via NODE_PATH).
+// ---------------------------------------------------------------------------
+const databaseUrl = process.env.DATABASE_URL || '';
+const pgHost = process.env.POSTGRES_HOST || '';
+const pgDatabase = process.env.POSTGRES_DATABASE || '';
+const pgUser = process.env.POSTGRES_USER || '';
+const AAD_DB_TOKEN_SCOPE = 'https://ossrdbms-aad.database.windows.net/.default';
+// Fixed key so concurrent pods (a rolling update briefly runs two) serialize
+// schema migration via a Postgres session advisory lock.
+const MIGRATION_ADVISORY_LOCK_KEY = 4300193001;
+
+const MIGRATIONS = [
+  {
+    version: 1,
+    name: 'init document stores',
+    sql: `
+      CREATE TABLE IF NOT EXISTS levels (
+        owner_email text        NOT NULL,
+        id          text        NOT NULL,
+        name        text,
+        cols        integer,
+        rows        integer,
+        revision    integer     NOT NULL DEFAULT 0,
+        body        jsonb       NOT NULL,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (owner_email, id)
+      );
+      CREATE TABLE IF NOT EXISTS campaign_workspaces (
+        owner_email text        PRIMARY KEY,
+        body        jsonb       NOT NULL,
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS design_portfolios (
+        id                    text        PRIMARY KEY,
+        data                  jsonb       NOT NULL,
+        client_schema_version integer,
+        metadata              jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        revision              integer     NOT NULL DEFAULT 0,
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
+    `,
+  },
+];
+
+let pool = null;
+let dbReady = false;
+let migrationPromise = null;
+
+function buildPool() {
+  if (databaseUrl) {
+    return new Pool({
+      connectionString: databaseUrl,
+      max: 8,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+  }
+  if (pgHost && pgDatabase && pgUser) {
+    // Lazy require so password-mode environments don't need @azure/identity.
+    const { DefaultAzureCredential } = require('@azure/identity');
+    const credential = new DefaultAzureCredential();
+    return new Pool({
+      host: pgHost,
+      port: 5432,
+      database: pgDatabase,
+      user: pgUser,
+      // pg evaluates this per new connection; @azure/identity caches the token
+      // and refreshes it before the ~1h expiry.
+      password: async () => {
+        const token = await credential.getToken(AAD_DB_TOKEN_SCOPE);
+        if (!token || !token.token) throw new Error('failed to acquire AAD token for Postgres');
+        return token.token;
+      },
+      // sslmode=require equivalent: encrypt in transit. The server is reachable
+      // only through the Azure-internal firewall rule, never the public internet.
+      ssl: { rejectUnauthorized: false },
+      max: 8,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      // Recycle connections before the AAD token TTL so reconnects fetch a fresh
+      // token.
+      maxLifetimeSeconds: 50 * 60,
+    });
+  }
+  return null;
+}
+
+async function runMigrations() {
+  const client = await pool.connect();
+  try {
+    await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+    try {
+      await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+      const { rows } = await client.query('SELECT version FROM schema_migrations');
+      const applied = new Set(rows.map((row) => row.version));
+      for (const migration of MIGRATIONS) {
+        if (applied.has(migration.version)) continue;
+        await client.query('BEGIN');
+        try {
+          await client.query(migration.sql);
+          await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [migration.version]);
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        }
+      }
+    } finally {
+      await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]).catch(() => {});
+    }
+  } finally {
+    client.release();
+  }
+}
+
+// Idempotent, self-healing readiness: migrations run once; a failed attempt is
+// retried on the next request rather than wedging persistence until a redeploy.
+async function ensureDbReady() {
+  if (!pool) throw new Error('database_not_configured');
+  if (dbReady) return;
+  if (!migrationPromise) {
+    migrationPromise = runMigrations()
+      .then(() => { dbReady = true; })
+      .catch((error) => { migrationPromise = null; throw error; });
+  }
+  await migrationPromise;
+}
+
+function dbUnavailable(res, message, error, code) {
+  console.error(`${message}:`, error);
+  res.status(503).json({ error: code });
+}
 
 const LEVEL_ROLES = new Set(['player', 'enemy', 'terrain']);
 const LEVEL_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen']);
@@ -121,33 +265,31 @@ function designPortfolioId(raw) {
   return DESIGN_PORTFOLIO_ID_PATTERN.test(id) ? id : null;
 }
 
-function emptyDesignPortfolioStore() {
-  return {
-    store_schema_version: DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION,
-    documents: {},
-  };
+async function dbGetDesignPortfolio(id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT data, client_schema_version, metadata, revision, created_at, updated_at, updated_by FROM design_portfolios WHERE id = $1',
+    [id],
+  );
+  return rows[0] || null;
 }
 
-function readDesignPortfolioStore() {
-  try {
-    const raw = fs.readFileSync(designPortfolioStorePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (!isObjectRecord(parsed) || !isObjectRecord(parsed.documents)) return emptyDesignPortfolioStore();
-    return {
-      store_schema_version: parsed.store_schema_version || DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION,
-      documents: parsed.documents,
-    };
-  } catch (error) {
-    if (error.code === 'ENOENT') return emptyDesignPortfolioStore();
-    throw error;
-  }
-}
-
-function writeDesignPortfolioStore(store) {
-  fs.mkdirSync(path.dirname(designPortfolioStorePath), { recursive: true });
-  const tempPath = `${designPortfolioStorePath}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tempPath, `${JSON.stringify(store, null, 2)}\n`);
-  fs.renameSync(tempPath, designPortfolioStorePath);
+async function dbUpsertDesignPortfolio(id, input) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO design_portfolios (id, data, client_schema_version, metadata, revision, updated_by)
+       VALUES ($1, $2::jsonb, $3, $4::jsonb, 1, $5)
+     ON CONFLICT (id) DO UPDATE SET
+       data = EXCLUDED.data,
+       client_schema_version = EXCLUDED.client_schema_version,
+       metadata = EXCLUDED.metadata,
+       revision = design_portfolios.revision + 1,
+       updated_at = now(),
+       updated_by = EXCLUDED.updated_by
+     RETURNING data, client_schema_version, metadata, revision, created_at, updated_at, updated_by`,
+    [id, JSON.stringify(input.data), input.client_schema_version, JSON.stringify(input.metadata || {}), input.updated_by],
+  );
+  return rows[0];
 }
 
 function publicDesignPortfolioDocument(id, document) {
@@ -905,21 +1047,20 @@ app.delete('/api/campaigns/:id/levels/:levelId', async (req, res) => {
   res.status(200).json({ campaign: campaignSummary(campaign) });
 });
 
-app.get('/api/design-portfolios/:id', (req, res) => {
+app.get('/api/design-portfolios/:id', async (req, res) => {
   const id = designPortfolioId(req.params.id);
   if (!id) {
     res.status(400).json({ error: 'invalid_design_portfolio_id' });
     return;
   }
   try {
-    const store = readDesignPortfolioStore();
+    const document = await dbGetDesignPortfolio(id);
     res.status(200).json({
-      portfolio: publicDesignPortfolioDocument(id, store.documents[id]),
-      store_schema_version: store.store_schema_version,
+      portfolio: publicDesignPortfolioDocument(id, document),
+      store_schema_version: DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION,
     });
   } catch (error) {
-    console.error('design portfolio read failed:', error);
-    res.status(503).json({ error: 'design_portfolio_store_unavailable' });
+    dbUnavailable(res, 'design portfolio read failed', error, 'design_portfolio_store_unavailable');
   }
 });
 
@@ -938,29 +1079,18 @@ app.put('/api/design-portfolios/:id', async (req, res) => {
   }
 
   try {
-    const store = readDesignPortfolioStore();
-    const existing = isObjectRecord(store.documents[id]) ? store.documents[id] : {};
-    const now = new Date().toISOString();
-    const document = {
-      id,
+    const document = await dbUpsertDesignPortfolio(id, {
       data: raw.data,
       client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
       metadata: isObjectRecord(raw.metadata) ? raw.metadata : {},
-      revision: (Number.isInteger(existing.revision) ? existing.revision : 0) + 1,
-      created_at: existing.created_at || now,
-      updated_at: now,
       updated_by: user.email,
-    };
-    store.store_schema_version = DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION;
-    store.documents[id] = document;
-    writeDesignPortfolioStore(store);
+    });
     res.status(200).json({
       portfolio: publicDesignPortfolioDocument(id, document),
-      store_schema_version: store.store_schema_version,
+      store_schema_version: DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION,
     });
   } catch (error) {
-    console.error('design portfolio write failed:', error);
-    res.status(503).json({ error: 'design_portfolio_store_unavailable' });
+    dbUnavailable(res, 'design portfolio write failed', error, 'design_portfolio_store_unavailable');
   }
 });
 
@@ -1005,24 +1135,13 @@ app.post('/api/auth/sign-out', async (req, res) => {
 });
 
 // --- New-format level persistence (Phase 4) --------------------------------
-// Durable document store for the new Level JSON schema. File-backed today
-// (mirrors the design-portfolio store); the read/write seam here is the single
-// place to swap to Postgres JSONB (relational metadata + body column) later.
+// Durable, per-user document store for the new Level JSON schema, backed by the
+// Postgres `levels` table (relational metadata columns + a jsonb body). Scoped
+// to the signed-in owner: each user has their own level id namespace.
 const LEVEL_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/;
 function levelStoreId(raw) {
   const id = String(raw || '').trim();
   return LEVEL_ID_PATTERN.test(id) ? id : '';
-}
-function readLevelStore() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(levelStorePath, 'utf8'));
-    if (parsed && typeof parsed === 'object' && parsed.levels && typeof parsed.levels === 'object') return parsed;
-  } catch (error) { /* missing or corrupt -> start fresh */ }
-  return { store_schema_version: 1, levels: {} };
-}
-function writeLevelStore(store) {
-  fs.mkdirSync(path.dirname(levelStorePath), { recursive: true });
-  fs.writeFileSync(levelStorePath, JSON.stringify(store), 'utf8');
 }
 function isLevelBody(body) {
   return Boolean(
@@ -1031,96 +1150,137 @@ function isLevelBody(body) {
   );
 }
 
-app.get('/api/levels', (_req, res) => {
+async function dbListLevels(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, name, cols, rows, updated_at FROM levels WHERE owner_email = $1 ORDER BY updated_at DESC',
+    [ownerEmail],
+  );
+  return rows;
+}
+
+async function dbGetLevel(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT body, revision, updated_at FROM levels WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rows[0] || null;
+}
+
+async function dbUpsertLevel(ownerEmail, id, body) {
+  await ensureDbReady();
+  const board = body.board || {};
+  const { rows } = await pool.query(
+    `INSERT INTO levels (owner_email, id, name, cols, rows, revision, body)
+       VALUES ($1, $2, $3, $4, $5, 1, $6::jsonb)
+     ON CONFLICT (owner_email, id) DO UPDATE SET
+       name = EXCLUDED.name,
+       cols = EXCLUDED.cols,
+       rows = EXCLUDED.rows,
+       revision = levels.revision + 1,
+       body = EXCLUDED.body,
+       updated_at = now()
+     RETURNING revision, updated_at`,
+    [ownerEmail, id, body.name ?? null, board.cols ?? null, board.rows ?? null, JSON.stringify(body)],
+  );
+  return rows[0];
+}
+
+app.get('/api/levels', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
   try {
-    const store = readLevelStore();
-    const levels = Object.values(store.levels).map((doc) => ({
-      id: doc.id,
-      name: doc.body && doc.body.name,
-      cols: doc.body && doc.body.board && doc.body.board.cols,
-      rows: doc.body && doc.body.board && doc.body.board.rows,
-      updated_at: doc.updated_at,
-    }));
-    res.status(200).json({ levels });
+    res.status(200).json({ levels: await dbListLevels(user.email) });
   } catch (error) {
-    console.error('level list failed:', error);
-    res.status(503).json({ error: 'level_store_unavailable' });
+    dbUnavailable(res, 'level list failed', error, 'level_store_unavailable');
   }
 });
 
-app.get('/api/levels/:id', (req, res) => {
+app.get('/api/levels/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
   const id = levelStoreId(req.params.id);
   if (!id) { res.status(400).json({ error: 'invalid_level_id' }); return; }
   try {
-    const doc = readLevelStore().levels[id];
+    const doc = await dbGetLevel(user.email, id);
     if (!doc) { res.status(404).json({ error: 'level_not_found' }); return; }
     res.status(200).json({ level: doc.body, revision: doc.revision, updated_at: doc.updated_at });
   } catch (error) {
-    console.error('level read failed:', error);
-    res.status(503).json({ error: 'level_store_unavailable' });
+    dbUnavailable(res, 'level read failed', error, 'level_store_unavailable');
   }
 });
 
-app.put('/api/levels/:id', (req, res) => {
+app.put('/api/levels/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
   const id = levelStoreId(req.params.id);
   if (!id) { res.status(400).json({ error: 'invalid_level_id' }); return; }
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
   if (!isLevelBody(raw.level)) { res.status(400).json({ error: 'invalid_level_body' }); return; }
   try {
-    const store = readLevelStore();
-    const existing = store.levels[id] || {};
-    const now = new Date().toISOString();
-    store.levels[id] = {
-      id,
-      body: { ...raw.level, id },
-      revision: (Number.isInteger(existing.revision) ? existing.revision : 0) + 1,
-      created_at: existing.created_at || now,
-      updated_at: now,
-    };
-    writeLevelStore(store);
-    res.status(200).json({ ok: true, id, revision: store.levels[id].revision, updated_at: now });
+    const result = await dbUpsertLevel(user.email, id, { ...raw.level, id });
+    res.status(200).json({ ok: true, id, revision: result.revision, updated_at: result.updated_at });
   } catch (error) {
-    console.error('level write failed:', error);
-    res.status(503).json({ error: 'level_store_unavailable' });
+    dbUnavailable(res, 'level write failed', error, 'level_store_unavailable');
   }
 });
 
 // Campaign-editor workspace persistence (Phase 4 cont.): the whole campaign +
-// level set as one document. File-backed; same swap-to-DB seam as levels.
-function readCampaignWorkspace() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(campaignWorkspaceStorePath, 'utf8'));
-    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.campaigns) && parsed.levels && typeof parsed.levels === 'object') return parsed;
-  } catch (error) { /* missing or corrupt -> empty workspace */ }
-  return { campaigns: [], levels: {} };
-}
-function writeCampaignWorkspace(ws) {
-  fs.mkdirSync(path.dirname(campaignWorkspaceStorePath), { recursive: true });
-  fs.writeFileSync(campaignWorkspaceStorePath, JSON.stringify(ws), 'utf8');
+// level set as one per-user document in the Postgres `campaign_workspaces`
+// table (one row per signed-in owner).
+async function dbGetWorkspace(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT body, updated_at FROM campaign_workspaces WHERE owner_email = $1',
+    [ownerEmail],
+  );
+  return rows[0] || null;
 }
 
-app.get('/api/campaign-workspace', (_req, res) => {
+async function dbPutWorkspace(ownerEmail, body) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO campaign_workspaces (owner_email, body)
+       VALUES ($1, $2::jsonb)
+     ON CONFLICT (owner_email) DO UPDATE SET
+       body = EXCLUDED.body,
+       updated_at = now()
+     RETURNING updated_at`,
+    [ownerEmail, JSON.stringify(body)],
+  );
+  return rows[0].updated_at;
+}
+
+app.get('/api/campaign-workspace', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
   try {
-    res.status(200).json(readCampaignWorkspace());
+    const row = await dbGetWorkspace(user.email);
+    const body = row && row.body ? row.body : { campaigns: [], levels: {} };
+    res.status(200).json({
+      campaigns: Array.isArray(body.campaigns) ? body.campaigns : [],
+      levels: body.levels && typeof body.levels === 'object' ? body.levels : {},
+      updated_at: row ? row.updated_at : null,
+    });
   } catch (error) {
-    console.error('campaign workspace read failed:', error);
-    res.status(503).json({ error: 'workspace_unavailable' });
+    dbUnavailable(res, 'campaign workspace read failed', error, 'workspace_unavailable');
   }
 });
 
-app.put('/api/campaign-workspace', (req, res) => {
+app.put('/api/campaign-workspace', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
   if (!Array.isArray(raw.campaigns) || !raw.levels || typeof raw.levels !== 'object') {
     res.status(400).json({ error: 'invalid_workspace' });
     return;
   }
   try {
-    const ws = { campaigns: raw.campaigns, levels: raw.levels, updated_at: new Date().toISOString() };
-    writeCampaignWorkspace(ws);
-    res.status(200).json({ ok: true, campaigns: ws.campaigns.length, updated_at: ws.updated_at });
+    const updatedAt = await dbPutWorkspace(user.email, { campaigns: raw.campaigns, levels: raw.levels });
+    res.status(200).json({ ok: true, campaigns: raw.campaigns.length, updated_at: updatedAt });
   } catch (error) {
-    console.error('campaign workspace write failed:', error);
-    res.status(503).json({ error: 'workspace_unavailable' });
+    dbUnavailable(res, 'campaign workspace write failed', error, 'workspace_unavailable');
   }
 });
 
@@ -1161,6 +1321,24 @@ app.use((req, res) => {
   res.sendFile(frontendIndexFile());
 });
 
-app.listen(port, () => {
-  console.log(`chess-tactics listening on :${port}`);
-});
+function startServer() {
+  app.listen(port, () => {
+    console.log(`chess-tactics listening on :${port}`);
+  });
+}
+
+// Configure the durable store, then start serving. The game (static + /play)
+// must stay up even if the database is unreachable, so a DB/migration failure is
+// logged and surfaced as 503 on the persistence endpoints — it never blocks
+// startup, and ensureDbReady() retries on the next request.
+pool = buildPool();
+if (pool) {
+  pool.on('error', (error) => console.error('postgres pool error:', error));
+  ensureDbReady()
+    .then(() => console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}); schema migrations applied`))
+    .catch((error) => console.error('postgres init failed; persistence endpoints will return 503 until it recovers:', error))
+    .finally(startServer);
+} else {
+  console.warn('no database configured (set DATABASE_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_USER); persistence endpoints will return 503');
+  startServer();
+}
