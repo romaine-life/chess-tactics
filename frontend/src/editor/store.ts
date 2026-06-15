@@ -47,6 +47,7 @@ export interface EditorState {
   paint: (x: number, y: number) => void;
   undo: () => void;
   redo: () => void;
+  setLevel: (level: Level) => void;
   newLevel: (cols?: number, rows?: number) => void;
 }
 
@@ -82,6 +83,8 @@ export const useEditor = create<EditorState>((set) => ({
     const next = s.future[0];
     return { level: next, past: [...s.past, s.level], future: s.future.slice(1) };
   }),
+
+  setLevel: (level) => set({ level, past: [], future: [], hover: null }),
 
   newLevel: (cols = 12, rows = 8) => set({ level: createBlankLevel('draft', 'Untitled', cols, rows), past: [], future: [], hover: null }),
 }));

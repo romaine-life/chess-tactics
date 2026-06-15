@@ -4,7 +4,7 @@ import { EditorBoard } from '../render/EditorBoard';
 import { useEditor, type EditorTool } from '../editor/store';
 import { validateLevel, type TerrainType } from '../core/level';
 import type { PieceType, Side } from '../core/types';
-import { saveLevel } from '../net/levels';
+import { saveLevel, loadLevel } from '../net/levels';
 
 const TERRAINS: TerrainType[] = ['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock'];
 const SWATCH: Record<TerrainType, string> = { grass: '#356a42', water: '#2f5d86', stone: '#6b6f76', road: '#a9905f', bridge: '#7a5a36', cliff: '#3a3f46', rock: '#595e66' };
@@ -50,6 +50,16 @@ export function LevelEditor() {
     }
   };
 
+  const loadFromServer = async () => {
+    try {
+      const loaded = await loadLevel(level.id);
+      useEditor.getState().setLevel(loaded);
+      setStatus(`Loaded from server · ${loaded.layers.units.length} units`);
+    } catch (e) {
+      setStatus(`Load failed: ${(e as Error).message}`);
+    }
+  };
+
   return (
     <div data-testid="level-editor" style={{ display: 'flex', gap: 14, padding: 14, alignItems: 'flex-start', position: 'relative', zIndex: 5, pointerEvents: 'auto', color: 'var(--ds-ink-2)', fontFamily: 'var(--ds-font-sans)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -62,6 +72,7 @@ export function LevelEditor() {
           <button type="button" data-testid="redo" style={chip(false)} disabled={!future.length} onClick={() => useEditor.getState().redo()}>Redo</button>
           <button type="button" data-testid="save" style={chip(false)} onClick={save}>Save</button>
           <button type="button" data-testid="publish" style={chip(false)} onClick={publish}>Publish</button>
+          <button type="button" data-testid="load" style={chip(false)} onClick={loadFromServer}>Load</button>
         </div>
         <EditorBoard />
         {status ? <div style={{ ...panel }} data-testid="editor-status">{status}</div> : null}
