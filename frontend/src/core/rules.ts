@@ -3,7 +3,7 @@
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
 // last-side-standing) — but deterministic and immutable.
 
-import type { BoardSize, GameEvent, GameState, Move, Piece, Side, Vec, Winner } from './types';
+import type { BoardSize, EnemyIntent, GameEvent, GameState, Move, Piece, PieceType, Side, Vec, Winner } from './types';
 import type { Rng } from './rng';
 
 const KNIGHT: ReadonlyArray<readonly [number, number]> = [
@@ -14,6 +14,18 @@ const ORTHO: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1]
 const ALL8: ReadonlyArray<readonly [number, number]> = [...ORTHO, ...DIAG];
 
 const isObstacle = (p: Piece): boolean => p.type === 'rock' || p.type === 'random-rock';
+
+/** Current hit points, defaulting to 1 so unset pieces keep single-hit capture. */
+export function pieceHp(piece: Piece): number {
+  return piece.hp ?? 1;
+}
+
+/** Relative worth, used to rank enemy targets when forecasting intents. */
+const PIECE_VALUE: Record<PieceType, number> = {
+  pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, rock: 0, 'random-rock': 0,
+};
+
+const manhattan = (a: Vec, b: Vec): number => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
 export function inBounds(x: number, y: number, size: BoardSize): boolean {
   return x >= 0 && x < size.cols && y >= 0 && y < size.rows;
@@ -158,23 +170,38 @@ export function applyMove(state: GameState, pieceId: string, move: Move): ApplyR
 
   const from: Vec = { x: piece.x, y: piece.y };
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
+  // Attacker displaces onto the target square only when the target dies. With
+  // hp > 1 the target survives the hit and the attacker stays put (an
+  // attack-in-place). For the default hp of 1 this collapses to classic capture.
+  let displaced = true;
   if (capturedId) {
-    const captured = pieces.find((p) => p.id === capturedId);
-    if (captured && captured.side !== piece.side) {
-      captured.alive = false;
-      events.push({ kind: 'captured', pieceId: captured.id, by: piece.id });
+    const target = pieces.find((p) => p.id === capturedId);
+    if (target && target.side !== piece.side && !isObstacle(target)) {
+      const damage = 1;
+      const remaining = pieceHp(target) - damage;
+      if (remaining > 0) {
+        target.hp = remaining;
+        displaced = false;
+        events.push({ kind: 'damaged', pieceId: target.id, by: piece.id, amount: damage, hp: remaining });
+      } else {
+        target.alive = false;
+        target.hp = 0;
+        events.push({ kind: 'captured', pieceId: target.id, by: piece.id });
+      }
     }
   }
 
-  piece.x = move.x;
-  piece.y = move.y;
-  events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
+  if (displaced) {
+    piece.x = move.x;
+    piece.y = move.y;
+    events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
 
-  if (piece.type === 'pawn') {
-    const farRank = piece.side === 'player' ? 0 : state.size.rows - 1;
-    if (piece.y === farRank) {
-      piece.type = 'queen';
-      events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
+    if (piece.type === 'pawn') {
+      const farRank = piece.side === 'player' ? 0 : state.size.rows - 1;
+      if (piece.y === farRank) {
+        piece.type = 'queen';
+        events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
+      }
     }
   }
 
@@ -212,4 +239,53 @@ export function enemyMove(state: GameState, rng: Rng): { pieceId: string; move: 
   const entry = rng.pick(pool);
   const move = rng.pick(entry.moves);
   return { pieceId: entry.piece.id, move };
+}
+
+/**
+ * Pick an enemy's next move deterministically (no RNG): take the highest-value
+ * capture, else the move that closes distance to the nearest living player.
+ * Stable tie-breaks (target value, then board position) so a telegraph computed
+ * now matches deterministic execution later.
+ */
+export function chooseEnemyMove(piece: Piece, moves: readonly Move[], state: GameState): Move | null {
+  if (!moves.length) return null;
+  const valueOf = (m: Move): number => {
+    if (!m.capture) return -1;
+    const t = state.pieces.find((p) => p.id === m.capture);
+    return t ? PIECE_VALUE[t.type] : -1;
+  };
+  const captures = moves.filter((m) => m.capture);
+  if (captures.length) {
+    return [...captures].sort((a, b) => valueOf(b) - valueOf(a) || a.y - b.y || a.x - b.x)[0];
+  }
+  const players = livingPieces(state.pieces, 'player').map((p) => ({ x: p.x, y: p.y }));
+  const distOf = (m: Move): number => (players.length
+    ? Math.min(...players.map((p) => manhattan({ x: m.x, y: m.y }, p)))
+    : 0);
+  return [...moves].sort((a, b) => distOf(a) - distOf(b) || a.y - b.y || a.x - b.x)[0];
+}
+
+/**
+ * Telegraph every living enemy's intended next action — the signature
+ * "forecast the queued attack a turn ahead" overlay. Deterministic, so the
+ * preview the player sees is exactly what a deterministic enemy turn executes.
+ */
+export function forecastEnemyIntents(state: GameState): EnemyIntent[] {
+  const intents: EnemyIntent[] = [];
+  for (const piece of livingPieces(state.pieces, 'enemy')) {
+    const move = chooseEnemyMove(piece, legalMoves(piece, state.pieces, state.size), state);
+    if (!move) continue;
+    const from: Vec = { x: piece.x, y: piece.y };
+    const targetId = move.capture ?? pieceAt(state.pieces, move.x, move.y)?.id;
+    const target = targetId ? state.pieces.find((p) => p.id === targetId && p.side !== piece.side) : null;
+    intents.push(target
+      ? { pieceId: piece.id, from, to: { x: move.x, y: move.y }, kind: 'attack', targetId: target.id, damage: 1 }
+      : { pieceId: piece.id, from, to: { x: move.x, y: move.y }, kind: 'move' });
+  }
+  return intents;
+}
+
+/** State with `intents` recomputed — the enemy's telegraphed upcoming turn. */
+export function withForecast(state: GameState): GameState {
+  return { ...state, intents: forecastEnemyIntents(state) };
 }
