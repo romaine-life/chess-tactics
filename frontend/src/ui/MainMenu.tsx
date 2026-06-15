@@ -2,9 +2,11 @@ import type { CSSProperties } from 'react';
 
 const MODES = [
   { href: '/play', label: 'Solo Skirmish', desc: 'Tactical chess battle on the isometric board.' },
+  { href: '/lobbies', label: 'Lobbies', desc: 'Host or join a 2-player match.' },
   { href: '/campaigns-next', label: 'Campaign Editor', desc: 'Author campaigns and order their levels.' },
   { href: '/edit', label: 'Level Editor', desc: 'Paint isometric terrain, elevation, and units.' },
-  { href: '/design/catalog', label: 'Design Catalog', desc: 'Component & asset styleguide.' },
+  { href: '/settings', label: 'Settings', desc: 'Audio and preferences.' },
+  { href: '/design', label: 'Design', desc: 'Styleguide & acceptance portfolio.' },
 ];
 
 const card: CSSProperties = {

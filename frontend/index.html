@@ -20,81 +20,26 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
     <link rel="preload" as="image" href="/assets/ui/main-menu-aspirational.png">
-    <link rel="prefetch" as="image" href="/assets/ui/campaign-editor-concept.png">
-    <link rel="prefetch" as="image" href="/assets/ui/level-editor-concept.png">
-    <link rel="prefetch" as="image" href="/assets/ui/skirmish-concept.png">
   </head>
   <body>
     <main class="shell">
-      <section class="game">
-        <header class="topbar">
-          <div class="mission-id">
-            <h1>Chess Tactics</h1>
-            <p id="statusLine">Breach 1 / 6</p>
-          </div>
-          <div class="topbar-right">
-            <div class="account" id="account">
-              <img id="accountAvatar" class="account-avatar" alt="" hidden>
-              <span id="accountName">Guest</span>
-              <button id="signInButton" type="button">Sign In</button>
-              <button id="signOutButton" type="button" hidden>Sign Out</button>
-            </div>
-            <div class="meters" aria-live="polite">
-              <span id="anchorMeter">Anchors 6</span>
-              <span id="enemyMeter">Threats 0</span>
-            </div>
-          </div>
-        </header>
-
-        <div class="board-wrap">
-          <svg class="skyline" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-            <defs>
-              <linearGradient id="moonField" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0" stop-color="#172d3b" stop-opacity="0.46" />
-                <stop offset="1" stop-color="#071016" stop-opacity="0.95" />
-              </linearGradient>
-            </defs>
-            <circle cx="930" cy="74" r="40" fill="#dce9ee" opacity="0.16" />
-            <path d="M0,360 0,258 C105,226 190,248 290,222 C394,195 492,206 588,238 C692,272 786,238 890,214 C1008,187 1105,212 1200,174 L1200,360 Z" fill="url(#moonField)" />
-            <path d="M0,360 0,300 C132,278 262,292 395,278 C541,262 696,286 840,264 C980,244 1088,260 1200,232 L1200,360 Z" fill="#09151c" opacity="0.86" />
-            <path d="M90,322 l10,-54 l10,54 M192,310 l8,-42 l8,42 M1020,302 l9,-48 l9,48 M1092,318 l12,-62 l12,62" stroke="#1c352d" stroke-width="5" stroke-linecap="square" opacity="0.78" />
-          </svg>
-          <div id="boardScroll" class="board-scroll">
-            <canvas id="board" class="board" width="760" height="560" aria-label="Tactical board"></canvas>
-          </div>
-          <div id="menuLayer" class="menu-layer"></div>
+      <header class="topbar">
+        <div class="mission-id">
+          <h1>Chess Tactics</h1>
+          <p id="statusLine">Tactical chess. Infinite possibilities.</p>
         </div>
-      </section>
-
-      <aside class="panel" aria-label="Tactical command panel">
-        <div id="gamePanel" class="game-panel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
-          <div class="panel-section selected-unit">
-            <h2 id="selectedName">Crown Lancer</h2>
-            <p id="selectedMeta">Hybrid royal vanguard</p>
-            <div class="actions">
-              <button id="moveButton" class="active" type="button">Move</button>
-              <button id="powerButton" type="button">Power</button>
-              <button id="threatButton" type="button">Threats: Off</button>
-              <button id="endButton" type="button">End Turn</button>
-            </div>
+        <div class="topbar-right">
+          <div class="account" id="account">
+            <img id="accountAvatar" class="account-avatar" alt="" hidden>
+            <span id="accountName">Guest</span>
+            <button id="signInButton" type="button">Sign In</button>
+            <button id="signOutButton" type="button" hidden>Sign Out</button>
           </div>
-
-          <div class="panel-section roster" id="roster"></div>
-
-          <div class="panel-section legend" aria-label="Board key">
-            <div><i class="k-move-dot"></i><span>Move capability</span></div>
-            <div><i class="k-attack-dash"></i><span>Attack capability</span></div>
-            <div><i class="k-danger"></i><span>Enemy threat range</span></div>
-            <div><i class="k-threat"></i><span>Enemy back rows</span></div>
-            <div><i class="k-spawn"></i><span>Allied back rows</span></div>
-          </div>
-
-          <div class="panel-section log" id="log" aria-live="polite"></div>
         </div>
-        <div id="levelEditorPanel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;" hidden></div>
-      </aside>
+      </header>
+      <div id="root" class="app-root"></div>
     </main>
 
-    <script type="module" src="/src/app.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
