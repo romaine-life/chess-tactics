@@ -26,7 +26,7 @@ export function App(): ReactElement {
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
   if (path === '/settings') return <Settings />;
-  if (path === '/design/catalog') return <CatalogViewer />;
+  if (path === '/design/catalog' || path.startsWith('/design/catalog/')) return <CatalogViewer />;
   if (path === '/design' || path.startsWith('/design/')) return <DesignIndex />;
   return <MainMenu />;
 }
