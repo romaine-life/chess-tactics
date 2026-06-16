@@ -364,7 +364,7 @@ async function dbUpsertDesignAsset(id, input) {
   const bytes = input.bytes instanceof Buffer ? input.bytes : null;
   const { rows } = await pool.query(
     `INSERT INTO design_assets (id, content_type, bytes, slots, status, metadata, revision, updated_by)
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, 0, $7)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, 1, $7)
      ON CONFLICT (id) DO UPDATE SET
        -- Only overwrite the image when a new buffer is supplied, so a
        -- metadata-only PUT keeps the existing bytes/content_type.
