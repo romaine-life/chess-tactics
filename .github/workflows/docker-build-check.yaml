@@ -107,18 +107,20 @@ jobs:
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         run: az acr login --name romainecr
 
-      - name: Build and push image (full-SHA tag for deploy-to-image)
+      - name: Build and push image (full head-sha tag for deploy-to-image)
         # On same-repo PRs / workflow_dispatch: build and push
-        # romainecr.azurecr.io/chess-tactics:<full github.sha>. The deploy-to-image
-        # resolver resolves git_ref to the FULL commit SHA, so this is the full
-        # SHA (not the short-7 form the post-merge build-and-deploy tag uses).
+        # romainecr.azurecr.io/chess-tactics:<full PR head sha>. The deploy-to-image
+        # resolver resolves git_ref to the PR HEAD commit's full sha, so tag
+        # head.sha on PR events (github.sha on a PR is the synthetic merge commit,
+        # which the resolver never sees) — matching tank-operator #1256 / glimmung
+        # / ambience. Full SHA, not the short-7 form the post-merge tag uses.
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.event.pull_request.head.sha || github.sha }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
 
