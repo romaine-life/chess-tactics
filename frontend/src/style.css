@@ -115,14 +115,22 @@ button:disabled {
 
 .shell {
   visibility: visible;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  /* React stack: topbar on top, the app fills the width below it. (The old
+     app.js shell was a 2-column grid `minmax(0,1fr) 340px`, which crammed the
+     entire React #root into a 340px side rail on every route.) */
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
   padding: 14px;
+}
+
+/* The React app root fills the remaining height/width under the topbar. */
+.app-root {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
 }
 
 .game {
