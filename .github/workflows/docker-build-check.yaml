@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: docker-build-check-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.git_ref || '' }}
@@ -20,6 +21,12 @@ jobs:
   test-and-build:
     name: Test and build app image
     runs-on: ubuntu-latest
+    # Use the same `prod` environment build-and-deploy.yaml runs under so the
+    # ARM_* repo variables and OIDC federation resolve identically.
+    environment: prod
+    env:
+      REGISTRY: romainecr.azurecr.io
+      IMAGE: chess-tactics
     # The backend smoke-test (npm test) exercises the Postgres-backed
     # persistence endpoints, so the test job needs a real Postgres.
     services:
@@ -82,7 +89,43 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build image without pushing
+      # Same-repo PRs and workflow_dispatch publish a commit-SHA-tagged image to
+      # ACR so the test-slot deploy-to-image flow (glimmung deploy_slot_to_image)
+      # can resolve a verified, not-yet-merged commit to its CI-built image.
+      # Fork PRs skip login + push (see the build-only step below) — forks can't
+      # mint the repo's OIDC token, and we must not hand them registry creds.
+      # Reuses build-and-deploy.yaml's exact azure/login (OIDC) + `az acr login`.
+      - name: Azure Login
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: az acr login --name romainecr
+
+      - name: Build and push image (full-SHA tag for deploy-to-image)
+        # On same-repo PRs / workflow_dispatch: build and push
+        # romainecr.azurecr.io/chess-tactics:<full github.sha>. The deploy-to-image
+        # resolver resolves git_ref to the FULL commit SHA, so this is the full
+        # SHA (not the short-7 form the post-merge build-and-deploy tag uses).
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
+
+      - name: Build image without pushing (fork PRs)
+        # Fork PRs stay build-only: no ACR login, no push. This preserves the
+        # original fork-safe behavior of this workflow verbatim.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         uses: docker/build-push-action@v7
         with:
           context: .
