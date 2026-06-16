@@ -362,36 +362,47 @@ async function dbGetDesignAssetBytes(id) {
 async function dbUpsertDesignAsset(id, input) {
   await ensureDbReady();
   const bytes = input.bytes instanceof Buffer ? input.bytes : null;
+  const slots = JSON.stringify(isObjectRecord(input.slots) ? input.slots : {});
+  const status = input.status ?? null;
+  const metadata = JSON.stringify(isObjectRecord(input.metadata) ? input.metadata : {});
+  const updatedBy = input.updated_by ?? null;
+  // Branch on whether an image is supplied. `bytes` is NOT NULL, and Postgres
+  // checks NOT NULL on the proposed row *before* ON CONFLICT runs — so a
+  // metadata-only INSERT can't be COALESCE'd away. With an image we
+  // create-or-replace; without one we UPDATE the existing row, leaving the
+  // bytes/content_type untouched. (The handler guarantees the row exists for
+  // metadata-only writes.)
+  if (bytes) {
+    const { rows } = await pool.query(
+      `INSERT INTO design_assets (id, content_type, bytes, slots, status, metadata, revision, updated_by)
+         VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, 1, $7)
+       ON CONFLICT (id) DO UPDATE SET
+         bytes = EXCLUDED.bytes,
+         content_type = EXCLUDED.content_type,
+         slots = EXCLUDED.slots,
+         status = EXCLUDED.status,
+         metadata = EXCLUDED.metadata,
+         revision = design_assets.revision + 1,
+         updated_at = now(),
+         updated_by = EXCLUDED.updated_by
+       RETURNING id, content_type, slots, status, metadata, revision, updated_at`,
+      [id, input.content_type, bytes, slots, status, metadata, updatedBy],
+    );
+    return rows[0];
+  }
   const { rows } = await pool.query(
-    `INSERT INTO design_assets (id, content_type, bytes, slots, status, metadata, revision, updated_by)
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, 1, $7)
-     ON CONFLICT (id) DO UPDATE SET
-       -- Only overwrite the image when a new buffer is supplied, so a
-       -- metadata-only PUT keeps the existing bytes/content_type.
-       bytes = COALESCE(EXCLUDED.bytes, design_assets.bytes),
-       content_type = COALESCE($8, design_assets.content_type),
-       slots = EXCLUDED.slots,
-       status = EXCLUDED.status,
-       metadata = EXCLUDED.metadata,
-       revision = design_assets.revision + 1,
+    `UPDATE design_assets SET
+       slots = $2::jsonb,
+       status = $3,
+       metadata = $4::jsonb,
+       revision = revision + 1,
        updated_at = now(),
-       updated_by = EXCLUDED.updated_by
+       updated_by = $5
+     WHERE id = $1
      RETURNING id, content_type, slots, status, metadata, revision, updated_at`,
-    [
-      id,
-      // INSERT requires a non-null content_type/bytes; the upsert path uses the
-      // COALESCE branches above. A first-time INSERT without an image is
-      // rejected by the NOT NULL constraint, which the handler guards against.
-      bytes ? input.content_type : (input.content_type || 'application/octet-stream'),
-      bytes,
-      JSON.stringify(isObjectRecord(input.slots) ? input.slots : {}),
-      input.status ?? null,
-      JSON.stringify(isObjectRecord(input.metadata) ? input.metadata : {}),
-      input.updated_by ?? null,
-      bytes ? input.content_type : null,
-    ],
+    [id, slots, status, metadata, updatedBy],
   );
-  return rows[0];
+  return rows[0] || null;
 }
 
 function publicDesignAsset(row) {
