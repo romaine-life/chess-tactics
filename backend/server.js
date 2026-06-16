@@ -448,9 +448,21 @@ async function seedDesignAssetsOnce() {
     const { rows } = await pool.query('SELECT count(*)::int AS count FROM design_assets');
     if (rows[0] && rows[0].count > 0) return;
 
-    const seedPath = path.join(__dirname, 'asset-catalog.seed.json');
-    if (!fs.existsSync(seedPath)) {
-      console.warn(`design asset seed skipped: catalog not found at ${seedPath}`);
+    // The hot-swap supervisor runs this file from HOT_BACKEND_DIR, so __dirname
+    // is NOT the baked backend dir — read the catalog from the served frontend
+    // dir (the one baked path the backend reliably has; the seed PNGs resolve
+    // there too). Vite copies frontend/public/asset-catalog.json into dist.
+    const seedCandidates = [
+      path.join(frontendDir, 'asset-catalog.json'),
+      path.resolve(__dirname, '..', 'frontend', 'public', 'asset-catalog.json'),
+      path.resolve(__dirname, '..', 'frontend', 'src', 'asset-catalog.json'),
+    ];
+    let seedPath = null;
+    for (const candidate of seedCandidates) {
+      try { if (fs.existsSync(candidate)) { seedPath = candidate; break; } } catch (_e) { /* try next candidate */ }
+    }
+    if (!seedPath) {
+      console.warn(`design asset seed skipped: catalog not found (tried ${seedCandidates.join(', ')})`);
       return;
     }
     const catalog = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
