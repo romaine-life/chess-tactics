@@ -143,12 +143,13 @@ jobs:
         shell: bash
         env:
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          LOOKUP_REF: ${{ inputs.git_ref || github.ref }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
             tag="ci-pr-${PR_NUMBER}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
           else
-            ref_hash="$(printf '%s' "${GITHUB_REF}" | sha256sum | cut -c1-12)"
+            ref_hash="$(printf '%s' "${LOOKUP_REF}" | sha256sum | cut -c1-12)"
             tag="ci-ref-${ref_hash}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
           fi
           case "${tag}" in
