@@ -27,7 +27,7 @@ draft endpoint contract.
 ## Needs Review
 
 All four remaining elements are implemented to match the concept and await your
-accept on `/design/main-menu`. Approach follows the render-fidelity + text-live
+accept on `/design/main-menu`. Approach follows the render-accuracy + text-live
 rules in `docs/ui-art-direction.md` — art for rendered visuals, live DOM for all
 copy and numbers:
 

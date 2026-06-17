@@ -39,7 +39,7 @@ app.use(express.json({ limit: '256kb' }));
 //                                    acquired via DefaultAzureCredential from
 //                                    the projected ServiceAccount token. No app
 //                                    password is ever stored.
-// This lives inline on purpose: the supervisor hot-swaps only server.js, so the
+// This lives inline on purpose: the supervisor reloads only server.js, so the
 // DB layer must travel with it (pg + @azure/identity resolve from the baked
 // node_modules via NODE_PATH).
 // ---------------------------------------------------------------------------
@@ -448,7 +448,7 @@ async function seedDesignAssetsOnce() {
     const { rows } = await pool.query('SELECT count(*)::int AS count FROM design_assets');
     if (rows[0] && rows[0].count > 0) return;
 
-    // The hot-swap supervisor runs this file from HOT_BACKEND_DIR, so __dirname
+    // The reload supervisor runs this file from HOT_BACKEND_DIR, so __dirname
     // is NOT the baked backend dir — read the catalog from the served frontend
     // dir (the one baked path the backend reliably has; the seed PNGs resolve
     // there too). Vite copies frontend/public/asset-catalog.json into dist.

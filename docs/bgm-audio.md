@@ -82,15 +82,10 @@ The real `/api/bgm` code path runs in the slot, pointed at a same-origin fixture
 instead of the blob (the env split is configuration, not a second code path):
 
 ```sh
-cd frontend && npm ci && npm run build            # static bundle
-# stage slugged tracks + index.json the slot will serve same-origin
-node tools/bgm/generate.mjs --src <raw songs dir> --out /tmp/bgm-staged
-NS=chess-tactics-N; POD=$(kubectl -n "$NS" get pod -l app=$NS -o name | head -1 | cut -d/ -f2)
-# 1) static hot-swap: frontend dist + the staged audio + index.json under /assets/audio
-kubectl cp dist/.        "$NS/$POD:/var/run/chess-tactics-static-override/" -c "$NS"
-kubectl cp /tmp/bgm-staged/. "$NS/$POD:/var/run/chess-tactics-static-override/assets/audio/" -c "$NS"
-# 2) backend hot-swap with BGM env: read the index same-origin (localhost), hand
-#    the browser the public slot URL for tracks
+cd frontend && npm ci && npm run build
+node tools/bgm/generate.mjs --src <raw songs dir> --out frontend/public/assets/audio
+# Push the ref, wait for the CI image, then deploy it to the slot with
+# Glimmung deploy_image_to_test_slot.
 #    BGM_READ_URL = http://localhost:3000/assets/audio
 #    BGM_BASE_URL = https://chess-tactics-N.tank.dev.romaine.life/assets/audio
 ```
