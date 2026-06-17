@@ -116,13 +116,28 @@ button:disabled {
 .shell {
   visibility: visible;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  /* Full-width app column: topbar on top, the React app (#root) fills the rest.
+     Was a 2-col grid with a fixed 340px right rail — a leftover of the retired
+     app.js game layout — which squished every React surface (menu, catalog,
+     editors) into a 340px column. */
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
   height: 100vh;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
   padding: 14px;
+}
+
+/* #root host. Fills the shell's content row; tall pages scroll here while the
+   catalog (height:100%) manages its own internal content-pane scroll so its
+   tree rail stays locked in place. */
+.app-root {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
 }
 
 .game {
