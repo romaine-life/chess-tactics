@@ -9,6 +9,32 @@ import { assetById, frameStyleForAsset, insetStyle, MENU_MODES, type MenuMode } 
 
 export function ModeButton({ mode, specimen = false, active = false }: { mode: MenuMode; specimen?: boolean; active?: boolean }): React.ReactElement | null {
   const [pressed, setPressed] = useState(active);
+  const rowAsset = assetById(mode.row);
+  if (rowAsset?.states) {
+    const isActive = specimen ? pressed : active;
+    const normalState = rowAsset.states.normal;
+    if (!normalState) return null;
+    const pressedState = rowAsset.states.pressed || rowAsset.states.active || normalState;
+    const normalStyle = frameStyleForAsset(rowAsset, normalState.rect);
+    const pressedStyle = frameStyleForAsset(rowAsset, pressedState.rect);
+    const labelStyle = insetStyle(rowAsset.rules?.textInset, normalState.rect);
+    const buttonStyle = { '--asset-aspect': `${normalState.rect.w} / ${normalState.rect.h}` } as CSSProperties;
+    return (
+      <button
+        type="button"
+        className={`mode-button uses-row-art ${isActive ? 'is-active' : ''}${specimen ? ' is-specimen' : ''}`.trim()}
+        aria-label={mode.label}
+        aria-current={isActive ? 'true' : undefined}
+        style={buttonStyle}
+        onClick={specimen ? () => setPressed((p) => !p) : undefined}
+      >
+        <span className="mode-button-art mode-button-art-normal" style={normalStyle} aria-hidden="true" />
+        <span className="mode-button-art mode-button-art-pressed" style={pressedStyle} aria-hidden="true" />
+        <span className="mode-button-label" style={labelStyle}>{mode.label}</span>
+      </button>
+    );
+  }
+
   const nineSlice = assetById('button-9slice.main-menu');
   if (!nineSlice || !nineSlice.states) return null;
   const rules = nineSlice.rules || {};
@@ -39,6 +65,7 @@ export function ModeButton({ mode, specimen = false, active = false }: { mode: M
 }
 
 export function WidgetCard({ mode }: { mode: MenuMode }): React.ReactElement {
+  const rowAsset = assetById(mode.row);
   const iconAsset = assetById(mode.icon);
   const iconName = iconAsset ? (iconAsset.title || mode.icon) : mode.icon;
   return (
@@ -48,7 +75,7 @@ export function WidgetCard({ mode }: { mode: MenuMode }): React.ReactElement {
       </div>
       <div className="widget-card-meta">
         <h3>{mode.label}</h3>
-        <p>9-slice + {iconName} + live label + <code>{mode.action}</code> action · click to press</p>
+        <p>{rowAsset ? (rowAsset.title || mode.row) : `9-slice + ${iconName}`} + live label + <code>{mode.action}</code> action · click to press</p>
       </div>
     </article>
   );

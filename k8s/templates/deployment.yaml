@@ -29,7 +29,9 @@ spec:
       serviceAccountName: {{ .Values.serviceAccount }}
       containers:
         - name: {{ include "chess-tactics.resourceName" . }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          {{- $imageTag := .Values.image.tag | toString }}
+          {{- $imageRef := ternary $imageTag (printf "%s:%s" .Values.image.repository $imageTag) (contains "/" $imageTag) }}
+          image: {{ $imageRef | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             {{- if .Values.bgm.baseUrl }}
