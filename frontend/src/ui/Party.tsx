@@ -1,12 +1,11 @@
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 import type { PieceType } from '../core/types';
 
 const OPTIONS: PieceType[] = ['knight', 'bishop', 'rook'];
-const btn = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? 'var(--ds-accent)' : 'var(--ds-line-2)'}`,
-  background: active ? 'var(--ds-accent-soft)' : 'transparent',
-  color: 'var(--ds-ink)', borderRadius: 'var(--ds-radius-sm)', padding: '8px 14px', cursor: 'pointer',
-});
+
+function PieceIcon({ type }: { type: PieceType }) {
+  return <span className={`utility-piece-icon icon-${type}`} aria-hidden="true" />;
+}
 
 // Squad picker (ported from legacy app.js): pawn is locked; choose two more
 // pieces, then deploy into a skirmish.
@@ -14,23 +13,39 @@ export function Party() {
   const [picks, setPicks] = useState<PieceType[]>([]);
   const toggle = (p: PieceType) => setPicks((cur) => cur.includes(p) ? cur.filter((x) => x !== p) : cur.length < 2 ? [...cur, p] : cur);
   return (
-    <div data-testid="party" style={{ padding: '32px clamp(20px,6vw,80px)', color: 'var(--ds-ink-2)', fontFamily: 'var(--ds-font-sans)' }}>
-      <h1 style={{ fontFamily: 'var(--ds-font-serif)', color: 'var(--ds-ink)' }}>Assemble your squad</h1>
-      <p style={{ color: 'var(--ds-ink-3)' }}>Pawn is locked in. Choose two more ({picks.length}/2).</p>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
-        <span style={{ ...btn(true), cursor: 'default', opacity: 0.8 }}>pawn (locked)</span>
+    <div data-testid="party" className="utility-screen utility-party">
+      <header className="utility-page-header">
+        <span className="utility-header-icon icon-pawn" aria-hidden="true" />
+        <div className="utility-title-copy">
+          <h1>Assemble your squad</h1>
+          <p>Pawn is locked in. Choose two more ({picks.length}/2).</p>
+        </div>
+        <a href="/" className="utility-button utility-button-neutral">Menu</a>
+      </header>
+      <section className="utility-panel">
+        <div className="utility-squad-grid">
+          <span className="utility-squad-card is-selected is-locked">
+            <PieceIcon type="pawn" />
+            <strong>Pawn</strong>
+            <small>Locked</small>
+          </span>
         {OPTIONS.map((p) => (
-          <button key={p} type="button" data-testid={`party-${p}`} style={btn(picks.includes(p))} onClick={() => toggle(p)}>{p}</button>
+          <button key={p} type="button" data-testid={`party-${p}`} className={`utility-squad-card ${picks.includes(p) ? 'is-selected' : ''}`.trim()} onClick={() => toggle(p)}>
+            <PieceIcon type={p} />
+            <strong>{p}</strong>
+            <small>{picks.includes(p) ? 'Selected' : 'Available'}</small>
+          </button>
         ))}
-      </div>
-      <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
+        </div>
+      </section>
+      <div className="utility-actions">
         <a
           href="/play"
           data-testid="party-deploy"
           aria-disabled={picks.length !== 2}
-          style={{ ...btn(picks.length === 2), textDecoration: 'none', pointerEvents: picks.length === 2 ? 'auto' : 'none', opacity: picks.length === 2 ? 1 : 0.5 }}
-        >Deploy →</a>
-        <a href="/" style={{ ...btn(false), textDecoration: 'none' }}>← Menu</a>
+          className={`utility-button utility-button-primary ${picks.length === 2 ? '' : 'is-disabled'}`.trim()}
+        >Deploy</a>
+        <a href="/" className="utility-button utility-button-neutral">Menu</a>
       </div>
     </div>
   );
