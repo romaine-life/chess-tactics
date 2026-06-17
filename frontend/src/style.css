@@ -978,6 +978,28 @@ h1 {
   inset: 0;
 }
 
+.mode-button-art {
+  transition: opacity .08s linear;
+}
+
+.mode-button-art-pressed {
+  opacity: 0;
+}
+
+.mode-button.uses-row-art:hover .mode-button-art-normal,
+.mode-button.uses-row-art:focus-visible .mode-button-art-normal,
+.mode-button.uses-row-art:active .mode-button-art-normal,
+.mode-button.uses-row-art.is-active .mode-button-art-normal {
+  opacity: 0;
+}
+
+.mode-button.uses-row-art:hover .mode-button-art-pressed,
+.mode-button.uses-row-art:focus-visible .mode-button-art-pressed,
+.mode-button.uses-row-art:active .mode-button-art-pressed,
+.mode-button.uses-row-art.is-active .mode-button-art-pressed {
+  opacity: 1;
+}
+
 /* .mode-button-icon is positioned by inline left/top/width/height (icon slot). */
 
 .mode-button:hover,
@@ -1013,8 +1035,12 @@ h1 {
 .mode-button.uses-row-art .mode-button-label {
   align-items: center;
   color: #f7ecd6;
-  font-size: clamp(13px, 1.25vw, 20px);
-  letter-spacing: .01em;
+  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: clamp(8px, .78vw, 13px);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.55;
+  text-transform: uppercase;
   text-shadow:
     0 2px 0 rgba(0, 0, 0, .86),
     0 0 10px rgba(3, 9, 13, .9);

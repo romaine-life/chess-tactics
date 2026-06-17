@@ -61,7 +61,7 @@ export function GlossaryPage({ onNavigate }: { onNavigate: Navigate }): React.Re
 
       <section className="glossary-example" aria-label="Worked example">
         <h3>Worked example</h3>
-        <p>The on-screen <b>Solo Skirmish</b> button is a <b>widget</b>: the <code>button-row.main-menu.solo-skirmish</code> row art (normal or active state) + the live label “Solo Skirmish” (in the <code>textInset</code>) + the <code>party</code> action. The row art is an asset in the catalog; the button itself is not.</p>
+        <p>The on-screen <b>Solo Skirmish</b> button is a <b>widget</b>: the <code>button-row.main-menu.solo-skirmish</code> row art (normal or pressed state) + the live label “Solo Skirmish” (in the <code>textInset</code>) + the <code>party</code> action. The row art is an asset in the catalog; the button itself is not.</p>
       </section>
     </div>
   );

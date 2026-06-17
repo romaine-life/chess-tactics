@@ -258,8 +258,8 @@
             "h": 164
           }
         },
-        "active": {
-          "label": "Active",
+        "pressed": {
+          "label": "Pressed",
           "rect": {
             "x": 0,
             "y": 164,
@@ -289,12 +289,12 @@
         },
         "states": [
           "normal",
-          "active"
+          "pressed"
         ],
         "text": "live",
         "sizing": "fixed-row-art",
         "notes": [
-          "Mode-specific row art used by the live main-menu button widget.",
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
           "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
           "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
         ]
@@ -327,8 +327,8 @@
             "h": 164
           }
         },
-        "active": {
-          "label": "Active",
+        "pressed": {
+          "label": "Pressed",
           "rect": {
             "x": 0,
             "y": 164,
@@ -358,12 +358,12 @@
         },
         "states": [
           "normal",
-          "active"
+          "pressed"
         ],
         "text": "live",
         "sizing": "fixed-row-art",
         "notes": [
-          "Mode-specific row art used by the live main-menu button widget.",
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
           "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
           "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
         ]
@@ -396,8 +396,8 @@
             "h": 164
           }
         },
-        "active": {
-          "label": "Active",
+        "pressed": {
+          "label": "Pressed",
           "rect": {
             "x": 0,
             "y": 164,
@@ -427,12 +427,12 @@
         },
         "states": [
           "normal",
-          "active"
+          "pressed"
         ],
         "text": "live",
         "sizing": "fixed-row-art",
         "notes": [
-          "Mode-specific row art used by the live main-menu button widget.",
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
           "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
           "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
         ]
@@ -465,8 +465,8 @@
             "h": 164
           }
         },
-        "active": {
-          "label": "Active",
+        "pressed": {
+          "label": "Pressed",
           "rect": {
             "x": 0,
             "y": 164,
@@ -496,12 +496,12 @@
         },
         "states": [
           "normal",
-          "active"
+          "pressed"
         ],
         "text": "live",
         "sizing": "fixed-row-art",
         "notes": [
-          "Mode-specific row art used by the live main-menu button widget.",
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
           "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
           "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
         ]
@@ -534,8 +534,8 @@
             "h": 164
           }
         },
-        "active": {
-          "label": "Active",
+        "pressed": {
+          "label": "Pressed",
           "rect": {
             "x": 0,
             "y": 164,
@@ -565,12 +565,12 @@
         },
         "states": [
           "normal",
-          "active"
+          "pressed"
         ],
         "text": "live",
         "sizing": "fixed-row-art",
         "notes": [
-          "Mode-specific row art used by the live main-menu button widget.",
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
           "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
           "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
         ]

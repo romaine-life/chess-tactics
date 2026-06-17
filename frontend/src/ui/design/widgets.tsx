@@ -12,11 +12,13 @@ export function ModeButton({ mode, specimen = false, active = false }: { mode: M
   const rowAsset = assetById(mode.row);
   if (rowAsset?.states) {
     const isActive = specimen ? pressed : active;
-    const stateDef = rowAsset.states[isActive ? 'active' : 'normal'] || rowAsset.states.normal;
-    if (!stateDef) return null;
-    const frameStyle = frameStyleForAsset(rowAsset, stateDef.rect);
-    const labelStyle = insetStyle(rowAsset.rules?.textInset, stateDef.rect);
-    const buttonStyle = { '--asset-aspect': `${stateDef.rect.w} / ${stateDef.rect.h}` } as CSSProperties;
+    const normalState = rowAsset.states.normal;
+    if (!normalState) return null;
+    const pressedState = rowAsset.states.pressed || rowAsset.states.active || normalState;
+    const normalStyle = frameStyleForAsset(rowAsset, normalState.rect);
+    const pressedStyle = frameStyleForAsset(rowAsset, pressedState.rect);
+    const labelStyle = insetStyle(rowAsset.rules?.textInset, normalState.rect);
+    const buttonStyle = { '--asset-aspect': `${normalState.rect.w} / ${normalState.rect.h}` } as CSSProperties;
     return (
       <button
         type="button"
@@ -26,7 +28,8 @@ export function ModeButton({ mode, specimen = false, active = false }: { mode: M
         style={buttonStyle}
         onClick={specimen ? () => setPressed((p) => !p) : undefined}
       >
-        <span className="mode-button-art" style={frameStyle} aria-hidden="true" />
+        <span className="mode-button-art mode-button-art-normal" style={normalStyle} aria-hidden="true" />
+        <span className="mode-button-art mode-button-art-pressed" style={pressedStyle} aria-hidden="true" />
         <span className="mode-button-label" style={labelStyle}>{mode.label}</span>
       </button>
     );

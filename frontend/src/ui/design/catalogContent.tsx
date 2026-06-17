@@ -88,7 +88,7 @@ function ButtonRowAssetCard({ asset }: { asset: Asset }): React.ReactElement {
         {states.map(([stateKey, state]) => (
           <div className="catalog-state-card" key={stateKey}>
             <strong>{state.label || stateKey}</strong>
-            <AssetFrame asset={asset} frame={state.rect} label={stateKey === 'active' ? 'Live Label' : undefined} />
+            <AssetFrame asset={asset} frame={state.rect} label={stateKey === 'pressed' ? 'Live Label' : undefined} />
             <code>x:{state.rect.x} y:{state.rect.y} w:{state.rect.w} h:{state.rect.h}</code>
           </div>
         ))}

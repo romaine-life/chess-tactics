@@ -93,11 +93,13 @@ function SvgIcon({ name }: { name: 'hourglass' | 'reticle' | 'gem' | 'shield' | 
 function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boolean }): ReactElement {
   const rowAsset = assetById(mode.row);
   const href = MODE_HREFS[mode.slug] || '/';
-  if (rowAsset?.states) {
-    const rowState = rowAsset.states[active ? 'active' : 'normal'] || rowAsset.states.normal;
-    const rowStyle = frameStyleForAsset(rowAsset, rowState.rect);
-    const labelStyle = insetStyle(rowAsset.rules?.textInset, rowState.rect);
-    const linkStyle = { '--asset-aspect': `${rowState.rect.w} / ${rowState.rect.h}` } as CSSProperties;
+  if (rowAsset?.states?.normal) {
+    const normalState = rowAsset.states.normal;
+    const pressedState = rowAsset.states.pressed || rowAsset.states.active || normalState;
+    const normalStyle = frameStyleForAsset(rowAsset, normalState.rect);
+    const pressedStyle = frameStyleForAsset(rowAsset, pressedState.rect);
+    const labelStyle = insetStyle(rowAsset.rules?.textInset, normalState.rect);
+    const linkStyle = { '--asset-aspect': `${normalState.rect.w} / ${normalState.rect.h}` } as CSSProperties;
 
     return (
       <a
@@ -106,7 +108,8 @@ function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boole
         aria-current={active ? 'page' : undefined}
         style={linkStyle}
       >
-        <span className="mode-button-art" style={rowStyle} aria-hidden="true" />
+        <span className="mode-button-art mode-button-art-normal" style={normalStyle} aria-hidden="true" />
+        <span className="mode-button-art mode-button-art-pressed" style={pressedStyle} aria-hidden="true" />
         <span className="mode-button-label" style={labelStyle}>{mode.label}</span>
       </a>
     );
@@ -274,8 +277,8 @@ export function MainMenu(): ReactElement {
             <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" />
           </a>
           <nav className="main-menu-actions main-menu-actions-assets" aria-label="Game modes">
-            {MENU_MODES.map((mode, index) => (
-              <ModeMenuLink key={mode.slug} mode={mode} active={index === 0} />
+            {MENU_MODES.map((mode) => (
+              <ModeMenuLink key={mode.slug} mode={mode} />
             ))}
           </nav>
           <DailyPanel />
