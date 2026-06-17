@@ -3,7 +3,7 @@ import { MainMenu } from './MainMenu';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
-import { DesignIndex } from './DesignIndex';
+import { DesignSurface } from './design/DesignSurface';
 
 // The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc.
 // don't pull the renderer bundle (preserving app.js's lazy-mount behaviour).
@@ -25,6 +25,6 @@ export function App(): ReactElement {
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
   if (path === '/settings') return <Settings />;
-  if (path === '/design' || path.startsWith('/design/')) return <DesignIndex />;
+  if (path === '/design' || path.startsWith('/design/')) return <DesignSurface />;
   return <MainMenu />;
 }

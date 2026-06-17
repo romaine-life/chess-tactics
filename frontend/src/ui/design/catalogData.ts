@@ -1,0 +1,211 @@
+// Design catalog data + geometry helpers, ported verbatim from the legacy
+// app.js design surfaces (recovered from git 8b438a5~1). This is the source of
+// truth the user iterated on across ~50 turns in session 930: the classification
+// tree (is-a, deliberately shallow), the glossary vocabulary (every term
+// attested by an engine authority), and the five completed main-menu button
+// widgets. Rendering reuses the original CSS (still in style.css), so the React
+// surface is pixel-faithful to what was built.
+import type { CSSProperties } from 'react';
+import assetCatalogRaw from '../../asset-catalog.json';
+
+export interface Rect { x: number; y: number; w: number; h: number }
+export interface AssetState { label?: string; rect: Rect }
+export interface AssetRules {
+  textInset?: Rect;
+  iconSlot?: Rect;
+  arrowSlot?: Rect;
+  hitbox?: Rect;
+  states?: string[];
+  text?: string;
+  sizing?: string;
+  fitsSlot?: string;
+  background?: string;
+  notes?: string[];
+}
+export interface AssetSheet { image: string; width: number; height: number }
+export interface AssetSource { kind?: string; image?: string; reference?: string; note?: string }
+export interface Asset {
+  id: string;
+  type: string;
+  status?: string;
+  title?: string;
+  summary?: string;
+  source?: AssetSource;
+  sheet?: AssetSheet;
+  states?: Record<string, AssetState>;
+  rect?: Rect;
+  rules?: AssetRules;
+}
+interface AssetCatalogFile { schemaVersion: number; assets: Asset[] }
+
+// The committed catalog is the source of truth that also seeds the DB. Reading
+// it directly (rather than the /api/design-assets DB endpoint) keeps the catalog
+// rendering self-contained and dodges the slot seed/413 bug that hid the 9-slice
+// before — the appearance is identical either way.
+export const assetCatalog = assetCatalogRaw as unknown as AssetCatalogFile;
+
+export function assetById(id: string): Asset | undefined {
+  return (assetCatalog.assets || []).find((asset) => asset.id === id);
+}
+
+// ---------------------------------------------------------------------------
+// The classification tree. asset → 9-slice → Main Menu; asset → icon → 5 icons;
+// asset → sprite atlas (planned); widget → button → Main Menu → 5 buttons.
+// "is-a" nesting, leaves labelled by entity only ("Main Menu", not "Main Menu
+// 9 Slice") because the path is the classifier (session 930, turn 41).
+// ---------------------------------------------------------------------------
+export interface TreeNode { label: string; href: string; planned?: boolean; children?: TreeNode[] }
+
+export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
+  {
+    label: 'asset',
+    href: '/design/catalog',
+    children: [
+      {
+        label: '9-slice',
+        href: '/design/catalog/main-menu-buttons',
+        children: [
+          { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
+        ],
+      },
+      {
+        label: 'icon',
+        href: '/design/catalog/main-menu-button-icons',
+        children: [
+          { label: 'Sword', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.sword' },
+          { label: 'Crown', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.crown' },
+          { label: 'Scroll', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.scroll' },
+          { label: 'Players', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.people' },
+          { label: 'Gear', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.gear' },
+        ],
+      },
+      { label: 'sprite atlas', href: '#', planned: true },
+    ],
+  },
+  {
+    label: 'widget',
+    href: '/design/catalog/widgets/main-menu',
+    children: [
+      {
+        label: 'button',
+        href: '/design/catalog/widgets/main-menu',
+        children: [
+          {
+            label: 'Main Menu',
+            href: '/design/catalog/widgets/main-menu',
+            children: [
+              { label: 'Solo Skirmish', href: '/design/catalog/widgets/main-menu/solo-skirmish' },
+              { label: 'Campaign Editor', href: '/design/catalog/widgets/main-menu/campaign-editor' },
+              { label: 'Level Editor', href: '/design/catalog/widgets/main-menu/level-editor' },
+              { label: 'Lobbies', href: '/design/catalog/widgets/main-menu/lobbies' },
+              { label: 'Settings', href: '/design/catalog/widgets/main-menu/settings' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Glossary — the shared vocabulary. Every term attested by Unity/Unreal/Godot
+// docs (session 930, turns 17-18: "nothing loose gets in").
+// ---------------------------------------------------------------------------
+export interface GlossaryEntry { term: string; tag: string; def: string; src: string }
+
+export const GLOSSARY: GlossaryEntry[] = [
+  { term: 'asset', tag: '', def: 'A reusable image plus contract the game operates on: it renders, state-switches, slots into, or swaps it.', src: 'Unity / Unreal' },
+  { term: '9-slice', tag: 'asset', def: 'A texture that scales while its corners stay fixed and the middle stretches; the reusable, icon-less button or panel background.', src: 'Unity 9-slicing · Godot NinePatchRect' },
+  { term: 'icon', tag: 'asset', def: 'A standalone image composited into a slot.', src: 'universal' },
+  { term: 'sprite atlas', tag: 'asset', def: 'One image packing several unrelated sprites (our source sheets).', src: 'Unity Sprite Atlas' },
+  { term: 'catalog', tag: '', def: 'The library of all assets, browsed sorted by type. It holds assets, not widgets.', src: 'project' },
+  { term: 'type', tag: '', def: 'An inventory shelf: a kind of asset (9-slice, icon). The catalog tree top levels.', src: 'project' },
+  { term: 'state', tag: '', def: 'A named visual variant: normal, pressed (later highlighted, selected, disabled).', src: 'Unity UI transitions' },
+  { term: 'slot', tag: '', def: 'A labelled region of a 9-slice filled at runtime by an asset (icon) or live text: iconSlot, textInset, arrowSlot.', src: 'Unreal UMG' },
+  { term: 'rect', tag: '', def: 'A pixel rectangle {x, y, w, h}; the bounds of a state or slot.', src: 'Unity Rect · Godot region_rect' },
+  { term: 'patch margins', tag: '', def: 'The fixed border thicknesses of a 9-slice: the parts that do not stretch.', src: 'Unity / Godot' },
+  { term: 'widget', tag: 'not an asset', def: 'The general term for an interactive element the player manipulates; assembled at runtime from assets, not a stored asset. Also called a control.', src: 'Unreal UMG · Wikipedia' },
+  { term: 'button', tag: 'not an asset', def: 'A kind of widget: a clickable control. Widget is the general term; button is the specific kind. The Main Menu Button is the button this catalog builds from its 9-slice and icons.', src: 'Unity / Unreal / Godot Button' },
+  { term: 'template', tag: 'not an asset', def: 'The reusable definition a widget instance is built from.', src: 'Unreal UI Template · Unity Prefab' },
+  { term: 'instance', tag: 'not an asset', def: 'A specific live widget produced from a template.', src: 'all engines' },
+];
+
+// ---------------------------------------------------------------------------
+// The five completed main-menu button widgets (live, assembled from assets).
+// ---------------------------------------------------------------------------
+export interface MenuMode { action: string; slug: string; icon: string; label: string }
+
+export const MENU_MODES: MenuMode[] = [
+  { action: 'party', slug: 'solo-skirmish', icon: 'button-icon.main-menu.sword', label: 'Solo Skirmish' },
+  { action: 'campaigns', slug: 'campaign-editor', icon: 'button-icon.main-menu.crown', label: 'Campaign Editor' },
+  { action: 'level-editor-preview', slug: 'level-editor', icon: 'button-icon.main-menu.scroll', label: 'Level Editor' },
+  { action: 'lobbies', slug: 'lobbies', icon: 'button-icon.main-menu.people', label: 'Lobbies' },
+  { action: 'settings', slug: 'settings', icon: 'button-icon.main-menu.gear', label: 'Settings' },
+];
+
+// ---------------------------------------------------------------------------
+// Geometry helpers (ported verbatim from app.js). frameStyleForAsset crops a
+// sprite sheet to a rect via CSS custom properties the .catalog-frame /
+// .mode-button-* rules consume; insetStyle positions a slot inside a frame.
+// ---------------------------------------------------------------------------
+export function frameStyleForAsset(asset: Asset, frame: Rect): CSSProperties {
+  const sheet = asset.sheet || ({} as AssetSheet);
+  const sheetWidth = Number(sheet.width) || frame.w || 1;
+  const sheetHeight = Number(sheet.height) || frame.h || 1;
+  const scaleX = (sheetWidth / frame.w) * 100;
+  const scaleY = (sheetHeight / frame.h) * 100;
+  const maxX = Math.max(1, sheetWidth - frame.w);
+  const maxY = Math.max(1, sheetHeight - frame.h);
+  const posX = maxX === 1 ? 0 : (frame.x / maxX) * 100;
+  const posY = maxY === 1 ? 0 : (frame.y / maxY) * 100;
+  const imageUrl = String(sheet.image || '').replace(/["'\\\n\r]/g, '');
+  return {
+    '--asset-image': `url(${imageUrl})`,
+    '--asset-bg-x': `${posX.toFixed(4)}%`,
+    '--asset-bg-y': `${posY.toFixed(4)}%`,
+    '--asset-bg-w': `${scaleX.toFixed(4)}%`,
+    '--asset-bg-h': `${scaleY.toFixed(4)}%`,
+    '--asset-aspect': `${frame.w} / ${frame.h}`,
+  } as CSSProperties;
+}
+
+export function insetStyle(inset: Rect | undefined, frame: Rect | undefined): CSSProperties {
+  if (!inset) return {};
+  const frameWidth = Number(frame && frame.w) || 1;
+  const frameHeight = Number(frame && frame.h) || 1;
+  return {
+    left: `${((inset.x / frameWidth) * 100).toFixed(3)}%`,
+    top: `${((inset.y / frameHeight) * 100).toFixed(3)}%`,
+    width: `${((inset.w / frameWidth) * 100).toFixed(3)}%`,
+    height: `${((inset.h / frameHeight) * 100).toFixed(3)}%`,
+  };
+}
+
+export function assetTypeLabel(type: string): string {
+  if (type === 'button-9slice.main-menu') return 'Main Menu Button 9-Slice';
+  if (type === 'button-icon.main-menu') return 'Main Menu Button Icon';
+  return `${type[0].toUpperCase()}${type.slice(1)}`;
+}
+
+export function assetTypePath(type: string): string {
+  if (type === 'button-9slice.main-menu') return '/design/catalog/main-menu-buttons';
+  if (type === 'button-icon.main-menu') return '/design/catalog/main-menu-button-icons';
+  return `/design/catalog/${type}s`;
+}
+
+export function assetPath(asset: Asset): string {
+  return `${assetTypePath(asset.type)}/${encodeURIComponent(asset.id)}`;
+}
+
+// Glossary mode reuses the classification tree but drops the specific-entity
+// leaves, leaving only the glossary-term nodes; each links to its definition.
+export function pruneTreeToTerms(nodes: TreeNode[]): TreeNode[] {
+  return nodes
+    .filter((node) => GLOSSARY.some((g) => g.term === node.label))
+    .map((node) => {
+      const kids = node.children ? pruneTreeToTerms(node.children) : [];
+      const out: TreeNode = { label: node.label, href: `/design/catalog/glossary/${encodeURIComponent(node.label)}` };
+      if (kids.length) out.children = kids;
+      return out;
+    });
+}
