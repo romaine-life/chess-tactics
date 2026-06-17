@@ -21,9 +21,9 @@ jobs:
   test-and-build:
     name: Test and build app image
     runs-on: ubuntu-latest
-    # Use the same `prod` environment build-and-deploy.yaml runs under so the
-    # ARM_* repo variables and OIDC federation resolve identically.
-    environment: prod
+    # Main builds use the production federated identity; branch dispatches and
+    # prebuilds use the dev identity so Azure OIDC subjects match Glimmung.
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
     env:
       REGISTRY: romainecr.azurecr.io
       IMAGE: chess-tactics
