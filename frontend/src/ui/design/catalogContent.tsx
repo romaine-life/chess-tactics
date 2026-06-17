@@ -65,6 +65,45 @@ function ButtonAssetCard({ asset }: { asset: Asset }): React.ReactElement {
   );
 }
 
+function PanelAssetCard({ asset }: { asset: Asset }): React.ReactElement {
+  const rules = asset.rules || {};
+  const rect = asset.rect;
+  return (
+    <article className="catalog-asset-card" id={asset.id}>
+      <header className="catalog-asset-head">
+        <span className="design-hub-kicker">{asset.type} · {asset.status || 'draft'}</span>
+        <h3>{asset.title || asset.id}</h3>
+        <p>{asset.summary || ''}</p>
+      </header>
+
+      <section className="catalog-asset-meta" aria-label="Asset metadata">
+        <div><dt>Category</dt><dd>{categoryLabel(asset)}</dd></div>
+        <div><dt>ID</dt><dd>{asset.id}</dd></div>
+        <div><dt>Source</dt><dd>{asset.source?.kind || 'unknown'}</dd></div>
+        <div><dt>Text</dt><dd>{rules.text || 'unknown'}</dd></div>
+        <div><dt>Sizing</dt><dd>{rules.sizing || 'unknown'}</dd></div>
+      </section>
+
+      <section className="catalog-state-grid" aria-label="Panel frame">
+        <div className="catalog-state-card">
+          <strong>Panel Frame</strong>
+          {rect ? <AssetFrame asset={asset} frame={rect} /> : null}
+          {rect ? <code>x:{rect.x} y:{rect.y} w:{rect.w} h:{rect.h}</code> : null}
+        </div>
+      </section>
+
+      <section className="catalog-slot-grid" aria-label="Panel slots">
+        <div><h4>Content Inset</h4><code>{JSON.stringify(rules.contentInset || {})}</code></div>
+        <div><h4>Patch Margins</h4><code>{JSON.stringify(rules.patchMargins || {})}</code></div>
+      </section>
+
+      <section className="catalog-rule-grid" aria-label="Asset rules">
+        <div><h4>Notes</h4><ul>{(rules.notes || []).map((note, i) => <li key={i}>{note}</li>)}</ul></div>
+      </section>
+    </article>
+  );
+}
+
 function IconAssetCard({ asset }: { asset: Asset }): React.ReactElement {
   const rules = asset.rules || {};
   const rect = asset.rect;
@@ -100,7 +139,8 @@ function IconAssetCard({ asset }: { asset: Asset }): React.ReactElement {
 
 export function CatalogAssetCard({ asset }: { asset: Asset }): React.ReactElement | null {
   if (asset.type === 'button-9slice.main-menu') return <ButtonAssetCard asset={asset} />;
-  if (asset.type === 'button-icon.main-menu') return <IconAssetCard asset={asset} />;
+  if (asset.type === 'panel-9slice.main-menu') return <PanelAssetCard asset={asset} />;
+  if (asset.type === 'button-icon.main-menu' || asset.type === 'profile-icon.main-menu') return <IconAssetCard asset={asset} />;
   return null;
 }
 
@@ -111,8 +151,10 @@ export function CatalogHome({ countsByType, onNavigate }: { countsByType: Record
     {
       label: 'asset',
       kinds: [
-        { title: '9-slice', href: '/design/catalog/main-menu-buttons', count: countsByType['button-9slice.main-menu'] || 0, summary: 'Scalable, icon-less frames whose corners stay fixed while the middle stretches.' },
-        { title: 'icon', href: '/design/catalog/main-menu-button-icons', count: countsByType['button-icon.main-menu'] || 0, summary: 'Standalone images composited into a slot.' },
+        { title: 'button 9-slice', href: '/design/catalog/main-menu-buttons', count: countsByType['button-9slice.main-menu'] || 0, summary: 'Scalable, icon-less button frames whose corners stay fixed while the middle stretches.' },
+        { title: 'panel 9-slice', href: '/design/catalog/main-menu-panels', count: countsByType['panel-9slice.main-menu'] || 0, summary: 'Scalable panel frames for profile, daily challenge, news, and other grouped content.' },
+        { title: 'button icon', href: '/design/catalog/main-menu-button-icons', count: countsByType['button-icon.main-menu'] || 0, summary: 'Standalone images composited into button icon slots.' },
+        { title: 'profile icon', href: '/design/catalog/main-menu-profile-icons', count: countsByType['profile-icon.main-menu'] || 0, summary: 'Standalone images composited into the profile/status panel.' },
         { title: 'sprite atlas', href: '#', count: 0, planned: true, summary: 'One image packing several unrelated sprites.' },
       ],
     },

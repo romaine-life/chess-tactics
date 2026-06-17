@@ -21,7 +21,9 @@ export interface DesignRoute {
 
 const ASSET_ROUTE_TYPES: Record<string, string> = {
   'main-menu-buttons': 'button-9slice.main-menu',
+  'main-menu-panels': 'panel-9slice.main-menu',
   'main-menu-button-icons': 'button-icon.main-menu',
+  'main-menu-profile-icons': 'profile-icon.main-menu',
 };
 
 export function normalizeDesignPath(pathname: string): string {

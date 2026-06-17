@@ -1,0 +1,27 @@
+{
+  "image": "/assets/ui/main-menu/panel-9slice.png",
+  "width": 390,
+  "height": 84,
+  "source": {
+    "image": "/assets/ui/main-menu-aspirational.png",
+    "rect": {
+      "x": 1176,
+      "y": 26,
+      "w": 390,
+      "h": 84
+    }
+  },
+  "contentInset": {
+    "x": 18,
+    "y": 16,
+    "w": 354,
+    "h": 52
+  },
+  "patchMargins": {
+    "left": 16,
+    "right": 16,
+    "top": 16,
+    "bottom": 16
+  },
+  "text": "live"
+}

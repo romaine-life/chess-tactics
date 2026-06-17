@@ -12,9 +12,11 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export interface AssetState { label?: string; rect: Rect }
 export interface AssetRules {
   textInset?: Rect;
+  contentInset?: Rect;
   iconSlot?: Rect;
   arrowSlot?: Rect;
   hitbox?: Rect;
+  patchMargins?: { left: number; right: number; top: number; bottom: number };
   states?: string[];
   text?: string;
   sizing?: string;
@@ -72,7 +74,13 @@ export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
               { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
             ],
           },
-          { label: 'panel', href: '/design/catalog/9-slice/panel', planned: true },
+          {
+            label: 'panel',
+            href: '/design/catalog/9-slice/panel',
+            children: [
+              { label: 'Main Menu', href: '/design/catalog/main-menu-panels/panel-9slice.main-menu.profile' },
+            ],
+          },
         ],
       },
       {
@@ -84,6 +92,10 @@ export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
           { label: 'Scroll', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.scroll' },
           { label: 'Players', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.people' },
           { label: 'Gear', href: '/design/catalog/main-menu-button-icons/button-icon.main-menu.gear' },
+          { label: 'Profile Crest', href: '/design/catalog/main-menu-profile-icons/profile-icon.main-menu.crest' },
+          { label: 'Allies Rook', href: '/design/catalog/main-menu-profile-icons/profile-icon.main-menu.rook-blue' },
+          { label: 'Enemies Rook', href: '/design/catalog/main-menu-profile-icons/profile-icon.main-menu.rook-red' },
+          { label: 'Profile Cog', href: '/design/catalog/main-menu-profile-icons/profile-icon.main-menu.cog' },
         ],
       },
       { label: 'sprite atlas', href: '#', planned: true },
@@ -165,10 +177,9 @@ export const NINE_SLICE_CATEGORIES: NineSliceCategory[] = [
   {
     id: 'panel',
     label: 'Panel',
-    def: 'A 9-slice of type panel: a stretchable container/surface background for grouping content (dialogs, cards, HUD panels). It exposes a content inset and patch margins — no icon, label, or arrow slots — and a single resting state. (Planned — no panel 9-slices yet.)',
+    def: 'A 9-slice of type panel: a stretchable container/surface background for grouping content (dialogs, cards, HUD panels). It exposes a content inset and patch margins — no icon, label, or arrow slots — and a single resting state.',
     slots: ['contentInset', 'patchMargins'],
     states: [],
-    planned: true,
   },
 ];
 
@@ -238,13 +249,17 @@ export function insetStyle(inset: Rect | undefined, frame: Rect | undefined): CS
 
 export function assetTypeLabel(type: string): string {
   if (type === 'button-9slice.main-menu') return 'Main Menu Button 9-Slice';
+  if (type === 'panel-9slice.main-menu') return 'Main Menu Panel 9-Slice';
   if (type === 'button-icon.main-menu') return 'Main Menu Button Icon';
+  if (type === 'profile-icon.main-menu') return 'Main Menu Profile Icon';
   return `${type[0].toUpperCase()}${type.slice(1)}`;
 }
 
 export function assetTypePath(type: string): string {
   if (type === 'button-9slice.main-menu') return '/design/catalog/main-menu-buttons';
+  if (type === 'panel-9slice.main-menu') return '/design/catalog/main-menu-panels';
   if (type === 'button-icon.main-menu') return '/design/catalog/main-menu-button-icons';
+  if (type === 'profile-icon.main-menu') return '/design/catalog/main-menu-profile-icons';
   return `/design/catalog/${type}s`;
 }
 

@@ -449,6 +449,11 @@ h1 {
   padding: 0;
 }
 
+.shell.main-menu-active .app-root {
+  overflow: hidden;
+  position: relative;
+}
+
 .shell.main-menu-active .game {
   gap: 0;
   grid-template-rows: minmax(0, 1fr);
@@ -652,6 +657,9 @@ h1 {
   background-size: 170.91% 171.03%;
   background-position: 81.46% 43.69%;
   image-rendering: pixelated;
+  inset: 16px;
+  overflow: hidden;
+  position: absolute;
 }
 
 .shell.main-menu-active .board-scroll {
@@ -941,6 +949,8 @@ h1 {
   border: 0;
   background: transparent;
   cursor: pointer;
+  min-height: 0;
+  text-decoration: none;
   -webkit-tap-highlight-color: transparent;
   transition: transform .12s ease, filter .12s ease;
 }
@@ -1187,9 +1197,28 @@ h1 {
 
 /* Profile / status panel — live DOM component (element 03) */
 .menu-panel {
-  border: 2px solid var(--menu-line);
-  background: var(--menu-panel);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(216, 240, 246, .05);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  position: relative;
+}
+
+.menu-panel::before,
+.profile-bar::before {
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/main-menu/panel-9slice.png") 16 fill / 16px stretch;
+  content: "";
+  image-rendering: pixelated;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.menu-panel > *,
+.profile-bar > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* Element 03 - hybrid (render-accuracy + text rule, docs/ui-art-direction.md):
@@ -1206,20 +1235,19 @@ h1 {
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
-  border: 2px solid var(--menu-line);
-  background: var(--menu-panel);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(216, 240, 246, .05);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  min-height: 72px;
+  position: relative;
 }
 
-/* Crest: crop of the lion shield from the render (~{x:1188,y:42,w:58,h:56} of 1586x992). */
+/* Crest: transparent PNG cropped from the approved render by normalize-main-menu-profile.mjs. */
 .profile-crest {
   flex: none;
-  width: 34px;
-  height: 33px;
-  background-image: url("/assets/ui/main-menu-aspirational.png");
-  background-repeat: no-repeat;
-  background-size: 2734.5% 1771.4%;
-  background-position: 77.75% 4.49%;
+  width: 42px;
+  height: 43px;
+  background: url("/assets/ui/main-menu/profile-crest.png") center / contain no-repeat;
   image-rendering: pixelated;
 }
 
@@ -1254,6 +1282,7 @@ h1 {
   letter-spacing: .04em;
   text-transform: uppercase;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .profile-auth:hover,
@@ -1273,11 +1302,20 @@ h1 {
   background: var(--panel-inset, #0a131b);
   color: var(--ink);
   cursor: pointer;
+  text-decoration: none;
 }
 
-.profile-gear .ui-icon {
-  width: 16px;
-  height: 16px;
+.profile-icon-img {
+  display: block;
+  height: 100%;
+  image-rendering: pixelated;
+  object-fit: contain;
+  width: 100%;
+}
+
+.profile-gear .profile-icon-img {
+  height: 20px;
+  width: 20px;
 }
 
 .profile-gear:hover,
@@ -1289,6 +1327,7 @@ h1 {
 .profile-forces {
   margin: 0;
   justify-content: space-between;
+  min-height: 62px;
 }
 
 .force {
@@ -1318,7 +1357,7 @@ h1 {
   height: 20px;
 }
 
-.force-icon .ui-icon {
+.force-icon .profile-icon-img {
   width: 18px;
   height: 20px;
 }
@@ -1492,6 +1531,7 @@ h1 {
 
 .dock-hit {
   position: absolute;
+  display: block;
   top: 6%;
   width: 22%;
   height: 88%;
