@@ -15,78 +15,23 @@ const MODE_HREFS: Record<string, string> = {
   settings: '/settings',
 };
 
+const SECONDARY_ASSET_ROOT = '/assets/ui/main-menu/secondary';
+
 const DOCK_ITEMS = [
-  { label: 'Achievements', href: '/design/catalog/widgets/main-menu', left: '0%' },
-  { label: 'Campaigns', href: '/campaigns-next', left: '26%' },
-  { label: 'Stats', href: '/design/widgets', left: '52%' },
-  { label: 'Collection', href: '/design/catalog', left: '78%' },
+  { label: 'Achievements', href: '/design/catalog/widgets/main-menu', key: 'achievements' },
+  { label: 'Campaigns', href: '/campaigns-next', key: 'campaigns' },
+  { label: 'Stats', href: '/design/widgets', key: 'stats' },
+  { label: 'Collection', href: '/design/catalog', key: 'collection' },
 ];
 
-function SvgIcon({ name }: { name: 'hourglass' | 'reticle' | 'gem' | 'shield' | 'crown' | 'book' }): ReactElement {
-  const common = {
-    className: 'ui-icon',
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 2,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    'aria-hidden': 'true',
-  } as const;
-  if (name === 'hourglass') {
-    return (
-      <svg {...common}>
-        <path d="M6 3h12" />
-        <path d="M6 21h12" />
-        <path d="M8 3v4c0 2 2 3 4 5 2-2 4-3 4-5V3" />
-        <path d="M8 21v-4c0-2 2-3 4-5 2 2 4 3 4 5v4" />
-      </svg>
-    );
-  }
-  if (name === 'reticle') {
-    return (
-      <svg {...common}>
-        <circle cx="12" cy="12" r="7" />
-        <circle cx="12" cy="12" r="2" />
-        <path d="M12 2v5" />
-        <path d="M12 17v5" />
-        <path d="M2 12h5" />
-        <path d="M17 12h5" />
-      </svg>
-    );
-  }
-  if (name === 'gem') {
-    return (
-      <svg {...common}>
-        <path d="M6 3h12l4 6-10 12L2 9l4-6Z" />
-        <path d="M2 9h20" />
-        <path d="m9 9 3 12 3-12" />
-      </svg>
-    );
-  }
-  if (name === 'shield') {
-    return (
-      <svg {...common}>
-        <path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" />
-        <path d="m9 12 2 2 4-5" />
-      </svg>
-    );
-  }
-  if (name === 'crown') {
-    return (
-      <svg {...common}>
-        <path d="m3 18 2-10 5 5 2-8 2 8 5-5 2 10H3Z" />
-        <path d="M3 21h18" />
-      </svg>
-    );
-  }
+function SecondaryIcon({ name, className = '' }: { name: string; className?: string }): ReactElement {
   return (
-    <svg {...common}>
-      <path d="M5 4h10a4 4 0 0 1 4 4v12H9a4 4 0 0 0-4-4V4Z" />
-      <path d="M5 4v12" />
-      <path d="M9 8h6" />
-      <path d="M9 12h5" />
-    </svg>
+    <img
+      className={`secondary-menu-icon ${className}`.trim()}
+      src={`${SECONDARY_ASSET_ROOT}/icon-${name}.png`}
+      alt=""
+      aria-hidden="true"
+    />
   );
 }
 
@@ -188,15 +133,15 @@ function DailyPanel(): ReactElement {
     <section className="menu-panel daily-panel" aria-label="Daily challenge">
       <div className="daily-head">
         <strong>Daily Challenge</strong>
-        <span className="daily-timer"><SvgIcon name="hourglass" />12h 45m</span>
+        <span className="daily-timer"><SecondaryIcon name="hourglass" />12h 45m</span>
       </div>
       <div className="daily-body">
-        <span className="daily-reticle" aria-hidden="true"><SvgIcon name="reticle" /></span>
+        <span className="daily-reticle" aria-hidden="true"><SecondaryIcon name="reticle" /></span>
         <p>Capture the enemy King</p>
       </div>
       <div className="daily-reward">
         <span className="daily-reward-label">Reward</span>
-        <span className="daily-gem" aria-hidden="true"><SvgIcon name="gem" /></span>
+        <span className="daily-gem" aria-hidden="true"><SecondaryIcon name="gem" /></span>
         <strong>50</strong>
       </div>
     </section>
@@ -211,15 +156,15 @@ function NewsPanel(): ReactElement {
       </div>
       <ul className="news-list">
         <li className="news-line news-line-cobalt">
-          <span className="news-ico" aria-hidden="true"><SvgIcon name="shield" /></span>
+          <span className="news-ico" aria-hidden="true"><SecondaryIcon name="shield" /></span>
           <span>v1.2.0 Balance Update</span>
         </li>
         <li className="news-line news-line-gold">
-          <span className="news-ico" aria-hidden="true"><SvgIcon name="crown" /></span>
+          <span className="news-ico" aria-hidden="true"><SecondaryIcon name="crown" /></span>
           <span>New official maps added</span>
         </li>
         <li className="news-line news-line-red">
-          <span className="news-ico" aria-hidden="true"><SvgIcon name="book" /></span>
+          <span className="news-ico" aria-hidden="true"><SecondaryIcon name="book" /></span>
           <span>Community Spotlight: Top Tactics</span>
         </li>
       </ul>
@@ -251,11 +196,14 @@ function MenuDock(): ReactElement {
         {DOCK_ITEMS.map((item) => (
           <a
             key={item.label}
-            className="dock-hit"
+            className={`dock-hit dock-hit-${item.key}`}
             href={item.href}
             aria-label={item.label}
-            style={{ left: item.left }}
-          />
+          >
+            <span className="dock-hit-art dock-hit-art-normal" aria-hidden="true" />
+            <span className="dock-hit-art dock-hit-art-hover" aria-hidden="true" />
+            <span className="dock-hit-art dock-hit-art-pressed" aria-hidden="true" />
+          </a>
         ))}
       </div>
     </nav>
