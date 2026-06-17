@@ -1,9 +1,15 @@
-import { lazy, Suspense, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactElement } from 'react';
 import { MainMenu } from './MainMenu';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
 import { DesignSurface } from './design/DesignSurface';
+import {
+  APP_NAVIGATION_EVENT,
+  navigateApp,
+  normalizeRoutePath,
+  shouldInterceptAppLinkClick,
+} from './navigation';
 
 // The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc.
 // don't pull the renderer bundle (preserving app.js's lazy-mount behaviour).
@@ -14,11 +20,36 @@ const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ defa
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 const split = (node: ReactElement): ReactElement => <Suspense fallback={fallback}>{node}</Suspense>;
 
-// React router replacing app.js's string-HTML router. Plain path matching over
-// window.location (links are full navigations). Legacy paths (/skirmish,
-// /level-editor, /campaigns, /menu-next, /main-menu) resolve to React surfaces.
+// React router replacing app.js's string-HTML router. Same-origin app links are
+// intercepted below so route changes keep the document, React tree, and BGM
+// audio element alive. Legacy paths (/skirmish, /level-editor, /campaigns,
+// /menu-next, /main-menu) resolve to React surfaces.
 export function App(): ReactElement {
-  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  const [path, setPath] = useState<string>(() => normalizeRoutePath(window.location.pathname));
+
+  useEffect(() => {
+    const syncPath = () => setPath(normalizeRoutePath(window.location.pathname));
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      if (!shouldInterceptAppLinkClick(event, anchor)) return;
+
+      event.preventDefault();
+      navigateApp(anchor.href);
+    };
+
+    window.addEventListener('popstate', syncPath);
+    window.addEventListener(APP_NAVIGATION_EVENT, syncPath);
+    document.addEventListener('click', onClick);
+    return () => {
+      window.removeEventListener('popstate', syncPath);
+      window.removeEventListener(APP_NAVIGATION_EVENT, syncPath);
+      document.removeEventListener('click', onClick);
+    };
+  }, []);
+
   if (path === '/play' || path === '/skirmish') return split(<Skirmish />);
   if (path === '/edit' || path === '/level-editor') return split(<LevelEditor />);
   if (path === '/campaigns-next' || path === '/campaigns') return split(<CampaignEditor />);

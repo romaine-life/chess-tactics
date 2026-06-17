@@ -1,10 +1,11 @@
 // Top-level /design surface. Owns client-side navigation for the whole design
 // subtree: link clicks within /design are intercepted (pushState + re-render in
 // place — no full reload, no flash of the game screen), while links that leave
-// /design fall through to a normal navigation so App's router re-routes. A
+// /design hand off to App's top-level client router. A
 // faithful restoration of the design hub + the catalog/glossary/widgets/
 // navigation-prototype surfaces from the retired app.js.
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { navigateApp } from '../navigation';
 import { parseDesignRoute, normalizeDesignPath } from './designRoute';
 import { DesignCatalog } from './DesignCatalog';
 import { GlossaryPage } from './glossary';
@@ -80,10 +81,8 @@ export function DesignSurface(): ReactNode {
   const navigate = useCallback<Navigate>((href, e) => {
     if (e) e.preventDefault();
     if (!href || href === '#') return;
-    // Leaving the design subtree: hand off to a real navigation so App's
-    // top-level router renders the right surface.
     if (!href.startsWith('/design')) {
-      window.location.href = href;
+      navigateApp(href);
       return;
     }
     window.history.pushState({}, '', href);
@@ -93,9 +92,7 @@ export function DesignSurface(): ReactNode {
   useEffect(() => {
     const onPop = () => {
       const pathname = window.location.pathname;
-      // Back/forward out of the design subtree: reload so App re-routes to the
-      // right top-level surface (main menu, a game screen, etc.).
-      if (!pathname.startsWith('/design')) { window.location.reload(); return; }
+      if (!pathname.startsWith('/design')) return;
       setPath(normalizeDesignPath(pathname));
     };
     window.addEventListener('popstate', onPop);
