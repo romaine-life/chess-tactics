@@ -38,9 +38,8 @@ and those changes should not require production database migrations.
 The current implementation writes a versioned JSON store file at
 `DESIGN_PORTFOLIO_STORE_PATH`. If unset, it defaults to a file in the writable
 hot backend directory, then the static override directory, then the runtime
-directory, and finally `/tmp`. That makes draft values survive frontend
-hot-swaps and backend reloads in a running test slot without committing them to
-git.
+directory, and finally `/tmp`. That makes draft values survive backend reloads
+in a running test slot without committing them to git.
 
 The committed source of truth remains the markdown acceptance profile. A draft
 decision becomes durable project policy only when the relevant profile document

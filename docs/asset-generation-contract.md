@@ -232,7 +232,7 @@ Mechanical checks can reject broken assets. Human review accepts the style.
 ## Migration Posture
 
 Art-backed screens and crops are allowed as bridges when they preserve approved
-fidelity faster than a production asset kit can. They should remain explicit
+visual accuracy faster than a production asset kit can. They should remain explicit
 references or temporary composition layers, not a reason to avoid building real
 assets for reusable game systems.
 

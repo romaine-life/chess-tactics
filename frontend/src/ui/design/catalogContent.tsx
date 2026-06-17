@@ -1,9 +1,8 @@
-// Catalog content pane — faithful port of app.js's asset cards, catalog home,
-// and the type picker (select + search). Renders to the right of the locked
-// tree rail; reuses the original .catalog-* CSS.
-import { useState } from 'react';
+// Catalog content pane — faithful port of app.js's asset cards + catalog home.
+// Renders to the right of the locked tree rail; reuses the original .catalog-*
+// CSS.
 import {
-  assetCatalog, assetPath, assetTypeLabel,
+  assetCatalog,
   frameStyleForAsset, insetStyle,
   type Asset, type Rect,
 } from './catalogData';
@@ -148,49 +147,15 @@ export function CatalogHome({ countsByType, onNavigate }: { countsByType: Record
   );
 }
 
-// Select + search picker for a chosen asset type. Selecting navigates in place;
-// search filters the live match count (and which options are offered).
-export function AssetTypePicker({ assets, selected, onNavigate }: { assets: Asset[]; selected?: Asset; onNavigate: Navigate }): React.ReactElement | null {
-  const [search, setSearch] = useState('');
-  if (!assets.length) return null;
-  const typeLabel = assetTypeLabel(assets[0].type);
-  const q = search.trim().toLowerCase();
-  const matches = assets.filter((a) => !q || `${a.title || ''} ${a.id}`.toLowerCase().includes(q));
-  return (
-    <aside className="catalog-picker" aria-label={`${typeLabel} assets`}>
-      <div className="catalog-picker-head">
-        <h3>{typeLabel} Assets</h3>
-        <span>{assets.length}</span>
-      </div>
-      <label className="catalog-picker-control">
-        <span>Selected {typeLabel.toLowerCase()}</span>
-        <select value={selected ? assetPath(selected) : ''} onChange={(e) => onNavigate(e.target.value)}>
-          {(q ? matches : assets).map((asset) => (
-            <option value={assetPath(asset)} key={asset.id}>{asset.title || asset.id}</option>
-          ))}
-        </select>
-      </label>
-      <label className="catalog-picker-control">
-        <span>Search {typeLabel.toLowerCase()} assets</span>
-        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter by name or id" autoComplete="off" />
-      </label>
-      <p className="catalog-picker-count">{matches.length} matches</p>
-    </aside>
-  );
-}
-
-// The browser pane: picker + the selected asset's full inspection card.
-export function CatalogBrowser({ assetType, assetId, onNavigate }: { assetType: string; assetId?: string; onNavigate: Navigate }): React.ReactElement {
+// The browser pane: the selected asset's full inspection card. (The old
+// select+search picker was removed — it was noise for single-asset types, and
+// the tree rail already navigates between a type's assets.)
+export function CatalogBrowser({ assetType, assetId }: { assetType: string; assetId?: string }): React.ReactElement {
   const assets = (assetCatalog.assets || []).filter((asset) => asset.type === assetType);
   const selected = assets.find((asset) => asset.id === assetId) || assets[0];
-  return (
-    <section className="catalog-browser" aria-label="Catalog asset browser">
-      <AssetTypePicker assets={assets} selected={selected} onNavigate={onNavigate} />
-      <div className="catalog-selected-asset">
-        {selected ? <CatalogAssetCard asset={selected} /> : <p className="catalog-empty">No assets in this section yet.</p>}
-      </div>
-    </section>
-  );
+  return selected
+    ? <CatalogAssetCard asset={selected} />
+    : <p className="catalog-empty">No assets in this section yet.</p>;
 }
 
 export function countsByType(): Record<string, number> {
