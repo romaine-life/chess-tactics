@@ -110,7 +110,7 @@ export function DesignCatalog({ route, path, onNavigate }: { route: DesignRoute;
     content = modes.length ? <WidgetGallery modes={modes} /> : <p className="catalog-empty">No widgets in this family yet.</p>;
   } else if (route.catalogMode === 'browser' && route.assetType) {
     title = `${assetTypeLabel(route.assetType)} Assets`;
-    content = <CatalogBrowser assetType={route.assetType} assetId={route.assetId} onNavigate={onNavigate} />;
+    content = <CatalogBrowser assetType={route.assetType} assetId={route.assetId} />;
   } else {
     content = <CatalogHome countsByType={countsByType()} onNavigate={onNavigate} />;
   }
