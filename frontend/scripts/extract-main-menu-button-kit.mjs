@@ -22,6 +22,17 @@ const ROWS = {
 };
 
 const FRAME = { w: 636, h: 164 };
+const POINTER_CLEANUP_RECTS = {
+  normal: [
+    // Remove the small disconnected lower pointer below each badge.
+    { x: 72, y: 145, w: 48, h: 19 },
+  ],
+  active: [
+    // The pressed crop includes disconnected top and bottom pointers.
+    { x: 96, y: 0, w: 64, h: 18 },
+    { x: 96, y: 145, w: 64, h: 19 },
+  ],
+};
 
 const BG_KEYS = [
   [23, 27, 30],
@@ -149,6 +160,22 @@ function composeFrame(row, ox, oy) {
   return out;
 }
 
+function clearRect(img, rect) {
+  const x0 = Math.max(0, rect.x);
+  const y0 = Math.max(0, rect.y);
+  const x1 = Math.min(img.w, rect.x + rect.w);
+  const y1 = Math.min(img.h, rect.y + rect.h);
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      img.data[pixelIndex(img, x, y) + 3] = 0;
+    }
+  }
+}
+
+function removePointerArtifacts(img, state) {
+  for (const rect of POINTER_CLEANUP_RECTS[state] || []) clearRect(img, rect);
+}
+
 function stackStates(normal, active) {
   const out = makeImage(FRAME.w, FRAME.h * 2);
   for (let y = 0; y < normal.h; y++) {
@@ -197,6 +224,7 @@ function main() {
       const row = crop(source, { x: spec.x, y: spec.y[index], w: spec.w, h: spec.h });
       floodRemoveBackground(row);
       const framed = composeFrame(row, spec.ox, spec.oy);
+      removePointerArtifacts(framed, state);
       stateFrames[state] = framed;
       const fileName = `${slug}-${state}.png`;
       writePNG(framed, path.join(OUT_DIR, fileName));
