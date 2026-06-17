@@ -2,7 +2,8 @@
 // Renders to the right of the locked tree rail; reuses the original .catalog-*
 // CSS.
 import {
-  assetCatalog,
+  assetCatalog, assetPath,
+  nineSliceCategory, nineSliceCategoryId,
   frameStyleForAsset, insetStyle,
   type Asset, type Rect,
 } from './catalogData';
@@ -30,6 +31,7 @@ function ButtonAssetCard({ asset }: { asset: Asset }): React.ReactElement {
       </header>
 
       <section className="catalog-asset-meta" aria-label="Asset metadata">
+        <div><dt>Category</dt><dd>{categoryLabel(asset)}</dd></div>
         <div><dt>ID</dt><dd>{asset.id}</dd></div>
         <div><dt>Source</dt><dd>{asset.source?.kind || 'unknown'}</dd></div>
         <div><dt>Text</dt><dd>{rules.text || 'unknown'}</dd></div>
@@ -156,6 +158,56 @@ export function CatalogBrowser({ assetType, assetId }: { assetType: string; asse
   return selected
     ? <CatalogAssetCard asset={selected} />
     : <p className="catalog-empty">No assets in this section yet.</p>;
+}
+
+// A 9-slice's mandatory category, label-ized for display ("Button 9-slice").
+function categoryLabel(asset: Asset): string {
+  const id = nineSliceCategoryId(asset);
+  const cat = id ? nineSliceCategory(id) : undefined;
+  return cat ? `${cat.label} 9-slice` : 'uncategorized';
+}
+
+// 9-slice category view — reads like a glossary entry for the *type* (its
+// definition), then its contract (required slots + states) and the 9-slices in
+// it. This is the catalog "showing the category" as a type, not a folder.
+export function NineSliceCategoryView({ categoryId, onNavigate }: { categoryId: string; onNavigate: (href: string, e?: { preventDefault: () => void }) => void }): React.ReactElement {
+  const cat = nineSliceCategory(categoryId);
+  if (!cat) return <p className="catalog-empty">Unknown 9-slice category “{categoryId}”.</p>;
+  const assets = (assetCatalog.assets || []).filter((asset) => nineSliceCategoryId(asset) === cat.id);
+  return (
+    <div className="catalog-home">
+      <article className="glossary-entry">
+        <header>
+          <h3>9-slice · {cat.label}</h3>
+          <span className={`glossary-tag ${cat.planned ? 'is-not-asset' : 'is-asset'}`}>{cat.planned ? 'planned' : 'asset type'}</span>
+        </header>
+        <p className="glossary-entry-def">{cat.def}</p>
+        <p className="glossary-entry-src">9-slice type · contract</p>
+      </article>
+
+      <section className="catalog-rule-grid" aria-label="Category contract">
+        <div><h4>Required slots</h4><code>{cat.slots.length ? cat.slots.join(', ') : '—'}</code></div>
+        <div><h4>States</h4><code>{cat.states.length ? cat.states.join(', ') : '—'}</code></div>
+      </section>
+
+      <section className="catalog-home-class" aria-label={`${cat.label} 9-slices`}>
+        <h3 className="catalog-home-class-label">9-slices in this category</h3>
+        {assets.length ? (
+          <div className="catalog-family-grid">
+            {assets.map((asset) => (
+              <a className="catalog-family-card" href={assetPath(asset)} onClick={(e) => onNavigate(assetPath(asset), e)} key={asset.id}>
+                <span className="design-hub-kicker">{asset.status || 'draft'}</span>
+                <h4>{asset.title || asset.id}</h4>
+                <p>{asset.summary || ''}</p>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="catalog-empty">{cat.planned ? 'Planned — no 9-slices of this type yet.' : 'No 9-slices in this category yet.'}</p>
+        )}
+      </section>
+    </div>
+  );
 }
 
 export function countsByType(): Record<string, number> {

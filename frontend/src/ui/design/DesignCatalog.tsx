@@ -10,9 +10,9 @@
 // (turns 56/59/60: locked rail, no reload, no game-screen flash).
 import { useState, type ReactNode } from 'react';
 import type { DesignRoute } from './designRoute';
-import { ASSET_TREE_PROTOTYPE, pruneTreeToTerms, assetTypeLabel, MENU_MODES } from './catalogData';
+import { ASSET_TREE_PROTOTYPE, pruneTreeToTerms, assetTypeLabel, nineSliceCategory, MENU_MODES } from './catalogData';
 import { TreeList, allBranchKeys } from './TreeList';
-import { CatalogHome, CatalogBrowser, countsByType } from './catalogContent';
+import { CatalogHome, CatalogBrowser, NineSliceCategoryView, countsByType } from './catalogContent';
 import { GlossaryEntry } from './glossary';
 import { WidgetGallery } from './widgets';
 
@@ -108,6 +108,11 @@ export function DesignCatalog({ route, path, onNavigate }: { route: DesignRoute;
       ? 'A completed widget, shown live on the catalog page — assembled from a catalog 9-slice (in a state) + an icon + a live label + an action.'
       : 'The completed Main Menu button widgets, shown live on the catalog page. Each is assembled from a catalog 9-slice (in a state) + an icon + a live label + an action.';
     content = modes.length ? <WidgetGallery modes={modes} /> : <p className="catalog-empty">No widgets in this family yet.</p>;
+  } else if (route.catalogMode === 'nineSliceCategory' && route.nineSliceCategory) {
+    const cat = nineSliceCategory(route.nineSliceCategory);
+    title = cat ? `${cat.label} 9-slice` : '9-slice';
+    intro = 'A 9-slice category — its contract is the slots and states every 9-slice of this type must expose.';
+    content = <NineSliceCategoryView categoryId={route.nineSliceCategory} onNavigate={onNavigate} />;
   } else if (route.catalogMode === 'browser' && route.assetType) {
     title = `${assetTypeLabel(route.assetType)} Assets`;
     content = <CatalogBrowser assetType={route.assetType} assetId={route.assetId} />;

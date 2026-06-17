@@ -4,7 +4,7 @@
 // place) so moving between catalog views never triggers a full reload or the
 // "flash of the game screen" the user flagged in session 930 (turns 56, 60).
 export type DesignView = 'hub' | 'catalog' | 'glossaryPage' | 'widgetsPage' | 'prototype';
-export type CatalogMode = 'home' | 'glossary' | 'widgets' | 'browser';
+export type CatalogMode = 'home' | 'glossary' | 'widgets' | 'browser' | 'nineSliceCategory';
 export type PrototypeKind = 'drilldown' | 'tree' | 'hybrid';
 
 export interface DesignRoute {
@@ -16,6 +16,7 @@ export interface DesignRoute {
   widgetFamily?: string;
   widgetSlug?: string;
   prototype?: PrototypeKind;
+  nineSliceCategory?: string;
 }
 
 const ASSET_ROUTE_TYPES: Record<string, string> = {
@@ -54,6 +55,11 @@ export function parseDesignRoute(pathname: string): DesignRoute {
       widgetFamily: decodeURIComponent(widget[1]),
       widgetSlug: widget[2] ? decodeURIComponent(widget[2]) : undefined,
     };
+  }
+
+  const nineSlice = path.match(/^\/design\/catalog\/9-slice\/([^/]+)$/);
+  if (nineSlice) {
+    return { view: 'catalog', catalogMode: 'nineSliceCategory', nineSliceCategory: decodeURIComponent(nineSlice[1]) };
   }
 
   const asset = path.match(/^\/design\/catalog\/([^/]+)(?:\/([^/]+))?$/);

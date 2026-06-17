@@ -63,9 +63,16 @@ export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
     children: [
       {
         label: '9-slice',
-        href: '/design/catalog/main-menu-buttons',
+        href: '/design/catalog',
         children: [
-          { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
+          {
+            label: 'button',
+            href: '/design/catalog/9-slice/button',
+            children: [
+              { label: 'Main Menu', href: '/design/catalog/main-menu-buttons/button-9slice.main-menu' },
+            ],
+          },
+          { label: 'panel', href: '/design/catalog/9-slice/panel', planned: true },
         ],
       },
       {
@@ -129,6 +136,54 @@ export const GLOSSARY: GlossaryEntry[] = [
   { term: 'template', tag: 'not an asset', def: 'The reusable definition a widget instance is built from.', src: 'Unreal UI Template · Unity Prefab' },
   { term: 'instance', tag: 'not an asset', def: 'A specific live widget produced from a template.', src: 'all engines' },
 ];
+
+// ---------------------------------------------------------------------------
+// 9-slice categories — the contract layer. Every 9-slice has a MANDATORY
+// category (button, panel, …); the category IS its contract — which slots and
+// states a 9-slice of that type must expose — i.e. the "repeating idea" that
+// maps to a class/type in code. A button 9-slice always has icon/text/arrow
+// slots + normal/pressed; a panel 9-slice has a content inset + margins and no
+// states. The def reads glossary-style ("a 9-slice of type button …").
+// ---------------------------------------------------------------------------
+export interface NineSliceCategory {
+  id: string;
+  label: string;
+  def: string;
+  slots: string[];
+  states: string[];
+  planned?: boolean;
+}
+
+export const NINE_SLICE_CATEGORIES: NineSliceCategory[] = [
+  {
+    id: 'button',
+    label: 'Button',
+    def: 'A 9-slice of type button: a stretchable button background that exposes an icon slot, a text (label) slot, and an arrow slot, with normal and pressed states. It is never placed on its own — a button widget is assembled on top of it (the 9-slice is the frame; the icon, label, and action composite in).',
+    slots: ['iconSlot', 'textInset', 'arrowSlot', 'hitbox'],
+    states: ['normal', 'pressed'],
+  },
+  {
+    id: 'panel',
+    label: 'Panel',
+    def: 'A 9-slice of type panel: a stretchable container/surface background for grouping content (dialogs, cards, HUD panels). It exposes a content inset and patch margins — no icon, label, or arrow slots — and a single resting state. (Planned — no panel 9-slices yet.)',
+    slots: ['contentInset', 'patchMargins'],
+    states: [],
+    planned: true,
+  },
+];
+
+// Every 9-slice asset resolves to exactly one category (mandatory). Derived
+// from the asset type's role prefix (button-9slice.* -> button); returns
+// undefined only for a 9-slice with no known category, which the catalog flags.
+export function nineSliceCategoryId(asset: Asset): string | undefined {
+  if (asset.type.startsWith('button-9slice')) return 'button';
+  if (asset.type.startsWith('panel-9slice')) return 'panel';
+  return undefined;
+}
+
+export function nineSliceCategory(id: string): NineSliceCategory | undefined {
+  return NINE_SLICE_CATEGORIES.find((category) => category.id === id);
+}
 
 // ---------------------------------------------------------------------------
 // The five completed main-menu button widgets (live, assembled from assets).
