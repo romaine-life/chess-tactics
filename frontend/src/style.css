@@ -5220,4 +5220,13 @@ h1 {
     right: 10px;
     bottom: 10px;
   }
+
+  .shell.main-menu-active + .bgm-control {
+    bottom: auto;
+    top: 96px;
+  }
+
+  .shell.main-menu-active .main-menu-screen {
+    padding-bottom: 64px;
+  }
 }
