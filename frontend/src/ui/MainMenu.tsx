@@ -91,8 +91,28 @@ function SvgIcon({ name }: { name: 'hourglass' | 'reticle' | 'gem' | 'shield' | 
 }
 
 function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boolean }): ReactElement {
-  const nineSlice = assetById('button-9slice.main-menu');
+  const rowAsset = assetById(mode.row);
   const href = MODE_HREFS[mode.slug] || '/';
+  if (rowAsset?.states) {
+    const rowState = rowAsset.states[active ? 'active' : 'normal'] || rowAsset.states.normal;
+    const rowStyle = frameStyleForAsset(rowAsset, rowState.rect);
+    const labelStyle = insetStyle(rowAsset.rules?.textInset, rowState.rect);
+    const linkStyle = { '--asset-aspect': `${rowState.rect.w} / ${rowState.rect.h}` } as CSSProperties;
+
+    return (
+      <a
+        className={`mode-button uses-row-art ${active ? 'is-active' : ''}`.trim()}
+        href={href}
+        aria-current={active ? 'page' : undefined}
+        style={linkStyle}
+      >
+        <span className="mode-button-art" style={rowStyle} aria-hidden="true" />
+        <span className="mode-button-label" style={labelStyle}>{mode.label}</span>
+      </a>
+    );
+  }
+
+  const nineSlice = assetById('button-9slice.main-menu');
   if (!nineSlice || !nineSlice.states) {
     return (
       <a className="main-menu-action" href={href}>

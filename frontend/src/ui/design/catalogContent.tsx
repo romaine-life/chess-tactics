@@ -65,6 +65,48 @@ function ButtonAssetCard({ asset }: { asset: Asset }): React.ReactElement {
   );
 }
 
+function ButtonRowAssetCard({ asset }: { asset: Asset }): React.ReactElement {
+  const states = Object.entries(asset.states || {});
+  const rules = asset.rules || {};
+  return (
+    <article className="catalog-asset-card" id={asset.id}>
+      <header className="catalog-asset-head">
+        <span className="design-hub-kicker">{asset.type} · {asset.status || 'draft'}</span>
+        <h3>{asset.title || asset.id}</h3>
+        <p>{asset.summary || ''}</p>
+      </header>
+
+      <section className="catalog-asset-meta" aria-label="Asset metadata">
+        <div><dt>Category</dt><dd>Button row art</dd></div>
+        <div><dt>ID</dt><dd>{asset.id}</dd></div>
+        <div><dt>Source</dt><dd>{asset.source?.kind || 'unknown'}</dd></div>
+        <div><dt>Text</dt><dd>{rules.text || 'unknown'}</dd></div>
+        <div><dt>Sizing</dt><dd>{rules.sizing || 'unknown'}</dd></div>
+      </section>
+
+      <section className="catalog-state-grid" aria-label="Button row states">
+        {states.map(([stateKey, state]) => (
+          <div className="catalog-state-card" key={stateKey}>
+            <strong>{state.label || stateKey}</strong>
+            <AssetFrame asset={asset} frame={state.rect} label={stateKey === 'active' ? 'Live Label' : undefined} />
+            <code>x:{state.rect.x} y:{state.rect.y} w:{state.rect.w} h:{state.rect.h}</code>
+          </div>
+        ))}
+      </section>
+
+      <section className="catalog-slot-grid" aria-label="Button row slots">
+        <div><h4>Text Slot</h4><code>{JSON.stringify(rules.textInset || {})}</code></div>
+        <div><h4>Arrow Slot</h4><code>{JSON.stringify(rules.arrowSlot || {})}</code></div>
+        <div><h4>Hitbox</h4><code>{JSON.stringify(rules.hitbox || {})}</code></div>
+      </section>
+
+      <section className="catalog-rule-grid" aria-label="Asset rules">
+        <div><h4>Notes</h4><ul>{(rules.notes || []).map((note, i) => <li key={i}>{note}</li>)}</ul></div>
+      </section>
+    </article>
+  );
+}
+
 function PanelAssetCard({ asset }: { asset: Asset }): React.ReactElement {
   const rules = asset.rules || {};
   const rect = asset.rect;
@@ -139,6 +181,7 @@ function IconAssetCard({ asset }: { asset: Asset }): React.ReactElement {
 
 export function CatalogAssetCard({ asset }: { asset: Asset }): React.ReactElement | null {
   if (asset.type === 'button-9slice.main-menu') return <ButtonAssetCard asset={asset} />;
+  if (asset.type === 'button-row.main-menu') return <ButtonRowAssetCard asset={asset} />;
   if (asset.type === 'panel-9slice.main-menu') return <PanelAssetCard asset={asset} />;
   if (asset.type === 'button-icon.main-menu' || asset.type === 'profile-icon.main-menu') return <IconAssetCard asset={asset} />;
   return null;
@@ -152,6 +195,7 @@ export function CatalogHome({ countsByType, onNavigate }: { countsByType: Record
       label: 'asset',
       kinds: [
         { title: 'button 9-slice', href: '/design/catalog/main-menu-buttons', count: countsByType['button-9slice.main-menu'] || 0, summary: 'Scalable, icon-less button frames whose corners stay fixed while the middle stretches.' },
+        { title: 'button row art', href: '/design/catalog/main-menu-button-rows', count: countsByType['button-row.main-menu'] || 0, summary: 'Mode-specific stateful button rows with authored badge/cap boundaries and live text slots.' },
         { title: 'panel 9-slice', href: '/design/catalog/main-menu-panels', count: countsByType['panel-9slice.main-menu'] || 0, summary: 'Scalable panel frames for profile, daily challenge, news, and other grouped content.' },
         { title: 'button icon', href: '/design/catalog/main-menu-button-icons', count: countsByType['button-icon.main-menu'] || 0, summary: 'Standalone images composited into button icon slots.' },
         { title: 'profile icon', href: '/design/catalog/main-menu-profile-icons', count: countsByType['profile-icon.main-menu'] || 0, summary: 'Standalone images composited into the profile/status panel.' },

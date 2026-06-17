@@ -21,19 +21,52 @@
       "states": {
         "normal": {
           "label": "Normal",
-          "rect": { "x": 0, "y": 0, "w": 897, "h": 244 }
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 897,
+            "h": 244
+          }
         },
         "pressed": {
           "label": "Pressed",
-          "rect": { "x": 0, "y": 244, "w": 897, "h": 244 }
+          "rect": {
+            "x": 0,
+            "y": 244,
+            "w": 897,
+            "h": 244
+          }
         }
       },
       "rules": {
-        "textInset": { "x": 253, "y": 49, "w": 514, "h": 146 },
-        "iconSlot": { "x": 12, "y": 11, "w": 223, "h": 223 },
-        "arrowSlot": { "x": 785, "y": 78, "w": 76, "h": 88 },
-        "hitbox": { "x": 0, "y": 0, "w": 897, "h": 244 },
-        "states": ["normal", "pressed"],
+        "textInset": {
+          "x": 253,
+          "y": 49,
+          "w": 514,
+          "h": 146
+        },
+        "iconSlot": {
+          "x": 12,
+          "y": 11,
+          "w": 223,
+          "h": 223
+        },
+        "arrowSlot": {
+          "x": 785,
+          "y": 78,
+          "w": 76,
+          "h": 88
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 897,
+          "h": 244
+        },
+        "states": [
+          "normal",
+          "pressed"
+        ],
         "text": "live",
         "sizing": "fixed-frame",
         "notes": [
@@ -55,12 +88,23 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Standalone badge cropped from the five-mode sheet. Composited into the frame icon slot."
       },
-      "sheet": { "image": "/assets/ui/main-menu/icon-sword.png", "width": 220, "height": 220 },
-      "rect": { "x": 0, "y": 0, "w": 220, "h": 220 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/icon-sword.png",
+        "width": 220,
+        "height": 220
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 220,
+        "h": 220
+      },
       "rules": {
         "fitsSlot": "button-9slice.main-menu.rules.iconSlot",
         "background": "transparent-required",
-        "notes": ["Composited onto the main-menu button frame icon slot."]
+        "notes": [
+          "Composited onto the main-menu button frame icon slot."
+        ]
       }
     },
     {
@@ -75,12 +119,23 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Standalone badge cropped from the five-mode sheet. Composited into the frame icon slot."
       },
-      "sheet": { "image": "/assets/ui/main-menu/icon-crown.png", "width": 220, "height": 220 },
-      "rect": { "x": 0, "y": 0, "w": 220, "h": 220 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/icon-crown.png",
+        "width": 220,
+        "height": 220
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 220,
+        "h": 220
+      },
       "rules": {
         "fitsSlot": "button-9slice.main-menu.rules.iconSlot",
         "background": "transparent-required",
-        "notes": ["Composited onto the main-menu button frame icon slot."]
+        "notes": [
+          "Composited onto the main-menu button frame icon slot."
+        ]
       }
     },
     {
@@ -95,12 +150,23 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Standalone badge cropped from the five-mode sheet. Composited into the frame icon slot."
       },
-      "sheet": { "image": "/assets/ui/main-menu/icon-scroll.png", "width": 220, "height": 220 },
-      "rect": { "x": 0, "y": 0, "w": 220, "h": 220 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/icon-scroll.png",
+        "width": 220,
+        "height": 220
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 220,
+        "h": 220
+      },
       "rules": {
         "fitsSlot": "button-9slice.main-menu.rules.iconSlot",
         "background": "transparent-required",
-        "notes": ["Composited onto the main-menu button frame icon slot."]
+        "notes": [
+          "Composited onto the main-menu button frame icon slot."
+        ]
       }
     },
     {
@@ -115,12 +181,23 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Standalone badge cropped from the five-mode sheet. Composited into the frame icon slot."
       },
-      "sheet": { "image": "/assets/ui/main-menu/icon-people.png", "width": 220, "height": 220 },
-      "rect": { "x": 0, "y": 0, "w": 220, "h": 220 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/icon-people.png",
+        "width": 220,
+        "height": 220
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 220,
+        "h": 220
+      },
       "rules": {
         "fitsSlot": "button-9slice.main-menu.rules.iconSlot",
         "background": "transparent-required",
-        "notes": ["Composited onto the main-menu button frame icon slot."]
+        "notes": [
+          "Composited onto the main-menu button frame icon slot."
+        ]
       }
     },
     {
@@ -135,12 +212,368 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Standalone badge cropped from the five-mode sheet. Composited into the frame icon slot."
       },
-      "sheet": { "image": "/assets/ui/main-menu/icon-gear.png", "width": 220, "height": 220 },
-      "rect": { "x": 0, "y": 0, "w": 220, "h": 220 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/icon-gear.png",
+        "width": 220,
+        "height": 220
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 220,
+        "h": 220
+      },
       "rules": {
         "fitsSlot": "button-9slice.main-menu.rules.iconSlot",
         "background": "transparent-required",
-        "notes": ["Composited onto the main-menu button frame icon slot."]
+        "notes": [
+          "Composited onto the main-menu button frame icon slot."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.solo-skirmish",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Solo Skirmish Button Row",
+      "summary": "Sword/combat row art for the main-menu skirmish action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/solo-skirmish-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/solo-skirmish-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "active": {
+          "label": "Active",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 318,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "active"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.campaign-editor",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Campaign Editor Button Row",
+      "summary": "Crown/campaign row art for the main-menu campaign editor action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/campaign-editor-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/campaign-editor-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "active": {
+          "label": "Active",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 318,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "active"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.level-editor",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Level Editor Button Row",
+      "summary": "Scroll/editor row art for the main-menu level editor action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/level-editor-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/level-editor-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "active": {
+          "label": "Active",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 318,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "active"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.lobbies",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Lobbies Button Row",
+      "summary": "Players/lobbies row art for the main-menu multiplayer action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/lobbies-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/lobbies-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "active": {
+          "label": "Active",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 318,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "active"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.settings",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Settings Button Row",
+      "summary": "Gear/settings row art for the main-menu settings action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/settings-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/settings-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "active": {
+          "label": "Active",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 318,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "active"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
       }
     },
     {
@@ -155,11 +588,30 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Cropped from the approved render and cleared of baked profile text/icons by frontend/scripts/normalize-main-menu-profile.mjs."
       },
-      "sheet": { "image": "/assets/ui/main-menu/panel-9slice.png", "width": 390, "height": 84 },
-      "rect": { "x": 0, "y": 0, "w": 390, "h": 84 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/panel-9slice.png",
+        "width": 390,
+        "height": 84
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 390,
+        "h": 84
+      },
       "rules": {
-        "contentInset": { "x": 18, "y": 16, "w": 354, "h": 52 },
-        "patchMargins": { "left": 16, "right": 16, "top": 16, "bottom": 16 },
+        "contentInset": {
+          "x": 18,
+          "y": 16,
+          "w": 354,
+          "h": 52
+        },
+        "patchMargins": {
+          "left": 16,
+          "right": 16,
+          "top": 16,
+          "bottom": 16
+        },
         "text": "live",
         "sizing": "9-slice",
         "notes": [
@@ -180,12 +632,23 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Transparent icon crop generated by frontend/scripts/normalize-main-menu-profile.mjs."
       },
-      "sheet": { "image": "/assets/ui/main-menu/profile-crest.png", "width": 58, "height": 59 },
-      "rect": { "x": 0, "y": 0, "w": 58, "h": 59 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/profile-crest.png",
+        "width": 58,
+        "height": 59
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 58,
+        "h": 59
+      },
       "rules": {
         "fitsSlot": "main-menu.profile-panel.crest",
         "background": "transparent-required",
-        "notes": ["Composited into the live profile panel beside account text."]
+        "notes": [
+          "Composited into the live profile panel beside account text."
+        ]
       }
     },
     {
@@ -200,12 +663,23 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Transparent icon crop generated by frontend/scripts/normalize-main-menu-profile.mjs."
       },
-      "sheet": { "image": "/assets/ui/main-menu/profile-rook-blue.png", "width": 34, "height": 38 },
-      "rect": { "x": 0, "y": 0, "w": 34, "h": 38 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/profile-rook-blue.png",
+        "width": 34,
+        "height": 38
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 34,
+        "h": 38
+      },
       "rules": {
         "fitsSlot": "main-menu.profile-panel.forceIcon",
         "background": "transparent-required",
-        "notes": ["Rendered beside the live Allies count."]
+        "notes": [
+          "Rendered beside the live Allies count."
+        ]
       }
     },
     {
@@ -220,12 +694,23 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Transparent icon crop generated by frontend/scripts/normalize-main-menu-profile.mjs."
       },
-      "sheet": { "image": "/assets/ui/main-menu/profile-rook-red.png", "width": 34, "height": 38 },
-      "rect": { "x": 0, "y": 0, "w": 34, "h": 38 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/profile-rook-red.png",
+        "width": 34,
+        "height": 38
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 34,
+        "h": 38
+      },
       "rules": {
         "fitsSlot": "main-menu.profile-panel.forceIcon",
         "background": "transparent-required",
-        "notes": ["Rendered beside the live Enemies count."]
+        "notes": [
+          "Rendered beside the live Enemies count."
+        ]
       }
     },
     {
@@ -240,12 +725,23 @@
         "reference": "/assets/ui/main-menu-aspirational.png",
         "note": "Transparent icon crop generated by frontend/scripts/normalize-main-menu-profile.mjs."
       },
-      "sheet": { "image": "/assets/ui/main-menu/profile-cog.png", "width": 37, "height": 37 },
-      "rect": { "x": 0, "y": 0, "w": 37, "h": 37 },
+      "sheet": {
+        "image": "/assets/ui/main-menu/profile-cog.png",
+        "width": 37,
+        "height": 37
+      },
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 37,
+        "h": 37
+      },
       "rules": {
         "fitsSlot": "main-menu.profile-panel.settingsButton",
         "background": "transparent-required",
-        "notes": ["Rendered inside the live settings affordance."]
+        "notes": [
+          "Rendered inside the live settings affordance."
+        ]
       }
     }
   ]

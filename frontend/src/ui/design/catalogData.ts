@@ -84,6 +84,17 @@ export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
         ],
       },
       {
+        label: 'button row',
+        href: '/design/catalog/main-menu-button-rows',
+        children: [
+          { label: 'Solo Skirmish', href: '/design/catalog/main-menu-button-rows/button-row.main-menu.solo-skirmish' },
+          { label: 'Campaign Editor', href: '/design/catalog/main-menu-button-rows/button-row.main-menu.campaign-editor' },
+          { label: 'Level Editor', href: '/design/catalog/main-menu-button-rows/button-row.main-menu.level-editor' },
+          { label: 'Lobbies', href: '/design/catalog/main-menu-button-rows/button-row.main-menu.lobbies' },
+          { label: 'Settings', href: '/design/catalog/main-menu-button-rows/button-row.main-menu.settings' },
+        ],
+      },
+      {
         label: 'icon',
         href: '/design/catalog/main-menu-button-icons',
         children: [
@@ -134,6 +145,7 @@ export interface GlossaryEntry { term: string; tag: string; def: string; src: st
 
 export const GLOSSARY: GlossaryEntry[] = [
   { term: 'asset', tag: '', def: 'A reusable image plus contract the game operates on: it renders, state-switches, slots into, or swaps it.', src: 'Unity / Unreal' },
+  { term: 'button row', tag: 'asset', def: 'A stateful, mode-specific button skin whose badge/cap, frame, and arrow are authored together while the label stays live.', src: 'project' },
   { term: '9-slice', tag: 'asset', def: 'A texture that scales while its corners stay fixed and the middle stretches; the reusable, icon-less button or panel background.', src: 'Unity 9-slicing · Godot NinePatchRect' },
   { term: 'icon', tag: 'asset', def: 'A standalone image composited into a slot.', src: 'universal' },
   { term: 'sprite atlas', tag: 'asset', def: 'One image packing several unrelated sprites (our source sheets).', src: 'Unity Sprite Atlas' },
@@ -199,14 +211,14 @@ export function nineSliceCategory(id: string): NineSliceCategory | undefined {
 // ---------------------------------------------------------------------------
 // The five completed main-menu button widgets (live, assembled from assets).
 // ---------------------------------------------------------------------------
-export interface MenuMode { action: string; slug: string; icon: string; label: string }
+export interface MenuMode { action: string; slug: string; icon: string; row: string; label: string }
 
 export const MENU_MODES: MenuMode[] = [
-  { action: 'party', slug: 'solo-skirmish', icon: 'button-icon.main-menu.sword', label: 'Solo Skirmish' },
-  { action: 'campaigns', slug: 'campaign-editor', icon: 'button-icon.main-menu.crown', label: 'Campaign Editor' },
-  { action: 'level-editor-preview', slug: 'level-editor', icon: 'button-icon.main-menu.scroll', label: 'Level Editor' },
-  { action: 'lobbies', slug: 'lobbies', icon: 'button-icon.main-menu.people', label: 'Lobbies' },
-  { action: 'settings', slug: 'settings', icon: 'button-icon.main-menu.gear', label: 'Settings' },
+  { action: 'party', slug: 'solo-skirmish', icon: 'button-icon.main-menu.sword', row: 'button-row.main-menu.solo-skirmish', label: 'Solo Skirmish' },
+  { action: 'campaigns', slug: 'campaign-editor', icon: 'button-icon.main-menu.crown', row: 'button-row.main-menu.campaign-editor', label: 'Campaign Editor' },
+  { action: 'level-editor-preview', slug: 'level-editor', icon: 'button-icon.main-menu.scroll', row: 'button-row.main-menu.level-editor', label: 'Level Editor' },
+  { action: 'lobbies', slug: 'lobbies', icon: 'button-icon.main-menu.people', row: 'button-row.main-menu.lobbies', label: 'Lobbies' },
+  { action: 'settings', slug: 'settings', icon: 'button-icon.main-menu.gear', row: 'button-row.main-menu.settings', label: 'Settings' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -249,6 +261,7 @@ export function insetStyle(inset: Rect | undefined, frame: Rect | undefined): CS
 
 export function assetTypeLabel(type: string): string {
   if (type === 'button-9slice.main-menu') return 'Main Menu Button 9-Slice';
+  if (type === 'button-row.main-menu') return 'Main Menu Button Row';
   if (type === 'panel-9slice.main-menu') return 'Main Menu Panel 9-Slice';
   if (type === 'button-icon.main-menu') return 'Main Menu Button Icon';
   if (type === 'profile-icon.main-menu') return 'Main Menu Profile Icon';
@@ -257,6 +270,7 @@ export function assetTypeLabel(type: string): string {
 
 export function assetTypePath(type: string): string {
   if (type === 'button-9slice.main-menu') return '/design/catalog/main-menu-buttons';
+  if (type === 'button-row.main-menu') return '/design/catalog/main-menu-button-rows';
   if (type === 'panel-9slice.main-menu') return '/design/catalog/main-menu-panels';
   if (type === 'button-icon.main-menu') return '/design/catalog/main-menu-button-icons';
   if (type === 'profile-icon.main-menu') return '/design/catalog/main-menu-profile-icons';
