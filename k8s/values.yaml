@@ -1,9 +1,9 @@
-# The image tag is bumped by .github/workflows/build-and-deploy.yaml on every
-# push to main (via sed on this file).
+# The content fingerprint image tag is bumped by
+# .github/workflows/build-and-deploy.yaml on every push to main (via sed on
+# this file).
 image:
   repository: romainecr.azurecr.io/chess-tactics
-  # Quoted on purpose: a bare short SHA like a8d4270 can parse as a YAML
-  # float/scientific-notation; keep the quotes.
+  # Quoted so YAML never reinterprets image tag characters.
   tag: "ff1f734"
   pullPolicy: IfNotPresent
 

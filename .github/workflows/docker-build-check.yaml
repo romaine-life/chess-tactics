@@ -89,11 +89,11 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Same-repo PRs and workflow_dispatch publish a commit-SHA-tagged image to
-      # ACR so the test-slot deploy-to-image flow (glimmung deploy_slot_to_image)
-      # can resolve a verified, not-yet-merged commit to its CI-built image.
-      # Fork PRs skip login + push (see the build-only step below) — forks can't
-      # mint the repo's OIDC token, and we must not hand them registry creds.
+      # Same-repo PRs and workflow_dispatch publish/reuse the app's canonical
+      # content fingerprint tag, then create a unique CI lookup tag that points
+      # at the same manifest for Glimmung-managed test-slot deploys. Fork PRs
+      # skip login + push (see the build-only step below) — forks can't mint the
+      # repo's OIDC token, and we must not hand them registry creds.
       # Reuses build-and-deploy.yaml's exact azure/login (OIDC) + `az acr login`.
       - name: Azure Login
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -107,22 +107,82 @@ jobs:
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         run: az acr login --name romainecr
 
-      - name: Build and push image (full head-sha tag for deploy-to-image)
-        # On same-repo PRs / workflow_dispatch: build and push
-        # romainecr.azurecr.io/chess-tactics:<full PR head sha>. The deploy-to-image
-        # resolver resolves git_ref to the PR HEAD commit's full sha, so tag
-        # head.sha on PR events (github.sha on a PR is the synthetic merge commit,
-        # which the resolver never sees) — matching tank-operator #1256 / glimmung
-        # / ambience. Full SHA, not the short-7 form the post-merge tag uses.
+      - name: Compute image fingerprint
+        id: fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/image-fingerprint.sh \
+            --image app \
+            --dockerfile Dockerfile \
+            --context . \
+            --paths 'Dockerfile .dockerignore backend frontend'
+
+      - name: Check existing image tag
+        id: image
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.fingerprint.outputs.proof_tag }}"
+          if az acr repository show-tags \
+              --name romainecr \
+              --repository "${IMAGE}" \
+              --query "[?@=='${tag}'] | [0]" \
+              --output tsv | grep -qx "${tag}"; then
+            echo "target_exists=true" >>"${GITHUB_OUTPUT}"
+            echo "Found reusable image: ${REGISTRY}/${IMAGE}:${tag}"
+          else
+            echo "target_exists=false" >>"${GITHUB_OUTPUT}"
+            echo "No image found for app fingerprint ${{ steps.fingerprint.outputs.fingerprint }}"
+          fi
+
+      - name: Compute CI lookup tag
+        id: lookup
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            tag="ci-pr-${PR_NUMBER}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          else
+            ref_hash="$(printf '%s' "${GITHUB_REF}" | sha256sum | cut -c1-12)"
+            tag="ci-ref-${ref_hash}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          fi
+          case "${tag}" in
+            *[!a-z0-9_.-]*)
+              echo "::error::computed lookup tag is not shell/ACR safe: ${tag}"
+              exit 1
+              ;;
+          esac
+          echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
+          echo "CI lookup tag: ${REGISTRY}/${IMAGE}:${tag}"
+
+      - name: Build and push image
+        if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && steps.image.outputs.target_exists != 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.event.pull_request.head.sha || github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.fingerprint.outputs.proof_tag }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
+
+      - name: Create CI lookup tag
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          canonical="${{ steps.fingerprint.outputs.proof_tag }}"
+          lookup="${{ steps.lookup.outputs.tag }}"
+          az acr import --name romainecr \
+            --source "${REGISTRY}/${IMAGE}:${canonical}" \
+            --image "${IMAGE}:${lookup}" \
+            --force
+          echo "Tagged ${REGISTRY}/${IMAGE}:${lookup} -> ${canonical}"
 
       - name: Build image without pushing (fork PRs)
         # Fork PRs stay build-only: no ACR login, no push. This preserves the
