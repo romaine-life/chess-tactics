@@ -556,12 +556,12 @@ h1 {
   --menu-line: rgba(80, 129, 151, .58);
   position: relative;
   display: grid;
-  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(300px, 370px) minmax(0, 1fr) minmax(300px, 360px);
   grid-template-rows: auto 1fr auto;
-  gap: 14px 18px;
+  gap: 12px 18px;
   height: 100%;
   min-height: 100%;
-  padding: clamp(22px, 3vw, 42px);
+  padding: clamp(18px, 2.4vw, 30px);
   overflow: hidden;
   pointer-events: none;
   width: 100%;
@@ -588,7 +588,7 @@ h1 {
 .main-menu-actions {
   grid-column: 1;
   justify-self: stretch;
-  max-width: 390px;
+  max-width: 370px;
   min-width: 0;
   pointer-events: auto;
   z-index: 3;
@@ -601,7 +601,7 @@ h1 {
   grid-row: 1 / 4;
   grid-template-rows: auto auto 1fr;
   gap: clamp(12px, 1.7vh, 18px);
-  max-width: 390px;
+  max-width: 370px;
   min-width: 0;
 }
 
@@ -621,11 +621,11 @@ h1 {
   grid-column: 2;
   grid-row: 1 / 3;
   justify-self: center;
-  margin-top: clamp(28px, 5vh, 56px);
-  max-height: min(54vh, 500px);
+  margin-top: clamp(24px, 4.6vh, 48px);
+  max-height: min(52vh, 480px);
   pointer-events: none;
   position: relative;
-  width: min(100%, 640px);
+  width: min(100%, 620px);
   z-index: 2;
 }
 
@@ -940,8 +940,8 @@ h1 {
 .main-menu-actions-assets {
   display: flex;
   flex-direction: column;
-  gap: clamp(6px, 1vh, 10px);
-  width: min(100%, 390px);
+  gap: clamp(6px, .9vh, 8px);
+  width: min(100%, 370px);
   max-width: 100%;
 }
 
@@ -1390,7 +1390,7 @@ h1 {
 .daily-panel {
   grid-column: 1;
   grid-row: 3;
-  max-width: 390px;
+  max-width: 370px;
   pointer-events: auto;
   width: 100%;
 }
@@ -1533,8 +1533,8 @@ h1 {
 
 .menu-dock-art {
   position: relative;
-  width: 410px;
-  max-width: 32vw;
+  width: 390px;
+  max-width: 30vw;
   aspect-ratio: 410 / 136;
   background-image: url("/assets/ui/main-menu-aspirational.png");
   background-repeat: no-repeat;
@@ -4734,8 +4734,12 @@ h1 {
   .main-menu-screen {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto;
+    align-content: start;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
     padding: 18px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .main-menu-left,
@@ -4767,6 +4771,7 @@ h1 {
   .main-menu-actions {
     grid-column: 1;
     grid-row: 3;
+    width: 100%;
   }
 
   .daily-panel {
