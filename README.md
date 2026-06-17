@@ -59,19 +59,13 @@ The server uses `auth.romaine.life` for Microsoft sign-in. Optional env:
 - `STATIC_FRONTEND_DIR` defaults to `/var/run/chess-tactics-static-override`.
 - `HOT_BACKEND_DIR` defaults to `/var/run/chess-tactics-hot`.
 
-The container starts `backend/supervisor.js` as PID 1. The supervisor copies
-the baked `backend/server.js` into `HOT_BACKEND_DIR/server.js`, runs that hot
-entrypoint with `NODE_PATH` pointed at the baked dependencies, and reloads the
-child process when PID 1 receives `SIGHUP`.
+The container starts `backend/supervisor.js` as PID 1. The supervisor prepares
+the runtime server entrypoint, runs it with `NODE_PATH` pointed at the baked
+dependencies, and reloads the child process when PID 1 receives `SIGHUP`.
 
-Static hot-swap writes built Vite files into `STATIC_FRONTEND_DIR`; Express
-serves that directory before the baked frontend, while keeping the baked
-frontend as the baseline for files that have not been overridden.
-
-Backend hot-swap writes a replacement server artifact to
-`HOT_BACKEND_DIR/server.js` and sends `SIGHUP` to PID 1. The replacement runs
-from the hot directory while still serving the baked frontend and using the
-baked `node_modules`.
+Test-slot validation should deploy the CI-built image for the pushed ref with
+Glimmung `deploy_image_to_test_slot`, so backend code, frontend assets, and
+runtime wiring are exercised from the same image that PR CI proved.
 
 ## Persistence
 

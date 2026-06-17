@@ -19,7 +19,7 @@ not the final component system.
   painted crop for the live main menu mode button stack, including its labels.
 - `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
-- The remaining main menu elements follow the render-fidelity + text-live rules in
+- The remaining main menu elements follow the render-accuracy + text-live rules in
   `docs/ui-art-direction.md` (art for rendered visuals; live DOM for all copy and numbers):
   profile/status (03) is a **hybrid** — an art-crop of the painterly lion crest plus clean
   SVG cog/rook silhouettes plus live DOM text for the name/rank/counters; daily/news (04) is
@@ -93,7 +93,7 @@ loop when adjusting them:
 
 1. Open the target URL with the `/hotspots` suffix.
 2. Adjust the matching selector in `frontend/src/style.css`.
-3. Hot-swap the frontend into the test slot.
+3. Deploy the pushed ref's CI image into the test slot.
 4. Inspect normal mode and hotspot mode.
 
 Keep hotspot labels short because they are also used as accessibility labels.

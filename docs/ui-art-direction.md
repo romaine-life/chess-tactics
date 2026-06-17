@@ -163,7 +163,7 @@ Do not begin with a full asset pipeline unless the code-rendered prototype
 cannot reach an acceptable style. The first production pass should prove the
 style with the existing architecture.
 
-### Render fidelity rule (binding)
+### Render accuracy rule (binding)
 
 Decide per UI element by whether it carries rich *rendered* detail — painterly
 art, a crest, lighting, illustration:
