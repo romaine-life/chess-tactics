@@ -1035,11 +1035,11 @@ h1 {
 .mode-button.uses-row-art .mode-button-label {
   align-items: center;
   color: #f7ecd6;
-  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: clamp(8px, .78vw, 13px);
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: clamp(24px, 2.25vw, 34px);
   font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.55;
+  letter-spacing: .035em;
+  line-height: 1;
   text-transform: uppercase;
   text-shadow:
     0 2px 0 rgba(0, 0, 0, .86),
