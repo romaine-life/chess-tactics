@@ -1,8 +1,6 @@
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted';
-const btn: CSSProperties = { border: '1px solid var(--ds-line-2)', background: 'var(--ds-accent-soft)', color: 'var(--ds-ink)', borderRadius: 'var(--ds-radius-sm)', padding: '8px 14px', cursor: 'pointer' };
-const headerActions: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10 };
 
 function readMuted(): boolean {
   try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; }
@@ -18,18 +16,30 @@ export function Settings() {
     setMuted(next);
   };
   return (
-    <div data-testid="settings" style={{ padding: '32px clamp(20px,6vw,80px)', color: 'var(--ds-ink-2)', fontFamily: 'var(--ds-font-sans)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontFamily: 'var(--ds-font-serif)', color: 'var(--ds-ink)', margin: 0 }}>Settings</h1>
-        <div style={headerActions}>
-          <a href="/design" style={{ ...btn, textDecoration: 'none' }}>Design</a>
-          <a href="/" style={{ ...btn, textDecoration: 'none' }}>← Menu</a>
+    <div data-testid="settings" className="utility-screen utility-settings">
+      <header className="utility-page-header">
+        <span className="utility-header-icon icon-gear" aria-hidden="true" />
+        <div className="utility-title-copy">
+          <h1>Settings</h1>
+          <p>Audio and utility controls.</p>
         </div>
-      </div>
-      <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span>Background music</span>
-        <button type="button" data-testid="toggle-bgm" style={btn} onClick={toggleMute}>{muted ? 'Muted' : 'On'}</button>
-      </div>
+        <div className="utility-header-actions">
+          <a href="/design" className="utility-button utility-button-neutral">Design</a>
+          <a href="/" className="utility-button utility-button-neutral">Menu</a>
+        </div>
+      </header>
+      <section className="utility-panel utility-settings-panel">
+        <div className="utility-setting-row">
+          <span className="utility-row-icon icon-speaker" aria-hidden="true" />
+          <div className="utility-setting-copy">
+            <strong>Background music</strong>
+            <span>{muted ? 'Muted' : 'On'}</span>
+          </div>
+          <button type="button" data-testid="toggle-bgm" className={`utility-toggle ${muted ? '' : 'is-on'}`.trim()} onClick={toggleMute} aria-pressed={!muted}>
+            <span>{muted ? 'Muted' : 'On'}</span>
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
