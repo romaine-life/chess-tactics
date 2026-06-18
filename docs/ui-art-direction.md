@@ -174,7 +174,7 @@ art, a crest, lighting, illustration:
   buttons (01), brand plate (02), and the profile/status panel (03) are built.
   Do NOT reconstruct rendered art in DOM/CSS/SVG: CSS yields stylized geometry,
   not rendered artwork, and hand-drawn SVG cannot match a rendered lion crest.
-- **Simple / text / utilitarian chrome → DOM/CSS** (news/daily, dock, HUD labels,
+- **Simple / text / utilitarian chrome → DOM/CSS** (dock labels, HUD labels,
   forms). These have no rendered detail to lose.
 - **Text is always live, never baked.** Even inside an art-backed element, keep
   copy and numbers as live DOM text (a webfont matching the concept's type)
@@ -206,8 +206,9 @@ isometric board presence, and tactical information density while adapting to the
 actual app architecture.
 
 The main menu concept is intentionally aspirational. Keep the saved image as a
-growth reference for future features such as profile state, news, daily
-challenge, lobbies, achievements, and richer account/status panels. The first
+growth reference for future features such as profile state, lobbies,
+achievements, and richer account/status panels. Daily/news is not part of the
+current main-menu target. The first
 implementation pass may reduce the main menu to the modes the app actually has
 today.
 
@@ -227,12 +228,14 @@ The default work surfaces are `/`, `/main-menu`, `/campaigns`,
 `/level-editor`, and `/skirmish`. They show live DOM bridge
 surfaces with unfinished asset slots labeled in place. The main menu uses a
 generated no-board scenic background image, the accepted generated five-button
-row asset family with live labels, and the accepted title/brand artwork.
+row asset family with live labels, and the accepted title/brand artwork. The
+background image is accepted as the live background-only scene.
 Profile/account is a real shell backed by the narrowed generated secondary
-chrome. Daily/news and bottom dock are open-slot markers only and should not be
-filled with fake live systems or fake destinations. The production route should
-not bake a board into the background or grow a separate battlefield preview
-panel until the separate skirmish/battlefield direction lands. `/design/*/render` routes preserve the approved renders for comparison:
+chrome. Daily/news is removed from the current main-menu design. The bottom
+dock is a desktop route bar and should only link to real app routes. The
+production route should not bake a board into the background or grow a separate
+battlefield preview panel; the real board/battlefield layer is out of scope for
+this pass. `/design/*/render` routes preserve the approved renders for comparison:
 `/design/main-menu/render`, `/design/campaigns/render`,
 `/design/level-editor/render`, and `/design/skirmish/render`.
 `/design/main-menu` remains the asset review board for comparing candidate
@@ -241,9 +244,9 @@ asset families before wiring them into a bridge.
 The main menu acceptance state lives in
 [main-menu-acceptance.md](main-menu-acceptance.md). As of the current pass, the
 mode button stack, upper-left brand/title banner, and art-backed live bridge
-approach are settled. The scenic background is placed and needs visual review.
-Profile/account, daily/news, bottom dock, and battlefield details still need
-review.
+approach are settled. The scenic background is accepted. Daily/news is removed.
+The real board/battlefield layer is out of scope for this pass, and desktop is
+the validation target. Profile/account and the bottom dock still need review.
 
 ## Parallel Work Boundaries
 

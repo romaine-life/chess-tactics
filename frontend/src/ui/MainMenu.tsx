@@ -16,6 +16,13 @@ const MODE_HREFS: Record<string, string> = {
   settings: '/settings',
 };
 
+const DOCK_LINKS = [
+  { label: 'Skirmish', href: '/play', icon: '/assets/ui/main-menu/icon-sword.png' },
+  { label: 'Campaigns', href: '/campaigns-next', icon: '/assets/ui/main-menu/icon-crown.png' },
+  { label: 'Editor', href: '/edit', icon: '/assets/ui/main-menu/icon-scroll.png' },
+  { label: 'Lobbies', href: '/lobbies', icon: '/assets/ui/main-menu/icon-people.png' },
+];
+
 function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boolean }): ReactElement {
   const rowAsset = assetById(mode.row);
   const href = MODE_HREFS[mode.slug] || '/';
@@ -86,44 +93,39 @@ function ProfilePanel(): ReactElement {
 
   const signedIn = me?.signed_in;
   const displayName = signedIn ? (me.name || me.email || 'Player') : 'Guest';
-  const status = signedIn ? 'Signed in' : 'Not signed in';
+  const status = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
 
   return (
     <section className="profile-panel" aria-label="Account">
       <div className="profile-bar">
         <span className="profile-crest" aria-hidden="true" />
-        <span className="profile-name">
+        <span className="profile-name" title={displayName}>
           <strong>{displayName}</strong>
           <small>{status}</small>
         </span>
-        {signedIn ? <span className="profile-status">Ready</span> : <a className="profile-auth" href={signInHref('/')}>Sign In</a>}
-        <a className="profile-gear" href="/settings" aria-label="Settings">
-          <img className="profile-icon-img" src="/assets/ui/main-menu/profile-cog.png" alt="" />
-        </a>
+        <span className="profile-actions">
+          {signedIn
+            ? <span className="profile-status">Ready</span>
+            : <a className="profile-auth" href={signInHref('/')}>Sign In</a>}
+          <a className="profile-gear" href="/settings" aria-label="Settings">
+            <img className="profile-icon-img" src="/assets/ui/main-menu/profile-cog.png" alt="" />
+          </a>
+        </span>
       </div>
     </section>
   );
 }
 
-function MainMenuOpenSlots(): ReactElement {
+function MainMenuDock(): ReactElement {
   return (
-    <section className="menu-panel main-menu-slot-panel" aria-label="Unfinished main menu areas">
-      <p className="slot-panel-kicker">Open Slots</p>
-      <ul className="slot-panel-list">
-        <li>Daily / News</li>
-        <li>Bottom Dock</li>
-        <li>Battlefield area absent</li>
-      </ul>
-    </section>
-  );
-}
-
-function MainMenuDockSlot(): ReactElement {
-  return (
-    <section className="main-menu-dock-slot" aria-label="Bottom dock open slot">
-      <span>Bottom Dock</span>
-      <small>Open Slot</small>
-    </section>
+    <nav className="main-menu-dock" aria-label="Quick routes">
+      {DOCK_LINKS.map((link) => (
+        <a className="main-menu-dock-link" href={link.href} key={link.href}>
+          <img src={link.icon} alt="" aria-hidden="true" />
+          <span>{link.label}</span>
+        </a>
+      ))}
+    </nav>
   );
 }
 
@@ -150,10 +152,9 @@ export function MainMenu(): ReactElement {
 
         <aside className="main-menu-right" aria-label="Main menu status">
           <ProfilePanel />
-          <MainMenuOpenSlots />
         </aside>
 
-        <MainMenuDockSlot />
+        <MainMenuDock />
       </section>
     </div>
   );

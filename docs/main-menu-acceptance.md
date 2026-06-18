@@ -27,7 +27,20 @@ draft endpoint contract.
 - Main menu scenic background placement.
   The live menu uses `frontend/public/assets/ui/main-menu/background-scene-v1.png`
   as a full-screen art-backed background layer with no baked UI, labels, panels,
-  menu chrome, board, grid, platform, or pieces.
+  menu chrome, board, grid, platform, or pieces. This background-only scene is
+  accepted.
+- Daily/news area removed from the main menu design.
+  The live menu should not reserve a daily/news panel, daily timer, objective,
+  reward, or news feed. Those systems are not part of the current main-menu
+  target.
+- Battlefield layer out of scope for the current main menu pass.
+  The future real board/battlefield belongs to a separate directed workstream
+  and should not appear here as a crop, preview, placeholder, or baked
+  background element.
+- Desktop-first validation for this pass.
+  Main-menu polish is being judged on desktop viewports. Mobile/tablet
+  refinement is intentionally deferred unless a desktop change breaks basic
+  rendering.
 
 ## Needs Review
 
@@ -35,25 +48,14 @@ The remaining areas should stay visibly unfinished until their production shape
 is real enough to review. Do not fill the main menu with fake live systems just
 to mimic the concept.
 
-- Background scene art (00) — **placed / visual review needed**. The current
-  generated background asset is wired into the live menu. Review it against the
-  accepted concept for composition and mood as a background-only scene. The real
-  board should be a later layer, not part of this image.
 - Profile/account panel (03) — **partial production shell**. Keep the real
   account/sign-in/settings affordance backed by the generated secondary
   `profile-panel.png` chrome. Do not show fake rank, allies, enemies, or
   progression counts until those systems exist.
-- Daily/news panel (04) — **open slot**. The concept target remains valid, but the
-  main menu should not show a fake daily timer, objective, reward, or news feed.
-  The live route may use the generated panel chrome only as an open-slot marker.
-- Bottom dock (05) — **open slot**. Do not wire fake achievements/stats/collection
-  actions to design pages. The live route may show inert generated dock chrome as
-  an open-slot marker. Build the dock when its product destinations and asset
-  treatment are ready.
-- Battlefield area (06) — **absent for now**. Skirmish/battlefield assets are a
-  separate directed workstream. The main menu should not show a crop, preview,
-  placeholder board, or live labels in that area.
+- Bottom dock (05) — **desktop route bar**. The dock may use the generated
+  `dock-chrome.png` shell, but its live actions must be real app routes. Do not
+  use fake achievements, stats, collection, timers, or placeholder actions.
 
 ## Rejected / Do Not Use
 
-- None yet.
+- Daily/news panel on the main menu.
