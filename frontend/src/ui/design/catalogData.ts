@@ -40,10 +40,9 @@ export interface Asset {
 }
 interface AssetCatalogFile { schemaVersion: number; assets: Asset[] }
 
-// The committed catalog is the source of truth that also seeds the DB. Reading
-// it directly (rather than the /api/design-assets DB endpoint) keeps the catalog
-// rendering self-contained and dodges the slot seed/413 bug that hid the 9-slice
-// before — the appearance is identical either way.
+// The committed catalog and the files under frontend/public/assets are the
+// source of truth for art assets. Do not route image bytes through Postgres;
+// the database is reserved for gameplay/design data documents.
 export const assetCatalog = assetCatalogRaw as unknown as AssetCatalogFile;
 
 export function assetById(id: string): Asset | undefined {

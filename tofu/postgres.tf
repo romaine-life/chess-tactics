@@ -1,9 +1,10 @@
 # ============================================================================
 # Azure Database for PostgreSQL — Flexible Server (chess-tactics durable store)
 # ============================================================================
-# chess-tactics' durable document store: levels, campaign workspaces, and design
-# portfolios. Replaces the pod-ephemeral JSON files under /var/run, which had no
-# PVC and were wiped on every restart/rollout.
+# chess-tactics' durable game/design document store: levels, campaigns, campaign
+# workspaces, and design portfolios. Art assets are code-owned files, not
+# database rows. This replaces the pod-ephemeral JSON files under /var/run,
+# which had no PVC and were wiped on every restart/rollout.
 #
 # Mirrors the glimmung/tank-operator shape: B1ms burstable, single AZ, public
 # endpoint gated by Entra (AAD) auth at the data plane plus an Azure-internal

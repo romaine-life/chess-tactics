@@ -8,7 +8,7 @@ wiped on every restart/rollout — a latent data-loss bug, now fixed).
 
 ## What is stored
 
-Three document stores, each a Postgres table with relational metadata columns
+Four document stores, each a Postgres table with relational metadata columns
 plus a `jsonb` `body`/`data` column (the migration lives inline in
 `backend/server.js`, `MIGRATIONS`):
 
@@ -16,14 +16,20 @@ plus a `jsonb` `body`/`data` column (the migration lives inline in
 | --- | --- | --- | --- |
 | `levels` | per signed-in owner (`PK (owner_email, id)`) | `/api/levels`, `/api/levels/:id` | sign-in required |
 | `campaign_workspaces` | one row per signed-in owner | `/api/campaign-workspace` | sign-in required |
+| `campaigns` | per signed-in owner (`PK (owner_email, id)`) | `/api/campaigns`, `/api/campaigns/:id`, `/api/campaigns/:id/levels` | sign-in required |
 | `design_portfolios` | global, by id | `/api/design-portfolios/:id` | GET public, PUT requires sign-in (designer) |
 
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
 overwrite the other's. Writes upsert and bump a `revision`.
 
-What is **not** in Postgres (deliberate, see "Boundaries"): the legacy
-in-memory `/api/campaigns` store and the `lobbies` matchmaking map.
+Art assets are **not** database records. PNG/WebP/AVIF/font files belong in the
+repo under `frontend/public/assets`, with catalog metadata in the committed
+`frontend/src/asset-catalog.json`. Postgres stores game/design data documents,
+not image bytes.
+
+What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
+matchmaking map.
 
 ## Authentication to the database
 
@@ -100,11 +106,10 @@ change. Hosts without Postgres binaries (e.g. the musl session pod) must supply
 `DATABASE_URL` or rely on the test slot. The smoke-test resets the document
 tables at the start of each run, so it is idempotent.
 
-## Boundaries (not migrated in this change)
+## Boundaries
 
-- **`/api/campaigns`** (the old in-memory campaign store, old level format) and
-  **`lobbies`** (in-memory matchmaking) remain process-memory. `/api/campaigns`
-  is part of the legacy `app.js` surface slated for deletion (issue #44, Track 1
-  "retire app.js"); investing durable infrastructure in a system marked for
-  removal would violate the migration policy. They should be resolved with that
-  track, not preserved.
+- **Game art/assets** remain code-owned files. The retired `design_assets`
+  table and `/api/design-assets` binary upload/image routes are intentionally
+  absent; migration version 3 drops the table if an earlier session created it.
+- **`lobbies`** remain process-memory matchmaking state. They are transient room
+  coordination, not authored game content.

@@ -11,7 +11,6 @@ const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 const lobbies = new Map();
-const campaigns = new Map();
 
 // Background music: the blob container is the source of truth. BGM_BASE_URL is
 // the public base for both the index.json playlist and the track files; the
@@ -88,19 +87,21 @@ const MIGRATIONS = [
   },
   {
     version: 2,
-    name: 'design asset catalog (metadata + binary images)',
+    name: 'reserved: db asset store removed before adoption',
+    sql: 'SELECT 1;',
+  },
+  {
+    version: 3,
+    name: 'legacy campaign documents and code-owned assets',
     sql: `
-      CREATE TABLE IF NOT EXISTS design_assets (
-        id           text        PRIMARY KEY,
-        content_type text        NOT NULL,
-        bytes        bytea       NOT NULL,
-        slots        jsonb       NOT NULL DEFAULT '{}'::jsonb,
-        status       text,
-        metadata     jsonb       NOT NULL DEFAULT '{}'::jsonb,
-        revision     integer     NOT NULL DEFAULT 0,
-        created_at   timestamptz NOT NULL DEFAULT now(),
-        updated_at   timestamptz NOT NULL DEFAULT now(),
-        updated_by   text
+      DROP TABLE IF EXISTS design_assets;
+      CREATE TABLE IF NOT EXISTS campaigns (
+        owner_email text        NOT NULL,
+        id          text        NOT NULL,
+        body        jsonb       NOT NULL,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (owner_email, id)
       );
     `,
   },
@@ -204,10 +205,6 @@ const PLAYER_1_SPAWN_ZONE_ID = 'player-1-spawn';
 const PLAYER_2_SPAWN_ZONE_ID = 'player-2-spawn';
 const DESIGN_PORTFOLIO_STORE_SCHEMA_VERSION = 1;
 const DESIGN_PORTFOLIO_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
-const DESIGN_ASSET_STORE_SCHEMA_VERSION = 1;
-// Asset ids carry dotted family/variant segments, e.g. button-9slice.main-menu
-// and button-icon.main-menu.sword, so dots are allowed (unlike portfolio ids).
-const DESIGN_ASSET_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
 const MIGRATED_RAW_ASSET_PATHS = new Set(['/app.js', '/style.css']);
 
 function safeReturnPath(raw) {
@@ -327,186 +324,6 @@ function publicDesignPortfolioDocument(id, document) {
   };
 }
 
-// --- Design asset catalog (metadata + binary images) -----------------------
-// The main-menu asset catalog, DB-backed: catalog metadata (slots/status/etc.)
-// AND the binary PNGs live in the `design_assets` table, mirroring the
-// design_portfolios document store. Listing never reads `bytes` (a separate
-// per-image endpoint streams them); writes COALESCE so a metadata-only PUT
-// keeps the existing image.
-function assetId(raw) {
-  const id = String(raw || '').trim();
-  return DESIGN_ASSET_ID_PATTERN.test(id) ? id : null;
-}
-
-function designAssetImageUrl(id) {
-  return `/api/design-assets/${id}/image`;
-}
-
-async function dbListDesignAssets() {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    'SELECT id, content_type, slots, status, metadata, revision, updated_at FROM design_assets ORDER BY id',
-  );
-  return rows;
-}
-
-async function dbGetDesignAssetBytes(id) {
-  await ensureDbReady();
-  const { rows } = await pool.query(
-    'SELECT content_type, bytes FROM design_assets WHERE id = $1',
-    [id],
-  );
-  return rows[0] || null;
-}
-
-async function dbUpsertDesignAsset(id, input) {
-  await ensureDbReady();
-  const bytes = input.bytes instanceof Buffer ? input.bytes : null;
-  const slots = JSON.stringify(isObjectRecord(input.slots) ? input.slots : {});
-  const status = input.status ?? null;
-  const metadata = JSON.stringify(isObjectRecord(input.metadata) ? input.metadata : {});
-  const updatedBy = input.updated_by ?? null;
-  // Branch on whether an image is supplied. `bytes` is NOT NULL, and Postgres
-  // checks NOT NULL on the proposed row *before* ON CONFLICT runs — so a
-  // metadata-only INSERT can't be COALESCE'd away. With an image we
-  // create-or-replace; without one we UPDATE the existing row, leaving the
-  // bytes/content_type untouched. (The handler guarantees the row exists for
-  // metadata-only writes.)
-  if (bytes) {
-    const { rows } = await pool.query(
-      `INSERT INTO design_assets (id, content_type, bytes, slots, status, metadata, revision, updated_by)
-         VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, 1, $7)
-       ON CONFLICT (id) DO UPDATE SET
-         bytes = EXCLUDED.bytes,
-         content_type = EXCLUDED.content_type,
-         slots = EXCLUDED.slots,
-         status = EXCLUDED.status,
-         metadata = EXCLUDED.metadata,
-         revision = design_assets.revision + 1,
-         updated_at = now(),
-         updated_by = EXCLUDED.updated_by
-       RETURNING id, content_type, slots, status, metadata, revision, updated_at`,
-      [id, input.content_type, bytes, slots, status, metadata, updatedBy],
-    );
-    return rows[0];
-  }
-  const { rows } = await pool.query(
-    `UPDATE design_assets SET
-       slots = $2::jsonb,
-       status = $3,
-       metadata = $4::jsonb,
-       revision = revision + 1,
-       updated_at = now(),
-       updated_by = $5
-     WHERE id = $1
-     RETURNING id, content_type, slots, status, metadata, revision, updated_at`,
-    [id, slots, status, metadata, updatedBy],
-  );
-  return rows[0] || null;
-}
-
-function publicDesignAsset(row) {
-  return {
-    id: row.id,
-    status: row.status ?? null,
-    slots: isObjectRecord(row.slots) ? row.slots : {},
-    metadata: isObjectRecord(row.metadata) ? row.metadata : {},
-    revision: Number.isInteger(row.revision) ? row.revision : 0,
-    updated_at: row.updated_at ?? null,
-    image: designAssetImageUrl(row.id),
-  };
-}
-
-// Resolve a catalog image path (e.g. /assets/ui/main-menu/icon-sword.png) to
-// bytes on disk. The backend runtime image may not carry frontend/src, so we
-// try the served frontend dir first, then the built dist, then public sources.
-function readSeedAssetBytes(relPath) {
-  if (typeof relPath !== 'string' || !relPath) return null;
-  const candidates = [
-    path.join(frontendDir, relPath),
-    path.resolve(__dirname, `../frontend/dist${relPath}`),
-    path.resolve(__dirname, `../frontend/public${relPath}`),
-  ];
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) return fs.readFileSync(candidate);
-    } catch (_error) {
-      // Ignore unreadable candidates and fall through to the next.
-    }
-  }
-  return null;
-}
-
-// Idempotent seed: on first boot (empty table) populate design_assets from the
-// committed catalog + PNG bytes. Guarded so it runs at most once per process and
-// never blocks startup — a failure here leaves the table empty and is logged.
-let designAssetsSeeded = false;
-async function seedDesignAssetsOnce() {
-  if (designAssetsSeeded || !pool) return;
-  designAssetsSeeded = true;
-  try {
-    const { rows } = await pool.query('SELECT count(*)::int AS count FROM design_assets');
-    if (rows[0] && rows[0].count > 0) return;
-
-    // The reload supervisor runs this file from HOT_BACKEND_DIR, so __dirname
-    // is NOT the baked backend dir — read the catalog from the served frontend
-    // dir (the one baked path the backend reliably has; the seed PNGs resolve
-    // there too). Vite copies frontend/public/asset-catalog.json into dist.
-    const seedCandidates = [
-      path.join(frontendDir, 'asset-catalog.json'),
-      path.resolve(__dirname, '..', 'frontend', 'public', 'asset-catalog.json'),
-      path.resolve(__dirname, '..', 'frontend', 'src', 'asset-catalog.json'),
-    ];
-    let seedPath = null;
-    for (const candidate of seedCandidates) {
-      try { if (fs.existsSync(candidate)) { seedPath = candidate; break; } } catch (_e) { /* try next candidate */ }
-    }
-    if (!seedPath) {
-      console.warn(`design asset seed skipped: catalog not found (tried ${seedCandidates.join(', ')})`);
-      return;
-    }
-    const catalog = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
-    const assets = Array.isArray(catalog && catalog.assets) ? catalog.assets : [];
-    let seeded = 0;
-    for (const asset of assets) {
-      if (!asset || typeof asset !== 'object') continue;
-      const id = assetId(asset.id);
-      if (!id) {
-        console.warn(`design asset seed skipped invalid id: ${asset && asset.id}`);
-        continue;
-      }
-      const relPath = asset.source && typeof asset.source.image === 'string' ? asset.source.image : '';
-      const bytes = readSeedAssetBytes(relPath);
-      if (!bytes) {
-        console.warn(`design asset seed skipped ${id}: image not found (${relPath || 'no source.image'})`);
-        continue;
-      }
-      const slots = {};
-      if (asset.sheet !== undefined) slots.sheet = asset.sheet;
-      if (asset.states !== undefined) slots.states = asset.states;
-      if (asset.rules !== undefined) slots.rules = asset.rules;
-      if (asset.rect !== undefined) slots.rect = asset.rect;
-      await dbUpsertDesignAsset(id, {
-        content_type: 'image/png',
-        bytes,
-        slots,
-        status: typeof asset.status === 'string' ? asset.status : null,
-        metadata: {
-          type: asset.type ?? null,
-          title: asset.title ?? null,
-          summary: asset.summary ?? null,
-          source: asset.source ?? null,
-        },
-        updated_by: 'seed',
-      });
-      seeded += 1;
-    }
-    console.log(`design asset catalog seeded (${seeded}/${assets.length} assets)`);
-  } catch (error) {
-    console.error('design asset seed failed; catalog will be empty until re-seeded or written:', error);
-  }
-}
-
 function clampText(value, fallback, maxLength) {
   const text = String(value || '').trim();
   return (text || fallback).slice(0, maxLength);
@@ -575,16 +392,70 @@ function publicZoneAssignments(assignments) {
   };
 }
 
-function userCampaigns(email) {
-  return Array.from(campaigns.values())
-    .filter((campaign) => campaign.owner.email === email)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+function timestampString(value, fallback = new Date().toISOString()) {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string' && value) return value;
+  return fallback;
 }
 
-function campaignForUser(id, email) {
-  const campaign = campaigns.get(id);
-  if (!campaign || campaign.owner.email !== email) return null;
-  return campaign;
+function campaignFromRow(row) {
+  if (!row || !isObjectRecord(row.body)) return null;
+  const fallbackUpdatedAt = timestampString(row.updated_at);
+  const campaign = row.body;
+  return {
+    ...campaign,
+    id: typeof campaign.id === 'string' ? campaign.id : row.id,
+    title: typeof campaign.title === 'string' ? campaign.title : 'Untitled Campaign',
+    description: typeof campaign.description === 'string' ? campaign.description : '',
+    createdAt: timestampString(campaign.createdAt, timestampString(row.created_at, fallbackUpdatedAt)),
+    updatedAt: timestampString(campaign.updatedAt, fallbackUpdatedAt),
+    owner: {
+      ...(isObjectRecord(campaign.owner) ? campaign.owner : {}),
+      email: row.owner_email,
+    },
+    levels: Array.isArray(campaign.levels) ? campaign.levels : [],
+  };
+}
+
+async function dbListCampaigns(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT owner_email, id, body, created_at, updated_at FROM campaigns WHERE owner_email = $1 ORDER BY updated_at DESC',
+    [ownerEmail],
+  );
+  return rows.map(campaignFromRow).filter(Boolean);
+}
+
+async function dbGetCampaign(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT owner_email, id, body, created_at, updated_at FROM campaigns WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return campaignFromRow(rows[0]);
+}
+
+async function dbPutCampaign(ownerEmail, campaign) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO campaigns (owner_email, id, body, created_at, updated_at)
+       VALUES ($1, $2, $3::jsonb, $4, $5)
+     ON CONFLICT (owner_email, id) DO UPDATE SET
+       body = EXCLUDED.body,
+       updated_at = EXCLUDED.updated_at
+     RETURNING owner_email, id, body, created_at, updated_at`,
+    [ownerEmail, campaign.id, JSON.stringify(campaign), campaign.createdAt, campaign.updatedAt],
+  );
+  return campaignFromRow(rows[0]);
+}
+
+async function dbDeleteCampaign(ownerEmail, id) {
+  await ensureDbReady();
+  const result = await pool.query(
+    'DELETE FROM campaigns WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return result.rowCount > 0;
 }
 
 function defaultLevelLayout(width, height) {
@@ -1118,7 +989,12 @@ app.post('/api/lobbies/:id/leave', async (req, res) => {
 app.get('/api/campaigns', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  res.status(200).json({ campaigns: userCampaigns(user.email).map(campaignSummary) });
+  try {
+    const campaigns = await dbListCampaigns(user.email);
+    res.status(200).json({ campaigns: campaigns.map(campaignSummary) });
+  } catch (error) {
+    dbUnavailable(res, 'campaign list failed', error, 'campaign_store_unavailable');
+  }
 });
 
 app.post('/api/campaigns', async (req, res) => {
@@ -1142,111 +1018,142 @@ app.post('/api/campaigns', async (req, res) => {
     owner: user,
     levels: [level],
   };
-  campaigns.set(campaign.id, campaign);
-  res.status(201).json({ campaign: campaignSummary(campaign) });
+  try {
+    const saved = await dbPutCampaign(user.email, campaign);
+    res.status(201).json({ campaign: campaignSummary(saved) });
+  } catch (error) {
+    dbUnavailable(res, 'campaign create failed', error, 'campaign_store_unavailable');
+  }
 });
 
 app.get('/api/campaigns/:id', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const campaign = campaignForUser(req.params.id, user.email);
-  if (!campaign) {
-    res.status(404).json({ error: 'campaign_not_found' });
-    return;
+  try {
+    const campaign = await dbGetCampaign(user.email, req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: 'campaign_not_found' });
+      return;
+    }
+    res.status(200).json({ campaign: campaignSummary(campaign) });
+  } catch (error) {
+    dbUnavailable(res, 'campaign read failed', error, 'campaign_store_unavailable');
   }
-  res.status(200).json({ campaign: campaignSummary(campaign) });
 });
 
 app.patch('/api/campaigns/:id', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const campaign = campaignForUser(req.params.id, user.email);
-  if (!campaign) {
-    res.status(404).json({ error: 'campaign_not_found' });
-    return;
+  try {
+    const campaign = await dbGetCampaign(user.email, req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: 'campaign_not_found' });
+      return;
+    }
+    const raw = req.body && typeof req.body === 'object' ? req.body : {};
+    if (Object.hasOwn(raw, 'title')) campaign.title = clampText(raw.title, campaign.title, 64);
+    if (Object.hasOwn(raw, 'description')) campaign.description = clampText(raw.description, campaign.description, 220);
+    campaign.updatedAt = new Date().toISOString();
+    const saved = await dbPutCampaign(user.email, campaign);
+    res.status(200).json({ campaign: campaignSummary(saved) });
+  } catch (error) {
+    dbUnavailable(res, 'campaign update failed', error, 'campaign_store_unavailable');
   }
-  const raw = req.body && typeof req.body === 'object' ? req.body : {};
-  if (Object.hasOwn(raw, 'title')) campaign.title = clampText(raw.title, campaign.title, 64);
-  if (Object.hasOwn(raw, 'description')) campaign.description = clampText(raw.description, campaign.description, 220);
-  campaign.updatedAt = new Date().toISOString();
-  res.status(200).json({ campaign: campaignSummary(campaign) });
 });
 
 app.delete('/api/campaigns/:id', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const campaign = campaignForUser(req.params.id, user.email);
-  if (!campaign) {
-    res.status(404).json({ error: 'campaign_not_found' });
-    return;
+  try {
+    const deleted = await dbDeleteCampaign(user.email, req.params.id);
+    if (!deleted) {
+      res.status(404).json({ error: 'campaign_not_found' });
+      return;
+    }
+    res.status(204).end();
+  } catch (error) {
+    dbUnavailable(res, 'campaign delete failed', error, 'campaign_store_unavailable');
   }
-  campaigns.delete(campaign.id);
-  res.status(204).end();
 });
 
 app.post('/api/campaigns/:id/levels', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const campaign = campaignForUser(req.params.id, user.email);
-  if (!campaign) {
-    res.status(404).json({ error: 'campaign_not_found' });
-    return;
-  }
-  let level;
   try {
-    level = buildLevel(req.body, campaign.levels.length);
+    const campaign = await dbGetCampaign(user.email, req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: 'campaign_not_found' });
+      return;
+    }
+    let level;
+    try {
+      level = buildLevel(req.body, campaign.levels.length);
+    } catch (error) {
+      res.status(error.statusCode || 400).json({ error: error.message || 'invalid_level' });
+      return;
+    }
+    campaign.levels.push(level);
+    campaign.updatedAt = new Date().toISOString();
+    const saved = await dbPutCampaign(user.email, campaign);
+    res.status(201).json({ campaign: campaignSummary(saved), level: publicLevel(level) });
   } catch (error) {
-    res.status(error.statusCode || 400).json({ error: error.message || 'invalid_level' });
-    return;
+    dbUnavailable(res, 'campaign level create failed', error, 'campaign_store_unavailable');
   }
-  campaign.levels.push(level);
-  campaign.updatedAt = new Date().toISOString();
-  res.status(201).json({ campaign: campaignSummary(campaign), level: publicLevel(level) });
 });
 
 app.patch('/api/campaigns/:id/levels/:levelId', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const campaign = campaignForUser(req.params.id, user.email);
-  if (!campaign) {
-    res.status(404).json({ error: 'campaign_not_found' });
-    return;
-  }
-  const level = campaign.levels.find((item) => item.id === req.params.levelId);
-  if (!level) {
-    res.status(404).json({ error: 'level_not_found' });
-    return;
-  }
   try {
-    applyLevelPatch(level, req.body);
+    const campaign = await dbGetCampaign(user.email, req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: 'campaign_not_found' });
+      return;
+    }
+    const level = campaign.levels.find((item) => item.id === req.params.levelId);
+    if (!level) {
+      res.status(404).json({ error: 'level_not_found' });
+      return;
+    }
+    try {
+      applyLevelPatch(level, req.body);
+    } catch (error) {
+      res.status(error.statusCode || 400).json({ error: error.message || 'invalid_level' });
+      return;
+    }
+    campaign.updatedAt = new Date().toISOString();
+    const saved = await dbPutCampaign(user.email, campaign);
+    res.status(200).json({ campaign: campaignSummary(saved), level: publicLevel(level) });
   } catch (error) {
-    res.status(error.statusCode || 400).json({ error: error.message || 'invalid_level' });
-    return;
+    dbUnavailable(res, 'campaign level update failed', error, 'campaign_store_unavailable');
   }
-  campaign.updatedAt = new Date().toISOString();
-  res.status(200).json({ campaign: campaignSummary(campaign), level: publicLevel(level) });
 });
 
 app.delete('/api/campaigns/:id/levels/:levelId', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const campaign = campaignForUser(req.params.id, user.email);
-  if (!campaign) {
-    res.status(404).json({ error: 'campaign_not_found' });
-    return;
+  try {
+    const campaign = await dbGetCampaign(user.email, req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: 'campaign_not_found' });
+      return;
+    }
+    if (campaign.levels.length <= 1) {
+      res.status(409).json({ error: 'campaign_needs_level' });
+      return;
+    }
+    const index = campaign.levels.findIndex((level) => level.id === req.params.levelId);
+    if (index === -1) {
+      res.status(404).json({ error: 'level_not_found' });
+      return;
+    }
+    campaign.levels.splice(index, 1);
+    campaign.updatedAt = new Date().toISOString();
+    const saved = await dbPutCampaign(user.email, campaign);
+    res.status(200).json({ campaign: campaignSummary(saved) });
+  } catch (error) {
+    dbUnavailable(res, 'campaign level delete failed', error, 'campaign_store_unavailable');
   }
-  if (campaign.levels.length <= 1) {
-    res.status(409).json({ error: 'campaign_needs_level' });
-    return;
-  }
-  const index = campaign.levels.findIndex((level) => level.id === req.params.levelId);
-  if (index === -1) {
-    res.status(404).json({ error: 'level_not_found' });
-    return;
-  }
-  campaign.levels.splice(index, 1);
-  campaign.updatedAt = new Date().toISOString();
-  res.status(200).json({ campaign: campaignSummary(campaign) });
 });
 
 app.get('/api/design-portfolios/:id', async (req, res) => {
@@ -1293,99 +1200,6 @@ app.put('/api/design-portfolios/:id', async (req, res) => {
     });
   } catch (error) {
     dbUnavailable(res, 'design portfolio write failed', error, 'design_portfolio_store_unavailable');
-  }
-});
-
-// Design asset catalog: the DB-backed main-menu catalog. The list returns
-// metadata only (slots/status/etc.) plus a per-image URL; the image route
-// streams the bytea; the gated PUT replaces metadata and, optionally, the image.
-app.get('/api/design-assets', async (_req, res) => {
-  try {
-    const rows = await dbListDesignAssets();
-    res.status(200).json({
-      assets: rows.map(publicDesignAsset),
-      store_schema_version: DESIGN_ASSET_STORE_SCHEMA_VERSION,
-    });
-  } catch (error) {
-    dbUnavailable(res, 'design asset list failed', error, 'design_asset_store_unavailable');
-  }
-});
-
-app.get('/api/design-assets/:id/image', async (req, res) => {
-  const id = assetId(req.params.id);
-  if (!id) {
-    res.status(400).json({ error: 'invalid_design_asset_id' });
-    return;
-  }
-  try {
-    const row = await dbGetDesignAssetBytes(id);
-    if (!row || !row.bytes) {
-      res.status(404).json({ error: 'design_asset_not_found' });
-      return;
-    }
-    res.setHeader('Content-Type', row.content_type || 'application/octet-stream');
-    // Catalog images are edited in place (the row's bytea is the source of
-    // truth); no-cache keeps editors/reviewers seeing the latest in dev.
-    res.setHeader('Cache-Control', 'no-cache');
-    res.status(200).send(row.bytes);
-  } catch (error) {
-    dbUnavailable(res, 'design asset image read failed', error, 'design_asset_store_unavailable');
-  }
-});
-
-// Image uploads travel as base64 in the JSON body, so this route needs a larger
-// limit than the global 256kb parser (the catalog PNGs are several hundred KB).
-app.put('/api/design-assets/:id', express.json({ limit: '12mb' }), async (req, res) => {
-  const user = await requireDesignPortfolioWriter(req, res);
-  if (!user) return;
-  const id = assetId(req.params.id);
-  if (!id) {
-    res.status(400).json({ error: 'invalid_design_asset_id' });
-    return;
-  }
-  const raw = req.body && typeof req.body === 'object' ? req.body : {};
-  const hasImage = typeof raw.image_base64 === 'string' && raw.image_base64.length > 0;
-  const hasMetadata = Object.hasOwn(raw, 'slots') || Object.hasOwn(raw, 'status') || Object.hasOwn(raw, 'metadata');
-  if (!hasImage && !hasMetadata) {
-    res.status(400).json({ error: 'design_asset_update_required' });
-    return;
-  }
-  let bytes = null;
-  if (hasImage) {
-    if (typeof raw.content_type !== 'string' || !raw.content_type.trim()) {
-      res.status(400).json({ error: 'design_asset_content_type_required' });
-      return;
-    }
-    bytes = Buffer.from(raw.image_base64, 'base64');
-    if (!bytes.length) {
-      res.status(400).json({ error: 'design_asset_image_invalid' });
-      return;
-    }
-  }
-  try {
-    // A brand-new asset must arrive with an image: the bytea column is NOT NULL,
-    // and a metadata-only first write has nothing to COALESCE against.
-    if (!hasImage) {
-      const existing = await dbGetDesignAssetBytes(id);
-      if (!existing) {
-        res.status(400).json({ error: 'design_asset_image_required' });
-        return;
-      }
-    }
-    const row = await dbUpsertDesignAsset(id, {
-      content_type: hasImage ? raw.content_type.trim() : null,
-      bytes,
-      slots: isObjectRecord(raw.slots) ? raw.slots : {},
-      status: typeof raw.status === 'string' ? raw.status : null,
-      metadata: isObjectRecord(raw.metadata) ? raw.metadata : {},
-      updated_by: user.email,
-    });
-    res.status(200).json({
-      asset: publicDesignAsset(row),
-      store_schema_version: DESIGN_ASSET_STORE_SCHEMA_VERSION,
-    });
-  } catch (error) {
-    dbUnavailable(res, 'design asset write failed', error, 'design_asset_store_unavailable');
   }
 });
 
@@ -1579,6 +1393,10 @@ app.put('/api/campaign-workspace', async (req, res) => {
   }
 });
 
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'not_found' });
+});
+
 app.use((req, res, next) => {
   if (Object.hasOwn(req.query || {}, 'screen')) {
     res.status(404).send('not found');
@@ -1613,7 +1431,7 @@ app.use((req, res) => {
     res.status(404).send('not found');
     return;
   }
-  res.sendFile(frontendIndexFile());
+  res.sendFile(frontendIndexFile(), { dotfiles: 'allow' });
 });
 
 function startServer() {
@@ -1631,7 +1449,6 @@ if (pool) {
   pool.on('error', (error) => console.error('postgres pool error:', error));
   ensureDbReady()
     .then(() => console.log(`postgres ready (mode=${databaseUrl ? 'connection-string' : 'workload-identity'}); schema migrations applied`))
-    .then(seedDesignAssetsOnce)
     .catch((error) => console.error('postgres init failed; persistence endpoints will return 503 until it recovers:', error))
     .finally(startServer);
 } else {
