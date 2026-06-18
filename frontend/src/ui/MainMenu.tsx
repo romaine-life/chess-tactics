@@ -16,13 +16,6 @@ const MODE_HREFS: Record<string, string> = {
   settings: '/settings',
 };
 
-const DOCK_LINKS = [
-  { label: 'Skirmish', href: '/play', icon: '/assets/ui/main-menu/icon-sword.png' },
-  { label: 'Campaigns', href: '/campaigns-next', icon: '/assets/ui/main-menu/icon-crown.png' },
-  { label: 'Editor', href: '/edit', icon: '/assets/ui/main-menu/icon-scroll.png' },
-  { label: 'Lobbies', href: '/lobbies', icon: '/assets/ui/main-menu/icon-people.png' },
-];
-
 function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boolean }): ReactElement {
   const rowAsset = assetById(mode.row);
   const href = MODE_HREFS[mode.slug] || '/';
@@ -116,19 +109,6 @@ function ProfilePanel(): ReactElement {
   );
 }
 
-function MainMenuDock(): ReactElement {
-  return (
-    <nav className="main-menu-dock" aria-label="Quick routes">
-      {DOCK_LINKS.map((link) => (
-        <a className="main-menu-dock-link" href={link.href} key={link.href}>
-          <img src={link.icon} alt="" aria-hidden="true" />
-          <span>{link.label}</span>
-        </a>
-      ))}
-    </nav>
-  );
-}
-
 export function MainMenu(): ReactElement {
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -153,8 +133,6 @@ export function MainMenu(): ReactElement {
         <aside className="main-menu-right" aria-label="Main menu status">
           <ProfilePanel />
         </aside>
-
-        <MainMenuDock />
       </section>
     </div>
   );

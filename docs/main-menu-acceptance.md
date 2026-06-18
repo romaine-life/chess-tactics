@@ -37,6 +37,10 @@ draft endpoint contract.
   The future real board/battlefield belongs to a separate directed workstream
   and should not appear here as a crop, preview, placeholder, or baked
   background element.
+- Bottom dock removed from the current main menu pass.
+  The generated dock chrome duplicated the primary mode buttons and did not
+  carry a distinct product purpose. The live main menu should not render a
+  bottom dock until there are real secondary actions that justify it.
 - Desktop-first validation for this pass.
   Main-menu polish is being judged on desktop viewports. Mobile/tablet
   refinement is intentionally deferred unless a desktop change breaks basic
@@ -52,10 +56,10 @@ to mimic the concept.
   account/sign-in/settings affordance backed by the generated secondary
   `profile-panel.png` chrome. Do not show fake rank, allies, enemies, or
   progression counts until those systems exist.
-- Bottom dock (05) — **desktop route bar**. The dock may use the generated
-  `dock-chrome.png` shell, but its live actions must be real app routes. Do not
-  use fake achievements, stats, collection, timers, or placeholder actions.
+- Bottom dock (05) — **absent for now**. Do not render the generated dock chrome
+  or duplicate the primary mode routes in a second bottom navigation area.
 
 ## Rejected / Do Not Use
 
 - Daily/news panel on the main menu.
+- Bottom dock that duplicates the primary mode buttons.

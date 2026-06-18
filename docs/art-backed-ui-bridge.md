@@ -25,17 +25,18 @@ not the final component system.
   title-only render crop for the live main menu brand plate.
 - `frontend/public/assets/ui/main-menu/secondary/*.png` contains the narrowed
   generated secondary chrome set imported from the follow-up art pass: profile
-  panel, status panel, legacy daily/news panel frames, dock chrome, and the
-  source contact sheet. The daily/news frames are no longer part of the live main
-  menu design. Battlefield frames, dock button states, and small fake-feature
-  icons from that pass are intentionally not part of the live route.
+  panel, status panel, legacy daily/news panel frames, legacy dock chrome, and
+  the source contact sheet. The daily/news frames and dock chrome are no longer
+  part of the live main menu design. Battlefield frames, dock button states, and
+  small fake-feature icons from that pass are intentionally not part of the live
+  route.
 - The remaining main menu elements follow the render-accuracy + text-live rules
   in `docs/ui-art-direction.md` (art for rendered visuals; live DOM for copy and
   state). The current live main menu keeps only real/accepted production pieces:
   the button row assets, the title artwork, the accepted no-board scenic
-  background, the art-backed account/settings shell, and a desktop dock wired
-  only to real app routes. Daily/news is removed from the live main-menu design;
-  battlefield remains out of scope for this pass. None of these areas may be
+  background, and the art-backed account/settings shell. Daily/news and the
+  bottom dock are removed from the live main-menu design; battlefield remains
+  out of scope for this pass. None of these areas may be
   represented by fake timers, fake stats, fake destination links, or concept-art
   crops on the live main menu. The earlier *generated*
   `main-menu-*-chrome-v1.png` bitmaps (regenerated approximations that had
@@ -56,9 +57,9 @@ rectangles over the 16:10 artboard.
 - `/` and `/main-menu` show the live DOM main menu bridge, with accepted button
   row assets, the accepted title artwork, the generated no-board scenic
   background, a
-  real art-backed account/settings shell, and a desktop dock wired to real app
-  routes. The live route does not show a daily/news area, fake dock actions, a
-  baked board in the background, or a separate battlefield preview panel.
+  real art-backed account/settings shell. The live route does not show a
+  daily/news area, bottom dock, fake dock actions, a baked board in the
+  background, or a separate battlefield preview panel.
 - `/main-menu/skeleton` also opens the live DOM main menu bridge.
 - `/design/main-menu/render` opens the saved main menu concept render.
 - `/design/main-menu` opens the main menu chrome review board. It renders each
@@ -83,7 +84,8 @@ behind the live bridge. The mode button family uses accepted production row
 assets with live HTML labels overlaid; the brand lockup uses the accepted title
 artwork; the profile area is a real account/settings shell backed by generated
 chrome. Daily/news has been removed from the current main-menu target. The
-bottom dock is a real desktop route bar, not an open-slot marker. There is no
+bottom dock has also been removed for now because it duplicated the primary
+mode buttons without a distinct product purpose. There is no
 separate battlefield preview panel on the main menu route. Other labeled slots on the editor and
 skirmish screens are intentionally unfinished.
 
@@ -92,7 +94,7 @@ Current main menu acceptance state is tracked in
 button asset family, upper-left brand/title artwork, and art-backed live bridge
 approach are settled; the scenic background is accepted; daily/news is removed;
 the battlefield layer is out of scope for this pass; profile/account and the
-desktop dock still need production review.
+desktop composition still need production review.
 
 The concept routes keep real buttons layered over the saved renders. The
 hotspots route back into existing app actions such as menu navigation, campaign
@@ -127,9 +129,10 @@ Replace the bridge from the inside out:
    background uses accepted `background-scene-v1.png`; it must stay
    background-only because the real board is a separate future layer.
    Profile/account can use the narrowed generated secondary panel. Daily/news is
-   removed from the live main-menu design. The dock is a desktop route bar whose
-   actions must map to real app routes. Battlefield should not become a separate
-   preview panel until the skirmish/battlefield direction lands. Use `/design/main-menu` to
+   removed from the live main-menu design. The bottom dock is also removed until
+   there are real secondary actions that justify it; do not duplicate the
+   primary mode routes. Battlefield should not become a separate preview panel
+   until the skirmish/battlefield direction lands. Use `/design/main-menu` to
    compare candidates against the approved render before wiring them into the
    bridge.
 3. Extract editor and skirmish side panels as real DOM components.

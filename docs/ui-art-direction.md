@@ -232,10 +232,10 @@ row asset family with live labels, and the accepted title/brand artwork. The
 background image is accepted as the live background-only scene.
 Profile/account is a real shell backed by the narrowed generated secondary
 chrome. Daily/news is removed from the current main-menu design. The bottom
-dock is a desktop route bar and should only link to real app routes. The
-production route should not bake a board into the background or grow a separate
-battlefield preview panel; the real board/battlefield layer is out of scope for
-this pass. `/design/*/render` routes preserve the approved renders for comparison:
+dock is also removed for now because it duplicated the primary mode buttons
+without a distinct product purpose. The production route should not bake a board
+into the background or grow a separate battlefield preview panel; the real
+board/battlefield layer is out of scope for this pass. `/design/*/render` routes preserve the approved renders for comparison:
 `/design/main-menu/render`, `/design/campaigns/render`,
 `/design/level-editor/render`, and `/design/skirmish/render`.
 `/design/main-menu` remains the asset review board for comparing candidate
@@ -246,7 +246,8 @@ The main menu acceptance state lives in
 mode button stack, upper-left brand/title banner, and art-backed live bridge
 approach are settled. The scenic background is accepted. Daily/news is removed.
 The real board/battlefield layer is out of scope for this pass, and desktop is
-the validation target. Profile/account and the bottom dock still need review.
+the validation target. Profile/account and the overall desktop composition still
+need review.
 
 ## Parallel Work Boundaries
 
