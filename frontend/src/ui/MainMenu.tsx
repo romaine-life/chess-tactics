@@ -121,7 +121,11 @@ export function MainMenu(): ReactElement {
       <section className="main-menu-screen main-menu-skeleton-screen" aria-label="Chess Tactics main menu">
         <div className="main-menu-left">
           <a className="main-menu-brand main-menu-brand-art accepted-brand-crop" href="/" aria-label="Chess Tactics">
-            <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" />
+            <picture>
+              <source srcSet="/assets/ui/main-menu-brand-title-only-v1.avif" type="image/avif" />
+              <source srcSet="/assets/ui/main-menu-brand-title-only-v1.webp" type="image/webp" />
+              <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="" />
+            </picture>
           </a>
           <nav className="main-menu-actions main-menu-actions-assets" aria-label="Game modes">
             {MENU_MODES.map((mode) => (
