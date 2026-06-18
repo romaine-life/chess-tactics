@@ -4949,8 +4949,15 @@ h1 {
 
 .skirmish-board-frame canvas {
   display: block;
-  height: auto;
-  width: min(100%, 900px);
+  height: auto !important;
+  width: 100% !important;
+}
+
+.skirmish-board-frame [data-testid="skirmish-board"] {
+  display: grid;
+  max-width: 100%;
+  place-items: center;
+  width: min(100%, 880px);
 }
 
 .skirmish-hud {
