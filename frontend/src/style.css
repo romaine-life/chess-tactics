@@ -5521,8 +5521,10 @@ h1 {
 
 .ce-campaign-list,
 .ce-level-list {
+  align-content: start;
   display: grid;
   gap: 8px;
+  grid-auto-rows: max-content;
   min-height: 0;
   overflow: auto;
   padding: 2px 4px 8px;
