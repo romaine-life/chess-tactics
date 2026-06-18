@@ -617,12 +617,16 @@ h1 {
 
 .main-menu-battlefield-plate {
   align-self: center;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 759 / 260;
+  background-image: url("/assets/ui/main-menu/secondary/battlefield-frame.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   grid-column: 2;
   grid-row: 1 / 3;
   justify-self: center;
   margin-top: clamp(24px, 4.6vh, 48px);
-  max-height: min(52vh, 480px);
+  max-height: min(40vh, 380px);
   pointer-events: none;
   position: relative;
   width: min(100%, 620px);
@@ -630,42 +634,17 @@ h1 {
 }
 
 .main-menu-battlefield-plate::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(37, 199, 255, .34), transparent 16% 84%, rgba(37, 199, 255, .22)),
-    linear-gradient(180deg, rgba(233, 184, 92, .26), transparent 12% 82%, rgba(233, 184, 92, .16));
-  clip-path: polygon(
-    0 8px, 8px 8px, 8px 0,
-    calc(100% - 8px) 0, calc(100% - 8px) 8px, 100% 8px,
-    100% calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) 100%,
-    8px 100%, 8px calc(100% - 8px), 0 calc(100% - 8px)
-  );
-  opacity: .82;
+  content: none;
 }
 
 .main-menu-battlefield-plate::after {
-  content: "";
-  position: absolute;
-  inset: 16px;
-  border: 1px solid rgba(67, 126, 151, .48);
-  box-shadow:
-    inset 0 0 46px rgba(1, 8, 13, .46),
-    0 0 36px rgba(37, 199, 255, .1);
+  content: none;
 }
 
 /* Element 06 — the menu battlefield preview is art-backed with the concept board crop
    (battlefield region of the render). The live canvas board returns in actual gameplay. */
 .main-menu-battlefield-art {
-  background-image: url("/assets/ui/main-menu-aspirational.png");
-  background-repeat: no-repeat;
-  background-size: 170.91% 171.03%;
-  background-position: 81.46% 43.69%;
-  image-rendering: pixelated;
-  inset: 16px;
-  overflow: hidden;
-  position: absolute;
+  display: none;
 }
 
 .shell.main-menu-active .board-scroll {
@@ -689,9 +668,9 @@ h1 {
   color: #bfefff;
   font-size: clamp(.46rem, .64vw, .62rem);
   gap: 12px;
-  left: 26px;
-  right: 26px;
-  top: 18px;
+  left: 34px;
+  right: 34px;
+  top: 22px;
 }
 
 .main-menu-battlefield-status {
@@ -1248,8 +1227,9 @@ h1 {
 
 .menu-panel::before,
 .profile-bar::before {
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/main-menu/panel-9slice.png") 16 fill / 16px stretch;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   content: "";
   image-rendering: pixelated;
   inset: 0;
@@ -1283,6 +1263,14 @@ h1 {
   box-shadow: none;
   min-height: 72px;
   position: relative;
+}
+
+.profile-bar::before {
+  background-image: url("/assets/ui/main-menu/secondary/profile-panel.png");
+}
+
+.profile-forces::before {
+  background-image: url("/assets/ui/main-menu/secondary/status-panel.png");
 }
 
 /* Crest: transparent PNG cropped from the approved render by normalize-main-menu-profile.mjs. */
@@ -1424,6 +1412,14 @@ h1 {
   align-self: end;
 }
 
+.daily-panel::before {
+  background-image: url("/assets/ui/main-menu/secondary/daily-panel.png");
+}
+
+.news-panel::before {
+  background-image: url("/assets/ui/main-menu/secondary/news-panel.png");
+}
+
 .daily-panel {
   grid-column: 1;
   grid-row: 3;
@@ -1462,9 +1458,18 @@ h1 {
   font-size: .5rem;
 }
 
-.daily-timer .ui-icon {
+.daily-timer .ui-icon,
+.daily-timer .secondary-menu-icon {
   width: 11px;
   height: 11px;
+}
+
+.secondary-menu-icon {
+  display: block;
+  height: 100%;
+  image-rendering: pixelated;
+  object-fit: contain;
+  width: 100%;
 }
 
 .daily-body {
@@ -1481,7 +1486,7 @@ h1 {
   color: var(--cobalt-bright);
 }
 
-.daily-reticle .ui-icon {
+.daily-reticle .secondary-menu-icon {
   width: 26px;
   height: 26px;
 }
@@ -1514,7 +1519,7 @@ h1 {
   color: var(--cobalt-bright);
 }
 
-.daily-gem .ui-icon {
+.daily-gem .secondary-menu-icon {
   width: 15px;
   height: 15px;
 }
@@ -1549,7 +1554,7 @@ h1 {
   height: 14px;
 }
 
-.news-ico .ui-icon {
+.news-ico .secondary-menu-icon {
   width: 14px;
   height: 14px;
 }
@@ -1570,26 +1575,67 @@ h1 {
 
 .menu-dock-art {
   position: relative;
-  width: 390px;
-  max-width: 30vw;
-  aspect-ratio: 410 / 136;
-  background-image: url("/assets/ui/main-menu-aspirational.png");
+  width: 520px;
+  max-width: min(42vw, 520px);
+  aspect-ratio: 1124 / 146;
+  background-image: url("/assets/ui/main-menu/secondary/dock-chrome.png");
   background-repeat: no-repeat;
-  background-size: 386.83% 729.41%;
-  background-position: 46.60% 94.63%;
+  background-size: 100% 100%;
   image-rendering: pixelated;
 }
 
 .dock-hit {
   position: absolute;
-  display: block;
-  top: 6%;
-  width: 22%;
-  height: 88%;
+  display: grid;
+  top: 24%;
+  width: 12%;
+  height: 50%;
   border: 0;
   background: transparent;
   cursor: pointer;
+  place-items: stretch;
 }
+
+.dock-hit-achievements { left: 21.8%; }
+.dock-hit-campaigns { left: 36.6%; }
+.dock-hit-stats { left: 51.7%; }
+.dock-hit-collection { left: 66.8%; }
+
+.dock-hit-art {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  grid-area: 1 / 1;
+  image-rendering: pixelated;
+}
+
+.dock-hit-art-hover,
+.dock-hit-art-pressed,
+.dock-hit:hover .dock-hit-art-normal,
+.dock-hit:focus-visible .dock-hit-art-normal,
+.dock-hit:active .dock-hit-art-normal,
+.dock-hit:active .dock-hit-art-hover {
+  opacity: 0;
+}
+
+.dock-hit:hover .dock-hit-art-hover,
+.dock-hit:focus-visible .dock-hit-art-hover,
+.dock-hit:active .dock-hit-art-pressed {
+  opacity: 1;
+}
+
+.dock-hit-achievements .dock-hit-art-normal { background-image: url("/assets/ui/main-menu/secondary/dock-button-achievements-normal.png"); }
+.dock-hit-achievements .dock-hit-art-hover { background-image: url("/assets/ui/main-menu/secondary/dock-button-achievements-hover.png"); }
+.dock-hit-achievements .dock-hit-art-pressed { background-image: url("/assets/ui/main-menu/secondary/dock-button-achievements-pressed.png"); }
+.dock-hit-campaigns .dock-hit-art-normal { background-image: url("/assets/ui/main-menu/secondary/dock-button-campaigns-normal.png"); }
+.dock-hit-campaigns .dock-hit-art-hover { background-image: url("/assets/ui/main-menu/secondary/dock-button-campaigns-hover.png"); }
+.dock-hit-campaigns .dock-hit-art-pressed { background-image: url("/assets/ui/main-menu/secondary/dock-button-campaigns-pressed.png"); }
+.dock-hit-stats .dock-hit-art-normal { background-image: url("/assets/ui/main-menu/secondary/dock-button-stats-normal.png"); }
+.dock-hit-stats .dock-hit-art-hover { background-image: url("/assets/ui/main-menu/secondary/dock-button-stats-hover.png"); }
+.dock-hit-stats .dock-hit-art-pressed { background-image: url("/assets/ui/main-menu/secondary/dock-button-stats-pressed.png"); }
+.dock-hit-collection .dock-hit-art-normal { background-image: url("/assets/ui/main-menu/secondary/dock-button-collection-normal.png"); }
+.dock-hit-collection .dock-hit-art-hover { background-image: url("/assets/ui/main-menu/secondary/dock-button-collection-hover.png"); }
+.dock-hit-collection .dock-hit-art-pressed { background-image: url("/assets/ui/main-menu/secondary/dock-button-collection-pressed.png"); }
 
 .dock-hit:hover,
 .dock-hit:focus-visible {
@@ -4910,9 +4956,12 @@ h1 {
 
   .main-menu-battlefield-meta {
     font-size: .48rem;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
     left: 18px;
     right: 18px;
-    top: 14px;
+    top: 18px;
   }
 
   .main-menu-battlefield-status {
