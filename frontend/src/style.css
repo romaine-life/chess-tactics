@@ -4664,6 +4664,357 @@ h1 {
   width: 12px;
 }
 
+/* Desktop concept pass: keep the editor chrome restrained and technical.
+   The board and placeable asset art remain intentionally placeholder quality. */
+@media (min-width: 1181px) {
+  .level-editor-shell {
+    --le-cyan: #21d7ff;
+    --le-gold: #ffbf3e;
+    --le-panel-line: rgba(74, 111, 128, .64);
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .le-topbar {
+    background:
+      linear-gradient(180deg, rgba(5, 14, 21, .98), rgba(2, 8, 13, .98));
+    border-color: var(--le-panel-line);
+    box-shadow: inset 0 -1px 0 rgba(33, 215, 255, .1);
+    gap: 4px;
+    grid-template-columns: 390px minmax(450px, 1fr) 130px 360px;
+    min-height: 70px;
+    padding: 4px;
+  }
+
+  .le-brand {
+    border-right: 1px solid rgba(74, 111, 128, .64);
+    gap: 12px;
+    padding-inline: 18px;
+  }
+
+  .le-brand img {
+    height: 45px;
+    width: 45px;
+  }
+
+  .le-brand small {
+    color: #f5f8f4;
+    font-size: .52rem;
+  }
+
+  .le-brand strong {
+    font-size: 1.2rem;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .le-tool-tabs {
+    background: none;
+    gap: 0;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    padding: 0;
+  }
+
+  .le-tool-tab {
+    background:
+      linear-gradient(180deg, rgba(8, 20, 29, .96), rgba(5, 13, 20, .96));
+    border: 1px solid rgba(74, 111, 128, .5);
+    color: #b8c8cf;
+    min-height: 62px;
+  }
+
+  .le-tool-tab.is-active {
+    background:
+      linear-gradient(180deg, rgba(8, 35, 48, .98), rgba(5, 22, 32, .98));
+    border-color: var(--le-cyan);
+    box-shadow: inset 0 0 0 1px rgba(33, 215, 255, .42);
+  }
+
+  .le-tool-tab:disabled {
+    opacity: .52;
+  }
+
+  .le-tool-tab img {
+    height: 26px;
+    width: 26px;
+  }
+
+  .le-history {
+    border-left: 1px solid rgba(74, 111, 128, .42);
+    justify-content: center;
+  }
+
+  .le-save-actions {
+    justify-content: end;
+  }
+
+  .le-icon-button,
+  .le-menu-link,
+  .le-action-button {
+    background:
+      linear-gradient(180deg, rgba(10, 24, 34, .96), rgba(5, 12, 18, .96));
+    border: 1px solid rgba(74, 111, 128, .58);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03);
+  }
+
+  .le-icon-button,
+  .le-menu-link {
+    height: 50px;
+    width: 50px;
+  }
+
+  .le-icon-button.is-active,
+  .le-icon-button:hover,
+  .le-icon-button:focus-visible,
+  .le-menu-link:hover,
+  .le-menu-link:focus-visible,
+  .le-action-button.is-primary,
+  .le-action-button:hover,
+  .le-action-button:focus-visible {
+    background:
+      linear-gradient(180deg, rgba(10, 60, 103, .98), rgba(6, 38, 70, .98));
+    border-color: var(--le-cyan);
+    box-shadow: inset 0 0 0 1px rgba(33, 215, 255, .34);
+  }
+
+  .le-action-button {
+    min-height: 50px;
+    min-width: 118px;
+  }
+
+  .le-workspace {
+    gap: 4px;
+    grid-template-columns: 256px minmax(0, 1fr) 350px;
+  }
+
+  .le-panel {
+    background:
+      linear-gradient(180deg, rgba(7, 20, 28, .96), rgba(4, 13, 19, .96));
+    border: 1px solid var(--le-panel-line);
+    border-image: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025);
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .le-panel h2 {
+    border-bottom: 1px solid rgba(74, 111, 128, .35);
+    color: var(--le-gold);
+    padding-bottom: 8px;
+  }
+
+  .le-left-rail,
+  .le-right-rail {
+    gap: 4px;
+  }
+
+  .le-field {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .le-field select {
+    background: rgba(3, 12, 18, .92);
+    border-color: rgba(118, 157, 176, .46);
+    min-height: 28px;
+  }
+
+  .le-layers-panel {
+    gap: 4px;
+  }
+
+  .le-layer-row {
+    background: rgba(5, 16, 24, .9);
+    border: 1px solid rgba(74, 111, 128, .32);
+    grid-template-columns: 28px minmax(0, 1fr) 54px;
+    min-height: 38px;
+    padding: 6px 10px;
+  }
+
+  .le-layer-row.is-selected,
+  .le-layer-row:hover,
+  .le-layer-row:focus-visible {
+    background: rgba(13, 71, 137, .72);
+    border-color: var(--le-cyan);
+  }
+
+  .le-layer-row img {
+    height: 18px;
+    width: 18px;
+  }
+
+  .le-minimap-panel,
+  .le-camera-panel,
+  .le-library-panel {
+    min-height: 0;
+  }
+
+  .le-minimap {
+    aspect-ratio: 1.3;
+    background:
+      linear-gradient(135deg, rgba(78, 127, 65, .9) 0 40%, rgba(42, 95, 137, .88) 40% 55%, rgba(105, 102, 80, .88) 55% 100%);
+    border: 1px solid rgba(118, 157, 176, .48);
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+
+  .le-minimap::before {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, .2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, .2) 1px, transparent 1px);
+    background-size: 16px 16px;
+    content: "";
+    inset: 12px;
+    position: absolute;
+  }
+
+  .le-minimap span {
+    border: 2px solid rgba(255, 255, 255, .82);
+    height: 58%;
+    width: 58%;
+    z-index: 1;
+  }
+
+  .le-camera-modes {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .le-camera-modes .le-icon-button {
+    width: 100%;
+  }
+
+  .le-camera-slider {
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 24px 1fr;
+  }
+
+  .le-camera-slider span {
+    background: url("/assets/ui/level-editor/icons/undo.png") center / contain no-repeat;
+    height: 22px;
+    image-rendering: pixelated;
+    width: 22px;
+  }
+
+  .le-camera-slider i {
+    background: linear-gradient(90deg, rgba(255, 255, 255, .28), #03090d 76%);
+    display: block;
+    height: 5px;
+    position: relative;
+  }
+
+  .le-camera-slider i::after {
+    background: #d9e9ee;
+    border-radius: 50%;
+    content: "";
+    height: 13px;
+    left: 48%;
+    position: absolute;
+    top: -4px;
+    width: 13px;
+  }
+
+  .le-library-panel {
+    display: none;
+  }
+
+  .le-palette-panel {
+    border-image: none;
+    min-height: 0;
+  }
+
+  .le-palette-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .le-palette-grid button {
+    min-height: 52px;
+    padding: 4px;
+  }
+
+  .le-palette-grid button span {
+    display: none;
+  }
+
+  .le-palette-grid i,
+  .le-tray-assets i {
+    height: 28px;
+    transform: rotateX(58deg) rotateZ(45deg);
+    width: 28px;
+  }
+
+  .le-brush-tools,
+  .le-zone-tools {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .le-brush-tools {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .le-brush-tools .le-icon-button,
+  .le-zone-tools .le-icon-button {
+    width: 100%;
+  }
+
+  .le-range {
+    align-items: center;
+    color: var(--le-ink);
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 88px minmax(0, 1fr) 42px;
+  }
+
+  .le-range span,
+  .le-range b {
+    color: #c8dce4;
+    font-family: "Press Start 2P", "VT323", monospace;
+    font-size: .48rem;
+    font-weight: 400;
+    text-transform: uppercase;
+  }
+
+  .le-range input {
+    accent-color: var(--le-cyan);
+    width: 100%;
+  }
+
+  .le-bottom-tray {
+    background:
+      linear-gradient(180deg, rgba(7, 20, 28, .98), rgba(4, 13, 19, .98));
+    border: 1px solid var(--le-panel-line);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025);
+    min-height: 92px;
+    padding: 12px 14px;
+  }
+
+  .le-tray-assets {
+    gap: 10px;
+  }
+
+  .le-tray-assets button {
+    background: transparent;
+    border: 0;
+    min-width: 58px;
+  }
+
+  .le-tray-assets img {
+    height: 38px;
+    width: 38px;
+  }
+
+  .le-status {
+    background: rgba(3, 12, 18, .96);
+    min-height: 28px;
+    padding-block: 5px;
+  }
+}
+
 @media (max-width: 1180px) {
   .le-topbar {
     grid-template-columns: minmax(180px, .8fr) minmax(280px, 1.2fr) auto;

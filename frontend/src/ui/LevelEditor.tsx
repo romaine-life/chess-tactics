@@ -11,6 +11,13 @@ const TERRAINS: TerrainType[] = ['grass', 'water', 'stone', 'road', 'bridge', 'c
 const SWATCH: Record<TerrainType, string> = { grass: '#356a42', water: '#2f5d86', stone: '#6b6f76', road: '#a9905f', bridge: '#7a5a36', cliff: '#3a3f46', rock: '#595e66' };
 const UNITS: PieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
 const SIDES: Side[] = ['player', 'enemy'];
+const EDITOR_TABS: { key: string; id: EditorTool; label: string; icon: string; disabled?: boolean }[] = [
+  { key: 'board', id: 'terrain', label: 'Board', icon: 'grid' },
+  { key: 'tiles', id: 'terrain', label: 'Tiles', icon: 'brush' },
+  { key: 'pieces', id: 'unit', label: 'Pieces', icon: 'zone' },
+  { key: 'zones', id: 'erase', label: 'Zones', icon: 'eyedropper' },
+  { key: 'templates', id: 'erase', label: 'Templates', icon: 'download', disabled: true },
+];
 const TOOLS: { id: EditorTool; label: string; icon: string }[] = [
   { id: 'terrain', label: 'Board', icon: 'grid' },
   { id: 'unit', label: 'Pieces', icon: 'zone' },
@@ -78,9 +85,9 @@ function ActionButton({
   );
 }
 
-function ToolTab({ tool, active }: { tool: { id: EditorTool; label: string; icon: string }; active: boolean }): ReactElement {
+function ToolTab({ tool, active }: { tool: { id: EditorTool; label: string; icon: string; disabled?: boolean }; active: boolean }): ReactElement {
   return (
-    <button type="button" data-testid={`tool-${tool.id}`} className={`le-tool-tab ${active ? 'is-active' : ''}`.trim()} onClick={() => useEditor.getState().setTool(tool.id)}>
+    <button type="button" data-testid={`tool-${tool.id}`} className={`le-tool-tab ${active ? 'is-active' : ''}`.trim()} disabled={tool.disabled} onClick={() => useEditor.getState().setTool(tool.id)}>
       <img src={iconSrc(tool.icon, active)} alt="" aria-hidden="true" />
       <span>{tool.label}</span>
     </button>
@@ -164,7 +171,7 @@ export function LevelEditor(): ReactElement {
           </span>
         </a>
         <nav className="le-tool-tabs" aria-label="Editor tools">
-          {TOOLS.map((t) => <ToolTab key={t.id} tool={t} active={tool === t.id} />)}
+          {EDITOR_TABS.map((t) => <ToolTab key={t.key} tool={t} active={t.key === 'board' && tool === 'terrain' || t.id === tool && t.key !== 'tiles'} />)}
         </nav>
         <div className="le-history" aria-label="Edit history">
           <IconButton label="Undo" icon="undo" disabled={!past.length} onClick={() => useEditor.getState().undo()} />
@@ -173,7 +180,6 @@ export function LevelEditor(): ReactElement {
         <div className="le-save-actions">
           <ActionButton label="Test" icon="play" onClick={save} />
           <ActionButton label="Save" icon="save" primary onClick={publish} />
-          <ActionButton label="Load" icon="download" onClick={loadFromServer} />
           <a className="le-menu-link" href="/" aria-label="Main menu">
             <img src={iconSrc('menu')} alt="" aria-hidden="true" />
           </a>
@@ -205,6 +211,23 @@ export function LevelEditor(): ReactElement {
             })}
           </ChromePanel>
 
+          <ChromePanel title="Map Preview" className="le-minimap-panel">
+            <div className="le-minimap" aria-hidden="true">
+              <span />
+            </div>
+          </ChromePanel>
+
+          <ChromePanel title="Camera" className="le-camera-panel">
+            <div className="le-camera-modes">
+              <IconButton label="Day camera" icon="height-up" />
+              <IconButton label="Night camera" icon="height-down" active />
+            </div>
+            <div className="le-camera-slider">
+              <span />
+              <i />
+            </div>
+          </ChromePanel>
+
           <ChromePanel title="Saved Levels" className="le-library-panel" testId="level-library">
             {me && !me.signed_in ? (
               <a href={signInHref()} data-testid="editor-sign-in" className="le-sign-in">Sign in to save and load</a>
@@ -212,6 +235,7 @@ export function LevelEditor(): ReactElement {
               <>
                 <div className="le-library-head">
                   <span>{savedLevels.length} saved</span>
+                  <button type="button" data-testid="load" onClick={loadFromServer}>Load ID</button>
                   {me?.signed_in ? <button type="button" data-testid="refresh-levels" onClick={refreshLevels}>Refresh</button> : null}
                 </div>
                 <div className="le-library-list">
@@ -255,21 +279,17 @@ export function LevelEditor(): ReactElement {
             <label className="le-check"><input type="checkbox" checked readOnly /> Auto-Connect</label>
           </ChromePanel>
 
-          <ChromePanel title="Pieces">
-            <div className="le-unit-groups">
-              {SIDES.map((side) => (
-                <div key={side} className={`le-unit-side is-${side}`}>
-                  <span>{side}</span>
-                  <div>
-                    {UNITS.map((u) => (
-                      <button key={u} type="button" className={tool === 'unit' && unitBrush.type === u && unitBrush.side === side ? 'is-active' : ''} onClick={() => useEditor.getState().setUnitBrush(u, side)}>
-                        {u[0].toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+          <ChromePanel title="Zones" className="le-zones-panel">
+            <div className="le-zone-tools">
+              <IconButton label="Enemy threat" icon="zone" active={tool === 'erase'} onClick={() => useEditor.getState().setTool('erase')} />
+              <IconButton label="Objective" icon="eyedropper" />
+              <IconButton label="Ally shield" icon="download" />
+              <IconButton label="Flag" icon="upload" />
+              <IconButton label="Clear zone" icon="eraser" onClick={() => useEditor.getState().setTool('erase')} />
             </div>
+            <label className="le-field"><span>Zone Type</span><select value="Enemy Threat" onChange={() => undefined}><option>Enemy Threat</option></select></label>
+            <label className="le-field"><span>Layer</span><select value="Above Units" onChange={() => undefined}><option>Above Units</option></select></label>
+            <label className="le-range"><span>Opacity</span><input type="range" min="0" max="100" value="60" readOnly /><b>60%</b></label>
           </ChromePanel>
         </aside>
       </main>
