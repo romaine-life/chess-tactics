@@ -4785,6 +4785,11 @@ h1 {
   overflow: hidden;
 }
 
+.shell.skirmish-active + .bgm-control {
+  bottom: 16px;
+  right: 400px;
+}
+
 .skirmish-screen::before {
   background:
     radial-gradient(760px 440px at 42% 38%, rgba(21, 95, 137, .3), transparent 66%),
@@ -5367,6 +5372,12 @@ h1 {
   .skirmish-turn-plate {
     display: none;
   }
+
+  .shell.skirmish-active + .bgm-control {
+    bottom: auto;
+    right: 16px;
+    top: 96px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -5424,6 +5435,11 @@ h1 {
   .skirmish-action-button small {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .shell.skirmish-active + .bgm-control {
+    right: 14px;
+    top: 88px;
   }
 }
 
