@@ -226,13 +226,13 @@ intended quality bar. The earlier placeholder skeletons were removed end to end.
 The default work surfaces are `/`, `/main-menu`, `/campaigns`,
 `/level-editor`, and `/skirmish`. They show live DOM bridge
 surfaces with unfinished asset slots labeled in place. The main menu uses a
-generated scenic background image, the accepted generated five-button row asset
-family with live labels, and the accepted title/brand artwork. Profile/account
-is a real shell backed by the narrowed generated secondary chrome. Daily/news
-and bottom dock are open-slot markers only and should not be filled with fake
-live systems or fake destinations. The production route should not grow a
-separate battlefield preview panel until the separate skirmish/battlefield
-direction lands. `/design/*/render` routes preserve the approved renders for comparison:
+generated no-board scenic background image, the accepted generated five-button
+row asset family with live labels, and the accepted title/brand artwork.
+Profile/account is a real shell backed by the narrowed generated secondary
+chrome. Daily/news and bottom dock are open-slot markers only and should not be
+filled with fake live systems or fake destinations. The production route should
+not bake a board into the background or grow a separate battlefield preview
+panel until the separate skirmish/battlefield direction lands. `/design/*/render` routes preserve the approved renders for comparison:
 `/design/main-menu/render`, `/design/campaigns/render`,
 `/design/level-editor/render`, and `/design/skirmish/render`.
 `/design/main-menu` remains the asset review board for comparing candidate

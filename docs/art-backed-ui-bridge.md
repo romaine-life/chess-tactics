@@ -19,7 +19,8 @@ not the final component system.
   main menu composition reference.
 - `frontend/public/assets/ui/main-menu/background-scene-v1.png` is the live
   scenic main-menu background. It is a generated background-only image with no
-  baked text, panels, buttons, profile UI, news UI, or dock UI.
+  baked text, panels, buttons, profile UI, news UI, dock UI, board, grid,
+  playable platform, or chess pieces.
 - `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
 - `frontend/public/assets/ui/main-menu/secondary/*.png` contains the narrowed
@@ -51,11 +52,12 @@ rectangles over the 16:10 artboard.
 ## Review URLs
 
 - `/` and `/main-menu` show the live DOM main menu bridge, with accepted button
-  row assets, the accepted title artwork, the generated scenic background, a
+  row assets, the accepted title artwork, the generated no-board scenic
+  background, a
   real art-backed account/settings shell, and clear open-slot markers for
   unfinished main menu areas. The bottom dock marker is inert chrome only. The
-  live route does not show fake daily/news content, fake dock actions, or a
-  separate battlefield preview panel.
+  live route does not show fake daily/news content, fake dock actions, a baked
+  board in the background, or a separate battlefield preview panel.
 - `/main-menu/skeleton` also opens the live DOM main menu bridge.
 - `/design/main-menu/render` opens the saved main menu concept render.
 - `/design/main-menu` opens the main menu chrome review board. It renders each
@@ -75,7 +77,7 @@ map. For example, use `/design/main-menu/render/hotspots` or
 ## What Is Live
 
 The main menu, campaign editor, level editor, and skirmish now use live bridge
-surfaces by default. The main menu uses a generated scenic background image
+surfaces by default. The main menu uses a generated no-board scenic background image
 behind the live bridge. The mode button family uses accepted production row
 assets with live HTML labels overlaid; the brand lockup uses the accepted title
 artwork; the profile area is a real account/settings shell backed by generated
@@ -121,7 +123,8 @@ Replace the bridge from the inside out:
    generated row assets with live labels; the title/brand plate uses
    `main-menu-brand-title-only-v1.png` from the approved render. The scenic
    background uses `background-scene-v1.png` until a later approved replacement
-   lands. Profile/account can use the narrowed generated secondary panel;
+   lands; it must stay background-only because the real board is a separate
+   future layer. Profile/account can use the narrowed generated secondary panel;
    daily/news and dock should stay as open-slot markers on the live menu until
    their contracts are ready. Battlefield should not become a separate preview
    panel until the skirmish/battlefield direction lands. Use `/design/main-menu` to

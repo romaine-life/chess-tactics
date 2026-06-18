@@ -642,10 +642,7 @@ h1 {
   border-radius: 0;
   padding: 0;
   perspective: none;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
+  background: #02070b;
   overflow: hidden;
 }
 
@@ -693,8 +690,13 @@ h1 {
 
 .menu-layer.main-menu-layer {
   align-items: stretch;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
   inset: 0;
   justify-content: stretch;
+  overflow: hidden;
   pointer-events: none;
 }
 

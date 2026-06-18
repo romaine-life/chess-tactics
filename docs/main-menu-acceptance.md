@@ -27,7 +27,7 @@ draft endpoint contract.
 - Main menu scenic background placement.
   The live menu uses `frontend/public/assets/ui/main-menu/background-scene-v1.png`
   as a full-screen art-backed background layer with no baked UI, labels, panels,
-  or menu chrome.
+  menu chrome, board, grid, platform, or pieces.
 
 ## Needs Review
 
@@ -37,8 +37,8 @@ to mimic the concept.
 
 - Background scene art (00) — **placed / visual review needed**. The current
   generated background asset is wired into the live menu. Review it against the
-  accepted concept for composition, mood, and whether the central battlefield
-  read is appropriate as scenic menu art rather than a live preview.
+  accepted concept for composition and mood as a background-only scene. The real
+  board should be a later layer, not part of this image.
 - Profile/account panel (03) — **partial production shell**. Keep the real
   account/sign-in/settings affordance backed by the generated secondary
   `profile-panel.png` chrome. Do not show fake rank, allies, enemies, or
