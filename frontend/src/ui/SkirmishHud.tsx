@@ -56,6 +56,17 @@ function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: bool
   );
 }
 
+function StatBar({ value, max }: { value: number; max: number }) {
+  const safeMax = Math.max(1, max);
+  return (
+    <span className="skirmish-stat-bar" aria-hidden="true">
+      {Array.from({ length: safeMax }).map((_, i) => (
+        <span key={i} className={i < value ? 'filled' : ''} />
+      ))}
+    </span>
+  );
+}
+
 function CountPip({ side, count }: { side: Side; count: number }) {
   return (
     <span className={`skirmish-count-pip ${side}`}>
@@ -80,6 +91,7 @@ export function SkirmishHud() {
   const playerPieces = livingPieces(game.pieces, 'player');
   const enemyPieces = livingPieces(game.pieces, 'enemy');
   const threats = enemyThreats(game.pieces, game.size);
+  const recentLog = log.length ? log.slice(0, 4) : ['Skirmish begins - move or capture; last side standing wins.'];
   const turnLabel = game.winner
     ? game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Your turn' : 'Enemy turn';
@@ -109,11 +121,17 @@ export function SkirmishHud() {
             <dl>
               <div>
                 <dt>HP</dt>
-                <dd>{hpText(selected)}</dd>
+                <dd>
+                  <span>{hpText(selected)}</span>
+                  <StatBar value={selected?.hp ?? 1} max={selected?.maxHp ?? selected?.hp ?? 1} />
+                </dd>
               </div>
               <div>
                 <dt>AP</dt>
-                <dd>{apText(selected)}</dd>
+                <dd>
+                  <span>{apText(selected)}</span>
+                  <StatBar value={selected?.ap ?? 1} max={selected?.maxAp ?? selected?.ap ?? 1} />
+                </dd>
               </div>
             </dl>
           </div>
@@ -149,18 +167,22 @@ export function SkirmishHud() {
 
       <section className="skirmish-card skirmish-roster-card" aria-label="Roster">
         <h2>Roster</h2>
-        <div className="skirmish-roster-strip">
-          {[...playerPieces, ...enemyPieces].map((piece) => (
-            <button
-              key={piece.id}
-              type="button"
-              className={`skirmish-roster-slot ${piece.id === selectedId ? 'active' : ''}`.trim()}
-              onClick={() => piece.side === 'player' ? select(piece.id) : undefined}
-              disabled={piece.side !== 'player'}
-              aria-label={`${piece.side} ${TYPE_LABEL[piece.type]}`}
-            >
-              <UnitBadge piece={piece} />
-            </button>
+        <div className="skirmish-roster-rows">
+          {[playerPieces, enemyPieces].map((pieces, row) => (
+            <div className="skirmish-roster-strip" key={row === 0 ? 'player' : 'enemy'}>
+              {pieces.map((piece) => (
+                <button
+                  key={piece.id}
+                  type="button"
+                  className={`skirmish-roster-slot ${piece.id === selectedId ? 'active' : ''}`.trim()}
+                  onClick={() => piece.side === 'player' ? select(piece.id) : undefined}
+                  disabled={piece.side !== 'player'}
+                  aria-label={`${piece.side} ${TYPE_LABEL[piece.type]}`}
+                >
+                  <UnitBadge piece={piece} />
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       </section>
@@ -177,10 +199,11 @@ export function SkirmishHud() {
       <section className="skirmish-card skirmish-log-card" aria-label="Event log">
         <h2>Event Log</h2>
         <ul>
-          {(log.length ? log : ['Skirmish begins - move or capture; last side standing wins.']).map((line, i) => (
+          {recentLog.map((line, i) => (
             <li key={`${line}-${i}`}>
               <span aria-hidden="true" />
-              {line}
+              <strong>T{Math.max(1, recentLog.length - i)}</strong>
+              <em>{line}</em>
             </li>
           ))}
         </ul>

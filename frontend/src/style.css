@@ -4927,6 +4927,7 @@ h1 {
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) minmax(316px, 374px);
   height: 100%;
@@ -4982,8 +4983,8 @@ h1 {
   align-items: center;
   background: url("/assets/ui/skirmish/top-bar.png") center / 100% 100% no-repeat;
   display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(220px, 1.1fr) minmax(220px, .72fr) minmax(220px, .95fr) auto;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1.05fr) minmax(220px, .76fr) minmax(220px, .88fr) auto auto;
   min-height: 72px;
   padding: 11px 18px;
 }
@@ -4991,6 +4992,7 @@ h1 {
 .skirmish-brand,
 .skirmish-objective,
 .skirmish-count-pip,
+.skirmish-top-counts,
 .skirmish-window-actions {
   align-items: center;
   display: flex;
@@ -5009,15 +5011,15 @@ h1 {
 .skirmish-end-turn,
 .skirmish-new-run,
 .skirmish-score-panel strong {
-  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-family: "Jersey 10", "Press Start 2P", "VT323", ui-monospace, monospace;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .skirmish-brand strong {
   display: block;
-  font-size: clamp(.9rem, 1.55vw, 1.55rem);
-  line-height: 1.25;
+  font-size: clamp(1.6rem, 2.15vw, 2.25rem);
+  line-height: .9;
   text-shadow: 0 3px 0 #02070b;
   white-space: nowrap;
 }
@@ -5028,16 +5030,16 @@ h1 {
 .skirmish-action-button small {
   color: var(--skirmish-muted);
   display: block;
-  font-family: "VT323", ui-monospace, monospace;
-  font-size: 1.08rem;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.18rem;
   line-height: 1.05;
 }
 
 .skirmish-objective strong {
   color: #d9f2ff;
   display: block;
-  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: .54rem;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.12rem;
   line-height: 1.35;
   text-transform: uppercase;
 }
@@ -5054,9 +5056,32 @@ h1 {
 
 .skirmish-turn-plate strong {
   color: #d9f4ff;
-  font-size: clamp(.78rem, 1.15vw, 1.1rem);
-  line-height: 1.25;
+  font-size: clamp(1.45rem, 1.85vw, 2.05rem);
+  line-height: .92;
   text-shadow: 0 2px 0 #02070b, 0 0 14px rgba(56, 215, 255, .22);
+}
+
+.skirmish-top-counts {
+  border-left: 1px solid rgba(88, 133, 157, .55);
+  border-right: 1px solid rgba(88, 133, 157, .45);
+  gap: 14px;
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.skirmish-top-counts span {
+  align-items: center;
+  color: #f7ead4;
+  display: flex;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.65rem;
+  gap: 4px;
+  line-height: 1;
+}
+
+.skirmish-top-counts .skirmish-icon {
+  height: 28px;
+  width: 28px;
 }
 
 .skirmish-window-actions {
@@ -5087,7 +5112,7 @@ h1 {
   display: grid;
   min-height: 0;
   overflow: hidden;
-  padding: 8px;
+  padding: 8px 10px;
   place-items: center;
   position: relative;
 }
@@ -5112,12 +5137,12 @@ h1 {
   max-height: 100%;
   max-width: 100%;
   overflow: auto;
-  padding: clamp(4px, 1vw, 14px);
+  padding: clamp(4px, .7vw, 10px);
   place-items: center;
   position: relative;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
-  width: min(94%, 940px);
+  width: min(98%, 1080px);
   z-index: 1;
 }
 
@@ -5131,7 +5156,107 @@ h1 {
   display: grid;
   max-width: 100%;
   place-items: center;
-  width: min(100%, 880px);
+  width: min(100%, 1000px);
+}
+
+.skirmish-left-panel {
+  background:
+    linear-gradient(180deg, rgba(9, 24, 36, .92), rgba(3, 10, 17, .94));
+  border: 1px solid rgba(57, 115, 153, .78);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, .72),
+    inset 0 0 22px rgba(22, 107, 170, .1),
+    0 12px 24px rgba(0, 0, 0, .26);
+  color: #d8eefb;
+  left: 14px;
+  padding: 12px 13px;
+  pointer-events: none;
+  position: absolute;
+  width: min(220px, 23%);
+  z-index: 2;
+}
+
+.skirmish-left-panel h2 {
+  align-items: center;
+  color: #c9eaff;
+  display: flex;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.35rem;
+  font-weight: 400;
+  gap: 7px;
+  line-height: 1;
+  margin: 0 0 9px;
+  text-transform: uppercase;
+}
+
+.skirmish-left-panel dl {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.skirmish-left-panel dl div {
+  align-items: center;
+  border-top: 1px solid rgba(70, 121, 148, .36);
+  display: flex;
+  justify-content: space-between;
+  min-height: 25px;
+}
+
+.skirmish-left-panel dt,
+.skirmish-left-panel dd,
+.skirmish-left-panel p {
+  color: #bdd0d7;
+  font-size: 1.12rem;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.skirmish-left-panel dd {
+  color: #f5ead7;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.22rem;
+}
+
+.skirmish-left-panel .skirmish-icon {
+  height: 22px;
+  width: 22px;
+}
+
+.skirmish-legion-panel {
+  top: 18px;
+}
+
+.skirmish-terrain-panel {
+  bottom: 16px;
+}
+
+.skirmish-terrain-panel h2 {
+  color: #f2f1dd;
+}
+
+.skirmish-terrain-panel p {
+  margin-bottom: 9px;
+}
+
+.skirmish-charge-track {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.skirmish-charge-track span {
+  background: #05090d;
+  border: 1px solid rgba(45, 74, 89, .75);
+  height: 10px;
+  transform: rotate(45deg);
+  width: 10px;
+}
+
+.skirmish-charge-track span.active {
+  background: #1f8dff;
+  border-color: #8de8ff;
+  box-shadow: 0 0 8px rgba(56, 215, 255, .55);
 }
 
 .skirmish-hud {
@@ -5167,16 +5292,17 @@ h1 {
 .skirmish-score-panel strong {
   color: #f2f8ff;
   display: block;
-  font-size: .66rem;
-  line-height: 1.35;
+  font-size: 1.38rem;
+  line-height: 1;
 }
 
 .skirmish-eyebrow,
 .skirmish-card h2 {
   color: #94daf5;
-  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: .48rem;
-  line-height: 1.35;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.08rem;
+  font-weight: 400;
+  line-height: 1;
   margin: 0 0 6px;
   text-transform: uppercase;
 }
@@ -5230,9 +5356,10 @@ h1 {
 .skirmish-selected-copy > strong {
   color: #fff5df;
   display: block;
-  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: .68rem;
-  line-height: 1.45;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.55rem;
+  font-weight: 400;
+  line-height: .96;
   overflow-wrap: anywhere;
   text-transform: uppercase;
 }
@@ -5241,8 +5368,8 @@ h1 {
 .skirmish-threat-card li,
 .skirmish-log-card li {
   color: var(--skirmish-muted);
-  font-family: "VT323", ui-monospace, monospace;
-  font-size: 1.05rem;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.12rem;
   line-height: 1.15;
 }
 
@@ -5260,15 +5387,37 @@ h1 {
 
 .skirmish-selected-copy dt {
   color: #6edcff;
-  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: .42rem;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1rem;
   margin: 0;
   min-width: 28px;
 }
 
 .skirmish-selected-copy dd {
+  align-items: center;
   color: #f3ead8;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 42px minmax(0, 1fr);
   margin: 0;
+  width: 100%;
+}
+
+.skirmish-stat-bar {
+  display: grid;
+  gap: 3px;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+}
+
+.skirmish-stat-bar span {
+  background: #081723;
+  border: 1px solid rgba(64, 115, 147, .72);
+  height: 9px;
+}
+
+.skirmish-stat-bar span.filled {
+  background: linear-gradient(180deg, #3fd4ff, #1e77e5);
+  box-shadow: 0 0 7px rgba(56, 215, 255, .38);
 }
 
 .skirmish-actions {
@@ -5324,8 +5473,8 @@ h1 {
 
 .skirmish-action-button strong {
   color: #f7f0e3;
-  font-size: .62rem;
-  line-height: 1.25;
+  font-size: 1.35rem;
+  line-height: .95;
 }
 
 .skirmish-action-button small {
@@ -5337,10 +5486,15 @@ h1 {
   border-image-source: url("/assets/ui/skirmish/roster-panel.png");
 }
 
-.skirmish-roster-strip {
+.skirmish-roster-rows {
   display: grid;
   gap: 5px;
-  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+}
+
+.skirmish-roster-strip {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(7, minmax(32px, 1fr));
 }
 
 .skirmish-roster-slot {
@@ -5382,8 +5536,9 @@ h1 {
 
 .skirmish-threat-card strong {
   color: #f8e2ba;
-  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: .48rem;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.15rem;
+  font-weight: 400;
 }
 
 .skirmish-log-card {
@@ -5395,7 +5550,7 @@ h1 {
   align-items: start;
   display: grid;
   gap: 9px;
-  grid-template-columns: 4px minmax(0, 1fr);
+  grid-template-columns: 4px 32px minmax(0, 1fr);
 }
 
 .skirmish-log-card li > span {
@@ -5411,6 +5566,20 @@ h1 {
   background: var(--skirmish-red);
 }
 
+.skirmish-log-card li strong {
+  color: #b9d8e6;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.08rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.skirmish-log-card li em {
+  color: var(--skirmish-muted);
+  font-style: normal;
+  min-width: 0;
+}
+
 .skirmish-bottom-actions {
   display: grid;
   gap: 6px;
@@ -5422,13 +5591,14 @@ h1 {
   background: url("/assets/ui/skirmish/bottom-button.png") center / 100% 100% no-repeat;
   border: 0;
   color: #f5eee3;
+  font-size: 1.35rem;
   min-height: 44px;
   text-shadow: 0 2px 0 #02070b;
 }
 
 .skirmish-new-run {
   background-image: url("/assets/ui/skirmish/action-dark-normal.png");
-  font-size: .5rem;
+  font-size: 1.05rem;
 }
 
 .skirmish-icon {
@@ -5471,8 +5641,8 @@ h1 {
   border: 1px solid rgba(92, 168, 212, .7);
   color: #dff4ff;
   display: grid;
-  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: .58rem;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.35rem;
   height: 100%;
   min-height: 26px;
   min-width: 26px;
@@ -5493,7 +5663,7 @@ h1 {
 }
 
 .skirmish-unit-badge.large {
-  font-size: 1.2rem;
+  font-size: 2.4rem;
   min-height: 62px;
   min-width: 62px;
 }
@@ -5504,11 +5674,15 @@ h1 {
   }
 
   .skirmish-topbar {
-    grid-template-columns: minmax(190px, 1fr) minmax(190px, .8fr) auto;
+    grid-template-columns: minmax(190px, 1fr) minmax(190px, .8fr) auto auto;
   }
 
   .skirmish-objective {
     display: none;
+  }
+
+  .skirmish-left-panel {
+    width: min(190px, 24%);
   }
 }
 
@@ -5538,7 +5712,9 @@ h1 {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .skirmish-turn-plate {
+  .skirmish-turn-plate,
+  .skirmish-top-counts,
+  .skirmish-left-panel {
     display: none;
   }
 
