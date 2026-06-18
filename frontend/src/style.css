@@ -5284,7 +5284,7 @@ h1 {
 
 .skirmish-score-panel {
   align-items: center;
-  display: flex;
+  display: none;
   justify-content: space-between;
   min-height: 62px;
 }
@@ -5701,6 +5701,10 @@ h1 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     max-height: none;
     overflow: visible;
+  }
+
+  .skirmish-score-panel {
+    display: flex;
   }
 
   .skirmish-score-panel,
