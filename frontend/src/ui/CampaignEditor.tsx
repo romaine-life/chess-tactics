@@ -1,18 +1,156 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
-import type { ObjectiveType } from '../core/level';
+import type { Campaign, CampaignLevelRef, Level, ObjectiveType } from '../core/level';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 
 const OBJECTIVES: ObjectiveType[] = ['capture-all', 'capture-king', 'survive', 'reach'];
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
+const SHIELDS = ['lion', 'rook', 'crescent', 'snow', 'flame', 'crown'] as const;
 
-const panel: CSSProperties = { background: 'var(--ds-surface)', border: '1px solid var(--ds-line)', borderRadius: 'var(--ds-radius-md)', padding: '12px 14px' };
-const eyebrow: CSSProperties = { fontSize: 'var(--ds-text-xs)', letterSpacing: '.08em', color: 'var(--ds-ink-3)', textTransform: 'uppercase', marginBottom: 8 };
-const btn: CSSProperties = { border: '1px solid var(--ds-line-2)', background: 'var(--ds-accent-soft)', color: 'var(--ds-ink)', borderRadius: 'var(--ds-radius-sm)', padding: '6px 10px', cursor: 'pointer', fontSize: 'var(--ds-text-sm)' };
-const field: CSSProperties = { width: '100%', background: 'var(--ds-canvas)', color: 'var(--ds-ink)', border: '1px solid var(--ds-line-2)', borderRadius: 'var(--ds-radius-sm)', padding: '6px 8px', marginTop: 4 };
-function rowStyle(active: boolean): CSSProperties {
-  return { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '7px 9px', borderRadius: 'var(--ds-radius-sm)', cursor: 'pointer', border: `1px solid ${active ? 'var(--ds-accent)' : 'transparent'}`, background: active ? 'var(--ds-accent-soft)' : 'transparent' };
+const objectiveLabel: Record<ObjectiveType, string> = {
+  'capture-all': 'Capture all enemy pieces',
+  'capture-king': 'Capture the enemy King',
+  survive: 'Survive the assault',
+  reach: 'Reach the objective',
+};
+
+function AssetButton({
+  children,
+  className = '',
+  danger = false,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean }): ReactElement {
+  return (
+    <button type="button" className={`ce-asset-button ${danger ? 'is-danger' : ''} ${className}`.trim()} {...props}>
+      <span>{children}</span>
+    </button>
+  );
+}
+
+function IconButton({
+  children,
+  danger = false,
+  selected = false,
+  className = '',
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean; selected?: boolean }): ReactElement {
+  return (
+    <button
+      type="button"
+      className={`ce-icon-button ${danger ? 'is-danger' : ''} ${selected ? 'is-selected' : ''} ${className}`.trim()}
+      {...props}
+    >
+      <span aria-hidden="true">{children}</span>
+    </button>
+  );
+}
+
+function ShieldBadge({ index, active = false }: { index: number; active?: boolean }): ReactElement {
+  const shield = SHIELDS[index % SHIELDS.length];
+  return <span className={`ce-shield ce-shield-${shield} ${active ? 'is-active' : ''}`.trim()} aria-hidden="true" />;
+}
+
+function Stars({ count = 0 }: { count?: number }): ReactElement {
+  return (
+    <span className="ce-stars" aria-label={`${count} stars`}>
+      {[0, 1, 2].map((i) => <span key={i} className={i < count ? 'is-filled' : ''}>★</span>)}
+    </span>
+  );
+}
+
+function MiniBoard({ level }: { level: Level | null }): ReactElement {
+  const cells = useMemo(() => Array.from({ length: 48 }, (_, i) => i), []);
+  const unitCount = level?.layers.units.length ?? 0;
+  return (
+    <div className="ce-mini-board" aria-label={level ? `${level.name} board preview` : 'Level board preview'}>
+      <div className="ce-mini-board-grid" aria-hidden="true">
+        {cells.map((cell) => (
+          <span
+            key={cell}
+            className={[
+              cell % 11 === 0 || cell % 17 === 0 ? 'is-water' : '',
+              cell % 13 === 0 ? 'is-stone' : '',
+              cell < unitCount * 3 ? (cell % 2 ? 'is-red-unit' : 'is-blue-unit') : '',
+            ].join(' ')}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CampaignRow({
+  campaign,
+  index,
+  active,
+  onSelect,
+}: {
+  campaign: Campaign;
+  index: number;
+  active: boolean;
+  onSelect: () => void;
+}): ReactElement {
+  return (
+    <button type="button" className={`ce-campaign-row ${active ? 'is-selected' : ''}`} onClick={onSelect}>
+      <ShieldBadge index={index} active={active} />
+      <span className="ce-row-copy">
+        <strong>{campaign.name}</strong>
+        <small>{campaign.levels.length} levels</small>
+      </span>
+      <span className="ce-row-favorite" aria-hidden="true">★</span>
+    </button>
+  );
+}
+
+function LevelRow({
+  levelRef,
+  level,
+  index,
+  active,
+  onSelect,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+}: {
+  levelRef: CampaignLevelRef;
+  level: Level | undefined;
+  index: number;
+  active: boolean;
+  onSelect: () => void;
+  onMoveUp: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onMoveDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
+}): ReactElement {
+  const objective = levelRef.objective ?? level?.objective ?? 'capture-all';
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={`ce-level-row ${active ? 'is-selected' : ''}`}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      <span className="ce-level-thumb" aria-hidden="true">
+        <span />
+      </span>
+      <span className="ce-row-copy">
+        <strong>{index + 1}. {level?.name ?? levelRef.levelId}</strong>
+        <small>{objectiveLabel[objective]}</small>
+      </span>
+      <Stars count={levelRef.stars ?? (active ? 2 : 1)} />
+      <span className="ce-row-actions" aria-label="Level actions">
+        <IconButton onClick={onMoveUp} aria-label="Move level up">↑</IconButton>
+        <IconButton onClick={onMoveDown} aria-label="Move level down">↓</IconButton>
+        <IconButton danger onClick={onDelete} aria-label="Delete level">×</IconButton>
+      </span>
+    </div>
+  );
 }
 
 export function CampaignEditor() {
@@ -22,6 +160,12 @@ export function CampaignEditor() {
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    const shell = document.querySelector('.shell');
+    shell?.classList.add('campaign-editor-active');
+    return () => shell?.classList.remove('campaign-editor-active');
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -46,90 +190,178 @@ export function CampaignEditor() {
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
   const levelDoc = selectedLevelId ? levels[selectedLevelId] : null;
   const levelRef = camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
+  const selectedLevelIndex = orderedLevels.findIndex((r) => r.levelId === selectedLevelId);
+  const totalLevels = orderedLevels.length;
 
   return (
-    <div data-testid="campaign-editor" style={{ display: 'flex', gap: 14, padding: 14, alignItems: 'flex-start', position: 'relative', zIndex: 5, pointerEvents: 'auto', color: 'var(--ds-ink-2)', fontFamily: 'var(--ds-font-sans)' }}>
-      {/* campaigns */}
-      <div style={{ ...panel, width: 230 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={eyebrow}>Campaigns</span>
-          <span style={{ display: 'flex', gap: 6 }}>
-            <button type="button" data-testid="save-workspace" style={btn} onClick={saveWorkspaceNow}>Save</button>
-            <button type="button" data-testid="new-campaign" style={btn} onClick={() => useCampaigns.getState().newCampaign()}>+ New</button>
+    <div className="ce-screen" data-testid="campaign-editor">
+      <header className="ce-topbar">
+        <a className="ce-brand" href="/" aria-label="Back to main menu">
+          <img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />
+          <span>
+            <strong>Campaign Editor</strong>
+            <small>Chess Tactics</small>
           </span>
+        </a>
+        <div className="ce-topbar-stats" aria-label="Campaign workspace stats">
+          <span><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{totalLevels || 0}</strong></span>
+          <span><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{campaigns.length}</strong></span>
         </div>
-        {status ? <div data-testid="workspace-status" style={{ fontSize: 'var(--ds-text-xs)', color: 'var(--ds-ink-3)', marginTop: 6 }}>{status}</div> : null}
-        {me && !me.signed_in ? (
-          <a href={signInHref()} data-testid="campaign-sign-in" style={{ ...btn, display: 'inline-block', marginTop: 6, textDecoration: 'none' }}>Sign in to save</a>
-        ) : null}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-          {campaigns.length === 0 && <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>No campaigns yet.</span>}
-          {campaigns.map((c) => (
-            <div key={c.id} style={rowStyle(c.id === selectedCampaignId)} onClick={() => useCampaigns.getState().selectCampaign(c.id)}>
-              <span style={{ color: 'var(--ds-ink)' }}>{c.name}</span>
-              <span style={{ fontSize: 'var(--ds-text-xs)', color: 'var(--ds-ink-3)' }}>{c.levels.length} lv</span>
-            </div>
-          ))}
-        </div>
-      </div>
+        <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
+          <a href="/" aria-label="Main menu">M</a>
+          <button type="button" onClick={saveWorkspaceNow} aria-label="Save workspace">S</button>
+          <a href="/settings" aria-label="Settings">G</a>
+        </nav>
+      </header>
 
-      {/* campaign details + levels */}
-      <div style={{ ...panel, width: 300 }}>
-        {camp ? (
-          <>
-            <div style={eyebrow}>Campaign</div>
-            <input style={field} value={camp.name} data-testid="campaign-name" onChange={(e) => useCampaigns.getState().renameCampaign(camp.id, e.target.value)} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 6px' }}>
-              <span style={eyebrow}>Levels</span>
-              <button type="button" data-testid="add-level" style={btn} onClick={() => useCampaigns.getState().addLevel()}>+ Add level</button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {orderedLevels.map((r, i) => (
-                <div key={r.levelId} style={rowStyle(r.levelId === selectedLevelId)} onClick={() => useCampaigns.getState().selectLevel(r.levelId)}>
-                  <span style={{ color: 'var(--ds-ink)' }}>{i + 1}. {levels[r.levelId]?.name ?? r.levelId}</span>
-                  <span style={{ display: 'flex', gap: 4 }}>
-                    <button type="button" style={btn} onClick={(e) => { e.stopPropagation(); useCampaigns.getState().moveLevel(r.levelId, -1); }}>↑</button>
-                    <button type="button" style={btn} onClick={(e) => { e.stopPropagation(); useCampaigns.getState().moveLevel(r.levelId, 1); }}>↓</button>
-                    <button type="button" style={btn} onClick={(e) => { e.stopPropagation(); useCampaigns.getState().deleteLevel(r.levelId); }}>✕</button>
-                  </span>
-                </div>
-              ))}
-              {orderedLevels.length === 0 && <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>No levels — add one.</span>}
-            </div>
-            <button type="button" style={{ ...btn, marginTop: 12, borderColor: 'var(--ds-reject)' }} onClick={() => useCampaigns.getState().deleteCampaign(camp.id)}>Delete campaign</button>
-          </>
-        ) : (
-          <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>Select or create a campaign.</span>
-        )}
-      </div>
-
-      {/* selected level settings */}
-      <div style={{ ...panel, width: 240 }}>
-        <div style={eyebrow}>Level settings</div>
-        {levelDoc && levelRef ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 'var(--ds-text-sm)' }}>
-            <label>Objective
-              <select style={field} data-testid="level-objective" value={levelRef.objective ?? levelDoc.objective} onChange={(e) => useCampaigns.getState().setLevelObjective(levelDoc.id, e.target.value as ObjectiveType)}>
-                {OBJECTIVES.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </label>
-            <label>Difficulty
-              <select style={field} value={levelDoc.difficulty} onChange={(e) => useCampaigns.getState().setLevelDifficulty(levelDoc.id, e.target.value)}>
-                {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </label>
-            <label>Starting funds
-              <input type="number" style={field} value={levelDoc.economy.startingFunds} onChange={(e) => useCampaigns.getState().setLevelEconomy(levelDoc.id, Number(e.target.value), levelDoc.economy.incomePerTurn)} />
-            </label>
-            <label>Income / turn
-              <input type="number" style={field} value={levelDoc.economy.incomePerTurn} onChange={(e) => useCampaigns.getState().setLevelEconomy(levelDoc.id, levelDoc.economy.startingFunds, Number(e.target.value))} />
-            </label>
-            <a href="/edit" style={{ ...btn, textAlign: 'center', textDecoration: 'none', marginTop: 4 }}>Open board editor →</a>
+      <main className="ce-layout">
+        <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
+          <div className="ce-panel-head">
+            <h2>Campaigns</h2>
+            <span>{campaigns.length} / 20</span>
           </div>
-        ) : (
-          <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>Select a level.</span>
-        )}
-      </div>
+          <AssetButton data-testid="new-campaign" className="ce-new-campaign" onClick={() => useCampaigns.getState().newCampaign()}>
+            + New Campaign
+          </AssetButton>
+          {status ? <div data-testid="workspace-status" className="ce-status">{status}</div> : null}
+          {me && !me.signed_in ? (
+            <a href={signInHref()} data-testid="campaign-sign-in" className="ce-sign-in">Sign in to save</a>
+          ) : null}
+          <div className="ce-campaign-list">
+            {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}
+            {campaigns.map((campaign, index) => (
+              <CampaignRow
+                key={campaign.id}
+                campaign={campaign}
+                index={index}
+                active={campaign.id === selectedCampaignId}
+                onSelect={() => useCampaigns.getState().selectCampaign(campaign.id)}
+              />
+            ))}
+          </div>
+        </aside>
+
+        <section className="ce-panel ce-details-panel" aria-label="Campaign details and levels">
+          {camp ? (
+            <>
+              <div className="ce-section-title">
+                <h2>Campaign Details</h2>
+              </div>
+              <div className="ce-campaign-summary">
+                <ShieldBadge index={campaigns.findIndex((c) => c.id === camp.id)} active />
+                <label className="ce-name-field">
+                  <span>Campaign Name</span>
+                  <input
+                    data-testid="campaign-name"
+                    value={camp.name}
+                    onChange={(e) => useCampaigns.getState().renameCampaign(camp.id, e.target.value)}
+                  />
+                </label>
+                <dl>
+                  <div><dt>Chapters</dt><dd>{camp.chapters}</dd></div>
+                  <div><dt>Levels</dt><dd>{camp.levels.length}</dd></div>
+                  <div><dt>Difficulty</dt><dd>{camp.difficulty}</dd></div>
+                </dl>
+              </div>
+
+              <div className="ce-levels-head">
+                <h2>Levels</h2>
+                <AssetButton data-testid="add-level" onClick={() => useCampaigns.getState().addLevel()}>+ Add Level</AssetButton>
+              </div>
+              <div className="ce-level-list">
+                {orderedLevels.length === 0 ? <p className="ce-empty">No levels. Add one to begin.</p> : null}
+                {orderedLevels.map((ref, index) => (
+                  <LevelRow
+                    key={ref.levelId}
+                    levelRef={ref}
+                    level={levels[ref.levelId]}
+                    index={index}
+                    active={ref.levelId === selectedLevelId}
+                    onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
+                    onMoveUp={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, -1); }}
+                    onMoveDown={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, 1); }}
+                    onDelete={(event) => { event.stopPropagation(); useCampaigns.getState().deleteLevel(ref.levelId); }}
+                  />
+                ))}
+              </div>
+              <div className="ce-mid-actions">
+                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, -1)} aria-label="Move selected level up">↑</IconButton>
+                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, 1)} aria-label="Move selected level down">↓</IconButton>
+                <AssetButton danger onClick={() => useCampaigns.getState().deleteCampaign(camp.id)}>Delete Campaign</AssetButton>
+              </div>
+            </>
+          ) : (
+            <p className="ce-empty ce-empty-large">Select or create a campaign.</p>
+          )}
+        </section>
+
+        <section className="ce-panel ce-level-panel" aria-label="Selected level">
+          <div className="ce-selected-head">
+            <h2>{levelDoc ? `Level ${selectedLevelIndex + 1}: ${levelDoc.name}` : 'Selected Level'}</h2>
+            <span aria-hidden="true">✎</span>
+          </div>
+          <div className="ce-preview-frame">
+            <MiniBoard level={levelDoc} />
+          </div>
+          {levelDoc && levelRef ? (
+            <>
+              <div className="ce-preview-actions">
+                <a className="ce-link-button" href="/edit">Edit Board</a>
+                <a className="ce-link-button ce-link-button-ghost" href="/play">Test Play</a>
+                <IconButton selected aria-label="Level settings">G</IconButton>
+              </div>
+
+              <div className="ce-settings-grid">
+                <label className="ce-setting-card">
+                  <span>Objective</span>
+                  <select
+                    data-testid="level-objective"
+                    value={levelRef.objective ?? levelDoc.objective}
+                    onChange={(e) => useCampaigns.getState().setLevelObjective(levelDoc.id, e.target.value as ObjectiveType)}
+                  >
+                    {OBJECTIVES.map((objective) => <option key={objective} value={objective}>{objectiveLabel[objective]}</option>)}
+                  </select>
+                </label>
+                <label className="ce-setting-card">
+                  <span>Difficulty</span>
+                  <select value={levelDoc.difficulty} onChange={(e) => useCampaigns.getState().setLevelDifficulty(levelDoc.id, e.target.value)}>
+                    {DIFFICULTIES.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
+                  </select>
+                </label>
+                <label className="ce-setting-card">
+                  <span>Starting Funds</span>
+                  <input
+                    type="number"
+                    value={levelDoc.economy.startingFunds}
+                    onChange={(e) => useCampaigns.getState().setLevelEconomy(levelDoc.id, Number(e.target.value), levelDoc.economy.incomePerTurn)}
+                  />
+                </label>
+                <label className="ce-setting-card">
+                  <span>Income Per Turn</span>
+                  <input
+                    type="number"
+                    value={levelDoc.economy.incomePerTurn}
+                    onChange={(e) => useCampaigns.getState().setLevelEconomy(levelDoc.id, levelDoc.economy.startingFunds, Number(e.target.value))}
+                  />
+                </label>
+              </div>
+
+              <div className="ce-notes-card">
+                <span>Notes</span>
+                <p>{objectiveLabel[levelRef.objective ?? levelDoc.objective]}. Board size {levelDoc.board.cols} x {levelDoc.board.rows}. Theme: {levelDoc.theme}.</p>
+              </div>
+            </>
+          ) : (
+            <p className="ce-empty ce-empty-large">Select a level.</p>
+          )}
+        </section>
+      </main>
+
+      <footer className="ce-footer">
+        <AssetButton data-testid="save-workspace" onClick={saveWorkspaceNow}>Save Campaign</AssetButton>
+        <a className="ce-footer-link" href="/edit">Open Board Editor</a>
+        <AssetButton danger disabled={!levelDoc} onClick={() => levelDoc && useCampaigns.getState().deleteLevel(levelDoc.id)}>Delete Level</AssetButton>
+      </footer>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { HttpError } from '../net/http';
 
@@ -17,8 +17,21 @@ async function api<T>(method: string, path: string): Promise<T> {
   return res.status === 204 ? (undefined as T) : (res.json() as Promise<T>);
 }
 
-const panel: CSSProperties = { background: 'var(--ds-surface)', border: '1px solid var(--ds-line)', borderRadius: 'var(--ds-radius-md)', padding: '14px 16px' };
-const btn: CSSProperties = { border: '1px solid var(--ds-line-2)', background: 'var(--ds-accent-soft)', color: 'var(--ds-ink)', borderRadius: 'var(--ds-radius-sm)', padding: '6px 12px', cursor: 'pointer', fontSize: 'var(--ds-text-sm)' };
+function displayName(user: LobbyUser | null, fallback: string): string {
+  return user?.name || user?.email || fallback;
+}
+
+function LobbySeat({ user, label }: { user: LobbyUser | null; label: string }) {
+  const name = displayName(user, 'Open seat');
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
+  return (
+    <div className={`utility-seat ${user ? '' : 'is-empty'}`.trim()}>
+      {user?.avatar_url ? <img className="utility-avatar" src={user.avatar_url} alt="" /> : <span className="utility-avatar" aria-hidden="true">{initial}</span>}
+      <span>{name}</span>
+      <small>{label}</small>
+    </div>
+  );
+}
 
 // Multiplayer lobby browser (ported from legacy app.js). Talks to the existing
 // in-memory /api/lobbies endpoints; sign-in gated like the editors.
@@ -43,37 +56,73 @@ export function Lobbies() {
   };
 
   return (
-    <div data-testid="lobbies" style={{ padding: '32px clamp(20px,6vw,80px)', color: 'var(--ds-ink-2)', fontFamily: 'var(--ds-font-sans)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1 style={{ fontFamily: 'var(--ds-font-serif)', color: 'var(--ds-ink)', margin: 0 }}>Lobbies</h1>
-        <a href="/" style={{ ...btn, textDecoration: 'none' }}>← Menu</a>
-      </div>
+    <div data-testid="lobbies" className="utility-screen utility-lobbies">
+      <header className="utility-page-header">
+        <span className="utility-header-icon icon-players" aria-hidden="true" />
+        <div className="utility-title-copy">
+          <h1>Lobbies</h1>
+          <p>Host, join, and launch multiplayer tactics.</p>
+        </div>
+        <a href="/" className="utility-button utility-button-neutral">Menu</a>
+      </header>
       {me && !me.signed_in ? (
-        <div style={panel}><a href={signInHref()} data-testid="lobbies-sign-in" style={{ ...btn, display: 'inline-block', textDecoration: 'none' }}>Sign in to host or join</a></div>
+        <section className="utility-panel utility-empty-panel">
+          <a href={signInHref()} data-testid="lobbies-sign-in" className="utility-button utility-button-primary">Sign in to host or join</a>
+        </section>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" data-testid="host-lobby" style={btn} onClick={act(() => api('POST', '/api/lobbies'))}>Host a lobby</button>
-            <button type="button" style={btn} onClick={refresh}>Refresh</button>
+        <div className="utility-stack">
+          <div className="utility-toolbar">
+            <button type="button" data-testid="host-lobby" className="utility-button utility-button-primary" onClick={act(() => api('POST', '/api/lobbies'))}>
+              <span className="utility-button-icon icon-players" aria-hidden="true" />
+              Host a lobby
+            </button>
+            <button type="button" className="utility-button utility-button-neutral" onClick={refresh}>
+              <span className="utility-button-icon icon-refresh" aria-hidden="true" />
+              Refresh
+            </button>
           </div>
-          {status ? <div style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>{status}</div> : null}
+          {status ? <div className="utility-status">{status}</div> : null}
           {data?.current ? (
-            <div style={{ ...panel, borderColor: 'var(--ds-accent)' }}>
-              <div style={{ color: 'var(--ds-ink)' }}>Your lobby: {data.current.name} · {data.current.phase} · {data.current.seats.filled}/{data.current.seats.total}</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                {data.current.viewer_role === 'host' && data.current.guest ? <button type="button" style={btn} onClick={act(() => api('POST', `/api/lobbies/${data.current!.id}/start`))}>Start</button> : null}
-                <button type="button" style={btn} onClick={act(() => api('POST', `/api/lobbies/${data.current!.id}/leave`))}>Leave</button>
+            <section className="utility-lobby-card is-current">
+              <div className="utility-lobby-main">
+                <span className="utility-row-icon icon-players" aria-hidden="true" />
+                <div className="utility-lobby-copy">
+                  <strong>{data.current.name}</strong>
+                  <span>{data.current.phase} / {data.current.seats.filled}/{data.current.seats.total}</span>
+                </div>
               </div>
-            </div>
+              <div className="utility-lobby-seats">
+                <LobbySeat user={data.current.host} label="Host" />
+                <LobbySeat user={data.current.guest} label="Guest" />
+              </div>
+              <div className="utility-actions">
+                {data.current.viewer_role === 'host' && data.current.guest ? (
+                  <button type="button" className="utility-button utility-button-primary" onClick={act(() => api('POST', `/api/lobbies/${data.current!.id}/start`))}>
+                    <span className="utility-button-icon icon-start" aria-hidden="true" />
+                    Start
+                  </button>
+                ) : null}
+                <button type="button" className="utility-button utility-button-danger" onClick={act(() => api('POST', `/api/lobbies/${data.current!.id}/leave`))}>
+                  <span className="utility-button-icon icon-leave" aria-hidden="true" />
+                  Leave
+                </button>
+              </div>
+            </section>
           ) : null}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="utility-lobby-list">
             {(data?.lobbies ?? []).filter((l) => !data?.current || l.id !== data.current.id).map((l) => (
-              <div key={l.id} style={{ ...panel, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'var(--ds-ink)' }}>{l.name} · {l.host.name ?? 'host'} · {l.seats.filled}/{l.seats.total}</span>
-                {l.phase === 'waiting' && !l.guest ? <button type="button" style={btn} onClick={act(() => api('POST', `/api/lobbies/${l.id}/join`))}>Join</button> : <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-xs)' }}>{l.phase}</span>}
+              <div key={l.id} className="utility-lobby-row">
+                <span className="utility-row-icon icon-players" aria-hidden="true" />
+                <div className="utility-lobby-copy">
+                  <strong>{l.name}</strong>
+                  <span>{displayName(l.host, 'host')} / {l.seats.filled}/{l.seats.total}</span>
+                </div>
+                {l.phase === 'waiting' && !l.guest ? (
+                  <button type="button" className="utility-button utility-button-primary" onClick={act(() => api('POST', `/api/lobbies/${l.id}/join`))}>Join</button>
+                ) : <span className="utility-phase">{l.phase}</span>}
               </div>
             ))}
-            {data && !data.lobbies.length && !data.current ? <span style={{ color: 'var(--ds-ink-3)', fontSize: 'var(--ds-text-sm)' }}>No open lobbies. Host one.</span> : null}
+            {data && !data.lobbies.length && !data.current ? <span className="utility-empty-row">No open lobbies. Host one.</span> : null}
           </div>
         </div>
       )}
