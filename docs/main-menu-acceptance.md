@@ -45,6 +45,17 @@ draft endpoint contract.
   Main-menu polish is being judged on desktop viewports. Mobile/tablet
   refinement is intentionally deferred unless a desktop change breaks basic
   rendering.
+- Optimized runtime delivery of the accepted art (no visual change).
+  The accepted background, five button-row sheets, and title are delivered as
+  AVIF/WebP derivatives with the original PNG kept as the universal fallback.
+  The PNG sources stay checked in and authoritative; derivatives are
+  regenerated deterministically with `npm --prefix frontend run optimize:assets`
+  (sharp, dev-only `--no-save`), driven by
+  `frontend/src/ui/design/optimized-images.json`. The runtime prefers AVIF →
+  WebP → PNG via CSS `image-set()` (background + button sheets) and a
+  `<picture>` element (title). This is a delivery-format change only — the
+  pixels, crops, and layout are unchanged. First-visit payload over those seven
+  assets drops ~4386 KiB PNG → ~175 KiB AVIF / ~267 KiB WebP (~96% / ~94%).
 
 ## Needs Review
 
