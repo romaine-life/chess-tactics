@@ -3685,6 +3685,455 @@ h1 {
 .skirmish-wait { left: 76.5%; top: 46.5%; width: 21.2%; height: 4.6%; }
 .skirmish-end { left: 83.6%; top: 92.5%; width: 14.2%; height: 5.3%; }
 
+/* Utility screens (/lobbies, /party, /settings) - asset-backed operational UI.
+   Bitmap skins live in public/assets/ui/utility; labels and behavior stay live. */
+.utility-screen {
+  --utility-max: 1040px;
+  align-content: start;
+  color: var(--ink);
+  display: grid;
+  gap: 14px;
+  grid-auto-rows: max-content;
+  margin: 0 auto;
+  max-width: min(var(--utility-max), calc(100vw - 28px));
+  min-height: 100%;
+  padding: clamp(14px, 3vw, 32px) 0 42px;
+  width: 100%;
+}
+
+.utility-page-header,
+.utility-panel,
+.utility-lobby-card,
+.utility-lobby-row,
+.utility-empty-row,
+.utility-button,
+.utility-squad-card,
+.utility-toggle {
+  image-rendering: pixelated;
+  position: relative;
+}
+
+.utility-page-header {
+  align-items: center;
+  background: transparent;
+  border: 28px solid transparent;
+  border-image: url("/assets/ui/utility/page-header.png") 28 fill / 28px stretch;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  min-height: 104px;
+  padding: 4px 8px;
+}
+
+.utility-header-actions,
+.utility-toolbar,
+.utility-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.utility-title-copy {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.utility-title-copy h1 {
+  color: #f8ecd3;
+  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: clamp(.86rem, 2vw, 1.22rem);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, .85),
+    0 0 12px rgba(101, 184, 255, .22);
+  text-transform: uppercase;
+}
+
+.utility-title-copy p,
+.utility-status,
+.utility-empty-row,
+.utility-setting-copy span,
+.utility-lobby-copy span {
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.utility-stack,
+.utility-lobby-list {
+  display: grid;
+  gap: 10px;
+}
+
+.utility-panel {
+  background: transparent;
+  border: 24px solid transparent;
+  border-image: url("/assets/ui/utility/panel-frame.png") 24 fill / 24px stretch;
+  min-width: 0;
+  padding: 2px;
+}
+
+.utility-empty-panel {
+  align-content: center;
+  min-height: 132px;
+}
+
+.utility-lobby-card {
+  background: transparent;
+  border: 24px solid transparent;
+  border-image: url("/assets/ui/utility/panel-frame.png") 24 fill / 24px stretch;
+  display: grid;
+  gap: 12px;
+  padding: 2px;
+}
+
+.utility-lobby-card.is-current {
+  border-image-source: url("/assets/ui/utility/lobby-row-current.png");
+}
+
+.utility-lobby-main,
+.utility-lobby-row,
+.utility-setting-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.utility-lobby-main,
+.utility-setting-row {
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+}
+
+.utility-lobby-row {
+  background: transparent;
+  border: 20px solid transparent;
+  border-image: url("/assets/ui/utility/lobby-row.png") 20 fill / 20px stretch;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  min-height: 82px;
+  padding: 0 2px;
+}
+
+.utility-lobby-copy,
+.utility-setting-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.utility-lobby-copy strong,
+.utility-setting-copy strong,
+.utility-squad-card strong {
+  color: #f6ecd8;
+  display: block;
+  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .62rem;
+  line-height: 1.45;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.utility-lobby-copy span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.utility-lobby-seats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.utility-seat {
+  align-items: center;
+  background: rgba(3, 10, 16, .48);
+  border: 1px solid rgba(205, 165, 74, .55);
+  display: grid;
+  gap: 4px 9px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  min-height: 58px;
+  padding: 8px;
+}
+
+.utility-seat.is-empty {
+  border-color: rgba(75, 103, 116, .65);
+  opacity: .78;
+}
+
+.utility-avatar {
+  background: #07111a;
+  border: 2px solid rgba(205, 165, 74, .72);
+  color: var(--cobalt-bright);
+  display: grid;
+  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .72rem;
+  grid-row: span 2;
+  height: 40px;
+  line-height: 40px;
+  object-fit: cover;
+  place-items: center;
+  text-align: center;
+  width: 40px;
+}
+
+.utility-seat span,
+.utility-seat small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.utility-seat small,
+.utility-phase,
+.utility-squad-card small {
+  color: var(--power);
+  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .46rem;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.utility-phase {
+  color: var(--muted);
+}
+
+.utility-empty-row {
+  background: transparent;
+  border: 20px solid transparent;
+  border-image: url("/assets/ui/utility/lobby-row.png") 20 fill / 20px stretch;
+  min-height: 72px;
+  padding: 6px;
+}
+
+.utility-button {
+  align-items: center;
+  background: transparent;
+  border: 18px solid transparent;
+  border-image: url("/assets/ui/utility/button-neutral.png") 18 fill / 18px stretch;
+  color: #f8ecd3;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .55rem;
+  gap: 7px;
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 1.35;
+  min-height: 48px;
+  min-width: 104px;
+  padding: 0 4px;
+  text-align: center;
+  text-decoration: none;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .82);
+  text-transform: uppercase;
+  transition: filter .12s ease, transform .12s ease;
+  white-space: nowrap;
+}
+
+.utility-button-primary {
+  border-image-source: url("/assets/ui/utility/button-primary.png");
+}
+
+.utility-button-danger {
+  border-image-source: url("/assets/ui/utility/button-danger.png");
+}
+
+.utility-button:hover,
+.utility-button:focus-visible,
+.utility-squad-card:hover,
+.utility-squad-card:focus-visible,
+.utility-toggle:hover,
+.utility-toggle:focus-visible {
+  filter: brightness(1.12);
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: -4px;
+}
+
+.utility-button:active,
+.utility-squad-card:active,
+.utility-toggle:active {
+  transform: translateY(1px);
+}
+
+.utility-button.is-disabled,
+.utility-button[aria-disabled="true"] {
+  filter: grayscale(.4);
+  opacity: .48;
+  pointer-events: none;
+}
+
+.utility-squad-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
+.utility-squad-card {
+  align-content: center;
+  background: transparent;
+  border: 22px solid transparent;
+  border-image: url("/assets/ui/utility/squad-card.png") 22 fill / 22px stretch;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-height: 150px;
+  min-width: 0;
+  padding: 2px;
+  text-align: center;
+}
+
+.utility-squad-card.is-selected {
+  border-image-source: url("/assets/ui/utility/squad-card-selected.png");
+}
+
+.utility-squad-card.is-locked {
+  cursor: default;
+}
+
+.utility-piece-icon,
+.utility-header-icon,
+.utility-button-icon,
+.utility-row-icon {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  display: inline-block;
+  flex: none;
+  image-rendering: pixelated;
+}
+
+.utility-header-icon {
+  height: 58px;
+  width: 58px;
+}
+
+.utility-row-icon {
+  height: 44px;
+  width: 44px;
+}
+
+.utility-button-icon {
+  height: 20px;
+  width: 20px;
+}
+
+.utility-piece-icon {
+  height: 58px;
+  width: 58px;
+}
+
+.icon-players { background-image: url("/assets/ui/utility/icon-players.png"); }
+.icon-start { background-image: url("/assets/ui/utility/icon-start.png"); }
+.icon-leave { background-image: url("/assets/ui/utility/icon-leave.png"); }
+.icon-refresh { background-image: url("/assets/ui/utility/icon-refresh.png"); }
+.icon-gear { background-image: url("/assets/ui/utility/icon-gear.png"); }
+.icon-speaker { background-image: url("/assets/ui/utility/icon-speaker.png"); }
+.icon-pawn { background-image: url("/assets/ui/utility/icon-pawn.png"); }
+.icon-knight { background-image: url("/assets/ui/utility/icon-knight.png"); }
+.icon-bishop { background-image: url("/assets/ui/utility/icon-bishop.png"); }
+.icon-rook { background-image: url("/assets/ui/utility/icon-rook.png"); }
+
+.utility-settings-panel {
+  max-width: 760px;
+}
+
+.utility-toggle {
+  background: transparent;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/utility/toggle-off.png") 16 fill / 16px stretch;
+  color: #f8ecd3;
+  cursor: pointer;
+  font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .48rem;
+  min-height: 50px;
+  min-width: 114px;
+  padding: 0 4px;
+  text-transform: uppercase;
+}
+
+.utility-toggle.is-on {
+  border-image-source: url("/assets/ui/utility/toggle-on.png");
+}
+
+@media (max-width: 760px) {
+  .utility-screen {
+    max-width: calc(100vw - 18px);
+    padding-top: 8px;
+  }
+
+  .utility-page-header {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .utility-page-header > .utility-button,
+  .utility-header-actions {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .utility-header-actions .utility-button,
+  .utility-page-header > .utility-button {
+    flex: 1 1 120px;
+  }
+
+  .utility-header-icon {
+    height: 48px;
+    width: 48px;
+  }
+
+  .utility-toolbar,
+  .utility-actions {
+    align-items: stretch;
+  }
+
+  .utility-toolbar .utility-button,
+  .utility-actions .utility-button {
+    flex: 1 1 140px;
+  }
+
+  .utility-lobby-main,
+  .utility-setting-row {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .utility-lobby-main .utility-actions,
+  .utility-setting-row .utility-toggle {
+    grid-column: 1 / -1;
+  }
+
+  .utility-lobby-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .utility-lobby-row .utility-button,
+  .utility-lobby-row .utility-phase {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .utility-lobby-seats,
+  .utility-squad-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .utility-squad-card {
+    min-height: 126px;
+  }
+}
+
 .party-menu { max-width: min(640px, calc(100vw - 48px)); }
 
 .lobby-menu {
