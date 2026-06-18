@@ -225,13 +225,13 @@ intended quality bar. The earlier placeholder skeletons were removed end to end.
 
 The default work surfaces are `/`, `/main-menu`, `/campaigns`,
 `/level-editor`, and `/skirmish`. They show live DOM bridge
-surfaces with unfinished asset slots labeled in place. The approved main menu
-render is the source for the five-button mode stack so its painted lettering
-stays intact. The main menu title/brand plate uses an accepted crop from the
-approved render; the profile/status is a hybrid (art crest + live DOM text); the
-daily/news panels are live DOM with SVG icons; the dock is an art-crop of the
-icon strip with live hit-targets; and the battlefield preview is an art-crop of
-the concept board (the live canvas returns for actual gameplay). `/design/*/render` routes preserve the approved renders for comparison:
+surfaces with unfinished asset slots labeled in place. The main menu uses the
+accepted generated five-button row asset family with live labels, plus the
+accepted title/brand artwork. Profile/account is a real shell backed by the
+narrowed generated secondary chrome. Daily/news and bottom dock are open-slot
+markers only and should not be filled with fake live systems or fake
+destinations. Battlefield is absent from the production route until the separate
+skirmish/battlefield direction lands. `/design/*/render` routes preserve the approved renders for comparison:
 `/design/main-menu/render`, `/design/campaigns/render`,
 `/design/level-editor/render`, and `/design/skirmish/render`.
 `/design/main-menu` remains the asset review board for comparing candidate
@@ -240,8 +240,8 @@ asset families before wiring them into a bridge.
 The main menu acceptance state lives in
 [main-menu-acceptance.md](main-menu-acceptance.md). As of the current pass, the
 mode button stack, upper-left brand/title banner, and art-backed live bridge
-approach are settled. Profile/status, daily/news, bottom dock, and battlefield
-plate details still need review.
+approach are settled. Profile/account, daily/news, bottom dock, and battlefield
+details still need review.
 
 ## Parallel Work Boundaries
 

@@ -1,4 +1,5 @@
-import { useEffect, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
+import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import {
   MENU_MODES,
   assetById,
@@ -14,81 +15,6 @@ const MODE_HREFS: Record<string, string> = {
   lobbies: '/lobbies',
   settings: '/settings',
 };
-
-const DOCK_ITEMS = [
-  { label: 'Achievements', href: '/design/catalog/widgets/main-menu', left: '0%' },
-  { label: 'Campaigns', href: '/campaigns-next', left: '26%' },
-  { label: 'Stats', href: '/design/widgets', left: '52%' },
-  { label: 'Collection', href: '/design/catalog', left: '78%' },
-];
-
-function SvgIcon({ name }: { name: 'hourglass' | 'reticle' | 'gem' | 'shield' | 'crown' | 'book' }): ReactElement {
-  const common = {
-    className: 'ui-icon',
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 2,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    'aria-hidden': 'true',
-  } as const;
-  if (name === 'hourglass') {
-    return (
-      <svg {...common}>
-        <path d="M6 3h12" />
-        <path d="M6 21h12" />
-        <path d="M8 3v4c0 2 2 3 4 5 2-2 4-3 4-5V3" />
-        <path d="M8 21v-4c0-2 2-3 4-5 2 2 4 3 4 5v4" />
-      </svg>
-    );
-  }
-  if (name === 'reticle') {
-    return (
-      <svg {...common}>
-        <circle cx="12" cy="12" r="7" />
-        <circle cx="12" cy="12" r="2" />
-        <path d="M12 2v5" />
-        <path d="M12 17v5" />
-        <path d="M2 12h5" />
-        <path d="M17 12h5" />
-      </svg>
-    );
-  }
-  if (name === 'gem') {
-    return (
-      <svg {...common}>
-        <path d="M6 3h12l4 6-10 12L2 9l4-6Z" />
-        <path d="M2 9h20" />
-        <path d="m9 9 3 12 3-12" />
-      </svg>
-    );
-  }
-  if (name === 'shield') {
-    return (
-      <svg {...common}>
-        <path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" />
-        <path d="m9 12 2 2 4-5" />
-      </svg>
-    );
-  }
-  if (name === 'crown') {
-    return (
-      <svg {...common}>
-        <path d="m3 18 2-10 5 5 2-8 2 8 5-5 2 10H3Z" />
-        <path d="M3 21h18" />
-      </svg>
-    );
-  }
-  return (
-    <svg {...common}>
-      <path d="M5 4h10a4 4 0 0 1 4 4v12H9a4 4 0 0 0-4-4V4Z" />
-      <path d="M5 4v12" />
-      <path d="M9 8h6" />
-      <path d="M9 12h5" />
-    </svg>
-  );
-}
 
 function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boolean }): ReactElement {
   const rowAsset = assetById(mode.row);
@@ -150,115 +76,54 @@ function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boole
 }
 
 function ProfilePanel(): ReactElement {
+  const [me, setMe] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchMe().then((user) => { if (active) setMe(user); });
+    return () => { active = false; };
+  }, []);
+
+  const signedIn = me?.signed_in;
+  const displayName = signedIn ? (me.name || me.email || 'Player') : 'Guest';
+  const status = signedIn ? 'Signed in' : 'Not signed in';
+
   return (
-    <section className="profile-panel" aria-label="Player profile">
+    <section className="profile-panel" aria-label="Account">
       <div className="profile-bar">
         <span className="profile-crest" aria-hidden="true" />
         <span className="profile-name">
-          <strong>Commander</strong>
-          <small>Rank 12</small>
+          <strong>{displayName}</strong>
+          <small>{status}</small>
         </span>
-        <a className="profile-auth" href="/api/auth/sign-in?returnTo=%2F">Sign In</a>
+        {signedIn ? <span className="profile-status">Ready</span> : <a className="profile-auth" href={signInHref('/')}>Sign In</a>}
         <a className="profile-gear" href="/settings" aria-label="Settings">
           <img className="profile-icon-img" src="/assets/ui/main-menu/profile-cog.png" alt="" />
         </a>
       </div>
-      <dl className="profile-bar profile-forces">
-        <div className="force force-allies">
-          <span className="force-icon" aria-hidden="true">
-            <img className="profile-icon-img" src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />
-          </span>
-          <dt>Allies</dt>
-          <dd>3</dd>
-        </div>
-        <div className="force force-enemies">
-          <span className="force-icon" aria-hidden="true">
-            <img className="profile-icon-img" src="/assets/ui/main-menu/profile-rook-red.png" alt="" />
-          </span>
-          <dt>Enemies</dt>
-          <dd>3</dd>
-        </div>
-      </dl>
     </section>
   );
 }
 
-function DailyPanel(): ReactElement {
+function MainMenuOpenSlots(): ReactElement {
   return (
-    <section className="menu-panel daily-panel" aria-label="Daily challenge">
-      <div className="daily-head">
-        <strong>Daily Challenge</strong>
-        <span className="daily-timer"><SvgIcon name="hourglass" />12h 45m</span>
-      </div>
-      <div className="daily-body">
-        <span className="daily-reticle" aria-hidden="true"><SvgIcon name="reticle" /></span>
-        <p>Capture the enemy King</p>
-      </div>
-      <div className="daily-reward">
-        <span className="daily-reward-label">Reward</span>
-        <span className="daily-gem" aria-hidden="true"><SvgIcon name="gem" /></span>
-        <strong>50</strong>
-      </div>
-    </section>
-  );
-}
-
-function NewsPanel(): ReactElement {
-  return (
-    <section className="menu-panel news-panel" aria-label="News">
-      <div className="news-head">
-        <strong>News</strong>
-      </div>
-      <ul className="news-list">
-        <li className="news-line news-line-cobalt">
-          <span className="news-ico" aria-hidden="true"><SvgIcon name="shield" /></span>
-          <span>v1.2.0 Balance Update</span>
-        </li>
-        <li className="news-line news-line-gold">
-          <span className="news-ico" aria-hidden="true"><SvgIcon name="crown" /></span>
-          <span>New official maps added</span>
-        </li>
-        <li className="news-line news-line-red">
-          <span className="news-ico" aria-hidden="true"><SvgIcon name="book" /></span>
-          <span>Community Spotlight: Top Tactics</span>
-        </li>
+    <section className="menu-panel main-menu-slot-panel" aria-label="Unfinished main menu areas">
+      <p className="slot-panel-kicker">Open Slots</p>
+      <ul className="slot-panel-list">
+        <li>Daily / News</li>
+        <li>Bottom Dock</li>
+        <li>Battlefield area absent</li>
       </ul>
     </section>
   );
 }
 
-function BattlefieldPlate(): ReactElement {
+function MainMenuDockSlot(): ReactElement {
   return (
-    <section className="main-menu-battlefield-plate" aria-label="Featured battlefield">
-      <div className="main-menu-battlefield-art" aria-hidden="true" />
-      <div className="main-menu-battlefield-meta">
-        <span>Moonlit Reach</span>
-        <span>Skirmish Ready</span>
-      </div>
-      <div className="main-menu-battlefield-status" aria-hidden="true">
-        <span>8 x 8</span>
-        <span>Live Board In Match</span>
-        <span>3 Objectives</span>
-      </div>
+    <section className="main-menu-dock-slot" aria-label="Bottom dock open slot">
+      <span>Bottom Dock</span>
+      <small>Open Slot</small>
     </section>
-  );
-}
-
-function MenuDock(): ReactElement {
-  return (
-    <nav className="menu-dock" aria-label="Secondary menu">
-      <div className="menu-dock-art">
-        {DOCK_ITEMS.map((item) => (
-          <a
-            key={item.label}
-            className="dock-hit"
-            href={item.href}
-            aria-label={item.label}
-            style={{ left: item.left }}
-          />
-        ))}
-      </div>
-    </nav>
   );
 }
 
@@ -281,17 +146,14 @@ export function MainMenu(): ReactElement {
               <ModeMenuLink key={mode.slug} mode={mode} />
             ))}
           </nav>
-          <DailyPanel />
         </div>
 
-        <BattlefieldPlate />
-
-        <aside className="main-menu-right" aria-label="Commander information">
+        <aside className="main-menu-right" aria-label="Main menu status">
           <ProfilePanel />
-          <NewsPanel />
+          <MainMenuOpenSlots />
         </aside>
 
-        <MenuDock />
+        <MainMenuDockSlot />
       </section>
     </div>
   );

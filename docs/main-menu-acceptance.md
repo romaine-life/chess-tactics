@@ -15,8 +15,9 @@ draft endpoint contract.
 ## Settled / Locked
 
 - Main menu mode button stack.
-  The painted five-button crop is accepted. Keep the source lettering and use
-  transparent live click targets over the art.
+  The generated five-button row asset family is accepted. Keep labels as live
+  DOM text using the approved vendored pixel font, with transparent live click
+  targets over the button art.
 - Upper-left brand/title banner.
   The crest plus `Chess Tactics` title crop is accepted. Treat it as locked
   unless a later layout change exposes a fit issue.
@@ -26,24 +27,24 @@ draft endpoint contract.
 
 ## Needs Review
 
-All four remaining elements are implemented to match the concept and await your
-accept on `/design/main-menu`. Approach follows the render-accuracy + text-live
-rules in `docs/ui-art-direction.md` — art for rendered visuals, live DOM for all
-copy and numbers:
+The remaining areas should stay visibly unfinished until their production shape
+is real enough to review. Do not fill the main menu with fake live systems just
+to mimic the concept.
 
-- Profile/status panel (03) — **hybrid**. Art-crop of the painterly lion crest
-  from the render; clean SVG cog + rook silhouettes; live DOM text for the name,
-  rank, sign-in/account affordance, and allies/enemies counters.
-- Daily/news panel (04) — **DOM + live text + SVG icons**. Daily challenge
-  (reticle, countdown, objective, reward gem) and news (cobalt/gold/red bulleted
-  items). Copy stays live (localizable/accessible); only the small icons are SVG.
-- Bottom dock (05) — **art-backed**. The concept dock is icon-only pixel art with
-  no baked text, so it is a crop of the dock strip + transparent live hit-targets
-  (the mode-button pattern), keeping the trophy/book/chart/chest icons and the
-  notification badge instead of redrawn glyphs.
-- Battlefield plate (06) — **art-backed preview**. The menu preview uses the
-  concept board crop (the live canvas board returns in actual gameplay); live DOM
-  header + status chips overlay it with a shadow for legibility.
+- Profile/account panel (03) — **partial production shell**. Keep the real
+  account/sign-in/settings affordance backed by the generated secondary
+  `profile-panel.png` chrome. Do not show fake rank, allies, enemies, or
+  progression counts until those systems exist.
+- Daily/news panel (04) — **open slot**. The concept target remains valid, but the
+  main menu should not show a fake daily timer, objective, reward, or news feed.
+  The live route may use the generated panel chrome only as an open-slot marker.
+- Bottom dock (05) — **open slot**. Do not wire fake achievements/stats/collection
+  actions to design pages. The live route may show inert generated dock chrome as
+  an open-slot marker. Build the dock when its product destinations and asset
+  treatment are ready.
+- Battlefield area (06) — **absent for now**. Skirmish/battlefield assets are a
+  separate directed workstream. The main menu should not show a crop, preview,
+  placeholder board, or live labels in that area.
 
 ## Rejected / Do Not Use
 

@@ -784,99 +784,8 @@ h1 {
   grid-row: 2;
 }
 
-.main-menu-battlefield-plate {
-  align-self: center;
-  aspect-ratio: 16 / 10;
-  grid-column: 2;
-  grid-row: 1 / 3;
-  justify-self: center;
-  margin-top: clamp(24px, 4.6vh, 48px);
-  max-height: min(52vh, 480px);
-  pointer-events: none;
-  position: relative;
-  width: min(100%, 620px);
-  z-index: 2;
-}
-
-.main-menu-battlefield-plate::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(37, 199, 255, .34), transparent 16% 84%, rgba(37, 199, 255, .22)),
-    linear-gradient(180deg, rgba(233, 184, 92, .26), transparent 12% 82%, rgba(233, 184, 92, .16));
-  clip-path: polygon(
-    0 8px, 8px 8px, 8px 0,
-    calc(100% - 8px) 0, calc(100% - 8px) 8px, 100% 8px,
-    100% calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) 100%,
-    8px 100%, 8px calc(100% - 8px), 0 calc(100% - 8px)
-  );
-  opacity: .82;
-}
-
-.main-menu-battlefield-plate::after {
-  content: "";
-  position: absolute;
-  inset: 16px;
-  border: 1px solid rgba(67, 126, 151, .48);
-  box-shadow:
-    inset 0 0 46px rgba(1, 8, 13, .46),
-    0 0 36px rgba(37, 199, 255, .1);
-}
-
-/* Element 06 — the menu battlefield preview is art-backed with the concept board crop
-   (battlefield region of the render). The live canvas board returns in actual gameplay. */
-.main-menu-battlefield-art {
-  background-image: url("/assets/ui/main-menu-aspirational.png");
-  background-repeat: no-repeat;
-  background-size: 170.91% 171.03%;
-  background-position: 81.46% 43.69%;
-  image-rendering: pixelated;
-  inset: 16px;
-  overflow: hidden;
-  position: absolute;
-}
-
 .shell.main-menu-active .board-scroll {
   display: none;
-}
-
-.main-menu-battlefield-meta,
-.main-menu-battlefield-status {
-  align-items: center;
-  display: flex;
-  font-family: "Press Start 2P", "VT323", monospace;
-  justify-content: space-between;
-  letter-spacing: 0;
-  position: absolute;
-  text-transform: uppercase;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .92), 0 0 7px rgba(0, 0, 0, .72);
-  z-index: 1;
-}
-
-.main-menu-battlefield-meta {
-  color: #bfefff;
-  font-size: clamp(.46rem, .64vw, .62rem);
-  gap: 12px;
-  left: 26px;
-  right: 26px;
-  top: 18px;
-}
-
-.main-menu-battlefield-status {
-  bottom: 20px;
-  color: #d9e5e8;
-  font-size: clamp(.42rem, .58vw, .54rem);
-  gap: 8px;
-  justify-content: center;
-  left: 24px;
-  right: 24px;
-}
-
-.main-menu-battlefield-status span {
-  background: rgba(2, 9, 14, .72);
-  border: 1px solid rgba(70, 135, 162, .42);
-  padding: 5px 7px;
 }
 
 .main-menu-brand {
@@ -1402,8 +1311,8 @@ h1 {
   display: grid;
   gap: 14px;
   grid-column: 3;
-  grid-row: 1 / 4;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-row: 1 / 3;
+  grid-template-rows: auto auto;
   justify-self: stretch;
 }
 
@@ -1454,6 +1363,12 @@ h1 {
   position: relative;
 }
 
+.profile-bar::before {
+  background: url("/assets/ui/main-menu/secondary/profile-panel.png") center / 100% 100% no-repeat;
+  border: 0;
+  border-image: none;
+}
+
 /* Crest: transparent PNG cropped from the approved render by normalize-main-menu-profile.mjs. */
 .profile-crest {
   flex: none;
@@ -1497,6 +1412,15 @@ h1 {
   text-decoration: none;
 }
 
+.profile-status {
+  margin-left: auto;
+  color: var(--cobalt-bright);
+  font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
 .profile-auth:hover,
 .profile-auth:focus-visible {
   border-color: var(--cobalt-bright);
@@ -1536,234 +1460,94 @@ h1 {
   color: var(--cobalt-bright);
 }
 
-.profile-forces {
-  margin: 0;
-  justify-content: space-between;
-  min-height: 62px;
-}
-
-.force {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.force dt {
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .5rem;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-.force dd {
-  margin: 0;
-  color: var(--ink-strong);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .62rem;
-}
-
-.force-icon {
-  flex: none;
-  display: grid;
-  width: 18px;
-  height: 20px;
-}
-
-.force-icon .profile-icon-img {
-  width: 18px;
-  height: 20px;
-}
-
-.force-allies dt,
-.force-allies .force-icon {
-  color: var(--cobalt-bright);
-}
-
-.force-enemies dt,
-.force-enemies .force-icon {
-  color: var(--menu-red);
-}
-
-/* Daily / News panels — element 04: DOM + live text + clean SVG icons (text never baked). */
-.daily-panel,
-.news-panel {
+.main-menu-slot-panel {
+  align-self: start;
   display: grid;
   gap: 10px;
   padding: 14px 16px;
-  align-self: end;
 }
 
-.daily-panel {
-  grid-column: 1;
-  grid-row: 3;
-  max-width: 370px;
-  pointer-events: auto;
-  width: 100%;
+.main-menu-slot-panel::before {
+  background: url("/assets/ui/main-menu/secondary/news-panel.png") center / 100% 100% no-repeat;
+  border: 0;
+  border-image: none;
 }
 
-.news-panel {
-  margin-top: auto;
-}
-
-.daily-head,
-.news-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.daily-head strong,
-.news-head strong {
+.slot-panel-kicker {
   color: var(--cobalt-bright);
   font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .56rem;
-  letter-spacing: .03em;
+  font-size: .52rem;
+  letter-spacing: .04em;
+  line-height: 1.35;
+  margin: 0;
   text-transform: uppercase;
 }
 
-.daily-timer {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.slot-panel-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slot-panel-list li {
   color: var(--muted);
   font-family: "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .03em;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.slot-panel-list li::before {
+  color: var(--menu-gold);
+  content: "// ";
+}
+
+.main-menu-dock-slot {
+  align-self: end;
+  aspect-ratio: 1124 / 146;
+  display: grid;
+  gap: 2px;
+  grid-column: 2;
+  grid-row: 3;
+  justify-items: center;
+  max-width: min(42vw, 520px);
+  padding-top: 26px;
+  pointer-events: none;
+  position: relative;
+  width: 100%;
+  z-index: 2;
+}
+
+.main-menu-dock-slot::before {
+  background: url("/assets/ui/main-menu/secondary/dock-chrome.png") center / 100% 100% no-repeat;
+  content: "";
+  image-rendering: pixelated;
+  inset: 0;
+  position: absolute;
+  z-index: 0;
+}
+
+.main-menu-dock-slot span,
+.main-menu-dock-slot small {
+  font-family: "Press Start 2P", "VT323", monospace;
+  letter-spacing: .04em;
+  line-height: 1.25;
+  position: relative;
+  text-transform: uppercase;
+  z-index: 1;
+}
+
+.main-menu-dock-slot span {
+  color: var(--ink-strong);
   font-size: .5rem;
 }
 
-.daily-timer .ui-icon {
-  width: 11px;
-  height: 11px;
-}
-
-.daily-body {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-
-.daily-reticle {
-  flex: none;
-  display: grid;
-  width: 26px;
-  height: 26px;
+.main-menu-dock-slot small {
   color: var(--cobalt-bright);
-}
-
-.daily-reticle .ui-icon {
-  width: 26px;
-  height: 26px;
-}
-
-.daily-body p {
-  margin: 0;
-  color: var(--ink);
-  font-size: .92rem;
-  line-height: 1.2;
-}
-
-.daily-reward {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.daily-reward-label {
-  color: var(--cobalt);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .46rem;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-.daily-gem {
-  display: grid;
-  width: 15px;
-  height: 15px;
-  color: var(--cobalt-bright);
-}
-
-.daily-gem .ui-icon {
-  width: 15px;
-  height: 15px;
-}
-
-.daily-reward strong {
-  color: var(--ink-strong);
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .56rem;
-}
-
-.news-list {
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 9px;
-  list-style: none;
-}
-
-.news-line {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
-  color: var(--ink);
-  font-size: .9rem;
-  line-height: 1.2;
-}
-
-.news-ico {
-  display: grid;
-  width: 14px;
-  height: 14px;
-}
-
-.news-ico .ui-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.news-line-cobalt .news-ico { color: var(--cobalt-bright); }
-.news-line-gold .news-ico { color: var(--menu-gold); }
-.news-line-red .news-ico { color: var(--menu-red); }
-
-/* Bottom dock — element 05, art-backed (icon-only pixel art, no baked text):
-   crop of dock-chrome {x:548,y:810,w:410,h:136} + transparent live hit-targets. */
-.menu-dock {
-  grid-column: 2;
-  grid-row: 3;
-  align-self: end;
-  justify-self: center;
-  padding-bottom: 0;
-}
-
-.menu-dock-art {
-  position: relative;
-  width: 390px;
-  max-width: 30vw;
-  aspect-ratio: 410 / 136;
-  background-image: url("/assets/ui/main-menu-aspirational.png");
-  background-repeat: no-repeat;
-  background-size: 386.83% 729.41%;
-  background-position: 46.60% 94.63%;
-  image-rendering: pixelated;
-}
-
-.dock-hit {
-  position: absolute;
-  display: block;
-  top: 6%;
-  width: 22%;
-  height: 88%;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.dock-hit:hover,
-.dock-hit:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+  font-size: .4rem;
 }
 
 /* Live component specimens on the design portfolio */
@@ -1773,14 +1557,6 @@ h1 {
   padding: 18px;
   border: 1px solid var(--line);
   background: var(--shell);
-}
-
-.portfolio-specimen .menu-dock {
-  grid-column: auto;
-  grid-row: auto;
-  justify-self: start;
-  padding-bottom: 0;
-  max-width: 100%;
 }
 
 /* Isolated specimen capture surface — one component per page, for exact screenshots */
@@ -4939,7 +4715,7 @@ h1 {
 
   .main-menu-screen {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto auto auto;
     align-content: start;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -4951,10 +4727,8 @@ h1 {
   .main-menu-left,
   .main-menu-brand,
   .main-menu-actions,
-  .daily-panel,
-  .main-menu-battlefield-plate,
   .main-menu-right,
-  .menu-dock {
+  .main-menu-dock-slot {
     grid-column: 1;
     grid-row: auto;
     max-width: none;
@@ -4969,36 +4743,21 @@ h1 {
     grid-row: 1;
   }
 
-  .main-menu-battlefield-plate {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
   .main-menu-actions {
     grid-column: 1;
-    grid-row: 3;
+    grid-row: 2;
     width: 100%;
   }
 
-  .daily-panel {
-    grid-column: 1;
-    grid-row: 4;
-  }
-
   .main-menu-right {
-    grid-row: 5;
-  }
-
-  .menu-dock {
-    grid-row: 6;
-  }
-
-  .main-menu-right {
+    grid-row: 3;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .news-panel {
-    margin-top: 0;
+  .main-menu-dock-slot {
+    grid-row: 4;
+    justify-self: center;
+    max-width: min(520px, 100%);
   }
 
   .main-menu-actions-art {
@@ -5063,43 +4822,6 @@ h1 {
     position: static;
     white-space: normal;
     width: auto;
-  }
-
-  .menu-dock {
-    justify-self: start;
-    padding-bottom: 0;
-  }
-
-  .main-menu-battlefield-plate {
-    margin-block: 6px 2px;
-    max-height: none;
-    min-height: 190px;
-    width: min(100%, 680px);
-  }
-
-  .main-menu-battlefield-meta {
-    font-size: .48rem;
-    left: 18px;
-    right: 18px;
-    top: 14px;
-  }
-
-  .main-menu-battlefield-status {
-    bottom: 16px;
-    flex-wrap: wrap;
-  }
-
-  .shell.main-menu-active .board-scroll {
-    left: 50%;
-    opacity: .34;
-    right: auto;
-    top: 18px;
-    transform: translateX(-50%);
-    width: min(96vw, 680px);
-  }
-
-  .shell.main-menu-active .board {
-    width: min(92vw, 620px);
   }
 
   .main-assets-screen {
@@ -5204,27 +4926,6 @@ h1 {
     grid-template-columns: 52px minmax(0, 1fr);
   }
 
-  .main-menu-battlefield-plate {
-    min-height: 164px;
-  }
-
-  .main-menu-battlefield-meta {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-    top: 12px;
-  }
-
-  .main-menu-battlefield-status {
-    justify-content: flex-start;
-    left: 18px;
-    right: 18px;
-  }
-
-  .main-menu-battlefield-status span {
-    padding: 4px 5px;
-  }
-
   .main-menu-crest {
     height: 66px;
     width: 52px;
@@ -5256,24 +4957,6 @@ h1 {
   .main-menu-action-icon.green,
   .main-menu-action-icon.slate {
     font-size: .52rem;
-  }
-
-  .menu-dock-art {
-    width: min(320px, 80vw);
-    max-width: none;
-  }
-
-  .shell.main-menu-active .board-scroll {
-    opacity: .32;
-    left: 50%;
-    right: auto;
-    top: 18px;
-    transform: translateX(-50%);
-    width: min(116vw, 520px);
-  }
-
-  .shell.main-menu-active .board {
-    width: min(112vw, 500px);
   }
 
   .main-assets-header {
@@ -5416,6 +5099,11 @@ h1 {
 .bgm-control.is-muted {
   opacity: 0.6;
   color: var(--muted);
+}
+
+.shell.main-menu-active ~ .bgm-control,
+.shell.main-menu-active + .bgm-control {
+  display: none !important;
 }
 
 @media (max-width: 560px) {
