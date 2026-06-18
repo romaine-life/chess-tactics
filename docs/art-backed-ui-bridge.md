@@ -17,6 +17,9 @@ not the final component system.
 - `docs/art/ui-screen-concepts/*.png` are the saved source references.
 - `frontend/public/assets/ui/main-menu-aspirational.png` remains the approved
   main menu composition reference.
+- `frontend/public/assets/ui/main-menu/background-scene-v1.png` is the live
+  scenic main-menu background. It is a generated background-only image with no
+  baked text, panels, buttons, profile UI, news UI, or dock UI.
 - `frontend/public/assets/ui/main-menu-brand-title-only-v1.png` is the accepted
   title-only render crop for the live main menu brand plate.
 - `frontend/public/assets/ui/main-menu/secondary/*.png` contains the narrowed
@@ -48,10 +51,11 @@ rectangles over the 16:10 artboard.
 ## Review URLs
 
 - `/` and `/main-menu` show the live DOM main menu bridge, with accepted button
-  row assets, the accepted title artwork, a real art-backed account/settings
-  shell, and clear open-slot markers for unfinished main menu areas. The bottom
-  dock marker is inert chrome only. The live route does not show fake daily/news
-  content, fake dock actions, or a battlefield preview.
+  row assets, the accepted title artwork, the generated scenic background, a
+  real art-backed account/settings shell, and clear open-slot markers for
+  unfinished main menu areas. The bottom dock marker is inert chrome only. The
+  live route does not show fake daily/news content, fake dock actions, or a
+  separate battlefield preview panel.
 - `/main-menu/skeleton` also opens the live DOM main menu bridge.
 - `/design/main-menu/render` opens the saved main menu concept render.
 - `/design/main-menu` opens the main menu chrome review board. It renders each
@@ -71,13 +75,14 @@ map. For example, use `/design/main-menu/render/hotspots` or
 ## What Is Live
 
 The main menu, campaign editor, level editor, and skirmish now use live bridge
-surfaces by default. The main menu mode button family uses accepted production
-row assets with live HTML labels overlaid; the brand lockup uses the accepted
-title artwork; the profile area is a real account/settings shell backed by
-generated chrome. Daily/news and bottom dock are represented only as open-slot
-markers until their production contracts are ready. Battlefield is absent from
-the main menu route. Other labeled slots on the editor and skirmish screens are
-intentionally unfinished.
+surfaces by default. The main menu uses a generated scenic background image
+behind the live bridge. The mode button family uses accepted production row
+assets with live HTML labels overlaid; the brand lockup uses the accepted title
+artwork; the profile area is a real account/settings shell backed by generated
+chrome. Daily/news and bottom dock are represented only as open-slot markers
+until their production contracts are ready. There is no separate battlefield
+preview panel on the main menu route. Other labeled slots on the editor and
+skirmish screens are intentionally unfinished.
 
 Current main menu acceptance state is tracked in
 [main-menu-acceptance.md](main-menu-acceptance.md). In short: the generated mode
@@ -114,11 +119,12 @@ Replace the bridge from the inside out:
    preserving the hotspot behavior until each slice is genuinely live.
 2. Fill one main menu asset family at a time. The button row uses the accepted
    generated row assets with live labels; the title/brand plate uses
-   `main-menu-brand-title-only-v1.png` from the approved render. Profile/account
-   can use the narrowed generated secondary panel; daily/news and dock should
-   stay as open-slot markers on the live menu until their contracts are ready.
-   Battlefield should stay absent until the separate skirmish/battlefield
-   direction lands. Use `/design/main-menu` to
+   `main-menu-brand-title-only-v1.png` from the approved render. The scenic
+   background uses `background-scene-v1.png` until a later approved replacement
+   lands. Profile/account can use the narrowed generated secondary panel;
+   daily/news and dock should stay as open-slot markers on the live menu until
+   their contracts are ready. Battlefield should not become a separate preview
+   panel until the skirmish/battlefield direction lands. Use `/design/main-menu` to
    compare candidates against the approved render before wiring them into the
    bridge.
 3. Extract editor and skirmish side panels as real DOM components.

@@ -24,6 +24,10 @@ draft endpoint contract.
 - Art-backed live bridge approach.
   The main menu should continue using art-backed chrome with real DOM labels,
   controls, and hotspots instead of reverting to generic browser cards.
+- Main menu scenic background placement.
+  The live menu uses `frontend/public/assets/ui/main-menu/background-scene-v1.png`
+  as a full-screen art-backed background layer with no baked UI, labels, panels,
+  or menu chrome.
 
 ## Needs Review
 
@@ -31,6 +35,10 @@ The remaining areas should stay visibly unfinished until their production shape
 is real enough to review. Do not fill the main menu with fake live systems just
 to mimic the concept.
 
+- Background scene art (00) — **placed / visual review needed**. The current
+  generated background asset is wired into the live menu. Review it against the
+  accepted concept for composition, mood, and whether the central battlefield
+  read is appropriate as scenic menu art rather than a live preview.
 - Profile/account panel (03) — **partial production shell**. Keep the real
   account/sign-in/settings affordance backed by the generated secondary
   `profile-panel.png` chrome. Do not show fake rank, allies, enemies, or
