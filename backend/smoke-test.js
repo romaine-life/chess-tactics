@@ -179,11 +179,15 @@ function get(path, headers) {
 // server applies migrations before it begins listening (and /health gates on
 // that), so waitForServer() has already returned by the time this runs.
 async function resetDb() {
+  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns');
+}
+
+async function queryDb(sql, params = []) {
   const { Client } = require('pg');
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
-    await client.query('TRUNCATE levels, campaign_workspaces, design_portfolios, design_assets');
+    return await client.query(sql, params);
   } finally {
     await client.end();
   }
@@ -352,6 +356,15 @@ async function main() {
     throw new Error(`Anonymous campaign list should require sign-in: ${anonymousCampaigns.statusCode}`);
   }
 
+  const retiredDesignAssetApi = await get('/api/design-assets');
+  if (retiredDesignAssetApi.statusCode !== 404) {
+    throw new Error(`Retired design asset API should 404: ${retiredDesignAssetApi.statusCode} ${retiredDesignAssetApi.body}`);
+  }
+  const retiredDesignAssetImageApi = await get('/api/design-assets/button-icon.main-menu.sword/image');
+  if (retiredDesignAssetImageApi.statusCode !== 404) {
+    throw new Error(`Retired design asset image API should 404: ${retiredDesignAssetImageApi.statusCode} ${retiredDesignAssetImageApi.body}`);
+  }
+
   const emptyPortfolio = await get('/api/design-portfolios/main-menu-acceptance');
   const emptyPortfolioBody = JSON.parse(emptyPortfolio.body);
   if (emptyPortfolio.statusCode !== 200 || emptyPortfolioBody.portfolio.revision !== 0 || Object.keys(emptyPortfolioBody.portfolio.data).length !== 0) {
@@ -423,124 +436,6 @@ async function main() {
     testSlotPortfolioWriteBody.portfolio.updated_by !== 'test-slot@chess-tactics.local'
   ) {
     throw new Error(`Test-slot design portfolio write should not require sign-in: ${testSlotPortfolioWrite.statusCode} ${testSlotPortfolioWrite.body}`);
-  }
-
-  // --- Design asset catalog (/api/design-assets): DB-backed metadata + bytes -
-  // The boot seed populated this table, but resetDb() truncates it for test
-  // isolation, so we PUT an asset (authed) and then read it back + its image.
-  // 1x1 transparent PNG (valid signature) as the uploaded image payload.
-  const tinyPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-  const assetIdPath = 'button-icon.main-menu.sword';
-
-  const anonymousAssetWrite = await request(
-    'PUT',
-    `/api/design-assets/${assetIdPath}`,
-    { 'content-type': 'application/json' },
-    JSON.stringify({ image_base64: tinyPngBase64, content_type: 'image/png' }),
-  );
-  if (anonymousAssetWrite.statusCode !== 401) {
-    throw new Error(`Production-style anonymous design asset write should require sign-in: ${anonymousAssetWrite.statusCode} ${anonymousAssetWrite.body}`);
-  }
-
-  const invalidAssetId = await request(
-    'PUT',
-    '/api/design-assets/Bad%20ID',
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ image_base64: tinyPngBase64, content_type: 'image/png' }),
-  );
-  if (invalidAssetId.statusCode !== 400) {
-    throw new Error(`Invalid design asset id should fail: ${invalidAssetId.statusCode} ${invalidAssetId.body}`);
-  }
-
-  const emptyAssetWrite = await request(
-    'PUT',
-    `/api/design-assets/${assetIdPath}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({}),
-  );
-  if (emptyAssetWrite.statusCode !== 400) {
-    throw new Error(`Empty design asset write should fail: ${emptyAssetWrite.statusCode} ${emptyAssetWrite.body}`);
-  }
-
-  const missingImageAsset = await get(`/api/design-assets/${assetIdPath}/image`);
-  if (missingImageAsset.statusCode !== 404) {
-    throw new Error(`Unseeded design asset image should 404: ${missingImageAsset.statusCode} ${missingImageAsset.body}`);
-  }
-
-  const savedAsset = await request(
-    'PUT',
-    `/api/design-assets/${assetIdPath}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      image_base64: tinyPngBase64,
-      content_type: 'image/png',
-      status: 'promoted',
-      slots: { rect: { x: 0, y: 0, w: 220, h: 220 } },
-      metadata: { type: 'button-icon.main-menu', title: 'Sword Icon' },
-    }),
-  );
-  const savedAssetBody = JSON.parse(savedAsset.body);
-  if (
-    savedAsset.statusCode !== 200 ||
-    savedAssetBody.asset.revision !== 1 ||
-    savedAssetBody.asset.id !== assetIdPath ||
-    savedAssetBody.asset.status !== 'promoted' ||
-    savedAssetBody.asset.slots.rect.w !== 220 ||
-    savedAssetBody.asset.metadata.title !== 'Sword Icon' ||
-    savedAssetBody.asset.image !== `/api/design-assets/${assetIdPath}/image`
-  ) {
-    throw new Error(`Unexpected signed design asset write: ${savedAsset.statusCode} ${savedAsset.body}`);
-  }
-
-  const assetList = await get('/api/design-assets');
-  const assetListBody = JSON.parse(assetList.body);
-  const listedAsset = Array.isArray(assetListBody.assets)
-    ? assetListBody.assets.find((asset) => asset.id === assetIdPath)
-    : null;
-  if (assetList.statusCode !== 200 || !listedAsset || listedAsset.status !== 'promoted' || listedAsset.revision !== 1) {
-    throw new Error(`Design asset list should include the saved asset: ${assetList.statusCode} ${assetList.body}`);
-  }
-  // The list must never leak the binary payload.
-  if (Object.hasOwn(listedAsset, 'bytes') || Object.hasOwn(listedAsset, 'image_base64')) {
-    throw new Error(`Design asset list leaked binary payload: ${assetList.body}`);
-  }
-
-  const assetImage = await get(`/api/design-assets/${assetIdPath}/image`);
-  if (assetImage.statusCode !== 200 || !String(assetImage.headers['content-type'] || '').includes('image/png')) {
-    throw new Error(`Unexpected design asset image response: ${assetImage.statusCode} ${assetImage.headers['content-type'] || ''}`);
-  }
-  // The request helper decodes the body as utf8, so assert presence (non-empty
-  // PNG payload) rather than an exact byte count, matching the art-asset checks.
-  if (!assetImage.body || assetImage.body.length === 0) {
-    throw new Error('Design asset image response was empty');
-  }
-
-  // Metadata-only PUT keeps the existing image (COALESCE) and bumps revision.
-  const metadataOnlyAsset = await request(
-    'PUT',
-    `/api/design-assets/${assetIdPath}`,
-    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
-    JSON.stringify({ status: 'review', metadata: { title: 'Sword Icon v2' } }),
-  );
-  const metadataOnlyAssetBody = JSON.parse(metadataOnlyAsset.body);
-  if (metadataOnlyAsset.statusCode !== 200 || metadataOnlyAssetBody.asset.revision !== 2 || metadataOnlyAssetBody.asset.status !== 'review') {
-    throw new Error(`Metadata-only design asset write should bump revision and keep status: ${metadataOnlyAsset.statusCode} ${metadataOnlyAsset.body}`);
-  }
-  const assetImageAfterMeta = await get(`/api/design-assets/${assetIdPath}/image`);
-  if (assetImageAfterMeta.statusCode !== 200 || !assetImageAfterMeta.body || assetImageAfterMeta.body.length === 0) {
-    throw new Error(`Metadata-only write should preserve the image: ${assetImageAfterMeta.statusCode}`);
-  }
-
-  // Test-slot writes skip sign-in, like the design-portfolio test-slot path.
-  const testSlotAssetWrite = await request(
-    'PUT',
-    `/api/design-assets/${assetIdPath}`,
-    { host: 'chess-tactics-1.tank.dev.romaine.life', 'content-type': 'application/json' },
-    JSON.stringify({ status: 'promoted' }),
-  );
-  const testSlotAssetWriteBody = JSON.parse(testSlotAssetWrite.body);
-  if (testSlotAssetWrite.statusCode !== 200 || testSlotAssetWriteBody.asset.revision !== 3) {
-    throw new Error(`Test-slot design asset write should not require sign-in: ${testSlotAssetWrite.statusCode} ${testSlotAssetWrite.body}`);
   }
 
   // --- New-format level persistence (/api/levels): per-user, DB-backed -------
@@ -712,6 +607,19 @@ async function main() {
   }
 
   const campaignId = createdCampaignBody.campaign.id;
+  const storedCampaign = await queryDb(
+    'SELECT owner_email, body FROM campaigns WHERE owner_email = $1 AND id = $2',
+    ['player@example.com', campaignId],
+  );
+  if (
+    storedCampaign.rowCount !== 1 ||
+    storedCampaign.rows[0].owner_email !== 'player@example.com' ||
+    storedCampaign.rows[0].body.title !== 'Forked Opening' ||
+    storedCampaign.rows[0].body.levels[0].width !== 10
+  ) {
+    throw new Error(`Created campaign should persist to Postgres: ${JSON.stringify(storedCampaign.rows)}`);
+  }
+
   const rivalCampaigns = await get('/api/campaigns', { cookie: 'better-auth.session=rival' });
   const rivalCampaignsBody = JSON.parse(rivalCampaigns.body);
   if (rivalCampaigns.statusCode !== 200 || rivalCampaignsBody.campaigns.length !== 0) {
@@ -732,6 +640,13 @@ async function main() {
   const renamedCampaignBody = JSON.parse(renamedCampaign.body);
   if (renamedCampaign.statusCode !== 200 || renamedCampaignBody.campaign.title !== 'Knight Forks') {
     throw new Error(`Unexpected campaign update response: ${renamedCampaign.statusCode} ${renamedCampaign.body}`);
+  }
+  const renamedCampaignRows = await queryDb(
+    'SELECT body FROM campaigns WHERE owner_email = $1 AND id = $2',
+    ['player@example.com', campaignId],
+  );
+  if (renamedCampaignRows.rows[0].body.title !== 'Knight Forks') {
+    throw new Error(`Renamed campaign should persist to Postgres: ${JSON.stringify(renamedCampaignRows.rows)}`);
   }
 
   const addedLevel = await request(
@@ -853,6 +768,26 @@ async function main() {
   );
   if (rejectedLastLevelDelete.statusCode !== 409) {
     throw new Error(`Deleting the last level should fail: ${rejectedLastLevelDelete.statusCode} ${rejectedLastLevelDelete.body}`);
+  }
+
+  const deletedCampaign = await request(
+    'DELETE',
+    `/api/campaigns/${campaignId}`,
+    { cookie: 'better-auth.session=abc' },
+  );
+  if (deletedCampaign.statusCode !== 204) {
+    throw new Error(`Unexpected campaign delete response: ${deletedCampaign.statusCode} ${deletedCampaign.body}`);
+  }
+  const deletedCampaignRead = await get(`/api/campaigns/${campaignId}`, { cookie: 'better-auth.session=abc' });
+  if (deletedCampaignRead.statusCode !== 404) {
+    throw new Error(`Deleted campaign should not be readable: ${deletedCampaignRead.statusCode} ${deletedCampaignRead.body}`);
+  }
+  const deletedCampaignRows = await queryDb(
+    'SELECT id FROM campaigns WHERE owner_email = $1 AND id = $2',
+    ['player@example.com', campaignId],
+  );
+  if (deletedCampaignRows.rowCount !== 0) {
+    throw new Error(`Deleted campaign should be removed from Postgres: ${JSON.stringify(deletedCampaignRows.rows)}`);
   }
 
   const hosted = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');

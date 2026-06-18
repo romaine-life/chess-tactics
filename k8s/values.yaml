@@ -35,8 +35,9 @@ serviceAccount: chess-tactics
 # itself still serves.
 serviceAccountClientId: "f9efb041-8b45-4cba-8f79-6a9546f73da1"
 
-# Azure Database for PostgreSQL — the durable document store (levels, campaign
-# workspaces, design portfolios). Provisioned by tofu/ (postgres.tf +
+# Azure Database for PostgreSQL — the durable game/design document store
+# (levels, campaigns, campaign workspaces, design portfolios). Art assets are
+# committed files, not database rows. Provisioned by tofu/ (postgres.tf +
 # identity.tf). host/database/user are deterministic from tofu and pre-filled;
 # confirm against the outputs after apply:
 #   host     <- terraform output postgres_fqdn

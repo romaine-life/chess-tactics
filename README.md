@@ -69,9 +69,11 @@ runtime wiring are exercised from the same image that PR CI proved.
 
 ## Persistence
 
-Durable data (levels, campaign workspaces, design portfolios) lives in **Azure
-Database for PostgreSQL**, reached passwordless via Entra workload identity. The
-database is self-provisioned by this repo's `tofu/`. See
+Durable game/design data (levels, campaigns, campaign workspaces, design
+portfolios) lives in **Azure Database for PostgreSQL**, reached passwordless via
+Entra workload identity. Art assets remain committed files under
+`frontend/public/assets`; they are not database records. The database is
+self-provisioned by this repo's `tofu/`. See
 [docs/persistence.md](docs/persistence.md) for the schema, auth model, backups,
 failure behavior, and the one post-`tofu apply` value to pin.
 

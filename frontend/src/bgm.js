@@ -18,6 +18,7 @@
 
 const BGM_API_URL = '/api/bgm';
 const MUTE_STORAGE_KEY = 'chess-tactics-bgm-muted-v1';
+const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
 const DEFAULT_VOLUME = 0.5;
 // If a track 404s or fails to decode, wait briefly then skip to the next one so
 // a single bad asset can never wedge the playlist.
@@ -128,9 +129,12 @@ export function initBgm() {
     updateControl();
   }
 
-  function toggleMute() {
-    state.muted = !state.muted;
-    writeMuted(state.muted);
+  function setMuted(muted, options = {}) {
+    const { persist = true, notify = true } = options;
+    const next = Boolean(muted);
+    const changed = state.muted !== next;
+    state.muted = next;
+    if (persist) writeMuted(state.muted);
     if (state.muted) {
       audio.pause();
     } else {
@@ -140,6 +144,13 @@ export function initBgm() {
       beginPlayback();
     }
     updateControl();
+    if (changed && notify) {
+      window.dispatchEvent(new CustomEvent(MUTE_CHANGE_EVENT, { detail: { muted: state.muted } }));
+    }
+  }
+
+  function toggleMute() {
+    setMuted(!state.muted);
   }
 
   // ---- audio element events ------------------------------------------------
@@ -186,6 +197,13 @@ export function initBgm() {
     armEvents.forEach((evt) => window.removeEventListener(evt, onGesture));
   }
   armEvents.forEach((evt) => window.addEventListener(evt, onGesture, { passive: true }));
+
+  window.addEventListener(MUTE_CHANGE_EVENT, (event) => {
+    setMuted(Boolean(event && event.detail && event.detail.muted), { persist: false, notify: false });
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key === MUTE_STORAGE_KEY) setMuted(readMuted(), { persist: false });
+  });
 
   // ---- mute control UI -----------------------------------------------------
   function buildControl() {
@@ -263,6 +281,7 @@ export function initBgm() {
 
   return {
     toggleMute,
+    setMuted,
     isMuted: () => state.muted,
     nowPlaying: () => state.currentTitle,
     // exposed for debugging / tests
