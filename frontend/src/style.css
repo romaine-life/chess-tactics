@@ -4939,21 +4939,23 @@ h1 {
   max-width: 100%;
   overflow: auto;
   padding: clamp(4px, 1vw, 14px);
+  place-items: center;
   position: relative;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
+  width: min(94%, 940px);
   z-index: 1;
 }
 
 .skirmish-board-frame canvas {
   display: block;
   height: auto;
-  max-width: min(100%, 900px);
+  width: min(100%, 900px);
 }
 
 .skirmish-hud {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-auto-rows: max-content;
   max-height: 100%;
   min-height: 0;
@@ -4966,11 +4968,11 @@ h1 {
 
 .skirmish-score-panel,
 .skirmish-card {
-  border: 20px solid transparent;
-  border-image: url("/assets/ui/skirmish/hud-panel.png") 22 fill / 20px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/skirmish/hud-panel.png") 22 fill / 16px stretch;
   image-rendering: pixelated;
   min-width: 0;
-  padding: 5px 8px;
+  padding: 4px 8px;
   position: relative;
 }
 
@@ -4978,7 +4980,7 @@ h1 {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  min-height: 68px;
+  min-height: 62px;
 }
 
 .skirmish-score-panel strong {
@@ -4994,7 +4996,7 @@ h1 {
   font-family: "Press Start 2P", "VT323", ui-monospace, monospace;
   font-size: .48rem;
   line-height: 1.35;
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   text-transform: uppercase;
 }
 
@@ -5027,16 +5029,16 @@ h1 {
 
 .skirmish-selected-body {
   display: grid;
-  gap: 12px;
-  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 10px;
+  grid-template-columns: 92px minmax(0, 1fr);
 }
 
 .skirmish-portrait-frame {
   align-items: center;
   background: url("/assets/ui/skirmish/portrait-frame.png") center / 100% 100% no-repeat;
   display: grid;
-  min-height: 104px;
-  padding: 18px;
+  min-height: 92px;
+  padding: 15px;
   place-items: center;
 }
 
@@ -5065,8 +5067,8 @@ h1 {
 
 .skirmish-selected-copy dl {
   display: grid;
-  gap: 5px;
-  margin: 10px 0 0;
+  gap: 4px;
+  margin: 8px 0 0;
 }
 
 .skirmish-selected-copy dl div {
@@ -5090,7 +5092,7 @@ h1 {
 
 .skirmish-actions {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .skirmish-action-button {
@@ -5103,9 +5105,9 @@ h1 {
   border: 0;
   display: grid;
   gap: 9px;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
-  min-height: 56px;
-  padding: 7px 17px 7px 12px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  min-height: 48px;
+  padding: 6px 14px 6px 10px;
   text-align: left;
 }
 
@@ -5156,16 +5158,16 @@ h1 {
 
 .skirmish-roster-strip {
   display: grid;
-  gap: 7px;
-  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 5px;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
 }
 
 .skirmish-roster-slot {
   aspect-ratio: 51 / 43;
   background: url("/assets/ui/skirmish/roster-slot.png") center / 100% 100% no-repeat;
   border: 0;
-  min-height: 42px;
-  padding: 4px;
+  min-height: 38px;
+  padding: 3px;
 }
 
 .skirmish-roster-slot.active,
@@ -5184,7 +5186,7 @@ h1 {
 .skirmish-threat-card ul,
 .skirmish-log-card ul {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -5193,8 +5195,8 @@ h1 {
 .skirmish-threat-card li {
   align-items: center;
   display: grid;
-  gap: 8px;
-  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 7px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
 }
 
 .skirmish-threat-card strong {
@@ -5205,7 +5207,7 @@ h1 {
 
 .skirmish-log-card {
   border-image-source: url("/assets/ui/skirmish/log-panel.png");
-  min-height: 128px;
+  min-height: 108px;
 }
 
 .skirmish-log-card li {
@@ -5230,7 +5232,7 @@ h1 {
 
 .skirmish-bottom-actions {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-template-columns: minmax(0, 1fr) 72px;
 }
 
@@ -5239,7 +5241,7 @@ h1 {
   background: url("/assets/ui/skirmish/bottom-button.png") center / 100% 100% no-repeat;
   border: 0;
   color: #f5eee3;
-  min-height: 54px;
+  min-height: 44px;
   text-shadow: 0 2px 0 #02070b;
 }
 
@@ -5278,8 +5280,8 @@ h1 {
 }
 
 .skirmish-action-button .skirmish-icon {
-  height: 38px;
-  width: 38px;
+  height: 31px;
+  width: 31px;
 }
 
 .skirmish-unit-badge {
@@ -5310,9 +5312,9 @@ h1 {
 }
 
 .skirmish-unit-badge.large {
-  font-size: 1.34rem;
-  min-height: 70px;
-  min-width: 70px;
+  font-size: 1.2rem;
+  min-height: 62px;
+  min-width: 62px;
 }
 
 @media (max-width: 1180px) {
