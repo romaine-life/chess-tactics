@@ -16,6 +16,9 @@ import {
 const Skirmish = lazy(() => import('./Skirmish').then((m) => ({ default: m.Skirmish })));
 const LevelEditor = lazy(() => import('./LevelEditor').then((m) => ({ default: m.LevelEditor })));
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
+const TilePreview = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilePreview })));
+const TileReview = lazy(() => import('./TilePreview').then((m) => ({ default: m.TileReview })));
+const TilesetStudio = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilesetStudio })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 const split = (node: ReactElement): ReactElement => <Suspense fallback={fallback}>{node}</Suspense>;
@@ -51,6 +54,9 @@ export function App(): ReactElement {
   }, []);
 
   if (path === '/play' || path === '/skirmish') return split(<Skirmish />);
+  if (path === '/tileset-studio') return split(<TilesetStudio />);
+  if (path === '/tile-review') return split(<TileReview />);
+  if (path === '/tile-preview') return split(<TilePreview />);
   if (path === '/edit' || path === '/level-editor') return split(<LevelEditor />);
   if (path === '/campaigns-next' || path === '/campaigns') return split(<CampaignEditor />);
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;

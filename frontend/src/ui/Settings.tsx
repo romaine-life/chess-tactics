@@ -52,6 +52,14 @@ export function Settings() {
             <span>{muted ? 'Muted' : 'On'}</span>
           </button>
         </div>
+        <div className="utility-setting-row utility-tool-row">
+          <span className="utility-row-icon icon-gear" aria-hidden="true" />
+          <div className="utility-setting-copy">
+            <strong>Tileset Studio</strong>
+            <span>Browse, inspect, and compare board terrain assets.</span>
+          </div>
+          <a href="/tileset-studio" className="utility-button utility-button-neutral">Open</a>
+        </div>
       </section>
     </div>
   );
