@@ -21,6 +21,11 @@ export function pieceHp(piece: Piece): number {
   return piece.hp ?? 1;
 }
 
+/** Hit-point capacity (for HUD/board bars); defaults to current hp. */
+export function pieceMaxHp(piece: Piece): number {
+  return piece.maxHp ?? piece.hp ?? 1;
+}
+
 /** Action points available this turn; defaults to 1 (classic single action). */
 export function pieceAp(piece: Piece): number {
   return piece.ap ?? 1;

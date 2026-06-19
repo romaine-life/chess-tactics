@@ -6,6 +6,13 @@ export type Side = 'player' | 'enemy' | 'neutral';
 
 export type PieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'rock' | 'random-rock';
 
+/**
+ * Board tile materials. Defined here (the foundational type module) rather than
+ * in `core/level.ts` so both the editor's `Level` and the live `GameState` share
+ * one terrain vocabulary; `core/level.ts` re-exports these for back-compat.
+ */
+export type TerrainType = 'grass' | 'water' | 'stone' | 'road' | 'bridge' | 'cliff' | 'rock';
+
 export interface Vec {
   x: number;
   y: number;
@@ -14,6 +21,15 @@ export interface Vec {
 export interface BoardSize {
   cols: number;
   rows: number;
+}
+
+/** A single board tile: its material and its isometric elevation (0 = ground). */
+export interface TerrainCell {
+  x: number;
+  y: number;
+  terrain: TerrainType;
+  /** Elevation level (0 = ground). The isometric multi-height axis. */
+  elevation: number;
 }
 
 export interface Piece {
@@ -75,6 +91,14 @@ export type Turn = Side | 'done';
 export interface GameState {
   size: BoardSize;
   pieces: Piece[];
+  /**
+   * Board terrain layer (one cell per authored tile). Optional + serializable so
+   * legacy/terrain-free states stay valid: when absent, every tile is treated as
+   * open grass at elevation 0 (see `buildTerrainIndex` / `canTraverse`). Water,
+   * cliff, and rock tiles are impassable; movement generation honours this when
+   * the layer is indexed into `MoveEnv.terrain`.
+   */
+  terrain?: TerrainCell[];
   turn: Turn;
   winner: Winner;
   /**

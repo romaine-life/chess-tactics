@@ -3,6 +3,22 @@ import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { useSkirmish } from '../game/store';
 import { livingPieces } from '../core/rules';
+import { isPassableTerrain } from '../core/terrain';
+import type { TerrainType } from '../core/types';
+
+// Presentation copy for the terrain panel. The first biome is moonlit
+// grassland; descriptions read the tile, not the unit. Movement/defense are
+// informational this pass — water/cliff block movement (enforced by the rules
+// engine) but per-tile move-cost and defense modifiers are not yet live.
+const TERRAIN_INFO: Record<TerrainType, { label: string; blurb: string }> = {
+  grass: { label: 'Grassland', blurb: 'Normal terrain. No special effect.' },
+  road: { label: 'Stone Road', blurb: 'A paved path through the grass.' },
+  stone: { label: 'Stone', blurb: 'Solid, open footing.' },
+  bridge: { label: 'Bridge', blurb: 'A crossing over the water.' },
+  water: { label: 'Water', blurb: 'Open water — impassable to land units.' },
+  cliff: { label: 'Cliff', blurb: 'A sheer rock face — impassable.' },
+  rock: { label: 'Rocky Ground', blurb: 'Broken, impassable ground.' },
+};
 
 export function Skirmish() {
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
@@ -14,6 +30,9 @@ export function Skirmish() {
   const playerCaptured = game.pieces.filter((piece) => piece.side === 'player' && !piece.alive).length;
   const selected = game.pieces.find((piece) => piece.id === selectedId && piece.alive) ?? null;
   const moves = movesForSelected();
+  const selectedTile = selected ? game.terrain?.find((c) => c.x === selected.x && c.y === selected.y) ?? null : null;
+  const terrainInfo = TERRAIN_INFO[selectedTile?.terrain ?? 'grass'];
+  const terrainPassable = isPassableTerrain(selectedTile?.terrain ?? 'grass');
   const turnLabel = game.winner
     ? game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Player Turn' : 'Enemy Turn';
@@ -82,10 +101,10 @@ export function Skirmish() {
             <SkirmishBoard />
           </div>
           <aside className="skirmish-left-panel skirmish-terrain-panel" aria-label="Current tile summary">
-            <h2>Grassland</h2>
-            <p>{selected ? `${selected.type} ready on open ground.` : 'Normal terrain. No special effect.'}</p>
+            <h2>{terrainInfo.label}</h2>
+            <p>{selected ? terrainInfo.blurb : 'Select a unit to inspect its tile.'}</p>
             <dl>
-              <div><dt><span className="skirmish-icon skirmish-icon-move" aria-hidden="true" />Move</dt><dd>{moves.length || 1}</dd></div>
+              <div><dt><span className="skirmish-icon skirmish-icon-move" aria-hidden="true" />Move</dt><dd>{selected ? (terrainPassable ? 'Open' : 'Blocked') : '—'}</dd></div>
               <div><dt><span className="skirmish-icon skirmish-icon-shield" aria-hidden="true" />Defense</dt><dd>0%</dd></div>
             </dl>
           </aside>

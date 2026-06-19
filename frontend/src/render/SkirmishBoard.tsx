@@ -1,13 +1,31 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js';
 import { useSkirmish } from '../game/store';
-import { enemyThreats } from '../core/rules';
+import { enemyThreats, pieceHp, pieceMaxHp } from '../core/rules';
+import type { TerrainCell, TerrainType } from '../core/types';
 import { DEFAULT_ISO, depthKey, screenToTile, tileToScreen, type IsoConfig } from './iso';
 import { loadSpriteAtlas, type SpriteAtlas } from './sprites';
 
 const MARGIN = 44;
+// Depth of the decorative cliff skirt below the board's camera-facing edges,
+// which makes the battlefield read as a floating island rather than a flat slab.
+const SKIRT = 26;
 const SIDE_COLOR: Record<string, number> = { player: 0x3b76d6, enemy: 0xc0473a, neutral: 0x6b6f76 };
 const MARK: Record<string, string> = { pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', rock: '▲', 'random-rock': '?' };
+// Graphics fallback colours per terrain (used only when the sprite atlas fails
+// to load); tuned for the moonlit-grassland palette in the art direction.
+const TERRAIN_COLOR: Record<TerrainType, number> = {
+  grass: 0x356a42, water: 0x2f5d86, stone: 0x6b6f76, road: 0xa9905f, bridge: 0x7a5a36, cliff: 0x3a3f46, rock: 0x595e66,
+};
+// Cliff-face shades for the island skirt (left face darker than right).
+const SKIRT_RIGHT = 0x2a3b34;
+const SKIRT_LEFT = 0x1d2a25;
+
+function grassGrid(cols: number, rows: number): TerrainCell[] {
+  const cells: TerrainCell[] = [];
+  for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) cells.push({ x, y, terrain: 'grass', elevation: 0 });
+  return cells;
+}
 
 // Imperative PixiJS board (canvas lives outside React's render path). Subscribes
 // to the skirmish store and redraws on change; clicks map screen->tile and
@@ -24,7 +42,7 @@ export function SkirmishBoard() {
     const hh = DEFAULT_ISO.tileH / 2;
     const cfg: IsoConfig = { ...DEFAULT_ISO, originX: MARGIN + (size.rows - 1) * hw, originY: MARGIN + 18 };
     const width = (size.cols + size.rows) * hw + MARGIN * 2;
-    const height = (size.cols + size.rows) * hh + MARGIN * 2 + 24;
+    const height = (size.cols + size.rows) * hh + MARGIN * 2 + 24 + SKIRT;
 
     const app = new Application();
     let cancelled = false;
@@ -40,29 +58,44 @@ export function SkirmishBoard() {
       const threatSet = new Set(enemyThreats(game.pieces, game.size).map((s) => `${s.x},${s.y}`));
       app.stage.removeChildren();
 
-      const grass = atlas?.tile('grass') ?? null;
-      if (grass) {
-        for (let y = 0; y < game.size.rows; y += 1) {
-          for (let x = 0; x < game.size.cols; x += 1) {
-            const s = tileToScreen(x, y, 0, cfg);
-            const spr = new Sprite(grass);
-            spr.anchor.set(0.5, 0.5);
-            spr.x = s.x;
-            spr.y = s.y;
-            spr.tint = (x + y) % 2 ? 0xdfe7df : 0xffffff; // faint checker
-            app.stage.addChild(spr);
-          }
+      const cols = game.size.cols;
+      const rows = game.size.rows;
+      // Back-to-front so the island skirt and any future elevation never paint
+      // over a tile behind it (painter's algorithm on the iso depth key).
+      const cells = (game.terrain ?? grassGrid(cols, rows)).slice().sort((a, b) => (a.x + a.y) - (b.x + b.y));
+
+      // Island skirt: extrude the board's two camera-facing outer edges downward
+      // into cliff faces so the battlefield reads as a floating island.
+      const skirt = new Graphics();
+      for (const c of cells) {
+        const s = tileToScreen(c.x, c.y, 0, cfg);
+        if (c.x === cols - 1) {
+          skirt.poly([s.x + hw, s.y, s.x, s.y + hh, s.x, s.y + hh + SKIRT, s.x + hw, s.y + SKIRT]).fill({ color: SKIRT_RIGHT });
         }
-      } else {
-        const tiles = new Graphics();
-        for (let y = 0; y < game.size.rows; y += 1) {
-          for (let x = 0; x < game.size.cols; x += 1) {
-            const s = tileToScreen(x, y, 0, cfg);
-            diamond(tiles, s.x, s.y).fill({ color: (x + y) % 2 ? 0x2f5d3a : 0x356a42 }).stroke({ color: 0x1c3a25, width: 1 });
-          }
+        if (c.y === rows - 1) {
+          skirt.poly([s.x - hw, s.y, s.x, s.y + hh, s.x, s.y + hh + SKIRT, s.x - hw, s.y + SKIRT]).fill({ color: SKIRT_LEFT });
         }
-        app.stage.addChild(tiles);
       }
+      app.stage.addChild(skirt);
+
+      // Tile faces: atlas sprites when available, Graphics diamonds otherwise.
+      const fallback = atlas ? null : new Graphics();
+      for (const c of cells) {
+        const s = tileToScreen(c.x, c.y, 0, cfg);
+        const tex = atlas?.tile(c.terrain) ?? null;
+        if (tex) {
+          const spr = new Sprite(tex);
+          spr.anchor.set(0.5, 0.5);
+          spr.x = s.x;
+          spr.y = s.y;
+          // Faint checker only on grass so paths/water keep their own art.
+          spr.tint = c.terrain === 'grass' && (c.x + c.y) % 2 ? 0xe4ede4 : 0xffffff;
+          app.stage.addChild(spr);
+        } else if (fallback) {
+          diamond(fallback, s.x, s.y).fill({ color: TERRAIN_COLOR[c.terrain] ?? TERRAIN_COLOR.grass }).stroke({ color: 0x1c3a25, width: 1 });
+        }
+      }
+      if (fallback) app.stage.addChild(fallback);
 
       const ov = new Graphics();
       for (const key of threatSet) {
@@ -106,6 +139,18 @@ export function SkirmishBoard() {
           label.anchor.set(0.5);
           label.y = p.type === 'rock' ? -5 : -9;
           c.addChild(label);
+        }
+        // HP bar above multi-hit units (hidden in the classic 1-hit model and on
+        // neutral obstacles). Cyan for the player, vermilion for the enemy.
+        const maxHp = pieceMaxHp(p);
+        if (maxHp > 1 && p.side !== 'neutral') {
+          const hp = Math.max(0, pieceHp(p));
+          const bw = 22; const bh = 3; const bx = -bw / 2; const by = -32;
+          const bar = new Graphics();
+          bar.rect(bx - 1, by - 1, bw + 2, bh + 2).fill({ color: 0x0a131b, alpha: 0.85 });
+          bar.rect(bx, by, bw, bh).fill({ color: 0x39404a });
+          bar.rect(bx, by, bw * (hp / maxHp), bh).fill({ color: p.side === 'player' ? 0x49c6ff : 0xff7a3c });
+          c.addChild(bar);
         }
         app.stage.addChild(c);
       }

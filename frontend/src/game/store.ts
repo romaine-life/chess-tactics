@@ -4,9 +4,15 @@
 
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move } from '../core/types';
-import { applyMove, enemyMove, legalMoves } from '../core/rules';
+import { applyMove, enemyMove, legalMoves, type MoveEnv } from '../core/rules';
+import { buildTerrainIndex } from '../core/terrain';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
+
+/** Movement environment for a state: indexes its terrain layer (if authored). */
+function envFor(game: GameState): MoveEnv {
+  return { terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined };
+}
 
 function describeEvent(ev: GameEvent): string | null {
   switch (ev.kind) {
@@ -22,10 +28,10 @@ function firstPlayerId(game: GameState): string | null {
 }
 
 /** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
-function resolveEnemy(game: GameState, seed: number, tick: number): { game: GameState; tick: number; events: GameEvent[] } {
+function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv): { game: GameState; tick: number; events: GameEvent[] } {
   const events: GameEvent[] = [];
   while (game.turn === 'enemy' && !game.winner) {
-    const move = enemyMove(game, createRng(seed + tick));
+    const move = enemyMove(game, createRng(seed + tick), env);
     tick += 1;
     if (!move) { game = { ...game, turn: 'player' }; break; }
     const res = applyMove(game, move.pieceId, move.move);
@@ -37,6 +43,8 @@ function resolveEnemy(game: GameState, seed: number, tick: number): { game: Game
 
 export interface SkirmishState {
   game: GameState;
+  /** Indexed terrain for the current game; movement generation reads this. */
+  env: MoveEnv;
   selectedId: string | null;
   seed: number;
   tick: number;
@@ -48,8 +56,11 @@ export interface SkirmishState {
   endTurn: () => void;
 }
 
+const INITIAL_GAME = createSkirmish({ seed: 1 });
+
 export const useSkirmish = create<SkirmishState>((set, get) => ({
-  game: createSkirmish({ seed: 1 }),
+  game: INITIAL_GAME,
+  env: envFor(INITIAL_GAME),
   selectedId: null,
   seed: 1,
   tick: 0,
@@ -57,7 +68,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
 
   newSkirmish: (opts) => {
     const game = createSkirmish(opts);
-    set({ game, seed: opts.seed, tick: 0, selectedId: firstPlayerId(game), log: ['Skirmish begins — move or capture; last side standing wins.'] });
+    set({ game, env: envFor(game), seed: opts.seed, tick: 0, selectedId: firstPlayerId(game), log: ['Skirmish begins — move or capture; last side standing wins.'] });
   },
 
   select: (id) => {
@@ -67,10 +78,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
   },
 
   movesForSelected: () => {
-    const { game, selectedId } = get();
+    const { game, selectedId, env } = get();
     if (game.turn !== 'player' || game.winner) return [];
     const p = game.pieces.find((q) => q.id === selectedId && q.alive && q.side === 'player');
-    return p ? legalMoves(p, game.pieces, game.size) : [];
+    return p ? legalMoves(p, game.pieces, game.size, env) : [];
   },
 
   tryMoveTo: (x, y) => {
@@ -78,10 +89,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
     if (s.game.turn !== 'player' || s.game.winner) return;
     const p = s.game.pieces.find((q) => q.id === s.selectedId && q.alive && q.side === 'player');
     if (!p) return;
-    const mv = legalMoves(p, s.game.pieces, s.game.size).find((m) => m.x === x && m.y === y);
+    const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
     const playerRes = applyMove(s.game, p.id, mv);
-    const enemyRes = resolveEnemy(playerRes.state, s.seed, s.tick);
+    const enemyRes = resolveEnemy(playerRes.state, s.seed, s.tick, s.env);
     const msgs = [...playerRes.events, ...enemyRes.events].map(describeEvent).filter((m): m is string => m !== null);
     set({
       game: enemyRes.game,
@@ -94,7 +105,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
   endTurn: () => {
     const s = get();
     if (s.game.turn !== 'player' || s.game.winner) return;
-    const enemyRes = resolveEnemy({ ...s.game, turn: 'enemy' }, s.seed, s.tick);
+    const enemyRes = resolveEnemy({ ...s.game, turn: 'enemy' }, s.seed, s.tick, s.env);
     const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
     set({ game: enemyRes.game, tick: enemyRes.tick, selectedId: firstPlayerId(enemyRes.game), log: [...msgs.reverse(), ...s.log].slice(0, 12) });
   },

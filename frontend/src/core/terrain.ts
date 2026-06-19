@@ -4,8 +4,7 @@
 // into movement generation as an optional environment so terrain-free callers are
 // completely unaffected.
 
-import type { Vec } from './types';
-import type { TerrainCell, TerrainType } from './level';
+import type { TerrainCell, TerrainType, Vec } from './types';
 
 export interface TerrainInfo {
   terrain: TerrainType;
