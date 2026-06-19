@@ -27,6 +27,9 @@ Source of truth:
 - `frontend/src/art/tileTemplate.ts`
 - `frontend/scripts/generate-tile-template.mjs`
 - `frontend/public/assets/tiles/canonical-template/`
+- Socket contract: `frontend/src/core/tileSockets.ts`
+- Board generation: `frontend/src/core/tileBoardGenerator.ts`
+- Coverage diagnostics: `frontend/src/core/tileCoverage.ts`
 
 ## Workflow Roadmap
 
@@ -58,7 +61,8 @@ Status: active.
 
 Review surface:
 
-- `http://localhost:3000/tile-review`
+- `http://localhost:3000/tileset-studio`
+- Legacy review: `http://localhost:3000/tile-review`
 - Implementation: `frontend/src/ui/TilePreview.tsx`
 
 ### 3. Single Terrain Tileset
@@ -103,6 +107,14 @@ Socket contract:
 - Valid transition masks are mixed-family masks only (`0001` through `1110`).
 - Pure masks (`0000`, `1111`) belong to base terrain families, not transition tiles.
 - Mask order is north, east, south, west.
+- The Tileset Studio portfolios every valid transition slot for each supported pair, including missing-art slots.
+- The generated board test uses a socket-aware placer: each placed tile must match the already-placed north and west neighbors.
+
+Current supported pairs:
+
+- Grass-Stone.
+- Grass-Water.
+- Stone-Water.
 
 Pass criteria:
 
@@ -110,6 +122,14 @@ Pass criteria:
 - Transitions are readable from the gameplay camera.
 - Transitions do not make the board look like disconnected objects.
 - Tiled-style terrain rules can select valid neighbors without hand-placing every tile.
+
+Status: structural V1 in place; art coverage is incomplete.
+
+Implementation notes:
+
+- Socket rules and board generation are pure core modules with Vitest coverage.
+- The Tileset Studio imports the same core modules it uses to show transition ledgers and generated boards.
+- Set Health currently reports total transition slot coverage, family-specific missing slots, invalid assets, and generated-board edge legality.
 
 Reference principle:
 
