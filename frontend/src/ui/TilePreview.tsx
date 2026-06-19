@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement } from 'react';
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
 
 type TileRun = 'grass' | 'stone' | 'water' | 'transition';
@@ -268,10 +268,13 @@ const beforeTileAssets: Record<ConceptTerrain, string[]> = {
   edge: ['/assets/tiles/canonical-accepted/grass-clean-a.png'],
 };
 
-type StudioFamilyId = 'grass' | 'stone' | 'water' | 'transitions' | 'templates';
+type StudioFamilyId = 'grass' | 'stone' | 'water';
 type StudioAssetKind = 'tile' | 'reference';
 type StudioTab = 'tiles' | 'board';
-type InspectorTab = 'inspect' | 'view' | 'generate';
+type InspectorTab = 'inspect' | 'controls';
+type TileFilter = 'base' | 'transitions' | 'references';
+type TerrainPairId = 'grass-stone' | 'grass-water';
+type EdgeName = 'north' | 'east' | 'south' | 'west';
 
 interface StudioAsset {
   id: string;
@@ -282,6 +285,9 @@ interface StudioAsset {
   source: string;
   probability: number;
   notes: string;
+  terrains?: StudioFamilyId[];
+  pairId?: TerrainPairId;
+  socketMask?: number;
 }
 
 interface StudioFamily {
@@ -292,6 +298,88 @@ interface StudioFamily {
   review: string;
   assets: StudioAsset[];
 }
+
+interface TransitionPair {
+  id: TerrainPairId;
+  label: string;
+  terrains: [StudioFamilyId, StudioFamilyId];
+}
+
+interface TransitionSlot {
+  mask: number;
+  code: string;
+  label: string;
+  sockets: Record<EdgeName, StudioFamilyId>;
+  assets: StudioAsset[];
+}
+
+const socketEdges: EdgeName[] = ['north', 'east', 'south', 'west'];
+
+const terrainLabels: Record<StudioFamilyId, string> = {
+  grass: 'Grass',
+  stone: 'Stone',
+  water: 'Water',
+};
+
+const transitionPairs: TransitionPair[] = [
+  { id: 'grass-stone', label: 'Grass-Stone', terrains: ['grass', 'stone'] },
+  { id: 'grass-water', label: 'Grass-Water', terrains: ['grass', 'water'] },
+];
+
+const transitionAssets: StudioAsset[] = [
+  {
+    id: 'transition-grass-stone-a',
+    label: 'Grass Stone A',
+    src: '/assets/tiles/canonical-clean/transition-grass-stone-a.png',
+    role: 'transition',
+    kind: 'tile',
+    source: 'canonical-clean',
+    probability: 1,
+    terrains: ['grass', 'stone'],
+    pairId: 'grass-stone',
+    socketMask: 1,
+    notes: 'First grass to stone transition tile.',
+  },
+  {
+    id: 'transition-grass-stone-b',
+    label: 'Grass Stone B',
+    src: '/assets/tiles/canonical-clean/transition-grass-stone-b.png',
+    role: 'transition',
+    kind: 'tile',
+    source: 'canonical-clean',
+    probability: 1,
+    terrains: ['grass', 'stone'],
+    pairId: 'grass-stone',
+    socketMask: 3,
+    notes: 'Alternate grass to stone transition tile.',
+  },
+  {
+    id: 'transition-grass-water-a',
+    label: 'Grass Water A',
+    src: '/assets/tiles/canonical-clean/transition-grass-water-a.png',
+    role: 'transition',
+    kind: 'tile',
+    source: 'canonical-clean',
+    probability: 1,
+    terrains: ['grass', 'water'],
+    pairId: 'grass-water',
+    socketMask: 1,
+    notes: 'First grass to water transition tile.',
+  },
+  {
+    id: 'transition-grass-water-b',
+    label: 'Grass Water B',
+    src: '/assets/tiles/canonical-clean/transition-grass-water-b.png',
+    role: 'transition',
+    kind: 'tile',
+    source: 'canonical-clean',
+    probability: 1,
+    terrains: ['grass', 'water'],
+    pairId: 'grass-water',
+    socketMask: 3,
+    notes: 'Alternate grass to water transition tile.',
+  },
+];
 
 const studioFamilies: StudioFamily[] = [
   {
@@ -421,94 +509,6 @@ const studioFamilies: StudioFamily[] = [
       },
     ],
   },
-  {
-    id: 'transitions',
-    label: 'Transitions',
-    purpose: 'Terrain boundaries once base families are stable.',
-    status: 'Later production phase',
-    review: 'Check that boundaries preserve the locked footprint and board read.',
-    assets: [
-      {
-        id: 'transition-grass-stone-a',
-        label: 'Grass Stone A',
-        src: '/assets/tiles/canonical-clean/transition-grass-stone-a.png',
-        role: 'transition',
-        kind: 'tile',
-        source: 'canonical-clean',
-        probability: 1,
-        notes: 'First grass to stone boundary.',
-      },
-      {
-        id: 'transition-grass-stone-b',
-        label: 'Grass Stone B',
-        src: '/assets/tiles/canonical-clean/transition-grass-stone-b.png',
-        role: 'transition',
-        kind: 'tile',
-        source: 'canonical-clean',
-        probability: 1,
-        notes: 'Alternate grass to stone boundary.',
-      },
-      {
-        id: 'transition-grass-water-a',
-        label: 'Grass Water A',
-        src: '/assets/tiles/canonical-clean/transition-grass-water-a.png',
-        role: 'transition',
-        kind: 'tile',
-        source: 'canonical-clean',
-        probability: 1,
-        notes: 'First grass to water boundary.',
-      },
-      {
-        id: 'transition-grass-water-b',
-        label: 'Grass Water B',
-        src: '/assets/tiles/canonical-clean/transition-grass-water-b.png',
-        role: 'transition',
-        kind: 'tile',
-        source: 'canonical-clean',
-        probability: 1,
-        notes: 'Alternate grass to water boundary.',
-      },
-    ],
-  },
-  {
-    id: 'templates',
-    label: 'Templates',
-    purpose: 'Canonical masks and measurement guides for normalization.',
-    status: 'Locked',
-    review: 'Use these to reject wrong-angle or wrong-footprint generated assets.',
-    assets: [
-      {
-        id: 'guide-grass',
-        label: 'Grass Template',
-        src: '/assets/tiles/canonical-template/guide-grass-tile.png',
-        role: 'template',
-        kind: 'reference',
-        source: 'canonical-template',
-        probability: 0,
-        notes: 'Top and side geometry guide.',
-      },
-      {
-        id: 'guide-stone',
-        label: 'Stone Template',
-        src: '/assets/tiles/canonical-template/guide-stone-tile.png',
-        role: 'template',
-        kind: 'reference',
-        source: 'canonical-template',
-        probability: 0,
-        notes: 'Top and side geometry guide.',
-      },
-      {
-        id: 'guide-water',
-        label: 'Water Template',
-        src: '/assets/tiles/canonical-template/guide-water-tile.png',
-        role: 'template',
-        kind: 'reference',
-        source: 'canonical-template',
-        probability: 0,
-        notes: 'Top and side geometry guide.',
-      },
-    ],
-  },
 ];
 
 const kindLabels: Record<StudioAssetKind, string> = {
@@ -518,11 +518,135 @@ const kindLabels: Record<StudioAssetKind, string> = {
 
 const familyCounts = (family: StudioFamily): string => {
   const variants = family.assets.filter((asset) => asset.kind === 'tile').length;
+  const transitions = transitionAssets.filter((asset) => asset.terrains?.includes(family.id)).length;
   const references = family.assets.filter((asset) => asset.kind === 'reference').length;
-  return references > 0 ? `${variants} variants · ${references} refs` : `${variants} variants`;
+  return `${variants} tiles · ${transitions} links · ${references} refs`;
 };
 
 const familySample = (family: StudioFamily): StudioAsset => family.assets.find((asset) => asset.kind === 'tile') ?? family.assets[0];
+
+const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
+  studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
+
+const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
+  studioFamilyById(familyId).assets.find((asset) => asset.kind === 'tile' && asset.role === 'base') ?? familySample(studioFamilyById(familyId));
+
+const transitionPairsForFamily = (familyId: StudioFamilyId): TransitionPair[] =>
+  transitionPairs.filter((pair) => pair.terrains.includes(familyId));
+
+const transitionPairById = (pairId: TerrainPairId): TransitionPair =>
+  transitionPairs.find((pair) => pair.id === pairId) ?? transitionPairs[0];
+
+const transitionMaskCode = (mask: number): string => mask.toString(2).padStart(4, '0');
+
+const transitionSlotLabel = (mask: number, pair: TransitionPair): string => {
+  if (mask === 0) return `All ${terrainLabels[pair.terrains[1]]}`;
+  if (mask === 15) return `All ${terrainLabels[pair.terrains[0]]}`;
+  return socketEdges
+    .filter((_, index) => (mask & (1 << index)) !== 0)
+    .map((edge) => edge[0].toUpperCase())
+    .join(' + ');
+};
+
+const transitionSocketsForMask = (mask: number, pair: TransitionPair): Record<EdgeName, StudioFamilyId> =>
+  socketEdges.reduce(
+    (sockets, edge, index) => ({
+      ...sockets,
+      [edge]: (mask & (1 << index)) !== 0 ? pair.terrains[0] : pair.terrains[1],
+    }),
+    {} as Record<EdgeName, StudioFamilyId>,
+  );
+
+const transitionSlotsForPair = (pair: TransitionPair): TransitionSlot[] =>
+  Array.from({ length: 14 }, (_, index) => index + 1).map((mask) => ({
+    mask,
+    code: transitionMaskCode(mask),
+    label: transitionSlotLabel(mask, pair),
+    sockets: transitionSocketsForMask(mask, pair),
+    assets: transitionAssets.filter((asset) => asset.pairId === pair.id && asset.socketMask === mask),
+  }));
+
+const owningFamilyForAsset = (asset: StudioAsset): StudioFamily | undefined =>
+  studioFamilies.find((item) => item.assets.some((familyAsset) => familyAsset.id === asset.id));
+
+const socketsForAsset = (asset: StudioAsset): Record<EdgeName, StudioFamilyId> => {
+  if (asset.pairId && typeof asset.socketMask === 'number') {
+    return transitionSocketsForMask(asset.socketMask, transitionPairById(asset.pairId));
+  }
+  const owningFamily = owningFamilyForAsset(asset) ?? studioFamilies[0];
+  return {
+    north: owningFamily.id,
+    east: owningFamily.id,
+    south: owningFamily.id,
+    west: owningFamily.id,
+  };
+};
+
+const propertyHelp: Record<string, string> = {
+  'Tile Type': 'How this asset participates in the tileset: base terrain, transition tile, reference, or invalid transition.',
+  North: 'The terrain family this tile exposes on its north edge.',
+  East: 'The terrain family this tile exposes on its east edge.',
+  South: 'The terrain family this tile exposes on its south edge.',
+  West: 'The terrain family this tile exposes on its west edge.',
+  Pair: 'The two terrain families this transition tile is allowed to connect.',
+  Mask: 'Four-bit edge socket code in north, east, south, west order.',
+  'Fill Weight': 'Relative chance this tile appears when generating random boards. Zero means it is not used by random fill.',
+  Angle: 'Measured top-edge angle for the canonical isometric tile footprint.',
+};
+
+function PropertyLabel({ label }: { label: string }): ReactElement {
+  const help = propertyHelp[label];
+
+  return (
+    <>
+      {label}
+      {help ? (
+        <span className="tileset-property-help" title={help} aria-label={`${label}: ${help}`}>
+          ?
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function EdgeLedger({ asset }: { asset: StudioAsset }): ReactElement {
+  const sockets = socketsForAsset(asset);
+  const typeLabel = tileTypeLabel(asset);
+
+  return (
+    <>
+      <div>
+        <dt><PropertyLabel label="Tile Type" /></dt>
+        <dd>{typeLabel}</dd>
+      </div>
+      {socketEdges.map((edge) => (
+        <div key={edge}>
+          <dt><PropertyLabel label={`${edge[0].toUpperCase()}${edge.slice(1)}`} /></dt>
+          <dd>{terrainLabels[sockets[edge]]}</dd>
+        </div>
+      ))}
+      {asset.pairId ? (
+        <>
+            <div>
+              <dt><PropertyLabel label="Pair" /></dt>
+              <dd>{transitionPairById(asset.pairId).label}</dd>
+            </div>
+            <div>
+              <dt><PropertyLabel label="Mask" /></dt>
+              <dd>{typeof asset.socketMask === 'number' ? transitionMaskCode(asset.socketMask) : 'unset'}</dd>
+            </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+const tileTypeLabel = (asset: StudioAsset): string => {
+  if (asset.kind === 'reference') return 'Reference';
+  if (!asset.pairId) return 'Base tile';
+  if (typeof asset.socketMask !== 'number' || asset.socketMask === 0 || asset.socketMask === 15) return 'Invalid transition';
+  return 'Transition tile';
+};
 
 const assetForCell = (assets: Record<ConceptTerrain, string[]>, cell: ConceptCell): string => {
   const options = assets[cell.terrain];
@@ -650,7 +774,7 @@ function StudioTileCard({
       aria-pressed={selected}
     >
       <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-        <img src={asset.src} alt="" draggable={false} />
+        <img src={asset.src} alt="" draggable={false} loading="eager" decoding="sync" />
       </span>
       <span className="tileset-studio-card-meta">
         <span>
@@ -659,6 +783,101 @@ function StudioTileCard({
         </span>
       </span>
     </button>
+  );
+}
+
+function TransitionRelationshipGrid({
+  family,
+  pair,
+  selectedAsset,
+  showFootprint,
+  onPairSelect,
+  onAssetSelect,
+}: {
+  family: StudioFamily;
+  pair: TransitionPair;
+  selectedAsset: StudioAsset;
+  showFootprint: boolean;
+  onPairSelect: (pairId: TerrainPairId) => void;
+  onAssetSelect: (asset: StudioAsset) => void;
+}): ReactElement {
+  const pairs = transitionPairsForFamily(family.id);
+  const slots = transitionSlotsForPair(pair);
+
+  return (
+    <div className="tileset-transition-workbench" aria-label={`${family.label} transition relationships`}>
+      <nav className="tileset-pair-tabs" aria-label="Transition pairs">
+        {pairs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={item.id === pair.id ? 'is-active' : ''}
+            onClick={() => onPairSelect(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      <div className="tileset-relationship-grid" aria-label={`${pair.label} connection previews`}>
+        {slots.map((slot) => {
+          const firstAsset = slot.assets[0];
+          const isSelected = slot.assets.some((asset) => asset.id === selectedAsset.id);
+          const cells = [
+            { edge: 'north' as EdgeName, x: 1, y: 0, asset: familyBaseAsset(slot.sockets.north) },
+            { edge: 'west' as EdgeName, x: 0, y: 1, asset: familyBaseAsset(slot.sockets.west) },
+            { edge: 'center' as const, x: 1, y: 1, asset: firstAsset },
+            { edge: 'east' as EdgeName, x: 2, y: 1, asset: familyBaseAsset(slot.sockets.east) },
+            { edge: 'south' as EdgeName, x: 1, y: 2, asset: familyBaseAsset(slot.sockets.south) },
+          ];
+
+          return (
+            <article
+              key={slot.mask}
+              className={`tileset-relationship-card ${firstAsset ? 'has-asset' : 'is-missing'} ${isSelected ? 'is-selected' : ''} ${showFootprint ? 'has-footprint' : ''}`}
+            >
+              <span className="tileset-relationship-head">
+                <strong>{slot.label}</strong>
+                <span>{slot.code}</span>
+              </span>
+              <span className="tileset-relationship-board" aria-label={`${slot.label} transition relationship`}>
+                {cells.map((cell) => {
+                  const left = 110 + (cell.x - cell.y) * 32;
+                  const top = 10 + (cell.x + cell.y) * 16;
+                  return (
+                    <span
+                      key={cell.edge}
+                      className={`tileset-relationship-cell is-${cell.edge} ${cell.asset ? '' : 'is-empty'}`}
+                      style={{ left, top, zIndex: cell.x + cell.y }}
+                    >
+                      {cell.asset ? <img src={cell.asset.src} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
+                    </span>
+                  );
+                })}
+                {cells
+                  .filter((cell): cell is typeof cell & { asset: StudioAsset } => Boolean(cell.asset))
+                  .map((cell) => {
+                    const left = 110 + (cell.x - cell.y) * 32;
+                    const top = 10 + (cell.x + cell.y) * 16;
+                    return (
+                      <button
+                        key={`hit-${cell.edge}`}
+                        type="button"
+                        className={`tileset-relationship-hit-target is-${cell.edge}`}
+                        style={{ left, top, zIndex: 100 + cell.x + cell.y }}
+                        onClick={() => onAssetSelect(cell.asset)}
+                        aria-label={`Inspect ${cell.asset.label}`}
+                      />
+                    );
+                  })}
+              </span>
+              <span className="tileset-relationship-foot">
+                {firstAsset ? `${firstAsset.label} · transition tile` : 'Needs transition art'}
+              </span>
+            </article>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -741,6 +960,8 @@ export function TilesetStudio(): ReactElement {
   const [familyId, setFamilyId] = useState<StudioFamilyId>('grass');
   const [studioTab, setStudioTab] = useState<StudioTab>('tiles');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('inspect');
+  const [tileFilter, setTileFilter] = useState<TileFilter>('base');
+  const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>('grass-stone');
   const [showFootprint, setShowFootprint] = useState(true);
   const [showBefore, setShowBefore] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -755,16 +976,29 @@ export function TilesetStudio(): ReactElement {
 
   const family = studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
   const [selectedAssetId, setSelectedAssetId] = useState(family.assets[0].id);
-  const allStudioAssets = studioFamilies.flatMap((item) => item.assets);
+  const familyTransitionPairs = transitionPairsForFamily(family.id);
+  const selectedPair = familyTransitionPairs.find((pair) => pair.id === selectedPairId) ?? familyTransitionPairs[0] ?? transitionPairs[0];
+  const allStudioAssets = useMemo(() => [...studioFamilies.flatMap((item) => item.assets), ...transitionAssets], []);
   const selectedAsset = allStudioAssets.find((asset) => asset.id === selectedAssetId) ?? family.assets[0];
-  const selectedFamilyAsset = family.assets.find((asset) => asset.id === selectedAssetId) ?? family.assets[0];
+  const familyHasBaseTile = family.assets.some((asset) => asset.kind === 'tile' && asset.role === 'base');
+  const tileFilters: Array<[TileFilter, string]> = [
+    ['base', 'Base'],
+    ...(familyHasBaseTile ? ([['transitions', 'Transitions']] as Array<[TileFilter, string]>) : []),
+    ['references', 'References'],
+  ];
+  const filteredTileAssets =
+    tileFilter === 'base'
+      ? family.assets.filter((asset) => asset.kind === 'tile')
+      : tileFilter === 'transitions'
+        ? transitionAssets.filter((asset) => asset.terrains?.includes(family.id))
+        : family.assets.filter((asset) => asset.kind === 'reference');
   const generatedAssets =
     boardScope === 'family'
-      ? family.assets
+      ? [...family.assets, ...transitionAssets.filter((asset) => asset.terrains?.includes(family.id))]
       : studioFamilies
-          .filter((item) => item.id !== 'templates')
           .flatMap((item) => item.assets)
-          .filter((asset) => asset.kind === 'tile');
+          .filter((asset) => asset.kind === 'tile')
+          .concat(transitionAssets);
   const generatedBoardSize = boardSize === 'small' ? { columns: 8, rows: 6 } : { columns: 10, rows: 7 };
 
   useEffect(() => {
@@ -774,14 +1008,47 @@ export function TilesetStudio(): ReactElement {
   }, []);
 
   useEffect(() => {
-    if (!family.assets.some((asset) => asset.id === selectedAssetId)) {
-      setSelectedAssetId(family.assets[0].id);
+    const preloadedImages = Array.from(new Set(allStudioAssets.map((asset) => asset.src))).map((src) => {
+      const image = new Image();
+      image.decoding = 'sync';
+      image.src = src;
+      return image;
+    });
+
+    return () => {
+      preloadedImages.forEach((image) => {
+        image.src = '';
+      });
+    };
+  }, [allStudioAssets]);
+
+  useEffect(() => {
+    if (!familyTransitionPairs.some((pair) => pair.id === selectedPairId)) {
+      setSelectedPairId(familyTransitionPairs[0]?.id ?? 'grass-stone');
     }
-  }, [family, selectedAssetId]);
+  }, [familyTransitionPairs, selectedPairId]);
+
+  useEffect(() => {
+    const visibleAssets =
+      tileFilter === 'base'
+        ? [...family.assets.filter((asset) => asset.kind === 'tile'), ...transitionAssets.filter((asset) => asset.terrains?.includes(family.id))]
+        : tileFilter === 'transitions'
+          ? transitionAssets.filter((asset) => asset.pairId === selectedPair.id)
+          : family.assets.filter((asset) => asset.kind === 'reference');
+    if (studioTab === 'tiles' && visibleAssets.length > 0) {
+      setSelectedAssetId((currentAssetId) => (visibleAssets.some((asset) => asset.id === currentAssetId) ? currentAssetId : visibleAssets[0].id));
+    }
+  }, [family, selectedPair.id, studioTab, tileFilter]);
 
   useEffect(() => {
     setInspectorTab('inspect');
   }, [studioTab]);
+
+  useEffect(() => {
+    if (tileFilter === 'transitions' && !familyHasBaseTile) {
+      setTileFilter('base');
+    }
+  }, [familyHasBaseTile, tileFilter]);
 
   const startBoardPan = (event: PointerEvent<HTMLDivElement>) => {
     if (studioTab !== 'board') return;
@@ -858,8 +1125,18 @@ export function TilesetStudio(): ReactElement {
 
         <section className="tileset-studio-main">
           <div className="tileset-studio-toolbar">
-            <div>
+            <div className="tileset-studio-title-row">
               <h2>{family.label} Tileset</h2>
+              <label className="tileset-collection-select">
+                <span>Collection</span>
+                <select value={tileFilter} disabled={studioTab !== 'tiles'} onChange={(event) => setTileFilter(event.target.value as TileFilter)}>
+                  {tileFilters.map(([filter, label]) => (
+                    <option key={filter} value={filter}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <nav className="tileset-studio-tabs" aria-label="Tileset studio modes">
               {[
@@ -880,21 +1157,76 @@ export function TilesetStudio(): ReactElement {
 
           {studioTab === 'tiles' ? (
             <section className="tileset-studio-tab-panel is-tiles" aria-label={`${family.label} tiles`}>
-              <div className="tileset-studio-grid" aria-label={`${family.label} assets`}>
-                {family.assets.map((asset) => (
-                  <StudioTileCard
-                    key={asset.id}
-                    asset={asset}
-                    selected={asset.id === selectedFamilyAsset.id}
-                    showFootprint={showFootprint}
-                    zoom={zoom}
-                    onSelect={() => {
-                      setSelectedAssetId(asset.id);
-                      setInspectorTab('inspect');
-                    }}
-                  />
-                ))}
-              </div>
+              {tileFilter === 'transitions' ? (
+                <TransitionRelationshipGrid
+                  family={family}
+                  pair={selectedPair}
+                  selectedAsset={selectedAsset}
+                  showFootprint={showFootprint}
+                  onPairSelect={setSelectedPairId}
+                  onAssetSelect={(asset) => {
+                    setSelectedAssetId(asset.id);
+                    setInspectorTab('inspect');
+                  }}
+                />
+              ) : tileFilter === 'base' ? (
+                <div className="tileset-asset-sections">
+                  <section className="tileset-asset-section" aria-label={`${family.label} base tiles`}>
+                    <h3>Base Tiles</h3>
+                    <div className="tileset-studio-grid" aria-label={`${family.label} base assets`}>
+                      {filteredTileAssets.map((asset) => (
+                        <StudioTileCard
+                          key={asset.id}
+                          asset={asset}
+                          selected={asset.id === selectedAsset.id}
+                          showFootprint={showFootprint}
+                          zoom={zoom}
+                          onSelect={() => {
+                            setSelectedAssetId(asset.id);
+                            setInspectorTab('inspect');
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                  <section className="tileset-asset-section" aria-label={`${family.label} transition tile inventory`}>
+                    <h3>Transition Tiles</h3>
+                    <div className="tileset-studio-grid" aria-label={`${family.label} transition assets`}>
+                      {transitionAssets
+                        .filter((asset) => asset.terrains?.includes(family.id))
+                        .map((asset) => (
+                          <StudioTileCard
+                            key={asset.id}
+                            asset={asset}
+                            selected={asset.id === selectedAsset.id}
+                            showFootprint={showFootprint}
+                            zoom={zoom}
+                            onSelect={() => {
+                              setSelectedAssetId(asset.id);
+                              setInspectorTab('inspect');
+                            }}
+                          />
+                        ))}
+                    </div>
+                  </section>
+                </div>
+              ) : (
+                <div className="tileset-studio-grid" aria-label={`${family.label} assets`}>
+                  {filteredTileAssets.map((asset) => (
+                    <StudioTileCard
+                      key={asset.id}
+                      asset={asset}
+                      selected={asset.id === selectedAsset.id}
+                      showFootprint={showFootprint}
+                      zoom={zoom}
+                      onSelect={() => {
+                        setSelectedAssetId(asset.id);
+                        setInspectorTab('inspect');
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           ) : null}
 
@@ -950,8 +1282,7 @@ export function TilesetStudio(): ReactElement {
           <nav className="tileset-inspector-tabs" aria-label="Inspector modes">
             {[
               ['inspect', 'Inspect'],
-              ...(studioTab === 'board' ? [['generate', 'Generate']] : []),
-              ['view', 'View'],
+              ['controls', 'Controls'],
             ].map(([tab, label]) => (
               <button
                 key={tab}
@@ -966,27 +1297,16 @@ export function TilesetStudio(): ReactElement {
 
           {inspectorTab === 'inspect' ? (
             <section className="tileset-inspector-section" aria-label="Selected tile details">
-              <img src={selectedAsset.src} alt="" draggable={false} />
+              <img src={selectedAsset.src} alt="" draggable={false} loading="eager" decoding="sync" />
               <h2>{selectedAsset.label}</h2>
               <dl>
+                <EdgeLedger asset={selectedAsset} />
                 <div>
-                  <dt>Kind</dt>
-                  <dd>{kindLabels[selectedAsset.kind]}</dd>
-                </div>
-                <div>
-                  <dt>Role</dt>
-                  <dd>{selectedAsset.role}</dd>
-                </div>
-                <div>
-                  <dt>Source</dt>
-                  <dd>{selectedAsset.source}</dd>
-                </div>
-                <div>
-                  <dt>Weight</dt>
+                  <dt><PropertyLabel label="Fill Weight" /></dt>
                   <dd>{selectedAsset.probability === 0 ? 'not random-filled' : selectedAsset.probability.toFixed(2)}</dd>
                 </div>
                 <div>
-                  <dt>Angle</dt>
+                  <dt><PropertyLabel label="Angle" /></dt>
                   <dd>{TILE_EDGE_ANGLE_DEGREES.toFixed(1)} degrees</dd>
                 </div>
               </dl>
@@ -999,44 +1319,9 @@ export function TilesetStudio(): ReactElement {
             </section>
           ) : null}
 
-          {inspectorTab === 'generate' && studioTab === 'board' ? (
-            <section className="tileset-inspector-section" aria-label="Board generation controls">
-              <h2>Generate Board</h2>
-              <div className="tileset-control-stack">
-                <div className="tileset-segmented-control" aria-label="Board source">
-                  <button type="button" className={boardMode === 'generated' ? 'is-active' : ''} onClick={() => setBoardMode('generated')}>
-                    Generated
-                  </button>
-                  <button type="button" className={boardMode === 'concept' ? 'is-active' : ''} onClick={() => setBoardMode('concept')}>
-                    Concept
-                  </button>
-                </div>
-                <div className="tileset-segmented-control" aria-label="Terrain scope">
-                  <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} disabled={boardMode !== 'generated'}>
-                    Family
-                  </button>
-                  <button type="button" className={boardScope === 'mixed' ? 'is-active' : ''} onClick={() => setBoardScope('mixed')} disabled={boardMode !== 'generated'}>
-                    Mixed
-                  </button>
-                </div>
-                <button type="button" className="tileset-wide-action" onClick={() => setBoardSeed(Math.floor(Math.random() * 999999) + 1)} disabled={boardMode !== 'generated'}>
-                  New Random Board
-                </button>
-                <button type="button" className="tileset-wide-action" onClick={() => setBoardSize((size) => (size === 'small' ? 'wide' : 'small'))} disabled={boardMode !== 'generated'}>
-                  Size: {boardSize === 'small' ? '8 x 6' : '10 x 7'}
-                </button>
-                <ul>
-                  <li>Seed: {boardSeed}</li>
-                  <li>Scope: {boardScope === 'family' ? family.label : 'mixed terrain'}</li>
-                  <li>Size: {generatedBoardSize.columns} x {generatedBoardSize.rows}</li>
-                </ul>
-              </div>
-            </section>
-          ) : null}
-
-          {inspectorTab === 'view' ? (
-            <section className="tileset-inspector-section" aria-label="View controls">
-              <h2>View</h2>
+          {inspectorTab === 'controls' ? (
+            <section className="tileset-inspector-section" aria-label="Controls">
+              <h2>Controls</h2>
               {studioTab === 'tiles' ? (
                 <div className="tileset-control-stack">
                   <button type="button" className={showFootprint ? 'is-active' : ''} onClick={() => setShowFootprint((value) => !value)}>
@@ -1056,6 +1341,35 @@ export function TilesetStudio(): ReactElement {
                 </div>
               ) : (
                 <div className="tileset-control-stack">
+                  <div className="tileset-segmented-control" aria-label="Board source">
+                    <button type="button" className={boardMode === 'generated' ? 'is-active' : ''} onClick={() => setBoardMode('generated')}>
+                      Generated
+                    </button>
+                    <button type="button" className={boardMode === 'concept' ? 'is-active' : ''} onClick={() => setBoardMode('concept')}>
+                      Concept
+                    </button>
+                  </div>
+                  <div className="tileset-segmented-control" aria-label="Terrain scope">
+                    <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} disabled={boardMode !== 'generated'}>
+                      Family
+                    </button>
+                    <button type="button" className={boardScope === 'mixed' ? 'is-active' : ''} onClick={() => setBoardScope('mixed')} disabled={boardMode !== 'generated'}>
+                      Mixed
+                    </button>
+                  </div>
+                  <button type="button" className="tileset-wide-action" onClick={() => setBoardSeed(Math.floor(Math.random() * 999999) + 1)} disabled={boardMode !== 'generated'}>
+                    New Random Board
+                  </button>
+                  <button type="button" className="tileset-wide-action" onClick={() => setBoardSize((size) => (size === 'small' ? 'wide' : 'small'))} disabled={boardMode !== 'generated'}>
+                    Size: {boardSize === 'small' ? '8 x 6' : '10 x 7'}
+                  </button>
+                  <ul>
+                    <li>Seed: {boardSeed}</li>
+                    <li>Scope: {boardScope === 'family' ? family.label : 'mixed terrain'}</li>
+                    <li>Size: {generatedBoardSize.columns} x {generatedBoardSize.rows}</li>
+                  </ul>
+                  <div className="tileset-control-divider" />
+                  <h3>View</h3>
                   <button type="button" className={showFootprint ? 'is-active' : ''} onClick={() => setShowFootprint((value) => !value)}>
                     Footprint {showFootprint ? 'On' : 'Off'}
                   </button>

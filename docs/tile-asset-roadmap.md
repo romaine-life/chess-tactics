@@ -87,7 +87,7 @@ Status: next.
 
 ### 4. Terrain Transitions
 
-Purpose: add terrain boundaries only after the base terrain family is stable.
+Purpose: add cross-family transition tiles only after the base terrain family is stable.
 
 Expected transition families:
 
@@ -95,10 +95,19 @@ Expected transition families:
 - Grass to water.
 - Raised or lowered edges if the board needs elevation.
 
+Socket contract:
+
+- Base tiles are family-aware only: all four edges socket to the same terrain family.
+- Base tiles do not directly connect to another terrain family.
+- Transition tiles are pair-aware: they declare a terrain pair and a four-edge socket mask.
+- Valid transition masks are mixed-family masks only (`0001` through `1110`).
+- Pure masks (`0000`, `1111`) belong to base terrain families, not transition tiles.
+- Mask order is north, east, south, west.
+
 Pass criteria:
 
 - Neighboring tiles match the same canonical footprint.
-- Boundaries are readable from the gameplay camera.
+- Transitions are readable from the gameplay camera.
 - Transitions do not make the board look like disconnected objects.
 - Tiled-style terrain rules can select valid neighbors without hand-placing every tile.
 
