@@ -690,10 +690,21 @@ h1 {
 
 .menu-layer.main-menu-layer {
   align-items: stretch;
+  /* PNG fallback declaration for browsers without image-set()/type() support. */
   background:
     linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
     url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
+  /* Preferred: AVIF -> WebP -> PNG. The whole declaration is dropped (falling
+     back to the one above) on engines that don't support image-set() type(). */
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat #02070b;
   inset: 0;
   justify-content: stretch;
   overflow: hidden;
@@ -1509,7 +1520,7 @@ h1 {
   position: relative;
 }
 
-.main-menu-brand-art > img {
+.main-menu-brand-art img {
   display: block;
   height: 100%;
   inset: 0;
@@ -1531,7 +1542,7 @@ h1 {
   content: none;
 }
 
-.main-menu-brand-art.accepted-brand-crop > img {
+.main-menu-brand-art.accepted-brand-crop img {
   object-fit: contain;
   object-position: left top;
 }

@@ -1404,8 +1404,35 @@ app.use((req, res, next) => {
   }
   next();
 });
+// Cache policy for statically-served files. Three tiers:
+//   - HTML (the app shell / SPA fallback): no-cache, so a new deploy is always
+//     picked up on the next navigation.
+//   - Vite content-hashed bundles: emitted as flat files directly under
+//     assets/ with a content hash in the name (e.g. assets/index-Cy4ekEXV.js).
+//     The name changes whenever the bytes change, so these are immutable for a
+//     year. Public assets always live in nested subdirs (assets/ui, assets/
+//     fonts, ...), never flat under assets/, so they never match this rule.
+//   - Everything else (public images/fonts/audio/json): a modest 1h TTL that
+//     trims repeat-visit payload but stays short enough that a hot static
+//     override (STATIC_FRONTEND_DIR) is reflected to clients quickly.
+const VITE_HASHED_ASSET = /^assets\/[^/]+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
+function makeStaticCacheHeaders(rootDir) {
+  return (res, filePath) => {
+    const rel = path.relative(rootDir, filePath).split(path.sep).join('/');
+    if (path.extname(filePath).toLowerCase() === '.html') {
+      res.setHeader('Cache-Control', 'no-cache');
+      return;
+    }
+    if (VITE_HASHED_ASSET.test(rel)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+  };
+}
+
 if (staticFrontendDir) {
-  app.use(express.static(staticFrontendDir));
+  app.use(express.static(staticFrontendDir, { setHeaders: makeStaticCacheHeaders(staticFrontendDir) }));
 }
 app.use((req, res, next) => {
   if (MIGRATED_RAW_ASSET_PATHS.has(req.path)) {
@@ -1414,7 +1441,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(frontendDir));
+app.use(express.static(frontendDir, { setHeaders: makeStaticCacheHeaders(frontendDir) }));
 
 // SPA fallback: serve index.html for client routes. Only 404 for genuine
 // static-asset extensions (a missing .png/.js/etc.) — NOT for app routes whose
@@ -1431,6 +1458,7 @@ app.use((req, res) => {
     res.status(404).send('not found');
     return;
   }
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(frontendIndexFile(), { dotfiles: 'allow' });
 });
 

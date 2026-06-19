@@ -17,7 +17,16 @@
       }
     </style>
     <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/jersey-10/jersey-10-latin.woff2" crossorigin>
-    <link rel="preload" as="image" href="/assets/ui/main-menu/background-scene-v1.png">
+    <!--
+      The global background preload was removed: index.html is the shared SPA
+      shell for every route, so preloading the main-menu background made all
+      routes pay for it and pinned the heavy ~2.6MB PNG. The accepted background
+      now loads as an optimized AVIF/WebP (~80KB) via the .main-menu-layer CSS
+      image-set() only when the menu route mounts. A route-scoped preload would
+      have to land in the initial HTML to beat the stylesheet fetch, which the
+      static shell can't target per-route; given the new ~80KB payload it is not
+      worth the global cost.
+    -->
   </head>
   <body>
     <main class="shell">

@@ -7,6 +7,7 @@
 // surface is pixel-faithful to what was built.
 import type { CSSProperties } from 'react';
 import assetCatalogRaw from '../../asset-catalog.json';
+import optimizedImagesRaw from './optimized-images.json';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface AssetState { label?: string; rect: Rect }
@@ -47,6 +48,41 @@ export const assetCatalog = assetCatalogRaw as unknown as AssetCatalogFile;
 
 export function assetById(id: string): Asset | undefined {
   return (assetCatalog.assets || []).find((asset) => asset.id === id);
+}
+
+// ---------------------------------------------------------------------------
+// Optimized runtime image formats (first-visit load). PNG sources stay
+// authoritative on disk; the optimizer (scripts/optimize-main-menu-assets.mjs)
+// emits AVIF + WebP siblings for the paths listed in optimized-images.json.
+// imageCssValue() upgrades those specific paths to a CSS image-set() so the
+// browser picks AVIF -> WebP -> PNG, while every other asset path is emitted
+// as a plain url() exactly as before. The PNG remains the universal fallback.
+// ---------------------------------------------------------------------------
+interface OptimizedImagesFile { schemaVersion: number; targets: { path: string }[] }
+const optimizedImages = optimizedImagesRaw as unknown as OptimizedImagesFile;
+const OPTIMIZED_IMAGE_PATHS: ReadonlySet<string> = new Set(
+  (optimizedImages.targets || []).map((target) => target.path),
+);
+
+function sanitizeCssUrl(raw: string): string {
+  return String(raw || '').replace(/["'\\\n\r]/g, '');
+}
+
+// Returns a CSS <image> value for an asset image URL: an image-set() with
+// AVIF/WebP/PNG candidates when the path has committed derivatives, otherwise a
+// plain url(). Exported for the runtime asset surfaces and tests.
+export function imageCssValue(imageUrl: string): string {
+  const clean = sanitizeCssUrl(imageUrl);
+  if (!clean) return 'none';
+  if (clean.endsWith('.png') && OPTIMIZED_IMAGE_PATHS.has(clean)) {
+    const variant = (ext: string) => clean.replace(/\.png$/, ext);
+    return (
+      `image-set(url(${variant('.avif')}) type("image/avif"), ` +
+      `url(${variant('.webp')}) type("image/webp"), ` +
+      `url(${clean}) type("image/png"))`
+    );
+  }
+  return `url(${clean})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,9 +271,8 @@ export function frameStyleForAsset(asset: Asset, frame: Rect): CSSProperties {
   const maxY = Math.max(1, sheetHeight - frame.h);
   const posX = maxX === 1 ? 0 : (frame.x / maxX) * 100;
   const posY = maxY === 1 ? 0 : (frame.y / maxY) * 100;
-  const imageUrl = String(sheet.image || '').replace(/["'\\\n\r]/g, '');
   return {
-    '--asset-image': `url(${imageUrl})`,
+    '--asset-image': imageCssValue(sheet.image || ''),
     '--asset-bg-x': `${posX.toFixed(4)}%`,
     '--asset-bg-y': `${posY.toFixed(4)}%`,
     '--asset-bg-w': `${scaleX.toFixed(4)}%`,
