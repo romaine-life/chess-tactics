@@ -3,8 +3,7 @@ import {
   buildTerrainIndex, terrainAt, elevationAt, isPassableTerrain, canTraverse, MAX_CLIMB,
 } from './terrain';
 import { legalMoves } from './rules';
-import type { TerrainCell } from './level';
-import type { GameState, Piece, PieceType, Side } from './types';
+import type { GameState, Piece, PieceType, Side, TerrainCell } from './types';
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number, extra: Partial<Piece> = {}): Piece {
   return { id, side, type, x, y, alive: true, startY: y, ...extra };

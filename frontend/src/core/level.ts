@@ -3,7 +3,12 @@
 // elevation + gameplay zones); LDtk-inspired structure (defs/instances spirit,
 // world/levels model, typed fields). Persisted as a validated JSONB body.
 
-import type { BoardSize, PieceType, Side } from './types';
+import type { BoardSize, PieceType, Side, TerrainCell, TerrainType } from './types';
+
+// Terrain vocabulary now lives in the foundational type module so the editor's
+// `Level` and the live `GameState` share one definition; re-exported here so
+// existing `from './level'` importers are unaffected.
+export type { TerrainType, TerrainCell };
 
 export const LEVEL_FORMAT_VERSION = 1;
 export const CAMPAIGN_FORMAT_VERSION = 1;
@@ -11,17 +16,8 @@ export const CAMPAIGN_FORMAT_VERSION = 1;
 export const BOARD_COLS = { min: 4, max: 16 } as const;
 export const BOARD_ROWS = { min: 4, max: 20 } as const;
 
-export type TerrainType = 'grass' | 'water' | 'stone' | 'road' | 'bridge' | 'cliff' | 'rock';
 export type ZoneType = 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock';
 export type ObjectiveType = 'capture-all' | 'capture-king' | 'survive' | 'reach';
-
-export interface TerrainCell {
-  x: number;
-  y: number;
-  terrain: TerrainType;
-  /** Elevation level (0 = ground). The isometric multi-height axis. */
-  elevation: number;
-}
 
 export interface Decal {
   x: number;

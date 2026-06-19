@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSkirmish } from './setup';
 import { livingPieces } from '../core/rules';
+import { isPassableTerrain } from '../core/terrain';
 
 describe('createSkirmish', () => {
   it('is deterministic for a given seed', () => {
@@ -38,5 +39,38 @@ describe('createSkirmish', () => {
     const s = createSkirmish({ seed: 5 });
     for (const p of livingPieces(s.pieces, 'player')) expect(p.y).toBeGreaterThanOrEqual(s.size.rows - 2);
     for (const p of livingPieces(s.pieces, 'enemy')) expect(p.y).toBeLessThanOrEqual(1);
+  });
+
+  it('authors a full terrain grid (one cell per tile)', () => {
+    const s = createSkirmish({ seed: 7 });
+    expect(s.terrain).toBeDefined();
+    expect(s.terrain).toHaveLength(s.size.cols * s.size.rows);
+    const keys = new Set(s.terrain!.map((c) => `${c.x},${c.y}`));
+    expect(keys.size).toBe(s.size.cols * s.size.rows); // no duplicate/missing tiles
+    for (const c of s.terrain!) {
+      expect(c.x).toBeGreaterThanOrEqual(0);
+      expect(c.x).toBeLessThan(s.size.cols);
+      expect(c.y).toBeGreaterThanOrEqual(0);
+      expect(c.y).toBeLessThan(s.size.rows);
+    }
+  });
+
+  it('never spawns a piece on impassable terrain', () => {
+    for (const seed of [1, 2, 7, 42, 99]) {
+      const s = createSkirmish({ seed });
+      const impassable = new Set(
+        s.terrain!.filter((c) => !isPassableTerrain(c.terrain)).map((c) => `${c.x},${c.y}`),
+      );
+      for (const p of s.pieces) expect(impassable.has(`${p.x},${p.y}`)).toBe(false);
+    }
+  });
+
+  it('keeps impassable terrain off the interior columns so the board stays connected', () => {
+    const s = createSkirmish({ seed: 13 });
+    for (const c of s.terrain!) {
+      if (!isPassableTerrain(c.terrain)) {
+        expect(c.x === 0 || c.x === s.size.cols - 1).toBe(true);
+      }
+    }
   });
 });
