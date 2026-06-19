@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type WheelEvent } from 'react';
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
 
 type TileRun = 'grass' | 'stone' | 'water' | 'transition';
@@ -313,6 +313,18 @@ interface TransitionSlot {
   assets: StudioAsset[];
 }
 
+interface TilesetStudioRouteState {
+  familyId: StudioFamilyId;
+  studioTab: StudioTab;
+  tileFilter: TileFilter;
+  selectedPairId: TerrainPairId;
+  selectedAssetId?: string;
+  boardMode: 'generated' | 'concept';
+  boardScope: 'family' | 'mixed';
+  boardSize: 'small' | 'wide';
+  boardSeed: number;
+}
+
 const socketEdges: EdgeName[] = ['north', 'east', 'south', 'west'];
 
 const terrainLabels: Record<StudioFamilyId, string> = {
@@ -325,6 +337,17 @@ const transitionPairs: TransitionPair[] = [
   { id: 'grass-stone', label: 'Grass-Stone', terrains: ['grass', 'stone'] },
   { id: 'grass-water', label: 'Grass-Water', terrains: ['grass', 'water'] },
 ];
+
+const studioDefaults: TilesetStudioRouteState = {
+  familyId: 'grass',
+  studioTab: 'tiles',
+  tileFilter: 'base',
+  selectedPairId: 'grass-stone',
+  boardMode: 'generated',
+  boardScope: 'family',
+  boardSize: 'small',
+  boardSeed: 4217,
+};
 
 const transitionAssets: StudioAsset[] = [
   {
@@ -537,7 +560,57 @@ const transitionPairsForFamily = (familyId: StudioFamilyId): TransitionPair[] =>
 const transitionPairById = (pairId: TerrainPairId): TransitionPair =>
   transitionPairs.find((pair) => pair.id === pairId) ?? transitionPairs[0];
 
+const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
+
+const isStudioTab = (value: string | null): value is StudioTab => value === 'tiles' || value === 'board';
+
+const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references';
+
+const isTerrainPairId = (value: string | null): value is TerrainPairId => value === 'grass-stone' || value === 'grass-water';
+
+const readTilesetStudioRoute = (): TilesetStudioRouteState => {
+  const params = new URLSearchParams(window.location.search);
+  const family = params.get('family');
+  const view = params.get('view');
+  const collection = params.get('collection');
+  const pair = params.get('pair');
+  const asset = params.get('asset');
+  const seed = Number(params.get('seed'));
+  return {
+    familyId: isStudioFamilyId(family) ? family : studioDefaults.familyId,
+    studioTab: isStudioTab(view) ? view : studioDefaults.studioTab,
+    tileFilter: isTileFilter(collection) ? collection : studioDefaults.tileFilter,
+    selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
+    selectedAssetId: asset || undefined,
+    boardMode: params.get('board') === 'concept' ? 'concept' : studioDefaults.boardMode,
+    boardScope: params.get('scope') === 'mixed' ? 'mixed' : studioDefaults.boardScope,
+    boardSize: params.get('size') === 'wide' ? 'wide' : studioDefaults.boardSize,
+    boardSeed: Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : studioDefaults.boardSeed,
+  };
+};
+
+const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
+  if (window.location.pathname !== '/tileset-studio') return;
+  const params = new URLSearchParams();
+  params.set('family', route.familyId);
+  params.set('view', route.studioTab);
+  params.set('collection', route.tileFilter);
+  if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
+  params.set('pair', route.selectedPairId);
+  params.set('board', route.boardMode);
+  params.set('scope', route.boardScope);
+  params.set('size', route.boardSize);
+  params.set('seed', String(route.boardSeed));
+  const nextHref = `${window.location.pathname}?${params.toString()}`;
+  const currentHref = `${window.location.pathname}${window.location.search}`;
+  if (nextHref !== currentHref) {
+    window.history.replaceState({}, '', nextHref);
+  }
+};
+
 const transitionMaskCode = (mask: number): string => mask.toString(2).padStart(4, '0');
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
 const transitionSlotLabel = (mask: number, pair: TransitionPair): string => {
   if (mask === 0) return `All ${terrainLabels[pair.terrains[1]]}`;
@@ -591,21 +664,16 @@ const propertyHelp: Record<string, string> = {
   Pair: 'The two terrain families this transition tile is allowed to connect.',
   Mask: 'Four-bit edge socket code in north, east, south, west order.',
   'Fill Weight': 'Relative chance this tile appears when generating random boards. Zero means it is not used by random fill.',
-  Angle: 'Measured top-edge angle for the canonical isometric tile footprint.',
 };
 
-function PropertyLabel({ label }: { label: string }): ReactElement {
+function InspectorRow({ label, children }: { label: string; children: ReactElement | string }): ReactElement {
   const help = propertyHelp[label];
 
   return (
-    <>
-      {label}
-      {help ? (
-        <span className="tileset-property-help" title={help} aria-label={`${label}: ${help}`}>
-          ?
-        </span>
-      ) : null}
-    </>
+    <div title={help}>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }
 
@@ -615,26 +683,16 @@ function EdgeLedger({ asset }: { asset: StudioAsset }): ReactElement {
 
   return (
     <>
-      <div>
-        <dt><PropertyLabel label="Tile Type" /></dt>
-        <dd>{typeLabel}</dd>
-      </div>
+      <InspectorRow label="Tile Type">{typeLabel}</InspectorRow>
       {socketEdges.map((edge) => (
-        <div key={edge}>
-          <dt><PropertyLabel label={`${edge[0].toUpperCase()}${edge.slice(1)}`} /></dt>
-          <dd>{terrainLabels[sockets[edge]]}</dd>
-        </div>
+        <InspectorRow key={edge} label={`${edge[0].toUpperCase()}${edge.slice(1)}`}>
+          {terrainLabels[sockets[edge]]}
+        </InspectorRow>
       ))}
       {asset.pairId ? (
         <>
-            <div>
-              <dt><PropertyLabel label="Pair" /></dt>
-              <dd>{transitionPairById(asset.pairId).label}</dd>
-            </div>
-            <div>
-              <dt><PropertyLabel label="Mask" /></dt>
-              <dd>{typeof asset.socketMask === 'number' ? transitionMaskCode(asset.socketMask) : 'unset'}</dd>
-            </div>
+          <InspectorRow label="Pair">{transitionPairById(asset.pairId).label}</InspectorRow>
+          <InspectorRow label="Mask">{typeof asset.socketMask === 'number' ? transitionMaskCode(asset.socketMask) : 'unset'}</InspectorRow>
         </>
       ) : null}
     </>
@@ -759,18 +817,21 @@ function StudioTileCard({
   showFootprint,
   zoom,
   onSelect,
+  onWheel,
 }: {
   asset: StudioAsset;
   selected: boolean;
   showFootprint: boolean;
   zoom: number;
   onSelect: () => void;
+  onWheel: (event: WheelEvent<HTMLButtonElement>) => void;
 }): ReactElement {
   return (
     <button
       type="button"
       className={`tileset-studio-card is-${asset.kind} ${selected ? 'is-selected' : ''} ${showFootprint ? 'has-footprint' : ''}`}
       onClick={onSelect}
+      onWheel={onWheel}
       aria-pressed={selected}
     >
       <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
@@ -908,7 +969,6 @@ function StudioGeneratedBoard({
   rows,
   boardZoom,
   boardPan,
-  onTileSelect,
 }: {
   assets: StudioAsset[];
   seed: number;
@@ -917,7 +977,6 @@ function StudioGeneratedBoard({
   rows: number;
   boardZoom: number;
   boardPan: { x: number; y: number };
-  onTileSelect: (asset: StudioAsset) => void;
 }): ReactElement {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile');
   const boardAssets = usableAssets.length > 0 ? usableAssets : assets;
@@ -931,22 +990,42 @@ function StudioGeneratedBoard({
       asset: pickWeightedAsset(boardAssets, random),
     };
   });
+  const projectedPoints = cells.map((cell) => ({
+    left: (cell.x - cell.y) * TILE_TEMPLATE.stepX,
+    top: (cell.x + cell.y) * TILE_TEMPLATE.stepY,
+  }));
+  const minLeft = Math.min(...projectedPoints.map((point) => point.left - 48));
+  const maxLeft = Math.max(...projectedPoints.map((point) => point.left + 48));
+  const minTop = Math.min(...projectedPoints.map((point) => point.top - 27));
+  const maxTop = Math.max(...projectedPoints.map((point) => point.top + 140));
+  const boardWidth = maxLeft - minLeft;
+  const boardHeight = maxTop - minTop;
+  const originLeft = -minLeft - boardWidth / 2;
+  const originTop = -minTop - boardHeight / 2;
 
   return (
     <div
       className={`tileset-generated-board ${showFootprint ? 'has-footprint' : ''}`}
-      style={{ '--board-zoom': boardZoom, '--board-pan-x': `${boardPan.x}px`, '--board-pan-y': `${boardPan.y}px` } as CSSProperties}
+      style={
+        {
+          '--board-zoom': boardZoom,
+          '--board-pan-x': `${boardPan.x}px`,
+          '--board-pan-y': `${boardPan.y}px`,
+          '--board-origin-left': `${originLeft}px`,
+          '--board-origin-top': `${originTop}px`,
+        } as CSSProperties
+      }
       aria-label="Generated board from selected tileset"
     >
       {cells.map((cell) => {
-        const left = 330 + (cell.x - cell.y) * TILE_TEMPLATE.stepX;
-        const top = 12 + (cell.x + cell.y) * TILE_TEMPLATE.stepY;
+        const left = (cell.x - cell.y) * TILE_TEMPLATE.stepX;
+        const top = (cell.x + cell.y) * TILE_TEMPLATE.stepY;
         return (
           <div
             key={`${cell.x}-${cell.y}`}
             className="tileset-generated-board-tile"
+            data-asset-id={cell.asset.id}
             style={{ left, top, zIndex: cell.x + cell.y }}
-            onClick={() => onTileSelect(cell.asset)}
           >
             <img src={cell.asset.src} alt="" draggable={false} />
           </div>
@@ -957,25 +1036,26 @@ function StudioGeneratedBoard({
 }
 
 export function TilesetStudio(): ReactElement {
-  const [familyId, setFamilyId] = useState<StudioFamilyId>('grass');
-  const [studioTab, setStudioTab] = useState<StudioTab>('tiles');
+  const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
+  const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
+  const [studioTab, setStudioTab] = useState<StudioTab>(initialRoute.studioTab);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('inspect');
-  const [tileFilter, setTileFilter] = useState<TileFilter>('base');
-  const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>('grass-stone');
+  const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
+  const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [showFootprint, setShowFootprint] = useState(true);
   const [showBefore, setShowBefore] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [boardMode, setBoardMode] = useState<'generated' | 'concept'>('generated');
-  const [boardScope, setBoardScope] = useState<'family' | 'mixed'>('family');
-  const [boardSize, setBoardSize] = useState<'small' | 'wide'>('small');
-  const [boardSeed, setBoardSeed] = useState(4217);
+  const [boardMode, setBoardMode] = useState<'generated' | 'concept'>(initialRoute.boardMode);
+  const [boardScope, setBoardScope] = useState<'family' | 'mixed'>(initialRoute.boardScope);
+  const [boardSize, setBoardSize] = useState<'small' | 'wide'>(initialRoute.boardSize);
+  const [boardSeed, setBoardSeed] = useState(initialRoute.boardSeed);
   const [boardZoom, setBoardZoom] = useState(0.85);
   const [boardPan, setBoardPan] = useState({ x: 0, y: 0 });
-  const boardDragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const boardDragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; assetId?: string } | null>(null);
   const boardDidDragRef = useRef(false);
 
   const family = studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
-  const [selectedAssetId, setSelectedAssetId] = useState(family.assets[0].id);
+  const [selectedAssetId, setSelectedAssetId] = useState(initialRoute.selectedAssetId ?? family.assets[0].id);
   const familyTransitionPairs = transitionPairsForFamily(family.id);
   const selectedPair = familyTransitionPairs.find((pair) => pair.id === selectedPairId) ?? familyTransitionPairs[0] ?? transitionPairs[0];
   const allStudioAssets = useMemo(() => [...studioFamilies.flatMap((item) => item.assets), ...transitionAssets], []);
@@ -1023,6 +1103,31 @@ export function TilesetStudio(): ReactElement {
   }, [allStudioAssets]);
 
   useEffect(() => {
+    const syncFromRoute = () => {
+      const route = readTilesetStudioRoute();
+      const routeFamily = studioFamilyById(route.familyId);
+      setFamilyId(route.familyId);
+      setStudioTab(route.studioTab);
+      setTileFilter(route.tileFilter);
+      setSelectedPairId(route.selectedPairId);
+      setSelectedAssetId(route.selectedAssetId ?? routeFamily.assets[0].id);
+      setBoardMode(route.boardMode);
+      setBoardScope(route.boardScope);
+      setBoardSize(route.boardSize);
+      setBoardSeed(route.boardSeed);
+    };
+
+    window.addEventListener('popstate', syncFromRoute);
+    return () => window.removeEventListener('popstate', syncFromRoute);
+  }, []);
+
+  useEffect(() => {
+    if (!allStudioAssets.some((asset) => asset.id === selectedAssetId)) {
+      setSelectedAssetId(family.assets[0].id);
+    }
+  }, [allStudioAssets, family.assets, selectedAssetId]);
+
+  useEffect(() => {
     if (!familyTransitionPairs.some((pair) => pair.id === selectedPairId)) {
       setSelectedPairId(familyTransitionPairs[0]?.id ?? 'grass-stone');
     }
@@ -1050,16 +1155,38 @@ export function TilesetStudio(): ReactElement {
     }
   }, [familyHasBaseTile, tileFilter]);
 
+  useEffect(() => {
+    if (boardMode !== 'concept' && showBefore) {
+      setShowBefore(false);
+    }
+  }, [boardMode, showBefore]);
+
+  useEffect(() => {
+    writeTilesetStudioRoute({
+      familyId,
+      studioTab,
+      tileFilter,
+      selectedPairId,
+      selectedAssetId: selectedAsset.id,
+      boardMode,
+      boardScope,
+      boardSize,
+      boardSeed,
+    });
+  }, [boardMode, boardScope, boardSeed, boardSize, familyId, selectedAsset.id, selectedPairId, studioTab, tileFilter]);
+
   const startBoardPan = (event: PointerEvent<HTMLDivElement>) => {
     if (studioTab !== 'board') return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    const tileElement = (event.target as HTMLElement).closest<HTMLElement>('.tileset-generated-board-tile');
     boardDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       originX: boardPan.x,
       originY: boardPan.y,
+      assetId: tileElement?.dataset.assetId,
     };
     boardDidDragRef.current = false;
   };
@@ -1081,6 +1208,22 @@ export function TilesetStudio(): ReactElement {
     if (!drag || drag.pointerId !== event.pointerId) return;
     boardDragRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
+    if (!boardDidDragRef.current && drag.assetId) {
+      setSelectedAssetId(drag.assetId);
+      setInspectorTab('inspect');
+    }
+  };
+
+  const zoomTilesWithWheel = (event: WheelEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    const direction = event.deltaY < 0 ? 1 : -1;
+    setZoom((value) => clamp(Number((value + direction * 0.05).toFixed(2)), 0.75, 1.6));
+  };
+
+  const zoomBoardWithWheel = (event: WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const direction = event.deltaY < 0 ? 1 : -1;
+    setBoardZoom((value) => clamp(Number((value + direction * 0.05).toFixed(2)), 0.55, 1.35));
   };
 
   return (
@@ -1112,7 +1255,10 @@ export function TilesetStudio(): ReactElement {
               key={item.id}
               type="button"
               className={item.id === family.id ? 'is-active' : ''}
-              onClick={() => setFamilyId(item.id)}
+              onClick={() => {
+                setFamilyId(item.id);
+                setSelectedAssetId(familySample(item).id);
+              }}
             >
               <img src={familySample(item).src} alt="" draggable={false} />
               <span className="tileset-family-copy">
@@ -1185,6 +1331,7 @@ export function TilesetStudio(): ReactElement {
                             setSelectedAssetId(asset.id);
                             setInspectorTab('inspect');
                           }}
+                          onWheel={zoomTilesWithWheel}
                         />
                       ))}
                     </div>
@@ -1205,6 +1352,7 @@ export function TilesetStudio(): ReactElement {
                               setSelectedAssetId(asset.id);
                               setInspectorTab('inspect');
                             }}
+                            onWheel={zoomTilesWithWheel}
                           />
                         ))}
                     </div>
@@ -1223,6 +1371,7 @@ export function TilesetStudio(): ReactElement {
                         setSelectedAssetId(asset.id);
                         setInspectorTab('inspect');
                       }}
+                      onWheel={zoomTilesWithWheel}
                     />
                   ))}
                 </div>
@@ -1233,22 +1382,20 @@ export function TilesetStudio(): ReactElement {
           {studioTab === 'board' ? (
             <section className="tileset-studio-tab-panel is-board-mode" aria-label="Board test lab">
               <div className="tileset-studio-panel-head">
-                <div>
-                  <h3>Board Test Lab</h3>
-                  <p>Generate map-like boards from the selected tileset and inspect repetition, scale, and cohesion.</p>
-                </div>
+                <h3>Board Test Lab</h3>
+                {boardMode === 'generated' ? (
+                  <p className="tileset-generated-board-meta">
+                    Seed {boardSeed} · {boardScope === 'family' ? family.label : 'mixed terrain'} · {generatedBoardSize.columns} x {generatedBoardSize.rows}
+                  </p>
+                ) : null}
               </div>
-              {boardMode === 'generated' ? (
-                <p className="tileset-generated-board-meta">
-                  Seed {boardSeed} · {boardScope === 'family' ? family.label : 'mixed terrain'} · {generatedBoardSize.columns} x {generatedBoardSize.rows}
-                </p>
-              ) : null}
               <div
                 className="tileset-studio-board-window"
                 onPointerDown={startBoardPan}
                 onPointerMove={moveBoardPan}
                 onPointerUp={endBoardPan}
                 onPointerCancel={endBoardPan}
+                onWheel={zoomBoardWithWheel}
               >
                 {boardMode === 'generated' ? (
                   <StudioGeneratedBoard
@@ -1259,11 +1406,6 @@ export function TilesetStudio(): ReactElement {
                     rows={generatedBoardSize.rows}
                     boardZoom={boardZoom}
                     boardPan={boardPan}
-                    onTileSelect={(asset) => {
-                      if (boardDidDragRef.current) return;
-                      setSelectedAssetId(asset.id);
-                      setInspectorTab('inspect');
-                    }}
                   />
                 ) : (
                   <div
@@ -1301,14 +1443,9 @@ export function TilesetStudio(): ReactElement {
               <h2>{selectedAsset.label}</h2>
               <dl>
                 <EdgeLedger asset={selectedAsset} />
-                <div>
-                  <dt><PropertyLabel label="Fill Weight" /></dt>
-                  <dd>{selectedAsset.probability === 0 ? 'not random-filled' : selectedAsset.probability.toFixed(2)}</dd>
-                </div>
-                <div>
-                  <dt><PropertyLabel label="Angle" /></dt>
-                  <dd>{TILE_EDGE_ANGLE_DEGREES.toFixed(1)} degrees</dd>
-                </div>
+                <InspectorRow label="Fill Weight">
+                  {selectedAsset.probability === 0 ? 'not random-filled' : selectedAsset.probability.toFixed(2)}
+                </InspectorRow>
               </dl>
               <p>{selectedAsset.notes}</p>
               <ul>
@@ -1373,7 +1510,13 @@ export function TilesetStudio(): ReactElement {
                   <button type="button" className={showFootprint ? 'is-active' : ''} onClick={() => setShowFootprint((value) => !value)}>
                     Footprint {showFootprint ? 'On' : 'Off'}
                   </button>
-                  <button type="button" className={showBefore ? 'is-active' : ''} onClick={() => setShowBefore((value) => !value)}>
+                  <button
+                    type="button"
+                    className={showBefore ? 'is-active' : ''}
+                    onClick={() => setShowBefore((value) => !value)}
+                    disabled={boardMode !== 'concept'}
+                    title={boardMode === 'concept' ? 'Toggle the concept board before/after view.' : 'Only available when Board Source is Concept.'}
+                  >
                     Before {showBefore ? 'On' : 'Off'}
                   </button>
                   <button type="button" onClick={() => setBoardPan({ x: 0, y: 0 })}>

@@ -8857,10 +8857,10 @@ h1 {
 }
 
 .tileset-studio-toolbar {
+  align-items: center;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
-  align-items: end;
   min-height: 48px;
 }
 
@@ -9142,11 +9142,13 @@ h1 {
 }
 
 .tileset-studio-tab-panel.is-board-mode {
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: stretch;
+  gap: 8px;
   background: rgba(5, 16, 25, 0.92);
   border: 1px solid rgba(67, 127, 179, 0.28);
   border-radius: 6px;
-  padding: 12px;
+  padding: 10px;
 }
 
 .tileset-studio-controls label {
@@ -9187,12 +9189,20 @@ h1 {
   font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
+.tileset-inspector-tabs button {
+  border-color: transparent;
+}
+
 .tileset-inspector-tabs button.is-active,
 .tileset-segmented-control button.is-active,
 .tileset-control-stack button.is-active {
   color: #f3fbff;
   background: rgba(25, 94, 132, 0.95);
   border-color: rgba(111, 210, 255, 0.76);
+}
+
+.tileset-inspector-tabs button.is-active {
+  border-color: transparent;
 }
 
 .tileset-segmented-control button:disabled,
@@ -9262,21 +9272,6 @@ h1 {
   cursor: pointer;
 }
 
-.tileset-studio-card::before {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 8px;
-  height: 3px;
-  background: rgba(99, 232, 151, 0.72);
-  border-radius: 999px;
-}
-
-.tileset-studio-card.is-reference::before {
-  background: rgba(132, 166, 255, 0.78);
-}
-
 .tileset-studio-card.is-selected {
   border-color: rgba(104, 198, 255, 0.8);
   box-shadow: inset 0 0 0 1px rgba(104, 198, 255, 0.34), 0 0 18px rgba(42, 166, 255, 0.18);
@@ -9327,16 +9322,19 @@ h1 {
   display: grid;
   gap: 2px;
   min-width: 0;
+  min-height: 48px;
 }
 
 .tileset-studio-card-meta strong {
   display: block;
   color: #f3f7fb;
   font-size: 14px;
+  line-height: 1.12;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .tileset-studio-card-meta em {
@@ -9372,10 +9370,18 @@ h1 {
 }
 
 .tileset-studio-panel-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   gap: 10px;
   align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.tileset-studio-panel-head h3 {
+  margin: 0;
+  color: #f3f7fb;
+  font-size: 16px;
+  line-height: 1.1;
 }
 
 .tileset-board-controls {
@@ -9424,16 +9430,17 @@ h1 {
 }
 
 .tileset-generated-board-meta {
-  margin: -4px 0 0;
+  margin: 0;
   color: #9eb1c5;
   font-size: 12px;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
 .tileset-studio-board-window {
   position: relative;
-  height: min(560px, calc(100vh - 250px));
-  min-height: 360px;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
   overflow: hidden;
   cursor: grab;
@@ -9470,12 +9477,17 @@ h1 {
   position: absolute;
   inset: 0;
   image-rendering: pixelated;
-  transform: translate(var(--board-pan-x, 0), var(--board-pan-y, 0)) scale(var(--board-zoom, 1));
-  transform-origin: 50% 12%;
+  transform:
+    translate(calc(50% + var(--board-pan-x, 0px)), calc(50% + var(--board-pan-y, 0px)))
+    scale(var(--board-zoom, 1))
+    translate(var(--board-origin-left, 0px), var(--board-origin-top, 0px));
+  transform-origin: 0 0;
   user-select: none;
   -webkit-user-select: none;
   --board-pan-x: 0px;
   --board-pan-y: 0px;
+  --board-origin-left: 0px;
+  --board-origin-top: 0px;
 }
 
 .tileset-generated-board-tile {
@@ -9548,30 +9560,15 @@ h1 {
   gap: 8px;
 }
 
+.tileset-studio-inspector dl div[title] {
+  cursor: help;
+}
+
 .tileset-studio-inspector dt {
-  display: flex;
-  gap: 4px;
-  align-items: center;
   color: #72bde8;
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-}
-
-.tileset-property-help {
-  display: inline-grid;
-  width: 13px;
-  height: 13px;
-  place-items: center;
-  color: #d8eaff;
-  background: rgba(12, 31, 48, 0.92);
-  border: 1px solid rgba(91, 157, 216, 0.42);
-  border-radius: 50%;
-  cursor: help;
-  font-size: 9px;
-  font-weight: 900;
-  line-height: 1;
-  text-transform: none;
 }
 
 .tileset-studio-inspector dd {
