@@ -21,6 +21,7 @@ import {
   type TransitionPair,
   type TransitionSlot,
 } from '../core/tileSockets';
+import type { PieceType, Side } from '../core/types';
 
 type TileRun = 'grass' | 'stone' | 'water' | 'transition';
 
@@ -1603,6 +1604,7 @@ function StudioEditableBoard({
   onPaint,
   onErase,
   onSelect,
+  overlay,
 }: {
   cols: number;
   rows: number;
@@ -1617,6 +1619,7 @@ function StudioEditableBoard({
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
   onSelect: (x: number, y: number) => void;
+  overlay?: ReactNode;
 }): ReactElement {
   const paintingRef = useRef(false);
   const gridCells: { x: number; y: number }[] = [];
@@ -1682,6 +1685,7 @@ function StudioEditableBoard({
           </div>
         );
       })}
+      {overlay}
     </div>
   );
 }
@@ -1941,6 +1945,16 @@ const levelSizes = {
   wide: { cols: 14, rows: 10 },
 } as const;
 
+type LevelUnitCell = { type: PieceType; side: Side };
+const levelPieceTypes: PieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+const levelSides: Side[] = ['player', 'enemy', 'neutral'];
+const pieceGlyph: Record<PieceType, string> = { pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', rock: '▲', 'random-rock': '?' };
+const pieceLabel: Record<PieceType, string> = { pawn: 'Pawn', knight: 'Knight', bishop: 'Bishop', rook: 'Rook', queen: 'Queen', rock: 'Rock', 'random-rock': 'Random rock' };
+const sideLabel: Record<Side, string> = { player: 'Player', enemy: 'Enemy', neutral: 'Neutral' };
+const sideClass: Record<Side, string> = { player: 'is-player', enemy: 'is-enemy', neutral: 'is-neutral' };
+// Only the pawn has finished art so far; everything else renders as a glyph chip.
+const levelPieceArt: Partial<Record<PieceType, string>> = { pawn: '/assets/units/cutouts/pawn-shield-south.png' };
+
 // Fill every unpainted cell with its nearest painted family (multi-source BFS),
 // so a painted region's outer border meets matching terrain (clean base tiles)
 // and only adjacent *different* painted families produce socket transitions.
@@ -1988,7 +2002,12 @@ function buildLevelTerrainMap(terrainCells: Record<string, TileFamilyId>, cols: 
 // stamping fixed asset ids.
 function LevelEditorStudio(): ReactElement {
   const [terrainCells, setTerrainCells] = useState<Record<string, TileFamilyId>>({});
+  const [unitCells, setUnitCells] = useState<Record<string, LevelUnitCell>>({});
+  const [layer, setLayer] = useState<'terrain' | 'units'>('terrain');
   const [brush, setBrush] = useState<LevelBrush>('grass');
+  const [unitType, setUnitType] = useState<PieceType>('pawn');
+  const [unitSide, setUnitSide] = useState<Side>('player');
+  const [unitErase, setUnitErase] = useState(false);
   const [sizeKey, setSizeKey] = useState<'small' | 'wide'>('small');
   const [viewZoom, setViewZoom] = useState(0.85);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
@@ -2019,6 +2038,7 @@ function LevelEditorStudio(): ReactElement {
   }, [solved, terrainCells]);
 
   const paintedCount = Object.keys(terrainCells).length;
+  const unitCount = Object.keys(unitCells).length;
   const missingCount = solved.cells.filter((cell) => terrainCells[`${cell.x},${cell.y}`] && cell.missing).length;
 
   const paintTerrain = (x: number, y: number) => {
@@ -2026,15 +2046,40 @@ function LevelEditorStudio(): ReactElement {
     const family = brush;
     setTerrainCells((prev) => (prev[`${x},${y}`] === family ? prev : { ...prev, [`${x},${y}`]: family }));
   };
-  const eraseTerrain = (x: number, y: number) =>
+  const eraseTerrain = (x: number, y: number) => {
+    const key = `${x},${y}`;
     setTerrainCells((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    // A unit can't stand on void — drop it when its tile is erased.
+    setUnitCells((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+  const placeUnit = (x: number, y: number) => {
+    const key = `${x},${y}`;
+    if (!terrainCells[key]) return; // units stand on painted terrain only
+    setUnitCells((prev) => (prev[key]?.type === unitType && prev[key]?.side === unitSide ? prev : { ...prev, [key]: { type: unitType, side: unitSide } }));
+  };
+  const eraseUnit = (x: number, y: number) =>
+    setUnitCells((prev) => {
       const key = `${x},${y}`;
       if (!(key in prev)) return prev;
       const next = { ...prev };
       delete next[key];
       return next;
     });
-  const clearLevel = () => setTerrainCells({});
+  const clearLevel = () => {
+    setTerrainCells({});
+    setUnitCells({});
+  };
+  const clearUnits = () => setUnitCells({});
   const fillLevel = () => {
     if (brush === 'erase') return;
     const family = brush;
@@ -2044,6 +2089,37 @@ function LevelEditorStudio(): ReactElement {
       return next;
     });
   };
+  // Random fill restricted to tiles that actually exist: the generator only
+  // emits socket-legal placements, so reading back each cell's terrain gives a
+  // legal, paintable map.
+  const randomizeTerrain = () => {
+    const board = generateSocketBoard({ assets: levelAssets, seed: Math.floor(Math.random() * 999999) + 1, columns: cols, rows, familyAssets: studioFamilyAssets });
+    const next: Record<string, TileFamilyId> = {};
+    for (const cell of board.cells) next[`${cell.x},${cell.y}`] = cell.terrain;
+    setTerrainCells(next);
+    setUnitCells({});
+  };
+
+  const onBoardPaint = layer === 'terrain' ? paintTerrain : placeUnit;
+  const onBoardErase = layer === 'terrain' ? eraseTerrain : eraseUnit;
+  const boardTool: 'select' | 'brush' | 'erase' =
+    layer === 'terrain' ? (brush === 'erase' ? 'erase' : 'brush') : unitErase ? 'erase' : 'brush';
+
+  const unitOverlay = (
+    <div className="level-unit-layer">
+      {Object.entries(unitCells).map(([key, unit]) => {
+        const [x, y] = key.split(',').map(Number);
+        const left = (x - y) * TILE_TEMPLATE.stepX;
+        const top = (x + y) * TILE_TEMPLATE.stepY;
+        const art = levelPieceArt[unit.type];
+        return (
+          <div key={key} className={`level-unit ${sideClass[unit.side]}`} style={{ left, top, zIndex: 500 + x + y }} title={`${sideLabel[unit.side]} ${pieceLabel[unit.type]}`}>
+            {art ? <img src={art} alt="" draggable={false} /> : <span className="level-unit-chip">{pieceGlyph[unit.type]}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="tileset-view-mode level-editor">
@@ -2054,49 +2130,88 @@ function LevelEditorStudio(): ReactElement {
             rows={rows}
             cells={renderedCells}
             resolveAsset={(id) => assetById.get(id)}
-            tool={brush === 'erase' ? 'erase' : 'brush'}
+            tool={boardTool}
             selectedCell={null}
             showFootprint={showGrid}
             boardZoom={viewZoom}
             boardPan={viewPan}
             animationFrame={animationFrame}
-            onPaint={paintTerrain}
-            onErase={eraseTerrain}
+            onPaint={onBoardPaint}
+            onErase={onBoardErase}
             onSelect={() => {}}
+            overlay={unitOverlay}
           />
         </div>
       </ViewPane>
 
       <aside className="tileset-view-controls level-editor-controls" aria-label="Level editor controls">
         <section className="tileset-inspector-section">
-          <h2>Terrain</h2>
-          <div className="tileset-control-stack">
-            <p className="tileset-group-label">Brush</p>
-            <div className="level-brush-grid">
-              {levelTerrainOrder.map((family) => (
-                <button key={family} type="button" className={`level-brush ${brush === family ? 'is-active' : ''}`} onClick={() => setBrush(family)} title={`Paint ${terrainLabels[family]}`}>
-                  <span className="level-brush-swatch" style={{ background: levelFamilySwatch[family] }} aria-hidden="true" />
-                  {terrainLabels[family]}
-                </button>
-              ))}
-              <button type="button" className={`level-brush ${brush === 'erase' ? 'is-active' : ''}`} onClick={() => setBrush('erase')} title="Erase terrain (right-click also erases).">
-                <span className="level-brush-swatch is-erase" aria-hidden="true" />
-                Erase
-              </button>
-            </div>
+          <div className="tileset-segmented-control" aria-label="Edit layer">
+            <button type="button" className={layer === 'terrain' ? 'is-active' : ''} onClick={() => setLayer('terrain')} title="Paint terrain.">Terrain</button>
+            <button type="button" className={layer === 'units' ? 'is-active' : ''} onClick={() => setLayer('units')} title="Place units.">Units</button>
+          </div>
 
-            <p className="tileset-group-label">Board</p>
-            <div className="tileset-button-row">
-              {(['small', 'wide'] as const).map((key) => (
-                <button key={key} type="button" className={sizeKey === key ? 'is-active' : ''} onClick={() => setSizeKey(key)} title={`${levelSizes[key].cols} × ${levelSizes[key].rows} board`}>
-                  {key === 'small' ? `${levelSizes.small.cols} × ${levelSizes.small.rows}` : `${levelSizes.wide.cols} × ${levelSizes.wide.rows}`}
-                </button>
-              ))}
-            </div>
-            <div className="tileset-button-row">
-              <button type="button" onClick={fillLevel} disabled={brush === 'erase'} title="Fill the whole board with the current brush.">Fill all</button>
-              <button type="button" className="tileset-action-danger" onClick={clearLevel} disabled={paintedCount === 0} title="Clear every painted tile.">Clear</button>
-            </div>
+          <div className="tileset-control-stack">
+            {layer === 'terrain' ? (
+              <>
+                <p className="tileset-group-label">Brush</p>
+                <div className="level-brush-grid">
+                  {levelTerrainOrder.map((family) => (
+                    <button key={family} type="button" className={`level-brush ${brush === family ? 'is-active' : ''}`} onClick={() => setBrush(family)} title={`Paint ${terrainLabels[family]}`}>
+                      <span className="level-brush-swatch" style={{ background: levelFamilySwatch[family] }} aria-hidden="true" />
+                      {terrainLabels[family]}
+                    </button>
+                  ))}
+                  <button type="button" className={`level-brush ${brush === 'erase' ? 'is-active' : ''}`} onClick={() => setBrush('erase')} title="Erase terrain (right-click also erases).">
+                    <span className="level-brush-swatch is-erase" aria-hidden="true" />
+                    Erase
+                  </button>
+                </div>
+
+                <p className="tileset-group-label">Board</p>
+                <div className="tileset-button-row">
+                  {(['small', 'wide'] as const).map((key) => (
+                    <button key={key} type="button" className={sizeKey === key ? 'is-active' : ''} onClick={() => setSizeKey(key)} title={`${levelSizes[key].cols} × ${levelSizes[key].rows} board`}>
+                      {key === 'small' ? `${levelSizes.small.cols} × ${levelSizes.small.rows}` : `${levelSizes.wide.cols} × ${levelSizes.wide.rows}`}
+                    </button>
+                  ))}
+                </div>
+                <div className="tileset-button-row">
+                  <button type="button" onClick={fillLevel} disabled={brush === 'erase'} title="Fill the whole board with the current brush.">Fill all</button>
+                  <button type="button" onClick={randomizeTerrain} title="Generate a random, socket-legal terrain layout.">Randomize</button>
+                  <button type="button" className="tileset-action-danger" onClick={clearLevel} disabled={paintedCount === 0 && unitCount === 0} title="Clear all terrain and units.">Clear</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="tileset-group-label">Piece</p>
+                <div className="level-brush-grid">
+                  {levelPieceTypes.map((piece) => (
+                    <button key={piece} type="button" className={`level-brush ${!unitErase && unitType === piece ? 'is-active' : ''}`} onClick={() => { setUnitType(piece); setUnitErase(false); }} title={`Place ${pieceLabel[piece]}`}>
+                      <span className="level-unit-glyph" aria-hidden="true">{pieceGlyph[piece]}</span>
+                      {pieceLabel[piece]}
+                    </button>
+                  ))}
+                  <button type="button" className={`level-brush ${unitErase ? 'is-active' : ''}`} onClick={() => setUnitErase(true)} title="Erase units (right-click also erases).">
+                    <span className="level-brush-swatch is-erase" aria-hidden="true" />
+                    Erase
+                  </button>
+                </div>
+
+                <p className="tileset-group-label">Side</p>
+                <div className="tileset-segmented-control" aria-label="Unit side">
+                  {levelSides.map((side) => (
+                    <button key={side} type="button" className={!unitErase && unitSide === side ? 'is-active' : ''} onClick={() => { setUnitSide(side); setUnitErase(false); }} title={`${sideLabel[side]} side`}>
+                      {sideLabel[side]}
+                    </button>
+                  ))}
+                </div>
+                <div className="tileset-button-row">
+                  <button type="button" className="tileset-action-danger" onClick={clearUnits} disabled={unitCount === 0} title="Remove every unit.">Clear units</button>
+                </div>
+                <p className="tileset-hint-text">Units stand on painted terrain. Pawn has art; others show a glyph until their art lands.</p>
+              </>
+            )}
 
             <p className="tileset-group-label">View</p>
             <button type="button" className={`tileset-toggle tileset-toggle-pill ${showGrid ? 'is-active' : ''}`} onClick={() => setShowGrid((value) => !value)} title="Show the empty-cell grid outline.">
@@ -2108,7 +2223,7 @@ function LevelEditorStudio(): ReactElement {
             </label>
 
             <div className="level-editor-status">
-              <span>{paintedCount} tile{paintedCount === 1 ? '' : 's'} painted</span>
+              <span>{paintedCount} tile{paintedCount === 1 ? '' : 's'} · {unitCount} unit{unitCount === 1 ? '' : 's'}</span>
               {missingCount > 0 ? (
                 <span className="is-warning">{missingCount} unsupported junction{missingCount === 1 ? '' : 's'}</span>
               ) : paintedCount > 0 ? (

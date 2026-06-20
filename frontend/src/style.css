@@ -9409,6 +9409,75 @@ h1 {
   color: #8298ad;
 }
 
+.tileset-hint-text {
+  margin: 2px 0 0;
+  color: #8298ad;
+  font: 600 11px/1.4 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+/* Units sit in their own layer above the tiles, anchored to each diamond's
+   top-centre (the board point the tile cell is positioned on). */
+.level-unit-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.level-unit {
+  position: absolute;
+  transform: translate(-50%, calc(-100% + 12px));
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
+}
+
+.level-unit img {
+  display: block;
+  height: 88px;
+  width: auto;
+  image-rendering: pixelated;
+}
+
+.level-unit.is-enemy img {
+  filter: hue-rotate(150deg) saturate(1.25);
+}
+
+.level-unit.is-neutral img {
+  filter: grayscale(0.85);
+}
+
+.level-unit-chip {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #f3f7fb;
+  font: 900 15px/1 var(--ds-font-sans, system-ui, sans-serif);
+  background: linear-gradient(180deg, rgba(46, 96, 142, 0.96), rgba(18, 44, 70, 0.98));
+  border: 1.5px solid rgba(150, 205, 255, 0.7);
+}
+
+.level-unit.is-enemy .level-unit-chip {
+  background: linear-gradient(180deg, rgba(150, 54, 64, 0.96), rgba(74, 20, 28, 0.98));
+  border-color: rgba(255, 160, 160, 0.7);
+}
+
+.level-unit.is-neutral .level-unit-chip {
+  background: linear-gradient(180deg, rgba(96, 102, 110, 0.96), rgba(40, 46, 54, 0.98));
+  border-color: rgba(200, 208, 216, 0.6);
+}
+
+.level-unit-glyph {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: #cfe6ff;
+  font: 900 13px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
 .tileset-review-stage-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
