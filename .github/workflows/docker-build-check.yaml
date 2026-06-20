@@ -146,30 +146,6 @@ jobs:
             echo "No image found for app fingerprint ${{ steps.fingerprint.outputs.fingerprint }}"
           fi
 
-      - name: Compute CI lookup tag
-        id: lookup
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        shell: bash
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
-          SOURCE_SHA: ${{ steps.source.outputs.sha }}
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            tag="ci-pr-${PR_NUMBER}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
-          else
-            ref_hash="$(printf '%s' "${SOURCE_SHA}" | sha256sum | cut -c1-12)"
-            tag="ci-ref-${ref_hash}-run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
-          fi
-          case "${tag}" in
-            *[!a-z0-9_.-]*)
-              echo "::error::computed lookup tag is not shell/ACR safe: ${tag}"
-              exit 1
-              ;;
-          esac
-          echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
-          echo "CI lookup tag: ${REGISTRY}/${IMAGE}:${tag}"
-
       - name: Build and push image
         if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && steps.image.outputs.target_exists != 'true'
         uses: docker/build-push-action@v7
@@ -180,19 +156,6 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.fingerprint.outputs.proof_tag }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
-
-      - name: Create CI lookup tag
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        shell: bash
-        run: |
-          set -euo pipefail
-          canonical="${{ steps.fingerprint.outputs.proof_tag }}"
-          lookup="${{ steps.lookup.outputs.tag }}"
-          az acr import --name romainecr \
-            --source "${REGISTRY}/${IMAGE}:${canonical}" \
-            --image "${IMAGE}:${lookup}" \
-            --force
-          echo "Tagged ${REGISTRY}/${IMAGE}:${lookup} -> ${canonical}"
 
       - name: Tag app image by commit
         # Commit-addressed alias of the fingerprint manifest so Glimmung's
