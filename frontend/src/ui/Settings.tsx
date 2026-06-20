@@ -61,6 +61,14 @@ export function Settings() {
           <a href="/tileset-studio" className="utility-button utility-button-neutral">Open</a>
         </div>
         <div className="utility-setting-row utility-tool-row">
+          <span className="utility-row-icon icon-pawn" aria-hidden="true" />
+          <div className="utility-setting-copy">
+            <strong>Unit Studio</strong>
+            <span>Inspect chess unit concepts and board-scale readability.</span>
+          </div>
+          <a href="/unit-studio" className="utility-button utility-button-neutral">Open</a>
+        </div>
+        <div className="utility-setting-row utility-tool-row">
           <span className="utility-row-icon icon-gear" aria-hidden="true" />
           <div className="utility-setting-copy">
             <strong>Tileset Review</strong>
