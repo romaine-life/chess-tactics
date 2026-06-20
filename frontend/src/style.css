@@ -9309,6 +9309,106 @@ h1 {
   }
 }
 
+/* Level editor: full-bleed board + a single control rail (no header row). */
+.tileset-studio-shell.is-level {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tileset-view-mode.level-editor {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.level-editor-controls {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 10px;
+  max-height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.level-brush-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.level-brush {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: #d8eaff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+  text-align: left;
+}
+
+.level-brush:hover {
+  border-color: rgba(104, 198, 255, 0.6);
+}
+
+.level-brush.is-active {
+  border-color: rgba(104, 198, 255, 0.95);
+  background: rgba(20, 52, 78, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(104, 198, 255, 0.45);
+}
+
+.level-brush-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  flex: none;
+}
+
+.level-brush-swatch.is-erase {
+  background:
+    linear-gradient(135deg, transparent 44%, #d8657a 44%, #d8657a 56%, transparent 56%),
+    rgba(20, 30, 40, 0.9);
+}
+
+.tileset-zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+  color: #a9bdd2;
+}
+
+.tileset-zoom-control input[type='range'] {
+  flex: 1;
+}
+
+.level-editor-status {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(67, 127, 179, 0.22);
+  font: 700 12px/1.35 var(--ds-font-sans, system-ui, sans-serif);
+  color: #9eb1c5;
+}
+
+.level-editor-status .is-warning {
+  color: #ffcf6b;
+}
+
+.level-editor-status .is-ok {
+  color: #7fe0a0;
+}
+
+.level-editor-status .is-hint {
+  color: #8298ad;
+}
+
 .tileset-review-stage-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -223,18 +223,34 @@ function missingForSockets(sockets: EdgeSockets): SocketBoardCell['missing'] {
   return { kind: 'missing-art', label: `${pair.label} ${mask.toString(2).padStart(4, '0')}`, pairId: pair.id, mask, families };
 }
 
-export function generateSocketBoard<TAsset extends TileSocketAsset>({
+export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
+  assets: readonly TAsset[];
+  /** Painted terrain family per cell, row-major (length must be columns * rows). */
+  terrainMap: readonly TileFamilyId[];
+  seed: number;
+  columns: number;
+  rows: number;
+  familyAssets: Record<TileFamilyId, readonly TAsset[]>;
+}
+
+/**
+ * Resolve a board from an explicit (e.g. hand-painted) terrain map, reusing the
+ * exact socket-legality contract that the random generator uses. Each shared
+ * edge is written once, so adjacency is always internally consistent; cells whose
+ * resolved sockets have no matching asset (3-family junctions, unmade transition
+ * art) come back marked `missing` instead of guessing an illegal tile.
+ */
+export function solveSocketBoard<TAsset extends TileSocketAsset>({
   assets,
+  terrainMap,
   seed,
   columns,
   rows,
   familyAssets,
-}: SocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
+}: SolveSocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
   const boardAssets = usableAssets.length > 0 ? usableAssets : assets.filter((asset) => asset.kind === 'tile');
   const rng = createRng(seed + 99);
-  const terrainFamilies = terrainFamiliesForAssets(boardAssets, familyAssets);
-  const terrainMap = generateTerrainMap(terrainFamilies, seed, columns, rows);
   const socketGrid = buildSocketGrid(terrainMap, columns, rows, seed);
   const cells: SocketBoardCell<TAsset>[] = [];
   const fallbacks: SocketBoardFallback[] = [];
@@ -242,7 +258,7 @@ export function generateSocketBoard<TAsset extends TileSocketAsset>({
   for (let index = 0; index < columns * rows; index += 1) {
     const y = Math.floor(index / columns);
     const x = index % columns;
-    const terrain = terrainAt(terrainMap, x, y, columns, rows) ?? terrainFamilies[0] ?? 'grass';
+    const terrain = terrainAt(terrainMap, x, y, columns, rows) ?? 'grass';
     const sockets = socketGrid[index];
     const candidates = boardAssets.filter((asset) => assetMatchesSockets(asset, sockets, familyAssets));
     if (candidates.length === 0) {
@@ -264,4 +280,18 @@ export function generateSocketBoard<TAsset extends TileSocketAsset>({
       candidateAssets: boardAssets.length,
     },
   };
+}
+
+export function generateSocketBoard<TAsset extends TileSocketAsset>({
+  assets,
+  seed,
+  columns,
+  rows,
+  familyAssets,
+}: SocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
+  const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
+  const boardAssets = usableAssets.length > 0 ? usableAssets : assets.filter((asset) => asset.kind === 'tile');
+  const terrainFamilies = terrainFamiliesForAssets(boardAssets, familyAssets);
+  const terrainMap = generateTerrainMap(terrainFamilies, seed, columns, rows);
+  return solveSocketBoard({ assets, terrainMap, seed, columns, rows, familyAssets });
 }

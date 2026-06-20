@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode, type WheelEvent } from 'react';
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
 import { buildTileCoverageReport } from '../core/tileCoverage';
-import { generateSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
+import { generateSocketBoard, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { createRng } from '../core/rng';
 import {
   socketEdges,
@@ -1929,12 +1929,207 @@ function UnitsStudio({ studioMode, onInspect, onBack }: { studioMode: StudioMode
   );
 }
 
+type LevelBrush = TileFamilyId | 'erase';
+const levelTerrainOrder: TileFamilyId[] = ['grass', 'stone', 'water'];
+const levelFamilySwatch: Record<TileFamilyId, string> = {
+  grass: '#5b8c3a',
+  stone: '#8c8c95',
+  water: '#3a6ea5',
+};
+const levelSizes = {
+  small: { cols: 10, rows: 8 },
+  wide: { cols: 14, rows: 10 },
+} as const;
+
+// Fill every unpainted cell with its nearest painted family (multi-source BFS),
+// so a painted region's outer border meets matching terrain (clean base tiles)
+// and only adjacent *different* painted families produce socket transitions.
+function buildLevelTerrainMap(terrainCells: Record<string, TileFamilyId>, cols: number, rows: number): TileFamilyId[] {
+  const map = new Array<TileFamilyId>(cols * rows).fill('grass');
+  const idx = (x: number, y: number) => y * cols + x;
+  const visited = new Uint8Array(cols * rows);
+  const queue: number[] = [];
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const family = terrainCells[`${x},${y}`];
+      if (family) {
+        const p = idx(x, y);
+        map[p] = family;
+        visited[p] = 1;
+        queue.push(p);
+      }
+    }
+  }
+  if (queue.length === 0) return map; // nothing painted yet: all grass, rendered as empty
+  let head = 0;
+  while (head < queue.length) {
+    const p = queue[head];
+    head += 1;
+    const x = p % cols;
+    const y = (p / cols) | 0;
+    const family = map[p];
+    const neighbours: Array<[number, number]> = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
+    for (const [nx, ny] of neighbours) {
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      const np = idx(nx, ny);
+      if (visited[np]) continue;
+      visited[np] = 1;
+      map[np] = family;
+      queue.push(np);
+    }
+  }
+  return map;
+}
+
+// Level editor: paint terrain *families* onto a board; the socket solver picks
+// the legal tile for every painted cell (base in the interior, transitions where
+// two families meet) and flags junctions it can't satisfy. Reuses the proven
+// StudioEditableBoard renderer — painting just mutates the terrain map instead of
+// stamping fixed asset ids.
+function LevelEditorStudio(): ReactElement {
+  const [terrainCells, setTerrainCells] = useState<Record<string, TileFamilyId>>({});
+  const [brush, setBrush] = useState<LevelBrush>('grass');
+  const [sizeKey, setSizeKey] = useState<'small' | 'wide'>('small');
+  const [viewZoom, setViewZoom] = useState(0.85);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [showGrid, setShowGrid] = useState(true);
+  const { cols, rows } = levelSizes[sizeKey];
+  const animationFrame = useAnimationClock(true, 8, 150);
+
+  const levelAssets = useMemo(
+    () => [...studioFamilies.flatMap((family) => family.assets.filter((asset) => asset.kind === 'tile')), ...transitionAssets],
+    [],
+  );
+  const assetById = useMemo(() => new Map(levelAssets.map((asset) => [asset.id, asset])), [levelAssets]);
+
+  const solved = useMemo(
+    () => solveSocketBoard({ assets: levelAssets, terrainMap: buildLevelTerrainMap(terrainCells, cols, rows), seed: 7, columns: cols, rows, familyAssets: studioFamilyAssets }),
+    [terrainCells, cols, rows, levelAssets],
+  );
+
+  // Only painted cells render. Map each to its solved asset id (StudioEditableBoard
+  // shows empty for unresolved/missing cells — those are surfaced in the status line).
+  const renderedCells = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const cell of solved.cells) {
+      const key = `${cell.x},${cell.y}`;
+      if (terrainCells[key] && cell.asset) out[key] = cell.asset.id;
+    }
+    return out;
+  }, [solved, terrainCells]);
+
+  const paintedCount = Object.keys(terrainCells).length;
+  const missingCount = solved.cells.filter((cell) => terrainCells[`${cell.x},${cell.y}`] && cell.missing).length;
+
+  const paintTerrain = (x: number, y: number) => {
+    if (brush === 'erase') return;
+    const family = brush;
+    setTerrainCells((prev) => (prev[`${x},${y}`] === family ? prev : { ...prev, [`${x},${y}`]: family }));
+  };
+  const eraseTerrain = (x: number, y: number) =>
+    setTerrainCells((prev) => {
+      const key = `${x},${y}`;
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  const clearLevel = () => setTerrainCells({});
+  const fillLevel = () => {
+    if (brush === 'erase') return;
+    const family = brush;
+    setTerrainCells(() => {
+      const next: Record<string, TileFamilyId> = {};
+      for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) next[`${x},${y}`] = family;
+      return next;
+    });
+  };
+
+  return (
+    <div className="tileset-view-mode level-editor">
+      <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
+        <div className="tileset-view-board-content is-board">
+          <StudioEditableBoard
+            cols={cols}
+            rows={rows}
+            cells={renderedCells}
+            resolveAsset={(id) => assetById.get(id)}
+            tool={brush === 'erase' ? 'erase' : 'brush'}
+            selectedCell={null}
+            showFootprint={showGrid}
+            boardZoom={viewZoom}
+            boardPan={viewPan}
+            animationFrame={animationFrame}
+            onPaint={paintTerrain}
+            onErase={eraseTerrain}
+            onSelect={() => {}}
+          />
+        </div>
+      </ViewPane>
+
+      <aside className="tileset-view-controls level-editor-controls" aria-label="Level editor controls">
+        <section className="tileset-inspector-section">
+          <h2>Terrain</h2>
+          <div className="tileset-control-stack">
+            <p className="tileset-group-label">Brush</p>
+            <div className="level-brush-grid">
+              {levelTerrainOrder.map((family) => (
+                <button key={family} type="button" className={`level-brush ${brush === family ? 'is-active' : ''}`} onClick={() => setBrush(family)} title={`Paint ${terrainLabels[family]}`}>
+                  <span className="level-brush-swatch" style={{ background: levelFamilySwatch[family] }} aria-hidden="true" />
+                  {terrainLabels[family]}
+                </button>
+              ))}
+              <button type="button" className={`level-brush ${brush === 'erase' ? 'is-active' : ''}`} onClick={() => setBrush('erase')} title="Erase terrain (right-click also erases).">
+                <span className="level-brush-swatch is-erase" aria-hidden="true" />
+                Erase
+              </button>
+            </div>
+
+            <p className="tileset-group-label">Board</p>
+            <div className="tileset-button-row">
+              {(['small', 'wide'] as const).map((key) => (
+                <button key={key} type="button" className={sizeKey === key ? 'is-active' : ''} onClick={() => setSizeKey(key)} title={`${levelSizes[key].cols} × ${levelSizes[key].rows} board`}>
+                  {key === 'small' ? `${levelSizes.small.cols} × ${levelSizes.small.rows}` : `${levelSizes.wide.cols} × ${levelSizes.wide.rows}`}
+                </button>
+              ))}
+            </div>
+            <div className="tileset-button-row">
+              <button type="button" onClick={fillLevel} disabled={brush === 'erase'} title="Fill the whole board with the current brush.">Fill all</button>
+              <button type="button" className="tileset-action-danger" onClick={clearLevel} disabled={paintedCount === 0} title="Clear every painted tile.">Clear</button>
+            </div>
+
+            <p className="tileset-group-label">View</p>
+            <button type="button" className={`tileset-toggle tileset-toggle-pill ${showGrid ? 'is-active' : ''}`} onClick={() => setShowGrid((value) => !value)} title="Show the empty-cell grid outline.">
+              Grid {showGrid ? 'on' : 'off'}
+            </button>
+            <label className="tileset-zoom-control">
+              <span>Zoom</span>
+              <input type="range" min="0.4" max="4" step="0.05" value={viewZoom} onChange={(event) => setViewZoom(Number(event.target.value))} />
+            </label>
+
+            <div className="level-editor-status">
+              <span>{paintedCount} tile{paintedCount === 1 ? '' : 's'} painted</span>
+              {missingCount > 0 ? (
+                <span className="is-warning">{missingCount} unsupported junction{missingCount === 1 ? '' : 's'}</span>
+              ) : paintedCount > 0 ? (
+                <span className="is-ok">All edges legal</span>
+              ) : (
+                <span className="is-hint">Pick a terrain and paint.</span>
+              )}
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  );
+}
+
 export function TilesetStudio(): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
-  const [category, setCategory] = useState<'tiles' | 'units'>('tiles');
+  const [category, setCategory] = useState<'tiles' | 'units' | 'level'>('tiles');
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>([initialRoute.familyId]);
@@ -2456,10 +2651,14 @@ export function TilesetStudio(): ReactElement {
             <span>Tactical chess, infinite possibilities.</span>
           </div>
           <div className="tileset-studio-titleblock">
-            <p className="tileset-studio-kicker">{category === 'units' ? 'Unit Studio' : 'Tileset Studio'}</p>
-            <h1>{category === 'units' ? 'Units' : selectedFamilyLabel}</h1>
+            <p className="tileset-studio-kicker">{category === 'units' ? 'Unit Studio' : category === 'level' ? 'Level Editor' : 'Tileset Studio'}</p>
+            <h1>{category === 'units' ? 'Units' : category === 'level' ? 'Level Editor' : selectedFamilyLabel}</h1>
             <p className="tileset-studio-subtitle">
-              {category === 'units' ? 'Chess pieces as squad units — concept review.' : activeFamilies.map((item) => item.purpose).join(' · ')}
+              {category === 'units'
+                ? 'Chess pieces as squad units — concept review.'
+                : category === 'level'
+                  ? 'Paint terrain — the socket solver lays down legal tiles and transitions.'
+                  : activeFamilies.map((item) => item.purpose).join(' · ')}
             </p>
           </div>
         </div>
@@ -2471,8 +2670,11 @@ export function TilesetStudio(): ReactElement {
             <button type="button" className={category === 'units' ? 'is-active' : ''} onClick={() => setCategory('units')} title="Browse chess-piece units.">
               Units
             </button>
+            <button type="button" className={category === 'level' ? 'is-active' : ''} onClick={() => setCategory('level')} title="Paint a level with socket-legal terrain.">
+              Level
+            </button>
           </span>
-          <span className="tileset-mode-tabs" aria-label="Tileset studio mode">
+          <span className="tileset-mode-tabs" aria-label="Tileset studio mode" hidden={category === 'level'}>
             {[
               ['catalog', 'Catalog'],
               ['view', 'View'],
@@ -2491,8 +2693,10 @@ export function TilesetStudio(): ReactElement {
         </nav>
       </header>
 
-      <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''}`} aria-label="Tileset browser">
-        {category === 'units' ? (
+      <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'level' ? 'is-level' : ''}`} aria-label="Tileset browser">
+        {category === 'level' ? (
+          <LevelEditorStudio />
+        ) : category === 'units' ? (
           <UnitsStudio studioMode={studioMode} onInspect={() => setStudioMode('view')} onBack={() => setStudioMode('catalog')} />
         ) : studioMode === 'catalog' ? (
         <section className="tileset-studio-main">
