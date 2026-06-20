@@ -5762,7 +5762,8 @@ h1 {
   max-height: 100%;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 10px;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
@@ -9241,7 +9242,8 @@ h1 {
   max-height: 100%;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 10px;
 }
 
@@ -9941,13 +9943,15 @@ button.tileset-relationship-cell {
 .tileset-control-stack button,
 .tileset-wide-action {
   min-height: 34px;
+  min-width: 0;
   padding: 8px 10px;
   color: #d8eaff;
   background: rgba(12, 31, 48, 0.92);
   border: 1px solid rgba(91, 157, 216, 0.38);
   border-radius: 4px;
   cursor: pointer;
-  font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+  font: 800 12px/1.15 var(--ds-font-sans, system-ui, sans-serif);
+  overflow-wrap: anywhere;
 }
 
 .tileset-inspector-tabs button {
@@ -9984,7 +9988,7 @@ button.tileset-relationship-cell {
 .tileset-relationship-head,
 .tileset-relationship-foot,
 .tileset-studio-card-meta {
-  cursor: zoom-in;
+  cursor: default;
 }
 
 .tileset-review-nav {
@@ -10019,8 +10023,146 @@ button.tileset-relationship-cell {
 
 .tileset-segmented-control {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
+}
+
+.tileset-segmented-control.tileset-tools {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tileset-tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-left: 4px;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+
+.tileset-tools button svg {
+  flex: none;
+}
+
+.tileset-control-stack {
+  gap: 8px;
+}
+
+.tileset-group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #72bde8;
+}
+
+.tileset-group-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(67, 127, 179, 0.25);
+}
+
+.tileset-group-label.is-collapsible {
+  background: none;
+  border: none;
+  box-shadow: none;
+  min-height: 0;
+  padding: 0;
+  width: 100%;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #72bde8;
+}
+
+.tileset-group-label.is-collapsible::after {
+  content: none;
+}
+
+.tileset-group-rule {
+  flex: 1;
+  height: 1px;
+  background: rgba(67, 127, 179, 0.25);
+}
+
+.tileset-group-chevron {
+  flex: none;
+  color: #72bde8;
+  transition: transform 0.12s ease;
+}
+
+.tileset-group-label.is-collapsible[aria-expanded="false"] .tileset-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.tileset-button-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tileset-button-row > button {
+  flex: 1 1 0;
+}
+
+.tileset-action-danger {
+  color: #f0b3b3;
+  border-color: rgba(150, 80, 80, 0.5);
+}
+
+.tileset-action-danger:hover:not(:disabled) {
+  background: rgba(120, 50, 50, 0.55);
+  border-color: rgba(210, 110, 110, 0.85);
+}
+
+.tileset-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tileset-toggle-pill {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  flex: none;
+  border-radius: 9px;
+  background: rgba(120, 140, 160, 0.45);
+  transition: background 0.12s ease;
+}
+
+.tileset-toggle-pill::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e7f1fb;
+  transition: left 0.12s ease;
+}
+
+.tileset-toggle.is-on .tileset-toggle-pill {
+  background: #2f8fc0;
+}
+
+.tileset-toggle.is-on .tileset-toggle-pill::after {
+  left: 16px;
+}
+
+.tileset-control-footnote {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #7f93a6;
 }
 
 .tileset-control-stack label {
@@ -10074,7 +10216,6 @@ button.tileset-relationship-cell {
   position: relative;
   display: grid;
   gap: 9px;
-  min-height: 220px;
   padding: 12px;
   color: #d9e7f7;
   text-align: left;
@@ -10131,10 +10272,17 @@ button.tileset-relationship-cell {
 }
 
 .tileset-studio-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tileset-studio-card-text {
   display: grid;
   gap: 2px;
   min-width: 0;
-  min-height: 48px;
+  flex: 1 1 auto;
 }
 
 .tileset-studio-card-meta strong {
@@ -10145,8 +10293,7 @@ button.tileset-relationship-cell {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .tileset-studio-card-meta em {
@@ -10363,6 +10510,167 @@ button.tileset-relationship-cell {
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   border: 1px solid rgba(111, 210, 255, 0.28);
   pointer-events: none;
+}
+
+/* Manual tile placement board (temporary preview-in-context). */
+.tileset-placement-cell {
+  pointer-events: none;
+}
+
+/* Only the top-face diamond is clickable, so overlapping cell rectangles can't
+   steal clicks from the tile behind them. Hit diamonds tile without overlap. */
+.tileset-cell-hit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 96px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  pointer-events: auto;
+  z-index: 4;
+}
+
+.tileset-placement-cell.is-empty::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 96px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(111, 210, 255, 0.06);
+  border: 1px solid rgba(111, 210, 255, 0.14);
+  pointer-events: none;
+}
+
+.tileset-placement-cell.is-empty:has(.tileset-cell-hit:hover)::before {
+  background: rgba(111, 210, 255, 0.16);
+  border-color: rgba(111, 210, 255, 0.4);
+}
+
+.tileset-placement-cell:not(.is-empty):has(.tileset-cell-hit:hover)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 96px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(111, 210, 255, 0.2);
+  pointer-events: none;
+}
+
+.tileset-brush-display {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: rgba(2, 8, 13, 0.4);
+  border: 1px solid rgba(67, 127, 179, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+  color: #c7d6e6;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.tileset-brush-display:hover {
+  border-color: rgba(111, 210, 255, 0.6);
+  background: rgba(111, 210, 255, 0.1);
+}
+
+.tileset-brush-display img {
+  width: 28px;
+  height: 40px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex: none;
+}
+
+.tileset-brush-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tileset-brush-change {
+  margin-left: auto;
+  flex: none;
+  color: #6fd2ff;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Cursor hints per tool (on the diamond hit overlay). */
+.tileset-placement-board.is-tool-brush .tileset-cell-hit {
+  cursor: crosshair;
+}
+.tileset-placement-board.is-tool-erase .tileset-cell-hit {
+  cursor: not-allowed;
+}
+.tileset-placement-board.is-tool-select .tileset-cell-hit {
+  cursor: pointer;
+}
+
+/* Selection highlight (a child element — pseudo-elements are used by footprint/empty). */
+.tileset-cell-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 96px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(255, 214, 102, 0.22);
+  box-shadow: inset 0 0 0 2px rgba(255, 214, 102, 0.9);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Catalog card actions (paint / open-as-board). The card body itself is no
+   longer a click target — only these buttons act. */
+.tileset-studio-card {
+  position: relative;
+  cursor: default;
+}
+
+.tileset-card-actions {
+  display: flex;
+  flex-direction: column;
+  align-self: center;
+  flex: none;
+  gap: 4px;
+}
+
+.tileset-card-action {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  background: #0e2536;
+  border: 1px solid rgba(111, 210, 255, 0.55);
+  border-radius: 5px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  line-height: 1;
+  color: #eaf4ff;
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+
+.tileset-card-action:hover,
+.tileset-card-action:focus-visible {
+  background: #1c5d7d;
+  border-color: rgba(111, 210, 255, 0.95);
+}
+
+.tileset-card-action svg {
+  display: block;
 }
 
 .tileset-studio-inspector {
