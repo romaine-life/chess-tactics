@@ -300,6 +300,12 @@ interface StudioAsset extends TileSocketAsset {
   id: string;
   label: string;
   src: string;
+  animation?: {
+    label: string;
+    frames: string[];
+    frameMs: number;
+    status: 'prototype' | 'raw candidate' | 'approved';
+  };
   role: string;
   kind: StudioAssetKind;
   source: string;
@@ -343,6 +349,34 @@ const studioDefaults: TilesetStudioRouteState = {
   boardSize: 'small',
   boardSeed: 4217,
 };
+
+const waterShimmerAFrames = Array.from(
+  { length: 8 },
+  (_, index) => `/assets/tiles/canonical-animated/water-shimmer-a/frame-${String(index).padStart(2, '0')}.png?v=3`,
+);
+
+const pixellabWaterCleanAFrames = Array.from(
+  { length: 9 },
+  (_, index) => `/assets/tiles/canonical-animated/pixellab-water-clean-a/frame-${String(index).padStart(2, '0')}.png?v=1`,
+);
+
+const aiWaterSheetAFrames = Array.from(
+  { length: 8 },
+  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a/frame-${String(index).padStart(2, '0')}.png?v=1`,
+);
+
+const aiWaterSheetALockedFrames = Array.from(
+  { length: 8 },
+  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a-locked/frame-${String(index).padStart(2, '0')}.png?v=1`,
+);
+
+const aiWaterSheetAUvLockedFrames = Array.from(
+  { length: 8 },
+  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a-uv-locked/frame-${String(index).padStart(2, '0')}.png?v=1`,
+);
+
+const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
+  asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
 
 const transitionFillMissingMasks: Record<TerrainPairId, number[]> = {
   'grass-stone': [2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
@@ -585,6 +619,12 @@ const studioFamilies: StudioFamily[] = [
         id: 'water-clean-a',
         label: 'Water A',
         src: '/assets/tiles/canonical-clean/water-clean-a.png',
+        animation: {
+          label: 'Water shimmer prototype',
+          frames: waterShimmerAFrames,
+          frameMs: 150,
+          status: 'prototype',
+        },
         role: 'base',
         kind: 'tile',
         source: 'canonical-clean',
@@ -600,6 +640,71 @@ const studioFamilies: StudioFamily[] = [
         source: 'canonical-clean',
         probability: 0.75,
         notes: 'Alternate water surface.',
+      },
+      {
+        id: 'water-ai-pixellab-clean-a',
+        label: 'Water AI A',
+        src: '/assets/tiles/canonical-animated/pixellab-water-clean-static.png',
+        animation: {
+          label: 'PixelLab water shimmer',
+          frames: pixellabWaterCleanAFrames,
+          frameMs: 150,
+          status: 'raw candidate',
+        },
+        role: 'variant',
+        kind: 'tile',
+        source: 'pixellab-ai-raw',
+        probability: 0,
+        notes: 'Raw PixelLab animated water candidate. Review animation quality only; geometry is not yet normalized to the accepted board footprint.',
+      },
+      {
+        id: 'water-ai-sheet-a',
+        label: 'Water AI B',
+        src: '/assets/tiles/canonical-animated/ai-water-sheet-a-static.png',
+        animation: {
+          label: 'Direct AI water sheet',
+          frames: aiWaterSheetAFrames,
+          frameMs: 150,
+          status: 'raw candidate',
+        },
+        role: 'variant',
+        kind: 'tile',
+        source: 'openai-image-raw',
+        probability: 0,
+        notes: 'Direct AI-generated sprite sheet candidate, sliced and normalized to 96x140. Review frame stability, edge cleanup, and style fit.',
+      },
+      {
+        id: 'water-ai-sheet-a-locked',
+        label: 'Water AI C',
+        src: '/assets/tiles/canonical-animated/ai-water-sheet-a-locked-static.png',
+        animation: {
+          label: 'Direct AI water sheet, geometry locked',
+          frames: aiWaterSheetALockedFrames,
+          frameMs: 150,
+          status: 'raw candidate',
+        },
+        role: 'variant',
+        kind: 'tile',
+        source: 'openai-image-locked',
+        probability: 0,
+        notes: 'Direct AI top-water animation composited onto the canonical water tile body. Side walls and silhouette are mathematically frozen; only the top diamond changes.',
+      },
+      {
+        id: 'water-ai-sheet-a-uv-locked',
+        label: 'Water AI D',
+        src: '/assets/tiles/canonical-animated/ai-water-sheet-a-uv-locked-static.png',
+        animation: {
+          label: 'Direct AI water sheet, UV locked',
+          frames: aiWaterSheetAUvLockedFrames,
+          frameMs: 150,
+          status: 'raw candidate',
+        },
+        role: 'variant',
+        kind: 'tile',
+        source: 'openai-image-uv-locked',
+        probability: 0,
+        notes:
+          'Direct AI top-water animation remapped from the source top diamond into the canonical top diamond. Side walls and silhouette are mathematically frozen.',
       },
       {
         id: 'water-refresh-a',
@@ -729,10 +834,11 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
 
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (window.location.pathname !== '/tileset-studio') return;
+  const routeTileFilter = route.studioMode === 'catalog' && route.tileFilter === 'board' ? studioDefaults.tileFilter : route.tileFilter;
   const params = new URLSearchParams();
   params.set('family', route.familyId);
   params.set('mode', route.studioMode);
-  params.set('collection', route.tileFilter);
+  params.set('collection', routeTileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
   if (route.selectedSlotMask) params.set('slot', String(route.selectedSlotMask));
   params.set('pair', route.selectedPairId);
@@ -979,6 +1085,22 @@ function useAnimationFrameIndex(): number {
   return animationFrame;
 }
 
+function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 150): number {
+  const [animationFrame, setAnimationFrame] = useState(0);
+
+  useEffect(() => {
+    if (!isPlaying || frameCount <= 1) return undefined;
+    const timer = window.setInterval(() => setAnimationFrame((frame) => (frame + 1) % frameCount), frameMs);
+    return () => window.clearInterval(timer);
+  }, [frameCount, frameMs, isPlaying]);
+
+  useEffect(() => {
+    if (frameCount > 0) setAnimationFrame((frame) => frame % frameCount);
+  }, [frameCount]);
+
+  return animationFrame;
+}
+
 function PreviewBoard({ className = '' }: { className?: string }): ReactElement {
   const ordered = board.slice().sort((a, b) => a.x + a.y - (b.x + b.y));
 
@@ -1024,6 +1146,7 @@ function StudioTileCard({
   selected,
   showFootprint,
   zoom,
+  animationFrame,
   onSelect,
   onInspect,
   onWheel,
@@ -1032,6 +1155,7 @@ function StudioTileCard({
   selected: boolean;
   showFootprint: boolean;
   zoom: number;
+  animationFrame: number;
   onSelect: () => void;
   onInspect: () => void;
   onWheel: (event: WheelEvent<HTMLButtonElement>) => void;
@@ -1045,7 +1169,7 @@ function StudioTileCard({
       aria-pressed={selected}
     >
       <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-        <img src={asset.src} alt="" draggable={false} loading="eager" decoding="sync" />
+        <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" />
       </span>
       <span
         className="tileset-studio-card-meta"
@@ -1069,6 +1193,7 @@ function TransitionRelationshipGrid({
   selectedAsset,
   selectedSlotMask,
   showFootprint,
+  animationFrame,
   onPairSelect,
   onAssetSelect,
   onSlotSelect,
@@ -1080,6 +1205,7 @@ function TransitionRelationshipGrid({
   selectedAsset: StudioAsset;
   selectedSlotMask?: number;
   showFootprint: boolean;
+  animationFrame: number;
   onPairSelect: (pairId: TerrainPairId) => void;
   onAssetSelect: (asset: StudioAsset) => void;
   onSlotSelect: (slot: TransitionSlot<StudioAsset>) => void;
@@ -1151,7 +1277,7 @@ function TransitionRelationshipGrid({
                       className={`tileset-relationship-cell is-${cell.edge} ${cell.asset ? '' : 'is-empty'}`}
                       style={{ left, top, zIndex: cell.x + cell.y }}
                     >
-                      {cell.asset ? <img src={cell.asset.src} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
+                      {cell.asset ? <img src={assetFrameSrc(cell.asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
                     </span>
                   );
                 })}
@@ -1200,10 +1326,12 @@ function TransitionSlotPreview({
   slot,
   asset,
   showFootprint,
+  animationFrame,
 }: {
   slot: TransitionSlot<StudioAsset>;
   asset?: StudioAsset;
   showFootprint: boolean;
+  animationFrame: number;
 }): ReactElement {
   const cells = [
     { edge: 'north' as EdgeName, x: 1, y: 0, asset: familyBaseAsset(slot.sockets.north) },
@@ -1231,7 +1359,7 @@ function TransitionSlotPreview({
               data-asset-id={cellAsset.id}
               aria-label={`Inspect ${cellAsset.label}`}
             >
-              <img src={cellAsset.src} alt="" draggable={false} loading="eager" decoding="sync" />
+              <img src={assetFrameSrc(cellAsset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" />
             </button>
           );
         }
@@ -1241,7 +1369,7 @@ function TransitionSlotPreview({
             className={cellClassName}
             style={cellStyle}
           >
-            {cell.asset ? <img src={cell.asset.src} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
+            {cell.asset ? <img src={assetFrameSrc(cell.asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
           </span>
         );
       })}
@@ -1346,11 +1474,13 @@ function StudioGeneratedBoard({
   showFootprint,
   boardZoom,
   boardPan,
+  animationFrame,
 }: {
   board: SocketBoardResult<StudioAsset>;
   showFootprint: boolean;
   boardZoom: number;
   boardPan: { x: number; y: number };
+  animationFrame: number;
 }): ReactElement {
   const cells = board.cells;
   const projectedPoints = cells.map((cell) => ({
@@ -1391,7 +1521,7 @@ function StudioGeneratedBoard({
             data-missing={cell.missing?.label}
             style={{ left, top, zIndex: cell.x + cell.y }}
           >
-            {cell.asset ? <img src={cell.asset.src} alt="" draggable={false} /> : <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>}
+            {cell.asset ? <img src={assetFrameSrc(cell.asset, animationFrame)} alt="" draggable={false} /> : <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>}
           </div>
         );
       })}
@@ -1424,11 +1554,9 @@ export function TilesetStudio(): ReactElement {
   const [boardScope, setBoardScope] = useState<'family' | 'mixed'>(initialRoute.boardScope);
   const [boardSize, setBoardSize] = useState<'small' | 'wide'>(initialRoute.boardSize);
   const [boardSeed, setBoardSeed] = useState(initialRoute.boardSeed);
-  const [boardZoom, setBoardZoom] = useState(0.85);
-  const [boardPan, setBoardPan] = useState({ x: 0, y: 0 });
+  const [animationPlaying, setAnimationPlaying] = useState(true);
+  const [manualAnimationFrame, setManualAnimationFrame] = useState(0);
   const filterDropdownRef = useRef<HTMLDivElement | null>(null);
-  const boardDragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; assetId?: string } | null>(null);
-  const boardDidDragRef = useRef(false);
 
   const family = studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
   const collectionFilters: Array<[CollectionFilter, string]> = [
@@ -1478,7 +1606,9 @@ export function TilesetStudio(): ReactElement {
     (selectedCollectionFilters.includes('references') ? visibleCatalogReferenceAssets.length : 0);
   const generatedAssets =
     boardScope === 'family'
-      ? activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile')).concat(transitionAssets.filter((asset) => asset.terrains?.some((terrain) => selectedFamilyIds.includes(terrain))))
+      ? activeFamilies
+          .flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile'))
+          .concat(transitionAssets.filter((asset) => asset.terrains?.every((terrain) => selectedFamilyIds.includes(terrain))))
       : studioFamilies
           .flatMap((item) => item.assets)
           .filter((asset) => asset.kind === 'tile')
@@ -1511,6 +1641,16 @@ export function TilesetStudio(): ReactElement {
   const viewTransitionAsset = selectedTransitionSlot ? selectedTransitionSlot.assets[0] : selectedAssetTransitionSlot ? selectedAsset : undefined;
   const viewKind = tileFilter === 'board' ? 'board' : viewTransitionSlot ? 'transition' : 'tile';
   const viewVisualKind = viewKind === 'transition' && transitionViewMode === 'tile' ? 'tile' : viewKind;
+  const inspectedAnimatedAsset =
+    viewKind === 'transition' && viewTransitionAsset?.animation
+      ? viewTransitionAsset
+      : viewKind === 'tile' && selectedAsset.animation
+        ? selectedAsset
+        : undefined;
+  const inspectedAnimation = inspectedAnimatedAsset?.animation;
+  const animationFrameCount = inspectedAnimation?.frames.length ?? 8;
+  const autoAnimationFrame = useAnimationClock(animationPlaying, animationFrameCount, inspectedAnimation?.frameMs ?? 150);
+  const animationFrame = inspectedAnimation ? (animationPlaying ? autoAnimationFrame : manualAnimationFrame) : autoAnimationFrame;
   const focusedTileBoard = useMemo(() => boardForAsset(selectedAsset), [selectedAsset]);
   const focusedTransitionBoard = useMemo(
     () =>
@@ -1549,7 +1689,8 @@ export function TilesetStudio(): ReactElement {
   }, []);
 
   useEffect(() => {
-    const preloadedImages = Array.from(new Set(allStudioAssets.map((asset) => asset.src))).map((src) => {
+    const assetSources = allStudioAssets.flatMap((asset) => [asset.src, ...(asset.animation?.frames ?? [])]);
+    const preloadedImages = Array.from(new Set(assetSources)).map((src) => {
       const image = new Image();
       image.decoding = 'sync';
       image.src = src;
@@ -1627,6 +1768,10 @@ export function TilesetStudio(): ReactElement {
   }, [boardMode, showBefore]);
 
   useEffect(() => {
+    setManualAnimationFrame((frame) => frame % animationFrameCount);
+  }, [animationFrameCount, inspectedAnimatedAsset?.id]);
+
+  useEffect(() => {
     if (!filterOpen) return;
 
     const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
@@ -1666,61 +1811,14 @@ export function TilesetStudio(): ReactElement {
     });
   }, [boardMode, boardScope, boardSeed, boardSize, familyId, selectedAsset.id, selectedPairId, selectedSlotMask, studioMode, tileFilter, viewHasTarget]);
 
-  const startBoardPan = (event: PointerEvent<HTMLDivElement>) => {
-    if (tileFilter !== 'board') return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const tileElement = (event.target as HTMLElement).closest<HTMLElement>('.tileset-generated-board-tile');
-    boardDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: boardPan.x,
-      originY: boardPan.y,
-      assetId: tileElement?.dataset.assetId,
-    };
-    boardDidDragRef.current = false;
-  };
-
-  const moveBoardPan = (event: PointerEvent<HTMLDivElement>) => {
-    const drag = boardDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
-      boardDidDragRef.current = true;
-    }
-    setBoardPan({
-      x: drag.originX + event.clientX - drag.startX,
-      y: drag.originY + event.clientY - drag.startY,
-    });
-  };
-
-  const endBoardPan = (event: PointerEvent<HTMLDivElement>) => {
-    const drag = boardDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    boardDragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    if (!boardDidDragRef.current && drag.assetId) {
-      const asset = allStudioAssets.find((item) => item.id === drag.assetId);
-      if (asset) {
-        inspectAsset(asset);
-      }
-    }
-  };
-
   const zoomTilesWithWheel = (event: WheelEvent<HTMLButtonElement>) => {
     event.preventDefault();
     const direction = event.deltaY < 0 ? 1 : -1;
-    setZoom((value) => clamp(Number((value + direction * 0.05).toFixed(2)), 0.75, 1.6));
+    setZoom((value) => clamp(Number((value + direction * 0.05).toFixed(2)), 0.75, 2));
   };
 
   const ignoreTileWheel = (event: WheelEvent<HTMLButtonElement>) => {
     event.preventDefault();
-  };
-
-  const zoomBoardWithWheel = (event: WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const direction = event.deltaY < 0 ? 1 : -1;
-    setBoardZoom((value) => clamp(Number((value + direction * 0.05).toFixed(2)), 0.55, 1.35));
   };
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
@@ -1750,6 +1848,7 @@ export function TilesetStudio(): ReactElement {
 
   const openBoardLab = () => {
     setTileFilter('board');
+    setSelectedSlotMask(undefined);
     setViewHasTarget(true);
     setStudioMode('view');
   };
@@ -1785,6 +1884,14 @@ export function TilesetStudio(): ReactElement {
 
   const selectOrInspectSlot = (pair: TransitionPair, slot: TransitionSlot<StudioAsset>) => {
     inspectSlot(pair, slot);
+  };
+
+  const viewCurrentSelection = () => {
+    if (selectedTransitionSlot) {
+      inspectSlot(selectedPair, selectedTransitionSlot);
+      return;
+    }
+    inspectAsset(selectedAsset);
   };
 
   const selectReviewItem = (item: ReviewItem) => {
@@ -1890,6 +1997,17 @@ export function TilesetStudio(): ReactElement {
                   placeholder="label, source, socket..."
                 />
               </label>
+              <label className="tileset-catalog-zoom">
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min="0.75"
+                  max="2"
+                  step="0.05"
+                  value={zoom}
+                  onChange={(event) => setZoom(Number(event.target.value))}
+                />
+              </label>
               <div className="tileset-active-filters" aria-label="Active filters">
                 {activeFamilies.map((item) => (
                   <button key={item.id} type="button" onClick={() => toggleFamilyFilter(item.id)} title={`Remove ${item.label} filter`}>
@@ -1982,10 +2100,7 @@ export function TilesetStudio(): ReactElement {
               <button
                 type="button"
                 className="tileset-view-action"
-                onClick={() => {
-                  setViewHasTarget(true);
-                  setStudioMode('view');
-                }}
+                onClick={viewCurrentSelection}
               >
                 View Selected
               </button>
@@ -2005,6 +2120,7 @@ export function TilesetStudio(): ReactElement {
                           selected={!selectedSlotMask && asset.id === selectedAsset.id}
                           showFootprint={showFootprint}
                           zoom={zoom}
+                          animationFrame={animationFrame}
                           onSelect={() => selectOrInspectAsset(asset)}
                           onInspect={() => inspectAsset(asset)}
                           onWheel={ignoreTileWheel}
@@ -2024,6 +2140,7 @@ export function TilesetStudio(): ReactElement {
                           selected={!selectedSlotMask && asset.id === selectedAsset.id}
                           showFootprint={showFootprint}
                           zoom={zoom}
+                          animationFrame={animationFrame}
                           onSelect={() => selectOrInspectAsset(asset)}
                           onInspect={() => inspectAsset(asset)}
                           onWheel={ignoreTileWheel}
@@ -2043,6 +2160,7 @@ export function TilesetStudio(): ReactElement {
                           selected={!selectedSlotMask && asset.id === selectedAsset.id}
                           showFootprint={showFootprint}
                           zoom={zoom}
+                          animationFrame={animationFrame}
                           onSelect={() => selectOrInspectAsset(asset)}
                           onInspect={() => inspectAsset(asset)}
                           onWheel={zoomTilesWithWheel}
@@ -2105,6 +2223,7 @@ export function TilesetStudio(): ReactElement {
                     showFootprint={showFootprint}
                     boardZoom={viewZoom}
                     boardPan={viewPan}
+                    animationFrame={animationFrame}
                   />
                 )}
               </div>
@@ -2152,6 +2271,54 @@ export function TilesetStudio(): ReactElement {
                     <button type="button" onClick={() => setViewPan({ x: 0, y: 0 })}>
                       Center View
                     </button>
+                    {inspectedAnimation ? (
+                      <div className="tileset-animation-controls" aria-label={`${inspectedAnimation.label} frame controls`}>
+                        <h3>Animation</h3>
+                        <div className="tileset-animation-control-row">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (animationPlaying) setManualAnimationFrame(animationFrame);
+                              setAnimationPlaying((value) => !value);
+                            }}
+                          >
+                            {animationPlaying ? 'Pause' : 'Play'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAnimationPlaying(false);
+                              setManualAnimationFrame((animationFrame - 1 + animationFrameCount) % animationFrameCount);
+                            }}
+                          >
+                            Prev
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAnimationPlaying(false);
+                              setManualAnimationFrame((animationFrame + 1) % animationFrameCount);
+                            }}
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <label>
+                          Frame {animationFrame + 1} / {animationFrameCount}
+                          <input
+                            type="range"
+                            min="0"
+                            max={animationFrameCount - 1}
+                            step="1"
+                            value={animationFrame}
+                            onChange={(event) => {
+                              setAnimationPlaying(false);
+                              setManualAnimationFrame(Number(event.target.value));
+                            }}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
                     <label>
                       View Zoom
                       <input
@@ -2197,6 +2364,54 @@ export function TilesetStudio(): ReactElement {
                     <button type="button" onClick={() => setViewPan({ x: 0, y: 0 })}>
                       Center View
                     </button>
+                    {inspectedAnimation ? (
+                      <div className="tileset-animation-controls" aria-label={`${inspectedAnimation.label} frame controls`}>
+                        <h3>Animation</h3>
+                        <div className="tileset-animation-control-row">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (animationPlaying) setManualAnimationFrame(animationFrame);
+                              setAnimationPlaying((value) => !value);
+                            }}
+                          >
+                            {animationPlaying ? 'Pause' : 'Play'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAnimationPlaying(false);
+                              setManualAnimationFrame((animationFrame - 1 + animationFrameCount) % animationFrameCount);
+                            }}
+                          >
+                            Prev
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAnimationPlaying(false);
+                              setManualAnimationFrame((animationFrame + 1) % animationFrameCount);
+                            }}
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <label>
+                          Frame {animationFrame + 1} / {animationFrameCount}
+                          <input
+                            type="range"
+                            min="0"
+                            max={animationFrameCount - 1}
+                            step="1"
+                            value={animationFrame}
+                            onChange={(event) => {
+                              setAnimationPlaying(false);
+                              setManualAnimationFrame(Number(event.target.value));
+                            }}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
                     <label>
                       View Zoom
                       <input
@@ -2217,6 +2432,9 @@ export function TilesetStudio(): ReactElement {
                 {viewTransitionSlot ? (
                   <dl>
                     <InspectorRow label="Tile Type">{viewTransitionAsset ? 'Transition tile' : 'Missing art'}</InspectorRow>
+                    {viewTransitionAsset?.animation ? (
+                      <InspectorRow label="Animation">{`${viewTransitionAsset.animation.label} · ${viewTransitionAsset.animation.status}`}</InspectorRow>
+                    ) : null}
                     <InspectorRow label="Pair">{viewTransitionPair?.label ?? 'Transition'}</InspectorRow>
                     <InspectorRow label="Mask">{viewTransitionSlot.code}</InspectorRow>
                     {socketEdges.map((edge) => (
@@ -2228,6 +2446,9 @@ export function TilesetStudio(): ReactElement {
                 ) : (
                   <dl>
                     <EdgeLedger asset={selectedAsset} />
+                    {selectedAsset.animation ? (
+                      <InspectorRow label="Animation">{`${selectedAsset.animation.label} · ${selectedAsset.animation.status}`}</InspectorRow>
+                    ) : null}
                     <InspectorRow label="Fill Weight">
                       {selectedAsset.probability === 0 ? 'not random-filled' : selectedAsset.probability.toFixed(2)}
                     </InspectorRow>
@@ -2246,6 +2467,7 @@ export function TilesetStudio(): ReactElement {
 }
 
 export function TilesetCandidateReview(): ReactElement {
+  const animationFrame = useAnimationFrameIndex();
   const queueItems = useMemo(
     (): ReviewQueueItem[] => {
       const candidateItems: ReviewQueueItem[] = candidateBatches.flatMap((batch) =>
@@ -2468,7 +2690,7 @@ export function TilesetCandidateReview(): ReactElement {
               data-review-decision={decision}
             >
               {item.type === 'candidate' ? (
-                <img src={item.asset.src} alt="" draggable={false} />
+                <img src={assetFrameSrc(item.asset, animationFrame)} alt="" draggable={false} />
               ) : (
                 <span className="tileset-queue-mask">{item.slot.code}</span>
               )}
@@ -2503,9 +2725,9 @@ export function TilesetCandidateReview(): ReactElement {
             <section className="tileset-review-focus" aria-label="Focused queue item">
               <div className="tileset-review-stage">
                 {selectedAsset ? (
-                  <img src={selectedAsset.src} alt="" draggable={false} loading="eager" decoding="sync" />
+                  <img src={assetFrameSrc(selectedAsset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" />
                 ) : selectedWorkSlot ? (
-                  <TransitionSlotPreview slot={selectedWorkSlot} showFootprint />
+                  <TransitionSlotPreview slot={selectedWorkSlot} showFootprint animationFrame={animationFrame} />
                 ) : null}
               </div>
               <div className="tileset-review-focus-copy">
@@ -2548,7 +2770,7 @@ export function TilesetCandidateReview(): ReactElement {
                 onPointerCancel={endReviewBoardPan}
                 onWheel={zoomReviewBoardWithWheel}
               >
-                <StudioGeneratedBoard board={candidateBoard} showFootprint boardZoom={reviewBoardZoom} boardPan={reviewBoardPan} />
+                <StudioGeneratedBoard board={candidateBoard} showFootprint boardZoom={reviewBoardZoom} boardPan={reviewBoardPan} animationFrame={animationFrame} />
               </div>
             </section>
           ) : null}
@@ -2567,6 +2789,7 @@ export function TilesetCandidateReview(): ReactElement {
                     selected={false}
                     showFootprint
                     zoom={1}
+                    animationFrame={animationFrame}
                     onSelect={() => undefined}
                     onInspect={() => undefined}
                     onWheel={(event) => event.preventDefault()}

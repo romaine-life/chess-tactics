@@ -1,0 +1,55 @@
+{
+  "sourceDir": "D:\\repos\\chess-tactics\\frontend\\public\\assets\\tiles\\canonical-animated\\ai-water-sheet-a",
+  "outDir": "D:\\repos\\chess-tactics\\frontend\\public\\assets\\tiles\\canonical-animated\\ai-water-sheet-a-locked",
+  "canonicalPath": "D:\\repos\\chess-tactics\\frontend\\public\\assets\\tiles\\canonical-clean\\water-clean-a.png",
+  "report": [
+    {
+      "frame": 0,
+      "topPixels": 2592,
+      "animatedPixels": 2533,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 1,
+      "topPixels": 2592,
+      "animatedPixels": 2310,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 2,
+      "topPixels": 2592,
+      "animatedPixels": 2539,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 3,
+      "topPixels": 2592,
+      "animatedPixels": 2534,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 4,
+      "topPixels": 2592,
+      "animatedPixels": 2536,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 5,
+      "topPixels": 2592,
+      "animatedPixels": 2536,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 6,
+      "topPixels": 2592,
+      "animatedPixels": 2543,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 7,
+      "topPixels": 2592,
+      "animatedPixels": 2538,
+      "changedOutsideTopFromCanonical": 0
+    }
+  ]
+}

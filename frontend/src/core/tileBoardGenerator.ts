@@ -125,25 +125,65 @@ function boundaryChoice(a: TileFamilyId, b: TileFamilyId, x: number, y: number, 
   return (n ^ (n >>> 13)) % 2 === 0 ? a : b;
 }
 
+function compatibleEdgeFamilies(
+  knownEdges: readonly TileFamilyId[],
+  preferredEdges: readonly TileFamilyId[],
+  center: TileFamilyId,
+  x: number,
+  y: number,
+  seed: number,
+): Set<TileFamilyId> {
+  const allowed = new Set(knownEdges);
+  if (allowed.size >= 2) return allowed;
+  if (allowed.size === 0) allowed.add(center);
+
+  const [only] = allowed;
+  const preferredBoundary = preferredEdges.find((family) => family !== only);
+  const alternate = preferredBoundary ?? (center !== only ? center : only);
+  if (alternate !== only) {
+    const chosenAlternate = preferredEdges.length > 1 && preferredEdges[0] !== preferredEdges[1]
+      ? boundaryChoice(preferredEdges[0], preferredEdges[1], x, y, seed)
+      : alternate;
+    allowed.add(chosenAlternate);
+  }
+  return allowed;
+}
+
+function compatibleEdgeValue(preferred: TileFamilyId, allowed: ReadonlySet<TileFamilyId>, x: number, y: number, seed: number): TileFamilyId {
+  if (allowed.has(preferred)) return preferred;
+  const families = [...allowed];
+  if (families.length <= 1) return families[0] ?? preferred;
+  return boundaryChoice(families[0], families[1], x, y, seed);
+}
+
 function buildSocketGrid(map: readonly TileFamilyId[], columns: number, rows: number, seed: number): EdgeSockets[] {
-  const horizontalEdges = Array.from({ length: rows + 1 }, (_, y) =>
-    Array.from({ length: columns }, (_, x) => {
-      const north = terrainAt(map, x, y - 1, columns, rows);
-      const south = terrainAt(map, x, y, columns, rows);
-      if (!north) return south ?? 'grass';
-      if (!south) return north;
-      return boundaryChoice(north, south, x, y, seed + 17);
-    }),
-  );
-  const verticalEdges = Array.from({ length: rows }, (_, y) =>
-    Array.from({ length: columns + 1 }, (_, x) => {
-      const west = terrainAt(map, x - 1, y, columns, rows);
-      const east = terrainAt(map, x, y, columns, rows);
-      if (!west) return east ?? 'grass';
-      if (!east) return west;
-      return boundaryChoice(west, east, x, y, seed + 43);
-    }),
-  );
+  const horizontalEdges: TileFamilyId[][] = Array.from({ length: rows + 1 }, () => Array<TileFamilyId>(columns));
+  const verticalEdges: TileFamilyId[][] = Array.from({ length: rows }, () => Array<TileFamilyId>(columns + 1));
+
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < columns; x += 1) {
+      const center = terrainAt(map, x, y, columns, rows) ?? 'grass';
+      if (y === 0) horizontalEdges[y][x] = center;
+      if (x === 0) verticalEdges[y][x] = center;
+
+      const eastTerrain = terrainAt(map, x + 1, y, columns, rows);
+      const southTerrain = terrainAt(map, x, y + 1, columns, rows);
+      const preferredEast = eastTerrain ? boundaryChoice(center, eastTerrain, x + 1, y, seed + 43) : center;
+      const preferredSouth = southTerrain ? boundaryChoice(center, southTerrain, x, y + 1, seed + 17) : center;
+      const allowed = compatibleEdgeFamilies(
+        [horizontalEdges[y][x], verticalEdges[y][x]],
+        [preferredEast, preferredSouth],
+        center,
+        x,
+        y,
+        seed + 71,
+      );
+
+      verticalEdges[y][x + 1] = compatibleEdgeValue(preferredEast, allowed, x + 1, y, seed + 89);
+      horizontalEdges[y + 1][x] = compatibleEdgeValue(preferredSouth, allowed, x, y + 1, seed + 107);
+    }
+  }
+
   return Array.from({ length: columns * rows }, (_, index) => {
     const y = Math.floor(index / columns);
     const x = index % columns;

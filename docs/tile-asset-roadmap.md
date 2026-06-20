@@ -2,6 +2,15 @@
 
 This document preserves the working plan for turning the skirmish concept art into production board and terrain assets.
 
+## Runtime Workflow Warning
+
+Use the right server for the job:
+
+- `http://localhost:5173/tileset-studio` is the Vite hot-reload workbench for tile UI, art review, and rapid iteration.
+- `http://localhost:3000/tileset-studio` is the backend/Express baked preview. It serves `frontend/dist`, so source edits only appear there after `npm run build` and a browser refresh.
+
+Do not debug live UI iteration on `3000` unless the goal is specifically to verify the baked build. A correct dev page contains `@vite/client` and `/src/main.tsx`; a baked preview contains `/assets/index-*.js`.
+
 ## Style Target
 
 Primary visual target:
@@ -21,11 +30,11 @@ Use this as the working checklist when resuming the tile-asset pipeline.
 - [x] Use one focused viewing pane model for board, tile, and transition inspection.
 - [x] Lock canonical tile geometry and edge-socket terminology.
 - [x] Generate boards using socket-aware rules instead of arbitrary mixed-family placement.
-- [ ] Finish small Tileset Studio UX cleanup: route state, filters, Board Lab, View Selected, and inspection controls should all feel predictable.
-- [ ] Document the durable tile ruleset in one place: family, base tile, transition tile, reference, edge socket, legal board generation, and missing art.
-- [ ] Fill missing transition art for Grass-Stone, Grass-Water, and Stone-Water socket masks.
-- [ ] Stress-test mixed board generation until missing tiles only mean missing art, not illegal placement.
-- [ ] Prototype animated tiles after static rules and transition coverage are stable, before final skirmish-board integration.
+- [x] Finish small Tileset Studio UX cleanup: route state, filters, Board Lab, View Selected, and inspection controls should all feel predictable.
+- [x] Document the durable tile ruleset in one place: family, base tile, transition tile, reference, edge socket, legal board generation, and missing art. See `docs/tile-ruleset.md`.
+- [x] Fill missing transition art for Grass-Stone, Grass-Water, and Stone-Water socket masks with first-pass structural tiles.
+- [x] Stress-test mixed board generation until missing tiles only mean missing art, not illegal placement.
+- [x] Prototype animated tiles after static rules and transition coverage are stable, before final skirmish-board integration.
 - [ ] Return to high-fidelity asset generation once the rules and review workflow are stable.
 - [ ] Integrate accepted tiles into the real skirmish board.
 
@@ -77,7 +86,7 @@ Pass criteria:
 - The board looks like a usable tactics surface, not a collage of generated samples.
 - The board can serve as the integration test for later tile families.
 
-Status: active.
+Status: first prototype active.
 
 Review surface:
 
@@ -143,7 +152,7 @@ Pass criteria:
 - Transitions do not make the board look like disconnected objects.
 - Tiled-style terrain rules can select valid neighbors without hand-placing every tile.
 
-Status: structural V1 in place; art coverage is incomplete.
+Status: structural V1 in place; first-pass transition coverage exists, but final art polish is not complete.
 
 Implementation notes:
 
@@ -164,7 +173,7 @@ Timing: start animation prototypes after the static tile rules, transition cover
 
 Likely animation targets:
 
-- Water shimmer or running water.
+- Water shimmer or running water. First prototype: `water-clean-a` uses local 8-frame shimmer frames from `frontend/public/assets/tiles/canonical-animated/water-shimmer-a/`.
 - Subtle grass movement if it does not distract from tactics readability.
 - Trees, shrubs, and props as separate animated objects or overlays.
 - Magical or tactical highlight tiles.
@@ -175,6 +184,14 @@ Pass criteria:
 - No frame changes the perceived camera angle.
 - Motion supports atmosphere without making the board hard to parse.
 - PixiJS handles playback and composition; asset generation provides consistent frames.
+
+Implementation notes:
+
+- Prototype generator: `frontend/scripts/generate-animated-tile-prototypes.mjs`
+- NPM command: `npm run tiles:animated`
+- Studio assets can declare optional animation metadata; renderers resolve the current frame without changing socket rules or geometry.
+- Tileset Studio view mode includes frame-by-frame controls for animated assets: play or pause, previous or next frame, and a scrubber.
+- Current prototype is deliberately subtle and should be judged in board context before expanding to more families.
 
 ## Tooling Notes
 
@@ -189,6 +206,7 @@ Current generated folders:
 - `frontend/public/assets/tiles/canonical-clean/`
 - `frontend/public/assets/tiles/canonical-accepted/`
 - `frontend/public/assets/tiles/canonical-template/`
+- `frontend/public/assets/tiles/canonical-transition-fill/`
 - `frontend/public/assets/tiles/concept-materials/`
 
 PixelLab can be useful for inspiration, raw candidates, and object/animation experiments. It should not be treated as the geometry authority. Generated assets must be normalized to the canonical board angle before being accepted.

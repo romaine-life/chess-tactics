@@ -1,0 +1,91 @@
+{
+  "canonicalPath": "D:\\repos\\chess-tactics\\frontend\\public\\assets\\tiles\\canonical-clean\\water-clean-a.png",
+  "sourceDir": "D:\\repos\\chess-tactics\\frontend\\public\\assets\\tiles\\canonical-animated\\ai-water-sheet-a",
+  "outDir": "D:\\repos\\chess-tactics\\frontend\\public\\assets\\tiles\\canonical-animated\\ai-water-sheet-a-uv-locked",
+  "canonicalTop": {
+    "top": [
+      48,
+      0
+    ],
+    "right": [
+      96,
+      27
+    ],
+    "bottom": [
+      48,
+      54
+    ],
+    "left": [
+      0,
+      27
+    ]
+  },
+  "sourceTop": {
+    "top": [
+      48,
+      1
+    ],
+    "right": [
+      94,
+      36
+    ],
+    "bottom": [
+      48,
+      70
+    ],
+    "left": [
+      2,
+      36
+    ]
+  },
+  "report": [
+    {
+      "frame": 0,
+      "mappedPixels": 2590,
+      "skippedPixels": 2,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 1,
+      "mappedPixels": 2533,
+      "skippedPixels": 59,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 2,
+      "mappedPixels": 2590,
+      "skippedPixels": 2,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 3,
+      "mappedPixels": 2590,
+      "skippedPixels": 2,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 4,
+      "mappedPixels": 2590,
+      "skippedPixels": 2,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 5,
+      "mappedPixels": 2590,
+      "skippedPixels": 2,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 6,
+      "mappedPixels": 2590,
+      "skippedPixels": 2,
+      "changedOutsideTopFromCanonical": 0
+    },
+    {
+      "frame": 7,
+      "mappedPixels": 2592,
+      "skippedPixels": 0,
+      "changedOutsideTopFromCanonical": 0
+    }
+  ]
+}

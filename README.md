@@ -7,6 +7,30 @@ hybrid chess units defend anchors against enemy telegraphs across six breaches.
 
 ## Local Dev
 
+Use two fixed local ports with fixed meanings:
+
+- `http://localhost:3000` is the backend/Express preview. It serves the baked
+  Vite build from `frontend/dist` and requires `npm run build` to reflect
+  frontend source changes.
+- `http://localhost:5173` is the Vite frontend dev server. Use it for UI,
+  Tileset Studio, and art-workbench iteration that needs hot reload.
+
+Do not try to make `3000` do both jobs during an agent session. If the page HTML
+contains `/assets/index-*.js`, it is the baked preview. If it contains
+`/@vite/client` and `/src/main.tsx`, it is the hot Vite dev server.
+
+For fast frontend iteration:
+
+```sh
+cd frontend
+npm install
+npm run dev -- --host localhost --port 5173 --strictPort
+```
+
+Open `http://localhost:5173`.
+
+For baked preview:
+
 ```sh
 cd frontend
 npm install
