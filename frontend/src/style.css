@@ -8725,6 +8725,15 @@ h1 {
   align-items: center;
 }
 
+/* Match the standalone Settings link's box height to the segmented tab groups
+   (which are taller because of their container padding), so the row aligns. */
+.tileset-studio-actions > a {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .tileset-studio-actions a,
 .tileset-mode-tabs button,
 .tileset-view-action,
@@ -10671,6 +10680,129 @@ button.tileset-relationship-cell {
 
 .tileset-card-action svg {
   display: block;
+}
+
+/* Units category (chess pieces folded into the studio catalog). */
+.unit-card-image {
+  min-height: 150px;
+}
+
+.unit-card-image img {
+  width: auto;
+  height: 132px;
+  max-width: 90%;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+.tileset-studio-card.is-coming {
+  opacity: 0.5;
+}
+
+.unit-card-image:empty {
+  display: grid;
+  place-items: center;
+}
+
+.unit-card-image:empty::after {
+  content: "Soon";
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5f748a;
+}
+
+.unit-facing-compass {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4px;
+  width: 138px;
+  aspect-ratio: 1;
+}
+
+.unit-facing-cell {
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.unit-facing-center {
+  display: grid;
+  place-items: center;
+}
+
+.unit-facing-cell.is-unavailable {
+  opacity: 0.5;
+}
+
+.unit-scene-empty {
+  width: 92px;
+  height: 104px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  text-align: center;
+  background: rgba(111, 210, 255, 0.06);
+  border: 1px dashed rgba(111, 210, 255, 0.4);
+  border-radius: 4px;
+  color: #9eb1c5;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.unit-scene-empty span:first-child {
+  color: #cfe3f6;
+  font-weight: 800;
+}
+
+.unit-scene-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.unit-scene {
+  position: relative;
+  width: 120px;
+  height: 260px;
+  transform-origin: center;
+}
+
+.unit-scene-ground {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 120px;
+  height: 175px;
+  image-rendering: pixelated;
+}
+
+.unit-scene-unit {
+  position: absolute;
+  left: 50%;
+  bottom: 128px;
+  transform: translateX(-50%);
+  height: 104px;
+  width: auto;
+  z-index: 1;
+  image-rendering: auto;
+}
+
+.unit-scene-unit.is-red {
+  filter: hue-rotate(150deg) saturate(1.15);
+}
+
+.unit-scene-unit.is-neutral {
+  filter: grayscale(0.85) brightness(1.05);
 }
 
 .tileset-studio-inspector {

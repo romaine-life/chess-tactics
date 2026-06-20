@@ -1686,11 +1686,255 @@ function StudioEditableBoard({
   );
 }
 
+type UnitFaction = 'blue' | 'red' | 'neutral';
+const unitFactionLabels: Record<UnitFaction, string> = { blue: 'Blue', red: 'Red', neutral: 'Neutral' };
+
+type UnitFacing = 'north' | 'north-east' | 'east' | 'south-east' | 'south' | 'south-west' | 'west' | 'north-west';
+const unitFacingLabels: Record<UnitFacing, string> = {
+  north: 'North',
+  'north-east': 'North-East',
+  east: 'East',
+  'south-east': 'South-East',
+  south: 'South',
+  'south-west': 'South-West',
+  west: 'West',
+  'north-west': 'North-West',
+};
+const unitFacingArrow: Record<UnitFacing, string> = {
+  north: '↑',
+  'north-east': '↗',
+  east: '→',
+  'south-east': '↘',
+  south: '↓',
+  'south-west': '↙',
+  west: '←',
+  'north-west': '↖',
+};
+// 3x3 compass layout (row-major); null is the centre cell.
+const unitCompassLayout: (UnitFacing | null)[] = [
+  'north-west', 'north', 'north-east',
+  'west', null, 'east',
+  'south-west', 'south', 'south-east',
+];
+
+interface StudioUnit {
+  id: string;
+  label: string;
+  concept: string;
+  cutout: string;
+  status: string;
+  notes: string;
+  availableFacings: UnitFacing[];
+}
+
+const studioUnits: StudioUnit[] = [
+  {
+    id: 'pawn-shield-south',
+    label: 'Pawn',
+    concept: '/assets/units/concepts/pawn-shield-south-concept.png',
+    cutout: '/assets/units/cutouts/pawn-shield-south.png',
+    status: 'Concept accepted',
+    notes:
+      'Shield-forward squad pawn — a classic pawn silhouette first, squad unit second. The forward shield locks the facing direction without adding a character body.',
+    availableFacings: ['south'],
+  },
+];
+const comingUnits = ['Rook', 'Knight', 'Bishop', 'Queen', 'King'];
+const unitProofTile = '/assets/tiles/canonical-clean/grass-clean-a.png';
+
+// Units browser, folded into the studio as a second asset category. Reuses the
+// catalog card grid and the studio view shell; pieces get a concept-art view
+// with faction tint and a board-scale proof using the transparent cutout.
+function UnitsStudio({ studioMode, onInspect, onBack }: { studioMode: StudioMode; onInspect: () => void; onBack: () => void }): ReactElement {
+  const [selectedId, setSelectedId] = useState(studioUnits[0].id);
+  const [faction, setFaction] = useState<UnitFaction>('blue');
+  const [facing, setFacing] = useState<UnitFacing>('south');
+  const [tileOn, setTileOn] = useState(true);
+  const [viewZoom, setViewZoom] = useState(2);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const unit = studioUnits.find((item) => item.id === selectedId) ?? studioUnits[0];
+
+  if (studioMode === 'catalog') {
+    return (
+      <section className="tileset-studio-main">
+        <div className="tileset-studio-toolbar">
+          <div className="tileset-studio-title-row">
+            <div className="tileset-catalog-heading">
+              <h2>Units</h2>
+              <p className="tileset-filter-summary">{studioUnits.length} concept · {comingUnits.length} planned</p>
+            </div>
+          </div>
+        </div>
+        <section className="tileset-studio-tab-panel">
+          <div className="tileset-asset-sections">
+          <section className="tileset-asset-section" aria-label="Unit concepts">
+            <h3>Concepts</h3>
+            <div className="tileset-studio-grid" aria-label="Unit assets">
+              {studioUnits.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`tileset-studio-card is-tile ${item.id === selectedId ? 'is-selected' : ''}`}
+                  onClick={() => { setSelectedId(item.id); onInspect(); }}
+                  title={`Inspect ${item.label}`}
+                >
+                  <span className="tileset-studio-card-image unit-card-image">
+                    <img src={item.cutout} alt="" draggable={false} loading="eager" decoding="sync" />
+                  </span>
+                  <span className="tileset-studio-card-meta">
+                    <span className="tileset-studio-card-text">
+                      <strong>{item.label}</strong>
+                      <em>concept</em>
+                    </span>
+                  </span>
+                </button>
+              ))}
+              {comingUnits.map((piece) => (
+                <button key={piece} type="button" className="tileset-studio-card is-coming" disabled title={`${piece} — not started yet`}>
+                  <span className="tileset-studio-card-image unit-card-image" />
+                  <span className="tileset-studio-card-meta">
+                    <span className="tileset-studio-card-text">
+                      <strong>{piece}</strong>
+                      <em>not started</em>
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+          </div>
+        </section>
+      </section>
+    );
+  }
+
+  return (
+    <section className="tileset-view-mode unit-view-mode" aria-label="Focused unit view">
+      <div className="tileset-view-header">
+        <button type="button" onClick={onBack}>
+          Back to Catalog
+        </button>
+        <div>
+          <p className="tileset-studio-kicker">Unit</p>
+          <h2>{unit.label}</h2>
+          <p>{unit.status}</p>
+        </div>
+      </div>
+      <ViewPane
+        kind="board"
+        ariaLabel="Unit viewer"
+        zoom={viewZoom}
+        pan={viewPan}
+        minZoom={0.5}
+        maxZoom={7}
+        onZoomChange={setViewZoom}
+        onPanChange={setViewPan}
+      >
+        <div className="unit-scene-wrap">
+          <div className="unit-scene" style={{ transform: `translate(${viewPan.x}px, ${viewPan.y}px) scale(${viewZoom})` }}>
+            {tileOn ? <img className="unit-scene-ground" src={unitProofTile} alt="" draggable={false} /> : null}
+            {unit.availableFacings.includes(facing) ? (
+              <img className={`unit-scene-unit is-${faction}`} src={unit.cutout} alt={`${unit.label}, facing ${unitFacingLabels[facing]}`} draggable={false} />
+            ) : (
+              <div className="unit-scene-unit unit-scene-empty" role="img" aria-label={`${unitFacingLabels[facing]} facing not yet made`}>
+                <span>{unitFacingLabels[facing]}</span>
+                <span>not yet made</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </ViewPane>
+      <aside className="tileset-view-controls" aria-label="Unit controls">
+        <section className="tileset-inspector-section">
+          <h2>Controls</h2>
+          <div className="tileset-control-stack">
+            <p className="tileset-group-label">Facing</p>
+            <div className="unit-facing-compass" role="group" aria-label="Unit facing">
+              {unitCompassLayout.map((dir) => {
+                if (dir === null) {
+                  return <span key="center" className="unit-facing-center" aria-hidden="true" />;
+                }
+                const available = unit.availableFacings.includes(dir);
+                return (
+                  <button
+                    key={dir}
+                    type="button"
+                    className={`unit-facing-cell ${facing === dir ? 'is-active' : ''} ${available ? '' : 'is-unavailable'}`}
+                    onClick={() => setFacing(dir)}
+                    aria-label={unitFacingLabels[dir]}
+                    title={available ? `Face ${unitFacingLabels[dir]}.` : `${unitFacingLabels[dir]} — not yet made`}
+                  >
+                    {unitFacingArrow[dir]}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="tileset-group-label">Faction</p>
+            <div className="tileset-segmented-control tileset-tools" aria-label="Faction tint">
+              {(Object.keys(unitFactionLabels) as UnitFaction[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={faction === item ? 'is-active' : ''}
+                  onClick={() => setFaction(item)}
+                  title={`Preview the ${unitFactionLabels[item]} faction tint.`}
+                >
+                  {unitFactionLabels[item]}
+                </button>
+              ))}
+            </div>
+
+            <p className="tileset-group-label">View</p>
+            <div className="tileset-button-row">
+              <button
+                type="button"
+                className={`tileset-toggle ${tileOn ? 'is-on' : ''}`}
+                aria-pressed={tileOn}
+                onClick={() => setTileOn((value) => !value)}
+                title="Show or hide the tile under the unit. Hide it and zoom in to inspect the artwork."
+              >
+                <span>Tile</span>
+                <span className="tileset-toggle-pill" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => { setViewPan({ x: 0, y: 0 }); setViewZoom(2); }} title="Recenter and reset the zoom.">
+                Reset
+              </button>
+            </div>
+            <label>
+              Zoom
+              <input
+                type="range"
+                min="0.5"
+                max="7"
+                step="0.1"
+                value={viewZoom}
+                onChange={(event) => setViewZoom(Number(event.target.value))}
+              />
+            </label>
+          </div>
+        </section>
+        <section className="tileset-inspector-section" aria-label="Unit details">
+          <h2>Details</h2>
+          <dl>
+            <InspectorRow label="Piece">{unit.label}</InspectorRow>
+            <InspectorRow label="Facing">{unitFacingLabels[facing]}</InspectorRow>
+            <InspectorRow label="Read">Chess piece first</InspectorRow>
+            <InspectorRow label="State">{unit.status}</InspectorRow>
+          </dl>
+          <p>{unit.notes}</p>
+        </section>
+      </aside>
+    </section>
+  );
+}
+
 export function TilesetStudio(): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
+  const [category, setCategory] = useState<'tiles' | 'units'>('tiles');
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>([initialRoute.familyId]);
@@ -2212,12 +2456,22 @@ export function TilesetStudio(): ReactElement {
             <span>Tactical chess, infinite possibilities.</span>
           </div>
           <div className="tileset-studio-titleblock">
-            <p className="tileset-studio-kicker">Tileset Studio</p>
-            <h1>{selectedFamilyLabel}</h1>
-            <p className="tileset-studio-subtitle">{activeFamilies.map((item) => item.purpose).join(' · ')}</p>
+            <p className="tileset-studio-kicker">{category === 'units' ? 'Unit Studio' : 'Tileset Studio'}</p>
+            <h1>{category === 'units' ? 'Units' : selectedFamilyLabel}</h1>
+            <p className="tileset-studio-subtitle">
+              {category === 'units' ? 'Chess pieces as squad units — concept review.' : activeFamilies.map((item) => item.purpose).join(' · ')}
+            </p>
           </div>
         </div>
         <nav className="tileset-studio-actions" aria-label="Tileset studio navigation">
+          <span className="tileset-mode-tabs" aria-label="Asset category">
+            <button type="button" className={category === 'tiles' ? 'is-active' : ''} onClick={() => setCategory('tiles')} title="Browse terrain tiles.">
+              Tiles
+            </button>
+            <button type="button" className={category === 'units' ? 'is-active' : ''} onClick={() => setCategory('units')} title="Browse chess-piece units.">
+              Units
+            </button>
+          </span>
           <span className="tileset-mode-tabs" aria-label="Tileset studio mode">
             {[
               ['catalog', 'Catalog'],
@@ -2237,8 +2491,10 @@ export function TilesetStudio(): ReactElement {
         </nav>
       </header>
 
-      <section className={`tileset-studio-shell is-${studioMode}`} aria-label="Tileset browser">
-        {studioMode === 'catalog' ? (
+      <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''}`} aria-label="Tileset browser">
+        {category === 'units' ? (
+          <UnitsStudio studioMode={studioMode} onInspect={() => setStudioMode('view')} onBack={() => setStudioMode('catalog')} />
+        ) : studioMode === 'catalog' ? (
         <section className="tileset-studio-main">
           <div className="tileset-studio-toolbar">
             <div className="tileset-studio-title-row">
