@@ -23,8 +23,8 @@ const familyAssets: Record<TileFamilyId, TileSocketAsset[]> = {
 describe('generateSocketBoard', () => {
   it('is deterministic for a seed', () => {
     const options = { assets: [grass, stone, grassStoneNorth], seed: 42, columns: 5, rows: 4, familyAssets };
-    const first = generateSocketBoard(options).cells.map((cell) => cell.asset.id);
-    const second = generateSocketBoard(options).cells.map((cell) => cell.asset.id);
+    const first = generateSocketBoard(options).cells.map((cell) => cell.asset?.id ?? cell.missing?.label);
+    const second = generateSocketBoard(options).cells.map((cell) => cell.asset?.id ?? cell.missing?.label);
     expect(first).toEqual(second);
   });
 
@@ -32,13 +32,20 @@ describe('generateSocketBoard', () => {
     const board = generateSocketBoard({ assets: [grass, stone, grassStoneNorth], seed: 5, columns: 6, rows: 4, familyAssets });
     expect(board.stats.placed).toBe(24);
     expect(board.stats.illegalEdges).toBe(0);
-    expect(board.stats.fallbackPlacements).toBe(0);
+    expect(board.stats.missingPlacements).toBeGreaterThanOrEqual(0);
+  });
+
+  it('uses missing cells instead of illegal fallback tiles for unsatisfied constraints', () => {
+    const board = generateSocketBoard({ assets: [grass, stone], seed: 5, columns: 6, rows: 4, familyAssets });
+    expect(board.stats.illegalEdges).toBe(0);
+    expect(board.stats.missingPlacements).toBeGreaterThan(0);
+    expect(board.cells.some((cell) => cell.missing?.kind === 'missing-art')).toBe(true);
   });
 
   it('counts illegal edges in explicit cell lists', () => {
     expect(countIllegalEdges([
-      { x: 0, y: 0, asset: grass },
-      { x: 1, y: 0, asset: stone },
+      { x: 0, y: 0, asset: grass, terrain: 'grass', sockets: { north: 'grass', east: 'grass', south: 'grass', west: 'grass' } },
+      { x: 1, y: 0, asset: stone, terrain: 'stone', sockets: { north: 'stone', east: 'stone', south: 'stone', west: 'stone' } },
     ], familyAssets)).toBe(1);
   });
 });

@@ -1,11 +1,20 @@
 import { createRng } from './rng';
-import type { EdgeName, TileFamilyId, TileSocketAsset } from './tileSockets';
-import { tileSocketsForAsset } from './tileSockets';
+import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
+import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
 
 export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsset> {
   x: number;
   y: number;
-  asset: TAsset;
+  asset?: TAsset;
+  sockets: EdgeSockets;
+  terrain: TileFamilyId;
+  missing?: {
+    kind: 'missing-art' | 'unsupported-junction';
+    label: string;
+    pairId?: TerrainPairId;
+    mask?: number;
+    families: TileFamilyId[];
+  };
 }
 
 export interface SocketBoardFallback {
@@ -18,7 +27,7 @@ export interface SocketBoardFallback {
 
 export interface SocketBoardStats {
   placed: number;
-  fallbackPlacements: number;
+  missingPlacements: number;
   illegalEdges: number;
   candidateAssets: number;
 }
@@ -58,13 +67,120 @@ export function countIllegalEdges<TAsset extends TileSocketAsset>(
 ): number {
   const cellAt = new Map(cells.map((cell) => [`${cell.x}-${cell.y}`, cell]));
   return cells.reduce((count, cell) => {
-    const sockets = tileSocketsForAsset(cell.asset, familyAssets);
     const east = cellAt.get(`${cell.x + 1}-${cell.y}`);
     const south = cellAt.get(`${cell.x}-${cell.y + 1}`);
-    const eastMismatch = east && sockets[oppositeEdges[0][0]] !== tileSocketsForAsset(east.asset, familyAssets)[oppositeEdges[0][1]] ? 1 : 0;
-    const southMismatch = south && sockets[oppositeEdges[1][0]] !== tileSocketsForAsset(south.asset, familyAssets)[oppositeEdges[1][1]] ? 1 : 0;
+    const eastMismatch = east && cell.sockets[oppositeEdges[0][0]] !== east.sockets[oppositeEdges[0][1]] ? 1 : 0;
+    const southMismatch = south && cell.sockets[oppositeEdges[1][0]] !== south.sockets[oppositeEdges[1][1]] ? 1 : 0;
     return count + eastMismatch + southMismatch;
   }, 0);
+}
+
+function assetFamily<TAsset extends TileSocketAsset>(asset: TAsset, familyAssets: Record<TileFamilyId, readonly TAsset[]>): TileFamilyId {
+  return familyIdForAsset(asset, familyAssets);
+}
+
+function terrainFamiliesForAssets<TAsset extends TileSocketAsset>(assets: readonly TAsset[], familyAssets: Record<TileFamilyId, readonly TAsset[]>): TileFamilyId[] {
+  const families = new Set<TileFamilyId>();
+  assets.forEach((asset) => {
+    if (asset.kind !== 'tile' || asset.probability <= 0) return;
+    if (asset.terrains) {
+      asset.terrains.forEach((terrain) => families.add(terrain));
+    } else {
+      families.add(assetFamily(asset, familyAssets));
+    }
+  });
+  return [...families];
+}
+
+function generateTerrainMap(families: readonly TileFamilyId[], seed: number, columns: number, rows: number): TileFamilyId[] {
+  if (families.length <= 1) return Array.from({ length: columns * rows }, () => families[0] ?? 'grass');
+  const rng = createRng(seed);
+  const anchors = families.flatMap((family) =>
+    Array.from({ length: 2 }, () => ({
+      family,
+      x: rng.int(columns),
+      y: rng.int(rows),
+      bias: rng.next() * 2.4,
+    })),
+  );
+  return Array.from({ length: columns * rows }, (_, index) => {
+    const y = Math.floor(index / columns);
+    const x = index % columns;
+    const best = anchors.reduce((winner, anchor) => {
+      const distance = Math.abs(anchor.x - x) + Math.abs(anchor.y - y) + anchor.bias;
+      return distance < winner.distance ? { family: anchor.family, distance } : winner;
+    }, { family: families[0], distance: Number.POSITIVE_INFINITY });
+    return best.family;
+  });
+}
+
+function terrainAt(map: readonly TileFamilyId[], x: number, y: number, columns: number, rows: number): TileFamilyId | undefined {
+  if (x < 0 || y < 0 || x >= columns || y >= rows) return undefined;
+  return map[y * columns + x];
+}
+
+function boundaryChoice(a: TileFamilyId, b: TileFamilyId, x: number, y: number, seed: number): TileFamilyId {
+  if (a === b) return a;
+  const n = (x * 374761393 + y * 668265263 + seed * 1442695041) >>> 0;
+  return (n ^ (n >>> 13)) % 2 === 0 ? a : b;
+}
+
+function buildSocketGrid(map: readonly TileFamilyId[], columns: number, rows: number, seed: number): EdgeSockets[] {
+  const horizontalEdges = Array.from({ length: rows + 1 }, (_, y) =>
+    Array.from({ length: columns }, (_, x) => {
+      const north = terrainAt(map, x, y - 1, columns, rows);
+      const south = terrainAt(map, x, y, columns, rows);
+      if (!north) return south ?? 'grass';
+      if (!south) return north;
+      return boundaryChoice(north, south, x, y, seed + 17);
+    }),
+  );
+  const verticalEdges = Array.from({ length: rows }, (_, y) =>
+    Array.from({ length: columns + 1 }, (_, x) => {
+      const west = terrainAt(map, x - 1, y, columns, rows);
+      const east = terrainAt(map, x, y, columns, rows);
+      if (!west) return east ?? 'grass';
+      if (!east) return west;
+      return boundaryChoice(west, east, x, y, seed + 43);
+    }),
+  );
+  return Array.from({ length: columns * rows }, (_, index) => {
+    const y = Math.floor(index / columns);
+    const x = index % columns;
+    return {
+      north: horizontalEdges[y][x],
+      east: verticalEdges[y][x + 1],
+      south: horizontalEdges[y + 1][x],
+      west: verticalEdges[y][x],
+    };
+  });
+}
+
+function pairForFamilies(families: readonly TileFamilyId[]) {
+  return transitionPairs.find((pair) => families.every((family) => pair.terrains.includes(family)));
+}
+
+function assetMatchesSockets<TAsset extends TileSocketAsset>(asset: TAsset, sockets: EdgeSockets, familyAssets: Record<TileFamilyId, readonly TAsset[]>): boolean {
+  const assetSockets = tileSocketsForAsset(asset, familyAssets);
+  return assetSockets.north === sockets.north && assetSockets.east === sockets.east && assetSockets.south === sockets.south && assetSockets.west === sockets.west;
+}
+
+function missingForSockets(sockets: EdgeSockets): SocketBoardCell['missing'] {
+  const families = [...new Set(Object.values(sockets))];
+  if (families.length <= 1) {
+    return { kind: 'missing-art', label: `${families[0]} base`, families };
+  }
+  const pair = pairForFamilies(families);
+  if (!pair) {
+    return { kind: 'unsupported-junction', label: `${families.join('-')} junction`, families };
+  }
+  const mask = pair.terrains.reduce((bits, family, pairIndex) => {
+    if (pairIndex !== 0) return bits;
+    return (Object.entries(sockets) as Array<[EdgeName, TileFamilyId]>).reduce((edgeBits, [edge, socketFamily], edgeIndex) => {
+      return socketFamily === family ? edgeBits | (1 << edgeIndex) : edgeBits;
+    }, bits);
+  }, 0);
+  return { kind: 'missing-art', label: `${pair.label} ${mask.toString(2).padStart(4, '0')}`, pairId: pair.id, mask, families };
 }
 
 export function generateSocketBoard<TAsset extends TileSocketAsset>({
@@ -76,27 +192,26 @@ export function generateSocketBoard<TAsset extends TileSocketAsset>({
 }: SocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
   const boardAssets = usableAssets.length > 0 ? usableAssets : assets.filter((asset) => asset.kind === 'tile');
-  const rng = createRng(seed);
+  const rng = createRng(seed + 99);
+  const terrainFamilies = terrainFamiliesForAssets(boardAssets, familyAssets);
+  const terrainMap = generateTerrainMap(terrainFamilies, seed, columns, rows);
+  const socketGrid = buildSocketGrid(terrainMap, columns, rows, seed);
   const cells: SocketBoardCell<TAsset>[] = [];
   const fallbacks: SocketBoardFallback[] = [];
 
   for (let index = 0; index < columns * rows; index += 1) {
     const y = Math.floor(index / columns);
     const x = index % columns;
-    const north = cells.find((cell) => cell.x === x && cell.y === y - 1);
-    const west = cells.find((cell) => cell.x === x - 1 && cell.y === y);
-    const requiredNorth = north ? tileSocketsForAsset(north.asset, familyAssets).south : undefined;
-    const requiredWest = west ? tileSocketsForAsset(west.asset, familyAssets).east : undefined;
-    const candidates = boardAssets.filter((asset) => {
-      const sockets = tileSocketsForAsset(asset, familyAssets);
-      return (!requiredNorth || sockets.north === requiredNorth) && (!requiredWest || sockets.west === requiredWest);
-    });
-    const finalCandidates = candidates.length > 0 ? candidates : boardAssets;
-    const asset = pickWeightedAsset(finalCandidates, rng.next);
+    const terrain = terrainAt(terrainMap, x, y, columns, rows) ?? terrainFamilies[0] ?? 'grass';
+    const sockets = socketGrid[index];
+    const candidates = boardAssets.filter((asset) => assetMatchesSockets(asset, sockets, familyAssets));
     if (candidates.length === 0) {
-      fallbacks.push({ x, y, requiredNorth, requiredWest, candidateCount: candidates.length });
+      const missing = missingForSockets(sockets);
+      fallbacks.push({ x, y, requiredNorth: sockets.north, requiredWest: sockets.west, candidateCount: candidates.length });
+      cells.push({ x, y, sockets, terrain, missing });
+    } else {
+      cells.push({ x, y, sockets, terrain, asset: pickWeightedAsset(candidates, rng.next) });
     }
-    cells.push({ x, y, asset });
   }
 
   return {
@@ -104,7 +219,7 @@ export function generateSocketBoard<TAsset extends TileSocketAsset>({
     fallbacks,
     stats: {
       placed: cells.length,
-      fallbackPlacements: fallbacks.length,
+      missingPlacements: fallbacks.length,
       illegalEdges: countIllegalEdges(cells, familyAssets),
       candidateAssets: boardAssets.length,
     },

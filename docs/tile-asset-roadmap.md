@@ -11,6 +11,26 @@ Primary visual target:
 
 The goal is not generic pixel-art terrain. The goal is to capture the board feel, camera angle, material language, and readable tactics-game presentation from the generated skirmish concept.
 
+## Current Checkpoint
+
+Use this as the working checklist when resuming the tile-asset pipeline.
+
+- [x] Separate Tileset Studio modes: Catalog is for browsing assets; View is for inspecting one selected tile, transition, or board.
+- [x] Prevent board content from appearing inside Catalog mode.
+- [x] Keep Catalog filters compact, dismissible, and non-permanent.
+- [x] Use one focused viewing pane model for board, tile, and transition inspection.
+- [x] Lock canonical tile geometry and edge-socket terminology.
+- [x] Generate boards using socket-aware rules instead of arbitrary mixed-family placement.
+- [ ] Finish small Tileset Studio UX cleanup: route state, filters, Board Lab, View Selected, and inspection controls should all feel predictable.
+- [ ] Document the durable tile ruleset in one place: family, base tile, transition tile, reference, edge socket, legal board generation, and missing art.
+- [ ] Fill missing transition art for Grass-Stone, Grass-Water, and Stone-Water socket masks.
+- [ ] Stress-test mixed board generation until missing tiles only mean missing art, not illegal placement.
+- [ ] Prototype animated tiles after static rules and transition coverage are stable, before final skirmish-board integration.
+- [ ] Return to high-fidelity asset generation once the rules and review workflow are stable.
+- [ ] Integrate accepted tiles into the real skirmish board.
+
+Current phase: asset-pipeline stabilization. The goal is to get out of UI/process churn and back to production tiles as soon as the checklist above is stable enough to trust.
+
 ## Current Geometry Contract
 
 The canonical board tile geometry is locked unless a deliberate art-direction decision changes it.
@@ -139,6 +159,8 @@ Reference principle:
 ### 5. Animated Tiles
 
 Purpose: animate stable tile families, not raw first-pass generations.
+
+Timing: start animation prototypes after the static tile rules, transition coverage, and mixed-board generation are stable enough to trust. Do not wait until the final game integration, because animation may affect asset records, rendering, and review tools.
 
 Likely animation targets:
 

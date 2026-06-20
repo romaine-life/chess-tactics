@@ -9,6 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "optimize:assets": "node scripts/optimize-main-menu-assets.mjs",
     "tiles:extract-concept": "node scripts/extract-concept-materials.mjs",
+    "tiles:base-refresh": "node scripts/generate-base-refresh-tiles.mjs",
+    "tiles:transition-fill": "node scripts/generate-transition-fill-tiles.mjs",
     "tiles:clean": "node scripts/generate-clean-canonical-tiles.mjs",
     "tiles:template": "node scripts/generate-tile-template.mjs",
     "pixellab:download": "node scripts/download-pixellab-tiles.mjs",

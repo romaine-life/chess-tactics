@@ -60,6 +60,14 @@ export function Settings() {
           </div>
           <a href="/tileset-studio" className="utility-button utility-button-neutral">Open</a>
         </div>
+        <div className="utility-setting-row utility-tool-row">
+          <span className="utility-row-icon icon-gear" aria-hidden="true" />
+          <div className="utility-setting-copy">
+            <strong>Tileset Review</strong>
+            <span>Judge generated candidates before promoting them into the catalog.</span>
+          </div>
+          <a href="/tileset-review" className="utility-button utility-button-neutral">Open</a>
+        </div>
       </section>
     </div>
   );
