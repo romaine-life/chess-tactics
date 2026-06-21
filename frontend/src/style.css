@@ -4523,7 +4523,7 @@ h1 {
   text-transform: uppercase;
 }
 
-.le-brand img {
+.le-brand-crest {
   height: 50px;
   image-rendering: pixelated;
   width: 50px;
@@ -4542,22 +4542,35 @@ h1 {
 .le-field span,
 .le-check {
   color: #ffc95f;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .48rem;
-  letter-spacing: 0;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 15px;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
 .le-brand strong {
   color: #fff;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.82rem, 1.45vw, 1.1rem);
-  letter-spacing: 0;
-  line-height: 1.15;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: clamp(23px, 2.3vw, 32px);
+  letter-spacing: 0.01em;
+  line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   text-shadow: 0 2px 0 #02070a, 0 0 14px rgba(37, 215, 255, .34);
   white-space: nowrap;
+}
+
+/* The "Chess Tactics" wordmark is the shared bitmap (not type), small as a kicker
+   above the "Level Editor" line — the 03 corner lockup. */
+.le-brand-title {
+  display: block;
+  line-height: 0;
+}
+
+.le-brand-title img {
+  display: block;
+  height: 22px;
+  width: auto;
 }
 
 .le-tool-tabs {
@@ -4603,10 +4616,10 @@ h1 {
 .le-palette-grid button span,
 .le-unit-side,
 .le-tray-assets button span {
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .48rem;
-  letter-spacing: 0;
-  line-height: 1.2;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
   text-transform: uppercase;
 }
 
@@ -4721,7 +4734,7 @@ h1 {
   background: rgba(2, 10, 15, .78);
   border: 1px solid rgba(101, 184, 255, .34);
   color: var(--le-ink);
-  font: 1rem "VT323", ui-monospace, monospace;
+  font: 16px/1 "Jersey 10", "VT323", ui-monospace, monospace;
   min-height: 32px;
   padding: 4px 8px;
   width: 100%;
@@ -4892,7 +4905,7 @@ h1 {
 
 .le-unit-side button {
   color: var(--le-ink);
-  font: 1.15rem "Press Start 2P", "VT323", monospace;
+  font: 20px/1 "Jersey 10", "VT323", ui-monospace, monospace;
   min-height: 38px;
   padding: 4px;
 }

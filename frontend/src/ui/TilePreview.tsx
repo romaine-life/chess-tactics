@@ -2258,9 +2258,13 @@ export function LevelEditorPage(): ReactElement {
     <div className="level-editor-shell" data-testid="level-editor">
       <header className="le-topbar" aria-label="Level editor toolbar">
         <a className="le-brand" href="/">
-          <img src="/assets/ui/main-menu/icon-scroll.png" alt="" aria-hidden="true" />
+          <img className="le-brand-crest" src="/assets/ui/main-menu/icon-scroll.png" alt="" aria-hidden="true" />
           <span>
-            <small>Chess Tactics</small>
+            <picture className="le-brand-title">
+              <source srcSet="/assets/ui/main-menu-brand-title-only-v1.avif" type="image/avif" />
+              <source srcSet="/assets/ui/main-menu-brand-title-only-v1.webp" type="image/webp" />
+              <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="Chess Tactics" />
+            </picture>
             <strong>Level Editor</strong>
           </span>
         </a>
