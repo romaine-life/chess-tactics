@@ -20,7 +20,7 @@ HEAD_GLB = HERE / "knight-head.glb"
 TARGET_H = 2.0          # total piece height
 HEAD_FRAC = 0.64        # head share of height; rest is the turned base
 ORIENT = (-130, 0, 0)   # raised-head chess-knight pose (rx, ry, rz) degrees
-OVERLAP = 0.05          # how far the neck stump plugs into the base collar
+OVERLAP = 0.22          # bury the neck stump deep in the base so the cut is hidden
 
 
 def bbox(o):
@@ -76,11 +76,12 @@ def import_head(rx, ry, rz, material):
 
 
 def build_base(material, base_top):
-    # broad fluted foot rising to a collar, capped flat on top (no open cup)
+    # broad fluted foot rising into a collar that hugs the neck, capped on top
     profile = [
         (0.00, 0.00), (0.54, 0.00), (0.54, 0.06), (0.45, 0.09), (0.47, 0.13),
-        (0.37, 0.20), (0.39, 0.24), (0.31, 0.31), (0.285, 0.46),
-        (0.31, 0.55), (0.345, 0.61), (0.32, base_top - 0.02), (0.0, base_top),
+        (0.37, 0.20), (0.39, 0.24), (0.32, 0.31), (0.30, 0.42),
+        (0.32, 0.50), (0.345, 0.58), (0.35, 0.64), (0.33, 0.69),
+        (0.30, base_top), (0.0, base_top + 0.005),
     ]
     return P.lathe("knight_base", profile, material, smooth=2)
 
@@ -92,10 +93,18 @@ def assemble(rx, ry, rz):
     m = P.stone()
     head, base_top = import_head(rx, ry, rz, m)
     base = build_base(m, base_top)
+    # fuse head + base into ONE carved form so there's no two-part seam
+    P.boolean(head, base, "UNION")
+    bev = head.modifiers.new("seam_bevel", "BEVEL")
+    bev.width = 0.012
+    bev.segments = 2
+    bev.use_clamp_overlap = True
+    head.modifiers.new("seam_wn", "WEIGHTED_NORMAL")
+    for poly in head.data.polygons:
+        poly.use_smooth = True
     pivot = bpy.data.objects.new("knight_pivot", None)
     bpy.context.collection.objects.link(pivot)
-    for o in (head, base):
-        o.parent = pivot
+    head.parent = pivot
     return pivot
 
 
