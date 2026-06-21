@@ -11277,6 +11277,19 @@ button.tileset-relationship-cell {
   width: 268px;
   padding: 12px;
   border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
+}
+
+.unit-studio-product:hover,
+.unit-studio-product:focus-visible {
+  border-color: rgba(111, 210, 255, 0.78);
+  background: rgba(8, 27, 41, 0.96);
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(111, 210, 255, 0.28),
+    0 0 18px rgba(42, 166, 255, 0.18);
 }
 
 .unit-studio-product strong,

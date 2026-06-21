@@ -293,10 +293,10 @@ export function UnitStudio() {
     <main className="unit-studio-page">
       <header className="unit-studio-header">
         <div className="unit-studio-brand">
-          <div className="unit-studio-product">
+          <a className="unit-studio-product" href="/" aria-label="Back to main menu">
             <strong>Chess Tactics</strong>
             <span>Tactical chess, infinite possibilities.</span>
-          </div>
+          </a>
           <div className="unit-studio-title">
             <p>Unit Studio</p>
             <h1>{familyLabels[selectedUnit.family]}</h1>
