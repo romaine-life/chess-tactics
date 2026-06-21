@@ -23,6 +23,7 @@ import {
 } from '../core/tileSockets';
 import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
+import { navigateApp } from './navigation';
 
 type TileRun = 'grass' | 'stone' | 'water' | 'transition';
 
@@ -2990,7 +2991,7 @@ export function TilesetStudio(): ReactElement {
             <button type="button" className={category === 'tiles' ? 'is-active' : ''} onClick={() => setCategory('tiles')} title="Browse terrain tiles.">
               Tiles
             </button>
-            <button type="button" className={category === 'units' ? 'is-active' : ''} onClick={() => setCategory('units')} title="Browse chess-piece units.">
+            <button type="button" onClick={() => navigateApp('/unit-studio?piece=rook')} title="Browse chess-piece units.">
               Units
             </button>
           </span>

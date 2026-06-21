@@ -1,0 +1,36 @@
+{
+  "inputRoot": "frontend/public/assets/units/normalized-concepts",
+  "outputRoot": "docs/art/unit-concepts/review",
+  "pieces": [
+    "pawn",
+    "rook",
+    "knight",
+    "bishop",
+    "queen",
+    "king"
+  ],
+  "directions": [
+    "north",
+    "north-east",
+    "east",
+    "south-east",
+    "south",
+    "south-west",
+    "west",
+    "north-west"
+  ],
+  "generated": {
+    "contactSheet": "docs/art/unit-concepts/review/unit-direction-contact-sheet.png",
+    "rows": [
+      "docs/art/unit-concepts/review/rows/pawn-direction-row.png",
+      "docs/art/unit-concepts/review/rows/rook-direction-row.png",
+      "docs/art/unit-concepts/review/rows/knight-direction-row.png",
+      "docs/art/unit-concepts/review/rows/bishop-direction-row.png",
+      "docs/art/unit-concepts/review/rows/queen-direction-row.png",
+      "docs/art/unit-concepts/review/rows/king-direction-row.png"
+    ]
+  },
+  "found": 48,
+  "expected": 48,
+  "missing": []
+}

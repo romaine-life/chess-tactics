@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Application, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js';
+import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import { useSkirmish } from '../game/store';
 import { enemyThreats, pieceHp, pieceMaxHp } from '../core/rules';
 import type { TerrainCell, TerrainType } from '../core/types';
@@ -20,6 +20,31 @@ const TERRAIN_COLOR: Record<TerrainType, number> = {
 // Cliff-face shades for the island skirt (left face darker than right).
 const SKIRT_RIGHT = 0x2a3b34;
 const SKIRT_LEFT = 0x1d2a25;
+
+const UNIT_SPRITE_TYPES = ['pawn', 'knight', 'bishop', 'rook', 'queen'] as const;
+type UnitSpriteType = typeof UNIT_SPRITE_TYPES[number];
+type UnitSpriteSet = Record<string, Texture>;
+
+async function loadUnitSpriteSet(): Promise<UnitSpriteSet> {
+  const entries: Array<[string, Texture]> = [];
+  try {
+    await Promise.all(UNIT_SPRITE_TYPES.flatMap((type) => [
+      Assets.load(`/assets/units/${type}/blue/south.png`).then((texture) => {
+        const tex = texture as Texture;
+        tex.source.scaleMode = 'nearest';
+        entries.push([`player.${type}`, tex]);
+      }),
+      Assets.load(`/assets/units/${type}/red/south.png`).then((texture) => {
+        const tex = texture as Texture;
+        tex.source.scaleMode = 'nearest';
+        entries.push([`enemy.${type}`, tex]);
+      }),
+    ]));
+  } catch {
+    return Object.fromEntries(entries);
+  }
+  return Object.fromEntries(entries);
+}
 
 function grassGrid(cols: number, rows: number): TerrainCell[] {
   const cells: TerrainCell[] = [];
@@ -48,6 +73,7 @@ export function SkirmishBoard() {
     let cancelled = false;
     let unsub = () => {};
     let atlas: SpriteAtlas | null = null;
+    let unitSprites: UnitSpriteSet = {};
 
     const diamond = (g: Graphics, cx: number, cy: number) =>
       g.poly([cx, cy - hh, cx + hw, cy, cx, cy + hh, cx - hw, cy]);
@@ -121,10 +147,16 @@ export function SkirmishBoard() {
           diamond(sel, 0, 0).stroke({ color: 0xffffff, width: 2 });
           c.addChild(sel);
         }
-        const tex = atlas?.piece(p.side, p.type) ?? null;
+        const unitTex = unitSprites[`${p.side}.${p.type}`] ?? null;
+        const tex = unitTex ?? atlas?.piece(p.side, p.type) ?? null;
         if (tex) {
           const spr = new Sprite(tex);
-          spr.anchor.set(atlas!.pieceAnchor.x, atlas!.pieceAnchor.y);
+          if (unitTex) {
+            spr.anchor.set(0.5, 0.9);
+            spr.scale.set(0.42);
+          } else {
+            spr.anchor.set(atlas!.pieceAnchor.x, atlas!.pieceAnchor.y);
+          }
           c.addChild(spr);
         } else {
           const base = new Graphics();
@@ -160,7 +192,10 @@ export function SkirmishBoard() {
       await app.init({ width, height, background: '#0d1720', antialias: false });
       if (cancelled) { app.destroy(true); return; }
       host.appendChild(app.canvas);
-      atlas = await loadSpriteAtlas(); // null on failure -> Graphics fallback
+      [atlas, unitSprites] = await Promise.all([
+        loadSpriteAtlas(), // null on failure -> Graphics fallback
+        loadUnitSpriteSet(),
+      ]);
       if (cancelled) { app.destroy(true); return; }
       app.stage.eventMode = 'static';
       app.stage.hitArea = new Rectangle(0, 0, width, height);
