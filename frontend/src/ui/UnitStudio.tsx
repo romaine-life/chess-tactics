@@ -101,6 +101,7 @@ const pieceCandidates: Array<{ piece: PieceId; name: string; read: string }> = [
   { piece: 'queen', name: 'Queen', read: 'Turned body with carved coronet of points' },
   { piece: 'bishop', name: 'Bishop', read: 'Turned body with diagonal mitre slit' },
   { piece: 'pawn', name: 'Pawn', read: 'Great-helm shell with cross visor' },
+  { piece: 'knight', name: 'Knight', read: 'Armored warhorse head — chamfron + crinet — on a turned base (CC-BY source)' },
 ];
 const pieceCandidateAssets: UnitAsset[] = pieceCandidates.map((candidate) => ({
   id: `${candidate.piece}-candidate-claude`,

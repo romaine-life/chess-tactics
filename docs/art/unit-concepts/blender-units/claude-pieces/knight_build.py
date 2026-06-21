@@ -1,0 +1,137 @@
+"""Build the knight from the cached armored horse head.
+
+Reuses pieces_claude for stone material / lighting / board camera. Run:
+    blender --background --python knight_build.py -- orient   # render rotation candidates
+    blender --background --python knight_build.py             # full 8-dir into catalog
+"""
+
+import math
+import sys
+from pathlib import Path
+
+import bpy
+from mathutils import Euler, Matrix, Vector
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import pieces_claude as P  # noqa: E402
+
+HEAD_GLB = HERE / "knight-head.glb"
+TARGET_H = 2.0          # total piece height
+HEAD_FRAC = 0.76        # head share of height; rest is the turned base
+ORIENT = (-90, 0, 0)    # chosen rotation (rx, ry, rz) degrees -- tune via 'orient'
+
+
+def bbox(o):
+    mn = Vector((1e18,) * 3)
+    mx = Vector((-1e18,) * 3)
+    for c in o.bound_box:
+        w = o.matrix_world @ Vector(c)
+        mn = Vector((min(mn.x, w.x), min(mn.y, w.y), min(mn.z, w.z)))
+        mx = Vector((max(mx.x, w.x), max(mx.y, w.y), max(mx.z, w.z)))
+    return mn, mx
+
+
+def data_bounds(mesh):
+    vs = mesh.vertices
+    xs = [v.co.x for v in vs]
+    ys = [v.co.y for v in vs]
+    zs = [v.co.z for v in vs]
+    return Vector((min(xs), min(ys), min(zs))), Vector((max(xs), max(ys), max(zs)))
+
+
+def import_head(rx, ry, rz, material):
+    before = set(bpy.context.scene.objects)
+    bpy.ops.import_scene.gltf(filepath=str(HEAD_GLB))
+    imported = [o for o in bpy.context.scene.objects if o not in before]
+    meshes = [o for o in imported if o.type == "MESH"]
+    # bake each object's world transform into its mesh data, then zero the object
+    for o in meshes:
+        mw = o.matrix_world.copy()
+        o.parent = None
+        o.matrix_basis = Matrix.Identity(4)
+        o.data.transform(mw)
+        o.data.update()
+    for o in imported:
+        if o.type != "MESH":
+            bpy.data.objects.remove(o, do_unlink=True)
+    head = meshes[0]
+    md = head.data
+    # everything below transforms the MESH DATA directly (reliable in --background)
+    R = Euler((math.radians(rx), math.radians(ry), math.radians(rz)), "XYZ").to_matrix().to_4x4()
+    md.transform(R)
+    mn, mx = data_bounds(md)
+    s = (TARGET_H * HEAD_FRAC) / (mx.z - mn.z)
+    md.transform(Matrix.Scale(s, 4))
+    mn, mx = data_bounds(md)
+    base_top = TARGET_H * (1 - HEAD_FRAC)
+    md.transform(Matrix.Translation(Vector((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, base_top - mn.z))))
+    md.update()
+    md.materials.clear()
+    md.materials.append(material)
+    for p in md.polygons:
+        p.use_smooth = True
+    return head, base_top
+
+
+def build_base(material, base_top):
+    profile = [
+        (0.00, 0.00), (0.46, 0.00), (0.46, 0.05), (0.40, 0.075), (0.42, 0.10),
+        (0.33, 0.15), (0.35, 0.175), (0.28, 0.23), (0.255, base_top),
+    ]
+    return P.lathe("knight_base", profile, material, smooth=2)
+
+
+def assemble(rx, ry, rz):
+    P.clear_scene()
+    P.setup_world()
+    P.setup_lighting()
+    m = P.stone()
+    head, base_top = import_head(rx, ry, rz, m)
+    base = build_base(m, base_top)
+    pivot = bpy.data.objects.new("knight_pivot", None)
+    bpy.context.collection.objects.link(pivot)
+    for o in (head, base):
+        o.parent = pivot
+    return pivot
+
+
+def render_orient_candidates():
+    for tag, (rx, ry, rz) in {
+        "rx0": (0, 0, 0),
+        "rxneg90": (-90, 0, 0),
+        "rxpos90": (90, 0, 0),
+        "rx180": (180, 0, 0),
+        "rxneg90_rz180": (-90, 0, 180),
+    }.items():
+        assemble(rx, ry, rz)
+        P.setup_board_camera(TARGET_H * 0.5, TARGET_H * 1.4)
+        P.setup_render()
+        bpy.context.scene.render.filepath = str(HERE / f"knight-rot-{tag}.png")
+        bpy.ops.render.render(write_still=True)
+        print(f"ORIENT_DONE {tag} ({rx},{ry},{rz})")
+
+
+def render_catalog():
+    pivot = assemble(*ORIENT)
+    P.setup_board_camera(TARGET_H * 0.5, TARGET_H * 1.6)
+    P.setup_render()
+    out = P.FRONTEND_UNITS / "knight" / "candidate-claude"
+    out.mkdir(parents=True, exist_ok=True)
+    for direction, angle in P.DIRECTIONS.items():
+        pivot.rotation_euler[2] = math.radians(angle)
+        bpy.context.scene.render.filepath = str(out / f"{direction}.png")
+        bpy.ops.render.render(write_still=True)
+    pivot.rotation_euler[2] = 0
+    bpy.context.scene.render.filepath = str(HERE / "knight-south.png")
+    bpy.ops.render.render(write_still=True)
+    print(f"KNIGHT_DONE -> {out}")
+
+
+if __name__ == "__main__":
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    if "orient" in argv:
+        render_orient_candidates()
+    else:
+        render_catalog()
+    print("KNIGHT_BUILD_DONE")
