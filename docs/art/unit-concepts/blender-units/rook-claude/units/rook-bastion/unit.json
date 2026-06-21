@@ -1,0 +1,12 @@
+{
+  "id": "rook-bastion",
+  "name": "Bastion",
+  "basePiece": "rook",
+  "tentative": true,
+  "sourceRender": "v3-overhang-top",
+  "description": "Cantilevered battlement box overhanging the shaft; four closed walls.",
+  "sprite": "south.png",
+  "model": "model.blend",
+  "isolated": "Standalone candidate. Not wired into the app; does not affect the production rook unit at frontend/public/assets/units/rook.",
+  "attribution": null
+}
