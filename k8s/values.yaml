@@ -21,6 +21,56 @@ renderMode: normal
 testEnv:
   slotName: ""
 
+# Live-preview lane (glimmung docs/live-preview-plan.md). OFF by default: a
+# normal (prod / ArgoCD) or validation (warm/hot test-slot) install renders no
+# edge, so the chart renders byte-identical to today and changes nothing until
+# Glimmung sets livePreview.enabled=true on a PREVIEW lease. This is a SEPARATE
+# lane from validation — the faithful image-deploy lane is untouched.
+#
+# When enabled, Glimmung vendors its `live-preview-edge` library partial into
+# this chart's charts/live-preview-edge/ at provision time (published as an
+# in-cluster ConfigMap — this chart declares NO Helm dependency and commits NO
+# copy of the partial; ACR Basic SKU rules out an oci:// dependency). The partial
+# then runs the generic edge in front of chess-tactics' backend: the edge becomes
+# the served port, the app backend listens internally on :3000 (loopback
+# upstream), and the edge serves the dev's pushed frontend override-first /
+# fresh-passthrough. Glimmung --sets image/upstream/authorizedSubject/
+# backendPrefixes/enabled per preview lease. The single-serving-pod invariant
+# (replicas=1) is enforced by the live-preview-edge.replicas helper.
+#
+# AUTH: the edge validates pushes against auth.romaine.life's public JWKS
+# (RS256 over HTTPS); the slot pod needs only outbound HTTPS reachability, which
+# it already has. NO projected auth.romaine.life token is added to the pod.
+livePreview:
+  enabled: false
+  image:
+    repository: romainecr.azurecr.io/glimmung-live-preview-edge
+    # Empty by default — there is NO floating ":edge" default. chess-tactics does
+    # not own the edge-image lockstep (Glimmung does); the preview provision
+    # --sets the fingerprint tag from the control plane's Settings. An empty tag
+    # with enabled=true is a hard render error (the partial `required`s it), so a
+    # missing edge image surfaces loudly, never as a silent ImagePull.
+    tag: ""
+    pullPolicy: IfNotPresent
+  port: 8080
+  servedPortName: http
+  upstream:
+    # chess-tactics' backend listens internally on :3000 (== live_preview
+    # backend_port); the edge fronts it over loopback.
+    url: "http://127.0.0.1:3000"
+  # Request path prefixes always reverse-proxied to the backend (the stable API
+  # + health stay reachable through the edge regardless of override state).
+  # chess-tactics' backend serves /api/* and /health; everything else is
+  # frontend served override-first / fresh-passthrough.
+  backendPrefixes:
+    - /api
+    - /health
+  authorizedSubject: ""
+  override:
+    volumeName: live-preview-override
+    mountPath: /var/run/glimmung-live-preview
+  resources: {}
+
 # Service account used by the app pod. In prod it carries an
 # azure.workload.identity/client-id annotation (serviceAccountClientId below) so
 # the backend can authenticate to Azure Database for PostgreSQL passwordless via
