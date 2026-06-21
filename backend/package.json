@@ -11,6 +11,6 @@
   "dependencies": {
     "@azure/identity": "^4.13.1",
     "express": "^5.2.1",
-    "pg": "^8.21.0"
+    "pg": "^8.22.0"
   }
 }
