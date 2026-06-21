@@ -1065,7 +1065,7 @@ h1 {
   min-height: 0;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
-  transition: transform .12s ease, filter .12s ease;
+  transition: filter .08s ease;
 }
 
 /* Frame + icon layers crop their catalog sheet via the --asset-* custom
@@ -1084,36 +1084,36 @@ h1 {
 .mode-button-art,
 .mode-button-9slice {
   inset: 0;
+  z-index: 0;
 }
 
 .mode-button-art {
-  transition: opacity .08s linear;
+  transition: none;
 }
 
 .mode-button-art-pressed {
+  display: none;
   opacity: 0;
 }
 
 .mode-button.uses-row-art:hover .mode-button-art-normal,
 .mode-button.uses-row-art:focus-visible .mode-button-art-normal,
-.mode-button.uses-row-art:active .mode-button-art-normal,
 .mode-button.uses-row-art.is-active .mode-button-art-normal {
-  opacity: 0;
+  filter: brightness(1.14) saturate(1.08);
 }
 
-.mode-button.uses-row-art:hover .mode-button-art-pressed,
-.mode-button.uses-row-art:focus-visible .mode-button-art-pressed,
-.mode-button.uses-row-art:active .mode-button-art-pressed,
-.mode-button.uses-row-art.is-active .mode-button-art-pressed {
-  opacity: 1;
+.mode-button.uses-row-art:active .mode-button-art-normal {
+  filter: brightness(.96) saturate(1.08);
 }
 
 /* .mode-button-icon is positioned by inline left/top/width/height (icon slot). */
+.mode-button-icon {
+  z-index: 1;
+}
 
 .mode-button:hover,
 .mode-button:focus-visible {
-  transform: translateX(0.6%);
-  filter: brightness(1.08);
+  filter: none;
 }
 
 .mode-button:focus-visible {
@@ -1138,6 +1138,7 @@ h1 {
   white-space: nowrap;
   overflow: hidden;
   pointer-events: none;
+  z-index: 2;
 }
 
 .mode-button.uses-row-art .mode-button-label {
