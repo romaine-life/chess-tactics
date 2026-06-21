@@ -5,12 +5,14 @@ type Faction = 'blue' | 'red' | 'neutral';
 type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
 type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 type TileContextId = 'grass' | 'stone' | 'water';
+type FootprintShape = 'square' | 'circle';
 type UnitPlacementStyle = CSSProperties & {
   '--tile-anchor-x': string;
   '--tile-anchor-y': string;
   '--unit-anchor-x': string;
   '--unit-anchor-y': string;
   '--unit-size': string;
+  '--unit-footprint-size': string;
 };
 
 type UnitAsset = {
@@ -162,6 +164,7 @@ const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
 const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'rook' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
 const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
 const isDirection = (value: string | null): value is Direction => rookDirections.some((direction) => direction === value);
+const isFootprintShape = (value: string | null): value is FootprintShape => value === 'square' || value === 'circle';
 const unitFromLegacyQuery = () => {
   const params = new URLSearchParams(window.location.search);
   const queryUnit = params.get('unit');
@@ -177,7 +180,8 @@ const unitFromLegacyQuery = () => {
 
   return unitAssets[0].id;
 };
-const clampUnitSize = (value: number) => Math.min(132, Math.max(48, value));
+const clampUnitSize = (value: number) => Math.min(1200, Math.max(24, value));
+const clampFootprintSize = (value: number) => Math.min(320, Math.max(24, value));
 
 export function UnitStudio() {
   const [unitId, setUnitId] = useState(unitFromLegacyQuery);
@@ -187,6 +191,15 @@ export function UnitStudio() {
   const [unitSize, setUnitSize] = useState(() => {
     const querySize = Number(new URLSearchParams(window.location.search).get('unitSize'));
     return Number.isFinite(querySize) ? clampUnitSize(querySize) : 84;
+  });
+  const [footprintVisible, setFootprintVisible] = useState(() => new URLSearchParams(window.location.search).get('footprint') !== 'off');
+  const [footprintShape, setFootprintShape] = useState<FootprintShape>(() => {
+    const queryShape = new URLSearchParams(window.location.search).get('footprintShape');
+    return isFootprintShape(queryShape) ? queryShape : 'square';
+  });
+  const [footprintSize, setFootprintSize] = useState(() => {
+    const querySize = Number(new URLSearchParams(window.location.search).get('footprintSize'));
+    return Number.isFinite(querySize) ? clampFootprintSize(querySize) : 96;
   });
   const [unitVisible, setUnitVisible] = useState(true);
   const [tileContext, setTileContext] = useState<TileContextId>('grass');
@@ -205,6 +218,7 @@ export function UnitStudio() {
     '--unit-anchor-x': selectedUnit.unitAnchorX ?? '50%',
     '--unit-anchor-y': selectedUnit.unitAnchorY ?? '92%',
     '--unit-size': `${unitSize}px`,
+    '--unit-footprint-size': `${footprintSize}px`,
   };
 
   useEffect(() => {
@@ -248,6 +262,31 @@ export function UnitStudio() {
     const params = new URLSearchParams(window.location.search);
     params.set('unitSize', String(clampedSize));
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
+  const selectFootprintSize = (nextSize: number) => {
+    const clampedSize = clampFootprintSize(nextSize);
+    setFootprintSize(clampedSize);
+    const params = new URLSearchParams(window.location.search);
+    params.set('footprintSize', String(clampedSize));
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
+  const selectFootprintShape = (nextShape: FootprintShape) => {
+    setFootprintShape(nextShape);
+    const params = new URLSearchParams(window.location.search);
+    params.set('footprintShape', nextShape);
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
+  const toggleFootprint = () => {
+    setFootprintVisible((current) => {
+      const nextValue = !current;
+      const params = new URLSearchParams(window.location.search);
+      params.set('footprint', nextValue ? 'on' : 'off');
+      window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+      return nextValue;
+    });
   };
 
   return (
@@ -313,6 +352,9 @@ export function UnitStudio() {
                 <div className="unit-studio-view-content">
                   <div className="unit-studio-tile-stack" style={unitPlacementStyle}>
                     <img className="unit-studio-context-tile" src={selectedTile.src} alt={`${selectedTile.label} tile`} draggable={false} />
+                    {footprintVisible ? (
+                      <span className={`unit-studio-footprint is-${footprintShape}`} aria-hidden="true" />
+                    ) : null}
                     {unitVisible ? (
                       <img
                         className={`unit-studio-unit-preview is-${selectedUnit.family}`}
@@ -352,13 +394,53 @@ export function UnitStudio() {
                 <input
                   type="range"
                   min="48"
-                  max="132"
-                  step="2"
+                  max="360"
+                  step="4"
                   value={unitSize}
                   onChange={(event) => selectUnitSize(Number(event.target.value))}
                 />
+                <input
+                  type="number"
+                  min="24"
+                  step="4"
+                  value={unitSize}
+                  onChange={(event) => selectUnitSize(Number(event.target.value))}
+                  aria-label="Unit size in pixels"
+                />
                 <em>{unitSize}px</em>
               </label>
+              <div className="unit-studio-control-group" aria-label="Expected footprint">
+                <strong>Footprint</strong>
+                <button type="button" className={footprintVisible ? 'is-active' : ''} onClick={toggleFootprint}>
+                  {footprintVisible ? 'Footprint On' : 'Footprint Off'}
+                </button>
+                <div className="unit-studio-factions">
+                  {(['square', 'circle'] as FootprintShape[]).map((shape) => (
+                    <button
+                      type="button"
+                      key={shape}
+                      className={footprintShape === shape ? 'is-active' : ''}
+                      disabled={!footprintVisible}
+                      onClick={() => selectFootprintShape(shape)}
+                    >
+                      {shape === 'square' ? 'Square' : 'Circle'}
+                    </button>
+                  ))}
+                </div>
+                <label className="unit-studio-zoom">
+                  <span>Expected Size</span>
+                  <input
+                    type="range"
+                    min="40"
+                    max="220"
+                    step="4"
+                    value={footprintSize}
+                    disabled={!footprintVisible}
+                    onChange={(event) => selectFootprintSize(Number(event.target.value))}
+                  />
+                  <em>{footprintSize}px</em>
+                </label>
+              </div>
               <div className="unit-studio-control-group" aria-label="Tile context">
                 <strong>Tile</strong>
                 {tileContexts.map((item) => (
@@ -423,6 +505,7 @@ export function UnitStudio() {
                 <div><dt>Unit</dt><dd>{selectedUnit.label}</dd></div>
                 <div><dt>Family</dt><dd>{familyLabels[selectedUnit.family]}</dd></div>
                 <div><dt>Size</dt><dd>{unitSize}px</dd></div>
+                <div><dt>Footprint</dt><dd>{footprintVisible ? `${footprintShape} · ${footprintSize}px` : 'Hidden'}</dd></div>
                 <div><dt>Facing</dt><dd>{hasEightDirections ? rookDirectionLabel[selectedDirection] : 'South'}</dd></div>
                 <div><dt>Status</dt><dd>{selectedUnit.status}</dd></div>
                 <div><dt>Read</dt><dd>{selectedUnit.read}</dd></div>
