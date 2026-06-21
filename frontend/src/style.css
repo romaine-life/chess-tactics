@@ -816,15 +816,27 @@ h1 {
 .main-menu-brand-live {
   align-items: center;
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 86px minmax(0, 1fr);
   gap: 18px;
   text-decoration: none;
 }
 
 .main-menu-brand-type {
   display: grid;
-  gap: 8px;
   min-width: 0;
+}
+
+.main-menu-brand-live::after {
+  content: none;
+}
+
+.main-menu-brand-mark {
+  display: block;
+  width: 86px;
+  height: 116px;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
 }
 
 .main-menu-eyebrow {

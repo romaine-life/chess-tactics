@@ -121,11 +121,9 @@ export function MainMenu(): ReactElement {
       <section className="main-menu-screen main-menu-skeleton-screen" aria-label="Chess Tactics main menu">
         <div className="main-menu-left">
           <a className="main-menu-brand main-menu-brand-live" href="/" aria-label="Chess Tactics">
-            <span className="main-menu-crest" aria-hidden="true">♜</span>
+            <img className="main-menu-brand-mark" src="/assets/ui/main-menu-brand-rook-mark-v1.png" alt="" />
             <span className="main-menu-brand-type">
-              <span className="main-menu-eyebrow">Tactical Breach Console</span>
               <strong>Chess Tactics</strong>
-              <span>Tactical chess, infinite possibilities.</span>
             </span>
           </a>
           <nav className="main-menu-actions main-menu-actions-assets" aria-label="Game modes">
