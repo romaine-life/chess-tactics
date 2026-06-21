@@ -4767,9 +4767,13 @@ h1 {
 }
 
 .le-board-stage {
+  /* The painted night scene from the main menu sits behind the board, dimmed by a
+     dark overlay so painted tiles stay readable — the 03 concept backdrop. */
   background:
-    radial-gradient(720px 430px at 48% 22%, rgba(19, 67, 98, .58), transparent 70%),
-    linear-gradient(180deg, rgba(7, 22, 33, .98), rgba(2, 8, 13, .98));
+    radial-gradient(760px 460px at 50% 16%, rgba(19, 67, 98, .32), transparent 72%),
+    linear-gradient(180deg, rgba(4, 12, 20, .52), rgba(2, 8, 13, .8)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center top / cover no-repeat,
+    #02080d;
   border: 1px solid rgba(101, 184, 255, .26);
   box-shadow: inset 0 0 0 1px rgba(212, 170, 79, .14);
   display: grid;
@@ -9478,34 +9482,16 @@ h1 {
   font: 900 13px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
-/* Level editor (catalog design language): the board fills the view-mode stage
-   cell, with undo/redo/test actions in the view header. */
-.level-stage {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
+/* The socket board lives inside the asset-backed le- chrome: let it fill the
+   board frame (which otherwise centres a fixed canvas). */
+.le-board-frame.le-board-live {
+  place-items: stretch;
+  overflow: hidden;
 }
 
-.tileset-view-header-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.tileset-view-headline {
-  min-width: 0;
-}
-
-.tileset-view-header-actions button.is-primary {
-  color: #06121d;
-  background: #6fd2ff;
-  border-color: #6fd2ff;
-  font-weight: 800;
-}
-
-.tileset-view-header-actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.le-board-live .tileset-view-stage {
+  width: 100%;
+  height: 100%;
 }
 
 .le-legality-readout {
