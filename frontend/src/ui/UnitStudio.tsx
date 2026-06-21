@@ -1,4 +1,5 @@
 import { type CSSProperties, useEffect, useState } from 'react';
+import { ViewPane } from './shared/ViewPane';
 
 type Faction = 'blue' | 'red' | 'neutral';
 type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
@@ -48,6 +49,17 @@ const rookDirectionLabel: Record<Direction, string> = {
   west: 'W',
   'south-west': 'SW',
 };
+const directionCompassCells: Array<Direction | 'center'> = [
+  'north-west',
+  'north',
+  'north-east',
+  'west',
+  'center',
+  'east',
+  'south-west',
+  'south',
+  'south-east',
+];
 
 const spriteFor = (piece: PieceId, faction: Faction) => `/assets/units/${piece}/${faction}/south.png`;
 const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
@@ -171,6 +183,7 @@ export function UnitStudio() {
   const [unitId, setUnitId] = useState(unitFromLegacyQuery);
   const [faction, setFaction] = useState<Faction>('blue');
   const [zoom, setZoom] = useState(1.15);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [unitSize, setUnitSize] = useState(() => {
     const querySize = Number(new URLSearchParams(window.location.search).get('unitSize'));
     return Number.isFinite(querySize) ? clampUnitSize(querySize) : 84;
@@ -187,7 +200,6 @@ export function UnitStudio() {
   const selectedTile = tileContexts.find((item) => item.id === tileContext) ?? tileContexts[0];
   const hasEightDirections = Boolean(selectedUnit.directions?.length);
   const unitPlacementStyle: UnitPlacementStyle = {
-    transform: `scale(${zoom})`,
     '--tile-anchor-x': '50%',
     '--tile-anchor-y': '54px',
     '--unit-anchor-x': selectedUnit.unitAnchorX ?? '50%',
@@ -221,6 +233,13 @@ export function UnitStudio() {
     const params = new URLSearchParams(window.location.search);
     params.set('direction', nextDirection);
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
+  const rotateDirection = () => {
+    if (!hasEightDirections) return;
+    const directionIndex = rookDirections.indexOf(selectedDirection);
+    const nextDirection = rookDirections[(directionIndex + 1) % rookDirections.length];
+    selectDirection(nextDirection);
   };
 
   const selectUnitSize = (nextSize: number) => {
@@ -281,17 +300,30 @@ export function UnitStudio() {
 
           <div className="unit-studio-workbench">
             <section className="unit-studio-art-frame" aria-label={`${selectedUnit.label} on ${selectedTile.label} tile`}>
-              <div className="unit-studio-tile-stack" style={unitPlacementStyle}>
-                <img className="unit-studio-context-tile" src={selectedTile.src} alt={`${selectedTile.label} tile`} draggable={false} />
-                {unitVisible ? (
-                  <img
-                    className={`unit-studio-unit-preview is-${selectedUnit.family}`}
-                    src={selectedSprite}
-                    alt={`${factionLabels[faction]} ${selectedUnit.label.toLowerCase()} on ${selectedTile.label.toLowerCase()} tile`}
-                    draggable={false}
-                  />
-                ) : null}
-              </div>
+              <ViewPane
+                kind="unit"
+                ariaLabel={`${selectedUnit.label} on ${selectedTile.label} tile viewport`}
+                zoom={zoom}
+                pan={pan}
+                minZoom={0.75}
+                maxZoom={1.85}
+                onZoomChange={setZoom}
+                onPanChange={setPan}
+              >
+                <div className="unit-studio-view-content">
+                  <div className="unit-studio-tile-stack" style={unitPlacementStyle}>
+                    <img className="unit-studio-context-tile" src={selectedTile.src} alt={`${selectedTile.label} tile`} draggable={false} />
+                    {unitVisible ? (
+                      <img
+                        className={`unit-studio-unit-preview is-${selectedUnit.family}`}
+                        src={selectedSprite}
+                        alt={`${factionLabels[faction]} ${selectedUnit.label.toLowerCase()} on ${selectedTile.label.toLowerCase()} tile`}
+                        draggable={false}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              </ViewPane>
             </section>
 
             <aside className="unit-studio-detail" aria-label="Unit view controls">
@@ -299,6 +331,9 @@ export function UnitStudio() {
               <div className="unit-studio-control-group" aria-label="Unit visibility">
                 <button type="button" className={unitVisible ? 'is-active' : ''} onClick={() => setUnitVisible((value) => !value)}>
                   {unitVisible ? 'Unit On' : 'Unit Off'}
+                </button>
+                <button type="button" onClick={() => setPan({ x: 0, y: 0 })}>
+                  Center View
                 </button>
               </div>
               <label className="unit-studio-zoom">
@@ -339,16 +374,31 @@ export function UnitStudio() {
               </div>
               <div className="unit-studio-control-group" aria-label="Facing direction">
                 <strong>Facing</strong>
-                <div className="unit-studio-direction-buttons">
-                  {rookDirections.map((item) => (
+                <div className="unit-studio-compass" role="radiogroup" aria-label="Facing direction">
+                  {directionCompassCells.map((item) => item === 'center' ? (
+                    <button
+                      type="button"
+                      className="unit-studio-compass-center"
+                      key="center"
+                      disabled={!hasEightDirections}
+                      onClick={rotateDirection}
+                    >
+                      <span>Facing</span>
+                      <strong>{hasEightDirections ? rookDirectionLabel[selectedDirection] : 'S'}</strong>
+                      <em>Rotate</em>
+                    </button>
+                  ) : (
                     <button
                       type="button"
                       key={item}
+                      role="radio"
+                      aria-checked={selectedDirection === item}
                       disabled={!hasEightDirections}
-                      className={selectedDirection === item ? 'is-active' : ''}
+                      className={`unit-studio-compass-button is-${item}${selectedDirection === item ? ' is-active' : ''}`}
                       onClick={() => selectDirection(item)}
                     >
-                      {rookDirectionLabel[item]}
+                      <span aria-hidden="true" />
+                      <em>{rookDirectionLabel[item]}</em>
                     </button>
                   ))}
                 </div>
