@@ -14,11 +14,11 @@ import {
 // The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc.
 // don't pull the renderer bundle (preserving app.js's lazy-mount behaviour).
 const Skirmish = lazy(() => import('./Skirmish').then((m) => ({ default: m.Skirmish })));
-const LevelEditor = lazy(() => import('./LevelEditor').then((m) => ({ default: m.LevelEditor })));
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 const TilePreview = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilePreview })));
 const TileReview = lazy(() => import('./TilePreview').then((m) => ({ default: m.TileReview })));
 const TilesetStudio = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilesetStudio })));
+const LevelEditor = lazy(() => import('./TilePreview').then((m) => ({ default: m.LevelEditorPage })));
 const TilesetCandidateReview = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilesetCandidateReview })));
 const UnitStudio = lazy(() => import('./UnitStudio').then((m) => ({ default: m.UnitStudio })));
 
@@ -61,6 +61,8 @@ export function App(): ReactElement {
   if (path === '/tileset-review') return split(<TilesetCandidateReview />);
   if (path === '/tile-review') return split(<TileReview />);
   if (path === '/tile-preview') return split(<TilePreview />);
+  // The level editor is now the studio's socket-legal board in the original
+  // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return split(<LevelEditor />);
   if (path === '/campaigns-next' || path === '/campaigns') return split(<CampaignEditor />);
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;

@@ -4523,7 +4523,7 @@ h1 {
   text-transform: uppercase;
 }
 
-.le-brand img {
+.le-brand-crest {
   height: 50px;
   image-rendering: pixelated;
   width: 50px;
@@ -4542,22 +4542,35 @@ h1 {
 .le-field span,
 .le-check {
   color: #ffc95f;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .48rem;
-  letter-spacing: 0;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 15px;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
 .le-brand strong {
   color: #fff;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.82rem, 1.45vw, 1.1rem);
-  letter-spacing: 0;
-  line-height: 1.15;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: clamp(23px, 2.3vw, 32px);
+  letter-spacing: 0.01em;
+  line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   text-shadow: 0 2px 0 #02070a, 0 0 14px rgba(37, 215, 255, .34);
   white-space: nowrap;
+}
+
+/* The "Chess Tactics" wordmark is the shared bitmap (not type), small as a kicker
+   above the "Level Editor" line — the 03 corner lockup. */
+.le-brand-title {
+  display: block;
+  line-height: 0;
+}
+
+.le-brand-title img {
+  display: block;
+  height: 32px;
+  width: auto;
 }
 
 .le-tool-tabs {
@@ -4603,10 +4616,10 @@ h1 {
 .le-palette-grid button span,
 .le-unit-side,
 .le-tray-assets button span {
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .48rem;
-  letter-spacing: 0;
-  line-height: 1.2;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
   text-transform: uppercase;
 }
 
@@ -4721,7 +4734,7 @@ h1 {
   background: rgba(2, 10, 15, .78);
   border: 1px solid rgba(101, 184, 255, .34);
   color: var(--le-ink);
-  font: 1rem "VT323", ui-monospace, monospace;
+  font: 16px/1 "Jersey 10", "VT323", ui-monospace, monospace;
   min-height: 32px;
   padding: 4px 8px;
   width: 100%;
@@ -4767,9 +4780,13 @@ h1 {
 }
 
 .le-board-stage {
+  /* The painted night scene from the main menu sits behind the board, dimmed by a
+     dark overlay so painted tiles stay readable — the 03 concept backdrop. */
   background:
-    radial-gradient(720px 430px at 48% 22%, rgba(19, 67, 98, .58), transparent 70%),
-    linear-gradient(180deg, rgba(7, 22, 33, .98), rgba(2, 8, 13, .98));
+    radial-gradient(760px 460px at 50% 16%, rgba(19, 67, 98, .32), transparent 72%),
+    linear-gradient(180deg, rgba(4, 12, 20, .52), rgba(2, 8, 13, .8)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center top / cover no-repeat,
+    #02080d;
   border: 1px solid rgba(101, 184, 255, .26);
   box-shadow: inset 0 0 0 1px rgba(212, 170, 79, .14);
   display: grid;
@@ -4888,7 +4905,7 @@ h1 {
 
 .le-unit-side button {
   color: var(--le-ink);
-  font: 1.15rem "Press Start 2P", "VT323", monospace;
+  font: 20px/1 "Jersey 10", "VT323", ui-monospace, monospace;
   min-height: 38px;
   padding: 4px;
 }
@@ -5762,7 +5779,8 @@ h1 {
   max-height: 100%;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 10px;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
@@ -8724,6 +8742,15 @@ h1 {
   align-items: center;
 }
 
+/* Match the standalone Settings link's box height to the segmented tab groups
+   (which are taller because of their container padding), so the row aligns. */
+.tileset-studio-actions > a {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .tileset-studio-actions a,
 .tileset-mode-tabs button,
 .tileset-view-action,
@@ -9241,7 +9268,8 @@ h1 {
   max-height: 100%;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 10px;
 }
 
@@ -9296,6 +9324,231 @@ h1 {
   .tileset-view-controls {
     max-height: 260px;
   }
+}
+
+/* Level editor: full-bleed board + a single control rail (no header row). */
+.tileset-studio-shell.is-level {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tileset-view-mode.level-editor {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.level-editor-controls {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 10px;
+  max-height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.level-brush-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.level-brush {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: #d8eaff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+  text-align: left;
+}
+
+.level-brush:hover {
+  border-color: rgba(104, 198, 255, 0.6);
+}
+
+.level-brush.is-active {
+  border-color: rgba(104, 198, 255, 0.95);
+  background: rgba(20, 52, 78, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(104, 198, 255, 0.45);
+}
+
+.level-brush-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  flex: none;
+}
+
+.level-brush-swatch.is-erase {
+  background:
+    linear-gradient(135deg, transparent 44%, #d8657a 44%, #d8657a 56%, transparent 56%),
+    rgba(20, 30, 40, 0.9);
+}
+
+.tileset-zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+  color: #a9bdd2;
+}
+
+.tileset-zoom-control input[type='range'] {
+  flex: 1;
+}
+
+.level-editor-status {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(67, 127, 179, 0.22);
+  font: 700 12px/1.35 var(--ds-font-sans, system-ui, sans-serif);
+  color: #9eb1c5;
+}
+
+.level-editor-status .is-warning {
+  color: #ffcf6b;
+}
+
+.level-editor-status .is-ok {
+  color: #7fe0a0;
+}
+
+.level-editor-status .is-hint {
+  color: #8298ad;
+}
+
+.tileset-hint-text {
+  margin: 2px 0 0;
+  color: #8298ad;
+  font: 600 11px/1.4 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+/* Units sit in their own layer above the tiles, anchored to each diamond's
+   top-centre (the board point the tile cell is positioned on). */
+.level-unit-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.level-unit {
+  position: absolute;
+  transform: translate(-50%, calc(-100% + 12px));
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
+}
+
+.level-unit img {
+  display: block;
+  height: 88px;
+  width: auto;
+  image-rendering: pixelated;
+}
+
+.level-unit.is-enemy img {
+  filter: hue-rotate(150deg) saturate(1.25);
+}
+
+.level-unit.is-neutral img {
+  filter: grayscale(0.85);
+}
+
+.level-unit-chip {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #f3f7fb;
+  font: 900 15px/1 var(--ds-font-sans, system-ui, sans-serif);
+  background: linear-gradient(180deg, rgba(46, 96, 142, 0.96), rgba(18, 44, 70, 0.98));
+  border: 1.5px solid rgba(150, 205, 255, 0.7);
+}
+
+.level-unit.is-enemy .level-unit-chip {
+  background: linear-gradient(180deg, rgba(150, 54, 64, 0.96), rgba(74, 20, 28, 0.98));
+  border-color: rgba(255, 160, 160, 0.7);
+}
+
+.level-unit.is-neutral .level-unit-chip {
+  background: linear-gradient(180deg, rgba(96, 102, 110, 0.96), rgba(40, 46, 54, 0.98));
+  border-color: rgba(200, 208, 216, 0.6);
+}
+
+.level-unit-glyph {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: #cfe6ff;
+  font: 900 13px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+/* The socket board lives inside the asset-backed le- chrome: let it fill the
+   board frame (which otherwise centres a fixed canvas). */
+.le-board-frame.le-board-live {
+  place-items: stretch;
+  overflow: hidden;
+}
+
+.le-board-live .tileset-view-stage {
+  width: 100%;
+  height: 100%;
+}
+
+.le-legality-readout {
+  color: var(--le-ink, #ecf7fb);
+  font: 1rem "VT323", ui-monospace, monospace;
+}
+
+.le-legality-readout strong {
+  color: #e5fbff;
+}
+
+.le-legality-status {
+  font: 1rem "VT323", ui-monospace, monospace;
+  color: var(--le-muted, #9fb3bd);
+}
+
+.le-legality-status.is-ok {
+  color: #76d65f;
+}
+
+.le-legality-status.is-warning {
+  color: #ffcf6b;
+}
+
+.le-tray-glyph {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #f3f7fb;
+  font: 900 14px/1 var(--ds-font-sans, system-ui, sans-serif);
+  background: linear-gradient(180deg, rgba(46, 96, 142, 0.96), rgba(18, 44, 70, 0.98));
+  border: 1.5px solid rgba(150, 205, 255, 0.7);
+}
+
+.le-tray-glyph.is-enemy {
+  background: linear-gradient(180deg, rgba(150, 54, 64, 0.96), rgba(74, 20, 28, 0.98));
+  border-color: rgba(255, 160, 160, 0.7);
+}
+
+.le-tray-glyph.is-neutral {
+  background: linear-gradient(180deg, rgba(96, 102, 110, 0.96), rgba(40, 46, 54, 0.98));
+  border-color: rgba(200, 208, 216, 0.6);
 }
 
 .tileset-review-stage-tabs {
@@ -9941,13 +10194,15 @@ button.tileset-relationship-cell {
 .tileset-control-stack button,
 .tileset-wide-action {
   min-height: 34px;
+  min-width: 0;
   padding: 8px 10px;
   color: #d8eaff;
   background: rgba(12, 31, 48, 0.92);
   border: 1px solid rgba(91, 157, 216, 0.38);
   border-radius: 4px;
   cursor: pointer;
-  font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+  font: 800 12px/1.15 var(--ds-font-sans, system-ui, sans-serif);
+  overflow-wrap: anywhere;
 }
 
 .tileset-inspector-tabs button {
@@ -9984,7 +10239,7 @@ button.tileset-relationship-cell {
 .tileset-relationship-head,
 .tileset-relationship-foot,
 .tileset-studio-card-meta {
-  cursor: zoom-in;
+  cursor: default;
 }
 
 .tileset-review-nav {
@@ -10019,8 +10274,146 @@ button.tileset-relationship-cell {
 
 .tileset-segmented-control {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
+}
+
+.tileset-segmented-control.tileset-tools {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tileset-tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-left: 4px;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+
+.tileset-tools button svg {
+  flex: none;
+}
+
+.tileset-control-stack {
+  gap: 8px;
+}
+
+.tileset-group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #72bde8;
+}
+
+.tileset-group-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(67, 127, 179, 0.25);
+}
+
+.tileset-group-label.is-collapsible {
+  background: none;
+  border: none;
+  box-shadow: none;
+  min-height: 0;
+  padding: 0;
+  width: 100%;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #72bde8;
+}
+
+.tileset-group-label.is-collapsible::after {
+  content: none;
+}
+
+.tileset-group-rule {
+  flex: 1;
+  height: 1px;
+  background: rgba(67, 127, 179, 0.25);
+}
+
+.tileset-group-chevron {
+  flex: none;
+  color: #72bde8;
+  transition: transform 0.12s ease;
+}
+
+.tileset-group-label.is-collapsible[aria-expanded="false"] .tileset-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.tileset-button-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tileset-button-row > button {
+  flex: 1 1 0;
+}
+
+.tileset-action-danger {
+  color: #f0b3b3;
+  border-color: rgba(150, 80, 80, 0.5);
+}
+
+.tileset-action-danger:hover:not(:disabled) {
+  background: rgba(120, 50, 50, 0.55);
+  border-color: rgba(210, 110, 110, 0.85);
+}
+
+.tileset-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tileset-toggle-pill {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  flex: none;
+  border-radius: 9px;
+  background: rgba(120, 140, 160, 0.45);
+  transition: background 0.12s ease;
+}
+
+.tileset-toggle-pill::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e7f1fb;
+  transition: left 0.12s ease;
+}
+
+.tileset-toggle.is-on .tileset-toggle-pill {
+  background: #2f8fc0;
+}
+
+.tileset-toggle.is-on .tileset-toggle-pill::after {
+  left: 16px;
+}
+
+.tileset-control-footnote {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #7f93a6;
 }
 
 .tileset-control-stack label {
@@ -10074,7 +10467,6 @@ button.tileset-relationship-cell {
   position: relative;
   display: grid;
   gap: 9px;
-  min-height: 220px;
   padding: 12px;
   color: #d9e7f7;
   text-align: left;
@@ -10131,10 +10523,17 @@ button.tileset-relationship-cell {
 }
 
 .tileset-studio-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tileset-studio-card-text {
   display: grid;
   gap: 2px;
   min-width: 0;
-  min-height: 48px;
+  flex: 1 1 auto;
 }
 
 .tileset-studio-card-meta strong {
@@ -10145,8 +10544,7 @@ button.tileset-relationship-cell {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .tileset-studio-card-meta em {
@@ -10363,6 +10761,290 @@ button.tileset-relationship-cell {
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   border: 1px solid rgba(111, 210, 255, 0.28);
   pointer-events: none;
+}
+
+/* Manual tile placement board (temporary preview-in-context). */
+.tileset-placement-cell {
+  pointer-events: none;
+}
+
+/* Only the top-face diamond is clickable, so overlapping cell rectangles can't
+   steal clicks from the tile behind them. Hit diamonds tile without overlap. */
+.tileset-cell-hit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 96px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  pointer-events: auto;
+  z-index: 4;
+}
+
+.tileset-placement-cell.is-empty::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 96px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(111, 210, 255, 0.06);
+  border: 1px solid rgba(111, 210, 255, 0.14);
+  pointer-events: none;
+}
+
+.tileset-placement-cell.is-empty:has(.tileset-cell-hit:hover)::before {
+  background: rgba(111, 210, 255, 0.16);
+  border-color: rgba(111, 210, 255, 0.4);
+}
+
+.tileset-placement-cell:not(.is-empty):has(.tileset-cell-hit:hover)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 96px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(111, 210, 255, 0.2);
+  pointer-events: none;
+}
+
+.tileset-brush-display {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: rgba(2, 8, 13, 0.4);
+  border: 1px solid rgba(67, 127, 179, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+  color: #c7d6e6;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.tileset-brush-display:hover {
+  border-color: rgba(111, 210, 255, 0.6);
+  background: rgba(111, 210, 255, 0.1);
+}
+
+.tileset-brush-display img {
+  width: 28px;
+  height: 40px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex: none;
+}
+
+.tileset-brush-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tileset-brush-change {
+  margin-left: auto;
+  flex: none;
+  color: #6fd2ff;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Cursor hints per tool (on the diamond hit overlay). */
+.tileset-placement-board.is-tool-brush .tileset-cell-hit {
+  cursor: crosshair;
+}
+.tileset-placement-board.is-tool-erase .tileset-cell-hit {
+  cursor: not-allowed;
+}
+.tileset-placement-board.is-tool-select .tileset-cell-hit {
+  cursor: pointer;
+}
+
+/* Selection highlight (a child element — pseudo-elements are used by footprint/empty). */
+.tileset-cell-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 96px;
+  height: 54px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(255, 214, 102, 0.22);
+  box-shadow: inset 0 0 0 2px rgba(255, 214, 102, 0.9);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Catalog card actions (paint / open-as-board). The card body itself is no
+   longer a click target — only these buttons act. */
+.tileset-studio-card {
+  position: relative;
+  cursor: default;
+}
+
+.tileset-card-actions {
+  display: flex;
+  flex-direction: column;
+  align-self: center;
+  flex: none;
+  gap: 4px;
+}
+
+.tileset-card-action {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  background: #0e2536;
+  border: 1px solid rgba(111, 210, 255, 0.55);
+  border-radius: 5px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  line-height: 1;
+  color: #eaf4ff;
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+
+.tileset-card-action:hover,
+.tileset-card-action:focus-visible {
+  background: #1c5d7d;
+  border-color: rgba(111, 210, 255, 0.95);
+}
+
+.tileset-card-action svg {
+  display: block;
+}
+
+/* Units category (chess pieces folded into the studio catalog). */
+.unit-card-image {
+  min-height: 150px;
+}
+
+.unit-card-image img {
+  width: auto;
+  height: 132px;
+  max-width: 90%;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+.tileset-studio-card.is-coming {
+  opacity: 0.5;
+}
+
+.unit-card-image:empty {
+  display: grid;
+  place-items: center;
+}
+
+.unit-card-image:empty::after {
+  content: "Soon";
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5f748a;
+}
+
+.unit-facing-compass {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4px;
+  width: 138px;
+  aspect-ratio: 1;
+}
+
+.unit-facing-cell {
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.unit-facing-center {
+  display: grid;
+  place-items: center;
+}
+
+.unit-facing-cell.is-unavailable {
+  opacity: 0.5;
+}
+
+.unit-scene-empty {
+  width: 92px;
+  height: 104px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  text-align: center;
+  background: rgba(111, 210, 255, 0.06);
+  border: 1px dashed rgba(111, 210, 255, 0.4);
+  border-radius: 4px;
+  color: #9eb1c5;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.unit-scene-empty span:first-child {
+  color: #cfe3f6;
+  font-weight: 800;
+}
+
+.unit-scene-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.unit-scene {
+  position: relative;
+  width: 120px;
+  height: 260px;
+  transform-origin: center;
+}
+
+.unit-scene-ground {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 120px;
+  height: 175px;
+  image-rendering: pixelated;
+}
+
+.unit-scene-unit {
+  position: absolute;
+  left: 50%;
+  bottom: 128px;
+  transform: translateX(-50%);
+  height: 104px;
+  width: auto;
+  z-index: 1;
+  image-rendering: auto;
+}
+
+.unit-scene-unit.is-red {
+  filter: hue-rotate(150deg) saturate(1.15);
+}
+
+.unit-scene-unit.is-neutral {
+  filter: grayscale(0.85) brightness(1.05);
 }
 
 .tileset-studio-inspector {
