@@ -7,7 +7,13 @@ metadata:
   labels:
     app: {{ include "chess-tactics.resourceName" . }}
 spec:
-  replicas: 1
+  # Single serving pod. When livePreview is enabled the live-preview-edge.replicas
+  # helper returns 1 and FAILS the render on requested>1 (a per-pod emptyDir
+  # override behind replicas>1 load-balances reads 50/50 and flickers the
+  # co-watched frontend, v1 #1419). Disabled → renders the app's own count (1),
+  # so normal / validation renders are unchanged. The include is guarded because
+  # the helper lives in the vendored partial, absent on non-preview renders.
+  replicas: {{ if .Values.livePreview.enabled }}{{ include "live-preview-edge.replicas" (dict "spec" .Values.livePreview "requested" 1) }}{{ else }}1{{ end }}
   selector:
     matchLabels:
       app: {{ include "chess-tactics.resourceName" . }}
@@ -57,7 +63,13 @@ spec:
               value: {{ .Values.postgres.user | quote }}
             {{- end }}
           ports:
-            - name: http
+            # When a live-preview edge fronts the backend, the edge owns the
+            # "http" served port and the backend's own port is renamed to an
+            # internal name (chess-tactics.appPortName) to avoid a duplicate port
+            # name in the pod. The container port NUMBER (3000) is unchanged, so
+            # the edge's loopback upstream still targets :3000, and probes still
+            # hit the backend directly. Disabled → name stays "http" (identical).
+            - name: {{ include "chess-tactics.appPortName" . }}
               containerPort: 3000
           resources:
             requests:
@@ -69,19 +81,33 @@ spec:
           startupProbe:
             httpGet:
               path: /health
-              port: http
+              port: {{ include "chess-tactics.appPortName" . }}
             periodSeconds: 5
             failureThreshold: 10
           readinessProbe:
             httpGet:
               path: /health
-              port: http
+              port: {{ include "chess-tactics.appPortName" . }}
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
-              port: http
+              port: {{ include "chess-tactics.appPortName" . }}
             periodSeconds: 30
             failureThreshold: 3
+        {{- /*
+        The live-preview edge, in front of the backend. Self-gated on
+        livePreview.enabled (off by default → renders nothing), and the include
+        is additionally guarded because the partial is only vendored on a preview
+        lease. When enabled it becomes the pod's served port and reverse-proxies
+        the backend on :3000. Changes nothing on a normal / validation install.
+        */ -}}
+        {{- if .Values.livePreview.enabled }}
+        {{- include "live-preview-edge.container" .Values.livePreview | nindent 8 }}
+        {{- end }}
+      {{- if .Values.livePreview.enabled }}
+      volumes:
+        {{- include "live-preview-edge.volume" .Values.livePreview | nindent 8 }}
+      {{- end }}
 {{- end }}
