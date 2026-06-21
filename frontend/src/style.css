@@ -11477,6 +11477,7 @@ button.tileset-relationship-cell {
   --tile-anchor-y: 54px;
   --unit-anchor-x: 50%;
   --unit-anchor-y: 92%;
+  --unit-size: 84px;
 }
 
 .unit-studio-context-tile {
@@ -11493,18 +11494,13 @@ button.tileset-relationship-cell {
   position: absolute;
   left: var(--tile-anchor-x);
   top: var(--tile-anchor-y);
-  width: 76px;
-  height: 76px;
+  width: var(--unit-size);
+  height: var(--unit-size);
   object-fit: contain;
   image-rendering: pixelated;
   transform: translate(calc(-1 * var(--unit-anchor-x)), calc(-1 * var(--unit-anchor-y)));
   filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.55));
   pointer-events: none;
-}
-
-.unit-studio-unit-preview.is-rook {
-  width: 84px;
-  height: 84px;
 }
 
 .unit-studio-detail {
@@ -11544,6 +11540,14 @@ button.tileset-relationship-cell {
   display: grid;
   gap: 7px;
   color: #9fb9cf;
+}
+
+.unit-studio-zoom em {
+  color: #d8e7f5;
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 800;
+  text-align: right;
 }
 
 .unit-studio-zoom input {

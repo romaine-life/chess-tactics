@@ -3,65 +3,131 @@ import { type CSSProperties, useEffect, useState } from 'react';
 type Faction = 'blue' | 'red' | 'neutral';
 type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
 type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
-type UnitSourceId = 'production' | 'pixellab-a' | 'blender-v2' | 'blender-render-v3' | 'blender-render-v4-calibrated';
 type TileContextId = 'grass' | 'stone' | 'water';
 type UnitPlacementStyle = CSSProperties & {
   '--tile-anchor-x': string;
   '--tile-anchor-y': string;
   '--unit-anchor-x': string;
   '--unit-anchor-y': string;
+  '--unit-size': string;
 };
 
-type UnitPiece = {
-  id: PieceId;
+type UnitAsset = {
+  id: string;
+  family: PieceId;
   label: string;
-  title: string;
-  concept: string;
+  badge: string;
+  preview: string;
   read: string;
+  status: string;
+  directions?: Direction[];
+  factionMode: 'fixed' | 'palette';
+  defaultSize: number;
+  unitAnchorX?: string;
+  unitAnchorY?: string;
+  sprite: (faction: Faction, direction: Direction) => string;
 };
 
-const unitPieces: UnitPiece[] = [
+const familyLabels: Record<PieceId, string> = {
+  pawn: 'Pawn',
+  rook: 'Rook',
+  knight: 'Knight',
+  bishop: 'Bishop',
+  queen: 'Queen',
+  king: 'King',
+};
+
+const rookDirections: Direction[] = ['south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west'];
+const rookDirectionLabel: Record<Direction, string> = {
+  south: 'S',
+  'south-east': 'SE',
+  east: 'E',
+  'north-east': 'NE',
+  north: 'N',
+  'north-west': 'NW',
+  west: 'W',
+  'south-west': 'SW',
+};
+
+const spriteFor = (piece: PieceId, faction: Faction) => `/assets/units/${piece}/${faction}/south.png`;
+const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
+const paletteSprite = (piece: PieceId) => (faction: Faction) => spriteFor(piece, faction);
+
+const unitAssets: UnitAsset[] = [
   {
-    id: 'pawn',
+    id: 'pawn-production',
+    family: 'pawn',
     label: 'Pawn',
-    title: 'Shield Pawn South',
-    concept: '/assets/units/concepts/pawn-shield-south-concept.png',
+    badge: 'Production south',
+    preview: spriteFor('pawn', 'blue'),
     read: 'Compact pawn with front shield',
+    status: 'current south sprite',
+    factionMode: 'palette',
+    defaultSize: 76,
+    sprite: paletteSprite('pawn'),
   },
   {
-    id: 'rook',
+    id: 'rook-blender-v4-calibrated',
+    family: 'rook',
     label: 'Rook',
-    title: 'Fortress Rook South',
-    concept: '/assets/units/concepts/rook-south-concept.png',
-    read: 'Tower silhouette first',
+    badge: '8 directions · calibrated',
+    preview: '/assets/units/rook/blender-render-v4-calibrated/south.png',
+    read: 'Board-calibrated castle rook with exact eight-direction rotations',
+    status: 'current default candidate',
+    directions: rookDirections,
+    factionMode: 'fixed',
+    defaultSize: 84,
+    unitAnchorX: '49.9%',
+    unitAnchorY: '71.753%',
+    sprite: rookVariantSprite('blender-render-v4-calibrated'),
   },
   {
-    id: 'knight',
+    id: 'knight-production',
+    family: 'knight',
     label: 'Knight',
-    title: 'Horse Knight South',
-    concept: '/assets/units/concepts/knight-south-concept.png',
+    badge: 'Production south',
+    preview: spriteFor('knight', 'blue'),
     read: 'Horse-head chess marker',
+    status: 'current south sprite',
+    factionMode: 'palette',
+    defaultSize: 76,
+    sprite: paletteSprite('knight'),
   },
   {
-    id: 'bishop',
+    id: 'bishop-production',
+    family: 'bishop',
     label: 'Bishop',
-    title: 'Mitre Bishop South',
-    concept: '/assets/units/concepts/bishop-south-concept.png',
+    badge: 'Production south',
+    preview: spriteFor('bishop', 'blue'),
     read: 'Tall bishop cap profile',
+    status: 'current south sprite',
+    factionMode: 'palette',
+    defaultSize: 76,
+    sprite: paletteSprite('bishop'),
   },
   {
-    id: 'queen',
+    id: 'queen-production',
+    family: 'queen',
     label: 'Queen',
-    title: 'Crowned Queen South',
-    concept: '/assets/units/concepts/queen-south-concept.png',
+    badge: 'Production south',
+    preview: spriteFor('queen', 'blue'),
     read: 'Crown and narrow royal body',
+    status: 'current south sprite',
+    factionMode: 'palette',
+    defaultSize: 76,
+    sprite: paletteSprite('queen'),
   },
   {
-    id: 'king',
+    id: 'king-production',
+    family: 'king',
     label: 'King',
-    title: 'Crowned King South',
-    concept: '/assets/units/concepts/king-south-concept.png',
+    badge: 'Production south',
+    preview: spriteFor('king', 'blue'),
     read: 'Cross crown chess identity',
+    status: 'current south sprite',
+    factionMode: 'palette',
+    defaultSize: 76,
+    sprite: paletteSprite('king'),
   },
 ];
 
@@ -81,116 +147,52 @@ const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
   { id: 'water', label: 'Water', src: waterTile },
 ];
 
-const spriteFor = (piece: PieceId, faction: Faction) => `/assets/units/${piece}/${faction}/south.png`;
-const isPieceId = (value: string | null): value is PieceId => unitPieces.some((piece) => piece.id === value);
+const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'rook' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
+const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
 const isDirection = (value: string | null): value is Direction => rookDirections.some((direction) => direction === value);
-const rookDirections: Direction[] = ['south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west'];
-const rookDirectionLabel: Record<Direction, string> = {
-  south: 'S',
-  'south-east': 'SE',
-  east: 'E',
-  'north-east': 'NE',
-  north: 'N',
-  'north-west': 'NW',
-  west: 'W',
-  'south-west': 'SW',
-};
-const rookComparisonSets = [
-  {
-    id: 'blender-render-v4-calibrated',
-    label: 'Blender v4 calibrated',
-    note: 'Board-calibrated camera basis: cardinal views are square-on and diagonal views are diamond-on.',
-    path: (direction: Direction) => `/assets/units/rook/blender-render-v4-calibrated/${direction}.png`,
-  },
-  {
-    id: 'blender-render-v3',
-    label: 'Blender v3 render',
-    note: 'Current castle-first model pass with clean eight-direction Blender renders.',
-    path: (direction: Direction) => `/assets/units/rook/blender-render-v3/${direction}.png`,
-  },
-  {
-    id: 'pixellab-a',
-    label: 'PixelLab reference run',
-    note: 'Generated from the accepted rook reference; useful for checking whether PixelLab preserves the art read across rotations.',
-    path: (direction: Direction) => `/assets/units/rook/pixellab-a/${direction}.png`,
-  },
-  {
-    id: 'blender-v2',
-    label: 'Blender model',
-    note: 'Exact rotations from the current model; useful for geometry and facing checks.',
-    path: (direction: Direction) => `/assets/units/rook/blender-v2/${direction}.png`,
-  },
-];
-const productionSource = {
-  id: 'production' as UnitSourceId,
-  label: 'Production south',
-  note: 'Current extracted game sprite. South only for now.',
-};
-const rookSources = [
-  {
-    id: 'blender-render-v4-calibrated' as UnitSourceId,
-    label: 'Blender v4 calibrated',
-    note: 'Current board-calibrated Blender pass. Eight exact rotations.',
-  },
-  {
-    id: 'blender-render-v3' as UnitSourceId,
-    label: 'Blender v3 rook',
-    note: 'Current castle-first Blender pass. Eight exact rotations.',
-  },
-  {
-    id: 'pixellab-a' as UnitSourceId,
-    label: 'PixelLab rook',
-    note: 'Current preferred rook candidate. Eight generated rotations.',
-  },
-  {
-    id: 'blender-v2' as UnitSourceId,
-    label: 'Blender rook',
-    note: 'Geometry reference. Useful for rotation consistency checks.',
-  },
-  productionSource,
-];
+const unitFromLegacyQuery = () => {
+  const params = new URLSearchParams(window.location.search);
+  const queryUnit = params.get('unit');
+  if (isUnitAssetId(queryUnit)) return queryUnit;
 
-const sourceFor = (piece: PieceId, source: UnitSourceId, faction: Faction, direction: Direction) => {
-  if (piece === 'rook' && source !== 'production') return `/assets/units/rook/${source}/${direction}.png`;
-  return spriteFor(piece, faction);
-};
+  const querySource = params.get('source');
+  if (querySource && params.get('piece') === 'rook') return 'rook-blender-v4-calibrated';
 
-const previewFor = (piece: PieceId) => piece === 'rook' ? '/assets/units/rook/blender-render-v4-calibrated/south.png' : spriteFor(piece, 'blue');
+  const queryPiece = params.get('piece');
+  if (isPieceId(queryPiece)) {
+    return unitAssets.find((unit) => unit.family === queryPiece)?.id ?? unitAssets[0].id;
+  }
+
+  return unitAssets[0].id;
+};
+const clampUnitSize = (value: number) => Math.min(132, Math.max(48, value));
 
 export function UnitStudio() {
-  const [pieceId, setPieceId] = useState<PieceId>(() => {
-    const queryPiece = new URLSearchParams(window.location.search).get('piece');
-    return isPieceId(queryPiece) ? queryPiece : 'pawn';
-  });
+  const [unitId, setUnitId] = useState(unitFromLegacyQuery);
   const [faction, setFaction] = useState<Faction>('blue');
   const [zoom, setZoom] = useState(1.15);
+  const [unitSize, setUnitSize] = useState(() => {
+    const querySize = Number(new URLSearchParams(window.location.search).get('unitSize'));
+    return Number.isFinite(querySize) ? clampUnitSize(querySize) : 84;
+  });
   const [unitVisible, setUnitVisible] = useState(true);
   const [tileContext, setTileContext] = useState<TileContextId>('grass');
   const [direction, setDirection] = useState<Direction>(() => {
     const queryDirection = new URLSearchParams(window.location.search).get('direction');
     return isDirection(queryDirection) ? queryDirection : 'south';
   });
-  const [source, setSource] = useState<UnitSourceId>(() => {
-    const querySource = new URLSearchParams(window.location.search).get('source');
-    return querySource === 'blender-render-v4-calibrated' || querySource === 'blender-render-v3' || querySource === 'blender-v2' || querySource === 'production' || querySource === 'pixellab-a'
-      ? querySource
-      : 'blender-render-v4-calibrated';
-  });
-  const selectedPiece = unitPieces.find((piece) => piece.id === pieceId) ?? unitPieces[0];
-  const sourceOptions = selectedPiece.id === 'rook' ? rookSources : [productionSource];
-  const normalizedSource = selectedPiece.id === 'rook' ? source : 'production';
-  const selectedSprite = sourceFor(selectedPiece.id, normalizedSource, faction, direction);
+  const selectedUnit = unitAssets.find((unit) => unit.id === unitId) ?? unitAssets[0];
+  const selectedDirection = selectedUnit.directions?.includes(direction) ? direction : 'south';
+  const selectedSprite = selectedUnit.sprite(faction, selectedDirection);
   const selectedTile = tileContexts.find((item) => item.id === tileContext) ?? tileContexts[0];
-  const hasEightDirections = selectedPiece.id === 'rook' && normalizedSource !== 'production';
-  const isBlenderRenderSource = normalizedSource === 'blender-render-v3' || normalizedSource === 'blender-render-v4-calibrated';
+  const hasEightDirections = Boolean(selectedUnit.directions?.length);
   const unitPlacementStyle: UnitPlacementStyle = {
     transform: `scale(${zoom})`,
     '--tile-anchor-x': '50%',
     '--tile-anchor-y': '54px',
-    '--unit-anchor-x': isBlenderRenderSource ? '49.9%' : '50%',
-    '--unit-anchor-y': normalizedSource === 'blender-render-v4-calibrated'
-      ? '71.753%'
-      : isBlenderRenderSource ? '90.8%' : '92%',
+    '--unit-anchor-x': selectedUnit.unitAnchorX ?? '50%',
+    '--unit-anchor-y': selectedUnit.unitAnchorY ?? '92%',
+    '--unit-size': `${unitSize}px`,
   };
 
   useEffect(() => {
@@ -199,28 +201,18 @@ export function UnitStudio() {
     return () => shell?.classList.remove('unit-studio-active');
   }, []);
 
-  const selectPiece = (nextPieceId: PieceId) => {
-    setPieceId(nextPieceId);
+  const selectUnit = (nextUnitId: string) => {
+    const nextUnit = unitAssets.find((unit) => unit.id === nextUnitId);
+    if (!nextUnit) return;
+    setUnitId(nextUnitId);
+    if (!nextUnit.directions?.includes(direction)) setDirection('south');
+    setUnitSize(nextUnit.defaultSize);
     const params = new URLSearchParams(window.location.search);
-    params.set('piece', nextPieceId);
-    if (nextPieceId !== 'rook') {
-      setSource('production');
-      setDirection('south');
-      params.set('source', 'production');
-      params.set('direction', 'south');
-    } else if (source === 'production') {
-      setSource('blender-render-v4-calibrated');
-      params.set('source', 'blender-render-v4-calibrated');
-    }
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-  };
-
-  const selectSource = (nextSource: UnitSourceId) => {
-    setSource(nextSource);
-    if (nextSource === 'production') setDirection('south');
-    const params = new URLSearchParams(window.location.search);
-    params.set('source', nextSource);
-    params.set('direction', nextSource === 'production' ? 'south' : direction);
+    params.set('unit', nextUnitId);
+    params.set('piece', nextUnit.family);
+    params.delete('source');
+    params.set('direction', nextUnit.directions?.includes(direction) ? direction : 'south');
+    params.set('unitSize', String(nextUnit.defaultSize));
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   };
 
@@ -228,6 +220,14 @@ export function UnitStudio() {
     setDirection(nextDirection);
     const params = new URLSearchParams(window.location.search);
     params.set('direction', nextDirection);
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
+  const selectUnitSize = (nextSize: number) => {
+    const clampedSize = clampUnitSize(nextSize);
+    setUnitSize(clampedSize);
+    const params = new URLSearchParams(window.location.search);
+    params.set('unitSize', String(clampedSize));
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   };
 
@@ -241,7 +241,7 @@ export function UnitStudio() {
           </div>
           <div className="unit-studio-title">
             <p>Unit Studio</p>
-            <h1>{selectedPiece.label}</h1>
+            <h1>{familyLabels[selectedUnit.family]}</h1>
             <span>Review chess-piece units on the same tile scale as the board.</span>
           </div>
         </div>
@@ -253,18 +253,18 @@ export function UnitStudio() {
 
       <section className="unit-studio-shell" aria-label="Unit art workbench">
         <aside className="unit-studio-rail" aria-label="Unit library">
-          <h2>Unit Library</h2>
-          {unitPieces.map((piece) => (
+          <h2>Unit Catalog</h2>
+          {unitAssets.map((unit) => (
             <button
               type="button"
-              className={piece.id === selectedPiece.id ? 'is-active' : ''}
-              key={piece.id}
-              onClick={() => selectPiece(piece.id)}
+              className={unit.id === selectedUnit.id ? 'is-active' : ''}
+              key={unit.id}
+              onClick={() => selectUnit(unit.id)}
             >
-              <img src={previewFor(piece.id)} alt="" draggable={false} />
+              <img src={unit.preview} alt="" draggable={false} />
               <span>
-                <strong>{piece.label}</strong>
-                <em>{piece.id === 'rook' ? '8 directions · Blender v4' : 'south concept sprite'}</em>
+                <strong>{unit.label}</strong>
+                <em>{unit.badge}</em>
               </span>
             </button>
           ))}
@@ -274,20 +274,20 @@ export function UnitStudio() {
           <div className="unit-studio-panel-head">
             <div>
               <p>Tile View</p>
-              <h2>{selectedPiece.label} on {selectedTile.label}</h2>
+              <h2>{selectedUnit.label} on {selectedTile.label}</h2>
             </div>
-            <span>{hasEightDirections ? `${rookDirectionLabel[direction]} facing · ${normalizedSource}` : 'south facing · production'}</span>
+            <span>{hasEightDirections ? `${rookDirectionLabel[selectedDirection]} facing` : 'south facing'} · {selectedUnit.status}</span>
           </div>
 
           <div className="unit-studio-workbench">
-            <section className="unit-studio-art-frame" aria-label={`${selectedPiece.label} on ${selectedTile.label} tile`}>
+            <section className="unit-studio-art-frame" aria-label={`${selectedUnit.label} on ${selectedTile.label} tile`}>
               <div className="unit-studio-tile-stack" style={unitPlacementStyle}>
                 <img className="unit-studio-context-tile" src={selectedTile.src} alt={`${selectedTile.label} tile`} draggable={false} />
                 {unitVisible ? (
                   <img
-                    className={`unit-studio-unit-preview is-${selectedPiece.id}`}
+                    className={`unit-studio-unit-preview is-${selectedUnit.family}`}
                     src={selectedSprite}
-                    alt={`${factionLabels[faction]} ${selectedPiece.label.toLowerCase()} on ${selectedTile.label.toLowerCase()} tile`}
+                    alt={`${factionLabels[faction]} ${selectedUnit.label.toLowerCase()} on ${selectedTile.label.toLowerCase()} tile`}
                     draggable={false}
                   />
                 ) : null}
@@ -312,6 +312,18 @@ export function UnitStudio() {
                   onChange={(event) => setZoom(Number(event.target.value))}
                 />
               </label>
+              <label className="unit-studio-zoom">
+                <span>Unit Size</span>
+                <input
+                  type="range"
+                  min="48"
+                  max="132"
+                  step="2"
+                  value={unitSize}
+                  onChange={(event) => selectUnitSize(Number(event.target.value))}
+                />
+                <em>{unitSize}px</em>
+              </label>
               <div className="unit-studio-control-group" aria-label="Tile context">
                 <strong>Tile</strong>
                 {tileContexts.map((item) => (
@@ -325,19 +337,6 @@ export function UnitStudio() {
                   </button>
                 ))}
               </div>
-              <div className="unit-studio-control-group" aria-label="Asset source">
-                <strong>Source</strong>
-                {sourceOptions.map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    className={normalizedSource === item.id ? 'is-active' : ''}
-                    onClick={() => selectSource(item.id)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
               <div className="unit-studio-control-group" aria-label="Facing direction">
                 <strong>Facing</strong>
                 <div className="unit-studio-direction-buttons">
@@ -346,7 +345,7 @@ export function UnitStudio() {
                       type="button"
                       key={item}
                       disabled={!hasEightDirections}
-                      className={direction === item ? 'is-active' : ''}
+                      className={selectedDirection === item ? 'is-active' : ''}
                       onClick={() => selectDirection(item)}
                     >
                       {rookDirectionLabel[item]}
@@ -362,7 +361,7 @@ export function UnitStudio() {
                       type="button"
                       key={item}
                       className={faction === item ? 'is-active' : ''}
-                      disabled={normalizedSource !== 'production'}
+                      disabled={selectedUnit.factionMode === 'fixed'}
                       onClick={() => setFaction(item)}
                     >
                       {factionLabels[item]}
@@ -371,54 +370,15 @@ export function UnitStudio() {
                 </div>
               </div>
               <dl>
-                <div><dt>Piece</dt><dd>{selectedPiece.label}</dd></div>
-                <div><dt>Source</dt><dd>{sourceOptions.find((item) => item.id === normalizedSource)?.label}</dd></div>
-                <div><dt>Facing</dt><dd>{hasEightDirections ? rookDirectionLabel[direction] : 'South'}</dd></div>
-                <div><dt>Read</dt><dd>{selectedPiece.read}</dd></div>
+                <div><dt>Unit</dt><dd>{selectedUnit.label}</dd></div>
+                <div><dt>Family</dt><dd>{familyLabels[selectedUnit.family]}</dd></div>
+                <div><dt>Size</dt><dd>{unitSize}px</dd></div>
+                <div><dt>Facing</dt><dd>{hasEightDirections ? rookDirectionLabel[selectedDirection] : 'South'}</dd></div>
+                <div><dt>Status</dt><dd>{selectedUnit.status}</dd></div>
+                <div><dt>Read</dt><dd>{selectedUnit.read}</dd></div>
               </dl>
             </aside>
           </div>
-
-          {selectedPiece.id === 'rook' ? (
-            <section className="unit-studio-rook-comparison" aria-label="Rook direction comparison">
-              <div className="unit-studio-panel-head">
-                <div>
-                  <p>Rook Direction Sheet</p>
-                  <h2>Rotation Candidates</h2>
-                </div>
-                <span>Blender v4 calibrated is the current default</span>
-              </div>
-              {rookComparisonSets.map((set) => (
-                <div className="unit-studio-direction-set" key={set.id}>
-                  <div>
-                    <strong>{set.label}</strong>
-                    <span>{set.note}</span>
-                  </div>
-                  <div className="unit-studio-direction-grid">
-                    {rookDirections.map((item) => (
-                      <button
-                        type="button"
-                        key={`${set.id}-${item}`}
-                        className={normalizedSource === set.id && direction === item ? 'is-active' : ''}
-                        onClick={() => {
-                          selectSource(set.id as UnitSourceId);
-                          selectDirection(item);
-                        }}
-                      >
-                        <span>{rookDirectionLabel[item]}</span>
-                        <img src={set.path(item)} alt={`${set.label} rook ${item}`} draggable={false} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </section>
-          ) : (
-            <section className="unit-studio-concept-reference" aria-label="Accepted concept reference">
-              <img src={selectedPiece.concept} alt={`Accepted ${selectedPiece.label} concept reference`} draggable={false} />
-              <p>Accepted concept remains the art-direction source; the tile view is the current scale and readability test.</p>
-            </section>
-          )}
         </section>
       </section>
     </main>
