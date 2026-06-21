@@ -589,31 +589,44 @@ def carved(groove="bonded", damage="shear", displace="layered", streaks=True, bu
     for o in parts[1:]:
         boolean(rook, o, "UNION")
 
+    # Carve masonry on ALL FOUR faces (front -Y, back +Y, right +X, left -X) so
+    # the style reads from every rotation, not just the two south-facing sides.
+    FACES = (("x", -0.41), ("x", 0.41), ("y", 0.41), ("y", -0.41))
     if groove == "subtle":
-        def fg(z, x0, x1):
-            return solid("fg", ((x0 + x1) / 2, -0.41, z), (abs(x1 - x0), 0.024, 0.018))
-
-        def rg(z, y0, y1):
-            return solid("rg", (0.41, (y0 + y1) / 2, z), (0.024, abs(y1 - y0), 0.018))
         cutters = []
-        for z in (0.70, 0.97, 1.24, 1.51):
-            cutters += [fg(z, -0.36, 0.36), rg(z, -0.36, 0.36)]
-        for z, xs in [(0.835, (-0.18, 0.18)), (1.105, (-0.27, -0.09, 0.09, 0.27)), (1.375, (-0.18, 0.18))]:
-            for x in xs:
-                cutters.append(solid("fv", (x, -0.41, z), (0.016, 0.024, 0.22)))
-                cutters.append(solid("rv", (0.41, x, z), (0.024, 0.016, 0.22)))
-        cutters += [fg(0.26, -0.46, 0.46), rg(0.26, -0.46, 0.46)]
+
+        def hcut(axis, plane, z, lo, hi):
+            if axis == "x":
+                return solid("h", ((lo + hi) / 2, plane, z), (abs(hi - lo), 0.024, 0.018))
+            return solid("h", (plane, (lo + hi) / 2, z), (0.024, abs(hi - lo), 0.018))
+
+        def vcut(axis, plane, t, z):
+            if axis == "x":
+                return solid("v", (t, plane, z), (0.016, 0.024, 0.22))
+            return solid("v", (plane, t, z), (0.024, 0.016, 0.22))
+
+        for axis, plane in FACES:
+            for z in (0.70, 0.97, 1.24, 1.51):
+                cutters.append(hcut(axis, plane, z, -0.36, 0.36))
+            for z, ts in [(0.835, (-0.18, 0.18)), (1.105, (-0.27, -0.09, 0.09, 0.27)), (1.375, (-0.18, 0.18))]:
+                for t in ts:
+                    cutters.append(vcut(axis, plane, t, z))
+            cutters.append(hcut(axis, plane, 0.26, -0.46, 0.46))
         for c in cutters:
             boolean(rook, c, "DIFFERENCE")
     elif groove == "bonded":
-        coursed_face(rook, "x", -0.41, -0.40, 0.40, 0.56, 1.52, 0.225, 0.158, 1)
-        coursed_face(rook, "y", 0.41, -0.40, 0.40, 0.56, 1.52, 0.225, 0.158, 2)
-        coursed_face(rook, "x", -0.51, -0.46, 0.46, 0.25, 0.39, 0.30, 0.16, 3)
-        coursed_face(rook, "y", 0.51, -0.46, 0.46, 0.25, 0.39, 0.30, 0.16, 4)
-        coursed_face(rook, "x", -0.66, -0.60, 0.60, 0.04, 0.22, 0.40, 0.20, 5)
-        coursed_face(rook, "y", 0.66, -0.60, 0.60, 0.04, 0.22, 0.40, 0.20, 6)
-        coursed_face(rook, "x", -0.58, -0.52, 0.52, 1.56, 1.72, 0.34, 0.18, 7)
-        coursed_face(rook, "y", 0.58, -0.52, 0.52, 1.56, 1.72, 0.34, 0.18, 8)
+        # (lo, hi, z0, z1, block_w, course_h, half-width) per stacked section
+        sections = [
+            (-0.40, 0.40, 0.56, 1.52, 0.225, 0.158, 0.41),  # shaft
+            (-0.46, 0.46, 0.25, 0.39, 0.30, 0.16, 0.51),    # base cap
+            (-0.60, 0.60, 0.04, 0.22, 0.40, 0.20, 0.66),    # plinth
+            (-0.52, 0.52, 1.56, 1.72, 0.34, 0.18, 0.58),    # overhang
+        ]
+        seed = 0
+        for lo, hi, z0, z1, bw, ch, half in sections:
+            for axis, sign in (("x", -1), ("x", 1), ("y", 1), ("y", -1)):
+                seed += 1
+                coursed_face(rook, axis, sign * half, lo, hi, z0, z1, bw, ch, seed)
 
     if damage == "varied":
         styles = {(-1, -1): "shear", (1, -1): "bite", (1, 1): "crumble", (-1, 1): "split"}
@@ -711,7 +724,12 @@ VERSIONS = [
     ("v7-rough-rock-one-shear", "ruinwall", carved, dict(groove="bonded", damage="shear", displace="layered", streaks=True, bump=0.42)),
 ]
 
+import sys as _sys
+_ONLY = _sys.argv[_sys.argv.index("--") + 1:] if "--" in _sys.argv else []
+
 for label, slug, builder, kwargs in VERSIONS:
+    if _ONLY and slug not in _ONLY and label not in _ONLY:
+        continue
     clear_scene()
     setup_world()
     setup_lighting()
