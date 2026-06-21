@@ -69,6 +69,15 @@ def lathe(name, profile, material, segments=72, smooth=2):
     screw.merge_threshold = 0.0005
     screw.axis = "Z"
     bpy.ops.object.modifier_apply(modifier="screw")
+    # weld the 0/360 seam and unify normals so the turned body has no seam line
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.remove_doubles(threshold=0.0009)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
     # smooth the turned facets (applied so later booleans cut a clean mesh)
     if smooth:
         sub = obj.modifiers.new("smooth", "SUBSURF")
@@ -244,7 +253,7 @@ def castle_stone(name, base, light, crevice, noise_scale=4.5, bump_strength=0.4)
 
 def stone():
     return castle_stone("navy stone", (0.045, 0.10, 0.16), (0.26, 0.38, 0.50),
-                        (0.020, 0.050, 0.085), noise_scale=4.5)
+                        (0.020, 0.050, 0.085), noise_scale=5.0, bump_strength=0.55)
 
 
 # ---------------------------------------------------------------------------
@@ -253,83 +262,83 @@ def stone():
 
 def build_bishop():
     m = stone()
-    # silhouette: fluted foot -> slim stem -> flared collar -> ovoid head -> ball
+    # silhouette: narrow fluted foot -> slim stem -> flared collar -> ovoid head -> ball
     profile = [
-        (0.00, 0.00), (0.60, 0.00), (0.60, 0.06), (0.50, 0.085), (0.53, 0.115),
-        (0.40, 0.165), (0.43, 0.195), (0.32, 0.255), (0.30, 0.32),
-        (0.235, 0.45), (0.19, 0.66), (0.175, 0.92), (0.185, 1.0),
-        (0.265, 1.075), (0.305, 1.115), (0.30, 1.155), (0.215, 1.225),
-        (0.175, 1.30), (0.235, 1.40), (0.30, 1.52), (0.30, 1.60),
-        (0.255, 1.70), (0.175, 1.80), (0.105, 1.875),
-        (0.085, 1.905), (0.135, 1.945), (0.12, 1.985), (0.0, 2.02),
+        (0.00, 0.00), (0.46, 0.00), (0.46, 0.05), (0.39, 0.075), (0.41, 0.10),
+        (0.31, 0.15), (0.33, 0.175), (0.255, 0.225), (0.235, 0.30),
+        (0.165, 0.46), (0.140, 0.78), (0.135, 1.06), (0.145, 1.14),
+        (0.215, 1.21), (0.245, 1.245), (0.235, 1.28), (0.160, 1.35),
+        (0.135, 1.42), (0.205, 1.52), (0.255, 1.64), (0.255, 1.73),
+        (0.205, 1.84), (0.135, 1.94), (0.082, 2.01),
+        (0.068, 2.04), (0.115, 2.08), (0.10, 2.125), (0.0, 2.16),
     ]
     body = lathe("bishop", profile, m, smooth=2)
     # diagonal mitre slit across the front of the head (cut before roughening)
-    slit = box("slit", (0.0, -0.20, 1.60), (0.50, 0.34, 0.09), rot=(0, math.radians(35), 0))
+    slit = box("slit", (0.0, -0.18, 1.62), (0.44, 0.32, 0.085), rot=(0, math.radians(35), 0))
     boolean(body, slit, "DIFFERENCE")
-    rough_surface(body, 0.011)
-    return body, 2.02
+    rough_surface(body, 0.013)
+    return body, 2.16
 
 
 def build_king():
     m = stone()
     profile = [
-        (0.00, 0.00), (0.64, 0.00), (0.64, 0.06), (0.53, 0.085), (0.56, 0.115),
-        (0.43, 0.165), (0.46, 0.195), (0.34, 0.255), (0.31, 0.33),
-        (0.27, 0.50), (0.24, 0.78), (0.235, 1.02), (0.255, 1.20),
-        (0.30, 1.32), (0.33, 1.38), (0.27, 1.46), (0.21, 1.54),
-        (0.25, 1.62), (0.34, 1.76), (0.36, 1.84), (0.29, 1.92),
-        (0.21, 2.00), (0.15, 2.07), (0.11, 2.12), (0.0, 2.15),
+        (0.00, 0.00), (0.50, 0.00), (0.50, 0.05), (0.42, 0.075), (0.44, 0.10),
+        (0.34, 0.15), (0.36, 0.175), (0.27, 0.225), (0.245, 0.30),
+        (0.205, 0.50), (0.185, 0.82), (0.18, 1.12), (0.195, 1.34),
+        (0.235, 1.46), (0.255, 1.52), (0.21, 1.60), (0.165, 1.68),
+        (0.20, 1.76), (0.28, 1.90), (0.295, 1.99), (0.235, 2.08),
+        (0.165, 2.16), (0.115, 2.23), (0.085, 2.28), (0.0, 2.31),
     ]
     body = lathe("king", profile, m, smooth=2)
-    rough_surface(body, 0.011)
+    rough_surface(body, 0.013)
     # classic structural cross finial (the king's chess cue)
-    stone_box("king_cross_v", (0, 0, 2.31), (0.07, 0.07, 0.30), m)
-    stone_box("king_cross_h", (0, 0, 2.33), (0.22, 0.07, 0.07), m)
-    return body, 2.48
+    stone_box("king_cross_v", (0, 0, 2.47), (0.06, 0.06, 0.30), m)
+    stone_box("king_cross_h", (0, 0, 2.50), (0.20, 0.06, 0.06), m)
+    return body, 2.64
 
 
 def build_queen():
     m = stone()
     profile = [
-        (0.00, 0.00), (0.60, 0.00), (0.60, 0.06), (0.50, 0.085), (0.53, 0.115),
-        (0.40, 0.165), (0.43, 0.195), (0.32, 0.255), (0.29, 0.33),
-        (0.25, 0.50), (0.225, 0.78), (0.22, 1.0), (0.24, 1.14),
-        (0.285, 1.24), (0.31, 1.30), (0.25, 1.38), (0.205, 1.46),
-        (0.25, 1.54), (0.32, 1.66), (0.33, 1.76), (0.27, 1.82),
-        (0.16, 1.86), (0.0, 1.88),
+        (0.00, 0.00), (0.46, 0.00), (0.46, 0.05), (0.39, 0.075), (0.41, 0.10),
+        (0.31, 0.15), (0.33, 0.175), (0.25, 0.225), (0.225, 0.30),
+        (0.185, 0.50), (0.165, 0.82), (0.16, 1.06), (0.175, 1.22),
+        (0.215, 1.32), (0.235, 1.38), (0.185, 1.46), (0.15, 1.54),
+        (0.19, 1.62), (0.25, 1.74), (0.26, 1.84), (0.205, 1.90),
+        (0.12, 1.94), (0.0, 1.96),
     ]
     body = lathe("queen", profile, m, smooth=2)
-    rough_surface(body, 0.011)
+    rough_surface(body, 0.013)
     # carved tiara crest: a coronet of points + small center finial
     n = 6
     for i in range(n):
         a = 2 * math.pi * i / n
-        cone(f"queen_point_{i}", (0.27 * math.cos(a), 0.27 * math.sin(a), 1.92),
-             0.075, 0.22, m)
-    sphere("queen_finial", (0, 0, 1.88), 0.085, m)
-    return body, 2.06
+        cone(f"queen_point_{i}", (0.205 * math.cos(a), 0.205 * math.sin(a), 1.99),
+             0.065, 0.22, m)
+    sphere("queen_finial", (0, 0, 1.95), 0.075, m)
+    return body, 2.12
 
 
 def build_pawn():
     m = stone()
     base_profile = [
-        (0.00, 0.00), (0.52, 0.00), (0.52, 0.06), (0.42, 0.085), (0.45, 0.115),
-        (0.34, 0.165), (0.37, 0.195), (0.27, 0.25), (0.25, 0.33),
-        (0.215, 0.46), (0.205, 0.60), (0.25, 0.70), (0.30, 0.78), (0.315, 0.84),
-        (0.26, 0.90), (0.185, 0.96),
+        (0.00, 0.00), (0.42, 0.00), (0.42, 0.05), (0.35, 0.075), (0.37, 0.10),
+        (0.28, 0.145), (0.30, 0.17), (0.225, 0.22), (0.205, 0.29),
+        (0.175, 0.42), (0.165, 0.56), (0.20, 0.66), (0.245, 0.74), (0.255, 0.80),
+        (0.21, 0.86), (0.15, 0.92),
     ]
     body = lathe("pawn", base_profile, m, smooth=2)
     # great-helm shell unioned on the collar
     helm_profile = [
-        (0.00, 0.96), (0.205, 0.96), (0.25, 1.02), (0.265, 1.12), (0.265, 1.30),
-        (0.255, 1.40), (0.215, 1.48), (0.14, 1.53), (0.0, 1.55),
+        (0.00, 0.92), (0.17, 0.92), (0.215, 0.98), (0.23, 1.08), (0.23, 1.28),
+        (0.225, 1.38), (0.19, 1.46), (0.12, 1.51), (0.0, 1.53),
     ]
     helm = lathe("pawn_helm", helm_profile, m, smooth=2)
     boolean(body, helm, "UNION")
     # cross visor: horizontal eye slit + vertical slit
-    boolean(body, box("pawn_eye", (0, -0.28, 1.24), (0.34, 0.18, 0.055)), "DIFFERENCE")
-    boolean(body, box("pawn_vert", (0, -0.28, 1.18), (0.055, 0.18, 0.30)), "DIFFERENCE")
+    boolean(body, box("pawn_eye", (0, -0.26, 1.22), (0.30, 0.18, 0.05)), "DIFFERENCE")
+    boolean(body, box("pawn_vert", (0, -0.26, 1.16), (0.05, 0.18, 0.28)), "DIFFERENCE")
     rough_surface(body, 0.010)
     return body, 1.55
 
@@ -398,23 +407,39 @@ def setup_render():
     except TypeError:
         pass
     s.cycles.device = "CPU"
-    s.render.resolution_x = s.render.resolution_y = 768
+    s.cycles.samples = 120
+    s.render.resolution_x = s.render.resolution_y = 512
     s.render.film_transparent = True
     s.view_settings.view_transform = "Standard"
 
 
-def render_piece(name):
+def assemble(name):
+    """Build the piece and parent every mesh to a pivot so it rotates as one."""
     clear_scene()
     setup_world()
     setup_lighting()
     _, height = PIECES[name]()
-    # parent every piece mesh to a pivot so the whole unit rotates as one
     pivot = bpy.data.objects.new(f"{name}_pivot", None)
     bpy.context.collection.objects.link(pivot)
     for obj in list(bpy.context.scene.objects):
         if obj.type == "MESH" and obj.parent is None:
             obj.parent = pivot
-    setup_board_camera(height * 0.46, height * 1.5)
+    return pivot, height
+
+
+def render_preview(name):
+    """Single south render to the gallery folder — fast validation, no catalog writes."""
+    pivot, height = assemble(name)
+    setup_board_camera(height * 0.5, height * 1.4)
+    setup_render()
+    bpy.context.scene.render.filepath = str(OUT / f"{name}-preview.png")
+    bpy.ops.render.render(write_still=True)
+    print(f"PREVIEW_DONE {name}")
+
+
+def render_piece(name):
+    pivot, height = assemble(name)
+    setup_board_camera(height * 0.5, height * 1.4)
     setup_render()
     out = FRONTEND_UNITS / name / "candidate-claude"
     out.mkdir(parents=True, exist_ok=True)
@@ -431,8 +456,8 @@ def render_piece(name):
 
 if __name__ == "__main__":
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    targets = argv if argv else list(PIECES)
+    preview = "preview" in argv
+    targets = [t for t in argv if t in PIECES] or list(PIECES)
     for t in targets:
-        if t in PIECES:
-            render_piece(t)
+        render_preview(t) if preview else render_piece(t)
     print("PIECES_DONE")
