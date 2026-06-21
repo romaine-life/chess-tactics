@@ -18,8 +18,9 @@ import pieces_claude as P  # noqa: E402
 
 HEAD_GLB = HERE / "knight-head.glb"
 TARGET_H = 2.0          # total piece height
-HEAD_FRAC = 0.76        # head share of height; rest is the turned base
-ORIENT = (-90, 0, 0)    # chosen rotation (rx, ry, rz) degrees -- tune via 'orient'
+HEAD_FRAC = 0.64        # head share of height; rest is the turned base
+ORIENT = (-130, 0, 0)   # raised-head chess-knight pose (rx, ry, rz) degrees
+OVERLAP = 0.05          # how far the neck stump plugs into the base collar
 
 
 def bbox(o):
@@ -65,7 +66,7 @@ def import_head(rx, ry, rz, material):
     md.transform(Matrix.Scale(s, 4))
     mn, mx = data_bounds(md)
     base_top = TARGET_H * (1 - HEAD_FRAC)
-    md.transform(Matrix.Translation(Vector((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, base_top - mn.z))))
+    md.transform(Matrix.Translation(Vector((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, (base_top - OVERLAP) - mn.z))))
     md.update()
     md.materials.clear()
     md.materials.append(material)
@@ -75,9 +76,11 @@ def import_head(rx, ry, rz, material):
 
 
 def build_base(material, base_top):
+    # broad fluted foot rising to a collar, capped flat on top (no open cup)
     profile = [
-        (0.00, 0.00), (0.46, 0.00), (0.46, 0.05), (0.40, 0.075), (0.42, 0.10),
-        (0.33, 0.15), (0.35, 0.175), (0.28, 0.23), (0.255, base_top),
+        (0.00, 0.00), (0.54, 0.00), (0.54, 0.06), (0.45, 0.09), (0.47, 0.13),
+        (0.37, 0.20), (0.39, 0.24), (0.31, 0.31), (0.285, 0.46),
+        (0.31, 0.55), (0.345, 0.61), (0.32, base_top - 0.02), (0.0, base_top),
     ]
     return P.lathe("knight_base", profile, material, smooth=2)
 
@@ -98,11 +101,11 @@ def assemble(rx, ry, rz):
 
 def render_orient_candidates():
     for tag, (rx, ry, rz) in {
-        "rx0": (0, 0, 0),
-        "rxneg90": (-90, 0, 0),
-        "rxpos90": (90, 0, 0),
-        "rx180": (180, 0, 0),
-        "rxneg90_rz180": (-90, 0, 180),
+        "rx-50": (-50, 0, 0),
+        "rx-65": (-65, 0, 0),
+        "rx-80": (-80, 0, 0),
+        "rx-110": (-110, 0, 0),
+        "rx-130": (-130, 0, 0),
     }.items():
         assemble(rx, ry, rz)
         P.setup_board_camera(TARGET_H * 0.5, TARGET_H * 1.4)
@@ -128,10 +131,21 @@ def render_catalog():
     print(f"KNIGHT_DONE -> {out}")
 
 
+def render_preview():
+    assemble(*ORIENT)
+    P.setup_board_camera(TARGET_H * 0.5, TARGET_H * 1.6)
+    P.setup_render()
+    bpy.context.scene.render.filepath = str(HERE / "knight-pose-preview.png")
+    bpy.ops.render.render(write_still=True)
+    print("PREVIEW_DONE")
+
+
 if __name__ == "__main__":
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     if "orient" in argv:
         render_orient_candidates()
+    elif "preview" in argv:
+        render_preview()
     else:
         render_catalog()
     print("KNIGHT_BUILD_DONE")
