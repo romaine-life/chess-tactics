@@ -4523,7 +4523,7 @@ h1 {
   text-transform: uppercase;
 }
 
-.le-brand img {
+.le-brand-crest {
   height: 50px;
   image-rendering: pixelated;
   width: 50px;
@@ -4542,22 +4542,35 @@ h1 {
 .le-field span,
 .le-check {
   color: #ffc95f;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .48rem;
-  letter-spacing: 0;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 15px;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
 .le-brand strong {
   color: #fff;
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.82rem, 1.45vw, 1.1rem);
-  letter-spacing: 0;
-  line-height: 1.15;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: clamp(23px, 2.3vw, 32px);
+  letter-spacing: 0.01em;
+  line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   text-shadow: 0 2px 0 #02070a, 0 0 14px rgba(37, 215, 255, .34);
   white-space: nowrap;
+}
+
+/* The "Chess Tactics" wordmark is the shared bitmap (not type), small as a kicker
+   above the "Level Editor" line — the 03 corner lockup. */
+.le-brand-title {
+  display: block;
+  line-height: 0;
+}
+
+.le-brand-title img {
+  display: block;
+  height: 32px;
+  width: auto;
 }
 
 .le-tool-tabs {
@@ -4603,10 +4616,10 @@ h1 {
 .le-palette-grid button span,
 .le-unit-side,
 .le-tray-assets button span {
-  font-family: "Press Start 2P", "VT323", monospace;
-  font-size: .48rem;
-  letter-spacing: 0;
-  line-height: 1.2;
+  font-family: "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
   text-transform: uppercase;
 }
 
@@ -4721,7 +4734,7 @@ h1 {
   background: rgba(2, 10, 15, .78);
   border: 1px solid rgba(101, 184, 255, .34);
   color: var(--le-ink);
-  font: 1rem "VT323", ui-monospace, monospace;
+  font: 16px/1 "Jersey 10", "VT323", ui-monospace, monospace;
   min-height: 32px;
   padding: 4px 8px;
   width: 100%;
@@ -4767,9 +4780,13 @@ h1 {
 }
 
 .le-board-stage {
+  /* The painted night scene from the main menu sits behind the board, dimmed by a
+     dark overlay so painted tiles stay readable — the 03 concept backdrop. */
   background:
-    radial-gradient(720px 430px at 48% 22%, rgba(19, 67, 98, .58), transparent 70%),
-    linear-gradient(180deg, rgba(7, 22, 33, .98), rgba(2, 8, 13, .98));
+    radial-gradient(760px 460px at 50% 16%, rgba(19, 67, 98, .32), transparent 72%),
+    linear-gradient(180deg, rgba(4, 12, 20, .52), rgba(2, 8, 13, .8)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center top / cover no-repeat,
+    #02080d;
   border: 1px solid rgba(101, 184, 255, .26);
   box-shadow: inset 0 0 0 1px rgba(212, 170, 79, .14);
   display: grid;
@@ -4888,7 +4905,7 @@ h1 {
 
 .le-unit-side button {
   color: var(--le-ink);
-  font: 1.15rem "Press Start 2P", "VT323", monospace;
+  font: 20px/1 "Jersey 10", "VT323", ui-monospace, monospace;
   min-height: 38px;
   padding: 4px;
 }
@@ -9307,6 +9324,231 @@ h1 {
   .tileset-view-controls {
     max-height: 260px;
   }
+}
+
+/* Level editor: full-bleed board + a single control rail (no header row). */
+.tileset-studio-shell.is-level {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tileset-view-mode.level-editor {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.level-editor-controls {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 10px;
+  max-height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.level-brush-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.level-brush {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: #d8eaff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+  text-align: left;
+}
+
+.level-brush:hover {
+  border-color: rgba(104, 198, 255, 0.6);
+}
+
+.level-brush.is-active {
+  border-color: rgba(104, 198, 255, 0.95);
+  background: rgba(20, 52, 78, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(104, 198, 255, 0.45);
+}
+
+.level-brush-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  flex: none;
+}
+
+.level-brush-swatch.is-erase {
+  background:
+    linear-gradient(135deg, transparent 44%, #d8657a 44%, #d8657a 56%, transparent 56%),
+    rgba(20, 30, 40, 0.9);
+}
+
+.tileset-zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+  color: #a9bdd2;
+}
+
+.tileset-zoom-control input[type='range'] {
+  flex: 1;
+}
+
+.level-editor-status {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(67, 127, 179, 0.22);
+  font: 700 12px/1.35 var(--ds-font-sans, system-ui, sans-serif);
+  color: #9eb1c5;
+}
+
+.level-editor-status .is-warning {
+  color: #ffcf6b;
+}
+
+.level-editor-status .is-ok {
+  color: #7fe0a0;
+}
+
+.level-editor-status .is-hint {
+  color: #8298ad;
+}
+
+.tileset-hint-text {
+  margin: 2px 0 0;
+  color: #8298ad;
+  font: 600 11px/1.4 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+/* Units sit in their own layer above the tiles, anchored to each diamond's
+   top-centre (the board point the tile cell is positioned on). */
+.level-unit-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.level-unit {
+  position: absolute;
+  transform: translate(-50%, calc(-100% + 12px));
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
+}
+
+.level-unit img {
+  display: block;
+  height: 88px;
+  width: auto;
+  image-rendering: pixelated;
+}
+
+.level-unit.is-enemy img {
+  filter: hue-rotate(150deg) saturate(1.25);
+}
+
+.level-unit.is-neutral img {
+  filter: grayscale(0.85);
+}
+
+.level-unit-chip {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #f3f7fb;
+  font: 900 15px/1 var(--ds-font-sans, system-ui, sans-serif);
+  background: linear-gradient(180deg, rgba(46, 96, 142, 0.96), rgba(18, 44, 70, 0.98));
+  border: 1.5px solid rgba(150, 205, 255, 0.7);
+}
+
+.level-unit.is-enemy .level-unit-chip {
+  background: linear-gradient(180deg, rgba(150, 54, 64, 0.96), rgba(74, 20, 28, 0.98));
+  border-color: rgba(255, 160, 160, 0.7);
+}
+
+.level-unit.is-neutral .level-unit-chip {
+  background: linear-gradient(180deg, rgba(96, 102, 110, 0.96), rgba(40, 46, 54, 0.98));
+  border-color: rgba(200, 208, 216, 0.6);
+}
+
+.level-unit-glyph {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: #cfe6ff;
+  font: 900 13px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+/* The socket board lives inside the asset-backed le- chrome: let it fill the
+   board frame (which otherwise centres a fixed canvas). */
+.le-board-frame.le-board-live {
+  place-items: stretch;
+  overflow: hidden;
+}
+
+.le-board-live .tileset-view-stage {
+  width: 100%;
+  height: 100%;
+}
+
+.le-legality-readout {
+  color: var(--le-ink, #ecf7fb);
+  font: 1rem "VT323", ui-monospace, monospace;
+}
+
+.le-legality-readout strong {
+  color: #e5fbff;
+}
+
+.le-legality-status {
+  font: 1rem "VT323", ui-monospace, monospace;
+  color: var(--le-muted, #9fb3bd);
+}
+
+.le-legality-status.is-ok {
+  color: #76d65f;
+}
+
+.le-legality-status.is-warning {
+  color: #ffcf6b;
+}
+
+.le-tray-glyph {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #f3f7fb;
+  font: 900 14px/1 var(--ds-font-sans, system-ui, sans-serif);
+  background: linear-gradient(180deg, rgba(46, 96, 142, 0.96), rgba(18, 44, 70, 0.98));
+  border: 1.5px solid rgba(150, 205, 255, 0.7);
+}
+
+.le-tray-glyph.is-enemy {
+  background: linear-gradient(180deg, rgba(150, 54, 64, 0.96), rgba(74, 20, 28, 0.98));
+  border-color: rgba(255, 160, 160, 0.7);
+}
+
+.le-tray-glyph.is-neutral {
+  background: linear-gradient(180deg, rgba(96, 102, 110, 0.96), rgba(40, 46, 54, 0.98));
+  border-color: rgba(200, 208, 216, 0.6);
 }
 
 .tileset-review-stage-tabs {
