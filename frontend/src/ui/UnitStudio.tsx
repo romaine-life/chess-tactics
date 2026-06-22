@@ -89,64 +89,7 @@ const directionCompassCells: Array<Direction | 'center'> = [
   'east',
 ];
 
-const spriteFor = (piece: PieceId, faction: Faction) => `/assets/units/${piece}/${faction}/south.png`;
 const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
-const paletteSprite = (piece: PieceId) => (faction: Faction) => spriteFor(piece, faction);
-// Tentative rook candidates: each is its own catalog entry with all 8
-// board-calibrated directions, and does not touch the production rook above.
-const rookCandidateSprite = (slug: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/candidate-${slug}/${direction}.png`;
-type RookCandidate = { slug: string; name: string; read: string };
-const rookCandidates: RookCandidate[] = [
-  { slug: 'old-keep', name: 'Old Keep', read: 'Stacked four-tier base, merlon battlements, vertical plank gate' },
-  { slug: 'sentinel', name: 'Sentinel', read: 'Pared-down two-step base, merlon top, cleaner silhouette' },
-  { slug: 'bastion', name: 'Bastion', read: 'Cantilevered battlement box overhanging the shaft, closed walls' },
-  { slug: 'gatewatch', name: 'Gatewatch', read: 'Open side notches with gate-front and rear wall; facing reads at a glance' },
-  { slug: 'masonkeep', name: 'Masonkeep', read: 'One carved stone mass: cavity grime, worn light edges, subtle seams' },
-  { slug: 'breachhold', name: 'Breachhold', read: 'Running-bond ashlar with four distinct per-pillar battle failures' },
-  { slug: 'ruinwall', name: 'Ruinwall', read: 'Rough-hewn rock surface with a single sheared corner pillar' },
-];
-const rookCandidateAssets: UnitAsset[] = rookCandidates.map((candidate) => ({
-  id: `rook-candidate-${candidate.slug}`,
-  family: 'rook',
-  label: `Rook · ${candidate.name}`,
-  badge: 'Candidate · 8 directions',
-  preview: `/assets/units/rook/candidate-${candidate.slug}/south.png`,
-  read: candidate.read,
-  status: 'tentative candidate',
-  directions: rookDirections,
-  factionMode: 'fixed',
-  defaultScale: 100,
-  footprint: squareFootprint(512),
-  unitAnchorY: '78%',
-  sprite: rookCandidateSprite(candidate.slug),
-}));
-
-// Tentative non-rook pieces (Claude first pass), each its own 8-direction entry,
-// separate from the production palette sprites above.
-const pieceCandidateSprite = (piece: PieceId) => (_faction: Faction, direction: Direction) =>
-  `/assets/units/${piece}/candidate-claude/${direction}.png`;
-const pieceCandidates: Array<{ piece: PieceId; name: string; read: string }> = [
-  { piece: 'king', name: 'King', read: 'Turned body with structural cross finial' },
-  { piece: 'queen', name: 'Queen', read: 'Turned body with carved coronet of points' },
-  { piece: 'bishop', name: 'Bishop', read: 'Turned body with diagonal mitre slit' },
-  { piece: 'pawn', name: 'Pawn', read: 'Great-helm shell with cross visor' },
-  { piece: 'knight', name: 'Knight', read: 'Armored warhorse head — chamfron + crinet — on a turned base (CC-BY source)' },
-];
-const pieceCandidateAssets: UnitAsset[] = pieceCandidates.map((candidate) => ({
-  id: `${candidate.piece}-candidate-claude`,
-  family: candidate.piece,
-  label: `${candidate.name} · Claude`,
-  badge: 'Candidate · 8 directions',
-  preview: `/assets/units/${candidate.piece}/candidate-claude/south.png`,
-  read: candidate.read,
-  status: 'tentative candidate',
-  directions: rookDirections,
-  factionMode: 'fixed',
-  defaultScale: 100,
-  footprint: circleFootprint(512),
-  unitAnchorY: '80%',
-  sprite: pieceCandidateSprite(candidate.piece),
-}));
 
 // Shown when a unit has no sprite for the chosen facing — a placeholder, never a
 // disabled control. Directions are always selectable.
@@ -164,26 +107,13 @@ const hasDirectionSprite = (unit: UnitAsset, dir: Direction) =>
 
 const unitAssets: UnitAsset[] = [
   {
-    id: 'pawn-production',
-    family: 'pawn',
-    label: 'Pawn',
-    badge: 'Production south',
-    preview: spriteFor('pawn', 'blue'),
-    read: 'Compact pawn with front shield',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(128),
-    sprite: paletteSprite('pawn'),
-  },
-  {
     id: 'rook-blender-v4-calibrated',
     family: 'rook',
     label: 'Rook',
     badge: '8 directions · calibrated',
     preview: '/assets/units/rook/blender-render-v4-calibrated/south.png',
     read: 'Board-calibrated castle rook with exact eight-direction rotations',
-    status: 'current default candidate',
+    status: 'active Blender production unit',
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
@@ -192,61 +122,8 @@ const unitAssets: UnitAsset[] = [
     unitAnchorY: '71.753%',
     sprite: rookVariantSprite('blender-render-v4-calibrated'),
   },
-  ...rookCandidateAssets,
-  {
-    id: 'knight-production',
-    family: 'knight',
-    label: 'Knight',
-    badge: 'Production south',
-    preview: spriteFor('knight', 'blue'),
-    read: 'Horse-head chess marker',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(128),
-    sprite: paletteSprite('knight'),
-  },
-  {
-    id: 'bishop-production',
-    family: 'bishop',
-    label: 'Bishop',
-    badge: 'Production south',
-    preview: spriteFor('bishop', 'blue'),
-    read: 'Tall bishop cap profile',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(128),
-    sprite: paletteSprite('bishop'),
-  },
-  {
-    id: 'queen-production',
-    family: 'queen',
-    label: 'Queen',
-    badge: 'Production south',
-    preview: spriteFor('queen', 'blue'),
-    read: 'Crown and narrow royal body',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(128),
-    sprite: paletteSprite('queen'),
-  },
-  {
-    id: 'king-production',
-    family: 'king',
-    label: 'King',
-    badge: 'Production south',
-    preview: spriteFor('king', 'blue'),
-    read: 'Cross crown chess identity',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(128),
-    sprite: paletteSprite('king'),
-  },
-  ...pieceCandidateAssets,
 ];
+const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
 
 const grassTile = '/assets/tiles/canonical-accepted/grass-clean-a.png';
 const stoneTile = '/assets/tiles/canonical-accepted/stone-clean-a.png';
@@ -276,6 +153,7 @@ const isUnitStudioMode = (value: string | null): value is UnitStudioMode => valu
 const isUnitCollectionFilter = (value: string | null): value is UnitCollectionFilter => value === 'production' || value === 'candidates';
 const unitCollectionForAsset = (unit: UnitAsset): UnitCollectionFilter =>
   unit.id.includes('candidate') || unit.badge.toLowerCase().includes('candidate') ? 'candidates' : 'production';
+const activeUnitCollectionFilters = unitCollectionFilters.filter(([filter]) => unitAssets.some((unit) => unitCollectionForAsset(unit) === filter));
 const unitFromLegacyQuery = (params = new URLSearchParams(window.location.search)) => {
   const queryUnit = params.get('unit');
   if (isUnitAssetId(queryUnit)) return queryUnit;
@@ -303,6 +181,9 @@ const readUnitStudioRoute = () => {
   const collectionsParam = params.get('collections');
   const queryFamilies = familiesParam === null ? undefined : familiesParam.split(',').filter(isPieceId);
   const queryCollections = collectionsParam === null ? undefined : collectionsParam.split(',').filter(isUnitCollectionFilter);
+  const activeCollections = activeUnitCollectionFilters.map(([filter]) => filter);
+  const normalizedFamilies = queryFamilies?.filter((family) => activeUnitFamilies.includes(family));
+  const normalizedCollections = queryCollections?.filter((collection) => activeCollections.includes(collection));
   const initialScale =
     queryScale !== undefined && Number.isFinite(queryScale)
       ? clampUnitScale(queryScale)
@@ -316,8 +197,8 @@ const readUnitStudioRoute = () => {
     direction: 'south' as Direction,
     unitScale: initialScale,
     footprintVisible: params.get('footprint') === 'on',
-    familyFilters: queryFamilies ?? [...new Set(unitAssets.map((item) => item.family))],
-    collectionFilters: queryCollections ?? unitCollectionFilters.map(([filter]) => filter),
+    familyFilters: normalizedFamilies && normalizedFamilies.length > 0 ? normalizedFamilies : activeUnitFamilies,
+    collectionFilters: normalizedCollections && normalizedCollections.length > 0 ? normalizedCollections : activeCollections,
   };
 };
 const clampUnitScale = (value: number) => Math.min(500, Math.max(25, value));
@@ -546,8 +427,8 @@ export function UnitStudio() {
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedFamilyFilters(Object.keys(familyLabels) as PieceId[]);
-                              setSelectedCollectionFilters(unitCollectionFilters.map(([filter]) => filter));
+                              setSelectedFamilyFilters(activeUnitFamilies);
+                              setSelectedCollectionFilters(activeUnitCollectionFilters.map(([filter]) => filter));
                             }}
                           >
                             Select all
@@ -565,7 +446,7 @@ export function UnitStudio() {
                       </div>
                       <section className="tileset-filter-group" aria-label="Unit families">
                         <h3>Unit Family</h3>
-                        {(Object.keys(familyLabels) as PieceId[]).map((piece) => (
+                        {activeUnitFamilies.map((piece) => (
                           <button
                             key={piece}
                             type="button"
@@ -582,7 +463,7 @@ export function UnitStudio() {
                       </section>
                       <section className="tileset-filter-group" aria-label="Unit collections">
                         <h3>Collection</h3>
-                        {unitCollectionFilters.map(([filter, label]) => (
+                        {activeUnitCollectionFilters.map(([filter, label]) => (
                           <button
                             key={filter}
                             type="button"
