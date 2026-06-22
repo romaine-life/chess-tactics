@@ -1,0 +1,12 @@
+{
+  "id": "rook-sentinel",
+  "name": "Sentinel",
+  "basePiece": "rook",
+  "tentative": true,
+  "sourceRender": "v2-simple-base",
+  "description": "Pared-down two-step base; merlon top; cleaner silhouette.",
+  "sprite": "south.png",
+  "model": "model.blend",
+  "isolated": "Standalone candidate. Not wired into the app; does not affect the production rook unit at frontend/public/assets/units/rook.",
+  "attribution": null
+}

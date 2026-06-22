@@ -1,0 +1,12 @@
+{
+  "id": "rook-gatewatch",
+  "name": "Gatewatch",
+  "basePiece": "rook",
+  "tentative": true,
+  "sourceRender": "v4-open-sides",
+  "description": "Open side notches, gate-front and rear wall; facing reads at a glance.",
+  "sprite": "south.png",
+  "model": "model.blend",
+  "isolated": "Standalone candidate. Not wired into the app; does not affect the production rook unit at frontend/public/assets/units/rook.",
+  "attribution": null
+}

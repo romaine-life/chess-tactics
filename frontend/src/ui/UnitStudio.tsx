@@ -66,6 +66,73 @@ const directionCompassCells: Array<Direction | 'center'> = [
 const spriteFor = (piece: PieceId, faction: Faction) => `/assets/units/${piece}/${faction}/south.png`;
 const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
 const paletteSprite = (piece: PieceId) => (faction: Faction) => spriteFor(piece, faction);
+// Tentative rook candidates: each is its own catalog entry with all 8
+// board-calibrated directions, and does not touch the production rook above.
+const rookCandidateSprite = (slug: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/candidate-${slug}/${direction}.png`;
+type RookCandidate = { slug: string; name: string; read: string };
+const rookCandidates: RookCandidate[] = [
+  { slug: 'old-keep', name: 'Old Keep', read: 'Stacked four-tier base, merlon battlements, vertical plank gate' },
+  { slug: 'sentinel', name: 'Sentinel', read: 'Pared-down two-step base, merlon top, cleaner silhouette' },
+  { slug: 'bastion', name: 'Bastion', read: 'Cantilevered battlement box overhanging the shaft, closed walls' },
+  { slug: 'gatewatch', name: 'Gatewatch', read: 'Open side notches with gate-front and rear wall; facing reads at a glance' },
+  { slug: 'masonkeep', name: 'Masonkeep', read: 'One carved stone mass: cavity grime, worn light edges, subtle seams' },
+  { slug: 'breachhold', name: 'Breachhold', read: 'Running-bond ashlar with four distinct per-pillar battle failures' },
+  { slug: 'ruinwall', name: 'Ruinwall', read: 'Rough-hewn rock surface with a single sheared corner pillar' },
+];
+const rookCandidateAssets: UnitAsset[] = rookCandidates.map((candidate) => ({
+  id: `rook-candidate-${candidate.slug}`,
+  family: 'rook',
+  label: `Rook · ${candidate.name}`,
+  badge: 'Candidate · 8 directions',
+  preview: `/assets/units/rook/candidate-${candidate.slug}/south.png`,
+  read: candidate.read,
+  status: 'tentative candidate',
+  directions: rookDirections,
+  factionMode: 'fixed',
+  defaultSize: 96,
+  unitAnchorY: '78%',
+  sprite: rookCandidateSprite(candidate.slug),
+}));
+
+// Tentative non-rook pieces (Claude first pass), each its own 8-direction entry,
+// separate from the production palette sprites above.
+const pieceCandidateSprite = (piece: PieceId) => (_faction: Faction, direction: Direction) =>
+  `/assets/units/${piece}/candidate-claude/${direction}.png`;
+const pieceCandidates: Array<{ piece: PieceId; name: string; read: string }> = [
+  { piece: 'king', name: 'King', read: 'Turned body with structural cross finial' },
+  { piece: 'queen', name: 'Queen', read: 'Turned body with carved coronet of points' },
+  { piece: 'bishop', name: 'Bishop', read: 'Turned body with diagonal mitre slit' },
+  { piece: 'pawn', name: 'Pawn', read: 'Great-helm shell with cross visor' },
+  { piece: 'knight', name: 'Knight', read: 'Armored warhorse head — chamfron + crinet — on a turned base (CC-BY source)' },
+];
+const pieceCandidateAssets: UnitAsset[] = pieceCandidates.map((candidate) => ({
+  id: `${candidate.piece}-candidate-claude`,
+  family: candidate.piece,
+  label: `${candidate.name} · Claude`,
+  badge: 'Candidate · 8 directions',
+  preview: `/assets/units/${candidate.piece}/candidate-claude/south.png`,
+  read: candidate.read,
+  status: 'tentative candidate',
+  directions: rookDirections,
+  factionMode: 'fixed',
+  defaultSize: 92,
+  unitAnchorY: '80%',
+  sprite: pieceCandidateSprite(candidate.piece),
+}));
+
+// Shown when a unit has no sprite for the chosen facing — a placeholder, never a
+// disabled control. Directions are always selectable.
+const MISSING_DIRECTION_SPRITE =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>" +
+      "<path d='M80 26 L144 80 L80 134 L16 80 Z' fill='none' stroke='#8fb8ff' stroke-width='3' stroke-dasharray='6 6' opacity='0.4'/>" +
+      "<text x='80' y='96' font-size='42' text-anchor='middle' fill='#8fb8ff' opacity='0.5' font-family='sans-serif'>?</text>" +
+      '</svg>',
+  );
+
+const hasDirectionSprite = (unit: UnitAsset, dir: Direction) =>
+  unit.directions ? unit.directions.includes(dir) : dir === 'south';
 
 const unitAssets: UnitAsset[] = [
   {
@@ -95,6 +162,7 @@ const unitAssets: UnitAsset[] = [
     unitAnchorY: '71.753%',
     sprite: rookVariantSprite('blender-render-v4-calibrated'),
   },
+  ...rookCandidateAssets,
   {
     id: 'knight-production',
     family: 'knight',
@@ -143,6 +211,7 @@ const unitAssets: UnitAsset[] = [
     defaultSize: 76,
     sprite: paletteSprite('king'),
   },
+  ...pieceCandidateAssets,
 ];
 
 const grassTile = '/assets/tiles/canonical-accepted/grass-clean-a.png';
@@ -208,10 +277,9 @@ export function UnitStudio() {
     return isDirection(queryDirection) ? queryDirection : 'south';
   });
   const selectedUnit = unitAssets.find((unit) => unit.id === unitId) ?? unitAssets[0];
-  const selectedDirection = selectedUnit.directions?.includes(direction) ? direction : 'south';
-  const selectedSprite = selectedUnit.sprite(faction, selectedDirection);
+  const directionAvailable = hasDirectionSprite(selectedUnit, direction);
+  const selectedSprite = directionAvailable ? selectedUnit.sprite(faction, direction) : MISSING_DIRECTION_SPRITE;
   const selectedTile = tileContexts.find((item) => item.id === tileContext) ?? tileContexts[0];
-  const hasEightDirections = Boolean(selectedUnit.directions?.length);
   const unitPlacementStyle: UnitPlacementStyle = {
     '--tile-anchor-x': '50%',
     '--tile-anchor-y': '54px',
@@ -250,8 +318,7 @@ export function UnitStudio() {
   };
 
   const rotateDirection = () => {
-    if (!hasEightDirections) return;
-    const directionIndex = rookDirections.indexOf(selectedDirection);
+    const directionIndex = rookDirections.indexOf(direction);
     const nextDirection = rookDirections[(directionIndex + 1) % rookDirections.length];
     selectDirection(nextDirection);
   };
@@ -334,7 +401,7 @@ export function UnitStudio() {
               <p>Tile View</p>
               <h2>{selectedUnit.label} on {selectedTile.label}</h2>
             </div>
-            <span>{hasEightDirections ? `${rookDirectionLabel[selectedDirection]} facing` : 'south facing'} · {selectedUnit.status}</span>
+            <span>{rookDirectionLabel[direction]} facing{directionAvailable ? '' : ' · placeholder'} · {selectedUnit.status}</span>
           </div>
 
           <div className="unit-studio-workbench">
@@ -462,11 +529,10 @@ export function UnitStudio() {
                       type="button"
                       className="unit-studio-compass-center"
                       key="center"
-                      disabled={!hasEightDirections}
                       onClick={rotateDirection}
                     >
                       <span>Facing</span>
-                      <strong>{hasEightDirections ? rookDirectionLabel[selectedDirection] : 'S'}</strong>
+                      <strong>{rookDirectionLabel[direction]}</strong>
                       <em>Rotate</em>
                     </button>
                   ) : (
@@ -474,9 +540,9 @@ export function UnitStudio() {
                       type="button"
                       key={item}
                       role="radio"
-                      aria-checked={selectedDirection === item}
-                      disabled={!hasEightDirections}
-                      className={`unit-studio-compass-button is-${item}${selectedDirection === item ? ' is-active' : ''}`}
+                      aria-checked={direction === item}
+                      title={hasDirectionSprite(selectedUnit, item) ? rookDirectionLabel[item] : `${rookDirectionLabel[item]} — no sprite yet (placeholder)`}
+                      className={`unit-studio-compass-button is-${item}${direction === item ? ' is-active' : ''}${hasDirectionSprite(selectedUnit, item) ? '' : ' is-missing'}`}
                       onClick={() => selectDirection(item)}
                     >
                       <span aria-hidden="true" />
@@ -506,7 +572,7 @@ export function UnitStudio() {
                 <div><dt>Family</dt><dd>{familyLabels[selectedUnit.family]}</dd></div>
                 <div><dt>Size</dt><dd>{unitSize}px</dd></div>
                 <div><dt>Footprint</dt><dd>{footprintVisible ? `${footprintShape} · ${footprintSize}px` : 'Hidden'}</dd></div>
-                <div><dt>Facing</dt><dd>{hasEightDirections ? rookDirectionLabel[selectedDirection] : 'South'}</dd></div>
+                <div><dt>Facing</dt><dd>{rookDirectionLabel[direction]}{directionAvailable ? '' : ' (placeholder)'}</dd></div>
                 <div><dt>Status</dt><dd>{selectedUnit.status}</dd></div>
                 <div><dt>Read</dt><dd>{selectedUnit.read}</dd></div>
               </dl>
