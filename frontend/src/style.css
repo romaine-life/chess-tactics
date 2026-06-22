@@ -727,9 +727,14 @@ h1 {
   --menu-panel: rgba(5, 15, 23, .88);
   --menu-panel-strong: rgba(7, 20, 30, .94);
   --menu-line: rgba(80, 129, 151, .58);
+  --menu-type-action: clamp(24px, 2.25vw, 34px);
+  --menu-type-panel-primary: 20px;
+  --menu-type-panel-secondary: 14px;
+  --menu-type-micro: 12px;
+  --menu-type-title: clamp(35px, 3.72vw, 62px);
   position: relative;
   display: grid;
-  grid-template-columns: minmax(300px, 370px) minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(300px, 370px) minmax(0, 1fr) minmax(440px, 540px);
   grid-template-rows: auto 1fr auto;
   gap: 12px 18px;
   height: 100%;
@@ -763,7 +768,7 @@ h1 {
   grid-column: 3;
   grid-row: 1 / 3;
   justify-self: end;
-  max-width: 360px;
+  max-width: 540px;
   min-width: 0;
   width: 100%;
 }
@@ -808,6 +813,32 @@ h1 {
   gap: 16px;
 }
 
+.main-menu-brand-live {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 18px;
+  text-decoration: none;
+}
+
+.main-menu-brand-type {
+  display: grid;
+  min-width: 0;
+}
+
+.main-menu-brand-live::after {
+  content: none;
+}
+
+.main-menu-brand-mark {
+  display: block;
+  width: 86px;
+  height: 116px;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+}
+
 .main-menu-eyebrow {
   color: #3c9bf7;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
@@ -842,22 +873,24 @@ h1 {
   line-height: 1;
 }
 
-.main-menu-brand h2 {
+.main-menu-brand h2,
+.main-menu-brand-type strong {
   color: #f0eadb;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: clamp(2.2rem, 3.72vw, 3.9rem);
+  font-size: var(--menu-type-title);
+  font-weight: 400;
   line-height: 1.12;
   text-shadow: 0 4px 0 #020507, 0 0 22px rgba(61, 150, 235, .14);
   text-transform: uppercase;
   white-space: nowrap;
 }
 
-.main-menu-brand p {
+.main-menu-brand p,
+.main-menu-brand-type > span:last-child {
   color: #3d9bf1;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.52rem, 1vw, .9rem);
+  font-size: var(--menu-type-panel-secondary);
   line-height: 1.6;
-  margin-top: 12px;
   text-transform: uppercase;
 }
 
@@ -1371,12 +1404,12 @@ h1 {
 .profile-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px 10px 14px;
+  gap: 18px;
+  padding: 15px 18px 15px 20px;
   background: transparent;
   border: 0;
   box-shadow: none;
-  min-height: 76px;
+  min-height: 112px;
   position: relative;
 }
 
@@ -1389,8 +1422,8 @@ h1 {
 /* Crest: transparent PNG cropped from the approved render by normalize-main-menu-profile.mjs. */
 .profile-crest {
   flex: none;
-  width: 44px;
-  height: 46px;
+  width: 78px;
+  height: 80px;
   background: url("/assets/ui/main-menu/profile-crest.png") center / contain no-repeat;
   image-rendering: pixelated;
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .72));
@@ -1400,13 +1433,13 @@ h1 {
   display: grid;
   line-height: 1.2;
   min-width: 0;
-  padding-right: 4px;
+  padding-right: 8px;
 }
 
 .profile-name strong {
   color: var(--ink-strong);
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .62rem;
+  font-size: var(--menu-type-panel-primary);
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1414,10 +1447,10 @@ h1 {
 }
 
 .profile-name small {
-  margin-top: 4px;
+  margin-top: 8px;
   color: var(--cobalt-bright);
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .46rem;
+  font-size: var(--menu-type-panel-secondary);
   letter-spacing: .04em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1427,17 +1460,20 @@ h1 {
   align-items: center;
   display: flex;
   flex: none;
-  gap: 9px;
+  gap: 14px;
   margin-left: auto;
 }
 
 .profile-auth {
-  padding: 6px 10px;
+  display: inline-grid;
+  place-items: center;
+  min-height: 52px;
+  padding: 10px 16px;
   border: 2px solid var(--menu-line);
   background: var(--panel-inset, #0a131b);
   color: var(--ink);
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .46rem;
+  font-size: var(--menu-type-panel-secondary);
   letter-spacing: .04em;
   text-transform: uppercase;
   cursor: pointer;
@@ -1449,7 +1485,7 @@ h1 {
 .profile-status {
   color: var(--cobalt-bright);
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .46rem;
+  font-size: var(--menu-type-panel-secondary);
   letter-spacing: .04em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1465,8 +1501,8 @@ h1 {
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 52px;
+  height: 52px;
   padding: 0;
   border: 2px solid var(--menu-line);
   background: var(--panel-inset, #0a131b);
@@ -1484,8 +1520,8 @@ h1 {
 }
 
 .profile-gear .profile-icon-img {
-  height: 20px;
-  width: 20px;
+  height: 30px;
+  width: 30px;
 }
 
 .profile-gear:hover,
@@ -11256,6 +11292,19 @@ button.tileset-relationship-cell {
   width: 268px;
   padding: 12px;
   border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .12s ease, background .12s ease, box-shadow .12s ease;
+}
+
+.unit-studio-product:hover,
+.unit-studio-product:focus-visible {
+  border-color: rgba(111, 210, 255, 0.78);
+  background: rgba(8, 27, 41, 0.96);
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(111, 210, 255, 0.28),
+    0 0 18px rgba(42, 166, 255, 0.18);
 }
 
 .unit-studio-product strong,
