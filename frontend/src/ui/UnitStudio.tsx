@@ -40,7 +40,7 @@ const familyLabels: Record<PieceId, string> = {
   king: 'King',
 };
 
-const rookDirections: Direction[] = ['south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west'];
+const rookDirections: Direction[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const rookDirectionLabel: Record<Direction, string> = {
   south: 'S',
   'south-east': 'SE',
@@ -52,15 +52,15 @@ const rookDirectionLabel: Record<Direction, string> = {
   'south-west': 'SW',
 };
 const directionCompassCells: Array<Direction | 'center'> = [
+  'west',
   'north-west',
   'north',
-  'north-east',
-  'west',
-  'center',
-  'east',
   'south-west',
+  'center',
+  'north-east',
   'south',
   'south-east',
+  'east',
 ];
 
 const spriteFor = (piece: PieceId, faction: Faction) => `/assets/units/${piece}/${faction}/south.png`;

@@ -11722,35 +11722,35 @@ button.tileset-relationship-cell {
 }
 
 .unit-studio-compass-button.is-north span {
-  transform: rotate(0deg);
-}
-
-.unit-studio-compass-button.is-north-east span {
   transform: rotate(45deg);
 }
 
-.unit-studio-compass-button.is-east span {
+.unit-studio-compass-button.is-north-east span {
   transform: rotate(90deg);
 }
 
-.unit-studio-compass-button.is-south-east span {
+.unit-studio-compass-button.is-east span {
   transform: rotate(135deg);
 }
 
-.unit-studio-compass-button.is-south span {
+.unit-studio-compass-button.is-south-east span {
   transform: rotate(180deg);
 }
 
-.unit-studio-compass-button.is-south-west span {
+.unit-studio-compass-button.is-south span {
   transform: rotate(225deg);
 }
 
-.unit-studio-compass-button.is-west span {
+.unit-studio-compass-button.is-south-west span {
   transform: rotate(270deg);
 }
 
-.unit-studio-compass-button.is-north-west span {
+.unit-studio-compass-button.is-west span {
   transform: rotate(315deg);
+}
+
+.unit-studio-compass-button.is-north-west span {
+  transform: rotate(0deg);
 }
 
 .unit-studio-detail .unit-studio-compass-button.is-active span {
