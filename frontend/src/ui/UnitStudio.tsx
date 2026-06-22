@@ -1,4 +1,5 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 
 type Faction = 'blue' | 'red' | 'neutral';
@@ -6,6 +7,11 @@ type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
 type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 type TileContextId = 'grass' | 'stone' | 'water';
 type FootprintShape = 'square' | 'circle';
+type UnitFootprint = {
+  shape: FootprintShape;
+  sourceCanvasPx: number;
+  sourceFootprintPx: number;
+};
 type UnitPlacementStyle = CSSProperties & {
   '--tile-anchor-x': string;
   '--tile-anchor-y': string;
@@ -25,11 +31,39 @@ type UnitAsset = {
   status: string;
   directions?: Direction[];
   factionMode: 'fixed' | 'palette';
-  defaultSize: number;
+  defaultScale: number;
+  footprint: UnitFootprint;
   unitAnchorX?: string;
   unitAnchorY?: string;
   sprite: (faction: Faction, direction: Direction) => string;
 };
+
+const CANONICAL_CIRCLE_FOOTPRINT_PX = 96;
+const SQUARE_EQUAL_AREA_FACTOR = Math.sqrt(Math.PI) / 2;
+const canonicalFootprintSize = (shape: FootprintShape) =>
+  shape === 'square' ? Math.round(CANONICAL_CIRCLE_FOOTPRINT_PX * SQUARE_EQUAL_AREA_FACTOR) : CANONICAL_CIRCLE_FOOTPRINT_PX;
+const renderSizeFromFootprint = (unit: UnitAsset, scale: number) =>
+  Math.round((canonicalFootprintSize(unit.footprint.shape) * (scale / 100) * unit.footprint.sourceCanvasPx) / unit.footprint.sourceFootprintPx);
+const footprintSizeFromScale = (unit: UnitAsset, scale: number) =>
+  Math.round(canonicalFootprintSize(unit.footprint.shape) * (scale / 100));
+const circleFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
+  shape: 'circle',
+  sourceCanvasPx,
+  sourceFootprintPx,
+});
+const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
+  shape: 'square',
+  sourceCanvasPx,
+  sourceFootprintPx,
+});
+const ROOK_BLENDER_V4_CANVAS_PX = 512;
+const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
+const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '49.9%';
+const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '71.753%';
+const KNIGHT_WOODEN_CANVAS_PX = 512;
+const KNIGHT_WOODEN_CONTACT_FOOTPRINT_PX = 174;
+const KNIGHT_WOODEN_CONTACT_ANCHOR_X = '49.9%';
+const KNIGHT_WOODEN_CONTACT_ANCHOR_Y = '74.219%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -40,7 +74,7 @@ const familyLabels: Record<PieceId, string> = {
   king: 'King',
 };
 
-const rookDirections: Direction[] = ['south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west'];
+const rookDirections: Direction[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const rookDirectionLabel: Record<Direction, string> = {
   south: 'S',
   'south-east': 'SE',
@@ -70,65 +104,10 @@ const directionCompassCells: Array<Direction | 'center'> = [
   'east',
 ];
 
-const spriteFor = (piece: PieceId, faction: Faction) => `/assets/units/${piece}/${faction}/south.png`;
 const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
 // Wooden-knight candidate: a board-calibrated Blender render of the carved
 // Staunton OBJ, restyled navy to sit in the unit family (8 fixed directions).
 const knightWoodenSprite = (_faction: Faction, direction: Direction) => `/assets/units/knight/candidate-wooden/${direction}.png`;
-const paletteSprite = (piece: PieceId) => (faction: Faction) => spriteFor(piece, faction);
-// Tentative rook candidates: each is its own catalog entry with all 8
-// board-calibrated directions, and does not touch the production rook above.
-const rookCandidateSprite = (slug: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/candidate-${slug}/${direction}.png`;
-type RookCandidate = { slug: string; name: string; read: string };
-const rookCandidates: RookCandidate[] = [
-  { slug: 'old-keep', name: 'Old Keep', read: 'Stacked four-tier base, merlon battlements, vertical plank gate' },
-  { slug: 'sentinel', name: 'Sentinel', read: 'Pared-down two-step base, merlon top, cleaner silhouette' },
-  { slug: 'bastion', name: 'Bastion', read: 'Cantilevered battlement box overhanging the shaft, closed walls' },
-  { slug: 'gatewatch', name: 'Gatewatch', read: 'Open side notches with gate-front and rear wall; facing reads at a glance' },
-  { slug: 'masonkeep', name: 'Masonkeep', read: 'One carved stone mass: cavity grime, worn light edges, subtle seams' },
-  { slug: 'breachhold', name: 'Breachhold', read: 'Running-bond ashlar with four distinct per-pillar battle failures' },
-  { slug: 'ruinwall', name: 'Ruinwall', read: 'Rough-hewn rock surface with a single sheared corner pillar' },
-];
-const rookCandidateAssets: UnitAsset[] = rookCandidates.map((candidate) => ({
-  id: `rook-candidate-${candidate.slug}`,
-  family: 'rook',
-  label: `Rook · ${candidate.name}`,
-  badge: 'Candidate · 8 directions',
-  preview: `/assets/units/rook/candidate-${candidate.slug}/south.png`,
-  read: candidate.read,
-  status: 'tentative candidate',
-  directions: rookDirections,
-  factionMode: 'fixed',
-  defaultSize: 96,
-  unitAnchorY: '78%',
-  sprite: rookCandidateSprite(candidate.slug),
-}));
-
-// Tentative non-rook pieces (Claude first pass), each its own 8-direction entry,
-// separate from the production palette sprites above.
-const pieceCandidateSprite = (piece: PieceId) => (_faction: Faction, direction: Direction) =>
-  `/assets/units/${piece}/candidate-claude/${direction}.png`;
-const pieceCandidates: Array<{ piece: PieceId; name: string; read: string }> = [
-  { piece: 'king', name: 'King', read: 'Turned body with structural cross finial' },
-  { piece: 'queen', name: 'Queen', read: 'Turned body with carved coronet of points' },
-  { piece: 'bishop', name: 'Bishop', read: 'Turned body with diagonal mitre slit' },
-  { piece: 'pawn', name: 'Pawn', read: 'Great-helm shell with cross visor' },
-  { piece: 'knight', name: 'Knight', read: 'Armored warhorse head — chamfron + crinet — on a turned base (CC-BY source)' },
-];
-const pieceCandidateAssets: UnitAsset[] = pieceCandidates.map((candidate) => ({
-  id: `${candidate.piece}-candidate-claude`,
-  family: candidate.piece,
-  label: `${candidate.name} · Claude`,
-  badge: 'Candidate · 8 directions',
-  preview: `/assets/units/${candidate.piece}/candidate-claude/south.png`,
-  read: candidate.read,
-  status: 'tentative candidate',
-  directions: rookDirections,
-  factionMode: 'fixed',
-  defaultSize: 92,
-  unitAnchorY: '80%',
-  sprite: pieceCandidateSprite(candidate.piece),
-}));
 
 // Shown when a unit has no sprite for the chosen facing — a placeholder, never a
 // disabled control. Directions are always selectable.
@@ -146,97 +125,39 @@ const hasDirectionSprite = (unit: UnitAsset, dir: Direction) =>
 
 const unitAssets: UnitAsset[] = [
   {
-    id: 'pawn-production',
-    family: 'pawn',
-    label: 'Pawn',
-    badge: 'Production south',
-    preview: spriteFor('pawn', 'blue'),
-    read: 'Compact pawn with front shield',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultSize: 76,
-    sprite: paletteSprite('pawn'),
-  },
-  {
     id: 'rook-blender-v4-calibrated',
     family: 'rook',
     label: 'Rook',
     badge: '8 directions · calibrated',
     preview: '/assets/units/rook/blender-render-v4-calibrated/south.png',
     read: 'Board-calibrated castle rook with exact eight-direction rotations',
-    status: 'current default candidate',
+    status: 'active Blender production unit',
     directions: rookDirections,
     factionMode: 'fixed',
-    defaultSize: 84,
-    unitAnchorX: '49.9%',
-    unitAnchorY: '71.753%',
+    defaultScale: 100,
+    footprint: squareFootprint(ROOK_BLENDER_V4_CANVAS_PX, ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: ROOK_BLENDER_V4_CONTACT_ANCHOR_X,
+    unitAnchorY: ROOK_BLENDER_V4_CONTACT_ANCHOR_Y,
     sprite: rookVariantSprite('blender-render-v4-calibrated'),
-  },
-  ...rookCandidateAssets,
-  {
-    id: 'knight-production',
-    family: 'knight',
-    label: 'Knight',
-    badge: 'Production south',
-    preview: spriteFor('knight', 'blue'),
-    read: 'Horse-head chess marker',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultSize: 76,
-    sprite: paletteSprite('knight'),
   },
   {
     id: 'knight-wooden',
     family: 'knight',
-    label: 'Knight · Wooden',
-    badge: 'Candidate · 8 directions',
+    label: 'Knight',
+    badge: '8 directions · Blender candidate',
     preview: '/assets/units/knight/candidate-wooden/south.png',
     read: 'Carved Staunton warhorse from a turned-wood model, restyled navy (board-calibrated render)',
-    status: 'tentative candidate',
+    status: 'active Blender candidate',
     directions: rookDirections,
     factionMode: 'fixed',
-    defaultSize: 88,
-    unitAnchorY: '76%',
+    defaultScale: 100,
+    footprint: circleFootprint(KNIGHT_WOODEN_CANVAS_PX, KNIGHT_WOODEN_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: KNIGHT_WOODEN_CONTACT_ANCHOR_X,
+    unitAnchorY: KNIGHT_WOODEN_CONTACT_ANCHOR_Y,
     sprite: knightWoodenSprite,
   },
-  {
-    id: 'bishop-production',
-    family: 'bishop',
-    label: 'Bishop',
-    badge: 'Production south',
-    preview: spriteFor('bishop', 'blue'),
-    read: 'Tall bishop cap profile',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultSize: 76,
-    sprite: paletteSprite('bishop'),
-  },
-  {
-    id: 'queen-production',
-    family: 'queen',
-    label: 'Queen',
-    badge: 'Production south',
-    preview: spriteFor('queen', 'blue'),
-    read: 'Crown and narrow royal body',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultSize: 76,
-    sprite: paletteSprite('queen'),
-  },
-  {
-    id: 'king-production',
-    family: 'king',
-    label: 'King',
-    badge: 'Production south',
-    preview: spriteFor('king', 'blue'),
-    read: 'Cross crown chess identity',
-    status: 'current south sprite',
-    factionMode: 'palette',
-    defaultSize: 76,
-    sprite: paletteSprite('king'),
-  },
-  ...pieceCandidateAssets,
 ];
+const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
 
 const grassTile = '/assets/tiles/canonical-accepted/grass-clean-a.png';
 const stoneTile = '/assets/tiles/canonical-accepted/stone-clean-a.png';
@@ -256,10 +177,18 @@ const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
 
 const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'rook' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
 const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
-const isDirection = (value: string | null): value is Direction => rookDirections.some((direction) => direction === value);
-const isFootprintShape = (value: string | null): value is FootprintShape => value === 'square' || value === 'circle';
-const unitFromLegacyQuery = () => {
-  const params = new URLSearchParams(window.location.search);
+type UnitStudioMode = 'catalog' | 'view';
+type UnitCollectionFilter = 'production' | 'candidates';
+const unitCollectionFilters: Array<[UnitCollectionFilter, string]> = [
+  ['production', 'Production'],
+  ['candidates', 'Candidates'],
+];
+const isUnitStudioMode = (value: string | null): value is UnitStudioMode => value === 'catalog' || value === 'view';
+const isUnitCollectionFilter = (value: string | null): value is UnitCollectionFilter => value === 'production' || value === 'candidates';
+const unitCollectionForAsset = (unit: UnitAsset): UnitCollectionFilter =>
+  unit.id.includes('candidate') || unit.badge.toLowerCase().includes('candidate') ? 'candidates' : 'production';
+const activeUnitCollectionFilters = unitCollectionFilters.filter(([filter]) => unitAssets.some((unit) => unitCollectionForAsset(unit) === filter));
+const unitFromLegacyQuery = (params = new URLSearchParams(window.location.search)) => {
   const queryUnit = params.get('unit');
   if (isUnitAssetId(queryUnit)) return queryUnit;
 
@@ -273,72 +202,141 @@ const unitFromLegacyQuery = () => {
 
   return unitAssets[0].id;
 };
-const clampUnitSize = (value: number) => Math.min(1200, Math.max(24, value));
-const clampFootprintSize = (value: number) => Math.min(320, Math.max(24, value));
+const readUnitStudioRoute = () => {
+  const params = new URLSearchParams(window.location.search);
+  const unitId = unitFromLegacyQuery(params);
+  const unit = unitAssets.find((item) => item.id === unitId) ?? unitAssets[0];
+  const queryMode = params.get('mode');
+  const queryScaleParam = params.get('unitScale');
+  const legacySizeParam = params.get('unitSize');
+  const queryScale = queryScaleParam === null ? undefined : Number(queryScaleParam);
+  const legacySize = legacySizeParam === null ? undefined : Number(legacySizeParam);
+  const familiesParam = params.get('families');
+  const collectionsParam = params.get('collections');
+  const queryFamilies = familiesParam === null ? undefined : familiesParam.split(',').filter(isPieceId);
+  const queryCollections = collectionsParam === null ? undefined : collectionsParam.split(',').filter(isUnitCollectionFilter);
+  const activeCollections = activeUnitCollectionFilters.map(([filter]) => filter);
+  const normalizedFamilies = queryFamilies?.filter((family) => activeUnitFamilies.includes(family));
+  const normalizedCollections = queryCollections?.filter((collection) => activeCollections.includes(collection));
+  const initialScale =
+    queryScale !== undefined && Number.isFinite(queryScale)
+      ? clampUnitScale(queryScale)
+      : legacySize !== undefined && Number.isFinite(legacySize)
+        ? scaleFromLegacySize(unit, legacySize)
+        : unit.defaultScale;
+
+  return {
+    unitId,
+    mode: isUnitStudioMode(queryMode) ? queryMode : params.has('unit') || params.has('piece') ? 'view' : 'catalog',
+    direction: 'south' as Direction,
+    unitScale: initialScale,
+    footprintVisible: params.get('footprint') === 'on',
+    familyFilters: normalizedFamilies && normalizedFamilies.length > 0 ? normalizedFamilies : activeUnitFamilies,
+    collectionFilters: normalizedCollections && normalizedCollections.length > 0 ? normalizedCollections : activeCollections,
+  };
+};
+const clampUnitScale = (value: number) => Math.min(500, Math.max(25, value));
+const scaleFromLegacySize = (unit: UnitAsset, size: number) => clampUnitScale(Math.round((size / renderSizeFromFootprint(unit, 100)) * 100));
 
 export function UnitStudio() {
-  const [unitId, setUnitId] = useState(unitFromLegacyQuery);
+  const initialRoute = useMemo(() => readUnitStudioRoute(), []);
+  const [studioMode, setStudioMode] = useState<UnitStudioMode>(initialRoute.mode);
+  const [unitId, setUnitId] = useState(initialRoute.unitId);
   const [faction, setFaction] = useState<Faction>('blue');
   const [zoom, setZoom] = useState(1.15);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [unitSize, setUnitSize] = useState(() => {
-    const querySize = Number(new URLSearchParams(window.location.search).get('unitSize'));
-    return Number.isFinite(querySize) ? clampUnitSize(querySize) : 84;
-  });
-  const [footprintVisible, setFootprintVisible] = useState(() => new URLSearchParams(window.location.search).get('footprint') !== 'off');
-  const [footprintShape, setFootprintShape] = useState<FootprintShape>(() => {
-    const queryShape = new URLSearchParams(window.location.search).get('footprintShape');
-    return isFootprintShape(queryShape) ? queryShape : 'square';
-  });
-  const [footprintSize, setFootprintSize] = useState(() => {
-    const querySize = Number(new URLSearchParams(window.location.search).get('footprintSize'));
-    return Number.isFinite(querySize) ? clampFootprintSize(querySize) : 96;
-  });
+  const [unitScale, setUnitScale] = useState(initialRoute.unitScale);
+  const [footprintVisible, setFootprintVisible] = useState(initialRoute.footprintVisible);
   const [unitVisible, setUnitVisible] = useState(true);
   const [tileContext, setTileContext] = useState<TileContextId>('grass');
-  const [direction, setDirection] = useState<Direction>(() => {
-    const queryDirection = new URLSearchParams(window.location.search).get('direction');
-    return isDirection(queryDirection) ? queryDirection : 'south';
-  });
+  const [direction, setDirection] = useState<Direction>(initialRoute.direction);
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogZoom, setCatalogZoom] = useState(1);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedFamilyFilters, setSelectedFamilyFilters] = useState<PieceId[]>(initialRoute.familyFilters);
+  const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<UnitCollectionFilter[]>(initialRoute.collectionFilters);
+  const filterDropdownRef = useRef<HTMLDivElement | null>(null);
   const selectedUnit = unitAssets.find((unit) => unit.id === unitId) ?? unitAssets[0];
+  const unitRenderSize = renderSizeFromFootprint(selectedUnit, unitScale);
+  const unitFootprintSize = footprintSizeFromScale(selectedUnit, unitScale);
   const directionAvailable = hasDirectionSprite(selectedUnit, direction);
   const selectedSprite = directionAvailable ? selectedUnit.sprite(faction, direction) : MISSING_DIRECTION_SPRITE;
   const selectedTile = tileContexts.find((item) => item.id === tileContext) ?? tileContexts[0];
+  const activeFamilyLabel =
+    selectedFamilyFilters.length === 0
+      ? 'No families'
+      : selectedFamilyFilters.length === 1
+        ? familyLabels[selectedFamilyFilters[0]]
+        : `${selectedFamilyFilters.length} families`;
+  const activeCollectionLabel =
+    selectedCollectionFilters.length === 0
+      ? 'No collections'
+      : selectedCollectionFilters.map((filter) => unitCollectionFilters.find(([id]) => id === filter)?.[1]).filter(Boolean).join(' + ');
+  const filteredUnits = unitAssets.filter((unit) => {
+    if (!selectedFamilyFilters.includes(unit.family)) return false;
+    if (!selectedCollectionFilters.includes(unitCollectionForAsset(unit))) return false;
+    const query = catalogQuery.trim().toLowerCase();
+    if (!query) return true;
+    return [unit.label, unit.badge, unit.read, unit.status, unit.family].join(' ').toLowerCase().includes(query);
+  });
   const unitPlacementStyle: UnitPlacementStyle = {
     '--tile-anchor-x': '50%',
     '--tile-anchor-y': '54px',
     '--unit-anchor-x': selectedUnit.unitAnchorX ?? '50%',
     '--unit-anchor-y': selectedUnit.unitAnchorY ?? '92%',
-    '--unit-size': `${unitSize}px`,
-    '--unit-footprint-size': `${footprintSize}px`,
+    '--unit-size': `${unitRenderSize}px`,
+    '--unit-footprint-size': `${unitFootprintSize}px`,
   };
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
-    shell?.classList.add('unit-studio-active');
-    return () => shell?.classList.remove('unit-studio-active');
+    shell?.classList.add('tileset-studio-active', 'unit-studio-active');
+    return () => shell?.classList.remove('tileset-studio-active', 'unit-studio-active');
   }, []);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+
+    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && filterDropdownRef.current?.contains(target)) return;
+      setFilterOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFilterOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [filterOpen]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('unit', selectedUnit.id);
+    params.set('piece', selectedUnit.family);
+    params.set('mode', studioMode);
+    params.set('unitScale', String(unitScale));
+    params.set('footprint', footprintVisible ? 'on' : 'off');
+    params.set('families', selectedFamilyFilters.join(','));
+    params.set('collections', selectedCollectionFilters.join(','));
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [footprintVisible, selectedCollectionFilters, selectedFamilyFilters, selectedUnit.family, selectedUnit.id, studioMode, unitScale]);
 
   const selectUnit = (nextUnitId: string) => {
     const nextUnit = unitAssets.find((unit) => unit.id === nextUnitId);
     if (!nextUnit) return;
     setUnitId(nextUnitId);
     if (!nextUnit.directions?.includes(direction)) setDirection('south');
-    setUnitSize(nextUnit.defaultSize);
-    const params = new URLSearchParams(window.location.search);
-    params.set('unit', nextUnitId);
-    params.set('piece', nextUnit.family);
-    params.delete('source');
-    params.set('direction', nextUnit.directions?.includes(direction) ? direction : 'south');
-    params.set('unitSize', String(nextUnit.defaultSize));
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+    setUnitScale(nextUnit.defaultScale);
+    setStudioMode('view');
   };
 
   const selectDirection = (nextDirection: Direction) => {
     setDirection(nextDirection);
-    const params = new URLSearchParams(window.location.search);
-    params.set('direction', nextDirection);
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   };
 
   const rotateDirection = () => {
@@ -347,88 +345,226 @@ export function UnitStudio() {
     selectDirection(nextDirection);
   };
 
-  const selectUnitSize = (nextSize: number) => {
-    const clampedSize = clampUnitSize(nextSize);
-    setUnitSize(clampedSize);
-    const params = new URLSearchParams(window.location.search);
-    params.set('unitSize', String(clampedSize));
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-  };
-
-  const selectFootprintSize = (nextSize: number) => {
-    const clampedSize = clampFootprintSize(nextSize);
-    setFootprintSize(clampedSize);
-    const params = new URLSearchParams(window.location.search);
-    params.set('footprintSize', String(clampedSize));
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-  };
-
-  const selectFootprintShape = (nextShape: FootprintShape) => {
-    setFootprintShape(nextShape);
-    const params = new URLSearchParams(window.location.search);
-    params.set('footprintShape', nextShape);
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  const selectUnitScale = (nextScale: number) => {
+    const clampedScale = clampUnitScale(nextScale);
+    setUnitScale(clampedScale);
   };
 
   const toggleFootprint = () => {
     setFootprintVisible((current) => {
-      const nextValue = !current;
-      const params = new URLSearchParams(window.location.search);
-      params.set('footprint', nextValue ? 'on' : 'off');
-      window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-      return nextValue;
+      return !current;
     });
   };
 
+  const toggleFamilyFilter = (nextFamily: PieceId) => {
+    setSelectedFamilyFilters((current) => (current.includes(nextFamily) ? current.filter((item) => item !== nextFamily) : [...current, nextFamily]));
+  };
+
+  const toggleCollectionFilter = (nextCollection: UnitCollectionFilter) => {
+    setSelectedCollectionFilters((current) =>
+      current.includes(nextCollection) ? current.filter((item) => item !== nextCollection) : [...current, nextCollection],
+    );
+  };
+
   return (
-    <main className="unit-studio-page">
-      <header className="unit-studio-header">
-        <div className="unit-studio-brand">
-          <a className="unit-studio-product" href="/" aria-label="Back to main menu">
+    <main className="tileset-studio-page unit-studio-route">
+      <header className="tileset-studio-header">
+        <div className="tileset-studio-brand">
+          <a className="tileset-studio-product" href="/" aria-label="Back to main menu">
             <strong>Chess Tactics</strong>
             <span>Tactical chess, infinite possibilities.</span>
           </a>
-          <div className="unit-studio-title">
-            <p>Unit Studio</p>
-            <h1>{familyLabels[selectedUnit.family]}</h1>
-            <span>Review chess-piece units on the same tile scale as the board.</span>
+          <div className="tileset-studio-titleblock">
+            <p className="tileset-studio-kicker">Unit Studio</p>
+            <h1>{studioMode === 'catalog' ? 'Units' : selectedUnit.label}</h1>
+            <p className="tileset-studio-subtitle">
+              {studioMode === 'catalog' ? 'Browse chess-piece units with the same catalog/view workflow as tiles.' : selectedUnit.status}
+            </p>
           </div>
         </div>
-        <nav className="unit-studio-actions" aria-label="Unit studio navigation">
-          <a href="/tileset-studio">Tilesets</a>
+        <nav className="tileset-studio-actions" aria-label="Unit studio navigation">
+          <span className="tileset-mode-tabs" aria-label="Asset category">
+            <button type="button" onClick={() => navigateApp('/tileset-studio')} title="Browse terrain tiles.">
+              Tiles
+            </button>
+            <button type="button" className="is-active" title="Browse chess-piece units.">
+              Units
+            </button>
+          </span>
+          <span className="tileset-mode-tabs" aria-label="Unit studio mode">
+            {(['catalog', 'view'] as UnitStudioMode[]).map((mode) => (
+              <button key={mode} type="button" className={studioMode === mode ? 'is-active' : ''} onClick={() => setStudioMode(mode)}>
+                {mode === 'catalog' ? 'Catalog' : 'View'}
+              </button>
+            ))}
+          </span>
           <a href="/settings">Settings</a>
         </nav>
       </header>
 
-      <section className="unit-studio-shell" aria-label="Unit art workbench">
-        <aside className="unit-studio-rail" aria-label="Unit library">
-          <h2>Unit Catalog</h2>
-          {unitAssets.map((unit) => (
-            <button
-              type="button"
-              className={unit.id === selectedUnit.id ? 'is-active' : ''}
-              key={unit.id}
-              onClick={() => selectUnit(unit.id)}
-            >
-              <img src={unit.preview} alt="" draggable={false} />
-              <span>
-                <strong>{unit.label}</strong>
-                <em>{unit.badge}</em>
-              </span>
-            </button>
-          ))}
-        </aside>
-
-        <section className="unit-studio-main" aria-label="Selected unit">
-          <div className="unit-studio-panel-head">
-            <div>
-              <p>Tile View</p>
-              <h2>{selectedUnit.label} on {selectedTile.label}</h2>
+      <section className={`tileset-studio-shell is-${studioMode} is-units`} aria-label="Unit studio">
+        {studioMode === 'catalog' ? (
+          <section className="tileset-studio-main">
+            <div className="tileset-studio-toolbar">
+              <div className="tileset-studio-title-row">
+                <div className="tileset-catalog-heading">
+                  <h2>Unit Catalog</h2>
+                  <p className="tileset-filter-summary">{filteredUnits.length} units · {activeFamilyLabel} · {activeCollectionLabel}</p>
+                </div>
+                <label className="tileset-catalog-search">
+                  <span>Search</span>
+                  <input
+                    type="search"
+                    value={catalogQuery}
+                    onChange={(event) => setCatalogQuery(event.target.value)}
+                    placeholder="piece, read, status..."
+                  />
+                </label>
+                <label className="tileset-catalog-zoom">
+                  <span>Zoom</span>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="2"
+                    step="0.05"
+                    value={catalogZoom}
+                    onChange={(event) => setCatalogZoom(Number(event.target.value))}
+                  />
+                </label>
+                <div className="tileset-active-filters" aria-label="Active filters">
+                  {selectedFamilyFilters.map((piece) => (
+                    <button key={piece} type="button" onClick={() => toggleFamilyFilter(piece)} title={`Remove ${familyLabels[piece]} filter`}>
+                      {familyLabels[piece]}
+                    </button>
+                  ))}
+                  {selectedCollectionFilters.map((filter) => (
+                    <button key={filter} type="button" onClick={() => toggleCollectionFilter(filter)} title={`Remove ${filter} filter`}>
+                      {unitCollectionFilters.find(([id]) => id === filter)?.[1] ?? filter}
+                    </button>
+                  ))}
+                </div>
+                <div className="tileset-filter-dropdown" ref={filterDropdownRef}>
+                  <button
+                    type="button"
+                    className={filterOpen ? 'is-active' : ''}
+                    onClick={() => setFilterOpen((value) => !value)}
+                    aria-expanded={filterOpen}
+                    aria-controls="unit-filter-menu"
+                  >
+                    Filters
+                  </button>
+                  {filterOpen ? (
+                    <div id="unit-filter-menu" className="tileset-filter-menu" role="dialog" aria-label="Unit filters">
+                      <div className="tileset-filter-menu-header">
+                        <strong>Filters</strong>
+                        <span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFamilyFilters(activeUnitFamilies);
+                              setSelectedCollectionFilters(activeUnitCollectionFilters.map(([filter]) => filter));
+                            }}
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFamilyFilters([]);
+                              setSelectedCollectionFilters([]);
+                            }}
+                          >
+                            Clear
+                          </button>
+                        </span>
+                      </div>
+                      <section className="tileset-filter-group" aria-label="Unit families">
+                        <h3>Unit Family</h3>
+                        {activeUnitFamilies.map((piece) => (
+                          <button
+                            key={piece}
+                            type="button"
+                            className={`tileset-filter-option ${selectedFamilyFilters.includes(piece) ? 'is-active' : ''}`}
+                            onClick={() => toggleFamilyFilter(piece)}
+                          >
+                            <span className="tileset-filter-mark" aria-hidden="true" />
+                            <span className="tileset-filter-option-copy">
+                              <strong>{familyLabels[piece]}</strong>
+                              <span>{unitAssets.filter((unit) => unit.family === piece).length} units</span>
+                            </span>
+                          </button>
+                        ))}
+                      </section>
+                      <section className="tileset-filter-group" aria-label="Unit collections">
+                        <h3>Collection</h3>
+                        {activeUnitCollectionFilters.map(([filter, label]) => (
+                          <button
+                            key={filter}
+                            type="button"
+                            className={`tileset-filter-option ${selectedCollectionFilters.includes(filter) ? 'is-active' : ''}`}
+                            onClick={() => toggleCollectionFilter(filter)}
+                          >
+                            <span className="tileset-filter-mark" aria-hidden="true" />
+                            <span className="tileset-filter-option-copy">
+                              <strong>{label}</strong>
+                              <span>{filter === 'production' ? 'default game-facing units' : 'review and exploration units'}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </section>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </div>
-            <span>{rookDirectionLabel[direction]} facing{directionAvailable ? '' : ' · placeholder'} · {selectedUnit.status}</span>
-          </div>
+            <section className="tileset-studio-tab-panel">
+              <div className="tileset-asset-sections">
+                <section className="tileset-asset-section" aria-label="Unit assets">
+                  <h3>Units</h3>
+                  <div className="tileset-studio-grid" aria-label="Filtered units">
+                    {filteredUnits.map((unit) => (
+                      <button
+                        key={unit.id}
+                        type="button"
+                        className={`tileset-studio-card is-tile ${unit.id === selectedUnit.id ? 'is-selected' : ''}`}
+                        onClick={() => selectUnit(unit.id)}
+                        title={`Inspect ${unit.label}`}
+                      >
+                        <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': catalogZoom } as CSSProperties}>
+                          <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
+                        </span>
+                        <span className="tileset-studio-card-meta">
+                          <span className="tileset-studio-card-text">
+                            <strong>{unit.label}</strong>
+                            <em>{unit.badge}</em>
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                    {filteredUnits.length === 0 ? (
+                      <div className="unit-catalog-empty">
+                        <h3>No units match</h3>
+                        <p>Change the family, collection, or search filters.</p>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+        ) : (
+          <section className="tileset-view-mode unit-view-mode" aria-label="Focused unit view">
+            <div className="tileset-view-header">
+              <button type="button" onClick={() => setStudioMode('catalog')}>
+                Back to Catalog
+              </button>
+              <div>
+                <p className="tileset-studio-kicker">Unit</p>
+                <h2>{selectedUnit.label}</h2>
+                <p>{selectedTile.label} tile</p>
+              </div>
+            </div>
 
-          <div className="unit-studio-workbench">
             <section className="unit-studio-art-frame" aria-label={`${selectedUnit.label} on ${selectedTile.label} tile`}>
               <ViewPane
                 kind="unit"
@@ -443,9 +579,7 @@ export function UnitStudio() {
                 <div className="unit-studio-view-content">
                   <div className="unit-studio-tile-stack" style={unitPlacementStyle}>
                     <img className="unit-studio-context-tile" src={selectedTile.src} alt={`${selectedTile.label} tile`} draggable={false} />
-                    {footprintVisible ? (
-                      <span className={`unit-studio-footprint is-${footprintShape}`} aria-hidden="true" />
-                    ) : null}
+                    {footprintVisible ? <span className={`unit-studio-footprint is-${selectedUnit.footprint.shape}`} aria-hidden="true" /> : null}
                     {unitVisible ? (
                       <img
                         className={`unit-studio-unit-preview is-${selectedUnit.family}`}
@@ -459,8 +593,8 @@ export function UnitStudio() {
               </ViewPane>
             </section>
 
-            <aside className="unit-studio-detail" aria-label="Unit view controls">
-              <h3>Controls</h3>
+            <aside className="tileset-view-controls unit-studio-detail" aria-label="Unit view controls">
+              <h2>Controls</h2>
               <div className="unit-studio-control-group" aria-label="Unit visibility">
                 <button type="button" className={unitVisible ? 'is-active' : ''} onClick={() => setUnitVisible((value) => !value)}>
                   {unitVisible ? 'Unit On' : 'Unit Off'}
@@ -481,56 +615,34 @@ export function UnitStudio() {
                 />
               </label>
               <label className="unit-studio-zoom">
-                <span>Unit Size</span>
+                <span>Unit Scale</span>
                 <input
                   type="range"
-                  min="48"
-                  max="360"
-                  step="4"
-                  value={unitSize}
-                  onChange={(event) => selectUnitSize(Number(event.target.value))}
+                  min="25"
+                  max="500"
+                  step="1"
+                  value={unitScale}
+                  onChange={(event) => selectUnitScale(Number(event.target.value))}
                 />
                 <input
                   type="number"
-                  min="24"
-                  step="4"
-                  value={unitSize}
-                  onChange={(event) => selectUnitSize(Number(event.target.value))}
-                  aria-label="Unit size in pixels"
+                  min="25"
+                  step="1"
+                  value={unitScale}
+                  onChange={(event) => selectUnitScale(Number(event.target.value))}
+                  aria-label="Unit scale percent"
                 />
-                <em>{unitSize}px</em>
+                <em>{unitScale}%</em>
               </label>
-              <div className="unit-studio-control-group" aria-label="Expected footprint">
+              <div className="unit-studio-control-group" aria-label="Unit footprint">
                 <strong>Footprint</strong>
                 <button type="button" className={footprintVisible ? 'is-active' : ''} onClick={toggleFootprint}>
                   {footprintVisible ? 'Footprint On' : 'Footprint Off'}
                 </button>
-                <div className="unit-studio-factions">
-                  {(['square', 'circle'] as FootprintShape[]).map((shape) => (
-                    <button
-                      type="button"
-                      key={shape}
-                      className={footprintShape === shape ? 'is-active' : ''}
-                      disabled={!footprintVisible}
-                      onClick={() => selectFootprintShape(shape)}
-                    >
-                      {shape === 'square' ? 'Square' : 'Circle'}
-                    </button>
-                  ))}
+                <div className="unit-studio-footprint-readout">
+                  <span>{selectedUnit.footprint.shape}</span>
+                  <em>{unitFootprintSize}px target</em>
                 </div>
-                <label className="unit-studio-zoom">
-                  <span>Expected Size</span>
-                  <input
-                    type="range"
-                    min="40"
-                    max="220"
-                    step="4"
-                    value={footprintSize}
-                    disabled={!footprintVisible}
-                    onChange={(event) => selectFootprintSize(Number(event.target.value))}
-                  />
-                  <em>{footprintSize}px</em>
-                </label>
               </div>
               <div className="unit-studio-control-group" aria-label="Tile context">
                 <strong>Tile</strong>
@@ -555,8 +667,8 @@ export function UnitStudio() {
                       key="center"
                       onClick={rotateDirection}
                     >
-                      <span>Facing</span>
-                      <strong>{rookDirectionLabel[direction]}</strong>
+                      <span>Rotate</span>
+                      <strong>Piece</strong>
                       <em>Rotate</em>
                     </button>
                   ) : (
@@ -594,15 +706,19 @@ export function UnitStudio() {
               <dl>
                 <div><dt>Unit</dt><dd>{selectedUnit.label}</dd></div>
                 <div><dt>Family</dt><dd>{familyLabels[selectedUnit.family]}</dd></div>
-                <div><dt>Size</dt><dd>{unitSize}px</dd></div>
-                <div><dt>Footprint</dt><dd>{footprintVisible ? `${footprintShape} · ${footprintSize}px` : 'Hidden'}</dd></div>
-                <div><dt>Facing</dt><dd>{rookDirectionLabel[direction]}{directionAvailable ? '' : ' (placeholder)'}</dd></div>
+                <div><dt>Scale</dt><dd>{unitScale}%</dd></div>
+                <div><dt>Render Box</dt><dd>{unitRenderSize}px</dd></div>
+                <div><dt>Footprint</dt><dd>{`${selectedUnit.footprint.shape} · ${unitFootprintSize}px`}</dd></div>
+                <div>
+                  <dt>Source Footprint</dt>
+                  <dd>{`${selectedUnit.footprint.sourceFootprintPx}px / ${selectedUnit.footprint.sourceCanvasPx}px`}</dd>
+                </div>
                 <div><dt>Status</dt><dd>{selectedUnit.status}</dd></div>
                 <div><dt>Read</dt><dd>{selectedUnit.read}</dd></div>
               </dl>
             </aside>
-          </div>
-        </section>
+          </section>
+        )}
       </section>
     </main>
   );
