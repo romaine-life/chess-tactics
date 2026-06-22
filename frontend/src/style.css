@@ -11628,7 +11628,7 @@ button.tileset-relationship-cell {
   top: var(--tile-anchor-y);
   z-index: 2;
   width: var(--unit-footprint-size);
-  height: var(--unit-footprint-size);
+  height: calc(var(--unit-footprint-size) * 0.5773502692);
   border: 2px solid rgba(105, 230, 255, 0.95);
   box-shadow:
     0 0 0 1px rgba(2, 8, 13, 0.72),
@@ -11636,6 +11636,10 @@ button.tileset-relationship-cell {
     inset 0 0 0 1px rgba(2, 8, 13, 0.55);
   transform: translate(-50%, -50%);
   pointer-events: none;
+}
+
+.unit-studio-footprint.is-square {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
 .unit-studio-footprint::before,

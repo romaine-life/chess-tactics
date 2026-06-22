@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 
 import bpy
+from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 HERE = Path(__file__).resolve().parent
@@ -85,4 +86,7 @@ for direction, angle in DIRECTIONS.items():
     bpy.ops.render.render(write_still=True)
     print(f"ROOK_RENDERED {direction} -> {OUT / f'{direction}.png'}")
 
+bpy.context.view_layer.update()
+anchor = world_to_camera_view(bpy.context.scene, bpy.context.scene.camera, Vector((0, 0, 0)))
+print("ANCHOR unitAnchorX=%.3f%% unitAnchorY=%.3f%%" % (anchor.x * 100, (1 - anchor.y) * 100))
 print(f"ROOK_OUT={OUT}")

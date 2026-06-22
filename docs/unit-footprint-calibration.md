@@ -33,19 +33,19 @@ Measured south-render source:
 
 - Source canvas: `512x512px`
 - Alpha bounds: `x=88..423`, `y=8..482`
-- Contact/anchor row: `y=367`
+- Contact/anchor point: world origin `(0, 0, 0)`, projected through the Blender camera
 - Contact footprint row: `x=89..422`, width `334px`
-- Anchor: `x=49.9%`, `y=71.753%`
+- Anchor: `x=50.000%`, `y=74.629%`
 
 Runtime metadata:
 
 ```ts
 footprint: squareFootprint(512, 334)
-unitAnchorX: '49.9%'
-unitAnchorY: '71.753%'
+unitAnchorX: '50%'
+unitAnchorY: '74.629%'
 ```
 
-At `100%` unit scale, the game renders the source image so the measured `334px` contact footprint maps to the canonical equal-area square footprint. These values were measured before the true-isometric projection correction and must be remeasured after the next Blender export.
+At `100%` unit scale, the game renders the source image so the measured `334px` contact footprint maps to the canonical equal-area square footprint. The anchor comes from `docs/art/unit-concepts/blender-units/rook-v4-calibrated/measure_rook_anchor.py`, using the same deterministic camera projection method as the knight.
 
 ## Active Blender Knight
 
