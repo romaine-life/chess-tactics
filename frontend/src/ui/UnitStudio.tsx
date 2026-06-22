@@ -265,7 +265,7 @@ export function UnitStudio() {
             <button type="button" onClick={() => navigateApp('/tileset-studio')} title="Browse terrain tiles.">
               Tiles
             </button>
-            <button type="button" className="is-active" title="Browse chess-piece units.">
+            <button type="button" className="is-active" onClick={() => setStudioMode('catalog')} title="Browse chess-piece units.">
               Units
             </button>
             <button type="button" onClick={() => openBoardLab()} title="Open the shared terrain and unit board lab.">
