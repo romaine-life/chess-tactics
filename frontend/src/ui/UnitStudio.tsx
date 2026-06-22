@@ -46,16 +46,20 @@ const renderSizeFromFootprint = (unit: UnitAsset, scale: number) =>
   Math.round((canonicalFootprintSize(unit.footprint.shape) * (scale / 100) * unit.footprint.sourceCanvasPx) / unit.footprint.sourceFootprintPx);
 const footprintSizeFromScale = (unit: UnitAsset, scale: number) =>
   Math.round(canonicalFootprintSize(unit.footprint.shape) * (scale / 100));
-const circleFootprint = (sourceCanvasPx: number): UnitFootprint => ({
+const circleFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
   shape: 'circle',
   sourceCanvasPx,
-  sourceFootprintPx: sourceCanvasPx,
+  sourceFootprintPx,
 });
-const squareFootprint = (sourceCanvasPx: number): UnitFootprint => ({
+const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
   shape: 'square',
   sourceCanvasPx,
-  sourceFootprintPx: sourceCanvasPx,
+  sourceFootprintPx,
 });
+const ROOK_BLENDER_V4_CANVAS_PX = 512;
+const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
+const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '49.9%';
+const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '71.753%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -117,9 +121,9 @@ const unitAssets: UnitAsset[] = [
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
-    footprint: squareFootprint(512),
-    unitAnchorX: '49.9%',
-    unitAnchorY: '71.753%',
+    footprint: squareFootprint(ROOK_BLENDER_V4_CANVAS_PX, ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: ROOK_BLENDER_V4_CONTACT_ANCHOR_X,
+    unitAnchorY: ROOK_BLENDER_V4_CONTACT_ANCHOR_Y,
     sprite: rookVariantSprite('blender-render-v4-calibrated'),
   },
 ];
@@ -675,6 +679,10 @@ export function UnitStudio() {
                 <div><dt>Scale</dt><dd>{unitScale}%</dd></div>
                 <div><dt>Render Box</dt><dd>{unitRenderSize}px</dd></div>
                 <div><dt>Footprint</dt><dd>{`${selectedUnit.footprint.shape} · ${unitFootprintSize}px`}</dd></div>
+                <div>
+                  <dt>Source Footprint</dt>
+                  <dd>{`${selectedUnit.footprint.sourceFootprintPx}px / ${selectedUnit.footprint.sourceCanvasPx}px`}</dd>
+                </div>
                 <div><dt>Status</dt><dd>{selectedUnit.status}</dd></div>
                 <div><dt>Read</dt><dd>{selectedUnit.read}</dd></div>
               </dl>
