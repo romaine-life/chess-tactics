@@ -51,20 +51,30 @@ const rookDirectionLabel: Record<Direction, string> = {
   west: 'W',
   'south-west': 'SW',
 };
+// Laid out to match the isometric board, not a flat geographic compass: the NE
+// board camera projects each direction to a 45-deg-rotated screen position, so a
+// south-facing unit points to screen lower-left. Each cell therefore sits where
+// the unit actually points — south is the numpad-1 (bottom-left) cell, etc.
+//   7 W    8 NW   9 N
+//   4 SW   5 .    6 NE
+//   1 S    2 SE   3 E
 const directionCompassCells: Array<Direction | 'center'> = [
+  'west',
   'north-west',
   'north',
-  'north-east',
-  'west',
-  'center',
-  'east',
   'south-west',
+  'center',
+  'north-east',
   'south',
   'south-east',
+  'east',
 ];
 
 const spriteFor = (piece: PieceId, faction: Faction) => `/assets/units/${piece}/${faction}/south.png`;
 const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
+// Wooden-knight candidate: a board-calibrated Blender render of the carved
+// Staunton OBJ, restyled navy to sit in the unit family (8 fixed directions).
+const knightWoodenSprite = (_faction: Faction, direction: Direction) => `/assets/units/knight/candidate-wooden/${direction}.png`;
 const paletteSprite = (piece: PieceId) => (faction: Faction) => spriteFor(piece, faction);
 // Tentative rook candidates: each is its own catalog entry with all 8
 // board-calibrated directions, and does not touch the production rook above.
@@ -174,6 +184,20 @@ const unitAssets: UnitAsset[] = [
     factionMode: 'palette',
     defaultSize: 76,
     sprite: paletteSprite('knight'),
+  },
+  {
+    id: 'knight-wooden',
+    family: 'knight',
+    label: 'Knight · Wooden',
+    badge: 'Candidate · 8 directions',
+    preview: '/assets/units/knight/candidate-wooden/south.png',
+    read: 'Carved Staunton warhorse from a turned-wood model, restyled navy (board-calibrated render)',
+    status: 'tentative candidate',
+    directions: rookDirections,
+    factionMode: 'fixed',
+    defaultSize: 88,
+    unitAnchorY: '76%',
+    sprite: knightWoodenSprite,
   },
   {
     id: 'bishop-production',
