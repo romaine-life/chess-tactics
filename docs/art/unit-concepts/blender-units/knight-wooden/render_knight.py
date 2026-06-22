@@ -38,9 +38,14 @@ DIRECTIONS = {
     "south": 0, "south-west": -45, "west": -90, "north-west": -135,
 }
 
-# Chosen from the `facing` contact sheet: -45 puts the classic side profile
-# (muzzle to screen-left, matching knight-south-concept.png) in the south view.
-FACING_OFFSET = -45
+# Per-model front alignment. The unit convention (docs/art/unit-concepts/README.md
+# "South Direction Lock", encoded in the rook's render_versions.py DIRECTIONS) is:
+# at south the piece's FRONT points local -Y, which the fixed NE camera projects to
+# screen-down toward the viewer. Every OBJ imports at an arbitrary yaw, so this is
+# the one-time rotation that turns the muzzle to -Y. After this, the per-direction
+# render uses DIRECTIONS straight (no aesthetic offset) like every other unit.
+# Resolved from the `probe` top-down view (see mode_probe).
+MODEL_FRONT_YAW = 0
 
 # Rotation that stands the imported mesh upright (head -> +Z). The importer leaves
 # the tall axis along Y with the base at +Y, so -90deg about X lifts the head up.
@@ -193,6 +198,24 @@ def load_knight():
     bake(Matrix.Translation((-center.x, -center.y, -mins.z)))  # center X/Y, base on Z=0
 
     mins, maxs = data_bbox()
+    height = maxs.z - mins.z
+
+    # Estimate where the muzzle points: at jaw height the snout is the dominant
+    # horizontal mass off the vertical axis. Printed only as a hint for setting
+    # MODEL_FRONT_YAW; the committed value is verified against the probe render.
+    jaw_lo, jaw_hi = mins.z + 0.50 * height, mins.z + 0.72 * height
+    sx = sy = 0.0
+    for v in mesh.data.vertices:
+        if jaw_lo <= v.co.z <= jaw_hi:
+            sx += v.co.x
+            sy += v.co.y
+    muzzle_deg = math.degrees(math.atan2(sy, sx))
+    print(f"DBG muzzle_dir~={muzzle_deg:.1f}deg  suggest MODEL_FRONT_YAW~={(-90 - muzzle_deg):.1f}")
+
+    # One-time per-model front alignment: rotate the muzzle onto local -Y.
+    bake(Matrix.Rotation(math.radians(MODEL_FRONT_YAW), 4, "Z"))
+
+    mins, maxs = data_bbox()
     print(f"DBG final size={tuple(round(v,3) for v in (maxs - mins))}")
     target_z = (mins.z + maxs.z) / 2
 
@@ -226,7 +249,8 @@ def build_scene():
 
 
 def mode_facing():
-    """Render the SOUTH camera view at eight yaw offsets to pick FACING_OFFSET."""
+    """Render the SOUTH camera view at eight yaw offsets — a coarse probe for
+    where the muzzle points; use `probe <deg>` to fine-tune MODEL_FRONT_YAW."""
     knight = build_scene()
     render_settings(360)
     for offset in range(0, 360, 45):
@@ -237,13 +261,40 @@ def mode_facing():
     print("FACING_DONE")
 
 
+def mode_probe():
+    """Verify the front alignment: a top-down view (screen-up=+Y, screen-right=+X;
+    so -Y is screen-DOWN) and the board south view, both at object yaw 0. After
+    MODEL_FRONT_YAW is right, the muzzle points screen-down in the top probe and
+    toward the viewer (screen down-right) in the south probe."""
+    knight = build_scene()
+    render_settings(420)
+    knight.rotation_euler[2] = 0
+
+    # Top-down ortho camera, independent of the board camera added by build_scene.
+    bpy.ops.object.camera_add(location=(0, 0, 12))
+    top = bpy.context.object
+    top.rotation_euler = (0, 0, 0)            # looks down -Z, local up = +Y
+    top.data.type = "ORTHO"
+    top.data.ortho_scale = 2.6
+    bpy.context.scene.camera = top
+    bpy.context.scene.render.filepath = str(CONTACT / "probe_top.png")
+    bpy.ops.render.render(write_still=True)
+
+    # Restore the board camera (last non-top camera) for the south probe.
+    board = next(o for o in bpy.context.scene.objects if o.type == "CAMERA" and o is not top)
+    bpy.context.scene.camera = board
+    bpy.context.scene.render.filepath = str(CONTACT / "probe_south.png")
+    bpy.ops.render.render(write_still=True)
+    print("PROBE_DONE")
+
+
 def mode_render():
     knight = build_scene()
     render_settings(512)
     out = FRONTEND_KNIGHT / "candidate-wooden"
     out.mkdir(parents=True, exist_ok=True)
     for direction, angle in DIRECTIONS.items():
-        knight.rotation_euler[2] = math.radians(angle + FACING_OFFSET)
+        knight.rotation_euler[2] = math.radians(angle)   # convention: no offset
         bpy.context.scene.render.filepath = str(out / f"{direction}.png")
         bpy.ops.render.render(write_still=True)
         print(f"RENDER {direction}")
@@ -252,7 +303,12 @@ def mode_render():
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 mode = argv[0] if argv else "render"
+if len(argv) > 1:  # optional CLI override: `-- probe 45`
+    MODEL_FRONT_YAW = float(argv[1])
+    print(f"DBG MODEL_FRONT_YAW override={MODEL_FRONT_YAW}")
 if mode == "facing":
     mode_facing()
+elif mode == "probe":
+    mode_probe()
 else:
     mode_render()
