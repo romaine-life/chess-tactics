@@ -7,8 +7,8 @@ This document records how Blender-rendered unit sprites are sized against the lo
 Units are calibrated against the canonical tile contract:
 
 - Tile canvas: `96x140px`
-- Top diamond: `96x54px`
-- Top-plane center: center of the diamond, currently rendered in Unit Studio at `--tile-anchor-x: 50%` and `--tile-anchor-y: 54px` on the 2x preview tile
+- Top diamond: `96x55.426px` true-isometric geometry (`30 deg` screen-space edge)
+- Top-plane center: center of the diamond, currently rendered in Unit Studio at `--tile-anchor-x: 50%` and `--tile-anchor-y: 55.426px` on the 2x preview tile
 - Source of truth: `frontend/src/art/tileTemplate.ts`
 
 The tile is the measuring stick. Unit scale should not be based on full sprite canvas bounds.
@@ -45,7 +45,7 @@ unitAnchorX: '49.9%'
 unitAnchorY: '71.753%'
 ```
 
-At `100%` unit scale, the game renders the source image so the measured `334px` contact footprint maps to the canonical equal-area square footprint.
+At `100%` unit scale, the game renders the source image so the measured `334px` contact footprint maps to the canonical equal-area square footprint. These values were measured before the true-isometric projection correction and must be remeasured after the next Blender export.
 
 ## Active Blender Knight
 
@@ -69,7 +69,7 @@ unitAnchorX: '49.9%'
 unitAnchorY: '74.219%'
 ```
 
-At `100%` unit scale, the game renders the source image so the measured `174px` contact footprint maps to the canonical circular footprint.
+At `100%` unit scale, the game renders the source image so the measured `174px` contact footprint maps to the canonical circular footprint. These values were measured before the true-isometric projection correction and must be remeasured after the next Blender export.
 
 ## Next Blender Export Rule
 

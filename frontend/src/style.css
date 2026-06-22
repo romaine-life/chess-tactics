@@ -201,6 +201,11 @@
   --gold-dim: #6e5a2a;
   --panel-inset: #0a131b;
   --focus-ring: var(--cobalt-bright);
+  --iso-tile-width: 96px;
+  --iso-tile-height: 55.426px;
+  --iso-tile-step-x: 48px;
+  --iso-tile-step-y: 27.713px;
+  --iso-tile-canvas-height: 140px;
 
   /* Grass-island tile field */
   --grass-a: #84ab61;
@@ -8634,15 +8639,15 @@ h1 {
 
 .concept-board-tile {
   position: absolute;
-  width: 96px;
-  height: 140px;
-  transform: translate(-48px, -27px);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
 }
 
 .concept-board-tile img {
   display: block;
-  width: 96px;
-  height: 140px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
   image-rendering: pixelated;
   pointer-events: none;
 }
@@ -8650,18 +8655,18 @@ h1 {
 .concept-board-selection {
   position: absolute;
   z-index: 40;
-  width: 96px;
-  height: 54px;
-  transform: translate(-48px, -27px);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   pointer-events: none;
 }
 
 .concept-board-overlay {
   position: absolute;
-  width: 96px;
-  height: 54px;
-  transform: translate(-48px, -27px);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   pointer-events: none;
 }
@@ -9734,7 +9739,7 @@ h1 {
 .tileset-review-stage > .tileset-relationship-board .tileset-relationship-cell {
   left: calc(var(--relationship-left, 0px) * 1.6);
   top: calc(var(--relationship-top, 0px) * 1.6);
-  transform: translate(-48px, -27px) scale(1.05);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y))) scale(1.05);
 }
 
 .tileset-review-focus-copy {
@@ -10124,12 +10129,12 @@ h1 {
 .tileset-relationship-cell {
   position: absolute;
   display: block;
-  width: 96px;
-  height: 140px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
   padding: 0;
   background: transparent;
   border: 0;
-  transform: translate(-48px, -27px) scale(.62);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y))) scale(.62);
   transform-origin: top center;
   image-rendering: pixelated;
 }
@@ -10140,8 +10145,8 @@ button.tileset-relationship-cell {
 
 .tileset-relationship-cell img {
   display: block;
-  width: 96px;
-  height: 140px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
   image-rendering: pixelated;
 }
 
@@ -10151,14 +10156,14 @@ button.tileset-relationship-cell {
 
 .tileset-relationship-hit-target {
   position: absolute;
-  width: 60px;
-  height: 34px;
+  width: calc(var(--iso-tile-width) * .62);
+  height: calc(var(--iso-tile-height) * .62);
   padding: 0;
   background: transparent;
   border: 0;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   cursor: pointer;
-  transform: translate(-30px, -27px);
+  transform: translate(calc(var(--iso-tile-width) * -.31), calc(var(--iso-tile-step-y) * -1));
 }
 
 .tileset-relationship-hit-target:hover,
@@ -10185,8 +10190,8 @@ button.tileset-relationship-cell {
   position: absolute;
   left: 0;
   top: 0;
-  width: 96px;
-  height: 54px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   border: 1px solid rgba(111, 210, 255, 0.72);
   pointer-events: none;
@@ -10545,8 +10550,8 @@ button.tileset-relationship-cell {
 }
 
 .tileset-studio-card-image img {
-  width: calc(96px * var(--tile-zoom, 1));
-  height: calc(140px * var(--tile-zoom, 1));
+  width: calc(var(--iso-tile-width) * var(--tile-zoom, 1));
+  height: calc(var(--iso-tile-canvas-height) * var(--tile-zoom, 1));
   image-rendering: pixelated;
   object-fit: contain;
 }
@@ -10560,8 +10565,8 @@ button.tileset-relationship-cell {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(96px * var(--tile-zoom, 1));
-  height: calc(54px * var(--tile-zoom, 1));
+  width: calc(var(--iso-tile-width) * var(--tile-zoom, 1));
+  height: calc(var(--iso-tile-height) * var(--tile-zoom, 1));
   transform: translate(-50%, -77%);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   border: 1px solid rgba(111, 210, 255, 0.82);
@@ -10749,9 +10754,9 @@ button.tileset-relationship-cell {
 
 .tileset-generated-board-tile {
   position: absolute;
-  width: 96px;
-  height: 140px;
-  transform: translate(-48px, -27px);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -10759,8 +10764,8 @@ button.tileset-relationship-cell {
 
 .tileset-generated-board-tile img {
   display: block;
-  width: 96px;
-  height: 140px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-canvas-height);
   image-rendering: pixelated;
   pointer-events: none;
   user-select: none;
@@ -10782,8 +10787,8 @@ button.tileset-relationship-cell {
   position: absolute;
   left: 0;
   top: 0;
-  width: 96px;
-  height: 54px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
   background: rgba(111, 210, 255, 0.09);
   border: 1px dashed rgba(111, 210, 255, 0.52);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -10803,8 +10808,8 @@ button.tileset-relationship-cell {
   position: absolute;
   left: 0;
   top: 0;
-  width: 96px;
-  height: 54px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   border: 1px solid rgba(111, 210, 255, 0.28);
   pointer-events: none;
@@ -10821,8 +10826,8 @@ button.tileset-relationship-cell {
   position: absolute;
   left: 0;
   top: 0;
-  width: 96px;
-  height: 54px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   pointer-events: auto;
   z-index: 4;
@@ -10833,8 +10838,8 @@ button.tileset-relationship-cell {
   position: absolute;
   left: 0;
   top: 0;
-  width: 96px;
-  height: 54px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   background: rgba(111, 210, 255, 0.06);
   border: 1px solid rgba(111, 210, 255, 0.14);
@@ -10851,8 +10856,8 @@ button.tileset-relationship-cell {
   position: absolute;
   left: 0;
   top: 0;
-  width: 96px;
-  height: 54px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   background: rgba(111, 210, 255, 0.2);
   pointer-events: none;
@@ -10921,8 +10926,8 @@ button.tileset-relationship-cell {
   position: absolute;
   left: 0;
   top: 0;
-  width: 96px;
-  height: 54px;
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   background: rgba(255, 214, 102, 0.22);
   box-shadow: inset 0 0 0 2px rgba(255, 214, 102, 0.9);
@@ -11569,7 +11574,7 @@ button.tileset-relationship-cell {
   transform-origin: center;
   image-rendering: pixelated;
   --tile-anchor-x: 50%;
-  --tile-anchor-y: 54px;
+  --tile-anchor-y: var(--iso-tile-height);
   --unit-anchor-x: 50%;
   --unit-anchor-y: 92%;
   --unit-size: 84px;

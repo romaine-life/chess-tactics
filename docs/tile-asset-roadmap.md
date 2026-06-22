@@ -45,11 +45,11 @@ Current phase: asset-pipeline stabilization. The goal is to get out of UI/proces
 The canonical board tile geometry is locked unless a deliberate art-direction decision changes it.
 
 - Top diamond width: `96px`
-- Top diamond height: `54px`
+- Top diamond height: `55.426px`
 - Side height: `86px`
 - Grid step X: `48px`
 - Grid step Y: `27px`
-- Edge angle: about `29.36deg`
+- Edge angle: `30deg`
 
 Source of truth:
 
