@@ -11703,6 +11703,27 @@ button.tileset-relationship-cell {
   font: 800 0.82rem/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
+.unit-studio-footprint-readout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  color: #d8e7f5;
+  background: rgba(5, 18, 28, 0.66);
+  border: 1px solid rgba(67, 127, 179, 0.34);
+  border-radius: 4px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.unit-studio-footprint-readout em {
+  color: #9fb9cf;
+  font-size: 0.78rem;
+  font-style: normal;
+  text-transform: none;
+}
+
 .unit-studio-factions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

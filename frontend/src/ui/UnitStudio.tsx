@@ -7,6 +7,11 @@ type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
 type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 type TileContextId = 'grass' | 'stone' | 'water';
 type FootprintShape = 'square' | 'circle';
+type UnitFootprint = {
+  shape: FootprintShape;
+  sourceCanvasPx: number;
+  sourceFootprintPx: number;
+};
 type UnitPlacementStyle = CSSProperties & {
   '--tile-anchor-x': string;
   '--tile-anchor-y': string;
@@ -26,11 +31,31 @@ type UnitAsset = {
   status: string;
   directions?: Direction[];
   factionMode: 'fixed' | 'palette';
-  defaultSize: number;
+  defaultScale: number;
+  footprint: UnitFootprint;
   unitAnchorX?: string;
   unitAnchorY?: string;
   sprite: (faction: Faction, direction: Direction) => string;
 };
+
+const CANONICAL_CIRCLE_FOOTPRINT_PX = 96;
+const SQUARE_EQUAL_AREA_FACTOR = Math.sqrt(Math.PI) / 2;
+const canonicalFootprintSize = (shape: FootprintShape) =>
+  shape === 'square' ? Math.round(CANONICAL_CIRCLE_FOOTPRINT_PX * SQUARE_EQUAL_AREA_FACTOR) : CANONICAL_CIRCLE_FOOTPRINT_PX;
+const renderSizeFromFootprint = (unit: UnitAsset, scale: number) =>
+  Math.round((canonicalFootprintSize(unit.footprint.shape) * (scale / 100) * unit.footprint.sourceCanvasPx) / unit.footprint.sourceFootprintPx);
+const footprintSizeFromScale = (unit: UnitAsset, scale: number) =>
+  Math.round(canonicalFootprintSize(unit.footprint.shape) * (scale / 100));
+const circleFootprint = (sourceCanvasPx: number): UnitFootprint => ({
+  shape: 'circle',
+  sourceCanvasPx,
+  sourceFootprintPx: sourceCanvasPx,
+});
+const squareFootprint = (sourceCanvasPx: number): UnitFootprint => ({
+  shape: 'square',
+  sourceCanvasPx,
+  sourceFootprintPx: sourceCanvasPx,
+});
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -90,7 +115,8 @@ const rookCandidateAssets: UnitAsset[] = rookCandidates.map((candidate) => ({
   status: 'tentative candidate',
   directions: rookDirections,
   factionMode: 'fixed',
-  defaultSize: 96,
+  defaultScale: 100,
+  footprint: squareFootprint(512),
   unitAnchorY: '78%',
   sprite: rookCandidateSprite(candidate.slug),
 }));
@@ -116,7 +142,8 @@ const pieceCandidateAssets: UnitAsset[] = pieceCandidates.map((candidate) => ({
   status: 'tentative candidate',
   directions: rookDirections,
   factionMode: 'fixed',
-  defaultSize: 92,
+  defaultScale: 100,
+  footprint: circleFootprint(512),
   unitAnchorY: '80%',
   sprite: pieceCandidateSprite(candidate.piece),
 }));
@@ -145,7 +172,8 @@ const unitAssets: UnitAsset[] = [
     read: 'Compact pawn with front shield',
     status: 'current south sprite',
     factionMode: 'palette',
-    defaultSize: 76,
+    defaultScale: 100,
+    footprint: circleFootprint(128),
     sprite: paletteSprite('pawn'),
   },
   {
@@ -158,7 +186,8 @@ const unitAssets: UnitAsset[] = [
     status: 'current default candidate',
     directions: rookDirections,
     factionMode: 'fixed',
-    defaultSize: 84,
+    defaultScale: 100,
+    footprint: squareFootprint(512),
     unitAnchorX: '49.9%',
     unitAnchorY: '71.753%',
     sprite: rookVariantSprite('blender-render-v4-calibrated'),
@@ -173,7 +202,8 @@ const unitAssets: UnitAsset[] = [
     read: 'Horse-head chess marker',
     status: 'current south sprite',
     factionMode: 'palette',
-    defaultSize: 76,
+    defaultScale: 100,
+    footprint: circleFootprint(128),
     sprite: paletteSprite('knight'),
   },
   {
@@ -185,7 +215,8 @@ const unitAssets: UnitAsset[] = [
     read: 'Tall bishop cap profile',
     status: 'current south sprite',
     factionMode: 'palette',
-    defaultSize: 76,
+    defaultScale: 100,
+    footprint: circleFootprint(128),
     sprite: paletteSprite('bishop'),
   },
   {
@@ -197,7 +228,8 @@ const unitAssets: UnitAsset[] = [
     read: 'Crown and narrow royal body',
     status: 'current south sprite',
     factionMode: 'palette',
-    defaultSize: 76,
+    defaultScale: 100,
+    footprint: circleFootprint(128),
     sprite: paletteSprite('queen'),
   },
   {
@@ -209,7 +241,8 @@ const unitAssets: UnitAsset[] = [
     read: 'Cross crown chess identity',
     status: 'current south sprite',
     factionMode: 'palette',
-    defaultSize: 76,
+    defaultScale: 100,
+    footprint: circleFootprint(128),
     sprite: paletteSprite('king'),
   },
   ...pieceCandidateAssets,
@@ -233,7 +266,6 @@ const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
 
 const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'rook' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
 const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
-const isFootprintShape = (value: string | null): value is FootprintShape => value === 'square' || value === 'circle';
 type UnitStudioMode = 'catalog' | 'view';
 type UnitCollectionFilter = 'production' | 'candidates';
 const unitCollectionFilters: Array<[UnitCollectionFilter, string]> = [
@@ -263,30 +295,33 @@ const readUnitStudioRoute = () => {
   const unitId = unitFromLegacyQuery(params);
   const unit = unitAssets.find((item) => item.id === unitId) ?? unitAssets[0];
   const queryMode = params.get('mode');
-  const queryShape = params.get('footprintShape');
-  const querySizeParam = params.get('unitSize');
-  const queryFootprintSizeParam = params.get('footprintSize');
-  const querySize = querySizeParam === null ? undefined : Number(querySizeParam);
-  const queryFootprintSize = queryFootprintSizeParam === null ? undefined : Number(queryFootprintSizeParam);
+  const queryScaleParam = params.get('unitScale');
+  const legacySizeParam = params.get('unitSize');
+  const queryScale = queryScaleParam === null ? undefined : Number(queryScaleParam);
+  const legacySize = legacySizeParam === null ? undefined : Number(legacySizeParam);
   const familiesParam = params.get('families');
   const collectionsParam = params.get('collections');
   const queryFamilies = familiesParam === null ? undefined : familiesParam.split(',').filter(isPieceId);
   const queryCollections = collectionsParam === null ? undefined : collectionsParam.split(',').filter(isUnitCollectionFilter);
+  const initialScale =
+    queryScale !== undefined && Number.isFinite(queryScale)
+      ? clampUnitScale(queryScale)
+      : legacySize !== undefined && Number.isFinite(legacySize)
+        ? scaleFromLegacySize(unit, legacySize)
+        : unit.defaultScale;
 
   return {
     unitId,
     mode: isUnitStudioMode(queryMode) ? queryMode : params.has('unit') || params.has('piece') ? 'view' : 'catalog',
     direction: 'south' as Direction,
-    unitSize: querySize !== undefined && Number.isFinite(querySize) ? clampUnitSize(querySize) : unit.defaultSize,
+    unitScale: initialScale,
     footprintVisible: params.get('footprint') === 'on',
-    footprintShape: isFootprintShape(queryShape) ? queryShape : 'square',
-    footprintSize: queryFootprintSize !== undefined && Number.isFinite(queryFootprintSize) ? clampFootprintSize(queryFootprintSize) : 96,
     familyFilters: queryFamilies ?? [...new Set(unitAssets.map((item) => item.family))],
     collectionFilters: queryCollections ?? unitCollectionFilters.map(([filter]) => filter),
   };
 };
-const clampUnitSize = (value: number) => Math.min(1200, Math.max(24, value));
-const clampFootprintSize = (value: number) => Math.min(320, Math.max(24, value));
+const clampUnitScale = (value: number) => Math.min(500, Math.max(25, value));
+const scaleFromLegacySize = (unit: UnitAsset, size: number) => clampUnitScale(Math.round((size / renderSizeFromFootprint(unit, 100)) * 100));
 
 export function UnitStudio() {
   const initialRoute = useMemo(() => readUnitStudioRoute(), []);
@@ -295,10 +330,8 @@ export function UnitStudio() {
   const [faction, setFaction] = useState<Faction>('blue');
   const [zoom, setZoom] = useState(1.15);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [unitSize, setUnitSize] = useState(initialRoute.unitSize);
+  const [unitScale, setUnitScale] = useState(initialRoute.unitScale);
   const [footprintVisible, setFootprintVisible] = useState(initialRoute.footprintVisible);
-  const [footprintShape, setFootprintShape] = useState<FootprintShape>(initialRoute.footprintShape);
-  const [footprintSize, setFootprintSize] = useState(initialRoute.footprintSize);
   const [unitVisible, setUnitVisible] = useState(true);
   const [tileContext, setTileContext] = useState<TileContextId>('grass');
   const [direction, setDirection] = useState<Direction>(initialRoute.direction);
@@ -309,6 +342,8 @@ export function UnitStudio() {
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<UnitCollectionFilter[]>(initialRoute.collectionFilters);
   const filterDropdownRef = useRef<HTMLDivElement | null>(null);
   const selectedUnit = unitAssets.find((unit) => unit.id === unitId) ?? unitAssets[0];
+  const unitRenderSize = renderSizeFromFootprint(selectedUnit, unitScale);
+  const unitFootprintSize = footprintSizeFromScale(selectedUnit, unitScale);
   const directionAvailable = hasDirectionSprite(selectedUnit, direction);
   const selectedSprite = directionAvailable ? selectedUnit.sprite(faction, direction) : MISSING_DIRECTION_SPRITE;
   const selectedTile = tileContexts.find((item) => item.id === tileContext) ?? tileContexts[0];
@@ -334,8 +369,8 @@ export function UnitStudio() {
     '--tile-anchor-y': '54px',
     '--unit-anchor-x': selectedUnit.unitAnchorX ?? '50%',
     '--unit-anchor-y': selectedUnit.unitAnchorY ?? '92%',
-    '--unit-size': `${unitSize}px`,
-    '--unit-footprint-size': `${footprintSize}px`,
+    '--unit-size': `${unitRenderSize}px`,
+    '--unit-footprint-size': `${unitFootprintSize}px`,
   };
 
   useEffect(() => {
@@ -369,21 +404,19 @@ export function UnitStudio() {
     params.set('unit', selectedUnit.id);
     params.set('piece', selectedUnit.family);
     params.set('mode', studioMode);
-    params.set('unitSize', String(unitSize));
+    params.set('unitScale', String(unitScale));
     params.set('footprint', footprintVisible ? 'on' : 'off');
-    params.set('footprintShape', footprintShape);
-    params.set('footprintSize', String(footprintSize));
     params.set('families', selectedFamilyFilters.join(','));
     params.set('collections', selectedCollectionFilters.join(','));
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-  }, [footprintShape, footprintSize, footprintVisible, selectedCollectionFilters, selectedFamilyFilters, selectedUnit.family, selectedUnit.id, studioMode, unitSize]);
+  }, [footprintVisible, selectedCollectionFilters, selectedFamilyFilters, selectedUnit.family, selectedUnit.id, studioMode, unitScale]);
 
   const selectUnit = (nextUnitId: string) => {
     const nextUnit = unitAssets.find((unit) => unit.id === nextUnitId);
     if (!nextUnit) return;
     setUnitId(nextUnitId);
     if (!nextUnit.directions?.includes(direction)) setDirection('south');
-    setUnitSize(nextUnit.defaultSize);
+    setUnitScale(nextUnit.defaultScale);
     setStudioMode('view');
   };
 
@@ -397,18 +430,9 @@ export function UnitStudio() {
     selectDirection(nextDirection);
   };
 
-  const selectUnitSize = (nextSize: number) => {
-    const clampedSize = clampUnitSize(nextSize);
-    setUnitSize(clampedSize);
-  };
-
-  const selectFootprintSize = (nextSize: number) => {
-    const clampedSize = clampFootprintSize(nextSize);
-    setFootprintSize(clampedSize);
-  };
-
-  const selectFootprintShape = (nextShape: FootprintShape) => {
-    setFootprintShape(nextShape);
+  const selectUnitScale = (nextScale: number) => {
+    const clampedScale = clampUnitScale(nextScale);
+    setUnitScale(clampedScale);
   };
 
   const toggleFootprint = () => {
@@ -640,9 +664,7 @@ export function UnitStudio() {
                 <div className="unit-studio-view-content">
                   <div className="unit-studio-tile-stack" style={unitPlacementStyle}>
                     <img className="unit-studio-context-tile" src={selectedTile.src} alt={`${selectedTile.label} tile`} draggable={false} />
-                    {footprintVisible ? (
-                      <span className={`unit-studio-footprint is-${footprintShape}`} aria-hidden="true" />
-                    ) : null}
+                    {footprintVisible ? <span className={`unit-studio-footprint is-${selectedUnit.footprint.shape}`} aria-hidden="true" /> : null}
                     {unitVisible ? (
                       <img
                         className={`unit-studio-unit-preview is-${selectedUnit.family}`}
@@ -678,56 +700,34 @@ export function UnitStudio() {
                 />
               </label>
               <label className="unit-studio-zoom">
-                <span>Unit Size</span>
+                <span>Unit Scale</span>
                 <input
                   type="range"
-                  min="48"
-                  max="360"
-                  step="4"
-                  value={unitSize}
-                  onChange={(event) => selectUnitSize(Number(event.target.value))}
+                  min="25"
+                  max="500"
+                  step="1"
+                  value={unitScale}
+                  onChange={(event) => selectUnitScale(Number(event.target.value))}
                 />
                 <input
                   type="number"
-                  min="24"
-                  step="4"
-                  value={unitSize}
-                  onChange={(event) => selectUnitSize(Number(event.target.value))}
-                  aria-label="Unit size in pixels"
+                  min="25"
+                  step="1"
+                  value={unitScale}
+                  onChange={(event) => selectUnitScale(Number(event.target.value))}
+                  aria-label="Unit scale percent"
                 />
-                <em>{unitSize}px</em>
+                <em>{unitScale}%</em>
               </label>
-              <div className="unit-studio-control-group" aria-label="Expected footprint">
+              <div className="unit-studio-control-group" aria-label="Unit footprint">
                 <strong>Footprint</strong>
                 <button type="button" className={footprintVisible ? 'is-active' : ''} onClick={toggleFootprint}>
                   {footprintVisible ? 'Footprint On' : 'Footprint Off'}
                 </button>
-                <div className="unit-studio-factions">
-                  {(['square', 'circle'] as FootprintShape[]).map((shape) => (
-                    <button
-                      type="button"
-                      key={shape}
-                      className={footprintShape === shape ? 'is-active' : ''}
-                      disabled={!footprintVisible}
-                      onClick={() => selectFootprintShape(shape)}
-                    >
-                      {shape === 'square' ? 'Square' : 'Circle'}
-                    </button>
-                  ))}
+                <div className="unit-studio-footprint-readout">
+                  <span>{selectedUnit.footprint.shape}</span>
+                  <em>{unitFootprintSize}px target</em>
                 </div>
-                <label className="unit-studio-zoom">
-                  <span>Expected Size</span>
-                  <input
-                    type="range"
-                    min="40"
-                    max="220"
-                    step="4"
-                    value={footprintSize}
-                    disabled={!footprintVisible}
-                    onChange={(event) => selectFootprintSize(Number(event.target.value))}
-                  />
-                  <em>{footprintSize}px</em>
-                </label>
               </div>
               <div className="unit-studio-control-group" aria-label="Tile context">
                 <strong>Tile</strong>
@@ -791,8 +791,9 @@ export function UnitStudio() {
               <dl>
                 <div><dt>Unit</dt><dd>{selectedUnit.label}</dd></div>
                 <div><dt>Family</dt><dd>{familyLabels[selectedUnit.family]}</dd></div>
-                <div><dt>Size</dt><dd>{unitSize}px</dd></div>
-                <div><dt>Footprint</dt><dd>{footprintVisible ? `${footprintShape} · ${footprintSize}px` : 'Hidden'}</dd></div>
+                <div><dt>Scale</dt><dd>{unitScale}%</dd></div>
+                <div><dt>Render Box</dt><dd>{unitRenderSize}px</dd></div>
+                <div><dt>Footprint</dt><dd>{`${selectedUnit.footprint.shape} · ${unitFootprintSize}px`}</dd></div>
                 <div><dt>Status</dt><dd>{selectedUnit.status}</dd></div>
                 <div><dt>Read</dt><dd>{selectedUnit.read}</dd></div>
               </dl>
