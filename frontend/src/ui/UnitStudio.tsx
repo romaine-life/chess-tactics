@@ -60,14 +60,14 @@ const ROOK_BLENDER_V4_CANVAS_PX = 512;
 const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '49.9%';
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '71.753%';
-// Fur knight calibration (measured from the 512px true-iso render; footprint = max
-// projected base width, anchorX = base center). anchorY is the measured base row and
-// still needs a Unit Studio visual proof per docs/blender-projection-contract.md
-// (the wooden precedent was hand-tuned ~2.5% below the measured row).
+// Fur knight calibration. anchor = the EXACT projection of the unit's ground-contact
+// point (base bottom-center, world origin) through the render camera — computed, not
+// eyeballed, so seating is mathematically correct. footprint = projected base width.
+// (Camera: 45deg yaw / 35.264deg elevation / ortho_scale 2.7 / 512px — render_knight_fur.py.)
 const KNIGHT_FUR_CANVAS_PX = 512;
 const KNIGHT_FUR_CONTACT_FOOTPRINT_PX = 178;
-const KNIGHT_FUR_CONTACT_ANCHOR_X = '49.9%';
-const KNIGHT_FUR_CONTACT_ANCHOR_Y = '75.977%';
+const KNIGHT_FUR_CONTACT_ANCHOR_X = '50%';
+const KNIGHT_FUR_CONTACT_ANCHOR_Y = '80.241%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
