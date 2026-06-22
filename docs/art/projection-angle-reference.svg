@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Projection angle reference</title>
+  <desc id="desc">A reference diagram showing the difference between Blender camera yaw, camera elevation, and the resulting projected screen-space tile edge angle.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#54d7ff"/>
+    </marker>
+    <marker id="redArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff6b57"/>
+    </marker>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#213647" stroke-width="1"/>
+    </pattern>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="760" fill="#07121a"/>
+  <rect x="32" y="32" width="1136" height="696" rx="14" fill="#0a1a25" stroke="#24506a" stroke-width="2"/>
+  <text x="64" y="88" fill="#eef7ff" font-family="Arial, sans-serif" font-size="34" font-weight="700">Projection Angle Reference</text>
+  <text x="64" y="122" fill="#91b2c8" font-family="Arial, sans-serif" font-size="18">Camera setup numbers are 3D. The tile edge angle is the 2D result the player sees.</text>
+
+  <g transform="translate(64 170)">
+    <rect x="0" y="0" width="505" height="500" rx="10" fill="#08141d" stroke="#1c455e" stroke-width="2"/>
+    <text x="28" y="44" fill="#54d7ff" font-family="Arial, sans-serif" font-size="18" font-weight="700">3D CAMERA SETUP</text>
+    <text x="28" y="78" fill="#eef7ff" font-family="Arial, sans-serif" font-size="28" font-weight="700">Blender camera angles</text>
+
+    <g transform="translate(60 135)">
+      <rect x="0" y="110" width="360" height="180" fill="url(#grid)" stroke="#355a70" stroke-width="2"/>
+      <line x1="180" y1="200" x2="330" y2="200" stroke="#ff6b57" stroke-width="8" marker-end="url(#redArrow)"/>
+      <path d="M 180 200 A 125 125 0 0 1 268 112" fill="none" stroke="#ff6b57" stroke-width="8"/>
+      <text x="245" y="183" fill="#ff6b57" font-family="Arial, sans-serif" font-size="32" font-weight="700">45 deg</text>
+      <text x="236" y="220" fill="#ffb1a7" font-family="Arial, sans-serif" font-size="16">yaw / azimuth</text>
+
+      <circle cx="92" cy="56" r="18" fill="#54d7ff"/>
+      <line x1="92" y1="56" x2="180" y2="200" stroke="#54d7ff" stroke-width="9" stroke-linecap="round"/>
+      <line x1="92" y1="56" x2="92" y2="200" stroke="#54d7ff" stroke-width="5" marker-end="url(#arrow)"/>
+      <path d="M 92 200 A 145 145 0 0 1 166 76" fill="none" stroke="#54d7ff" stroke-width="7"/>
+      <text x="18" y="164" fill="#54d7ff" font-family="Arial, sans-serif" font-size="30" font-weight="700">35.264 deg</text>
+      <text x="20" y="190" fill="#9adfff" font-family="Arial, sans-serif" font-size="16">elevation / pitch</text>
+
+      <rect x="145" y="175" width="70" height="50" fill="#d9e2ec" opacity="0.68" stroke="#eef7ff"/>
+      <text x="138" y="252" fill="#91b2c8" font-family="Arial, sans-serif" font-size="16">board plane / object</text>
+    </g>
+  </g>
+
+  <g transform="translate(632 170)">
+    <rect x="0" y="0" width="505" height="500" rx="10" fill="#08141d" stroke="#1c455e" stroke-width="2"/>
+    <text x="28" y="44" fill="#54d7ff" font-family="Arial, sans-serif" font-size="18" font-weight="700">2D RENDERED RESULT</text>
+    <text x="28" y="78" fill="#eef7ff" font-family="Arial, sans-serif" font-size="28" font-weight="700">What the player sees</text>
+
+    <g transform="translate(70 130)" filter="url(#softShadow)">
+      <polygon points="180,30 360,135 180,240 0,135" fill="#496c2f" stroke="#90b75c" stroke-width="4"/>
+      <line x1="180" y1="135" x2="360" y2="135" stroke="#09141c" stroke-width="3" opacity="0.55"/>
+      <line x1="180" y1="135" x2="180" y2="240" stroke="#09141c" stroke-width="3" opacity="0.55"/>
+    </g>
+
+    <g transform="translate(70 130)">
+      <line x1="180" y1="240" x2="360" y2="240" stroke="#ff6b57" stroke-width="6" marker-end="url(#redArrow)"/>
+      <line x1="180" y1="240" x2="360" y2="135" stroke="#ff6b57" stroke-width="6" marker-end="url(#redArrow)"/>
+      <path d="M 226 240 A 46 46 0 0 1 219 216" fill="none" stroke="#ff6b57" stroke-width="5"/>
+      <text x="238" y="222" fill="#ff6b57" font-family="Arial, sans-serif" font-size="34" font-weight="700">30 deg</text>
+      <text x="238" y="252" fill="#ffb1a7" font-family="Arial, sans-serif" font-size="16">projected screen-space tile edge angle</text>
+    </g>
+
+    <line x1="70" y1="410" x2="435" y2="410" stroke="#23495f" stroke-width="2"/>
+    <text x="70" y="448" fill="#eef7ff" font-family="Arial, sans-serif" font-size="20" font-weight="700">Important:</text>
+    <text x="168" y="448" fill="#b8cad8" font-family="Arial, sans-serif" font-size="20">30 deg is not a camera angle.</text>
+    <text x="70" y="476" fill="#b8cad8" font-family="Arial, sans-serif" font-size="20">It is the visible angle after projection.</text>
+  </g>
+
+  <g transform="translate(64 690)">
+    <text x="0" y="0" fill="#eef7ff" font-family="Arial, sans-serif" font-size="22" font-weight="700">Vocabulary:</text>
+    <text x="132" y="0" fill="#91b2c8" font-family="Arial, sans-serif" font-size="22">45 deg = yaw/azimuth</text>
+    <text x="390" y="0" fill="#91b2c8" font-family="Arial, sans-serif" font-size="22">35.264 deg = elevation/pitch</text>
+    <text x="744" y="0" fill="#91b2c8" font-family="Arial, sans-serif" font-size="22">30 deg = projected screen-space edge</text>
+  </g>
+</svg>
