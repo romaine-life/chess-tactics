@@ -1,4 +1,5 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 
 type Faction = 'blue' | 'red' | 'neutral';
@@ -50,6 +51,16 @@ const rookDirectionLabel: Record<Direction, string> = {
   'north-west': 'NW',
   west: 'W',
   'south-west': 'SW',
+};
+const rookDirectionName: Record<Direction, string> = {
+  south: 'South',
+  'south-east': 'South-east',
+  east: 'East',
+  'north-east': 'North-east',
+  north: 'North',
+  'north-west': 'North-west',
+  west: 'West',
+  'south-west': 'South-west',
 };
 const directionCompassCells: Array<Direction | 'center'> = [
   'west',
@@ -234,8 +245,17 @@ const isPieceId = (value: string | null): value is PieceId => value === 'pawn' |
 const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
 const isDirection = (value: string | null): value is Direction => rookDirections.some((direction) => direction === value);
 const isFootprintShape = (value: string | null): value is FootprintShape => value === 'square' || value === 'circle';
-const unitFromLegacyQuery = () => {
-  const params = new URLSearchParams(window.location.search);
+type UnitStudioMode = 'catalog' | 'view';
+type UnitCollectionFilter = 'production' | 'candidates';
+const unitCollectionFilters: Array<[UnitCollectionFilter, string]> = [
+  ['production', 'Production'],
+  ['candidates', 'Candidates'],
+];
+const isUnitStudioMode = (value: string | null): value is UnitStudioMode => value === 'catalog' || value === 'view';
+const isUnitCollectionFilter = (value: string | null): value is UnitCollectionFilter => value === 'production' || value === 'candidates';
+const unitCollectionForAsset = (unit: UnitAsset): UnitCollectionFilter =>
+  unit.id.includes('candidate') || unit.badge.toLowerCase().includes('candidate') ? 'candidates' : 'production';
+const unitFromLegacyQuery = (params = new URLSearchParams(window.location.search)) => {
   const queryUnit = params.get('unit');
   if (isUnitAssetId(queryUnit)) return queryUnit;
 
@@ -249,37 +269,78 @@ const unitFromLegacyQuery = () => {
 
   return unitAssets[0].id;
 };
+const readUnitStudioRoute = () => {
+  const params = new URLSearchParams(window.location.search);
+  const unitId = unitFromLegacyQuery(params);
+  const unit = unitAssets.find((item) => item.id === unitId) ?? unitAssets[0];
+  const queryMode = params.get('mode');
+  const queryDirection = params.get('direction');
+  const queryShape = params.get('footprintShape');
+  const querySizeParam = params.get('unitSize');
+  const queryFootprintSizeParam = params.get('footprintSize');
+  const querySize = querySizeParam === null ? undefined : Number(querySizeParam);
+  const queryFootprintSize = queryFootprintSizeParam === null ? undefined : Number(queryFootprintSizeParam);
+  const familiesParam = params.get('families');
+  const collectionsParam = params.get('collections');
+  const queryFamilies = familiesParam === null ? undefined : familiesParam.split(',').filter(isPieceId);
+  const queryCollections = collectionsParam === null ? undefined : collectionsParam.split(',').filter(isUnitCollectionFilter);
+
+  return {
+    unitId,
+    mode: isUnitStudioMode(queryMode) ? queryMode : params.has('unit') || params.has('piece') ? 'view' : 'catalog',
+    direction: isDirection(queryDirection) ? queryDirection : 'south',
+    unitSize: querySize !== undefined && Number.isFinite(querySize) ? clampUnitSize(querySize) : unit.defaultSize,
+    footprintVisible: params.get('footprint') !== 'off',
+    footprintShape: isFootprintShape(queryShape) ? queryShape : 'square',
+    footprintSize: queryFootprintSize !== undefined && Number.isFinite(queryFootprintSize) ? clampFootprintSize(queryFootprintSize) : 96,
+    familyFilters: queryFamilies ?? [...new Set(unitAssets.map((item) => item.family))],
+    collectionFilters: queryCollections ?? unitCollectionFilters.map(([filter]) => filter),
+  };
+};
 const clampUnitSize = (value: number) => Math.min(1200, Math.max(24, value));
 const clampFootprintSize = (value: number) => Math.min(320, Math.max(24, value));
 
 export function UnitStudio() {
-  const [unitId, setUnitId] = useState(unitFromLegacyQuery);
+  const initialRoute = useMemo(() => readUnitStudioRoute(), []);
+  const [studioMode, setStudioMode] = useState<UnitStudioMode>(initialRoute.mode);
+  const [unitId, setUnitId] = useState(initialRoute.unitId);
   const [faction, setFaction] = useState<Faction>('blue');
   const [zoom, setZoom] = useState(1.15);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [unitSize, setUnitSize] = useState(() => {
-    const querySize = Number(new URLSearchParams(window.location.search).get('unitSize'));
-    return Number.isFinite(querySize) ? clampUnitSize(querySize) : 84;
-  });
-  const [footprintVisible, setFootprintVisible] = useState(() => new URLSearchParams(window.location.search).get('footprint') !== 'off');
-  const [footprintShape, setFootprintShape] = useState<FootprintShape>(() => {
-    const queryShape = new URLSearchParams(window.location.search).get('footprintShape');
-    return isFootprintShape(queryShape) ? queryShape : 'square';
-  });
-  const [footprintSize, setFootprintSize] = useState(() => {
-    const querySize = Number(new URLSearchParams(window.location.search).get('footprintSize'));
-    return Number.isFinite(querySize) ? clampFootprintSize(querySize) : 96;
-  });
+  const [unitSize, setUnitSize] = useState(initialRoute.unitSize);
+  const [footprintVisible, setFootprintVisible] = useState(initialRoute.footprintVisible);
+  const [footprintShape, setFootprintShape] = useState<FootprintShape>(initialRoute.footprintShape);
+  const [footprintSize, setFootprintSize] = useState(initialRoute.footprintSize);
   const [unitVisible, setUnitVisible] = useState(true);
   const [tileContext, setTileContext] = useState<TileContextId>('grass');
-  const [direction, setDirection] = useState<Direction>(() => {
-    const queryDirection = new URLSearchParams(window.location.search).get('direction');
-    return isDirection(queryDirection) ? queryDirection : 'south';
-  });
+  const [direction, setDirection] = useState<Direction>(initialRoute.direction);
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogZoom, setCatalogZoom] = useState(1);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedFamilyFilters, setSelectedFamilyFilters] = useState<PieceId[]>(initialRoute.familyFilters);
+  const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<UnitCollectionFilter[]>(initialRoute.collectionFilters);
+  const filterDropdownRef = useRef<HTMLDivElement | null>(null);
   const selectedUnit = unitAssets.find((unit) => unit.id === unitId) ?? unitAssets[0];
   const directionAvailable = hasDirectionSprite(selectedUnit, direction);
   const selectedSprite = directionAvailable ? selectedUnit.sprite(faction, direction) : MISSING_DIRECTION_SPRITE;
   const selectedTile = tileContexts.find((item) => item.id === tileContext) ?? tileContexts[0];
+  const activeFamilyLabel =
+    selectedFamilyFilters.length === 0
+      ? 'No families'
+      : selectedFamilyFilters.length === 1
+        ? familyLabels[selectedFamilyFilters[0]]
+        : `${selectedFamilyFilters.length} families`;
+  const activeCollectionLabel =
+    selectedCollectionFilters.length === 0
+      ? 'No collections'
+      : selectedCollectionFilters.map((filter) => unitCollectionFilters.find(([id]) => id === filter)?.[1]).filter(Boolean).join(' + ');
+  const filteredUnits = unitAssets.filter((unit) => {
+    if (!selectedFamilyFilters.includes(unit.family)) return false;
+    if (!selectedCollectionFilters.includes(unitCollectionForAsset(unit))) return false;
+    const query = catalogQuery.trim().toLowerCase();
+    if (!query) return true;
+    return [unit.label, unit.badge, unit.read, unit.status, unit.family].join(' ').toLowerCase().includes(query);
+  });
   const unitPlacementStyle: UnitPlacementStyle = {
     '--tile-anchor-x': '50%',
     '--tile-anchor-y': '54px',
@@ -291,9 +352,44 @@ export function UnitStudio() {
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
-    shell?.classList.add('unit-studio-active');
-    return () => shell?.classList.remove('unit-studio-active');
+    shell?.classList.add('tileset-studio-active', 'unit-studio-active');
+    return () => shell?.classList.remove('tileset-studio-active', 'unit-studio-active');
   }, []);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+
+    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && filterDropdownRef.current?.contains(target)) return;
+      setFilterOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFilterOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [filterOpen]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('unit', selectedUnit.id);
+    params.set('piece', selectedUnit.family);
+    params.set('mode', studioMode);
+    params.set('direction', direction);
+    params.set('unitSize', String(unitSize));
+    params.set('footprint', footprintVisible ? 'on' : 'off');
+    params.set('footprintShape', footprintShape);
+    params.set('footprintSize', String(footprintSize));
+    params.set('families', selectedFamilyFilters.join(','));
+    params.set('collections', selectedCollectionFilters.join(','));
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [direction, footprintShape, footprintSize, footprintVisible, selectedCollectionFilters, selectedFamilyFilters, selectedUnit.family, selectedUnit.id, studioMode, unitSize]);
 
   const selectUnit = (nextUnitId: string) => {
     const nextUnit = unitAssets.find((unit) => unit.id === nextUnitId);
@@ -301,20 +397,11 @@ export function UnitStudio() {
     setUnitId(nextUnitId);
     if (!nextUnit.directions?.includes(direction)) setDirection('south');
     setUnitSize(nextUnit.defaultSize);
-    const params = new URLSearchParams(window.location.search);
-    params.set('unit', nextUnitId);
-    params.set('piece', nextUnit.family);
-    params.delete('source');
-    params.set('direction', nextUnit.directions?.includes(direction) ? direction : 'south');
-    params.set('unitSize', String(nextUnit.defaultSize));
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+    setStudioMode('view');
   };
 
   const selectDirection = (nextDirection: Direction) => {
     setDirection(nextDirection);
-    const params = new URLSearchParams(window.location.search);
-    params.set('direction', nextDirection);
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   };
 
   const rotateDirection = () => {
@@ -326,85 +413,232 @@ export function UnitStudio() {
   const selectUnitSize = (nextSize: number) => {
     const clampedSize = clampUnitSize(nextSize);
     setUnitSize(clampedSize);
-    const params = new URLSearchParams(window.location.search);
-    params.set('unitSize', String(clampedSize));
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   };
 
   const selectFootprintSize = (nextSize: number) => {
     const clampedSize = clampFootprintSize(nextSize);
     setFootprintSize(clampedSize);
-    const params = new URLSearchParams(window.location.search);
-    params.set('footprintSize', String(clampedSize));
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   };
 
   const selectFootprintShape = (nextShape: FootprintShape) => {
     setFootprintShape(nextShape);
-    const params = new URLSearchParams(window.location.search);
-    params.set('footprintShape', nextShape);
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
   };
 
   const toggleFootprint = () => {
     setFootprintVisible((current) => {
-      const nextValue = !current;
-      const params = new URLSearchParams(window.location.search);
-      params.set('footprint', nextValue ? 'on' : 'off');
-      window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-      return nextValue;
+      return !current;
     });
   };
 
+  const toggleFamilyFilter = (nextFamily: PieceId) => {
+    setSelectedFamilyFilters((current) => (current.includes(nextFamily) ? current.filter((item) => item !== nextFamily) : [...current, nextFamily]));
+  };
+
+  const toggleCollectionFilter = (nextCollection: UnitCollectionFilter) => {
+    setSelectedCollectionFilters((current) =>
+      current.includes(nextCollection) ? current.filter((item) => item !== nextCollection) : [...current, nextCollection],
+    );
+  };
+
   return (
-    <main className="unit-studio-page">
-      <header className="unit-studio-header">
-        <div className="unit-studio-brand">
-          <a className="unit-studio-product" href="/" aria-label="Back to main menu">
+    <main className="tileset-studio-page unit-studio-route">
+      <header className="tileset-studio-header">
+        <div className="tileset-studio-brand">
+          <a className="tileset-studio-product" href="/" aria-label="Back to main menu">
             <strong>Chess Tactics</strong>
             <span>Tactical chess, infinite possibilities.</span>
           </a>
-          <div className="unit-studio-title">
-            <p>Unit Studio</p>
-            <h1>{familyLabels[selectedUnit.family]}</h1>
-            <span>Review chess-piece units on the same tile scale as the board.</span>
+          <div className="tileset-studio-titleblock">
+            <p className="tileset-studio-kicker">Unit Studio</p>
+            <h1>{studioMode === 'catalog' ? 'Units' : selectedUnit.label}</h1>
+            <p className="tileset-studio-subtitle">
+              {studioMode === 'catalog' ? 'Browse chess-piece units with the same catalog/view workflow as tiles.' : `${rookDirectionName[direction]} facing · ${selectedUnit.status}`}
+            </p>
           </div>
         </div>
-        <nav className="unit-studio-actions" aria-label="Unit studio navigation">
-          <a href="/tileset-studio">Tilesets</a>
+        <nav className="tileset-studio-actions" aria-label="Unit studio navigation">
+          <span className="tileset-mode-tabs" aria-label="Asset category">
+            <button type="button" onClick={() => navigateApp('/tileset-studio')} title="Browse terrain tiles.">
+              Tiles
+            </button>
+            <button type="button" className="is-active" title="Browse chess-piece units.">
+              Units
+            </button>
+          </span>
+          <span className="tileset-mode-tabs" aria-label="Unit studio mode">
+            {(['catalog', 'view'] as UnitStudioMode[]).map((mode) => (
+              <button key={mode} type="button" className={studioMode === mode ? 'is-active' : ''} onClick={() => setStudioMode(mode)}>
+                {mode === 'catalog' ? 'Catalog' : 'View'}
+              </button>
+            ))}
+          </span>
           <a href="/settings">Settings</a>
         </nav>
       </header>
 
-      <section className="unit-studio-shell" aria-label="Unit art workbench">
-        <aside className="unit-studio-rail" aria-label="Unit library">
-          <h2>Unit Catalog</h2>
-          {unitAssets.map((unit) => (
-            <button
-              type="button"
-              className={unit.id === selectedUnit.id ? 'is-active' : ''}
-              key={unit.id}
-              onClick={() => selectUnit(unit.id)}
-            >
-              <img src={unit.preview} alt="" draggable={false} />
-              <span>
-                <strong>{unit.label}</strong>
-                <em>{unit.badge}</em>
-              </span>
-            </button>
-          ))}
-        </aside>
-
-        <section className="unit-studio-main" aria-label="Selected unit">
-          <div className="unit-studio-panel-head">
-            <div>
-              <p>Tile View</p>
-              <h2>{selectedUnit.label} on {selectedTile.label}</h2>
+      <section className={`tileset-studio-shell is-${studioMode} is-units`} aria-label="Unit studio">
+        {studioMode === 'catalog' ? (
+          <section className="tileset-studio-main">
+            <div className="tileset-studio-toolbar">
+              <div className="tileset-studio-title-row">
+                <div className="tileset-catalog-heading">
+                  <h2>Unit Catalog</h2>
+                  <p className="tileset-filter-summary">{filteredUnits.length} units · {activeFamilyLabel} · {activeCollectionLabel}</p>
+                </div>
+                <label className="tileset-catalog-search">
+                  <span>Search</span>
+                  <input
+                    type="search"
+                    value={catalogQuery}
+                    onChange={(event) => setCatalogQuery(event.target.value)}
+                    placeholder="piece, read, status..."
+                  />
+                </label>
+                <label className="tileset-catalog-zoom">
+                  <span>Zoom</span>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="2"
+                    step="0.05"
+                    value={catalogZoom}
+                    onChange={(event) => setCatalogZoom(Number(event.target.value))}
+                  />
+                </label>
+                <div className="tileset-active-filters" aria-label="Active filters">
+                  {selectedFamilyFilters.map((piece) => (
+                    <button key={piece} type="button" onClick={() => toggleFamilyFilter(piece)} title={`Remove ${familyLabels[piece]} filter`}>
+                      {familyLabels[piece]}
+                    </button>
+                  ))}
+                  {selectedCollectionFilters.map((filter) => (
+                    <button key={filter} type="button" onClick={() => toggleCollectionFilter(filter)} title={`Remove ${filter} filter`}>
+                      {unitCollectionFilters.find(([id]) => id === filter)?.[1] ?? filter}
+                    </button>
+                  ))}
+                </div>
+                <div className="tileset-filter-dropdown" ref={filterDropdownRef}>
+                  <button
+                    type="button"
+                    className={filterOpen ? 'is-active' : ''}
+                    onClick={() => setFilterOpen((value) => !value)}
+                    aria-expanded={filterOpen}
+                    aria-controls="unit-filter-menu"
+                  >
+                    Filters
+                  </button>
+                  {filterOpen ? (
+                    <div id="unit-filter-menu" className="tileset-filter-menu" role="dialog" aria-label="Unit filters">
+                      <div className="tileset-filter-menu-header">
+                        <strong>Filters</strong>
+                        <span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFamilyFilters(Object.keys(familyLabels) as PieceId[]);
+                              setSelectedCollectionFilters(unitCollectionFilters.map(([filter]) => filter));
+                            }}
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFamilyFilters([]);
+                              setSelectedCollectionFilters([]);
+                            }}
+                          >
+                            Clear
+                          </button>
+                        </span>
+                      </div>
+                      <section className="tileset-filter-group" aria-label="Unit families">
+                        <h3>Unit Family</h3>
+                        {(Object.keys(familyLabels) as PieceId[]).map((piece) => (
+                          <button
+                            key={piece}
+                            type="button"
+                            className={`tileset-filter-option ${selectedFamilyFilters.includes(piece) ? 'is-active' : ''}`}
+                            onClick={() => toggleFamilyFilter(piece)}
+                          >
+                            <span className="tileset-filter-mark" aria-hidden="true" />
+                            <span className="tileset-filter-option-copy">
+                              <strong>{familyLabels[piece]}</strong>
+                              <span>{unitAssets.filter((unit) => unit.family === piece).length} units</span>
+                            </span>
+                          </button>
+                        ))}
+                      </section>
+                      <section className="tileset-filter-group" aria-label="Unit collections">
+                        <h3>Collection</h3>
+                        {unitCollectionFilters.map(([filter, label]) => (
+                          <button
+                            key={filter}
+                            type="button"
+                            className={`tileset-filter-option ${selectedCollectionFilters.includes(filter) ? 'is-active' : ''}`}
+                            onClick={() => toggleCollectionFilter(filter)}
+                          >
+                            <span className="tileset-filter-mark" aria-hidden="true" />
+                            <span className="tileset-filter-option-copy">
+                              <strong>{label}</strong>
+                              <span>{filter === 'production' ? 'default game-facing units' : 'review and exploration units'}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </section>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </div>
-            <span>{rookDirectionLabel[direction]} facing{directionAvailable ? '' : ' · placeholder'} · {selectedUnit.status}</span>
-          </div>
+            <section className="tileset-studio-tab-panel">
+              <div className="tileset-asset-sections">
+                <section className="tileset-asset-section" aria-label="Unit assets">
+                  <h3>Units</h3>
+                  <div className="tileset-studio-grid" aria-label="Filtered units">
+                    {filteredUnits.map((unit) => (
+                      <button
+                        key={unit.id}
+                        type="button"
+                        className={`tileset-studio-card is-tile ${unit.id === selectedUnit.id ? 'is-selected' : ''}`}
+                        onClick={() => selectUnit(unit.id)}
+                        title={`Inspect ${unit.label}`}
+                      >
+                        <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': catalogZoom } as CSSProperties}>
+                          <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
+                        </span>
+                        <span className="tileset-studio-card-meta">
+                          <span className="tileset-studio-card-text">
+                            <strong>{unit.label}</strong>
+                            <em>{unit.badge}</em>
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                    {filteredUnits.length === 0 ? (
+                      <div className="unit-catalog-empty">
+                        <h3>No units match</h3>
+                        <p>Change the family, collection, or search filters.</p>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+        ) : (
+          <section className="tileset-view-mode unit-view-mode" aria-label="Focused unit view">
+            <div className="tileset-view-header">
+              <button type="button" onClick={() => setStudioMode('catalog')}>
+                Back to Catalog
+              </button>
+              <div>
+                <p className="tileset-studio-kicker">Unit</p>
+                <h2>{selectedUnit.label}</h2>
+                <p>{selectedTile.label} tile · {rookDirectionName[direction]} facing{directionAvailable ? '' : ' · placeholder'}</p>
+              </div>
+            </div>
 
-          <div className="unit-studio-workbench">
             <section className="unit-studio-art-frame" aria-label={`${selectedUnit.label} on ${selectedTile.label} tile`}>
               <ViewPane
                 kind="unit"
@@ -435,8 +669,8 @@ export function UnitStudio() {
               </ViewPane>
             </section>
 
-            <aside className="unit-studio-detail" aria-label="Unit view controls">
-              <h3>Controls</h3>
+            <aside className="tileset-view-controls unit-studio-detail" aria-label="Unit view controls">
+              <h2>Controls</h2>
               <div className="unit-studio-control-group" aria-label="Unit visibility">
                 <button type="button" className={unitVisible ? 'is-active' : ''} onClick={() => setUnitVisible((value) => !value)}>
                   {unitVisible ? 'Unit On' : 'Unit Off'}
@@ -577,8 +811,8 @@ export function UnitStudio() {
                 <div><dt>Read</dt><dd>{selectedUnit.read}</dd></div>
               </dl>
             </aside>
-          </div>
-        </section>
+          </section>
+        )}
       </section>
     </main>
   );

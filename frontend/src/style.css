@@ -10984,6 +10984,39 @@ button.tileset-relationship-cell {
   image-rendering: auto;
 }
 
+.unit-studio-route .unit-card-image {
+  min-height: calc(150px * var(--tile-zoom, 1));
+}
+
+.unit-studio-route .unit-card-image img {
+  width: auto;
+  height: calc(132px * var(--tile-zoom, 1));
+}
+
+.unit-catalog-empty {
+  display: grid;
+  grid-column: 1 / -1;
+  min-height: 260px;
+  place-items: center;
+  padding: 28px;
+  color: #a9bfd3;
+  text-align: center;
+  background: rgba(5, 16, 25, 0.58);
+  border: 1px dashed rgba(91, 157, 216, 0.34);
+  border-radius: 6px;
+}
+
+.unit-catalog-empty h3 {
+  margin: 0 0 6px;
+  color: #f3f7fb;
+  font-size: 18px;
+}
+
+.unit-catalog-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
 .tileset-studio-card.is-coming {
   opacity: 0.5;
 }
