@@ -51,25 +51,24 @@ At `100%` unit scale, the game renders the source image so the measured `334px` 
 
 Asset:
 
-- `frontend/public/assets/units/knight/candidate-wooden/*.png`
-
-Measured south-render source:
+- `frontend/public/assets/units/knight/blender-render-fur/*.png` (procedural navy fur coat; render recipe: `docs/art/unit-concepts/blender-units/knight-fur/render_knight_fur.py`)
+- Supersedes the earlier `candidate-wooden` render (same OBJ, raw wood-grain diffuse — kept as historical candidate).
 
 - Source canvas: `512x512px`
-- Alpha bounds: `x=169..342`, `y=103..436`
-- Contact/anchor row: `y=380`
-- Contact footprint row: `x=169..342`, width `174px`
-- Anchor: `x=49.9%`, `y=74.219%`
+- Contact footprint (max projected base width): `178px`
+- **Anchor: `x=50%`, `y=80.241%`** — the *exact* projection of the unit's ground-contact point (base bottom-center = world origin) through the render camera, via `world_to_camera_view`. Not measured/eyeballed: it's deterministic, so seating is mathematically correct.
 
 Runtime metadata:
 
 ```ts
-footprint: circleFootprint(512, 174)
-unitAnchorX: '49.9%'
-unitAnchorY: '74.219%'
+footprint: circleFootprint(512, 178)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
 ```
 
-At `100%` unit scale, the game renders the source image so the measured `174px` contact footprint maps to the canonical circular footprint. These values were measured before the true-isometric projection correction and must be remeasured after the next Blender export.
+At `100%` unit scale, the game renders the source image so the measured `178px` contact footprint maps to the canonical circular footprint.
+
+> **On computing the anchor.** Don't measure the alpha base row — in isometric the widest base row is the back rim, which projects *higher* than the true contact (this caused an earlier off-by-22px error). The correct anchor is `world_to_camera_view(scene, cam, (0,0,0))` with the unit's base normalized to z=0 and centered at the origin: `anchorX = v.x`, `anchorY = 1 - v.y`. Requires a `view_layer.update()` first so the camera matrix is evaluated.
 
 ## Next Blender Export Rule
 

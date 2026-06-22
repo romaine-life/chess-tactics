@@ -65,10 +65,10 @@ const ROOK_BLENDER_V4_CANVAS_PX = 512;
 const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '49.9%';
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '71.753%';
-const KNIGHT_WOODEN_CANVAS_PX = 512;
-const KNIGHT_WOODEN_CONTACT_FOOTPRINT_PX = 174;
-const KNIGHT_WOODEN_CONTACT_ANCHOR_X = '49.9%';
-const KNIGHT_WOODEN_CONTACT_ANCHOR_Y = '74.219%';
+const KNIGHT_FUR_CANVAS_PX = 512;
+const KNIGHT_FUR_CONTACT_FOOTPRINT_PX = 178;
+const KNIGHT_FUR_CONTACT_ANCHOR_X = '50%';
+const KNIGHT_FUR_CONTACT_ANCHOR_Y = '80.241%';
 
 export const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -105,7 +105,7 @@ export const directionCompassCells: Array<Direction | 'center'> = [
 ];
 
 const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
-const knightWoodenSprite = (_faction: Faction, direction: Direction) => `/assets/units/knight/candidate-wooden/${direction}.png`;
+const knightFurSprite = (_faction: Faction, direction: Direction) => `/assets/units/knight/blender-render-fur/${direction}.png`;
 
 export const MISSING_DIRECTION_SPRITE =
   'data:image/svg+xml;utf8,' +
@@ -136,20 +136,20 @@ export const unitAssets: UnitAsset[] = [
     sprite: rookVariantSprite('blender-render-v4-calibrated'),
   },
   {
-    id: 'knight-wooden',
+    id: 'knight-fur',
     family: 'knight',
     label: 'Knight',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/knight/candidate-wooden/south.png',
-    read: 'Carved Staunton warhorse from a turned-wood model, restyled navy (board-calibrated render)',
+    preview: '/assets/units/knight/blender-render-fur/south.png',
+    read: 'Carved warhorse with a procedural navy fur coat; true-isometric Blender render',
     status: 'active Blender production unit',
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
-    footprint: circleFootprint(KNIGHT_WOODEN_CANVAS_PX, KNIGHT_WOODEN_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: KNIGHT_WOODEN_CONTACT_ANCHOR_X,
-    unitAnchorY: KNIGHT_WOODEN_CONTACT_ANCHOR_Y,
-    sprite: knightWoodenSprite,
+    footprint: circleFootprint(KNIGHT_FUR_CANVAS_PX, KNIGHT_FUR_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: KNIGHT_FUR_CONTACT_ANCHOR_X,
+    unitAnchorY: KNIGHT_FUR_CONTACT_ANCHOR_Y,
+    sprite: knightFurSprite,
   },
 ];
 
