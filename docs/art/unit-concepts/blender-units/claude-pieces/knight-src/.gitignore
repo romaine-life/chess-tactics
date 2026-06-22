@@ -1,0 +1,5 @@
+# Heavy CC-BY source assets — re-downloadable from the Sketchfab link in
+# ATTRIBUTION.md. The working isolated head (../knight-head.glb) is committed.
+source/
+textures/
+*.zip
