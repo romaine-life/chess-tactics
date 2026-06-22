@@ -160,9 +160,9 @@ const unitAssets: UnitAsset[] = [
 ];
 const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
 
-const grassTile = '/assets/tiles/canonical-accepted/grass-clean-a.png';
-const stoneTile = '/assets/tiles/canonical-accepted/stone-clean-a.png';
-const waterTile = '/assets/tiles/canonical-accepted/water-clean-a.png';
+const grassTile = '/assets/tiles/canonical-true-iso/grass-clean-a.png';
+const stoneTile = '/assets/tiles/canonical-true-iso/stone-clean-a.png';
+const waterTile = '/assets/tiles/canonical-true-iso/water-clean-a.png';
 
 const factionLabels: Record<Faction, string> = {
   blue: 'Blue',

@@ -203,13 +203,14 @@ Current deterministic asset scripts:
 
 Current generated folders:
 
+- `frontend/public/assets/tiles/canonical-true-iso/` - active production catalog tiles, normalized to the true-isometric footprint.
 - `frontend/public/assets/tiles/canonical-clean/`
 - `frontend/public/assets/tiles/canonical-accepted/`
 - `frontend/public/assets/tiles/canonical-template/`
 - `frontend/public/assets/tiles/canonical-transition-fill/`
 - `frontend/public/assets/tiles/concept-materials/`
 
-PixelLab can be useful for inspiration, raw candidates, and object/animation experiments. It should not be treated as the geometry authority. Generated assets must be normalized to the canonical board angle before being accepted.
+`canonical-clean` and `canonical-accepted` are retained as legacy/source and before/after comparison folders; they should not be wired as active production tile catalog assets. PixelLab can be useful for inspiration, raw candidates, and object/animation experiments. It should not be treated as the geometry authority. Generated assets must be normalized to the canonical board angle before being accepted.
 
 ## Collaboration Rules
 

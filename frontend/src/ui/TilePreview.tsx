@@ -243,29 +243,33 @@ const overlayCells = [
   { x: 6, y: 2, type: 'danger' },
 ] satisfies Array<{ x: number; y: number; type: 'move' | 'danger' }>;
 
+const TRUE_ISO_TILE_ASSET_ROOT = '/assets/tiles/canonical-true-iso';
+const TRUE_ISO_TILE_SOURCE = 'canonical-true-iso';
+const trueIsoTileAsset = (filename: string): string => `${TRUE_ISO_TILE_ASSET_ROOT}/${filename}`;
+
 const canonicalTileAssets: Record<ConceptTerrain, string[]> = {
   grass: [
-    '/assets/tiles/canonical-clean/grass-clean-a.png',
-    '/assets/tiles/canonical-clean/grass-clean-b.png',
-    '/assets/tiles/canonical-clean/grass-clean-c.png',
+    trueIsoTileAsset('grass-clean-a.png'),
+    trueIsoTileAsset('grass-clean-b.png'),
+    trueIsoTileAsset('grass-clean-c.png'),
   ],
   stone: [
-    '/assets/tiles/canonical-clean/stone-clean-a.png',
-    '/assets/tiles/canonical-clean/stone-clean-b.png',
+    trueIsoTileAsset('stone-clean-a.png'),
+    trueIsoTileAsset('stone-clean-b.png'),
   ],
   water: [
-    '/assets/tiles/canonical-clean/water-clean-a.png',
-    '/assets/tiles/canonical-clean/water-clean-b.png',
+    trueIsoTileAsset('water-clean-a.png'),
+    trueIsoTileAsset('water-clean-b.png'),
   ],
   grassStone: [
-    '/assets/tiles/canonical-clean/transition-grass-stone-a.png',
-    '/assets/tiles/canonical-clean/transition-grass-stone-b.png',
+    trueIsoTileAsset('transition-grass-stone-a.png'),
+    trueIsoTileAsset('transition-grass-stone-b.png'),
   ],
   grassWater: [
-    '/assets/tiles/canonical-clean/transition-grass-water-a.png',
-    '/assets/tiles/canonical-clean/transition-grass-water-b.png',
+    trueIsoTileAsset('transition-grass-water-a.png'),
+    trueIsoTileAsset('transition-grass-water-b.png'),
   ],
-  edge: ['/assets/tiles/canonical-clean/grass-clean-a.png'],
+  edge: [trueIsoTileAsset('grass-clean-a.png')],
 };
 
 const beforeTileAssets: Record<ConceptTerrain, string[]> = {
@@ -426,54 +430,54 @@ const transitionAssets: StudioAsset[] = [
   {
     id: 'transition-grass-stone-a',
     label: 'Grass Stone A',
-    src: '/assets/tiles/canonical-clean/transition-grass-stone-a.png',
+    src: trueIsoTileAsset('transition-grass-stone-a.png'),
     role: 'transition',
     kind: 'tile',
-    source: 'canonical-clean',
+    source: TRUE_ISO_TILE_SOURCE,
     probability: 1,
     terrains: ['grass', 'stone'],
     pairId: 'grass-stone',
     socketMask: 1,
-    notes: 'First grass to stone transition tile.',
+    notes: 'Projection-locked grass to stone transition tile.',
   },
   {
     id: 'transition-grass-stone-b',
     label: 'Grass Stone B',
-    src: '/assets/tiles/canonical-clean/transition-grass-stone-b.png',
+    src: trueIsoTileAsset('transition-grass-stone-b.png'),
     role: 'transition',
     kind: 'tile',
-    source: 'canonical-clean',
+    source: TRUE_ISO_TILE_SOURCE,
     probability: 1,
     terrains: ['grass', 'stone'],
     pairId: 'grass-stone',
     socketMask: 3,
-    notes: 'Alternate grass to stone transition tile.',
+    notes: 'Projection-locked alternate grass to stone transition tile.',
   },
   {
     id: 'transition-grass-water-a',
     label: 'Grass Water A',
-    src: '/assets/tiles/canonical-clean/transition-grass-water-a.png',
+    src: trueIsoTileAsset('transition-grass-water-a.png'),
     role: 'transition',
     kind: 'tile',
-    source: 'canonical-clean',
+    source: TRUE_ISO_TILE_SOURCE,
     probability: 1,
     terrains: ['grass', 'water'],
     pairId: 'grass-water',
     socketMask: 1,
-    notes: 'First grass to water transition tile.',
+    notes: 'Projection-locked grass to water transition tile.',
   },
   {
     id: 'transition-grass-water-b',
     label: 'Grass Water B',
-    src: '/assets/tiles/canonical-clean/transition-grass-water-b.png',
+    src: trueIsoTileAsset('transition-grass-water-b.png'),
     role: 'transition',
     kind: 'tile',
-    source: 'canonical-clean',
+    source: TRUE_ISO_TILE_SOURCE,
     probability: 1,
     terrains: ['grass', 'water'],
     pairId: 'grass-water',
     socketMask: 3,
-    notes: 'Alternate grass to water transition tile.',
+    notes: 'Projection-locked alternate grass to water transition tile.',
   },
   ...transitionFillAssets,
 ];
@@ -489,32 +493,32 @@ const studioFamilies: StudioFamily[] = [
       {
         id: 'grass-clean-a',
         label: 'Grass A',
-        src: '/assets/tiles/canonical-clean/grass-clean-a.png',
+        src: trueIsoTileAsset('grass-clean-a.png'),
         role: 'base',
         kind: 'tile',
-        source: 'canonical-clean',
+        source: TRUE_ISO_TILE_SOURCE,
         probability: 1,
-        notes: 'Current board base tile.',
+        notes: 'Projection-locked current board base tile.',
       },
       {
         id: 'grass-clean-b',
         label: 'Grass B',
-        src: '/assets/tiles/canonical-clean/grass-clean-b.png',
+        src: trueIsoTileAsset('grass-clean-b.png'),
         role: 'variant',
         kind: 'tile',
-        source: 'canonical-clean',
+        source: TRUE_ISO_TILE_SOURCE,
         probability: 0.75,
-        notes: 'Darker texture variation.',
+        notes: 'Projection-locked darker texture variation.',
       },
       {
         id: 'grass-clean-c',
         label: 'Grass C',
-        src: '/assets/tiles/canonical-clean/grass-clean-c.png',
+        src: trueIsoTileAsset('grass-clean-c.png'),
         role: 'variant',
         kind: 'tile',
-        source: 'canonical-clean',
+        source: TRUE_ISO_TILE_SOURCE,
         probability: 0.75,
-        notes: 'Light texture variation.',
+        notes: 'Projection-locked light texture variation.',
       },
       {
         id: 'grass-refresh-a',
@@ -568,22 +572,22 @@ const studioFamilies: StudioFamily[] = [
       {
         id: 'stone-clean-a',
         label: 'Stone A',
-        src: '/assets/tiles/canonical-clean/stone-clean-a.png',
+        src: trueIsoTileAsset('stone-clean-a.png'),
         role: 'base',
         kind: 'tile',
-        source: 'canonical-clean',
+        source: TRUE_ISO_TILE_SOURCE,
         probability: 1,
-        notes: 'Current board stone base.',
+        notes: 'Projection-locked current board stone base.',
       },
       {
         id: 'stone-clean-b',
         label: 'Stone B',
-        src: '/assets/tiles/canonical-clean/stone-clean-b.png',
+        src: trueIsoTileAsset('stone-clean-b.png'),
         role: 'variant',
         kind: 'tile',
-        source: 'canonical-clean',
+        source: TRUE_ISO_TILE_SOURCE,
         probability: 0.75,
-        notes: 'Alternate stone value pass.',
+        notes: 'Projection-locked alternate stone value pass.',
       },
       {
         id: 'stone-refresh-a',
@@ -627,7 +631,7 @@ const studioFamilies: StudioFamily[] = [
       {
         id: 'water-clean-a',
         label: 'Water A',
-        src: '/assets/tiles/canonical-clean/water-clean-a.png',
+        src: trueIsoTileAsset('water-clean-a.png'),
         animation: {
           label: 'Water shimmer prototype',
           frames: waterShimmerAFrames,
@@ -636,19 +640,19 @@ const studioFamilies: StudioFamily[] = [
         },
         role: 'base',
         kind: 'tile',
-        source: 'canonical-clean',
+        source: TRUE_ISO_TILE_SOURCE,
         probability: 1,
-        notes: 'Current board water base.',
+        notes: 'Projection-locked current board water base.',
       },
       {
         id: 'water-clean-b',
         label: 'Water B',
-        src: '/assets/tiles/canonical-clean/water-clean-b.png',
+        src: trueIsoTileAsset('water-clean-b.png'),
         role: 'variant',
         kind: 'tile',
-        source: 'canonical-clean',
+        source: TRUE_ISO_TILE_SOURCE,
         probability: 0.75,
-        notes: 'Alternate water surface.',
+        notes: 'Projection-locked alternate water surface.',
       },
       {
         id: 'water-ai-pixellab-clean-a',
@@ -1003,6 +1007,8 @@ const propertyHelp: Record<string, string> = {
   West: 'The terrain family this tile exposes on its west edge.',
   Pair: 'The two terrain families this transition tile is allowed to connect.',
   Mask: 'Four-bit edge socket code in north, east, south, west order.',
+  Source: 'The asset folder or generation source this item is loaded from.',
+  Projection: 'Whether this item is already in the true-isometric production footprint or still needs review.',
   'Fill Weight': 'Relative chance this tile appears when generating random boards. Zero means it is not used by random fill.',
 };
 
@@ -1024,6 +1030,8 @@ function EdgeLedger({ asset }: { asset: StudioAsset }): ReactElement {
   return (
     <>
       <InspectorRow label="Tile Type">{typeLabel}</InspectorRow>
+      <InspectorRow label="Source">{asset.source}</InspectorRow>
+      <InspectorRow label="Projection">{asset.source === TRUE_ISO_TILE_SOURCE ? 'true-iso locked' : 'review required'}</InspectorRow>
       {socketEdges.map((edge) => (
         <InspectorRow key={edge} label={`${edge[0].toUpperCase()}${edge.slice(1)}`}>
           {terrainLabels[sockets[edge]]}
@@ -1655,7 +1663,7 @@ const studioUnits: StudioUnit[] = [
   },
 ];
 const comingUnits = ['Rook', 'Knight', 'Bishop', 'Queen', 'King'];
-const unitProofTile = '/assets/tiles/canonical-clean/grass-clean-a.png';
+const unitProofTile = trueIsoTileAsset('grass-clean-a.png');
 
 // Units browser, folded into the studio as a second asset category. Reuses the
 // catalog card grid and the studio view shell; pieces get a concept-art view
@@ -3388,6 +3396,14 @@ export function TilesetStudio(): ReactElement {
                 {viewTransitionSlot ? (
                   <dl>
                     <InspectorRow label="Tile Type">{viewTransitionAsset ? 'Transition tile' : 'Missing art'}</InspectorRow>
+                    {viewTransitionAsset ? (
+                      <>
+                        <InspectorRow label="Source">{viewTransitionAsset.source}</InspectorRow>
+                        <InspectorRow label="Projection">
+                          {viewTransitionAsset.source === TRUE_ISO_TILE_SOURCE ? 'true-iso locked' : 'review required'}
+                        </InspectorRow>
+                      </>
+                    ) : null}
                     {viewTransitionAsset?.animation ? (
                       <InspectorRow label="Animation">{`${viewTransitionAsset.animation.label} · ${viewTransitionAsset.animation.status}`}</InspectorRow>
                     ) : null}
@@ -3903,9 +3919,9 @@ export function TileReview(): ReactElement {
             <img src="/assets/tiles/canonical-template/guide-water-tile.png" alt="" draggable={false} />
           </div>
           <div className="tile-template-guides is-normalized" aria-label="Normalized PixelLab samples">
-            <img src="/assets/tiles/canonical-clean/grass-clean-a.png" alt="" draggable={false} />
-            <img src="/assets/tiles/canonical-clean/stone-clean-a.png" alt="" draggable={false} />
-            <img src="/assets/tiles/canonical-clean/water-clean-a.png" alt="" draggable={false} />
+            <img src={trueIsoTileAsset('grass-clean-a.png')} alt="" draggable={false} />
+            <img src={trueIsoTileAsset('stone-clean-a.png')} alt="" draggable={false} />
+            <img src={trueIsoTileAsset('water-clean-a.png')} alt="" draggable={false} />
           </div>
         </aside>
       </section>

@@ -87,7 +87,7 @@ Each accepted transition must include:
 
 ## Normalization Gates
 
-Before an asset can enter `canonical-accepted` or equivalent production folders, verify:
+Before an asset can enter `canonical-true-iso` or equivalent production folders, verify:
 
 - Canvas is exactly `96x140px`.
 - Top diamond aligns to the canonical template.
