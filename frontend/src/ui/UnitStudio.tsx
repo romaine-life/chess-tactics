@@ -52,16 +52,6 @@ const rookDirectionLabel: Record<Direction, string> = {
   west: 'W',
   'south-west': 'SW',
 };
-const rookDirectionName: Record<Direction, string> = {
-  south: 'South',
-  'south-east': 'South-east',
-  east: 'East',
-  'north-east': 'North-east',
-  north: 'North',
-  'north-west': 'North-west',
-  west: 'West',
-  'south-west': 'South-west',
-};
 const directionCompassCells: Array<Direction | 'center'> = [
   'west',
   'north-west',
@@ -243,7 +233,6 @@ const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
 
 const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'rook' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
 const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
-const isDirection = (value: string | null): value is Direction => rookDirections.some((direction) => direction === value);
 const isFootprintShape = (value: string | null): value is FootprintShape => value === 'square' || value === 'circle';
 type UnitStudioMode = 'catalog' | 'view';
 type UnitCollectionFilter = 'production' | 'candidates';
@@ -274,7 +263,6 @@ const readUnitStudioRoute = () => {
   const unitId = unitFromLegacyQuery(params);
   const unit = unitAssets.find((item) => item.id === unitId) ?? unitAssets[0];
   const queryMode = params.get('mode');
-  const queryDirection = params.get('direction');
   const queryShape = params.get('footprintShape');
   const querySizeParam = params.get('unitSize');
   const queryFootprintSizeParam = params.get('footprintSize');
@@ -288,7 +276,7 @@ const readUnitStudioRoute = () => {
   return {
     unitId,
     mode: isUnitStudioMode(queryMode) ? queryMode : params.has('unit') || params.has('piece') ? 'view' : 'catalog',
-    direction: isDirection(queryDirection) ? queryDirection : 'south',
+    direction: 'south' as Direction,
     unitSize: querySize !== undefined && Number.isFinite(querySize) ? clampUnitSize(querySize) : unit.defaultSize,
     footprintVisible: params.get('footprint') !== 'off',
     footprintShape: isFootprintShape(queryShape) ? queryShape : 'square',
@@ -381,7 +369,6 @@ export function UnitStudio() {
     params.set('unit', selectedUnit.id);
     params.set('piece', selectedUnit.family);
     params.set('mode', studioMode);
-    params.set('direction', direction);
     params.set('unitSize', String(unitSize));
     params.set('footprint', footprintVisible ? 'on' : 'off');
     params.set('footprintShape', footprintShape);
@@ -389,7 +376,7 @@ export function UnitStudio() {
     params.set('families', selectedFamilyFilters.join(','));
     params.set('collections', selectedCollectionFilters.join(','));
     window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-  }, [direction, footprintShape, footprintSize, footprintVisible, selectedCollectionFilters, selectedFamilyFilters, selectedUnit.family, selectedUnit.id, studioMode, unitSize]);
+  }, [footprintShape, footprintSize, footprintVisible, selectedCollectionFilters, selectedFamilyFilters, selectedUnit.family, selectedUnit.id, studioMode, unitSize]);
 
   const selectUnit = (nextUnitId: string) => {
     const nextUnit = unitAssets.find((unit) => unit.id === nextUnitId);
@@ -452,7 +439,7 @@ export function UnitStudio() {
             <p className="tileset-studio-kicker">Unit Studio</p>
             <h1>{studioMode === 'catalog' ? 'Units' : selectedUnit.label}</h1>
             <p className="tileset-studio-subtitle">
-              {studioMode === 'catalog' ? 'Browse chess-piece units with the same catalog/view workflow as tiles.' : `${rookDirectionName[direction]} facing · ${selectedUnit.status}`}
+              {studioMode === 'catalog' ? 'Browse chess-piece units with the same catalog/view workflow as tiles.' : selectedUnit.status}
             </p>
           </div>
         </div>
@@ -635,7 +622,7 @@ export function UnitStudio() {
               <div>
                 <p className="tileset-studio-kicker">Unit</p>
                 <h2>{selectedUnit.label}</h2>
-                <p>{selectedTile.label} tile · {rookDirectionName[direction]} facing{directionAvailable ? '' : ' · placeholder'}</p>
+                <p>{selectedTile.label} tile</p>
               </div>
             </div>
 
@@ -765,8 +752,8 @@ export function UnitStudio() {
                       key="center"
                       onClick={rotateDirection}
                     >
-                      <span>Facing</span>
-                      <strong>{rookDirectionLabel[direction]}</strong>
+                      <span>Rotate</span>
+                      <strong>Piece</strong>
                       <em>Rotate</em>
                     </button>
                   ) : (
@@ -806,7 +793,6 @@ export function UnitStudio() {
                 <div><dt>Family</dt><dd>{familyLabels[selectedUnit.family]}</dd></div>
                 <div><dt>Size</dt><dd>{unitSize}px</dd></div>
                 <div><dt>Footprint</dt><dd>{footprintVisible ? `${footprintShape} · ${footprintSize}px` : 'Hidden'}</dd></div>
-                <div><dt>Facing</dt><dd>{rookDirectionLabel[direction]}{directionAvailable ? '' : ' (placeholder)'}</dd></div>
                 <div><dt>Status</dt><dd>{selectedUnit.status}</dd></div>
                 <div><dt>Read</dt><dd>{selectedUnit.read}</dd></div>
               </dl>
