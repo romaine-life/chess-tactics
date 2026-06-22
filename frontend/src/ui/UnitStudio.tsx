@@ -2,163 +2,25 @@ import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react'
 import { TILE_TOP_HEIGHT } from '../art/projectionContract';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
+import {
+  MISSING_DIRECTION_SPRITE,
+  activeUnitFamilies,
+  directionCompassCells,
+  familyLabels,
+  footprintSizeFromScale,
+  hasDirectionSprite,
+  renderSizeFromFootprint,
+  rookDirectionLabel,
+  rookDirections,
+  unitAssets,
+  type Direction,
+  type Faction,
+  type PieceId,
+  type UnitAsset,
+  type UnitPlacementStyle,
+} from './unitCatalog';
 
-type Faction = 'blue' | 'red' | 'neutral';
-type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
-type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 type TileContextId = 'grass' | 'stone' | 'water';
-type FootprintShape = 'square' | 'circle';
-type UnitFootprint = {
-  shape: FootprintShape;
-  sourceCanvasPx: number;
-  sourceFootprintPx: number;
-};
-type UnitPlacementStyle = CSSProperties & {
-  '--tile-anchor-x': string;
-  '--tile-anchor-y': string;
-  '--unit-anchor-x': string;
-  '--unit-anchor-y': string;
-  '--unit-size': string;
-  '--unit-footprint-size': string;
-};
-
-type UnitAsset = {
-  id: string;
-  family: PieceId;
-  label: string;
-  badge: string;
-  preview: string;
-  read: string;
-  status: string;
-  directions?: Direction[];
-  factionMode: 'fixed' | 'palette';
-  defaultScale: number;
-  footprint: UnitFootprint;
-  unitAnchorX?: string;
-  unitAnchorY?: string;
-  sprite: (faction: Faction, direction: Direction) => string;
-};
-
-const CANONICAL_CIRCLE_FOOTPRINT_PX = 96;
-const SQUARE_EQUAL_AREA_FACTOR = Math.sqrt(Math.PI) / 2;
-const canonicalFootprintSize = (shape: FootprintShape) =>
-  shape === 'square' ? Math.round(CANONICAL_CIRCLE_FOOTPRINT_PX * SQUARE_EQUAL_AREA_FACTOR) : CANONICAL_CIRCLE_FOOTPRINT_PX;
-const renderSizeFromFootprint = (unit: UnitAsset, scale: number) =>
-  Math.round((canonicalFootprintSize(unit.footprint.shape) * (scale / 100) * unit.footprint.sourceCanvasPx) / unit.footprint.sourceFootprintPx);
-const footprintSizeFromScale = (unit: UnitAsset, scale: number) =>
-  Math.round(canonicalFootprintSize(unit.footprint.shape) * (scale / 100));
-const circleFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
-  shape: 'circle',
-  sourceCanvasPx,
-  sourceFootprintPx,
-});
-const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
-  shape: 'square',
-  sourceCanvasPx,
-  sourceFootprintPx,
-});
-const ROOK_BLENDER_V4_CANVAS_PX = 512;
-const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
-const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '49.9%';
-const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '71.753%';
-const KNIGHT_WOODEN_CANVAS_PX = 512;
-const KNIGHT_WOODEN_CONTACT_FOOTPRINT_PX = 174;
-const KNIGHT_WOODEN_CONTACT_ANCHOR_X = '49.9%';
-const KNIGHT_WOODEN_CONTACT_ANCHOR_Y = '74.219%';
-
-const familyLabels: Record<PieceId, string> = {
-  pawn: 'Pawn',
-  rook: 'Rook',
-  knight: 'Knight',
-  bishop: 'Bishop',
-  queen: 'Queen',
-  king: 'King',
-};
-
-const rookDirections: Direction[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
-const rookDirectionLabel: Record<Direction, string> = {
-  south: 'S',
-  'south-east': 'SE',
-  east: 'E',
-  'north-east': 'NE',
-  north: 'N',
-  'north-west': 'NW',
-  west: 'W',
-  'south-west': 'SW',
-};
-// Laid out to match the isometric board, not a flat geographic compass: the NE
-// board camera projects each direction to a 45-deg-rotated screen position, so a
-// south-facing unit points to screen lower-left. Each cell therefore sits where
-// the unit actually points — south is the numpad-1 (bottom-left) cell, etc.
-//   7 W    8 NW   9 N
-//   4 SW   5 .    6 NE
-//   1 S    2 SE   3 E
-const directionCompassCells: Array<Direction | 'center'> = [
-  'west',
-  'north-west',
-  'north',
-  'south-west',
-  'center',
-  'north-east',
-  'south',
-  'south-east',
-  'east',
-];
-
-const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
-// Wooden-knight candidate: a board-calibrated Blender render of the carved
-// Staunton OBJ, restyled navy to sit in the unit family (8 fixed directions).
-const knightWoodenSprite = (_faction: Faction, direction: Direction) => `/assets/units/knight/candidate-wooden/${direction}.png`;
-
-// Shown when a unit has no sprite for the chosen facing — a placeholder, never a
-// disabled control. Directions are always selectable.
-const MISSING_DIRECTION_SPRITE =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>" +
-      "<path d='M80 26 L144 80 L80 134 L16 80 Z' fill='none' stroke='#8fb8ff' stroke-width='3' stroke-dasharray='6 6' opacity='0.4'/>" +
-      "<text x='80' y='96' font-size='42' text-anchor='middle' fill='#8fb8ff' opacity='0.5' font-family='sans-serif'>?</text>" +
-      '</svg>',
-  );
-
-const hasDirectionSprite = (unit: UnitAsset, dir: Direction) =>
-  unit.directions ? unit.directions.includes(dir) : dir === 'south';
-
-const unitAssets: UnitAsset[] = [
-  {
-    id: 'rook-blender-v4-calibrated',
-    family: 'rook',
-    label: 'Rook',
-    badge: '8 directions · calibrated',
-    preview: '/assets/units/rook/blender-render-v4-calibrated/south.png',
-    read: 'Board-calibrated castle rook with exact eight-direction rotations',
-    status: 'active Blender production unit',
-    directions: rookDirections,
-    factionMode: 'fixed',
-    defaultScale: 100,
-    footprint: squareFootprint(ROOK_BLENDER_V4_CANVAS_PX, ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: ROOK_BLENDER_V4_CONTACT_ANCHOR_X,
-    unitAnchorY: ROOK_BLENDER_V4_CONTACT_ANCHOR_Y,
-    sprite: rookVariantSprite('blender-render-v4-calibrated'),
-  },
-  {
-    id: 'knight-wooden',
-    family: 'knight',
-    label: 'Knight',
-    badge: '8 directions · Blender candidate',
-    preview: '/assets/units/knight/candidate-wooden/south.png',
-    read: 'Carved Staunton warhorse from a turned-wood model, restyled navy (board-calibrated render)',
-    status: 'active Blender candidate',
-    directions: rookDirections,
-    factionMode: 'fixed',
-    defaultScale: 100,
-    footprint: circleFootprint(KNIGHT_WOODEN_CANVAS_PX, KNIGHT_WOODEN_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: KNIGHT_WOODEN_CONTACT_ANCHOR_X,
-    unitAnchorY: KNIGHT_WOODEN_CONTACT_ANCHOR_Y,
-    sprite: knightWoodenSprite,
-  },
-];
-const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
 
 const grassTile = '/assets/tiles/canonical-true-iso/grass-clean-a.png';
 const stoneTile = '/assets/tiles/canonical-true-iso/stone-clean-a.png';
@@ -366,6 +228,21 @@ export function UnitStudio() {
       current.includes(nextCollection) ? current.filter((item) => item !== nextCollection) : [...current, nextCollection],
     );
   };
+  const openBoardLab = (unitToPlace = selectedUnit.id) => {
+    const params = new URLSearchParams();
+    params.set('family', 'grass');
+    params.set('mode', 'view');
+    params.set('collection', 'board');
+    params.set('asset', 'grass-clean-a');
+    params.set('pair', 'grass-stone');
+    params.set('board', 'generated');
+    params.set('scope', 'mixed');
+    params.set('size', 'small');
+    params.set('seed', '4217');
+    params.set('brush', 'unit');
+    params.set('unit', unitToPlace);
+    navigateApp(`/tileset-studio?${params.toString()}`);
+  };
 
   return (
     <main className="tileset-studio-page unit-studio-route">
@@ -390,6 +267,9 @@ export function UnitStudio() {
             </button>
             <button type="button" className="is-active" title="Browse chess-piece units.">
               Units
+            </button>
+            <button type="button" onClick={() => openBoardLab()} title="Open the shared terrain and unit board lab.">
+              Board Lab
             </button>
           </span>
           <span className="tileset-mode-tabs" aria-label="Unit studio mode">
@@ -538,6 +418,28 @@ export function UnitStudio() {
                           <span className="tileset-studio-card-text">
                             <strong>{unit.label}</strong>
                             <em>{unit.badge}</em>
+                          </span>
+                          <span className="tileset-card-actions">
+                            <span
+                              className="tileset-card-action"
+                              role="button"
+                              tabIndex={0}
+                              title={`Place ${unit.label} on the board`}
+                              aria-label={`Place ${unit.label} on the board`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openBoardLab(unit.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  openBoardLab(unit.id);
+                                }
+                              }}
+                            >
+                              +
+                            </span>
                           </span>
                         </span>
                       </button>

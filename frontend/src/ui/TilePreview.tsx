@@ -25,6 +25,15 @@ import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
+import {
+  MISSING_DIRECTION_SPRITE,
+  hasDirectionSprite,
+  renderSizeFromFootprint,
+  unitAssets,
+  type Direction,
+  type Faction,
+  type UnitAsset,
+} from './unitCatalog';
 
 type TileRun = 'grass' | 'stone' | 'water' | 'transition';
 
@@ -341,11 +350,19 @@ interface TilesetStudioRouteState {
   boardScope: 'family' | 'mixed';
   boardSize: 'small' | 'wide';
   boardSeed: number;
+  brushKind: 'tile' | 'unit';
+  selectedUnitId?: string;
 }
 
 type ReviewItem =
   | { type: 'asset'; asset: StudioAsset }
   | { type: 'slot'; pair: TransitionPair; slot: TransitionSlot<StudioAsset> };
+
+type BoardUnitPlacement = {
+  unitId: string;
+  direction: Direction;
+  faction: Faction;
+};
 
 const studioDefaults: TilesetStudioRouteState = {
   familyId: 'grass',
@@ -356,6 +373,7 @@ const studioDefaults: TilesetStudioRouteState = {
   boardScope: 'family',
   boardSize: 'small',
   boardSeed: 4217,
+  brushKind: 'tile',
 };
 
 const waterShimmerAFrames = Array.from(
@@ -835,6 +853,7 @@ const isStudioMode = (value: string | null): value is StudioMode => value === 'c
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
 
 const isTerrainPairId = (value: string | null): value is TerrainPairId => value === 'grass-stone' || value === 'grass-water' || value === 'stone-water';
+const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
 
 const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const params = new URLSearchParams(window.location.search);
@@ -844,6 +863,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const collection = params.get('collection');
   const pair = params.get('pair');
   const asset = params.get('asset');
+  const unit = params.get('unit');
   const slot = Number(params.get('slot'));
   const seed = Number(params.get('seed'));
   const studioMode = isStudioMode(mode) ? mode : studioDefaults.studioMode;
@@ -859,6 +879,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     boardScope: params.get('scope') === 'mixed' ? 'mixed' : studioDefaults.boardScope,
     boardSize: params.get('size') === 'wide' ? 'wide' : studioDefaults.boardSize,
     boardSeed: Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : studioDefaults.boardSeed,
+    brushKind: params.get('brush') === 'unit' ? 'unit' : studioDefaults.brushKind,
+    selectedUnitId: isUnitAssetId(unit) ? unit : undefined,
   };
 };
 
@@ -876,6 +898,8 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   params.set('scope', route.boardScope);
   params.set('size', route.boardSize);
   params.set('seed', String(route.boardSeed));
+  if (route.brushKind === 'unit') params.set('brush', 'unit');
+  if (route.selectedUnitId) params.set('unit', route.selectedUnitId);
   const nextHref = `${window.location.pathname}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
   if (nextHref !== currentHref) {
@@ -1513,7 +1537,9 @@ function StudioEditableBoard({
   cols,
   rows,
   cells: placed,
+  units: placedUnits,
   resolveAsset,
+  resolveUnit,
   tool,
   selectedCell,
   showFootprint,
@@ -1528,7 +1554,9 @@ function StudioEditableBoard({
   cols: number;
   rows: number;
   cells: Record<string, string>;
+  units: Record<string, BoardUnitPlacement>;
   resolveAsset: (id: string) => StudioAsset | undefined;
+  resolveUnit: (id: string) => UnitAsset | undefined;
   tool: 'select' | 'brush' | 'erase';
   selectedCell: { x: number; y: number } | null;
   showFootprint: boolean;
@@ -1579,9 +1607,17 @@ function StudioEditableBoard({
         const key = `${cell.x},${cell.y}`;
         const assetId = placed[key];
         const asset = assetId ? resolveAsset(assetId) : undefined;
+        const unitPlacement = placedUnits[key];
+        const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
         const left = (cell.x - cell.y) * TILE_TEMPLATE.stepX;
         const top = (cell.x + cell.y) * TILE_TEMPLATE.stepY;
         const isSelected = selectedCell?.x === cell.x && selectedCell?.y === cell.y;
+        const unitSprite =
+          unitAsset && unitPlacement
+            ? hasDirectionSprite(unitAsset, unitPlacement.direction)
+              ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
+              : MISSING_DIRECTION_SPRITE
+            : undefined;
         return (
           <div
             key={key}
@@ -1589,6 +1625,20 @@ function StudioEditableBoard({
             style={{ left, top, zIndex: cell.x + cell.y }}
           >
             {asset ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
+            {unitAsset && unitSprite ? (
+              <img
+                className={`tileset-board-unit is-${unitAsset.family}`}
+                src={unitSprite}
+                alt=""
+                draggable={false}
+                style={
+                  {
+                    width: `${renderSizeFromFootprint(unitAsset, unitAsset.defaultScale)}px`,
+                    transform: `translate(-${unitAsset.unitAnchorX ?? '50%'}, -${unitAsset.unitAnchorY ?? '92%'})`,
+                  } as CSSProperties
+                }
+              />
+            ) : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
@@ -2264,7 +2314,9 @@ export function LevelEditorPage(): ReactElement {
                   cols={cols}
                   rows={rows}
                   cells={renderedCells}
+                  units={{}}
                   resolveAsset={(id) => assetById.get(id)}
+                  resolveUnit={() => undefined}
                   tool={boardTool}
                   selectedCell={null}
                   showFootprint={showGrid}
@@ -2398,9 +2450,14 @@ export function TilesetStudio(): ReactElement {
   const [animationPlaying, setAnimationPlaying] = useState(true);
   const [manualAnimationFrame, setManualAnimationFrame] = useState(0);
   // Unified editable board (temporary, in-memory only — re-seeds when a new view loads).
-  const [tool, setTool] = useState<'select' | 'brush' | 'erase'>('select');
+  const [tool, setTool] = useState<'select' | 'brush' | 'erase'>(initialRoute.brushKind === 'unit' ? 'brush' : 'select');
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit'>(initialRoute.brushKind);
   const [brushId, setBrushId] = useState<string>(initialRoute.selectedAssetId ?? '');
+  const [unitBrushId, setUnitBrushId] = useState<string>(initialRoute.selectedUnitId ?? unitAssets[0].id);
+  const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
+  const [unitBrushFaction] = useState<Faction>('blue');
   const [boardCells, setBoardCells] = useState<Record<string, string>>({});
+  const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [boardSectionOpen, setBoardSectionOpen] = useState(true);
   const [viewSectionOpen, setViewSectionOpen] = useState(true);
@@ -2427,9 +2484,33 @@ export function TilesetStudio(): ReactElement {
   const allStudioAssets = useMemo(() => [...studioFamilies.flatMap((item) => item.assets), ...transitionAssets], []);
   const selectedAsset = allStudioAssets.find((asset) => asset.id === selectedAssetId) ?? family.assets[0];
   const resolveStudioAsset = (id: string): StudioAsset | undefined => allStudioAssets.find((asset) => asset.id === id);
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
   const brushAsset = resolveStudioAsset(brushId) ?? selectedAsset;
-  const paintCell = (x: number, y: number): void => setBoardCells((prev) => ({ ...prev, [`${x},${y}`]: brushAsset.id }));
+  const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
+  const paintCell = (x: number, y: number): void => {
+    if (brushKind === 'unit') {
+      setBoardUnits((prev) => ({
+        ...prev,
+        [`${x},${y}`]: {
+          unitId: unitBrushAsset.id,
+          direction: unitBrushDirection,
+          faction: unitBrushFaction,
+        },
+      }));
+      return;
+    }
+    setBoardCells((prev) => ({ ...prev, [`${x},${y}`]: brushAsset.id }));
+  };
   const eraseCell = (x: number, y: number): void =>
+    brushKind === 'unit'
+      ? setBoardUnits((prev) => {
+          const key = `${x},${y}`;
+          if (!(key in prev)) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        })
+      :
     setBoardCells((prev) => {
       const key = `${x},${y}`;
       if (!(key in prev)) return prev;
@@ -2439,6 +2520,7 @@ export function TilesetStudio(): ReactElement {
     });
   const clearBoard = (): void => {
     setBoardCells({});
+    setBoardUnits({});
     setSelectedCell(null);
   };
   const filteredTileAssets =
@@ -2657,6 +2739,9 @@ export function TilesetStudio(): ReactElement {
       setBoardScope(route.boardScope);
       setBoardSize(route.boardSize);
       setBoardSeed(route.boardSeed);
+      setBrushKind(route.brushKind);
+      if (route.brushKind === 'unit') setTool('brush');
+      if (route.selectedUnitId) setUnitBrushId(route.selectedUnitId);
     };
 
     window.addEventListener('popstate', syncFromRoute);
@@ -2743,8 +2828,10 @@ export function TilesetStudio(): ReactElement {
       boardScope,
       boardSize,
       boardSeed,
+      brushKind,
+      selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, familyId, selectedAsset.id, selectedPairId, selectedSlotMask, studioMode, tileFilter, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, familyId, selectedAsset.id, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   const zoomTilesWithWheel = (event: WheelEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -2782,6 +2869,7 @@ export function TilesetStudio(): ReactElement {
   };
 
   const openBoardLab = () => {
+    setCategory('tiles');
     setTileFilter('board');
     setSelectedSlotMask(undefined);
     setViewHasTarget(true);
@@ -2809,6 +2897,7 @@ export function TilesetStudio(): ReactElement {
   const armBrush = (asset: StudioAsset) => {
     if (asset.kind !== 'tile') return;
     setBrushId(asset.id);
+    setBrushKind('tile');
     setTool('brush');
     setStudioMode('view');
   };
@@ -2896,20 +2985,27 @@ export function TilesetStudio(): ReactElement {
             <span>Tactical chess, infinite possibilities.</span>
           </div>
           <div className="tileset-studio-titleblock">
-            <p className="tileset-studio-kicker">{category === 'units' ? 'Unit Studio' : 'Tileset Studio'}</p>
-            <h1>{category === 'units' ? 'Units' : selectedFamilyLabel}</h1>
+            <p className="tileset-studio-kicker">{tileFilter === 'board' ? 'Board Studio' : category === 'units' ? 'Unit Studio' : 'Tileset Studio'}</p>
+            <h1>{tileFilter === 'board' ? 'Board Lab' : category === 'units' ? 'Units' : selectedFamilyLabel}</h1>
             <p className="tileset-studio-subtitle">
-              {category === 'units' ? 'Chess pieces as squad units — concept review.' : activeFamilies.map((item) => item.purpose).join(' · ')}
+              {tileFilter === 'board'
+                ? 'Shared terrain and unit placement workbench.'
+                : category === 'units'
+                  ? 'Chess pieces as squad units — concept review.'
+                  : activeFamilies.map((item) => item.purpose).join(' · ')}
             </p>
           </div>
         </div>
         <nav className="tileset-studio-actions" aria-label="Tileset studio navigation">
           <span className="tileset-mode-tabs" aria-label="Asset category">
-            <button type="button" className={category === 'tiles' ? 'is-active' : ''} onClick={() => setCategory('tiles')} title="Browse terrain tiles.">
+            <button type="button" className={category === 'tiles' && tileFilter !== 'board' ? 'is-active' : ''} onClick={() => setCategory('tiles')} title="Browse terrain tiles.">
               Tiles
             </button>
             <button type="button" onClick={() => navigateApp('/unit-studio?piece=rook')} title="Browse chess-piece units.">
               Units
+            </button>
+            <button type="button" className={tileFilter === 'board' ? 'is-active' : ''} onClick={openBoardLab} title="Open the shared terrain and unit board lab.">
+              Board Lab
             </button>
           </span>
           <span className="tileset-mode-tabs" aria-label="Tileset studio mode">
@@ -3050,9 +3146,6 @@ export function TilesetStudio(): ReactElement {
                   </div>
                 ) : null}
               </div>
-              <button type="button" className="tileset-view-action" onClick={openBoardLab}>
-                Board Lab
-              </button>
               <button
                 type="button"
                 className="tileset-view-action"
@@ -3183,7 +3276,9 @@ export function TilesetStudio(): ReactElement {
                     cols={editableGrid.columns}
                     rows={editableGrid.rows}
                     cells={boardCells}
+                    units={boardUnits}
                     resolveAsset={resolveStudioAsset}
+                    resolveUnit={resolveUnitAsset}
                     tool={tool}
                     selectedCell={selectedCell}
                     showFootprint={showFootprint}
@@ -3220,31 +3315,64 @@ export function TilesetStudio(): ReactElement {
                       </div>
 
                       <p className="tileset-group-label">Brush</p>
+                      <div className="tileset-segmented-control" aria-label="Placeable brush type">
+                        <button type="button" className={brushKind === 'tile' ? 'is-active' : ''} onClick={() => setBrushKind('tile')} title="Paint terrain tiles.">
+                          Tile
+                        </button>
+                        <button type="button" className={brushKind === 'unit' ? 'is-active' : ''} onClick={() => setBrushKind('unit')} title="Place chess units on top of tiles.">
+                          Unit
+                        </button>
+                      </div>
                       <button
                         type="button"
                         className="tileset-brush-display"
-                        onClick={() => setStudioMode('catalog')}
-                        title="Pick a different tile from the catalog"
-                        aria-label={`Active brush: ${brushAsset.label}. Pick a different tile from the catalog.`}
+                        onClick={() => (brushKind === 'unit' ? navigateApp(`/unit-studio?unit=${unitBrushAsset.id}&mode=catalog`) : setStudioMode('catalog'))}
+                        title={brushKind === 'unit' ? 'Pick a different unit from the unit catalog' : 'Pick a different tile from the tile catalog'}
+                        aria-label={`Active brush: ${brushKind === 'unit' ? unitBrushAsset.label : brushAsset.label}. Pick a different ${brushKind}.`}
                       >
-                        <img src={brushAsset.src} alt="" draggable={false} />
-                        <span className="tileset-brush-label">{brushAsset.label}</span>
+                        <img src={brushKind === 'unit' ? unitBrushAsset.preview : brushAsset.src} alt="" draggable={false} />
+                        <span className="tileset-brush-label">{brushKind === 'unit' ? unitBrushAsset.label : brushAsset.label}</span>
                         <span className="tileset-brush-change">Pick in catalog ›</span>
                       </button>
-
-                      <p className="tileset-group-label">Fill</p>
-                      {tool === 'select' && selectedCell && boardCells[`${selectedCell.x},${selectedCell.y}`] ? (
-                        <button type="button" className="tileset-wide-action" onClick={fillCardinals} title="Place the matching base tile of each edge's family around the selected tile (N/E/S/W).">
-                          Fill cardinal neighbors
-                        </button>
+                      {brushKind === 'unit' ? (
+                        <div className="tileset-segmented-control tileset-unit-facing" aria-label="Unit facing">
+                          {(['south', 'east', 'north', 'west'] as Direction[]).map((dir) => (
+                            <button
+                              key={dir}
+                              type="button"
+                              className={unitBrushDirection === dir ? 'is-active' : ''}
+                              onClick={() => setUnitBrushDirection(dir)}
+                              title={`Face ${dir}`}
+                            >
+                              {dir[0].toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
                       ) : null}
-                      <div className="tileset-button-row">
-                        <button type="button" onClick={() => fillBoard('empty')} title="Fill every blank cell with the current brush.">Empty</button>
-                        <button type="button" onClick={() => fillBoard('all')} title="Fill the whole board with the current brush (overwrites everything).">Whole</button>
-                        <button type="button" className="tileset-action-danger" onClick={clearBoard} disabled={Object.keys(boardCells).length === 0} title="Remove every tile from the board.">
-                          Clear
-                        </button>
-                      </div>
+
+                      {brushKind === 'tile' ? (
+                        <>
+                          <p className="tileset-group-label">Fill</p>
+                          {tool === 'select' && selectedCell && boardCells[`${selectedCell.x},${selectedCell.y}`] ? (
+                            <button type="button" className="tileset-wide-action" onClick={fillCardinals} title="Place the matching base tile of each edge's family around the selected tile (N/E/S/W).">
+                              Fill cardinal neighbors
+                            </button>
+                          ) : null}
+                          <div className="tileset-button-row">
+                            <button type="button" onClick={() => fillBoard('empty')} title="Fill every blank cell with the current brush.">Empty</button>
+                            <button type="button" onClick={() => fillBoard('all')} title="Fill the whole board with the current brush (overwrites everything).">Whole</button>
+                            <button type="button" className="tileset-action-danger" onClick={clearBoard} disabled={Object.keys(boardCells).length === 0 && Object.keys(boardUnits).length === 0} title="Remove every tile and unit from the board.">
+                              Clear
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="tileset-button-row">
+                          <button type="button" className="tileset-action-danger" onClick={clearBoard} disabled={Object.keys(boardCells).length === 0 && Object.keys(boardUnits).length === 0} title="Remove every tile and unit from the board.">
+                            Clear board
+                          </button>
+                        </div>
+                      )}
                     </>
                   ) : null}
 

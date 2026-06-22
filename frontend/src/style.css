@@ -10772,6 +10772,20 @@ button.tileset-relationship-cell {
   -webkit-user-select: none;
 }
 
+.tileset-generated-board-tile .tileset-board-unit {
+  position: absolute;
+  left: 50%;
+  top: var(--iso-tile-height);
+  z-index: 5;
+  width: auto;
+  height: auto;
+  max-width: none;
+  image-rendering: auto;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .tileset-generated-board-tile.is-missing {
   align-items: start;
   color: #9eb1c5;
