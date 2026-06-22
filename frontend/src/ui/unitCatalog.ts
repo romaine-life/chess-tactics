@@ -46,6 +46,11 @@ export const canonicalFootprintSize = (shape: FootprintShape) =>
 export const renderSizeFromFootprint = (unit: UnitAsset, scale: number) =>
   Math.round((canonicalFootprintSize(unit.footprint.shape) * (scale / 100) * unit.footprint.sourceCanvasPx) / unit.footprint.sourceFootprintPx);
 
+export const UNIT_INSPECTION_TILE_SCALE = 2;
+
+export const renderSizeForTileScale = (unit: UnitAsset, scale: number, tileScale: number) =>
+  Math.round(renderSizeFromFootprint(unit, scale) * (tileScale / UNIT_INSPECTION_TILE_SCALE));
+
 export const footprintSizeFromScale = (unit: UnitAsset, scale: number) =>
   Math.round(canonicalFootprintSize(unit.footprint.shape) * (scale / 100));
 

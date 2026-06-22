@@ -10782,7 +10782,9 @@ button.tileset-relationship-cell {
   width: auto;
   height: auto;
   max-width: none;
+  object-fit: contain;
   image-rendering: auto;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.55));
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;

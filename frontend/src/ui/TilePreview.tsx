@@ -28,7 +28,7 @@ import { ViewPane } from './shared/ViewPane';
 import {
   MISSING_DIRECTION_SPRITE,
   hasDirectionSprite,
-  renderSizeFromFootprint,
+  renderSizeForTileScale,
   unitAssets,
   type Direction,
   type Faction,
@@ -1633,7 +1633,8 @@ function StudioEditableBoard({
                 draggable={false}
                 style={
                   {
-                    width: `${renderSizeFromFootprint(unitAsset, unitAsset.defaultScale)}px`,
+                    width: `${renderSizeForTileScale(unitAsset, unitAsset.defaultScale, 1)}px`,
+                    height: `${renderSizeForTileScale(unitAsset, unitAsset.defaultScale, 1)}px`,
                     transform: `translate(-${unitAsset.unitAnchorX ?? '50%'}, -${unitAsset.unitAnchorY ?? '92%'})`,
                   } as CSSProperties
                 }

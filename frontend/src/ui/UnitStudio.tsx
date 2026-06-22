@@ -9,9 +9,10 @@ import {
   familyLabels,
   footprintSizeFromScale,
   hasDirectionSprite,
-  renderSizeFromFootprint,
+  renderSizeForTileScale,
   rookDirectionLabel,
   rookDirections,
+  UNIT_INSPECTION_TILE_SCALE,
   unitAssets,
   type Direction,
   type Faction,
@@ -99,7 +100,8 @@ const readUnitStudioRoute = () => {
   };
 };
 const clampUnitScale = (value: number) => Math.min(500, Math.max(25, value));
-const scaleFromLegacySize = (unit: UnitAsset, size: number) => clampUnitScale(Math.round((size / renderSizeFromFootprint(unit, 100)) * 100));
+const scaleFromLegacySize = (unit: UnitAsset, size: number) =>
+  clampUnitScale(Math.round((size / renderSizeForTileScale(unit, 100, UNIT_INSPECTION_TILE_SCALE)) * 100));
 
 export function UnitStudio() {
   const initialRoute = useMemo(() => readUnitStudioRoute(), []);
@@ -120,7 +122,7 @@ export function UnitStudio() {
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<UnitCollectionFilter[]>(initialRoute.collectionFilters);
   const filterDropdownRef = useRef<HTMLDivElement | null>(null);
   const selectedUnit = unitAssets.find((unit) => unit.id === unitId) ?? unitAssets[0];
-  const unitRenderSize = renderSizeFromFootprint(selectedUnit, unitScale);
+  const unitRenderSize = renderSizeForTileScale(selectedUnit, unitScale, UNIT_INSPECTION_TILE_SCALE);
   const unitFootprintSize = footprintSizeFromScale(selectedUnit, unitScale);
   const directionAvailable = hasDirectionSprite(selectedUnit, direction);
   const selectedSprite = directionAvailable ? selectedUnit.sprite(faction, direction) : MISSING_DIRECTION_SPRITE;
