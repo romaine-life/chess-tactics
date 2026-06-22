@@ -17,10 +17,13 @@ sys.path.insert(0, str(HERE))
 import pieces_claude as P  # noqa: E402
 
 HEAD_GLB = HERE / "knight-head.glb"
-TARGET_H = 2.0          # total piece height
-HEAD_FRAC = 0.64        # head share of height; rest is the turned base
-ORIENT = (-130, 0, 0)   # raised-head chess-knight pose (rx, ry, rz) degrees
-OVERLAP = 0.22          # bury the neck stump deep in the base so the cut is hidden
+# A chess piece is a turned column with a motif on top. Build the column (foot +
+# neck) in the set's lathe language, then fuse the horse head onto the TOP third.
+TARGET_H = 2.2          # total piece height
+HEAD_H = 0.92           # the horse head occupies only the top ~third (a motif)
+NECK_TOP = 1.48         # the turned neck column rises to here; head caps it
+HEAD_DROP = 0.12        # head sinks into the column top for a clean fuse
+ORIENT = (-104, 0, 0)   # head tilt where it sits on the column (tune via 'orient')
 
 
 def bbox(o):
@@ -62,28 +65,30 @@ def import_head(rx, ry, rz, material):
     R = Euler((math.radians(rx), math.radians(ry), math.radians(rz)), "XYZ").to_matrix().to_4x4()
     md.transform(R)
     mn, mx = data_bounds(md)
-    s = (TARGET_H * HEAD_FRAC) / (mx.z - mn.z)
+    s = HEAD_H / (mx.z - mn.z)
     md.transform(Matrix.Scale(s, 4))
     mn, mx = data_bounds(md)
-    base_top = TARGET_H * (1 - HEAD_FRAC)
-    md.transform(Matrix.Translation(Vector((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, (base_top - OVERLAP) - mn.z))))
+    # sit the head on top of the neck column, sinking in by HEAD_DROP to fuse
+    md.transform(Matrix.Translation(Vector((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, (NECK_TOP - HEAD_DROP) - mn.z))))
     md.update()
     md.materials.clear()
     md.materials.append(material)
     for p in md.polygons:
         p.use_smooth = True
-    return head, base_top
+    return head
 
 
-def build_base(material, base_top):
-    # broad fluted foot rising into a collar that hugs the neck, capped on top
+def build_body(material):
+    # Turned chess-piece column in the set's lathe language: flared foot + collar,
+    # then a neck rising to NECK_TOP where the horse head caps it.
     profile = [
-        (0.00, 0.00), (0.54, 0.00), (0.54, 0.06), (0.45, 0.09), (0.47, 0.13),
-        (0.37, 0.20), (0.39, 0.24), (0.32, 0.31), (0.30, 0.42),
-        (0.32, 0.50), (0.345, 0.58), (0.35, 0.64), (0.33, 0.69),
-        (0.30, base_top), (0.0, base_top + 0.005),
+        (0.00, 0.00), (0.47, 0.00), (0.47, 0.05), (0.39, 0.085), (0.42, 0.12),
+        (0.37, 0.19), (0.31, 0.28), (0.295, 0.35),
+        (0.315, 0.40), (0.305, 0.45),
+        (0.25, 0.60), (0.225, 0.82), (0.225, 1.05), (0.25, 1.26),
+        (0.285, NECK_TOP - 0.06), (0.30, NECK_TOP),
     ]
-    return P.lathe("knight_base", profile, material, smooth=2)
+    return P.lathe("knight_body", profile, material, smooth=2)
 
 
 def assemble(rx, ry, rz):
@@ -91,20 +96,20 @@ def assemble(rx, ry, rz):
     P.setup_world()
     P.setup_lighting()
     m = P.stone()
-    head, base_top = import_head(rx, ry, rz, m)
-    base = build_base(m, base_top)
-    # fuse head + base into ONE carved form so there's no two-part seam
-    P.boolean(head, base, "UNION")
-    bev = head.modifiers.new("seam_bevel", "BEVEL")
+    body = build_body(m)
+    head = import_head(rx, ry, rz, m)
+    # fuse the head onto the top of the turned column -> one carved piece
+    P.boolean(body, head, "UNION")
+    bev = body.modifiers.new("seam_bevel", "BEVEL")
     bev.width = 0.012
     bev.segments = 2
     bev.use_clamp_overlap = True
-    head.modifiers.new("seam_wn", "WEIGHTED_NORMAL")
-    for poly in head.data.polygons:
+    body.modifiers.new("seam_wn", "WEIGHTED_NORMAL")
+    for poly in body.data.polygons:
         poly.use_smooth = True
     pivot = bpy.data.objects.new("knight_pivot", None)
     bpy.context.collection.objects.link(pivot)
-    head.parent = pivot
+    body.parent = pivot
     return pivot
 
 
