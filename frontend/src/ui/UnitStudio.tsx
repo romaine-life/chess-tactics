@@ -278,7 +278,7 @@ const readUnitStudioRoute = () => {
     mode: isUnitStudioMode(queryMode) ? queryMode : params.has('unit') || params.has('piece') ? 'view' : 'catalog',
     direction: 'south' as Direction,
     unitSize: querySize !== undefined && Number.isFinite(querySize) ? clampUnitSize(querySize) : unit.defaultSize,
-    footprintVisible: params.get('footprint') !== 'off',
+    footprintVisible: params.get('footprint') === 'on',
     footprintShape: isFootprintShape(queryShape) ? queryShape : 'square',
     footprintSize: queryFootprintSize !== undefined && Number.isFinite(queryFootprintSize) ? clampFootprintSize(queryFootprintSize) : 96,
     familyFilters: queryFamilies ?? [...new Set(unitAssets.map((item) => item.family))],
