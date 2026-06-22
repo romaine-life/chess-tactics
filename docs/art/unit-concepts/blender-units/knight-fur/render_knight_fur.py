@@ -116,4 +116,13 @@ for name, angle in DIRECTIONS.items():
     kn.rotation_euler = (0, 0, math.radians(angle))
     s.render.filepath = os.path.join(OUT, name); bpy.ops.render.render(write_still=True)
     print("rendered", name)
+
+# Exact seating calibration: project the ground-contact point (base bottom-center =
+# world origin) through the render camera. This IS the unitAnchor — deterministic, not
+# eyeballed. Do NOT use the alpha base row (in iso the widest row is the back rim).
+from bpy_extras.object_utils import world_to_camera_view
+kn.rotation_euler = (0, 0, 0)
+bpy.context.view_layer.update()
+v = world_to_camera_view(s, cam, mathutils.Vector((0, 0, 0)))
+print("ANCHOR  unitAnchorX=%.3f%%  unitAnchorY=%.3f%%" % (v.x * 100.0, (1.0 - v.y) * 100.0))
 print("KNIGHT_FUR_DONE ->", OUT)
