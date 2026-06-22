@@ -11775,6 +11775,8 @@ button.tileset-relationship-cell {
   font-weight: 900;
 }
 
+/* Arrows point to each direction's isometric SCREEN bearing (geographic + 45deg),
+   matching the iso-diamond cell layout in directionCompassCells. */
 .unit-studio-compass-button.is-north span {
   transform: rotate(45deg);
 }

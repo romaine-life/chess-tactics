@@ -47,6 +47,30 @@ unitAnchorY: '71.753%'
 
 At `100%` unit scale, the game renders the source image so the measured `334px` contact footprint maps to the canonical equal-area square footprint.
 
+## Active Blender Knight
+
+Asset:
+
+- `frontend/public/assets/units/knight/candidate-wooden/*.png`
+
+Measured south-render source:
+
+- Source canvas: `512x512px`
+- Alpha bounds: `x=169..342`, `y=103..436`
+- Contact/anchor row: `y=380`
+- Contact footprint row: `x=169..342`, width `174px`
+- Anchor: `x=49.9%`, `y=74.219%`
+
+Runtime metadata:
+
+```ts
+footprint: circleFootprint(512, 174)
+unitAnchorX: '49.9%'
+unitAnchorY: '74.219%'
+```
+
+At `100%` unit scale, the game renders the source image so the measured `174px` contact footprint maps to the canonical circular footprint.
+
 ## Next Blender Export Rule
 
 For every new Blender unit export:

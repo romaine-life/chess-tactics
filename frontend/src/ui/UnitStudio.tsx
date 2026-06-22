@@ -60,6 +60,10 @@ const ROOK_BLENDER_V4_CANVAS_PX = 512;
 const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '49.9%';
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '71.753%';
+const KNIGHT_WOODEN_CANVAS_PX = 512;
+const KNIGHT_WOODEN_CONTACT_FOOTPRINT_PX = 174;
+const KNIGHT_WOODEN_CONTACT_ANCHOR_X = '49.9%';
+const KNIGHT_WOODEN_CONTACT_ANCHOR_Y = '74.219%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -81,6 +85,13 @@ const rookDirectionLabel: Record<Direction, string> = {
   west: 'W',
   'south-west': 'SW',
 };
+// Laid out to match the isometric board, not a flat geographic compass: the NE
+// board camera projects each direction to a 45-deg-rotated screen position, so a
+// south-facing unit points to screen lower-left. Each cell therefore sits where
+// the unit actually points — south is the numpad-1 (bottom-left) cell, etc.
+//   7 W    8 NW   9 N
+//   4 SW   5 .    6 NE
+//   1 S    2 SE   3 E
 const directionCompassCells: Array<Direction | 'center'> = [
   'west',
   'north-west',
@@ -94,6 +105,9 @@ const directionCompassCells: Array<Direction | 'center'> = [
 ];
 
 const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
+// Wooden-knight candidate: a board-calibrated Blender render of the carved
+// Staunton OBJ, restyled navy to sit in the unit family (8 fixed directions).
+const knightWoodenSprite = (_faction: Faction, direction: Direction) => `/assets/units/knight/candidate-wooden/${direction}.png`;
 
 // Shown when a unit has no sprite for the chosen facing — a placeholder, never a
 // disabled control. Directions are always selectable.
@@ -125,6 +139,22 @@ const unitAssets: UnitAsset[] = [
     unitAnchorX: ROOK_BLENDER_V4_CONTACT_ANCHOR_X,
     unitAnchorY: ROOK_BLENDER_V4_CONTACT_ANCHOR_Y,
     sprite: rookVariantSprite('blender-render-v4-calibrated'),
+  },
+  {
+    id: 'knight-wooden',
+    family: 'knight',
+    label: 'Knight',
+    badge: '8 directions · Blender candidate',
+    preview: '/assets/units/knight/candidate-wooden/south.png',
+    read: 'Carved Staunton warhorse from a turned-wood model, restyled navy (board-calibrated render)',
+    status: 'active Blender candidate',
+    directions: rookDirections,
+    factionMode: 'fixed',
+    defaultScale: 100,
+    footprint: circleFootprint(KNIGHT_WOODEN_CANVAS_PX, KNIGHT_WOODEN_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: KNIGHT_WOODEN_CONTACT_ANCHOR_X,
+    unitAnchorY: KNIGHT_WOODEN_CONTACT_ANCHOR_Y,
+    sprite: knightWoodenSprite,
   },
 ];
 const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
