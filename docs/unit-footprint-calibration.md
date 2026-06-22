@@ -70,6 +70,26 @@ At `100%` unit scale, the game renders the source image so the measured `178px` 
 
 > **On computing the anchor.** Don't measure the alpha base row — in isometric the widest base row is the back rim, which projects *higher* than the true contact (this caused an earlier off-by-22px error). The correct anchor is `world_to_camera_view(scene, cam, (0,0,0))` with the unit's base normalized to z=0 and centered at the origin: `anchorX = v.x`, `anchorY = 1 - v.y`. Requires a `view_layer.update()` first so the camera matrix is evaluated.
 
+## Active Blender Pawn
+
+Asset:
+
+- `frontend/public/assets/units/pawn/blender-render-helmet/*.png` (classic Staunton pawn + medieval archer's helmet, navy). Recipe: `docs/art/unit-concepts/blender-units/pawn-helmet/render_pawn_helmet.py`. Source models: `docs/art/unit-concepts/source-assets/pawn-helmet/`.
+
+Calibration (same camera + base-at-origin normalization as the knight):
+
+- Source canvas: `512x512px`
+- Contact footprint (max projected base width): `188px`
+- **Anchor: `x=50%`, `y=80.241%`** — computed via `world_to_camera_view(scene, cam, (0,0,0))` (the ground-contact projection), identical to the knight because the camera and normalization are identical.
+
+```ts
+footprint: circleFootprint(512, 188)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
+```
+
+The pawn body is rotationally symmetric; the helmet's visor provides the per-direction facing (visor → game-south at yaw 0).
+
 ## Next Blender Export Rule
 
 For every new Blender unit export:
