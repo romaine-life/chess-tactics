@@ -51,25 +51,26 @@ At `100%` unit scale, the game renders the source image so the measured `334px` 
 
 Asset:
 
-- `frontend/public/assets/units/knight/candidate-wooden/*.png`
+- `frontend/public/assets/units/knight/blender-render-fur/*.png` (procedural navy fur coat; render recipe: `docs/art/unit-concepts/blender-units/knight-fur/render_knight_fur.py`)
+- Supersedes the earlier `candidate-wooden` render (same OBJ, raw wood-grain diffuse — kept as historical candidate).
 
-Measured south-render source:
+Measured south-render source (footprint = max projected base width, anchorX = base center):
 
 - Source canvas: `512x512px`
-- Alpha bounds: `x=169..342`, `y=103..436`
-- Contact/anchor row: `y=380`
-- Contact footprint row: `x=169..342`, width `174px`
-- Anchor: `x=49.9%`, `y=74.219%`
+- Contact footprint (max base width): `178px`
+- Anchor: `x=49.9%`, `y=75.977%`
 
 Runtime metadata:
 
 ```ts
-footprint: circleFootprint(512, 174)
+footprint: circleFootprint(512, 178)
 unitAnchorX: '49.9%'
-unitAnchorY: '74.219%'
+unitAnchorY: '75.977%'
 ```
 
-At `100%` unit scale, the game renders the source image so the measured `174px` contact footprint maps to the canonical circular footprint.
+At `100%` unit scale, the game renders the source image so the measured `178px` contact footprint maps to the canonical circular footprint.
+
+> **Anchor verification pending.** `unitAnchorY` here is the *measured* base row. The wooden precedent was hand-tuned ~2.5% below its measured row, so this value still needs the Unit Studio visual proof (contract step 7) and may need a small downward nudge before final sign-off.
 
 ## Next Blender Export Rule
 
