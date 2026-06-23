@@ -1,10 +1,16 @@
 import bpy, math, mathutils, sys, os, glob
 import numpy as np
-# args: MODE OUTFILE BASECOLOR [PACKDIR] [SEED]
+# args: MODE OUTFILE BASECOLOR [PACKDIR] [SEED] [SIDEBASE]
+# BASE textures the top face (the terrain's identity); SIDE textures the block body /
+# vertical cliff (the geologic substrate beneath). They differ when the surface layer
+# (grass, pebbles, water) is not what the earth is made of — grass/pebble sit on soil,
+# water sits in a rock basin. For dirt/stone/sand the body IS the identity, so SIDE
+# defaults to BASE.
 a = sys.argv[sys.argv.index("--") + 1:]
 MODE, OUT, BASE = a[0], a[1], a[2]
 PACK = a[3] if len(a) > 3 and a[3] != "-" else None
 SEED = int(a[4]) if len(a) > 4 else 0
+SIDE = a[5] if len(a) > 5 and a[5] != "-" else BASE
 
 for c in (bpy.data.meshes, bpy.data.materials, bpy.data.lights, bpy.data.cameras, bpy.data.worlds, bpy.data.images, bpy.data.textures):
     for b in list(c):
@@ -99,16 +105,16 @@ if MODE in ("ground", "water"):
         # reflective ripple water: glossy, low roughness, normal ripples, slight blue tint
         m = pbr_top(BASE, nrm, None, None, metallic=0.0, roughval=0.12)
         b = m.node_tree.nodes.get("Principled BSDF"); b.inputs["IOR"].default_value = 1.33
-        blk.data.materials.append(m); blk.data.materials.append(side_mat(BASE))
+        blk.data.materials.append(m); blk.data.materials.append(side_mat(SIDE))
         add_top_relief(0.02)
     else:
         add_top_relief(0.22 if disp else 0.05, disp)
-        blk.data.materials.append(pbr_top(BASE, nrm, rgh, ao)); blk.data.materials.append(side_mat(BASE))
+        blk.data.materials.append(pbr_top(BASE, nrm, rgh, ao)); blk.data.materials.append(side_mat(SIDE))
     for p in blk.data.polygons:
         p.material_index = 0 if p.normal.z > 0.5 else 1
 
 elif MODE == "pebble":
-    blk.data.materials.append(side_mat(BASE))
+    blk.data.materials.append(side_mat(SIDE))
     for p in blk.data.polygons:
         p.material_index = 0
     g = glob.glob(os.path.join(PACK, "**", "*.glb"), recursive=True)[0]
@@ -128,7 +134,7 @@ elif MODE == "pebble":
 elif MODE == "grass":
     # grassy ground (BASE) + standing 3D blades scattered on top (seeded variation)
     nrm = findmap("normal", "nrm")
-    blk.data.materials.append(pbr_top(BASE, nrm)); blk.data.materials.append(side_mat(BASE))
+    blk.data.materials.append(pbr_top(BASE, nrm)); blk.data.materials.append(side_mat(SIDE))
     for p in blk.data.polygons:
         p.material_index = 0 if p.normal.z > 0.5 else 1
     EX = os.path.join(os.environ["TEMP"], "tiles_ex")
