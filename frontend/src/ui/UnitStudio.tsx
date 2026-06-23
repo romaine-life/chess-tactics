@@ -102,13 +102,21 @@ const readUnitStudioRoute = () => {
 const clampUnitScale = (value: number) => Math.min(500, Math.max(25, value));
 const scaleFromLegacySize = (unit: UnitAsset, size: number) =>
   clampUnitScale(Math.round((size / renderSizeForTileScale(unit, 100, UNIT_INSPECTION_TILE_SCALE)) * 100));
+const DEFAULT_VIEW_ZOOM = 1.15;
+
+const ResetIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M7 7h6a5 5 0 1 1-4.3 7.55" />
+    <path d="M7 7V3L3 7l4 4V7Z" />
+  </svg>
+);
 
 export function UnitStudio() {
   const initialRoute = useMemo(() => readUnitStudioRoute(), []);
   const [studioMode, setStudioMode] = useState<UnitStudioMode>(initialRoute.mode);
   const [unitId, setUnitId] = useState(initialRoute.unitId);
   const [faction, setFaction] = useState<Faction>('blue');
-  const [zoom, setZoom] = useState(1.15);
+  const [zoom, setZoom] = useState(DEFAULT_VIEW_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [unitScale, setUnitScale] = useState(initialRoute.unitScale);
   const [footprintVisible, setFootprintVisible] = useState(initialRoute.footprintVisible);
@@ -508,27 +516,42 @@ export function UnitStudio() {
                   Center View
                 </button>
               </div>
-              <label className="unit-studio-zoom">
+              <div className="unit-studio-zoom">
                 <span>View Zoom</span>
-                <input
-                  type="range"
-                  min="0.75"
-                  max="1.85"
-                  step="0.05"
-                  value={zoom}
-                  onChange={(event) => setZoom(Number(event.target.value))}
-                />
-              </label>
-              <label className="unit-studio-zoom">
+                <div className="unit-studio-slider-row">
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.85"
+                    step="0.05"
+                    value={zoom}
+                    onChange={(event) => setZoom(Number(event.target.value))}
+                  />
+                  <button type="button" className="unit-studio-icon-button" aria-label="Reset view zoom" onClick={() => setZoom(DEFAULT_VIEW_ZOOM)}>
+                    <ResetIcon />
+                  </button>
+                </div>
+              </div>
+              <div className="unit-studio-zoom">
                 <span>Unit Scale</span>
-                <input
-                  type="range"
-                  min="25"
-                  max="500"
-                  step="1"
-                  value={unitScale}
-                  onChange={(event) => selectUnitScale(Number(event.target.value))}
-                />
+                <div className="unit-studio-slider-row">
+                  <input
+                    type="range"
+                    min="25"
+                    max="500"
+                    step="1"
+                    value={unitScale}
+                    onChange={(event) => selectUnitScale(Number(event.target.value))}
+                  />
+                  <button
+                    type="button"
+                    className="unit-studio-icon-button"
+                    aria-label={`Reset unit scale to ${selectedUnit.defaultScale}%`}
+                    onClick={() => selectUnitScale(selectedUnit.defaultScale)}
+                  >
+                    <ResetIcon />
+                  </button>
+                </div>
                 <input
                   type="number"
                   min="25"
@@ -538,7 +561,7 @@ export function UnitStudio() {
                   aria-label="Unit scale percent"
                 />
                 <em>{unitScale}%</em>
-              </label>
+              </div>
               <div className="unit-studio-control-group" aria-label="Unit footprint">
                 <strong>Footprint</strong>
                 <button type="button" className={footprintVisible ? 'is-active' : ''} onClick={toggleFootprint}>
