@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { BoardSize, Piece, PieceType, Side } from './types';
+import type { BoardSize, Move, Piece, PieceType, Side } from './types';
 import {
   applyMove,
   attackedSquares,
@@ -16,7 +16,7 @@ function P(side: Side, type: PieceType, x: number, y: number, extra: Partial<Pie
   return { id: `${side}-${type}-${x}-${y}`, side, type, x, y, alive: true, startY: side === 'player' ? 11 : 0, ...extra };
 }
 const has = (moves: ReadonlyArray<{ x: number; y: number }>, x: number, y: number) => moves.some((m) => m.x === x && m.y === y);
-const find = (moves: ReadonlyArray<{ x: number; y: number; capture?: string }>, x: number, y: number) => moves.find((m) => m.x === x && m.y === y);
+const find = (moves: ReadonlyArray<Move>, x: number, y: number) => moves.find((m) => m.x === x && m.y === y);
 
 describe('pawn movement', () => {
   it('moves forward one, and two from the home rank', () => {
@@ -41,6 +41,23 @@ describe('pawn movement', () => {
     const target = P('enemy', 'pawn', 3, 5);
     const m = find(legalMoves(pawn, [pawn, target], SIZE), 3, 5);
     expect(m?.capture).toBe(target.id);
+  });
+  it('can capture en passant immediately after an adjacent pawn double-step', () => {
+    const pawn = P('player', 'pawn', 4, 3);
+    const target = P('enemy', 'pawn', 3, 3);
+    const moves = legalMoves(pawn, [pawn, target], SIZE, {
+      lastMove: { pieceId: target.id, pieceType: 'pawn', side: 'enemy', from: { x: 3, y: 1 }, to: { x: 3, y: 3 } },
+    });
+    const ep = find(moves, 3, 2);
+    expect(ep).toMatchObject({ capture: target.id, enPassant: true });
+  });
+  it('does not allow en passant after a non-double-step pawn move', () => {
+    const pawn = P('player', 'pawn', 4, 3);
+    const target = P('enemy', 'pawn', 3, 3);
+    const moves = legalMoves(pawn, [pawn, target], SIZE, {
+      lastMove: { pieceId: target.id, pieceType: 'pawn', side: 'enemy', from: { x: 3, y: 2 }, to: { x: 3, y: 3 } },
+    });
+    expect(find(moves, 3, 2)?.enPassant).toBeUndefined();
   });
 });
 
@@ -137,6 +154,14 @@ describe('applyMove', () => {
     const res = applyMove(state, pawn.id, { x: 4, y: 0 });
     expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
     expect(res.events.some((e) => e.kind === 'promoted')).toBe(true);
+  });
+  it('removes the side pawn captured en passant', () => {
+    const pawn = P('player', 'pawn', 4, 3);
+    const target = P('enemy', 'pawn', 3, 3);
+    const state = { size: SIZE, pieces: [pawn, target, P('enemy', 'king', 7, 0)], turn: 'player' as const, winner: null };
+    const res = applyMove(state, pawn.id, { x: 3, y: 2, capture: target.id, enPassant: true });
+    expect(res.state.pieces.find((p) => p.id === pawn.id)).toMatchObject({ x: 3, y: 2 });
+    expect(res.state.pieces.find((p) => p.id === target.id)?.alive).toBe(false);
   });
   it('declares victory when one side is wiped out', () => {
     const queen = P('player', 'queen', 4, 6);

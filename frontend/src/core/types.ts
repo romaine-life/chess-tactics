@@ -60,6 +60,14 @@ export interface Piece {
   maxAp?: number;
 }
 
+export interface LastMove {
+  pieceId: string;
+  pieceType: PieceType;
+  side: Side;
+  from: Vec;
+  to: Vec;
+}
+
 /**
  * A telegraphed enemy action for the *next* enemy turn — the signature
  * "forecast the queued attack a turn ahead" mechanic. Computed deterministically
@@ -83,6 +91,8 @@ export interface Move {
   y: number;
   /** id of a piece captured by making this move, if any. */
   capture?: string;
+  /** True when a pawn captures a just-double-stepped pawn from the side. */
+  enPassant?: boolean;
 }
 
 export type Winner = Side | null;
@@ -94,13 +104,15 @@ export interface GameState {
   /**
    * Board terrain layer (one cell per authored tile). Optional + serializable so
    * legacy/terrain-free states stay valid: when absent, every tile is treated as
-   * open grass at elevation 0 (see `buildTerrainIndex` / `canTraverse`). Water,
-   * cliff, and rock tiles are impassable; movement generation honours this when
-   * the layer is indexed into `MoveEnv.terrain`.
+   * open grass at elevation 0 (see `buildTerrainIndex` / `canTraverse`). Water is
+   * passable terrain; cliff and rock tiles are impassable. Movement generation
+   * honours this when the layer is indexed into `MoveEnv.terrain`.
    */
   terrain?: TerrainCell[];
   turn: Turn;
   winner: Winner;
+  /** Last displaced move, used for immediate pawn en passant eligibility. */
+  lastMove?: LastMove;
   /**
    * Telegraphed enemy actions for the upcoming enemy turn. Recomputed after each
    * player move (see `withForecast`). Optional so existing callers/serialized

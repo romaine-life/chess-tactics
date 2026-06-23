@@ -1,6 +1,6 @@
 import { useSkirmish } from '../game/store';
 import { enemyThreats, livingPieces } from '../core/rules';
-import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, portraitPath } from '../core/pieces';
+import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, pieceSpritePath, portraitPath } from '../core/pieces';
 import type { Piece, PieceType, Side } from '../core/types';
 
 const TYPE_LABEL = PIECE_LABEL;
@@ -17,6 +17,11 @@ const ROLE: Record<PieceType, string> = {
 };
 
 const MARK = PIECE_MARK;
+
+function unitSprite(piece: Piece | null): string | null {
+  if (!piece || piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
+  return pieceSpritePath(piece.type, PALETTE_FOR_SIDE[piece.side]);
+}
 
 function hpText(piece: Piece | null): string {
   if (!piece) return '--';
@@ -35,9 +40,10 @@ function apText(piece: Piece | null): string {
 function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: boolean }) {
   const side = piece?.side ?? 'neutral';
   const label = piece ? MARK[piece.type] : '?';
+  const src = unitSprite(piece);
   return (
     <span className={`skirmish-unit-badge ${side} ${large ? 'large' : ''}`.trim()} aria-hidden="true">
-      {label}
+      {src ? <img src={src} alt="" draggable={false} /> : label}
     </span>
   );
 }
@@ -65,13 +71,16 @@ function CountPip({ side, count }: { side: Side; count: number }) {
 export function SkirmishHud() {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
+  const focusedId = useSkirmish((s) => s.focusedId);
   const log = useSkirmish((s) => s.log);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const select = useSkirmish((s) => s.select);
+  const focus = useSkirmish((s) => s.focus);
   const movesForSelected = useSkirmish((s) => s.movesForSelected);
   const endTurn = useSkirmish((s) => s.endTurn);
 
   const selected = game.pieces.find((p) => p.id === selectedId && p.alive) ?? null;
+  const focused = game.pieces.find((p) => p.id === focusedId && p.alive) ?? selected;
   const moves = movesForSelected();
   const captures = moves.filter((move) => move.capture).length;
   const playerPieces = livingPieces(game.pieces, 'player');
@@ -99,33 +108,33 @@ export function SkirmishHud() {
         <h2>Selected Unit</h2>
         <div className="skirmish-selected-body">
           <div className="skirmish-portrait-frame">
-            {selected && isPlayablePieceType(selected.type) ? (
+            {focused && isPlayablePieceType(focused.type) ? (
               <img
                 className="skirmish-portrait"
-                src={portraitPath(selected.type, PALETTE_FOR_SIDE[selected.side])}
+                src={portraitPath(focused.type, PALETTE_FOR_SIDE[focused.side])}
                 alt=""
                 draggable={false}
               />
             ) : (
-              <UnitBadge piece={selected} large />
+              <UnitBadge piece={focused} large />
             )}
           </div>
           <div className="skirmish-selected-copy">
-            <strong data-testid="selected-name">{selected ? TYPE_LABEL[selected.type] : 'None'}</strong>
-            <span>{selected ? ROLE[selected.type] : 'Choose a blue unit on the board.'}</span>
+            <strong data-testid="selected-name">{focused ? TYPE_LABEL[focused.type] : 'None'}</strong>
+            <span>{focused ? `${focused.side === 'enemy' ? 'Enemy' : focused.side === 'player' ? 'Blue' : 'Neutral'} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
             <dl>
               <div>
                 <dt>HP</dt>
                 <dd>
-                  <span>{hpText(selected)}</span>
-                  <StatBar value={selected?.hp ?? 1} max={selected?.maxHp ?? selected?.hp ?? 1} />
+                  <span>{hpText(focused)}</span>
+                  <StatBar value={focused?.hp ?? 1} max={focused?.maxHp ?? focused?.hp ?? 1} />
                 </dd>
               </div>
               <div>
                 <dt>AP</dt>
                 <dd>
-                  <span>{apText(selected)}</span>
-                  <StatBar value={selected?.ap ?? 1} max={selected?.maxAp ?? selected?.ap ?? 1} />
+                  <span>{apText(focused)}</span>
+                  <StatBar value={focused?.ap ?? 1} max={focused?.maxAp ?? focused?.ap ?? 1} />
                 </dd>
               </div>
             </dl>
@@ -169,9 +178,8 @@ export function SkirmishHud() {
                 <button
                   key={piece.id}
                   type="button"
-                  className={`skirmish-roster-slot ${piece.id === selectedId ? 'active' : ''}`.trim()}
-                  onClick={() => piece.side === 'player' ? select(piece.id) : undefined}
-                  disabled={piece.side !== 'player'}
+                  className={`skirmish-roster-slot ${piece.id === focused?.id ? 'active' : ''}`.trim()}
+                  onClick={() => piece.side === 'player' ? select(piece.id) : focus(piece.id)}
                   aria-label={`${piece.side} ${TYPE_LABEL[piece.type]}`}
                 >
                   <UnitBadge piece={piece} />

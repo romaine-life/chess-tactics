@@ -84,10 +84,21 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
             style={{ left, top, zIndex }}
           >
             {cell.asset ? <img src={assetFrameSrc(cell.asset)} alt="" draggable={false} /> : <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>}
-            {renderCellOverlay?.({ cell, left, top })}
           </div>
         );
       })}
+      {renderCellOverlay ? cells.map((cell) => {
+        const { left, top, zIndex } = boardLabCellPosition(cell);
+        return (
+          <div
+            key={`overlay-${cell.x}-${cell.y}`}
+            className="tileset-generated-board-overlay-cell"
+            style={{ left, top, zIndex: zIndex + 10000 }}
+          >
+            {renderCellOverlay({ cell, left, top })}
+          </div>
+        );
+      }) : null}
       {children}
     </div>
   );
