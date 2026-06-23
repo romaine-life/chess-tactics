@@ -29,7 +29,28 @@ const SIDE_PALETTE: Record<Piece['side'], UnitPalette> = {
   neutral: 'navy-blue',
 };
 
+// Neutral rocks: two boulder variants x 8 rotations. Pick deterministically from the
+// piece id so each rock on the board looks distinct (no repeated-blob feel) yet stays
+// stable across re-renders.
+const ROCK_VARIANTS = ['boulder', 'granite'] as const;
+const ROCK_DIRECTIONS = ['south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east'] as const;
+function hashId(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i += 1) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function rockSpritePath(piece: Piece): string {
+  const h = hashId(piece.id);
+  const variant = ROCK_VARIANTS[h % ROCK_VARIANTS.length];
+  const dir = ROCK_DIRECTIONS[(h >>> 5) % ROCK_DIRECTIONS.length];
+  return `/assets/units/rock/${variant}/${dir}.png`;
+}
+
 function pieceImageSrc(piece: Piece): string | null {
+  if (piece.type === 'rock' || piece.type === 'random-rock') return rockSpritePath(piece);
   if (piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
   return pieceSpritePath(piece.type, SIDE_PALETTE[piece.side]);
 }
