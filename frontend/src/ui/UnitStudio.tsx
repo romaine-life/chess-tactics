@@ -60,6 +60,12 @@ const ROOK_BLENDER_V4_CANVAS_PX = 512;
 const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '49.9%';
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '71.753%';
+// Active rook: "badass keep" — detailed octagonal fortress (OBJ) run through our navy
+// true-iso pipeline. Replaces the blocky v4 rook (kept as legacy). Standard-rig anchor.
+const ROOK_BADASS_KEEP_CANVAS_PX = 512;
+const ROOK_BADASS_KEEP_CONTACT_FOOTPRINT_PX = 428;
+const ROOK_BADASS_KEEP_CONTACT_ANCHOR_X = '50%';
+const ROOK_BADASS_KEEP_CONTACT_ANCHOR_Y = '80.241%';
 // Fur knight calibration. anchor = the EXACT projection of the unit's ground-contact
 // point (base bottom-center, world origin) through the render camera — computed, not
 // eyeballed, so seating is mathematically correct. footprint = projected base width.
@@ -229,13 +235,29 @@ const unitAssets: UnitAsset[] = [
     sprite: queenTiaraSprite,
   },
   {
-    id: 'rook-blender-v4-calibrated',
+    id: 'rook-badass-keep',
     family: 'rook',
     label: 'Rook',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/rook/blender-render-v4-calibrated/south.png',
-    read: 'Board-calibrated castle rook with exact eight-direction rotations',
+    preview: '/assets/units/rook/blender-render-badass-keep/south.png',
+    read: 'Detailed octagonal fortress keep (corner buttresses, machicolations, star base) navy-styled through our true-isometric pipeline',
     status: 'active Blender production unit',
+    directions: rookDirections,
+    factionMode: 'fixed',
+    defaultScale: 100,
+    footprint: squareFootprint(ROOK_BADASS_KEEP_CANVAS_PX, ROOK_BADASS_KEEP_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: ROOK_BADASS_KEEP_CONTACT_ANCHOR_X,
+    unitAnchorY: ROOK_BADASS_KEEP_CONTACT_ANCHOR_Y,
+    sprite: rookVariantSprite('blender-render-badass-keep'),
+  },
+  {
+    id: 'rook-blender-v4-calibrated',
+    family: 'rook',
+    label: 'Rook (legacy voxel)',
+    badge: '8 directions · legacy',
+    preview: '/assets/units/rook/blender-render-v4-calibrated/south.png',
+    read: 'Previous blocky/voxel castle rook — retained as legacy reference, superseded by the badass keep',
+    status: 'legacy (retained, not the in-game rook)',
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
