@@ -8,8 +8,11 @@ top-down gameplay projection; a portrait needs an eye-level, dimensional "hero" 
 - **Perspective** lens, 55mm on a 36mm sensor (mild, flattering portrait depth) — *not*
   orthographic.
 - **Eye-level**: elevation **+10°** above the look-at point.
-- **Frontal-¾**: azimuth **30°** off dead-front for every piece **except the knight**,
-  which uses a **−90° profile** (a horse head reads as a horse from the side, not head-on).
+- **Frontal-¾**: azimuth **30°** off dead-front for **every** piece. The unit keeps its
+  standard orientation (front → local −Y = in-game south, per the unit-facing
+  convention); only the *camera* orbits, so every portrait faces south like the board
+  sprite. No per-unit aesthetic facing offset — the knight is viewed frontal-¾ like the
+  rest (its horse head reads fine at 30°), not turned to profile.
 - **Adaptive bust framing**: from each unit's actual top (`topZ`), the camera looks at
   `Tz = 0.70·topZ` and frames a vertical span of `0.82·topZ`, so the distinctive upper
   form (crown / mitre / tiara / helmet / horse head / battlements) fills the frame and the
@@ -17,11 +20,9 @@ top-down gameplay projection; a portrait needs an eye-level, dimensional "hero" 
 - 512×512, transparent background (`film_transparent`), Cycles, Standard view transform.
   Lighting + materials come from the unit's source `.blend` (same look as the board).
 
-## Per-piece hero yaw
-| piece | yaw |
-|---|---|
-| pawn, bishop, rook, queen, king | `30°` (frontal-¾) |
-| knight | `−90°` (profile) |
+## Hero yaw
+All pieces (pawn, knight, bishop, rook, queen, king): `30°` (frontal-¾). The unit faces
+in-game south; the camera orbits 30° off the front.
 
 ## Palettes
 One portrait **per team palette** (`navy-blue`, `crimson`, `golden`, `emerald`) — same

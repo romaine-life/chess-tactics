@@ -20,7 +20,7 @@ from pathlib import Path
 
 # args after '--': PALETTE OUTDIR
 _a = sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else ["navy-blue", ""]
-PALETTE = _a[0]; OUTFILE = _a[1]; HERO_YAW = float(_a[2]) if len(_a) > 2 else -90.0
+PALETTE = _a[0]; OUTFILE = _a[1]; HERO_YAW = float(_a[2]) if len(_a) > 2 else 30.0
 # (dark, mid, flat) fur tones + body metallic per palette. Navy is the original look;
 # the others remap navy's dark->light gradient to the team hue.
 PALETTES = {
