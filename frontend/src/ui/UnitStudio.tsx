@@ -299,6 +299,7 @@ export function UnitStudio() {
 
       <section className={`tileset-studio-shell is-${studioMode} is-units`} aria-label="Unit studio">
         {studioMode === 'catalog' ? (
+          <>
           <section className="tileset-studio-main">
             <div className="tileset-studio-toolbar">
               <div className="tileset-studio-title-row">
@@ -306,14 +307,77 @@ export function UnitStudio() {
                   <h2>Unit Catalog</h2>
                   <p className="tileset-filter-summary">{filteredUnits.length} units · {activeFamilyLabel} · {activeCollectionLabel}</p>
                 </div>
-                <span className="tileset-mode-tabs tileset-context-tabs" aria-label="Catalog asset type">
+              </div>
+            </div>
+            <section className="tileset-studio-tab-panel">
+              <div className="tileset-asset-sections">
+                <section className="tileset-asset-section" aria-label="Unit assets">
+                  <h3>Units</h3>
+                  <div className="tileset-studio-grid" aria-label="Filtered units">
+                    {filteredUnits.map((unit) => (
+                      <button
+                        key={unit.id}
+                        type="button"
+                        className={`tileset-studio-card is-tile ${unit.id === selectedUnit.id ? 'is-selected' : ''}`}
+                        onClick={() => selectUnit(unit.id)}
+                        title={`Inspect ${unit.label}`}
+                      >
+                        <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': catalogZoom } as CSSProperties}>
+                          <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
+                        </span>
+                        <span className="tileset-studio-card-meta">
+                          <span className="tileset-studio-card-text">
+                            <strong>{unit.label}</strong>
+                            <em>{unit.badge}</em>
+                          </span>
+                          <span className="tileset-card-actions">
+                            <span
+                              className="tileset-card-action"
+                              role="button"
+                              tabIndex={0}
+                              title={`Place ${unit.label} on the board`}
+                              aria-label={`Place ${unit.label} on the board`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openBoardLab(unit.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  openBoardLab(unit.id);
+                                }
+                              }}
+                            >
+                              +
+                            </span>
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                    {filteredUnits.length === 0 ? (
+                      <div className="unit-catalog-empty">
+                        <h3>No units match</h3>
+                        <p>Change the family, collection, or search filters.</p>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+          <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Unit catalog controls">
+            <section className="tileset-inspector-section">
+              <h2>Controls</h2>
+              <div className="tileset-control-stack">
+                <div className="tileset-segmented-control" aria-label="Catalog asset type">
                   <button type="button" onClick={() => navigateApp('/tileset-studio')} title="Browse terrain tiles.">
                     Tiles
                   </button>
                   <button type="button" className="is-active" onClick={() => setStudioMode('catalog')} title="Browse chess-piece units.">
                     Units
                   </button>
-                </span>
+                </div>
                 <label className="tileset-catalog-search">
                   <span>Search</span>
                   <input
@@ -419,64 +483,9 @@ export function UnitStudio() {
                   ) : null}
                 </div>
               </div>
-            </div>
-            <section className="tileset-studio-tab-panel">
-              <div className="tileset-asset-sections">
-                <section className="tileset-asset-section" aria-label="Unit assets">
-                  <h3>Units</h3>
-                  <div className="tileset-studio-grid" aria-label="Filtered units">
-                    {filteredUnits.map((unit) => (
-                      <button
-                        key={unit.id}
-                        type="button"
-                        className={`tileset-studio-card is-tile ${unit.id === selectedUnit.id ? 'is-selected' : ''}`}
-                        onClick={() => selectUnit(unit.id)}
-                        title={`Inspect ${unit.label}`}
-                      >
-                        <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': catalogZoom } as CSSProperties}>
-                          <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
-                        </span>
-                        <span className="tileset-studio-card-meta">
-                          <span className="tileset-studio-card-text">
-                            <strong>{unit.label}</strong>
-                            <em>{unit.badge}</em>
-                          </span>
-                          <span className="tileset-card-actions">
-                            <span
-                              className="tileset-card-action"
-                              role="button"
-                              tabIndex={0}
-                              title={`Place ${unit.label} on the board`}
-                              aria-label={`Place ${unit.label} on the board`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openBoardLab(unit.id);
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  openBoardLab(unit.id);
-                                }
-                              }}
-                            >
-                              +
-                            </span>
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                    {filteredUnits.length === 0 ? (
-                      <div className="unit-catalog-empty">
-                        <h3>No units match</h3>
-                        <p>Change the family, collection, or search filters.</p>
-                      </div>
-                    ) : null}
-                  </div>
-                </section>
-              </div>
             </section>
-          </section>
+          </aside>
+          </>
         ) : (
           <section className="tileset-view-mode unit-view-mode" aria-label="Focused unit view">
             <div className="tileset-view-header">

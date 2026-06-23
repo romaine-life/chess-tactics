@@ -2901,6 +2901,7 @@ export function TilesetStudio(): ReactElement {
             }}
           />
         ) : studioMode === 'catalog' ? (
+        <>
         <section className="tileset-studio-main">
           <div className="tileset-studio-toolbar">
             <div className="tileset-studio-title-row">
@@ -2910,7 +2911,84 @@ export function TilesetStudio(): ReactElement {
                   {visibleCatalogCount} assets · {selectedCollectionLabel}
                 </p>
               </div>
-              <span className="tileset-mode-tabs tileset-context-tabs" aria-label="Catalog asset type">
+            </div>
+          </div>
+
+          <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
+              <div className="tileset-asset-sections">
+                {selectedCollectionFilters.includes('base') ? (
+                  <section className="tileset-asset-section" aria-label="Base tiles">
+                    <h3>Base Tiles</h3>
+                    <div className="tileset-studio-grid" aria-label="Base assets">
+                      {visibleCatalogBaseAssets.map((asset) => (
+                        <StudioTileCard
+                          key={asset.id}
+                          asset={asset}
+                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
+                          showFootprint={showFootprint}
+                          zoom={zoom}
+                          animationFrame={animationFrame}
+                          onSelect={() => inspectAsset(asset)}
+                          onInspect={() => inspectAsset(asset)}
+                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
+                          onOpenBoard={() => inspectAsset(asset)}
+                          onWheel={ignoreTileWheel}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+                {selectedCollectionFilters.includes('transitions') ? (
+                  <section className="tileset-asset-section" aria-label="Transition tiles">
+                    <h3>Transition Tiles</h3>
+                    <div className="tileset-studio-grid" aria-label="Transition assets">
+                      {visibleCatalogTransitionAssets.map((asset) => (
+                        <StudioTileCard
+                          key={asset.id}
+                          asset={asset}
+                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
+                          showFootprint={showFootprint}
+                          zoom={zoom}
+                          animationFrame={animationFrame}
+                          onSelect={() => inspectAsset(asset)}
+                          onInspect={() => inspectAsset(asset)}
+                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
+                          onOpenBoard={() => inspectAsset(asset)}
+                          onWheel={ignoreTileWheel}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+                {selectedCollectionFilters.includes('references') ? (
+                  <section className="tileset-asset-section" aria-label="Reference tiles">
+                    <h3>References</h3>
+                    <div className="tileset-studio-grid" aria-label="Reference assets">
+                      {visibleCatalogReferenceAssets.map((asset) => (
+                        <StudioTileCard
+                          key={asset.id}
+                          asset={asset}
+                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
+                          showFootprint={showFootprint}
+                          zoom={zoom}
+                          animationFrame={animationFrame}
+                          onSelect={() => inspectAsset(asset)}
+                          onInspect={() => inspectAsset(asset)}
+                          onOpenBoard={() => inspectAsset(asset)}
+                          onWheel={zoomTilesWithWheel}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+            </section>
+        </section>
+        <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Catalog controls">
+          <section className="tileset-inspector-section">
+            <h2>Controls</h2>
+            <div className="tileset-control-stack">
+              <div className="tileset-segmented-control" aria-label="Catalog asset type">
                 <button
                   type="button"
                   className={category === 'tiles' ? 'is-active' : ''}
@@ -2927,7 +3005,7 @@ export function TilesetStudio(): ReactElement {
                 >
                   Units
                 </button>
-              </span>
+              </div>
               <label className="tileset-catalog-search">
                 <span>Search</span>
                 <input
@@ -3042,78 +3120,9 @@ export function TilesetStudio(): ReactElement {
                 View Selected
               </button>
             </div>
-          </div>
-
-          <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
-              <div className="tileset-asset-sections">
-                {selectedCollectionFilters.includes('base') ? (
-                  <section className="tileset-asset-section" aria-label="Base tiles">
-                    <h3>Base Tiles</h3>
-                    <div className="tileset-studio-grid" aria-label="Base assets">
-                      {visibleCatalogBaseAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-                {selectedCollectionFilters.includes('transitions') ? (
-                  <section className="tileset-asset-section" aria-label="Transition tiles">
-                    <h3>Transition Tiles</h3>
-                    <div className="tileset-studio-grid" aria-label="Transition assets">
-                      {visibleCatalogTransitionAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-                {selectedCollectionFilters.includes('references') ? (
-                  <section className="tileset-asset-section" aria-label="Reference tiles">
-                    <h3>References</h3>
-                    <div className="tileset-studio-grid" aria-label="Reference assets">
-                      {visibleCatalogReferenceAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={zoomTilesWithWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-              </div>
-            </section>
-        </section>
+          </section>
+        </aside>
+        </>
         ) : (
           <section className="tileset-view-mode" aria-label="Focused tileset view">
             <div className="tileset-view-header">
