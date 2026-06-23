@@ -51,10 +51,10 @@ describe('canTraverse', () => {
 });
 
 describe('legalMoves with terrain env', () => {
-  it('stops a rook ray at a water wall', () => {
-    const rook = piece('r', 'player', 'rook', 4, 4);
+  it('stops a queen ray at a water wall', () => {
+    const queen = piece('r', 'player', 'queen', 4, 4);
     const env = { terrain: index([{ x: 4, y: 2, terrain: 'water', elevation: 0 }]) };
-    const up = legalMoves(rook, [rook], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
+    const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
     expect(up).toEqual([3]); // (4,3) only; the ray dies before the water at (4,2)
   });
 
@@ -75,18 +75,18 @@ describe('legalMoves with terrain env', () => {
   });
 
   it('uses the origin elevation: a piece cannot ray up past a +1 rise', () => {
-    const rook = piece('r', 'player', 'rook', 4, 4);
+    const queen = piece('r', 'player', 'queen', 4, 4);
     const env = { terrain: index([
       { x: 4, y: 3, terrain: 'grass', elevation: 1 }, // +1 from ground: reachable
       { x: 4, y: 2, terrain: 'grass', elevation: 2 }, // +2 from origin: a wall
     ]) };
-    const up = legalMoves(rook, [rook], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
+    const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
     expect(up).toEqual([3]);
   });
 
   it('is identical to plain movement when no terrain is supplied', () => {
-    const rook = piece('r', 'player', 'rook', 4, 4);
-    const up = legalMoves(rook, [rook], { cols: 8, rows: 8 }).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
+    const queen = piece('r', 'player', 'queen', 4, 4);
+    const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
     expect(up).toEqual([3, 2, 1, 0]);
   });
 });

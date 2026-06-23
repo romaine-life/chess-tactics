@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js';
 import { useEditor } from '../editor/store';
+import { PIECE_MARK } from '../core/pieces';
 import { DEFAULT_ISO, depthKey, screenToTile, tileToScreen, type IsoConfig } from './iso';
 import { loadSpriteAtlas, type SpriteAtlas } from './sprites';
 
@@ -9,7 +10,6 @@ const TERRAIN: Record<string, number> = {
   grass: 0x356a42, water: 0x2f5d86, stone: 0x6b6f76, road: 0xa9905f, bridge: 0x7a5a36, cliff: 0x3a3f46, rock: 0x595e66,
 };
 const SIDE_COLOR: Record<string, number> = { player: 0x3b76d6, enemy: 0xc0473a, neutral: 0x6b6f76 };
-const MARK: Record<string, string> = { pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', rock: '▲', 'random-rock': '?' };
 
 // Editor board: a pure projection of the editor's Level. Click/drag paints via
 // the editor store (which handles undo); hover previews the target cell.
@@ -93,7 +93,7 @@ export function EditorBoard() {
           base.ellipse(0, 3, 14, 6).fill({ color: 0x0a131b, alpha: 0.5 });
           base.circle(0, -9, 13).fill({ color: SIDE_COLOR[u.side] ?? 0x888888 }).stroke({ color: 0xf3efe4, width: 2 });
           cont.addChild(base);
-          const label = new Text({ text: MARK[u.type] ?? '?', style: { fill: 0xffffff, fontFamily: 'monospace', fontSize: 13, fontWeight: 'bold' } });
+          const label = new Text({ text: PIECE_MARK[u.type] ?? '?', style: { fill: 0xffffff, fontFamily: 'monospace', fontSize: 13, fontWeight: 'bold' } });
           label.anchor.set(0.5);
           label.y = -9;
           cont.addChild(label);

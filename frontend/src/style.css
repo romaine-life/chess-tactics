@@ -6370,17 +6370,123 @@ h1 {
   z-index: 1;
 }
 
-.skirmish-board-frame canvas {
+.skirmish-board-frame [data-testid="skirmish-board"] {
+  aspect-ratio: 1.42;
   display: block;
-  height: auto !important;
-  width: 100% !important;
+  max-width: 100%;
+  overflow: hidden;
+  position: relative;
+  width: min(100%, 1000px);
 }
 
-.skirmish-board-frame [data-testid="skirmish-board"] {
+.skirmish-board-lab {
+  background:
+    radial-gradient(580px 260px at 50% 42%, rgba(52, 144, 190, .2), transparent 68%),
+    linear-gradient(180deg, rgba(5, 20, 34, .72), rgba(2, 7, 12, .9));
+}
+
+.skirmish-board-surface .tileset-generated-board-tile {
+  cursor: default;
+}
+
+.skirmish-board-cell-hit {
+  background: transparent;
+  border: 0;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  cursor: pointer;
+  height: 54px;
+  left: 0;
+  padding: 0;
+  position: absolute;
+  top: 0;
+  width: 96px;
+}
+
+.skirmish-board-cell-hit::before,
+.skirmish-board-cell-hit::after {
+  content: "";
+  inset: 0;
+  opacity: 0;
+  position: absolute;
+}
+
+.skirmish-board-cell-hit.is-threat::before {
+  background: rgba(255, 105, 64, .38);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-move::before {
+  background: rgba(61, 210, 255, .42);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-selected::after,
+.skirmish-board-cell-hit:focus-visible::after,
+.skirmish-board-cell-hit:hover::after {
+  box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .92);
+  opacity: 1;
+}
+
+.skirmish-board-unit {
+  align-items: center;
   display: grid;
-  max-width: 100%;
-  place-items: center;
-  width: min(100%, 1000px);
+  height: 86px;
+  justify-items: center;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, -78%);
+  width: 72px;
+}
+
+.skirmish-board-unit img {
+  display: block;
+  image-rendering: pixelated;
+  max-height: 92px;
+  max-width: 78px;
+  object-fit: contain;
+}
+
+.skirmish-board-unit span {
+  align-items: center;
+  background: rgba(8, 13, 18, .82);
+  border: 2px solid rgba(240, 236, 216, .85);
+  border-radius: 999px;
+  color: #fff7df;
+  display: grid;
+  font: 800 22px/1 var(--ds-font-sans, system-ui, sans-serif);
+  height: 42px;
+  justify-items: center;
+  width: 42px;
+}
+
+.skirmish-board-unit.is-player span {
+  background: #1c66c7;
+}
+
+.skirmish-board-unit.is-enemy span {
+  background: #b83d33;
+}
+
+.skirmish-board-unit.is-neutral span {
+  background: #606872;
+}
+
+.skirmish-board-hp {
+  background: rgba(3, 8, 12, .9);
+  border: 1px solid rgba(235, 247, 255, .72);
+  display: block;
+  height: 5px;
+  left: 50%;
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  width: 30px;
+}
+
+.skirmish-board-hp b {
+  background: var(--skirmish-cyan);
+  display: block;
+  height: 100%;
 }
 
 .skirmish-left-panel {
