@@ -148,21 +148,23 @@ elif MODE == "grass":
         bpy.ops.object.join()
     g = bpy.context.view_layer.objects.active; bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     g.rotation_euler = (math.radians(90), 0, 0); bpy.ops.object.transform_apply(rotation=True)
-    c = np.array([v.co for v in g.data.vertices]); s = 0.40 / (c[:, 2].max() - c[:, 2].min()); g.scale = (s, s, s); bpy.ops.object.transform_apply(scale=True)
+    c = np.array([v.co for v in g.data.vertices]); s = 0.12 / (c[:, 2].max() - c[:, 2].min()); g.scale = (s, s, s); bpy.ops.object.transform_apply(scale=True)
     c = np.array([v.co for v in g.data.vertices]); g.location = (-(c[:, 0].min() + c[:, 0].max()) / 2, -(c[:, 1].min() + c[:, 1].max()) / 2, -c[:, 2].min()); bpy.ops.object.transform_apply(location=True)
     gm = bpy.data.materials.new("grass"); gm.use_nodes = True; nt = gm.node_tree; b = nt.nodes.get("Principled BSDF"); b.inputs["Roughness"].default_value = 0.9
     tg = nt.nodes.new("ShaderNodeTexImage"); tg.image = loadimg(GTEX); nt.links.new(tg.outputs["Color"], b.inputs["Base Color"])
     agt = nt.nodes.new("ShaderNodeMath"); agt.operation = "GREATER_THAN"; agt.inputs[1].default_value = 0.35
     nt.links.new(tg.outputs["Alpha"], agt.inputs[0]); nt.links.new(agt.outputs["Value"], b.inputs["Alpha"])
     g.data.materials.clear(); g.data.materials.append(gm)
-    # seeded scatter — deterministic per variant (no Math.random; index-based)
-    n = 11
+    # seeded scatter — deterministic per variant (no Math.random; index-based).
+    # Short blades (0.12 world) tufted densely across the top read as a mown lawn,
+    # not standing bushes; keep height variance tight so nothing spikes up.
+    n = 22
     for i in range(n):
         h = (i * 2654435761 + SEED * 40503) & 0xffffffff
-        x = ((h % 1000) / 1000.0 - 0.5) * 0.42
-        y = (((h >> 10) % 1000) / 1000.0 - 0.5) * 0.42
+        x = ((h % 1000) / 1000.0 - 0.5) * 0.46
+        y = (((h >> 10) % 1000) / 1000.0 - 0.5) * 0.46
         rot = ((h >> 5) % 360) * math.pi / 180.0
-        scv = 0.7 + 0.55 * (((h >> 16) % 100) / 100.0)
+        scv = 0.8 + 0.4 * (((h >> 16) % 100) / 100.0)
         d = g if i == 0 else g.copy()
         if i > 0:
             d.data = g.data.copy(); bpy.context.collection.objects.link(d)
