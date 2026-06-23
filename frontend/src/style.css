@@ -8842,6 +8842,13 @@ h1 {
   border-color: rgba(111, 210, 255, 0.76);
 }
 
+.tileset-mode-tabs button:disabled {
+  color: rgba(216, 234, 255, 0.42);
+  background: rgba(12, 31, 48, 0.42);
+  border-color: transparent;
+  cursor: not-allowed;
+}
+
 .tileset-studio-shell {
   align-self: stretch;
   display: grid;

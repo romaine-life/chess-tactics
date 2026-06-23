@@ -310,6 +310,7 @@ type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
 type StudioMode = 'catalog' | 'view';
 type TileFilter = 'base' | 'transitions' | 'references' | 'board';
+type LabMode = 'board' | 'tile' | 'unit';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
 type TransitionViewMode = 'tile' | 'proof' | 'sample';
 
@@ -2428,6 +2429,9 @@ export function TilesetStudio(): ReactElement {
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
   const [category, setCategory] = useState<'tiles' | 'units'>('tiles');
+  const [labMode, setLabMode] = useState<LabMode>(
+    initialRoute.tileFilter === 'board' ? 'board' : initialRoute.brushKind === 'unit' ? 'unit' : 'tile',
+  );
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>([initialRoute.familyId]);
@@ -2498,9 +2502,11 @@ export function TilesetStudio(): ReactElement {
           faction: unitBrushFaction,
         },
       }));
+      setLabMode('unit');
       return;
     }
     setBoardCells((prev) => ({ ...prev, [`${x},${y}`]: brushAsset.id }));
+    setLabMode('tile');
   };
   const eraseCell = (x: number, y: number): void =>
     brushKind === 'unit'
@@ -2523,6 +2529,7 @@ export function TilesetStudio(): ReactElement {
     setBoardCells({});
     setBoardUnits({});
     setSelectedCell(null);
+    setLabMode('board');
   };
   const filteredTileAssets =
     tileFilter === 'base'
@@ -2682,6 +2689,19 @@ export function TilesetStudio(): ReactElement {
       return next;
     });
   };
+  const selectBoardCell = (x: number, y: number): void => {
+    const key = `${x},${y}`;
+    setSelectedCell({ x, y });
+    if (boardUnits[key]) {
+      setLabMode('unit');
+      return;
+    }
+    if (boardCells[key]) {
+      setLabMode('tile');
+      return;
+    }
+    setLabMode('board');
+  };
   const reviewItems: ReviewItem[] =
     tileFilter === 'board'
       ? Array.from(new Map(generatedBoard.cells.flatMap((cell) => (cell.asset ? [[cell.asset.id, cell.asset] as const] : []))).values()).map((asset) => ({ type: 'asset', asset }))
@@ -2731,6 +2751,7 @@ export function TilesetStudio(): ReactElement {
       setStudioMode(route.studioMode);
       setViewHasTarget(Boolean(route.selectedAssetId || route.selectedSlotMask || route.tileFilter === 'board'));
       setTileFilter(route.tileFilter);
+      setLabMode(route.tileFilter === 'board' ? 'board' : route.brushKind === 'unit' ? 'unit' : 'tile');
       if (route.tileFilter !== 'board') setSelectedCollectionFilters([route.tileFilter]);
       setSelectedPairId(route.selectedPairId);
       setSelectedAssetId(route.selectedAssetId ?? routeFamily.assets[0].id);
@@ -2871,6 +2892,7 @@ export function TilesetStudio(): ReactElement {
 
   const openBoardLab = () => {
     setCategory('tiles');
+    setLabMode('board');
     setTileFilter('board');
     setSelectedSlotMask(undefined);
     setViewHasTarget(true);
@@ -2889,6 +2911,7 @@ export function TilesetStudio(): ReactElement {
     } else {
       setTileFilter('base');
     }
+    setLabMode('tile');
     setViewHasTarget(true);
     setStudioMode('view');
   };
@@ -2900,6 +2923,7 @@ export function TilesetStudio(): ReactElement {
     setBrushId(asset.id);
     setBrushKind('tile');
     setTool('brush');
+    setLabMode('board');
     setStudioMode('view');
   };
 
@@ -2908,6 +2932,7 @@ export function TilesetStudio(): ReactElement {
     setSelectedSlotMask(slot.mask);
     setTileFilter('transitions');
     setTransitionViewMode(slot.assets[0] ? 'tile' : 'proof');
+    setLabMode('tile');
     setViewHasTarget(true);
     setStudioMode('view');
   };
@@ -2976,6 +3001,51 @@ export function TilesetStudio(): ReactElement {
       : viewKind === 'transition'
         ? `${viewTransitionPair?.label ?? 'Transition'} · mask ${viewTransitionSlot?.code ?? selectedAsset.socketMask ?? ''}`
         : `${family.label} · ${selectedAsset.role}`;
+  const hasLabTiles = Object.keys(boardCells).length > 0;
+  const hasLabUnits = Object.keys(boardUnits).length > 0;
+  const headerKicker = studioMode === 'catalog' ? (category === 'units' ? 'Unit Catalog' : 'Tile Catalog') : 'Lab';
+  const headerTitle =
+    studioMode === 'catalog'
+      ? category === 'units'
+        ? 'Units'
+        : selectedFamilyLabel
+      : labMode === 'board'
+        ? 'Board Lab'
+        : labMode === 'unit'
+          ? 'Unit Lab'
+          : 'Tile Lab';
+  const headerSubtitle =
+    studioMode === 'catalog'
+      ? category === 'units'
+        ? 'Browse chess-piece units.'
+        : activeFamilies.map((item) => item.purpose).join(' · ')
+      : labMode === 'board'
+        ? 'Edit and test tiles and units on one shared board surface.'
+        : labMode === 'unit'
+          ? 'Inspect the selected unit in board context.'
+          : 'Inspect the selected tile in board context.';
+  const openCatalogMode = (): void => {
+    if (tileFilter === 'board') setTileFilter('base');
+    setStudioMode('catalog');
+  };
+  const openLabMode = (): void => {
+    if (!viewHasTarget) {
+      openBoardLab();
+      return;
+    }
+    setStudioMode('view');
+  };
+  const openTileLab = (): void => {
+    if (!hasLabTiles) return;
+    setLabMode('tile');
+    setStudioMode('view');
+  };
+  const openUnitLab = (): void => {
+    if (!hasLabUnits) return;
+    setLabMode('unit');
+    setBrushKind('unit');
+    setStudioMode('view');
+  };
 
   return (
     <main className="tileset-studio-page">
@@ -2986,44 +3056,42 @@ export function TilesetStudio(): ReactElement {
             <span>Tactical chess, infinite possibilities.</span>
           </div>
           <div className="tileset-studio-titleblock">
-            <p className="tileset-studio-kicker">{tileFilter === 'board' ? 'Board Studio' : category === 'units' ? 'Unit Studio' : 'Tileset Studio'}</p>
-            <h1>{tileFilter === 'board' ? 'Board Lab' : category === 'units' ? 'Units' : selectedFamilyLabel}</h1>
-            <p className="tileset-studio-subtitle">
-              {tileFilter === 'board'
-                ? 'Shared terrain and unit placement workbench.'
-                : category === 'units'
-                  ? 'Chess pieces as squad units — concept review.'
-                  : activeFamilies.map((item) => item.purpose).join(' · ')}
-            </p>
+            <p className="tileset-studio-kicker">{headerKicker}</p>
+            <h1>{headerTitle}</h1>
+            <p className="tileset-studio-subtitle">{headerSubtitle}</p>
           </div>
         </div>
         <nav className="tileset-studio-actions" aria-label="Tileset studio navigation">
-          <span className="tileset-mode-tabs" aria-label="Asset category">
-            <button type="button" className={category === 'tiles' && tileFilter !== 'board' ? 'is-active' : ''} onClick={() => setCategory('tiles')} title="Browse terrain tiles.">
-              Tiles
+          <span className="tileset-mode-tabs" aria-label="Workspace mode">
+            <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse asset catalogs.">
+              Catalog
             </button>
-            <button type="button" onClick={() => navigateApp('/unit-studio?piece=rook')} title="Browse chess-piece units.">
-              Units
-            </button>
-            <button type="button" className={tileFilter === 'board' ? 'is-active' : ''} onClick={openBoardLab} title="Open the shared terrain and unit board lab.">
-              Board Lab
+            <button type="button" className={studioMode === 'view' ? 'is-active' : ''} onClick={openLabMode} title="Open the shared board lab.">
+              Lab
             </button>
           </span>
-          <span className="tileset-mode-tabs" aria-label="Tileset studio mode">
-            {[
-              ['catalog', 'Catalog'],
-              ['view', 'View'],
-            ].map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                className={studioMode === mode ? 'is-active' : ''}
-                onClick={() => setStudioMode(mode as StudioMode)}
-              >
-                {label}
+          {studioMode === 'catalog' ? (
+            <span className="tileset-mode-tabs" aria-label="Catalog type">
+              <button type="button" className={category === 'tiles' ? 'is-active' : ''} onClick={() => setCategory('tiles')} title="Browse terrain tiles.">
+                Tiles
               </button>
-            ))}
-          </span>
+              <button type="button" onClick={() => navigateApp('/unit-studio?mode=catalog')} title="Browse chess-piece units.">
+                Units
+              </button>
+            </span>
+          ) : (
+            <span className="tileset-mode-tabs" aria-label="Lab context">
+              <button type="button" className={labMode === 'board' ? 'is-active' : ''} onClick={openBoardLab} title="Inspect the whole board.">
+                Board
+              </button>
+              <button type="button" className={labMode === 'tile' ? 'is-active' : ''} onClick={openTileLab} disabled={!hasLabTiles} title={hasLabTiles ? 'Inspect the selected tile.' : 'Place or select a tile first.'}>
+                Tile
+              </button>
+              <button type="button" className={labMode === 'unit' ? 'is-active' : ''} onClick={openUnitLab} disabled={!hasLabUnits} title={hasLabUnits ? 'Inspect the selected unit.' : 'Place or select a unit first.'}>
+                Unit
+              </button>
+            </span>
+          )}
           <a href="/settings">Settings</a>
         </nav>
       </header>
@@ -3171,8 +3239,8 @@ export function TilesetStudio(): ReactElement {
                           showFootprint={showFootprint}
                           zoom={zoom}
                           animationFrame={animationFrame}
-                          onSelect={() => undefined}
-                          onInspect={() => undefined}
+                          onSelect={() => inspectAsset(asset)}
+                          onInspect={() => inspectAsset(asset)}
                           onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
                           onOpenBoard={() => inspectAsset(asset)}
                           onWheel={ignoreTileWheel}
@@ -3193,8 +3261,8 @@ export function TilesetStudio(): ReactElement {
                           showFootprint={showFootprint}
                           zoom={zoom}
                           animationFrame={animationFrame}
-                          onSelect={() => undefined}
-                          onInspect={() => undefined}
+                          onSelect={() => inspectAsset(asset)}
+                          onInspect={() => inspectAsset(asset)}
                           onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
                           onOpenBoard={() => inspectAsset(asset)}
                           onWheel={ignoreTileWheel}
@@ -3215,8 +3283,8 @@ export function TilesetStudio(): ReactElement {
                           showFootprint={showFootprint}
                           zoom={zoom}
                           animationFrame={animationFrame}
-                          onSelect={() => undefined}
-                          onInspect={() => undefined}
+                          onSelect={() => inspectAsset(asset)}
+                          onInspect={() => inspectAsset(asset)}
                           onOpenBoard={() => inspectAsset(asset)}
                           onWheel={zoomTilesWithWheel}
                         />
@@ -3288,7 +3356,7 @@ export function TilesetStudio(): ReactElement {
                     animationFrame={animationFrame}
                     onPaint={paintCell}
                     onErase={eraseCell}
-                    onSelect={(x, y) => setSelectedCell({ x, y })}
+                    onSelect={selectBoardCell}
                   />
                 )}
               </div>
