@@ -307,6 +307,26 @@ overcast green fields, white linen, wet clay, pale farm walls, and lamp-lit
 interiors. The war is never shown directly. No active combat, no centered guns,
 no battlefield spectacle, and no heroic military tableau.
 
+### Set 05 Candidate: The Summer That Failed
+
+**Historical anchor:** [Year Without A Summer, 1816](lore/historical-anchors/year-without-a-summer-1816.md)
+
+**Status:** Candidate for generated set.
+
+**Hidden scenario:** summer has failed, but the village is still trying to
+behave as if summer can be repaired. People protect plants, ration stores,
+move along roads, shelter animals, and keep working under a season that has
+become wrong.
+
+**Emotional contradiction:** natural and unnatural; bright and cold; inevitable
+and survivable; communal problem rather than human enemy.
+
+This set should not frame humanity as its own adversary. The pressure comes from
+climate, distance, and the strange fact that a disaster elsewhere made local
+summer unreliable. The positive contrast is not victory over nature, but
+adaptation: people survived, unevenly and imperfectly, because they solved the
+problem as well as they could.
+
 ## Candidate Scenario Bank
 
 These are not accepted sets yet. They are seeds for brainstorming.
