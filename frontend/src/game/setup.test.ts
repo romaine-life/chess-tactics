@@ -2,6 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { createSkirmish } from './setup';
 import { livingPieces } from '../core/rules';
 import { isPassableTerrain } from '../core/terrain';
+import { tileAssets, tileFamilies } from '../art/tileset';
+import { solveSocketBoard } from '../core/tileBoardGenerator';
+import type { TerrainType } from '../core/types';
+import type { TileFamilyId } from '../core/tileSockets';
+
+const terrainToFamily: Record<TerrainType, TileFamilyId> = {
+  grass: 'grass',
+  road: 'stone',
+  stone: 'stone',
+  bridge: 'stone',
+  cliff: 'stone',
+  rock: 'stone',
+  water: 'water',
+};
 
 describe('createSkirmish', () => {
   it('is deterministic for a given seed', () => {
@@ -65,12 +79,20 @@ describe('createSkirmish', () => {
     }
   });
 
-  it('keeps impassable terrain off the interior columns so the board stays connected', () => {
-    const s = createSkirmish({ seed: 13 });
-    for (const c of s.terrain!) {
-      if (!isPassableTerrain(c.terrain)) {
-        expect(c.x === 0 || c.x === s.size.cols - 1).toBe(true);
-      }
+  it('authors terrain that resolves to a legal socket board', () => {
+    for (const seed of [1, 7, 13, 42, 99]) {
+      const s = createSkirmish({ seed });
+      const terrainMap = s.terrain!.map((cell) => terrainToFamily[cell.terrain]);
+      const board = solveSocketBoard({
+        assets: tileAssets,
+        terrainMap,
+        seed,
+        columns: s.size.cols,
+        rows: s.size.rows,
+        familyAssets: tileFamilies,
+      });
+      expect(board.stats.illegalEdges).toBe(0);
+      expect(board.stats.missingPlacements).toBe(0);
     }
   });
 });

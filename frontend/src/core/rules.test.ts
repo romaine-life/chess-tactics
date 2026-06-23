@@ -60,19 +60,19 @@ describe('knight movement', () => {
 });
 
 describe('sliding pieces', () => {
-  it('rook rays to the board edges', () => {
-    const rook = P('player', 'rook', 4, 6);
-    const moves = legalMoves(rook, [rook], SIZE);
+  it('queen rays to the board edges', () => {
+    const queen = P('player', 'queen', 4, 6);
+    const moves = legalMoves(queen, [queen], SIZE);
     expect(has(moves, 4, 0)).toBe(true);
     expect(has(moves, 0, 6)).toBe(true);
     expect(has(moves, 7, 6)).toBe(true);
     expect(has(moves, 4, 11)).toBe(true);
   });
-  it('rook stops at an enemy (capturing) and before a friend', () => {
-    const rook = P('player', 'rook', 4, 6);
+  it('queen stops at an enemy (capturing) and before a friend', () => {
+    const queen = P('player', 'queen', 4, 6);
     const foe = P('enemy', 'pawn', 4, 3);
     const friend = P('player', 'pawn', 6, 6);
-    const moves = legalMoves(rook, [rook, foe, friend], SIZE);
+    const moves = legalMoves(queen, [queen, foe, friend], SIZE);
     expect(has(moves, 4, 4)).toBe(true);
     expect(find(moves, 4, 3)?.capture).toBe(foe.id);
     expect(has(moves, 4, 2)).toBe(false);
@@ -91,11 +91,11 @@ describe('sliding pieces', () => {
     expect(has(qm, 6, 8)).toBe(true);
   });
   it('rocks never move and are not capturable', () => {
-    const rook = P('player', 'rook', 4, 6);
+    const queen = P('player', 'queen', 4, 6);
     const rock = P('neutral', 'rock', 4, 3);
     expect(legalMoves(rock, [rock], SIZE)).toHaveLength(0);
-    expect(isEnemy(rook, rock)).toBe(false);
-    expect(has(legalMoves(rook, [rook, rock], SIZE), 4, 3)).toBe(false); // blocked, no capture
+    expect(isEnemy(queen, rock)).toBe(false);
+    expect(has(legalMoves(queen, [queen, rock], SIZE), 4, 3)).toBe(false); // blocked, no capture
   });
 });
 
@@ -109,7 +109,7 @@ describe('threats', () => {
   });
   it('enemyThreats unions every living enemy', () => {
     const ep = P('enemy', 'pawn', 4, 2);
-    const t = enemyThreats([ep, P('player', 'rook', 0, 0)], SIZE);
+    const t = enemyThreats([ep, P('player', 'queen', 0, 0)], SIZE);
     expect(has(t, 3, 3)).toBe(true);
     expect(has(t, 5, 3)).toBe(true);
   });
@@ -117,12 +117,12 @@ describe('threats', () => {
 
 describe('applyMove', () => {
   it('captures, leaves the source state untouched (immutable)', () => {
-    const rook = P('player', 'rook', 4, 6);
+    const queen = P('player', 'queen', 4, 6);
     const pawn = P('player', 'pawn', 0, 11);
     const foePawn = P('enemy', 'pawn', 4, 3);
     const foeKnight = P('enemy', 'knight', 7, 0);
-    const state = { size: SIZE, pieces: [rook, pawn, foePawn, foeKnight], turn: 'player' as const, winner: null };
-    const res = applyMove(state, rook.id, { x: 4, y: 3, capture: foePawn.id });
+    const state = { size: SIZE, pieces: [queen, pawn, foePawn, foeKnight], turn: 'player' as const, winner: null };
+    const res = applyMove(state, queen.id, { x: 4, y: 3, capture: foePawn.id });
     expect(res.events.some((e) => e.kind === 'captured')).toBe(true);
     expect(res.state.pieces.find((p) => p.id === foePawn.id)?.alive).toBe(false);
     expect(res.state.turn).toBe('enemy');
@@ -132,17 +132,17 @@ describe('applyMove', () => {
   });
   it('promotes a pawn reaching the far rank', () => {
     const pawn = P('player', 'pawn', 4, 1);
-    const foe = P('enemy', 'rook', 7, 0);
+    const foe = P('enemy', 'queen', 7, 0);
     const state = { size: SIZE, pieces: [pawn, foe], turn: 'player' as const, winner: null };
     const res = applyMove(state, pawn.id, { x: 4, y: 0 });
     expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
     expect(res.events.some((e) => e.kind === 'promoted')).toBe(true);
   });
   it('declares victory when one side is wiped out', () => {
-    const rook = P('player', 'rook', 4, 6);
+    const queen = P('player', 'queen', 4, 6);
     const lastFoe = P('enemy', 'pawn', 4, 5);
-    const state = { size: SIZE, pieces: [rook, lastFoe], turn: 'player' as const, winner: null };
-    const res = applyMove(state, rook.id, { x: 4, y: 5, capture: lastFoe.id });
+    const state = { size: SIZE, pieces: [queen, lastFoe], turn: 'player' as const, winner: null };
+    const res = applyMove(state, queen.id, { x: 4, y: 5, capture: lastFoe.id });
     expect(res.state.winner).toBe('player');
     expect(res.state.turn).toBe('done');
     expect(res.events.some((e) => e.kind === 'victory')).toBe(true);
@@ -151,7 +151,7 @@ describe('applyMove', () => {
 
 describe('enemy AI', () => {
   it('is deterministic for a given seed', () => {
-    const pieces = [P('player', 'pawn', 4, 6), P('enemy', 'knight', 4, 2), P('enemy', 'rook', 1, 1)];
+    const pieces = [P('player', 'pawn', 4, 6), P('enemy', 'knight', 4, 2), P('enemy', 'queen', 1, 1)];
     const state = { size: SIZE, pieces, turn: 'enemy' as const, winner: null };
     const a = enemyMove(state, createRng(123));
     const b = enemyMove(state, createRng(123));
@@ -159,11 +159,11 @@ describe('enemy AI', () => {
     expect(a).not.toBeNull();
   });
   it('prefers a capturing move when one exists', () => {
-    // enemy rook on the same file as a lone player pawn -> a capture is available
+    // enemy queen on the same file as a lone player pawn -> a capture is available
     const pawn = P('player', 'pawn', 4, 6);
-    const rook = P('enemy', 'rook', 4, 2);
+    const queen = P('enemy', 'queen', 4, 2);
     const idle = P('enemy', 'knight', 0, 0);
-    const state = { size: SIZE, pieces: [pawn, rook, idle], turn: 'enemy' as const, winner: null };
+    const state = { size: SIZE, pieces: [pawn, queen, idle], turn: 'enemy' as const, winner: null };
     const chosen = enemyMove(state, createRng(7));
     expect(chosen?.move.capture).toBe(pawn.id);
   });

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
+import { pieceSpritePath, type UnitPalette } from '../core/pieces';
 
-export type Faction = 'blue' | 'red' | 'neutral';
+export type Faction = UnitPalette;
 export type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
 export type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 export type FootprintShape = 'square' | 'circle';
@@ -66,10 +67,10 @@ const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanva
   sourceFootprintPx,
 });
 
-const ROOK_BLENDER_V4_CANVAS_PX = 512;
-const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 236;
-const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '50%';
-const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '74.629%';
+const ROOK_KEEP_CANVAS_PX = 512;
+const ROOK_KEEP_CONTACT_FOOTPRINT_PX = 428;
+const ROOK_KEEP_CONTACT_ANCHOR_X = '50%';
+const ROOK_KEEP_CONTACT_ANCHOR_Y = '80.241%';
 const KNIGHT_FUR_CANVAS_PX = 512;
 const KNIGHT_FUR_CONTACT_FOOTPRINT_PX = 178;
 const KNIGHT_FUR_CONTACT_ANCHOR_X = '50%';
@@ -109,8 +110,7 @@ export const directionCompassCells: Array<Direction | 'center'> = [
   'east',
 ];
 
-const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
-const knightFurSprite = (_faction: Faction, direction: Direction) => `/assets/units/knight/blender-render-fur/${direction}.png`;
+const paletteSprite = (piece: PieceId) => (faction: Faction, direction: Direction) => pieceSpritePath(piece, faction, direction);
 
 export const MISSING_DIRECTION_SPRITE =
   'data:image/svg+xml;utf8,' +
@@ -129,32 +129,32 @@ export const unitAssets: UnitAsset[] = [
     family: 'rook',
     label: 'Rook',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/rook/blender-render-v4-calibrated/south.png',
+    preview: pieceSpritePath('rook'),
     read: 'Board-calibrated castle rook with exact eight-direction rotations',
-    status: 'active Blender production unit',
+    status: 'active production unit',
     directions: rookDirections,
-    factionMode: 'fixed',
+    factionMode: 'palette',
     defaultScale: 100,
-    footprint: squareFootprint(ROOK_BLENDER_V4_CANVAS_PX, ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: ROOK_BLENDER_V4_CONTACT_ANCHOR_X,
-    unitAnchorY: ROOK_BLENDER_V4_CONTACT_ANCHOR_Y,
-    sprite: rookVariantSprite('blender-render-v4-calibrated'),
+    footprint: squareFootprint(ROOK_KEEP_CANVAS_PX, ROOK_KEEP_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: ROOK_KEEP_CONTACT_ANCHOR_X,
+    unitAnchorY: ROOK_KEEP_CONTACT_ANCHOR_Y,
+    sprite: paletteSprite('rook'),
   },
   {
     id: 'knight-fur',
     family: 'knight',
     label: 'Knight',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/knight/blender-render-fur/south.png',
+    preview: pieceSpritePath('knight'),
     read: 'Carved warhorse with a procedural navy fur coat; true-isometric Blender render',
-    status: 'active Blender production unit',
+    status: 'active production unit',
     directions: rookDirections,
-    factionMode: 'fixed',
+    factionMode: 'palette',
     defaultScale: 100,
     footprint: circleFootprint(KNIGHT_FUR_CANVAS_PX, KNIGHT_FUR_CONTACT_FOOTPRINT_PX),
     unitAnchorX: KNIGHT_FUR_CONTACT_ANCHOR_X,
     unitAnchorY: KNIGHT_FUR_CONTACT_ANCHOR_Y,
-    sprite: knightFurSprite,
+    sprite: paletteSprite('knight'),
   },
 ];
 

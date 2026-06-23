@@ -15,9 +15,9 @@ describe('editor store', () => {
   });
 
   it('places a unit and replaces (no duplicate) on repaint', () => {
-    useEditor.getState().setUnitBrush('rook', 'enemy');
+    useEditor.getState().setUnitBrush('queen', 'enemy');
     useEditor.getState().paint(4, 4);
-    expect(unitAt(4, 4)).toMatchObject({ type: 'rook', side: 'enemy' });
+    expect(unitAt(4, 4)).toMatchObject({ type: 'queen', side: 'enemy' });
     useEditor.getState().setUnitBrush('knight', 'player');
     useEditor.getState().paint(4, 4);
     expect(useEditor.getState().level.layers.units.filter((u) => u.x === 4 && u.y === 4)).toHaveLength(1);
@@ -25,7 +25,7 @@ describe('editor store', () => {
   });
 
   it('erases a unit', () => {
-    useEditor.getState().setUnitBrush('rook', 'enemy');
+    useEditor.getState().setUnitBrush('queen', 'enemy');
     useEditor.getState().paint(1, 1);
     useEditor.getState().setTool('erase');
     useEditor.getState().paint(1, 1);

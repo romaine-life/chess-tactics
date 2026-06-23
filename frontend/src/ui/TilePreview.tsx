@@ -21,8 +21,10 @@ import {
   type TransitionPair,
   type TransitionSlot,
 } from '../core/tileSockets';
+import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath } from '../core/pieces';
 import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
+import { BoardLabBoard } from '../render/BoardLabBoard';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 import {
@@ -283,27 +285,27 @@ const canonicalTileAssets: Record<ConceptTerrain, string[]> = {
 
 const beforeTileAssets: Record<ConceptTerrain, string[]> = {
   grass: [
-    '/assets/tiles/canonical-accepted/grass-clean-a.png',
-    '/assets/tiles/canonical-accepted/grass-clean-b.png',
-    '/assets/tiles/canonical-accepted/grass-clean-c.png',
+    '/assets/tiles/canonical-clean/grass-clean-a.png',
+    '/assets/tiles/canonical-clean/grass-clean-b.png',
+    '/assets/tiles/canonical-clean/grass-clean-c.png',
   ],
   stone: [
-    '/assets/tiles/canonical-accepted/stone-clean-a.png',
-    '/assets/tiles/canonical-accepted/stone-clean-b.png',
+    '/assets/tiles/canonical-clean/stone-clean-a.png',
+    '/assets/tiles/canonical-clean/stone-clean-b.png',
   ],
   water: [
-    '/assets/tiles/canonical-accepted/water-clean-a.png',
-    '/assets/tiles/canonical-accepted/water-clean-b.png',
+    '/assets/tiles/canonical-clean/water-clean-a.png',
+    '/assets/tiles/canonical-clean/water-clean-b.png',
   ],
   grassStone: [
-    '/assets/tiles/canonical-accepted/transition-grass-stone-a.png',
-    '/assets/tiles/canonical-accepted/transition-grass-stone-b.png',
+    '/assets/tiles/canonical-clean/transition-grass-stone-a.png',
+    '/assets/tiles/canonical-clean/transition-grass-stone-b.png',
   ],
   grassWater: [
-    '/assets/tiles/canonical-accepted/transition-grass-water-a.png',
-    '/assets/tiles/canonical-accepted/transition-grass-water-b.png',
+    '/assets/tiles/canonical-clean/transition-grass-water-a.png',
+    '/assets/tiles/canonical-clean/transition-grass-water-b.png',
   ],
-  edge: ['/assets/tiles/canonical-accepted/grass-clean-a.png'],
+  edge: ['/assets/tiles/canonical-clean/grass-clean-a.png'],
 };
 
 type StudioFamilyId = TileFamilyId;
@@ -1499,50 +1501,15 @@ function StudioGeneratedBoard({
   boardPan: { x: number; y: number };
   animationFrame: number;
 }): ReactElement {
-  const cells = board.cells;
-  const projectedPoints = cells.map((cell) => ({
-    left: (cell.x - cell.y) * TILE_TEMPLATE.stepX,
-    top: (cell.x + cell.y) * TILE_TEMPLATE.stepY,
-  }));
-  const minLeft = Math.min(...projectedPoints.map((point) => point.left - 48));
-  const maxLeft = Math.max(...projectedPoints.map((point) => point.left + 48));
-  const minTop = Math.min(...projectedPoints.map((point) => point.top - 27));
-  const maxTop = Math.max(...projectedPoints.map((point) => point.top + 140));
-  const boardWidth = maxLeft - minLeft;
-  const boardHeight = maxTop - minTop;
-  const originLeft = -minLeft - boardWidth / 2;
-  const originTop = -minTop - boardHeight / 2;
-
   return (
-    <div
-      className={`tileset-generated-board ${showFootprint ? 'has-footprint' : ''}`}
-      style={
-        {
-          '--board-zoom': boardZoom,
-          '--board-pan-x': `${boardPan.x}px`,
-          '--board-pan-y': `${boardPan.y}px`,
-          '--board-origin-left': `${originLeft}px`,
-          '--board-origin-top': `${originTop}px`,
-        } as CSSProperties
-      }
-      aria-label="Generated board from selected tileset"
-    >
-      {cells.map((cell) => {
-        const left = (cell.x - cell.y) * TILE_TEMPLATE.stepX;
-        const top = (cell.x + cell.y) * TILE_TEMPLATE.stepY;
-        return (
-          <div
-            key={`${cell.x}-${cell.y}`}
-            className={`tileset-generated-board-tile ${cell.missing ? 'is-missing' : ''}`}
-            data-asset-id={cell.asset?.id}
-            data-missing={cell.missing?.label}
-            style={{ left, top, zIndex: cell.x + cell.y }}
-          >
-            {cell.asset ? <img src={assetFrameSrc(cell.asset, animationFrame)} alt="" draggable={false} /> : <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>}
-          </div>
-        );
-      })}
-    </div>
+    <BoardLabBoard
+      board={board}
+      showFootprint={showFootprint}
+      boardZoom={boardZoom}
+      boardPan={boardPan}
+      assetFrameSrc={(asset) => assetFrameSrc(asset, animationFrame)}
+      ariaLabel="Generated board from selected tileset"
+    />
   );
 }
 
@@ -1731,7 +1698,7 @@ const studioUnits: StudioUnit[] = [
   },
 ];
 const comingUnits = ['Rook', 'Knight', 'Bishop', 'Queen', 'King'];
-const unitProofTile = trueIsoTileAsset('grass-clean-a.png');
+const unitProofTile = '/assets/tiles/canonical-clean/grass-clean-a.png';
 
 // Units browser, folded into the studio as a second asset category. Reuses the
 // catalog card grid and the studio view shell; pieces get a concept-art view
@@ -1936,14 +1903,15 @@ type LevelUnitCell = { type: PieceType; side: Side };
 type LevelSnapshot = { t: Record<string, TileFamilyId>; u: Record<string, LevelUnitCell> };
 const LE_ICON_ROOT = '/assets/ui/level-editor';
 const leIcon = (name: string, active = false): string => `${LE_ICON_ROOT}/icons/${name}${active ? '-active' : ''}.png`;
-const levelPieceTypes: PieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+const levelPieceTypes: PieceType[] = [...PLAYABLE_PIECE_TYPES];
 const levelSides: Side[] = ['player', 'enemy', 'neutral'];
-const pieceGlyph: Record<PieceType, string> = { pawn: 'P', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', rock: '▲', 'random-rock': '?' };
-const pieceLabel: Record<PieceType, string> = { pawn: 'Pawn', knight: 'Knight', bishop: 'Bishop', rook: 'Rook', queen: 'Queen', rock: 'Rock', 'random-rock': 'Random rock' };
+const pieceGlyph = PIECE_MARK;
+const pieceLabel = PIECE_LABEL;
 const sideLabel: Record<Side, string> = { player: 'Player', enemy: 'Enemy', neutral: 'Neutral' };
 const sideClass: Record<Side, string> = { player: 'is-player', enemy: 'is-enemy', neutral: 'is-neutral' };
-// Only the pawn has finished art so far; everything else renders as a glyph chip.
-const levelPieceArt: Partial<Record<PieceType, string>> = { pawn: '/assets/units/cutouts/pawn-shield-south.png' };
+const levelPieceArt: Partial<Record<PieceType, string>> = Object.fromEntries(
+  PLAYABLE_PIECE_TYPES.map((piece) => [piece, pieceSpritePath(piece)]),
+) as Partial<Record<PieceType, string>>;
 
 // Fill every unpainted cell with its nearest painted family (multi-source BFS),
 // so a painted region's outer border meets matching terrain (clean base tiles)
@@ -2474,7 +2442,7 @@ export function TilesetStudio(): ReactElement {
   const [brushId, setBrushId] = useState<string>(initialRoute.selectedAssetId ?? '');
   const [unitBrushId, setUnitBrushId] = useState<string>(initialRoute.selectedUnitId ?? unitAssets[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
-  const [unitBrushFaction] = useState<Faction>('blue');
+  const [unitBrushFaction] = useState<Faction>('navy-blue');
   const [boardCells, setBoardCells] = useState<Record<string, string>>({});
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);

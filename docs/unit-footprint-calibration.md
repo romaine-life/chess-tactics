@@ -70,6 +70,86 @@ At `100%` unit scale, the game renders the source image so the measured `178px` 
 
 > **On computing the anchor.** Don't measure the alpha base row — in isometric the widest base row is the back rim, which projects *higher* than the true contact (this caused an earlier off-by-22px error). The correct anchor is `world_to_camera_view(scene, cam, (0,0,0))` with the unit's base normalized to z=0 and centered at the origin: `anchorX = v.x`, `anchorY = 1 - v.y`. Requires a `view_layer.update()` first so the camera matrix is evaluated.
 
+## Active Blender Pawn
+
+Asset:
+
+- `frontend/public/assets/units/pawn/blender-render-helmet/*.png` (classic Staunton pawn + medieval archer's helmet, navy). Recipe: `docs/art/unit-concepts/blender-units/pawn-helmet/render_pawn_helmet.py`. Source models: `docs/art/unit-concepts/source-assets/pawn-helmet/`.
+
+Calibration (same camera + base-at-origin normalization as the knight):
+
+- Source canvas: `512x512px`
+- Contact footprint (max projected base width): `188px`
+- **Anchor: `x=50%`, `y=80.241%`** — computed via `world_to_camera_view(scene, cam, (0,0,0))` (the ground-contact projection), identical to the knight because the camera and normalization are identical.
+
+```ts
+footprint: circleFootprint(512, 188)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
+```
+
+The pawn body is rotationally symmetric; the helmet's visor provides the per-direction facing (visor → game-south at yaw 0).
+
+## Active Blender King
+
+Asset:
+
+- `frontend/public/assets/units/king/blender-render-crown/*.png` (navy Staunton king + gold/jewel crown, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/king-crown/` (`king_crown.blend` is the hand-assembled source of truth; `render_king_crown.py` re-renders it).
+
+Calibration (same camera + base-at-origin normalization as the rest of the roster):
+
+- Source canvas: `512x512px`
+- Contact footprint (max projected base width): `148px`
+- **Anchor: `x=50%`, `y=80.241%`** — computed via `world_to_camera_view(scene, cam, (0,0,0))`.
+
+```ts
+footprint: circleFootprint(512, 148)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
+```
+
+The crown was hand-fitted in Blender (not scripted), so unlike the pawn/knight there's no procedural recipe — the assembled `.blend` is the source. King + crown are rotationally symmetric (no per-direction facing).
+
+## Active Blender Bishop
+
+Asset:
+
+- `frontend/public/assets/units/bishop/blender-render-mitre/*.png` (navy Staunton bishop + navy mitre, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/bishop-mitre/` (`bishop_mitre.blend` is the hand-assembled source of truth; `render_bishop_mitre.py` re-renders it).
+
+Calibration (same camera + base-at-origin normalization as the rest of the roster):
+
+- Source canvas: `512x512px`
+- Contact footprint (max projected base width): `158px`
+- **Anchor: `x=50%`, `y=80.241%`** — computed via `world_to_camera_view(scene, cam, (0,0,0))`.
+
+```ts
+footprint: circleFootprint(512, 158)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
+```
+
+The mitre was hand-fitted in Blender (not scripted) — the assembled `.blend` is the source. Unlike the king, the mitre's front peak gives a genuine per-direction facing across the 8 sprites.
+
+## Active Blender Queen
+
+Asset:
+
+- `frontend/public/assets/units/queen/blender-render-tiara/*.png` (navy Staunton queen + jeweled gold tiara, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/queen-tiara/` (`queen_tiara.blend` is the hand-assembled source of truth; `render_queen_tiara.py` re-renders it).
+
+Calibration (same camera + base-at-origin normalization as the rest of the roster):
+
+- Source canvas: `512x512px`
+- Contact footprint (max projected base width): `150px`
+- **Anchor: `x=50%`, `y=80.241%`** — computed via `world_to_camera_view(scene, cam, (0,0,0))`.
+
+```ts
+footprint: circleFootprint(512, 150)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
+```
+
+The tiara was hand-fitted in Blender (not scripted) — the assembled `.blend` is the source. Like the bishop, the tiara's front gives a genuine per-direction facing across the 8 sprites.
+
 ## Next Blender Export Rule
 
 For every new Blender unit export:

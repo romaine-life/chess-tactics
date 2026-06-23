@@ -1,17 +1,17 @@
 import { useState } from 'react';
-import type { PieceType } from '../core/types';
+import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 
-const OPTIONS: PieceType[] = ['knight', 'bishop', 'rook'];
+const OPTIONS = PLAYABLE_PIECE_TYPES.filter((piece) => piece !== 'pawn');
 
-function PieceIcon({ type }: { type: PieceType }) {
+function PieceIcon({ type }: { type: PlayablePieceType }) {
   return <span className={`utility-piece-icon icon-${type}`} aria-hidden="true" />;
 }
 
 // Squad picker (ported from legacy app.js): pawn is locked; choose two more
 // pieces, then deploy into a skirmish.
 export function Party() {
-  const [picks, setPicks] = useState<PieceType[]>([]);
-  const toggle = (p: PieceType) => setPicks((cur) => cur.includes(p) ? cur.filter((x) => x !== p) : cur.length < 2 ? [...cur, p] : cur);
+  const [picks, setPicks] = useState<PlayablePieceType[]>([]);
+  const toggle = (p: PlayablePieceType) => setPicks((cur) => cur.includes(p) ? cur.filter((x) => x !== p) : cur.length < 2 ? [...cur, p] : cur);
   return (
     <div data-testid="party" className="utility-screen utility-party">
       <header className="utility-page-header">

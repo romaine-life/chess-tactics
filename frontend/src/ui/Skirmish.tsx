@@ -44,7 +44,7 @@ export function Skirmish() {
   }, []);
 
   useEffect(() => {
-    newSkirmish({ seed: 1 });
+    newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1 });
   }, [newSkirmish]);
 
   return (

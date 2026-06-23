@@ -29,12 +29,12 @@ describe('applyMove AP turn model', () => {
   it('spends an AP and keeps the turn while the side still has AP', () => {
     const s = state([
       piece('kn', 'player', 'knight', 1, 1, { ap: 2, maxAp: 2 }),
-      piece('rk', 'player', 'rook', 7, 7, { ap: 2, maxAp: 2 }),
+      piece('rk', 'player', 'queen', 7, 7, { ap: 2, maxAp: 2 }),
       piece('foe', 'enemy', 'pawn', 4, 4, { ap: 0, maxAp: 1 }),
     ]);
     const { state: next } = applyMove(s, 'kn', { x: 2, y: 3 }, { ap: true });
     expect(next.pieces.find((p) => p.id === 'kn')!.ap).toBe(1);
-    expect(next.turn).toBe('player'); // rook still has AP — side keeps acting
+    expect(next.turn).toBe('player'); // queen still has AP — side keeps acting
   });
 
   it('hands off and refreshes the incoming side once AP is exhausted', () => {
@@ -50,7 +50,7 @@ describe('applyMove AP turn model', () => {
 
   it('spends AP on an attack-in-place (no displacement)', () => {
     const s = state([
-      piece('rk', 'player', 'rook', 4, 4, { ap: 2, maxAp: 2 }),
+      piece('rk', 'player', 'queen', 4, 4, { ap: 2, maxAp: 2 }),
       piece('pw', 'player', 'pawn', 0, 0, { ap: 2, maxAp: 2 }), // keeps side AP alive
       piece('tank', 'enemy', 'pawn', 4, 5, { hp: 2, maxHp: 2, ap: 0, maxAp: 1 }),
     ]);

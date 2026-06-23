@@ -23,14 +23,15 @@ import {
 
 type TileContextId = 'grass' | 'stone' | 'water';
 
-const grassTile = '/assets/tiles/canonical-true-iso/grass-clean-a.png';
-const stoneTile = '/assets/tiles/canonical-true-iso/stone-clean-a.png';
-const waterTile = '/assets/tiles/canonical-true-iso/water-clean-a.png';
+const grassTile = '/assets/tiles/canonical-clean/grass-clean-a.png';
+const stoneTile = '/assets/tiles/canonical-clean/stone-clean-a.png';
+const waterTile = '/assets/tiles/canonical-clean/water-clean-a.png';
 
 const factionLabels: Record<Faction, string> = {
-  blue: 'Blue',
-  red: 'Red',
-  neutral: 'Neutral',
+  'navy-blue': 'Navy',
+  crimson: 'Crimson',
+  golden: 'Golden',
+  emerald: 'Emerald',
 };
 
 const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
@@ -39,7 +40,7 @@ const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
   { id: 'water', label: 'Water', src: waterTile },
 ];
 
-const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'rook' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
+const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'knight' || value === 'bishop' || value === 'rook' || value === 'queen' || value === 'king';
 const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
 type UnitStudioMode = 'catalog' | 'view';
 type UnitCollectionFilter = 'production' | 'candidates';
@@ -55,9 +56,6 @@ const activeUnitCollectionFilters = unitCollectionFilters.filter(([filter]) => u
 const unitFromLegacyQuery = (params = new URLSearchParams(window.location.search)) => {
   const queryUnit = params.get('unit');
   if (isUnitAssetId(queryUnit)) return queryUnit;
-
-  const querySource = params.get('source');
-  if (querySource && params.get('piece') === 'rook') return 'rook-blender-v4-calibrated';
 
   const queryPiece = params.get('piece');
   if (isPieceId(queryPiece)) {
@@ -115,7 +113,7 @@ export function UnitStudio() {
   const initialRoute = useMemo(() => readUnitStudioRoute(), []);
   const [studioMode, setStudioMode] = useState<UnitStudioMode>(initialRoute.mode);
   const [unitId, setUnitId] = useState(initialRoute.unitId);
-  const [faction, setFaction] = useState<Faction>('blue');
+  const [faction, setFaction] = useState<Faction>('navy-blue');
   const [zoom, setZoom] = useState(DEFAULT_VIEW_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [unitScale, setUnitScale] = useState(initialRoute.unitScale);
@@ -627,8 +625,8 @@ export function UnitStudio() {
                   ))}
                 </div>
               </div>
-              <div className="unit-studio-control-group" aria-label="Faction">
-                <strong>Faction</strong>
+              <div className="unit-studio-control-group" aria-label="Palette">
+                <strong>Palette</strong>
                 <div className="unit-studio-factions">
                   {(Object.keys(factionLabels) as Faction[]).map((item) => (
                     <button

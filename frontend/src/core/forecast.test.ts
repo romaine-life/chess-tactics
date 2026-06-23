@@ -21,7 +21,7 @@ describe('forecastEnemyIntents', () => {
   it('is deterministic — identical output across calls', () => {
     const s = state([
       piece('p1', 'player', 'pawn', 3, 6),
-      piece('e1', 'enemy', 'rook', 4, 4),
+      piece('e1', 'enemy', 'queen', 4, 4),
       piece('e2', 'enemy', 'knight', 1, 1),
     ]);
     expect(forecastEnemyIntents(s)).toEqual(forecastEnemyIntents(s));
@@ -29,22 +29,22 @@ describe('forecastEnemyIntents', () => {
 
   it('telegraphs an attack on a reachable player target', () => {
     const s = state([
-      piece('rook', 'enemy', 'rook', 4, 4),
+      piece('queen', 'enemy', 'queen', 4, 4),
       piece('victim', 'player', 'pawn', 4, 6),
     ]);
     const intents = forecastEnemyIntents(s);
-    const rookIntent = intents.find((i) => i.pieceId === 'rook');
-    expect(rookIntent).toMatchObject({ kind: 'attack', targetId: 'victim', to: { x: 4, y: 6 }, damage: 1 });
+    const queenIntent = intents.find((i) => i.pieceId === 'queen');
+    expect(queenIntent).toMatchObject({ kind: 'attack', targetId: 'victim', to: { x: 4, y: 6 }, damage: 1 });
   });
 
   it('prefers the higher-value capture', () => {
     const s = state([
       piece('q', 'enemy', 'queen', 4, 4),
-      piece('rook', 'player', 'rook', 4, 6), // value 5, straight down
+      piece('queen', 'player', 'queen', 4, 6), // value 5, straight down
       piece('pawn', 'player', 'pawn', 6, 4), // value 1, straight right
     ]);
     const intent = forecastEnemyIntents(s).find((i) => i.pieceId === 'q');
-    expect(intent).toMatchObject({ kind: 'attack', targetId: 'rook' });
+    expect(intent).toMatchObject({ kind: 'attack', targetId: 'queen' });
   });
 
   it('advances toward the nearest player when no capture is available', () => {
@@ -59,12 +59,12 @@ describe('forecastEnemyIntents', () => {
 
   it('withForecast attaches intents to the state', () => {
     const s = state([
-      piece('rook', 'enemy', 'rook', 4, 4),
+      piece('queen', 'enemy', 'queen', 4, 4),
       piece('victim', 'player', 'pawn', 4, 6),
     ]);
     const next = withForecast(s);
     expect(next.intents).toHaveLength(1);
-    expect(next.intents![0]).toMatchObject({ pieceId: 'rook', kind: 'attack' });
+    expect(next.intents![0]).toMatchObject({ pieceId: 'queen', kind: 'attack' });
   });
 
   it('chooseEnemyMove returns null with no moves', () => {
@@ -75,26 +75,26 @@ describe('forecastEnemyIntents', () => {
 describe('applyMove with hp', () => {
   it('damages a multi-hp target without displacing the attacker (attack-in-place)', () => {
     const s = state([
-      piece('rook', 'player', 'rook', 4, 4),
+      piece('queen', 'player', 'queen', 4, 4),
       piece('tank', 'enemy', 'pawn', 4, 5, { hp: 2, maxHp: 2 }),
     ]);
-    const { state: next, events } = applyMove(s, 'rook', { x: 4, y: 5, capture: 'tank' });
-    const rook = next.pieces.find((p) => p.id === 'rook')!;
+    const { state: next, events } = applyMove(s, 'queen', { x: 4, y: 5, capture: 'tank' });
+    const queen = next.pieces.find((p) => p.id === 'queen')!;
     const tank = next.pieces.find((p) => p.id === 'tank')!;
-    expect(rook).toMatchObject({ x: 4, y: 4 }); // did not move onto the square
+    expect(queen).toMatchObject({ x: 4, y: 4 }); // did not move onto the square
     expect(tank).toMatchObject({ alive: true, hp: 1 });
-    expect(events).toContainEqual({ kind: 'damaged', pieceId: 'tank', by: 'rook', amount: 1, hp: 1 });
+    expect(events).toContainEqual({ kind: 'damaged', pieceId: 'tank', by: 'queen', amount: 1, hp: 1 });
     expect(events.some((e) => e.kind === 'moved')).toBe(false);
     expect(next.turn).toBe('enemy'); // turn still passes
   });
 
   it('kills a 1-hp target and displaces onto the square (classic capture)', () => {
     const s = state([
-      piece('rook', 'player', 'rook', 4, 4),
+      piece('queen', 'player', 'queen', 4, 4),
       piece('foe', 'enemy', 'pawn', 4, 5),
     ]);
-    const { state: next, events } = applyMove(s, 'rook', { x: 4, y: 5, capture: 'foe' });
-    expect(next.pieces.find((p) => p.id === 'rook')).toMatchObject({ x: 4, y: 5 });
+    const { state: next, events } = applyMove(s, 'queen', { x: 4, y: 5, capture: 'foe' });
+    expect(next.pieces.find((p) => p.id === 'queen')).toMatchObject({ x: 4, y: 5 });
     expect(next.pieces.find((p) => p.id === 'foe')).toMatchObject({ alive: false });
     expect(events.some((e) => e.kind === 'captured')).toBe(true);
     expect(events.some((e) => e.kind === 'moved')).toBe(true);
