@@ -1,36 +1,21 @@
 import { useSkirmish } from '../game/store';
 import { enemyThreats, livingPieces } from '../core/rules';
+import { PIECE_LABEL, PIECE_MARK } from '../core/pieces';
 import type { Piece, PieceType, Side } from '../core/types';
 
-const TYPE_LABEL: Record<PieceType, string> = {
-  pawn: 'Pawn',
-  knight: 'Knight',
-  bishop: 'Bishop',
-  rook: 'Rook',
-  queen: 'Queen',
-  rock: 'Rock',
-  'random-rock': 'Rock',
-};
+const TYPE_LABEL = PIECE_LABEL;
 
 const ROLE: Record<PieceType, string> = {
   pawn: 'Forward footman',
   knight: 'L-shaped jumper',
   bishop: 'Diagonal runner',
-  rook: 'Straight-line tower',
   queen: 'Promoted raider',
+  king: 'Royal commander',
   rock: 'Impassable obstacle',
   'random-rock': 'Impassable obstacle',
 };
 
-const MARK: Record<PieceType, string> = {
-  pawn: 'P',
-  knight: 'N',
-  bishop: 'B',
-  rook: 'R',
-  queen: 'Q',
-  rock: 'R',
-  'random-rock': '?',
-};
+const MARK = PIECE_MARK;
 
 function hpText(piece: Piece | null): string {
   if (!piece) return '--';

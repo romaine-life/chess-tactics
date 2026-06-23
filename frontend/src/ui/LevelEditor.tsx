@@ -3,13 +3,14 @@ import { EditorBoard } from '../render/EditorBoard';
 import { useEditor, type EditorTool } from '../editor/store';
 import { validateLevel, type TerrainType } from '../core/level';
 import type { PieceType, Side } from '../core/types';
+import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import { saveLevel, loadLevel, listLevels, type LevelSummary } from '../net/levels';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 
 const ASSET_ROOT = '/assets/ui/level-editor';
 const TERRAINS: TerrainType[] = ['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock'];
 const SWATCH: Record<TerrainType, string> = { grass: '#356a42', water: '#2f5d86', stone: '#6b6f76', road: '#a9905f', bridge: '#7a5a36', cliff: '#3a3f46', rock: '#595e66' };
-const UNITS: PieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+const UNITS: PieceType[] = [...PLAYABLE_PIECE_TYPES];
 const SIDES: Side[] = ['player', 'enemy'];
 const EDITOR_TABS: { key: string; id: EditorTool; label: string; icon: string; disabled?: boolean }[] = [
   { key: 'board', id: 'terrain', label: 'Board', icon: 'grid' },

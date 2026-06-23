@@ -1,9 +1,10 @@
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { pieceSpritePath } from '../core/pieces';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 
 type Faction = 'blue' | 'red' | 'neutral';
-type PieceId = 'pawn' | 'rook' | 'knight' | 'bishop' | 'queen' | 'king';
+type PieceId = 'pawn' | 'knight' | 'bishop' | 'queen' | 'king';
 type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 type TileContextId = 'grass' | 'stone' | 'water';
 type FootprintShape = 'square' | 'circle';
@@ -51,15 +52,6 @@ const circleFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanva
   sourceCanvasPx,
   sourceFootprintPx,
 });
-const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
-  shape: 'square',
-  sourceCanvasPx,
-  sourceFootprintPx,
-});
-const ROOK_BLENDER_V4_CANVAS_PX = 512;
-const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
-const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '49.9%';
-const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '71.753%';
 // Fur knight calibration. anchor = the EXACT projection of the unit's ground-contact
 // point (base bottom-center, world origin) through the render camera — computed, not
 // eyeballed, so seating is mathematically correct. footprint = projected base width.
@@ -93,7 +85,6 @@ const QUEEN_TIARA_CONTACT_ANCHOR_Y = '80.241%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
-  rook: 'Rook',
   knight: 'Knight',
   bishop: 'Bishop',
   queen: 'Queen',
@@ -130,24 +121,7 @@ const directionCompassCells: Array<Direction | 'center'> = [
   'east',
 ];
 
-const rookVariantSprite = (variant: string) => (_faction: Faction, direction: Direction) => `/assets/units/rook/${variant}/${direction}.png`;
-// Fur knight: the carved Staunton OBJ given a procedural navy "hint of fur" coat
-// (smooth muzzle, fur only on the coat — not the pedestal base or sculpted mane),
-// rendered at the true-isometric contract angle (35.264deg), 8 fixed directions.
-const knightFurSprite = (_faction: Faction, direction: Direction) => `/assets/units/knight/blender-render-fur/${direction}.png`;
-// Helmeted pawn: classic Staunton pawn (STL) wearing a medieval archer's helmet
-// (COLLADA) seated on the ball head, navy-styled; the visor gives the symmetric pawn
-// a real per-direction facing. True-isometric, 8 fixed directions.
-const pawnHelmetSprite = (_faction: Faction, direction: Direction) => `/assets/units/pawn/blender-render-helmet/${direction}.png`;
-// Crowned king: Staunton king (OBJ) wearing a gold/jewel crown (FBX) hand-seated on the
-// head; navy body, real gold crown material. Rotationally symmetric, 8 fixed directions.
-const kingCrownSprite = (_faction: Faction, direction: Direction) => `/assets/units/king/blender-render-crown/${direction}.png`;
-// Bishop: classic Staunton bishop (FBX) wearing a separate mitre (OBJ) hand-seated on
-// the head, navy-styled; the mitre's front peak gives a per-direction facing. 8 directions.
-const bishopMitreSprite = (_faction: Faction, direction: Direction) => `/assets/units/bishop/blender-render-mitre/${direction}.png`;
-// Queen: navy Staunton queen (blend) wearing a separate jeweled tiara (FBX) hand-seated on
-// the crown collar; the tiara's front gives a per-direction facing. 8 directions.
-const queenTiaraSprite = (_faction: Faction, direction: Direction) => `/assets/units/queen/blender-render-tiara/${direction}.png`;
+const claudeSprite = (piece: PieceId) => (_faction: Faction, direction: Direction) => pieceSpritePath(piece, direction);
 
 // Shown when a unit has no sprite for the chosen facing — a placeholder, never a
 // disabled control. Directions are always selectable.
@@ -169,96 +143,80 @@ const unitAssets: UnitAsset[] = [
     family: 'pawn',
     label: 'Pawn',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/pawn/blender-render-helmet/south.png',
-    read: "Classic navy pawn in a medieval archer's helmet — the visor faces the unit's direction; true-isometric Blender render",
-    status: 'active Blender production unit',
+    preview: pieceSpritePath('pawn'),
+    read: 'Solidified Claude chess pawn render; true-isometric eight-direction unit',
+    status: 'active Claude production unit',
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
     footprint: circleFootprint(PAWN_HELMET_CANVAS_PX, PAWN_HELMET_CONTACT_FOOTPRINT_PX),
     unitAnchorX: PAWN_HELMET_CONTACT_ANCHOR_X,
     unitAnchorY: PAWN_HELMET_CONTACT_ANCHOR_Y,
-    sprite: pawnHelmetSprite,
+    sprite: claudeSprite('pawn'),
   },
   {
     id: 'king-crown',
     family: 'king',
     label: 'King',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/king/blender-render-crown/south.png',
-    read: 'Navy Staunton king wearing a gold-and-jewel crown, hand-fitted; true-isometric Blender render',
-    status: 'active Blender production unit',
+    preview: pieceSpritePath('king'),
+    read: 'Solidified Claude chess king render; true-isometric eight-direction unit',
+    status: 'active Claude production unit',
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
     footprint: circleFootprint(KING_CROWN_CANVAS_PX, KING_CROWN_CONTACT_FOOTPRINT_PX),
     unitAnchorX: KING_CROWN_CONTACT_ANCHOR_X,
     unitAnchorY: KING_CROWN_CONTACT_ANCHOR_Y,
-    sprite: kingCrownSprite,
+    sprite: claudeSprite('king'),
   },
   {
     id: 'bishop-mitre',
     family: 'bishop',
     label: 'Bishop',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/bishop/blender-render-mitre/south.png',
-    read: 'Navy Staunton bishop wearing a hand-fitted mitre (the peak faces the unit\'s direction); true-isometric Blender render',
-    status: 'active Blender production unit',
+    preview: pieceSpritePath('bishop'),
+    read: 'Solidified Claude chess bishop render; true-isometric eight-direction unit',
+    status: 'active Claude production unit',
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
     footprint: circleFootprint(BISHOP_MITRE_CANVAS_PX, BISHOP_MITRE_CONTACT_FOOTPRINT_PX),
     unitAnchorX: BISHOP_MITRE_CONTACT_ANCHOR_X,
     unitAnchorY: BISHOP_MITRE_CONTACT_ANCHOR_Y,
-    sprite: bishopMitreSprite,
+    sprite: claudeSprite('bishop'),
   },
   {
     id: 'queen-tiara',
     family: 'queen',
     label: 'Queen',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/queen/blender-render-tiara/south.png',
-    read: 'Navy Staunton queen wearing a hand-fitted jeweled tiara (the front faces the unit\'s direction); true-isometric Blender render',
-    status: 'active Blender production unit',
+    preview: pieceSpritePath('queen'),
+    read: 'Solidified Claude chess queen render; true-isometric eight-direction unit',
+    status: 'active Claude production unit',
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
     footprint: circleFootprint(QUEEN_TIARA_CANVAS_PX, QUEEN_TIARA_CONTACT_FOOTPRINT_PX),
     unitAnchorX: QUEEN_TIARA_CONTACT_ANCHOR_X,
     unitAnchorY: QUEEN_TIARA_CONTACT_ANCHOR_Y,
-    sprite: queenTiaraSprite,
-  },
-  {
-    id: 'rook-blender-v4-calibrated',
-    family: 'rook',
-    label: 'Rook',
-    badge: '8 directions · calibrated',
-    preview: '/assets/units/rook/blender-render-v4-calibrated/south.png',
-    read: 'Board-calibrated castle rook with exact eight-direction rotations',
-    status: 'active Blender production unit',
-    directions: rookDirections,
-    factionMode: 'fixed',
-    defaultScale: 100,
-    footprint: squareFootprint(ROOK_BLENDER_V4_CANVAS_PX, ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: ROOK_BLENDER_V4_CONTACT_ANCHOR_X,
-    unitAnchorY: ROOK_BLENDER_V4_CONTACT_ANCHOR_Y,
-    sprite: rookVariantSprite('blender-render-v4-calibrated'),
+    sprite: claudeSprite('queen'),
   },
   {
     id: 'knight-fur',
     family: 'knight',
     label: 'Knight',
     badge: '8 directions · calibrated',
-    preview: '/assets/units/knight/blender-render-fur/south.png',
-    read: 'Carved warhorse with a procedural navy fur coat — smooth muzzle, fuzzy coat, sculpted mane; true-isometric Blender render',
-    status: 'active Blender production unit',
+    preview: pieceSpritePath('knight'),
+    read: 'Solidified Claude chess knight render; true-isometric eight-direction unit',
+    status: 'active Claude production unit',
     directions: rookDirections,
     factionMode: 'fixed',
     defaultScale: 100,
     footprint: circleFootprint(KNIGHT_FUR_CANVAS_PX, KNIGHT_FUR_CONTACT_FOOTPRINT_PX),
     unitAnchorX: KNIGHT_FUR_CONTACT_ANCHOR_X,
     unitAnchorY: KNIGHT_FUR_CONTACT_ANCHOR_Y,
-    sprite: knightFurSprite,
+    sprite: claudeSprite('knight'),
   },
 ];
 const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
@@ -279,7 +237,7 @@ const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
   { id: 'water', label: 'Water', src: waterTile },
 ];
 
-const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'rook' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
+const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
 const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
 type UnitStudioMode = 'catalog' | 'view';
 type UnitCollectionFilter = 'production' | 'candidates';
@@ -295,9 +253,6 @@ const activeUnitCollectionFilters = unitCollectionFilters.filter(([filter]) => u
 const unitFromLegacyQuery = (params = new URLSearchParams(window.location.search)) => {
   const queryUnit = params.get('unit');
   if (isUnitAssetId(queryUnit)) return queryUnit;
-
-  const querySource = params.get('source');
-  if (querySource && params.get('piece') === 'rook') return 'rook-blender-v4-calibrated';
 
   const queryPiece = params.get('piece');
   if (isPieceId(queryPiece)) {
