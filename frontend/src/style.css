@@ -10777,7 +10777,7 @@ button.tileset-relationship-cell {
 .tileset-generated-board-tile .tileset-board-unit {
   position: absolute;
   left: 50%;
-  top: var(--iso-tile-step-y);
+  top: var(--iso-tile-height);
   z-index: 5;
   width: auto;
   height: auto;
