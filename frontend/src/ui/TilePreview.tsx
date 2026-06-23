@@ -2891,7 +2891,9 @@ export function TilesetStudio(): ReactElement {
       </header>
 
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''}`} aria-label="Tileset browser">
-        {category === 'units' && studioMode === 'catalog' ? (
+        {studioMode === 'catalog' ? (
+        <>
+        {category === 'units' ? (
           <UnitsStudio
             onInspect={(unitId) => {
               setUnitBrushId(unitId);
@@ -2900,9 +2902,8 @@ export function TilesetStudio(): ReactElement {
               openBoardLab();
             }}
           />
-        ) : studioMode === 'catalog' ? (
-        <>
-        <section className="tileset-studio-main">
+        ) : (
+          <section className="tileset-studio-main">
           <div className="tileset-studio-toolbar">
             <div className="tileset-studio-title-row">
               <div className="tileset-catalog-heading">
@@ -2983,7 +2984,8 @@ export function TilesetStudio(): ReactElement {
                 ) : null}
               </div>
             </section>
-        </section>
+          </section>
+        )}
         <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Catalog controls">
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
@@ -3006,119 +3008,125 @@ export function TilesetStudio(): ReactElement {
                   Units
                 </button>
               </div>
-              <label className="tileset-catalog-search">
-                <span>Search</span>
-                <input
-                  type="search"
-                  value={catalogQuery}
-                  onChange={(event) => setCatalogQuery(event.target.value)}
-                  placeholder="label, source, socket..."
-                />
-              </label>
-              <label className="tileset-catalog-zoom">
-                <span>Zoom</span>
-                <input
-                  type="range"
-                  min="0.75"
-                  max="2"
-                  step="0.05"
-                  value={zoom}
-                  onChange={(event) => setZoom(Number(event.target.value))}
-                />
-              </label>
-              <div className="tileset-active-filters" aria-label="Active filters">
-                {activeFamilies.map((item) => (
-                  <button key={item.id} type="button" onClick={() => toggleFamilyFilter(item.id)} title={`Remove ${item.label} filter`}>
-                    {item.label}
-                  </button>
-                ))}
-                {selectedCollectionFilters.map((filter) => (
-                  <button key={filter} type="button" onClick={() => toggleCollectionFilter(filter)} title={`Remove ${filter} filter`}>
-                    {collectionFilters.find(([id]) => id === filter)?.[1] ?? filter}
-                  </button>
-                ))}
-              </div>
-              <div className="tileset-filter-dropdown" ref={filterDropdownRef}>
-                <button
-                  type="button"
-                  className={filterOpen ? 'is-active' : ''}
-                  onClick={() => setFilterOpen((value) => !value)}
-                  aria-expanded={filterOpen}
-                  aria-controls="tileset-filter-menu"
-                >
-                  Filters
-                </button>
-                {filterOpen ? (
-                  <div id="tileset-filter-menu" className="tileset-filter-menu" role="dialog" aria-label="Tileset filters">
-                    <div className="tileset-filter-menu-header">
-                      <strong>Filters</strong>
-                      <span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedFamilyIds(studioFamilies.map((item) => item.id));
-                            setSelectedCollectionFilters(collectionFilters.map(([filter]) => filter));
-                          }}
-                        >
-                          Select all
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedFamilyIds([]);
-                            setSelectedCollectionFilters([]);
-                          }}
-                        >
-                          Clear
-                        </button>
-                      </span>
-                    </div>
-                    <section className="tileset-filter-group" aria-label="Tile families">
-                      <h3>Tile Family</h3>
-                      {studioFamilies.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`tileset-filter-option${selectedFamilyIds.includes(item.id) ? ' is-active' : ''}`}
-                          aria-pressed={selectedFamilyIds.includes(item.id)}
-                          onClick={() => toggleFamilyFilter(item.id)}
-                        >
-                          <span className="tileset-filter-mark" aria-hidden="true" />
-                          <span className="tileset-filter-option-copy">
-                            <strong>{item.label}</strong>
-                            <span>{familyCounts(item)}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </section>
-                    <section className="tileset-filter-group" aria-label="Collections">
-                      <h3>Collection</h3>
-                      {collectionFilters.map(([filter, label]) => (
-                        <button
-                          key={filter}
-                          type="button"
-                          className={`tileset-filter-option${selectedCollectionFilters.includes(filter) ? ' is-active' : ''}`}
-                          aria-pressed={selectedCollectionFilters.includes(filter)}
-                          onClick={() => toggleCollectionFilter(filter)}
-                        >
-                          <span className="tileset-filter-mark" aria-hidden="true" />
-                          <span className="tileset-filter-option-copy">
-                            <strong>{label}</strong>
-                            <span>{filter === 'base' ? 'terrain variants' : filter === 'transitions' ? 'edge socket tiles' : 'footprint guides'}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </section>
+              {category === 'tiles' ? (
+                <>
+                  <label className="tileset-catalog-search">
+                    <span>Search</span>
+                    <input
+                      type="search"
+                      value={catalogQuery}
+                      onChange={(event) => setCatalogQuery(event.target.value)}
+                      placeholder="label, source, socket..."
+                    />
+                  </label>
+                  <label className="tileset-catalog-zoom">
+                    <span>Zoom</span>
+                    <input
+                      type="range"
+                      min="0.75"
+                      max="2"
+                      step="0.05"
+                      value={zoom}
+                      onChange={(event) => setZoom(Number(event.target.value))}
+                    />
+                  </label>
+                  <div className="tileset-active-filters" aria-label="Active filters">
+                    {activeFamilies.map((item) => (
+                      <button key={item.id} type="button" onClick={() => toggleFamilyFilter(item.id)} title={`Remove ${item.label} filter`}>
+                        {item.label}
+                      </button>
+                    ))}
+                    {selectedCollectionFilters.map((filter) => (
+                      <button key={filter} type="button" onClick={() => toggleCollectionFilter(filter)} title={`Remove ${filter} filter`}>
+                        {collectionFilters.find(([id]) => id === filter)?.[1] ?? filter}
+                      </button>
+                    ))}
                   </div>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="tileset-view-action"
-                onClick={viewCurrentSelection}
-              >
-                View Selected
-              </button>
+                  <div className="tileset-filter-dropdown" ref={filterDropdownRef}>
+                    <button
+                      type="button"
+                      className={filterOpen ? 'is-active' : ''}
+                      onClick={() => setFilterOpen((value) => !value)}
+                      aria-expanded={filterOpen}
+                      aria-controls="tileset-filter-menu"
+                    >
+                      Filters
+                    </button>
+                    {filterOpen ? (
+                      <div id="tileset-filter-menu" className="tileset-filter-menu" role="dialog" aria-label="Tileset filters">
+                        <div className="tileset-filter-menu-header">
+                          <strong>Filters</strong>
+                          <span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedFamilyIds(studioFamilies.map((item) => item.id));
+                                setSelectedCollectionFilters(collectionFilters.map(([filter]) => filter));
+                              }}
+                            >
+                              Select all
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedFamilyIds([]);
+                                setSelectedCollectionFilters([]);
+                              }}
+                            >
+                              Clear
+                            </button>
+                          </span>
+                        </div>
+                        <section className="tileset-filter-group" aria-label="Tile families">
+                          <h3>Tile Family</h3>
+                          {studioFamilies.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={`tileset-filter-option${selectedFamilyIds.includes(item.id) ? ' is-active' : ''}`}
+                              aria-pressed={selectedFamilyIds.includes(item.id)}
+                              onClick={() => toggleFamilyFilter(item.id)}
+                            >
+                              <span className="tileset-filter-mark" aria-hidden="true" />
+                              <span className="tileset-filter-option-copy">
+                                <strong>{item.label}</strong>
+                                <span>{familyCounts(item)}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </section>
+                        <section className="tileset-filter-group" aria-label="Collections">
+                          <h3>Collection</h3>
+                          {collectionFilters.map(([filter, label]) => (
+                            <button
+                              key={filter}
+                              type="button"
+                              className={`tileset-filter-option${selectedCollectionFilters.includes(filter) ? ' is-active' : ''}`}
+                              aria-pressed={selectedCollectionFilters.includes(filter)}
+                              onClick={() => toggleCollectionFilter(filter)}
+                            >
+                              <span className="tileset-filter-mark" aria-hidden="true" />
+                              <span className="tileset-filter-option-copy">
+                                <strong>{label}</strong>
+                                <span>{filter === 'base' ? 'terrain variants' : filter === 'transitions' ? 'edge socket tiles' : 'footprint guides'}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </section>
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="tileset-view-action"
+                    onClick={viewCurrentSelection}
+                  >
+                    View Selected
+                  </button>
+                </>
+              ) : (
+                <p className="tileset-catalog-note">Select a unit card to place it in the shared lab board.</p>
+              )}
             </div>
           </section>
         </aside>
