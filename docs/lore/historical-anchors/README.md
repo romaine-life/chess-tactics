@@ -165,6 +165,22 @@ tended.
 Residues: empty railway platform, unreadable village memorial, repaired
 farmhouse, fields worked by those left behind, no battlefield.
 
+### Lijssenthoek / Remy Farm, World War I
+
+Fit: a small rural farm-and-rail landscape became a major medical threshold
+behind the Ypres front, useful because wounded people could arrive, be treated,
+be sent onward, or be buried there.
+
+Survival / aftereffect: ordinary care, records, transport, burial, nursing,
+washing, and farm-space adaptation continued beside the unseen war.
+
+Residues: farm roads, rail siding, white linen, canvas huts, water buckets,
+horse or mule, covered stretchers, grave rows at a distance, no active combat.
+
+Dedicated note: [`lijssenthoek-remy-farm-wwi.md`](lijssenthoek-remy-farm-wwi.md)
+
+Set candidate: **The Farm Behind The Line**
+
 ## Selection Rule
 
 Pick an anchor when it gives a set:

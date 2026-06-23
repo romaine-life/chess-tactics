@@ -289,6 +289,24 @@ Empire that "never ended," but only as a hidden interpretive pressure. Do not
 literalize PKD, the Black Iron Prison, stopped time, or gnostic imagery in the
 art.
 
+### Set 04 Candidate: The Farm Behind The Line
+
+**Historical anchor:** [Lijssenthoek / Remy Farm, World War I](lore/historical-anchors/lijssenthoek-remy-farm-wwi.md)
+
+**Status:** Locked candidate.
+
+**Hidden scenario:** a rural farm, hamlet, and railway siding behind the Ypres
+front have become a medical threshold: the wounded arrive, some are sent onward,
+some remain, and the fields keep growing around the work.
+
+**Emotional contradiction:** bright and sorrowful; useful and helpless; rural
+and industrial; ordinary care beside mass injury.
+
+This set should be visually brighter than the sanctuary set. It may use daylight,
+overcast green fields, white linen, wet clay, pale farm walls, and lamp-lit
+interiors. The war is never shown directly. No active combat, no centered guns,
+no battlefield spectacle, and no heroic military tableau.
+
 ## Candidate Scenario Bank
 
 These are not accepted sets yet. They are seeds for brainstorming.
