@@ -195,6 +195,14 @@ export function UnitStudio() {
       skipNextRouteWriteRef.current = false;
       return;
     }
+    if (studioMode === 'catalog') {
+      const nextHref = window.location.pathname;
+      const currentHref = `${window.location.pathname}${window.location.search}`;
+      if (nextHref !== currentHref) {
+        window.history.replaceState(null, '', nextHref);
+      }
+      return;
+    }
     const params = new URLSearchParams();
     params.set('unit', selectedUnit.id);
     params.set('piece', selectedUnit.family);
@@ -209,21 +217,13 @@ export function UnitStudio() {
   const selectUnit = (nextUnitId: string) => {
     const nextUnit = unitAssets.find((unit) => unit.id === nextUnitId);
     if (!nextUnit) return;
-    const params = new URLSearchParams({
-      family: 'grass',
-      mode: 'lab',
-      lab: 'unit',
-      collection: 'base',
-      asset: 'grass-clean-a',
-      pair: 'grass-stone',
-      board: 'generated',
-      scope: 'family',
-      size: 'small',
-      seed: '4217',
-      brush: 'unit',
-      unit: nextUnit.id,
-    });
-    navigateApp(`/tileset-studio?${params.toString()}`);
+    setUnitId(nextUnit.id);
+    setUnitScale(nextUnit.defaultScale);
+  };
+
+  const inspectUnit = (nextUnitId: string) => {
+    selectUnit(nextUnitId);
+    setStudioMode('view');
   };
 
   const selectDirection = (nextDirection: Direction) => {
@@ -339,9 +339,10 @@ export function UnitStudio() {
                       <button
                         key={unit.id}
                         type="button"
-                        className={`tileset-studio-card is-tile ${unit.id === selectedUnit.id ? 'is-selected' : ''}`}
+                        className={`tileset-studio-card is-unit ${unit.id === selectedUnit.id ? 'is-selected' : ''}`}
                         onClick={() => selectUnit(unit.id)}
-                        title={`Inspect ${unit.label}`}
+                        title={`Select ${unit.label}`}
+                        aria-pressed={unit.id === selectedUnit.id}
                       >
                         <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': catalogZoom } as CSSProperties}>
                           <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
@@ -370,7 +371,30 @@ export function UnitStudio() {
                                 }
                               }}
                             >
-                              +
+                              🖌
+                            </span>
+                            <span
+                              className="tileset-card-action"
+                              role="button"
+                              tabIndex={0}
+                              title={`Inspect ${unit.label}`}
+                              aria-label={`Inspect ${unit.label}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                inspectUnit(unit.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  inspectUnit(unit.id);
+                                }
+                              }}
+                            >
+                              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                                <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                                <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
                             </span>
                           </span>
                         </span>

@@ -901,15 +901,19 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
 
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (window.location.pathname !== '/tileset-studio') return;
-  const routeTileFilter =
-    route.studioMode === 'catalog'
-      ? route.tileFilter === 'board' ? studioDefaults.tileFilter : route.tileFilter
-      : route.tileFilter;
+  if (route.studioMode === 'catalog') {
+    const nextHref = window.location.pathname;
+    const currentHref = `${window.location.pathname}${window.location.search}`;
+    if (nextHref !== currentHref) {
+      window.history.replaceState({}, '', nextHref);
+    }
+    return;
+  }
   const params = new URLSearchParams();
   params.set('family', route.familyId);
   params.set('mode', route.studioMode);
   if (route.studioMode === 'lab') params.set('lab', route.labMode);
-  params.set('collection', routeTileFilter);
+  params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
   if (route.selectedSlotMask) params.set('slot', String(route.selectedSlotMask));
   params.set('pair', route.selectedPairId);
@@ -1646,7 +1650,17 @@ function StudioEditableBoard({
 
 // Units browser folded into the shared studio catalog. Unit data comes from
 // unitCatalog.ts so the catalog, lab brush, and standalone Unit Studio stay in sync.
-function UnitsStudio({ onInspect }: { onInspect: (unitId: string) => void }): ReactElement {
+function UnitsStudio({
+  selectedUnitId,
+  onSelect,
+  onInspect,
+  onArmBrush,
+}: {
+  selectedUnitId: string;
+  onSelect: (unitId: string) => void;
+  onInspect: (unitId: string) => void;
+  onArmBrush: (unitId: string) => void;
+}): ReactElement {
   return (
     <section className="tileset-studio-main">
       <div className="tileset-studio-toolbar">
@@ -1666,17 +1680,48 @@ function UnitsStudio({ onInspect }: { onInspect: (unitId: string) => void }): Re
                 <button
                   key={unit.id}
                   type="button"
-                  className="tileset-studio-card is-tile"
-                  onClick={() => onInspect(unit.id)}
-                  title={`Place ${unit.label} in the shared lab`}
+                  className={`tileset-studio-card is-unit ${unit.id === selectedUnitId ? 'is-selected' : ''}`}
+                  onClick={() => onSelect(unit.id)}
+                  title={`Select ${unit.label}`}
+                  aria-pressed={unit.id === selectedUnitId}
                 >
                   <span className="tileset-studio-card-image unit-card-image">
                     <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
                   </span>
                   <span className="tileset-studio-card-meta">
-                    <span className="tileset-studio-card-text">
+                    <span
+                      className="tileset-studio-card-text"
+                      onClick={(event) => { event.stopPropagation(); onSelect(unit.id); }}
+                    >
                       <strong>{unit.label}</strong>
                       <em>{unit.badge}</em>
+                    </span>
+                    <span className="tileset-card-actions">
+                      <span
+                        className="tileset-card-action"
+                        role="button"
+                        tabIndex={0}
+                        title={`Place ${unit.label} on the current board`}
+                        aria-label={`Place ${unit.label}`}
+                        onClick={(event) => { event.stopPropagation(); onArmBrush(unit.id); }}
+                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onArmBrush(unit.id); } }}
+                      >
+                        🖌
+                      </span>
+                      <span
+                        className="tileset-card-action"
+                        role="button"
+                        tabIndex={0}
+                        title={`Inspect ${unit.label} in the lab`}
+                        aria-label={`Inspect ${unit.label}`}
+                        onClick={(event) => { event.stopPropagation(); onInspect(unit.id); }}
+                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onInspect(unit.id); } }}
+                      >
+                        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                          <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                          <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
                     </span>
                   </span>
                 </button>
@@ -2858,6 +2903,40 @@ export function TilesetStudio(): ReactElement {
     }
     openBoardLab();
   };
+  const selectUnitInCatalog = (unitId: string): void => {
+    setUnitBrushId(unitId);
+  };
+  const placeUnitOnLoadedBoard = (unitId: string): void => {
+    const occupiedTileKeys = Object.keys(boardCells);
+    const [x, y] = selectedCell
+      ? [selectedCell.x, selectedCell.y]
+      : occupiedTileKeys.length > 0
+        ? (() => {
+            const positions = occupiedTileKeys.map((key) => key.split(',').map(Number) as [number, number]);
+            const xs = positions.map(([cellX]) => cellX);
+            const ys = positions.map(([, cellY]) => cellY);
+            return [Math.round((Math.min(...xs) + Math.max(...xs)) / 2), Math.round((Math.min(...ys) + Math.max(...ys)) / 2)];
+          })()
+        : [Math.floor(editableGrid.columns / 2), Math.floor(editableGrid.rows / 2)];
+    setUnitBrushId(unitId);
+    setBrushKind('unit');
+    setTool('select');
+    setBoardUnits((prev) => ({
+      ...prev,
+      [`${x},${y}`]: {
+        unitId,
+        direction: unitBrushDirection,
+        faction: unitBrushFaction,
+      },
+    }));
+    setSelectedCell({ x, y });
+    setLabMode('unit');
+    setViewHasTarget(true);
+    setStudioMode('lab');
+  };
+  const inspectUnitInLab = (unitId: string): void => {
+    placeUnitOnLoadedBoard(unitId);
+  };
   const openTileLab = (): void => {
     if (!hasLabTiles) return;
     setLabMode('tile');
@@ -2902,12 +2981,10 @@ export function TilesetStudio(): ReactElement {
         <>
         {category === 'units' ? (
           <UnitsStudio
-            onInspect={(unitId) => {
-              setUnitBrushId(unitId);
-              setBrushKind('unit');
-              setTool('brush');
-              openBoardLab();
-            }}
+            selectedUnitId={unitBrushAsset.id}
+            onSelect={selectUnitInCatalog}
+            onInspect={inspectUnitInLab}
+            onArmBrush={placeUnitOnLoadedBoard}
           />
         ) : (
           <section className="tileset-studio-main">
