@@ -15,6 +15,9 @@ const terrainToFamily: Record<TerrainType, TileFamilyId> = {
   cliff: 'stone',
   rock: 'stone',
   water: 'water',
+  dirt: 'dirt',
+  pebble: 'pebble',
+  sand: 'sand',
 };
 
 describe('createSkirmish', () => {

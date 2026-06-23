@@ -18,6 +18,9 @@ const TERRAIN_INFO: Record<TerrainType, { label: string; blurb: string }> = {
   water: { label: 'Water', blurb: 'Open water — impassable to land units.' },
   cliff: { label: 'Cliff', blurb: 'A sheer rock face — impassable.' },
   rock: { label: 'Rocky Ground', blurb: 'Broken, impassable ground.' },
+  dirt: { label: 'Dirt', blurb: 'Bare earth. No special effect.' },
+  pebble: { label: 'Pebbles', blurb: 'Loose stone ground. No special effect.' },
+  sand: { label: 'Sand', blurb: 'Soft sandy ground. No special effect.' },
 };
 
 export function Skirmish() {

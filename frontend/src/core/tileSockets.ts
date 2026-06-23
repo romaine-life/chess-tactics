@@ -1,4 +1,4 @@
-export type TileFamilyId = 'grass' | 'stone' | 'water';
+export type TileFamilyId = 'grass' | 'stone' | 'water' | 'dirt' | 'pebble' | 'sand';
 export type TerrainPairId = 'grass-stone' | 'grass-water' | 'stone-water';
 export type EdgeName = 'north' | 'east' | 'south' | 'west';
 export type TileAssetKind = 'tile' | 'reference';
@@ -36,8 +36,14 @@ export const terrainLabels: Record<TileFamilyId, string> = {
   grass: 'Grass',
   stone: 'Stone',
   water: 'Water',
+  dirt: 'Dirt',
+  pebble: 'Pebble',
+  sand: 'Sand',
 };
 
+// The transition socket model is retained for the tile studio, but the shipped tileset
+// has no transition tiles — so on the board every boundary is a HARD EDGE (the solver
+// falls back to each cell's own family base; see solveSocketBoard).
 export const transitionPairs: TransitionPair[] = [
   { id: 'grass-stone', label: 'Grass-Stone', terrains: ['grass', 'stone'] },
   { id: 'grass-water', label: 'Grass-Water', terrains: ['grass', 'water'] },

@@ -807,6 +807,9 @@ const studioFamilyAssets: Record<StudioFamilyId, readonly StudioAsset[]> = {
   grass: studioFamilies.find((family) => family.id === 'grass')?.assets ?? [],
   stone: studioFamilies.find((family) => family.id === 'stone')?.assets ?? [],
   water: studioFamilies.find((family) => family.id === 'water')?.assets ?? [],
+  dirt: studioFamilies.find((family) => family.id === 'dirt')?.assets ?? [],
+  pebble: studioFamilies.find((family) => family.id === 'pebble')?.assets ?? [],
+  sand: studioFamilies.find((family) => family.id === 'sand')?.assets ?? [],
 };
 
 const familyCounts = (family: StudioFamily): string => {
@@ -1812,11 +1815,14 @@ function UnitsStudio({ studioMode, onInspect, onBack }: { studioMode: StudioMode
 }
 
 type LevelBrush = TileFamilyId | 'erase';
-const levelTerrainOrder: TileFamilyId[] = ['grass', 'stone', 'water'];
+const levelTerrainOrder: TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
 const levelFamilySwatch: Record<TileFamilyId, string> = {
   grass: '#5b8c3a',
   stone: '#8c8c95',
   water: '#3a6ea5',
+  dirt: '#6b513a',
+  pebble: '#7d7a70',
+  sand: '#b8a06a',
 };
 const levelSizes = {
   small: { cols: 10, rows: 8 },

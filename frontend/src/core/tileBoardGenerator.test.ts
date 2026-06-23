@@ -20,6 +20,9 @@ const familyAssets: Record<TileFamilyId, TileSocketAsset[]> = {
   grass: [grass],
   stone: [stone],
   water: [water],
+  dirt: [],
+  pebble: [],
+  sand: [],
 };
 
 describe('generateSocketBoard', () => {
@@ -37,11 +40,12 @@ describe('generateSocketBoard', () => {
     expect(board.stats.missingPlacements).toBeGreaterThanOrEqual(0);
   });
 
-  it('uses missing cells instead of illegal fallback tiles for unsatisfied constraints', () => {
+  it('falls back to the cell family base at hard edges instead of leaving gaps', () => {
+    // No transition tiles in the catalog: a grass/stone boundary has no socket-legal tile,
+    // so each cell falls back to its own family base (a hard edge) rather than a missing gap.
     const board = generateSocketBoard({ assets: [grass, stone], seed: 5, columns: 6, rows: 4, familyAssets });
-    expect(board.stats.illegalEdges).toBe(0);
-    expect(board.stats.missingPlacements).toBeGreaterThan(0);
-    expect(board.cells.some((cell) => cell.missing?.kind === 'missing-art')).toBe(true);
+    expect(board.stats.missingPlacements).toBe(0);
+    expect(board.cells.every((cell) => cell.asset)).toBe(true);
   });
 
   it('counts illegal edges in explicit cell lists', () => {

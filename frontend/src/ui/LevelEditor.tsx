@@ -8,8 +8,8 @@ import { saveLevel, loadLevel, listLevels, type LevelSummary } from '../net/leve
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 
 const ASSET_ROOT = '/assets/ui/level-editor';
-const TERRAINS: TerrainType[] = ['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock'];
-const SWATCH: Record<TerrainType, string> = { grass: '#356a42', water: '#2f5d86', stone: '#6b6f76', road: '#a9905f', bridge: '#7a5a36', cliff: '#3a3f46', rock: '#595e66' };
+const TERRAINS: TerrainType[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water', 'road', 'bridge', 'cliff', 'rock'];
+const SWATCH: Record<TerrainType, string> = { grass: '#356a42', water: '#2f5d86', stone: '#6b6f76', road: '#a9905f', bridge: '#7a5a36', cliff: '#3a3f46', rock: '#595e66', dirt: '#6b513a', pebble: '#7d7a70', sand: '#b8a06a' };
 const UNITS: PieceType[] = [...PLAYABLE_PIECE_TYPES];
 const SIDES: Side[] = ['player', 'enemy'];
 const EDITOR_TABS: { key: string; id: EditorTool; label: string; icon: string; disabled?: boolean }[] = [
