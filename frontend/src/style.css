@@ -8865,7 +8865,8 @@ h1 {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.tileset-studio-shell.is-view {
+.tileset-studio-shell.is-view,
+.tileset-studio-shell.is-lab {
   grid-template-columns: minmax(0, 1fr);
 }
 

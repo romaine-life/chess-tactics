@@ -202,10 +202,21 @@ export function UnitStudio() {
   const selectUnit = (nextUnitId: string) => {
     const nextUnit = unitAssets.find((unit) => unit.id === nextUnitId);
     if (!nextUnit) return;
-    setUnitId(nextUnitId);
-    if (!nextUnit.directions?.includes(direction)) setDirection('south');
-    setUnitScale(nextUnit.defaultScale);
-    setStudioMode('view');
+    const params = new URLSearchParams({
+      family: 'grass',
+      mode: 'lab',
+      lab: 'unit',
+      collection: 'base',
+      asset: 'grass-clean-a',
+      pair: 'grass-stone',
+      board: 'generated',
+      scope: 'family',
+      size: 'small',
+      seed: '4217',
+      brush: 'unit',
+      unit: nextUnit.id,
+    });
+    navigateApp(`/tileset-studio?${params.toString()}`);
   };
 
   const selectDirection = (nextDirection: Direction) => {
@@ -241,8 +252,9 @@ export function UnitStudio() {
   const openBoardLab = (unitToPlace = selectedUnit.id) => {
     const params = new URLSearchParams();
     params.set('family', 'grass');
-    params.set('mode', 'view');
-    params.set('collection', 'board');
+    params.set('mode', 'lab');
+    params.set('lab', 'unit');
+    params.set('collection', 'base');
     params.set('asset', 'grass-clean-a');
     params.set('pair', 'grass-stone');
     params.set('board', 'generated');

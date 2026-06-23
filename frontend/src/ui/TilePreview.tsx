@@ -308,7 +308,7 @@ const beforeTileAssets: Record<ConceptTerrain, string[]> = {
 
 type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
-type StudioMode = 'catalog' | 'view';
+type StudioMode = 'catalog' | 'lab';
 type TileFilter = 'base' | 'transitions' | 'references' | 'board';
 type LabMode = 'board' | 'tile' | 'unit';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
@@ -343,6 +343,7 @@ interface StudioFamily {
 interface TilesetStudioRouteState {
   familyId: StudioFamilyId;
   studioMode: StudioMode;
+  labMode: LabMode;
   tileFilter: TileFilter;
   selectedPairId: TerrainPairId;
   selectedAssetId?: string;
@@ -368,6 +369,7 @@ type BoardUnitPlacement = {
 const studioDefaults: TilesetStudioRouteState = {
   familyId: 'grass',
   studioMode: 'catalog',
+  labMode: 'board',
   tileFilter: 'base',
   selectedPairId: 'grass-stone',
   boardMode: 'generated',
@@ -849,7 +851,8 @@ const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
 
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
-const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'view';
+const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab';
+const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
 
@@ -860,6 +863,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const params = new URLSearchParams(window.location.search);
   const family = params.get('family');
   const mode = params.get('mode');
+  const lab = params.get('lab');
   const view = params.get('view');
   const collection = params.get('collection');
   const pair = params.get('pair');
@@ -867,12 +871,24 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const unit = params.get('unit');
   const slot = Number(params.get('slot'));
   const seed = Number(params.get('seed'));
-  const studioMode = isStudioMode(mode) ? mode : studioDefaults.studioMode;
+  const studioMode = isStudioMode(mode) ? mode : mode === 'view' ? 'lab' : studioDefaults.studioMode;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
+  const explicitLabMode = isLabMode(lab) ? lab : undefined;
+  const brushKind = params.get('brush') === 'unit' || explicitLabMode === 'unit' ? 'unit' : studioDefaults.brushKind;
+  const routeLabMode = explicitLabMode ?? (routeTileFilter === 'board' ? 'board' : brushKind === 'unit' ? 'unit' : 'tile');
+  const effectiveTileFilter =
+    studioMode === 'catalog'
+      ? routeTileFilter === 'board' ? studioDefaults.tileFilter : routeTileFilter
+      : routeLabMode === 'board'
+        ? 'board'
+        : routeTileFilter === 'board'
+          ? studioDefaults.tileFilter
+          : routeTileFilter;
   return {
     familyId: isStudioFamilyId(family) ? family : studioDefaults.familyId,
     studioMode,
-    tileFilter: studioMode === 'catalog' && routeTileFilter === 'board' ? studioDefaults.tileFilter : routeTileFilter,
+    labMode: routeLabMode,
+    tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
     selectedAssetId: asset || undefined,
     selectedSlotMask: Number.isInteger(slot) && slot >= 1 && slot <= 14 ? slot : undefined,
@@ -880,17 +896,25 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     boardScope: params.get('scope') === 'mixed' ? 'mixed' : studioDefaults.boardScope,
     boardSize: params.get('size') === 'wide' ? 'wide' : studioDefaults.boardSize,
     boardSeed: Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : studioDefaults.boardSeed,
-    brushKind: params.get('brush') === 'unit' ? 'unit' : studioDefaults.brushKind,
+    brushKind,
     selectedUnitId: isUnitAssetId(unit) ? unit : undefined,
   };
 };
 
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (window.location.pathname !== '/tileset-studio') return;
-  const routeTileFilter = route.studioMode === 'catalog' && route.tileFilter === 'board' ? studioDefaults.tileFilter : route.tileFilter;
+  const routeTileFilter =
+    route.studioMode === 'catalog'
+      ? route.tileFilter === 'board' ? studioDefaults.tileFilter : route.tileFilter
+      : route.labMode === 'board'
+        ? 'board'
+        : route.tileFilter === 'board'
+          ? studioDefaults.tileFilter
+          : route.tileFilter;
   const params = new URLSearchParams();
   params.set('family', route.familyId);
   params.set('mode', route.studioMode);
+  if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', routeTileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
   if (route.selectedSlotMask) params.set('slot', String(route.selectedSlotMask));
@@ -2429,9 +2453,7 @@ export function TilesetStudio(): ReactElement {
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
   const [category, setCategory] = useState<'tiles' | 'units'>('tiles');
-  const [labMode, setLabMode] = useState<LabMode>(
-    initialRoute.tileFilter === 'board' ? 'board' : initialRoute.brushKind === 'unit' ? 'unit' : 'tile',
-  );
+  const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>([initialRoute.familyId]);
@@ -2622,7 +2644,7 @@ export function TilesetStudio(): ReactElement {
   const editableGrid = viewKind === 'board' ? { columns: generatedBoardSize.columns, rows: generatedBoardSize.rows } : { columns: 8, rows: 6 };
   // Re-seed the editable board whenever the *loaded view* changes (a new tile,
   // transition, or a freshly generated board). Painting then mutates the seed.
-  const boardSeedKey = `${viewKind}|${selectedAsset.id}|${selectedSlotMask ?? ''}|${boardMode}|${boardSeed}|${boardSize}|${boardScope}|${transitionViewMode}`;
+  const boardSeedKey = `${viewKind}|${selectedAsset.id}|${selectedSlotMask ?? ''}|${boardMode}|${boardSeed}|${boardSize}|${boardScope}|${transitionViewMode}|${labMode}|${unitBrushAsset.id}`;
   const focusedViewBoardRef = useRef(focusedViewBoard);
   focusedViewBoardRef.current = focusedViewBoard;
   const editableGridRef = useRef(editableGrid);
@@ -2647,7 +2669,24 @@ export function TilesetStudio(): ReactElement {
     for (const cell of placed) {
       if (cell.asset) seeded[`${cell.x + offX},${cell.y + offY}`] = cell.asset.id;
     }
+    const seededUnits: Record<string, BoardUnitPlacement> = {};
+    if (labMode === 'unit' && placed.length) {
+      const xs = placed.map((cell) => cell.x + offX);
+      const ys = placed.map((cell) => cell.y + offY);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const x = Math.round((minX + maxX) / 2);
+      const y = Math.round((minY + maxY) / 2);
+      seededUnits[`${x},${y}`] = {
+        unitId: unitBrushAsset.id,
+        direction: unitBrushDirection,
+        faction: unitBrushFaction,
+      };
+    }
     setBoardCells(seeded);
+    if (viewKind !== 'board' || labMode === 'unit') setBoardUnits(seededUnits);
     setSelectedCell(null);
     if (selectedAsset.kind === 'tile') setBrushId(selectedAsset.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2751,7 +2790,7 @@ export function TilesetStudio(): ReactElement {
       setStudioMode(route.studioMode);
       setViewHasTarget(Boolean(route.selectedAssetId || route.selectedSlotMask || route.tileFilter === 'board'));
       setTileFilter(route.tileFilter);
-      setLabMode(route.tileFilter === 'board' ? 'board' : route.brushKind === 'unit' ? 'unit' : 'tile');
+      setLabMode(route.labMode);
       if (route.tileFilter !== 'board') setSelectedCollectionFilters([route.tileFilter]);
       setSelectedPairId(route.selectedPairId);
       setSelectedAssetId(route.selectedAssetId ?? routeFamily.assets[0].id);
@@ -2842,6 +2881,7 @@ export function TilesetStudio(): ReactElement {
     writeTilesetStudioRoute({
       familyId,
       studioMode,
+      labMode,
       tileFilter,
       selectedPairId,
       selectedAssetId: viewHasTarget ? selectedAsset.id : undefined,
@@ -2853,7 +2893,7 @@ export function TilesetStudio(): ReactElement {
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, familyId, selectedAsset.id, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, familyId, labMode, selectedAsset.id, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   const zoomTilesWithWheel = (event: WheelEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -2896,7 +2936,7 @@ export function TilesetStudio(): ReactElement {
     setTileFilter('board');
     setSelectedSlotMask(undefined);
     setViewHasTarget(true);
-    setStudioMode('view');
+    setStudioMode('lab');
   };
 
   const inspectAsset = (asset: StudioAsset) => {
@@ -2913,7 +2953,7 @@ export function TilesetStudio(): ReactElement {
     }
     setLabMode('tile');
     setViewHasTarget(true);
-    setStudioMode('view');
+    setStudioMode('lab');
   };
 
   // Catalog paintbrush: arm a tile as the brush and drop onto the CURRENT board
@@ -2924,7 +2964,7 @@ export function TilesetStudio(): ReactElement {
     setBrushKind('tile');
     setTool('brush');
     setLabMode('board');
-    setStudioMode('view');
+    setStudioMode('lab');
   };
 
   const inspectSlot = (pair: TransitionPair, slot: TransitionSlot<StudioAsset>) => {
@@ -2934,7 +2974,7 @@ export function TilesetStudio(): ReactElement {
     setTransitionViewMode(slot.assets[0] ? 'tile' : 'proof');
     setLabMode('tile');
     setViewHasTarget(true);
-    setStudioMode('view');
+    setStudioMode('lab');
   };
 
   const selectOrInspectAsset = (asset: StudioAsset) => {
@@ -2962,7 +3002,7 @@ export function TilesetStudio(): ReactElement {
       setSelectedSlotMask(undefined);
     }
     setViewHasTarget(true);
-    setStudioMode('view');
+    setStudioMode('lab');
   };
 
   const moveReviewSelection = (direction: -1 | 1) => {
@@ -2990,13 +3030,17 @@ export function TilesetStudio(): ReactElement {
   }, [reviewItems, selectedReviewIndex]);
 
   const viewTitle =
-    viewKind === 'board'
+    labMode === 'unit'
+      ? unitBrushAsset.label
+      : viewKind === 'board'
       ? 'Board View'
       : viewKind === 'transition'
         ? viewTransitionAsset?.label ?? `Missing ${viewTransitionPair?.label ?? 'Transition'} ${viewTransitionSlot?.label ?? ''}`
         : selectedAsset.label;
   const viewSubtitle =
-    viewKind === 'board'
+    labMode === 'unit'
+      ? `${unitBrushAsset.family} unit · ${selectedAsset.label} tile`
+      : viewKind === 'board'
       ? `${boardScope === 'family' ? selectedFamilyLabel : 'Mixed terrain'} · seed ${boardSeed}`
       : viewKind === 'transition'
         ? `${viewTransitionPair?.label ?? 'Transition'} · mask ${viewTransitionSlot?.code ?? selectedAsset.socketMask ?? ''}`
@@ -3033,18 +3077,18 @@ export function TilesetStudio(): ReactElement {
       openBoardLab();
       return;
     }
-    setStudioMode('view');
+    setStudioMode('lab');
   };
   const openTileLab = (): void => {
     if (!hasLabTiles) return;
     setLabMode('tile');
-    setStudioMode('view');
+    setStudioMode('lab');
   };
   const openUnitLab = (): void => {
     if (!hasLabUnits) return;
     setLabMode('unit');
     setBrushKind('unit');
-    setStudioMode('view');
+    setStudioMode('lab');
   };
 
   return (
@@ -3066,7 +3110,7 @@ export function TilesetStudio(): ReactElement {
             <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse asset catalogs.">
               Catalog
             </button>
-            <button type="button" className={studioMode === 'view' ? 'is-active' : ''} onClick={openLabMode} title="Open the shared board lab.">
+            <button type="button" className={studioMode === 'lab' ? 'is-active' : ''} onClick={openLabMode} title="Open the shared board lab.">
               Lab
             </button>
           </span>
@@ -3098,7 +3142,7 @@ export function TilesetStudio(): ReactElement {
 
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''}`} aria-label="Tileset browser">
         {category === 'units' ? (
-          <UnitsStudio studioMode={studioMode} onInspect={() => setStudioMode('view')} onBack={() => setStudioMode('catalog')} />
+          <UnitsStudio studioMode={studioMode} onInspect={() => setStudioMode('lab')} onBack={() => setStudioMode('catalog')} />
         ) : studioMode === 'catalog' ? (
         <section className="tileset-studio-main">
           <div className="tileset-studio-toolbar">
@@ -3302,7 +3346,7 @@ export function TilesetStudio(): ReactElement {
                 Back to Catalog
               </button>
               <div>
-                <p className="tileset-studio-kicker">{viewKind === 'board' ? 'Board' : viewKind === 'transition' && transitionViewMode !== 'tile' ? 'Transition Showcase' : 'Tile'}</p>
+                <p className="tileset-studio-kicker">{labMode === 'unit' ? 'Unit' : viewKind === 'board' ? 'Board' : viewKind === 'transition' && transitionViewMode !== 'tile' ? 'Transition Showcase' : 'Tile'}</p>
                 <h2>{viewTitle}</h2>
                 <p>{viewSubtitle}</p>
               </div>
@@ -3590,7 +3634,15 @@ export function TilesetStudio(): ReactElement {
 
               <section className="tileset-inspector-section" aria-label="Selected item details">
                 <h2>Details</h2>
-                {viewTransitionSlot ? (
+                {labMode === 'unit' ? (
+                  <dl>
+                    <InspectorRow label="Unit">{unitBrushAsset.label}</InspectorRow>
+                    <InspectorRow label="Piece">{unitBrushAsset.family}</InspectorRow>
+                    <InspectorRow label="Status">{unitBrushAsset.status}</InspectorRow>
+                    <InspectorRow label="Footprint">{unitBrushAsset.footprint.shape}</InspectorRow>
+                    <InspectorRow label="Ground">{selectedAsset.label}</InspectorRow>
+                  </dl>
+                ) : viewTransitionSlot ? (
                   <dl>
                     <InspectorRow label="Tile Type">{viewTransitionAsset ? 'Transition tile' : 'Missing art'}</InspectorRow>
                     {viewTransitionAsset ? (
@@ -3623,7 +3675,7 @@ export function TilesetStudio(): ReactElement {
                     </InspectorRow>
                   </dl>
                 )}
-                <p>{viewTransitionSlot ? viewTransitionAsset?.notes ?? 'This transition slot is required but has no production tile assigned yet.' : selectedAsset.notes}</p>
+                <p>{labMode === 'unit' ? unitBrushAsset.read : viewTransitionSlot ? viewTransitionAsset?.notes ?? 'This transition slot is required but has no production tile assigned yet.' : selectedAsset.notes}</p>
               </section>
             </aside>
               </>
