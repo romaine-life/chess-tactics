@@ -127,7 +127,10 @@ elif MODE == "pebble":
         bpy.ops.object.join()
     pob = bpy.context.view_layer.objects.active; bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     c = np.array([v.co for v in pob.data.vertices]); dims = c.max(0) - c.min(0)
-    s = 0.95 / max(dims[0], dims[1]); pob.scale = (s, s, s); bpy.ops.object.transform_apply(scale=True)
+    # Fit the pebble field WITHIN the 0.5-wide block top so it doesn't overhang the tile
+    # edges. At 0.95 the field spilled ~43px past the tile on every side and hung out over
+    # the void at board edges. 0.48 keeps every pebble inside the contact diamond.
+    s = 0.48 / max(dims[0], dims[1]); pob.scale = (s, s, s); bpy.ops.object.transform_apply(scale=True)
     c = np.array([v.co for v in pob.data.vertices]); pob.location = (-(c[:, 0].min() + c[:, 0].max()) / 2, -(c[:, 1].min() + c[:, 1].max()) / 2, -c[:, 2].min()); bpy.ops.object.transform_apply(location=True)
     bpy.ops.object.shade_smooth()
 
