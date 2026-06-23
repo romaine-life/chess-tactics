@@ -154,6 +154,10 @@ agricultural recovery.
 Residues: frost on crops, dim sky, covered plants, empty road, tiny figure in
 wrong-season weather.
 
+Dedicated note: [`year-without-a-summer-1816.md`](year-without-a-summer-1816.md)
+
+Set candidate: **The Summer That Failed**
+
 ### World War I Home Front / Rural Europe, 1914-1918
 
 Fit: tragedy absent from the frame if focused on villages, fields, memorials,
