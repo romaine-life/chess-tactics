@@ -20,6 +20,7 @@ type UnitPlacementStyle = CSSProperties & {
   '--unit-anchor-y': string;
   '--unit-size': string;
   '--unit-footprint-size': string;
+  '--stack-shift-y': string;
 };
 
 type UnitAsset = {
@@ -79,7 +80,7 @@ const KING_CROWN_CONTACT_ANCHOR_X = '50%';
 const KING_CROWN_CONTACT_ANCHOR_Y = '80.241%';
 // Bishop + mitre — mitre hand-fitted on the head; same computed-anchor calibration.
 const BISHOP_MITRE_CANVAS_PX = 512;
-const BISHOP_MITRE_CONTACT_FOOTPRINT_PX = 158;
+const BISHOP_MITRE_CONTACT_FOOTPRINT_PX = 126;
 const BISHOP_MITRE_CONTACT_ANCHOR_X = '50%';
 const BISHOP_MITRE_CONTACT_ANCHOR_Y = '80.241%';
 // Queen + tiara — jeweled tiara hand-fitted on the head; same computed-anchor calibration.
@@ -366,6 +367,14 @@ export function UnitStudio() {
     if (!query) return true;
     return [unit.label, unit.badge, unit.read, unit.status, unit.family].join(' ').toLowerCase().includes(query);
   });
+  // Center the view on the UNIT, not the tile block. The contact point sits
+  // TILE_ANCHOR_Y px below the tile-stack top and the unit extends anchorFrac*size
+  // above it, so a tall unit (e.g. the bishop's mitre) overruns the frame top. Shift
+  // the whole stack down so the unit's vertical midpoint lands at the frame center.
+  const TILE_ANCHOR_Y = 54; // px — matches CSS --tile-anchor-y
+  const STACK_HEIGHT = 280; // px — matches .unit-studio-tile-stack height
+  const unitAnchorFrac = (parseFloat(selectedUnit.unitAnchorY ?? '80') || 80) / 100;
+  const stackShiftY = Math.round((STACK_HEIGHT / 2 - TILE_ANCHOR_Y) + (unitAnchorFrac - 0.5) * unitRenderSize);
   const unitPlacementStyle: UnitPlacementStyle = {
     '--tile-anchor-x': '50%',
     '--tile-anchor-y': '54px',
@@ -373,6 +382,7 @@ export function UnitStudio() {
     '--unit-anchor-y': selectedUnit.unitAnchorY ?? '92%',
     '--unit-size': `${unitRenderSize}px`,
     '--unit-footprint-size': `${unitFootprintSize}px`,
+    '--stack-shift-y': `${stackShiftY}px`,
   };
 
   useEffect(() => {
