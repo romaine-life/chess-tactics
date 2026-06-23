@@ -285,23 +285,13 @@ export function UnitStudio() {
           </div>
         </div>
         <nav className="tileset-studio-actions" aria-label="Unit studio navigation">
-          <span className="tileset-mode-tabs" aria-label="Asset category">
-            <button type="button" onClick={() => navigateApp('/tileset-studio')} title="Browse terrain tiles.">
-              Tiles
+          <span className="tileset-mode-tabs" aria-label="Workspace mode">
+            <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={() => setStudioMode('catalog')} title="Browse unit catalogs.">
+              Catalog
             </button>
-            <button type="button" className="is-active" onClick={() => setStudioMode('catalog')} title="Browse chess-piece units.">
-              Units
+            <button type="button" className={studioMode === 'view' ? 'is-active' : ''} onClick={() => openBoardLab()} title="Open the shared lab with this unit placed.">
+              Lab
             </button>
-            <button type="button" onClick={() => openBoardLab()} title="Open the shared terrain and unit board lab.">
-              Board Lab
-            </button>
-          </span>
-          <span className="tileset-mode-tabs" aria-label="Unit studio mode">
-            {(['catalog', 'view'] as UnitStudioMode[]).map((mode) => (
-              <button key={mode} type="button" className={studioMode === mode ? 'is-active' : ''} onClick={() => setStudioMode(mode)}>
-                {mode === 'catalog' ? 'Catalog' : 'View'}
-              </button>
-            ))}
           </span>
           <a href="/settings">Settings</a>
         </nav>
@@ -316,6 +306,14 @@ export function UnitStudio() {
                   <h2>Unit Catalog</h2>
                   <p className="tileset-filter-summary">{filteredUnits.length} units · {activeFamilyLabel} · {activeCollectionLabel}</p>
                 </div>
+                <span className="tileset-mode-tabs tileset-context-tabs" aria-label="Catalog asset type">
+                  <button type="button" onClick={() => navigateApp('/tileset-studio')} title="Browse terrain tiles.">
+                    Tiles
+                  </button>
+                  <button type="button" className="is-active" onClick={() => setStudioMode('catalog')} title="Browse chess-piece units.">
+                    Units
+                  </button>
+                </span>
                 <label className="tileset-catalog-search">
                   <span>Search</span>
                   <input

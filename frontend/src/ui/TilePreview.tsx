@@ -2829,11 +2829,7 @@ export function TilesetStudio(): ReactElement {
       ? category === 'units'
         ? 'Units'
         : selectedFamilyLabel
-      : labMode === 'board'
-        ? 'Board Lab'
-        : labMode === 'unit'
-          ? 'Unit Lab'
-          : 'Tile Lab';
+      : 'Lab';
   const headerSubtitle =
     studioMode === 'catalog'
       ? category === 'units'
@@ -2890,40 +2886,6 @@ export function TilesetStudio(): ReactElement {
               Lab
             </button>
           </span>
-          <span className="tileset-mode-tabs" aria-label="Catalog type">
-            <button
-              type="button"
-              className={(studioMode === 'catalog' && category === 'tiles') || (studioMode === 'lab' && labMode === 'tile') ? 'is-active' : ''}
-              onClick={() => {
-                if (studioMode === 'lab') {
-                  openTileLab();
-                  return;
-                }
-                setCategory('tiles');
-                openCatalogMode();
-              }}
-              disabled={studioMode === 'lab' && !hasLabTiles}
-              title={studioMode === 'lab' ? (hasLabTiles ? 'Inspect the selected tile.' : 'Place or select a tile first.') : 'Browse terrain tiles.'}
-            >
-              Tiles
-            </button>
-            <button
-              type="button"
-              className={(studioMode === 'catalog' && category === 'units') || (studioMode === 'lab' && labMode === 'unit') ? 'is-active' : ''}
-              onClick={() => {
-                if (studioMode === 'lab') {
-                  openUnitLab();
-                  return;
-                }
-                setCategory('units');
-                openCatalogMode();
-              }}
-              disabled={studioMode === 'lab' && !hasLabUnits}
-              title={studioMode === 'lab' ? (hasLabUnits ? 'Inspect the selected unit.' : 'Place or select a unit first.') : 'Browse chess-piece units.'}
-            >
-              Units
-            </button>
-          </span>
           <a href="/settings">Settings</a>
         </nav>
       </header>
@@ -2948,6 +2910,24 @@ export function TilesetStudio(): ReactElement {
                   {visibleCatalogCount} assets · {selectedCollectionLabel}
                 </p>
               </div>
+              <span className="tileset-mode-tabs tileset-context-tabs" aria-label="Catalog asset type">
+                <button
+                  type="button"
+                  className={category === 'tiles' ? 'is-active' : ''}
+                  onClick={() => setCategory('tiles')}
+                  title="Browse terrain tiles."
+                >
+                  Tiles
+                </button>
+                <button
+                  type="button"
+                  className={category === 'units' ? 'is-active' : ''}
+                  onClick={() => setCategory('units')}
+                  title="Browse chess-piece units."
+                >
+                  Units
+                </button>
+              </span>
               <label className="tileset-catalog-search">
                 <span>Search</span>
                 <input
@@ -3145,6 +3125,34 @@ export function TilesetStudio(): ReactElement {
                 <h2>{viewTitle}</h2>
                 <p>{viewSubtitle}</p>
               </div>
+              <span className="tileset-mode-tabs tileset-context-tabs tileset-lab-tabs" aria-label="Lab view">
+                <button
+                  type="button"
+                  className={labMode === 'board' ? 'is-active' : ''}
+                  onClick={openBoardLab}
+                  title="Inspect and edit the loaded board."
+                >
+                  Board
+                </button>
+                <button
+                  type="button"
+                  className={labMode === 'tile' ? 'is-active' : ''}
+                  onClick={openTileLab}
+                  disabled={!hasLabTiles}
+                  title={hasLabTiles ? 'Inspect the selected tile on the loaded board.' : 'Place or select a tile first.'}
+                >
+                  Tile
+                </button>
+                <button
+                  type="button"
+                  className={labMode === 'unit' ? 'is-active' : ''}
+                  onClick={openUnitLab}
+                  disabled={!hasLabUnits}
+                  title={hasLabUnits ? 'Inspect the selected unit on the loaded board.' : 'Place or select a unit first.'}
+                >
+                  Unit
+                </button>
+              </span>
             </div>
 
             {!viewHasTarget ? (

@@ -8957,6 +8957,15 @@ h1 {
   cursor: not-allowed;
 }
 
+.tileset-context-tabs {
+  flex: none;
+  align-self: center;
+}
+
+.tileset-lab-tabs {
+  margin-left: auto;
+}
+
 .tileset-studio-shell {
   align-self: stretch;
   display: grid;
