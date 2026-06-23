@@ -67,7 +67,7 @@ const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanva
 });
 
 const ROOK_BLENDER_V4_CANVAS_PX = 512;
-const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 334;
+const ROOK_BLENDER_V4_CONTACT_FOOTPRINT_PX = 236;
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_X = '50%';
 const ROOK_BLENDER_V4_CONTACT_ANCHOR_Y = '74.629%';
 const KNIGHT_FUR_CANVAS_PX = 512;

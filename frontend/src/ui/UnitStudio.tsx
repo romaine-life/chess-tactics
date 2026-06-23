@@ -1,5 +1,5 @@
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
-import { TILE_TOP_HEIGHT } from '../art/projectionContract';
+import { TILE_STEP_Y } from '../art/projectionContract';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 import {
@@ -146,7 +146,7 @@ export function UnitStudio() {
   });
   const unitPlacementStyle: UnitPlacementStyle = {
     '--tile-anchor-x': '50%',
-    '--tile-anchor-y': `${TILE_TOP_HEIGHT}px`,
+    '--tile-anchor-y': `${TILE_STEP_Y}px`,
     '--unit-anchor-x': selectedUnit.unitAnchorX ?? '50%',
     '--unit-anchor-y': selectedUnit.unitAnchorY ?? '92%',
     '--unit-size': `${unitRenderSize}px`,
