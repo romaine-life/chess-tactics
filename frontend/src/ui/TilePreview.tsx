@@ -3266,7 +3266,10 @@ export function TilesetStudio(): ReactElement {
                       <button
                         type="button"
                         className="tileset-brush-display"
-                        onClick={() => (brushKind === 'unit' ? navigateApp(`/unit-studio?unit=${unitBrushAsset.id}&mode=catalog`) : setStudioMode('catalog'))}
+                        onClick={() => {
+                          setCategory(brushKind === 'unit' ? 'units' : 'tiles');
+                          setStudioMode('catalog');
+                        }}
                         title={brushKind === 'unit' ? 'Pick a different unit from the unit catalog' : 'Pick a different tile from the tile catalog'}
                         aria-label={`Active brush: ${brushKind === 'unit' ? unitBrushAsset.label : brushAsset.label}. Pick a different ${brushKind}.`}
                       >
