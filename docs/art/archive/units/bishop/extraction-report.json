@@ -1,0 +1,58 @@
+{
+  "piece": "bishop",
+  "label": "Bishop",
+  "source": "public/assets/units/concepts/bishop-south-concept.png",
+  "sourceWidth": 1254,
+  "sourceHeight": 1254,
+  "outputSize": 128,
+  "crop": {
+    "x": 347,
+    "y": 93,
+    "width": 555,
+    "height": 1065
+  },
+  "stats": {
+    "sourcePixels": 1572516,
+    "protectedPixels": 304844,
+    "backgroundPixels": 1263378,
+    "foregroundPixels": 309138,
+    "foregroundCoverage": 0.1966
+  },
+  "notes": [
+    "Deterministic first-pass matte from color salience plus edge-connected dark-background flood fill.",
+    "Background removal is approximate; dark outer shadow pixels can be lost and dark halo pixels near protected color regions can remain.",
+    "Team variants recolor only saturated blue/cyan sprite pixels; gold, white, black, red, and steel trim are intentionally preserved."
+  ],
+  "outputs": {
+    "blue": {
+      "path": "public/assets/units/bishop/blue/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 67,
+      "drawnHeight": 128,
+      "offsetX": 30,
+      "offsetY": 0,
+      "opaquePixels": 4456
+    },
+    "red": {
+      "path": "public/assets/units/bishop/red/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 67,
+      "drawnHeight": 128,
+      "offsetX": 30,
+      "offsetY": 0,
+      "opaquePixels": 4456
+    },
+    "neutral": {
+      "path": "public/assets/units/bishop/neutral/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 67,
+      "drawnHeight": 128,
+      "offsetX": 30,
+      "offsetY": 0,
+      "opaquePixels": 4456
+    }
+  }
+}
