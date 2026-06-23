@@ -3083,7 +3083,7 @@ export function TilesetStudio(): ReactElement {
       openBoardLab();
       return;
     }
-    setStudioMode('lab');
+    openBoardLab();
   };
   const openTileLab = (): void => {
     if (!hasLabTiles) return;
@@ -3123,48 +3123,35 @@ export function TilesetStudio(): ReactElement {
           <span className="tileset-mode-tabs" aria-label="Catalog type">
             <button
               type="button"
-              className={studioMode === 'catalog' && category === 'tiles' ? 'is-active' : ''}
+              className={(studioMode === 'catalog' && category === 'tiles') || (studioMode === 'lab' && labMode === 'tile') ? 'is-active' : ''}
               onClick={() => {
+                if (studioMode === 'lab') {
+                  openTileLab();
+                  return;
+                }
                 setCategory('tiles');
                 openCatalogMode();
               }}
-              title="Browse terrain tiles."
+              disabled={studioMode === 'lab' && !hasLabTiles}
+              title={studioMode === 'lab' ? (hasLabTiles ? 'Inspect the selected tile.' : 'Place or select a tile first.') : 'Browse terrain tiles.'}
             >
               Tiles
             </button>
             <button
               type="button"
-              className={studioMode === 'catalog' && category === 'units' ? 'is-active' : ''}
+              className={(studioMode === 'catalog' && category === 'units') || (studioMode === 'lab' && labMode === 'unit') ? 'is-active' : ''}
               onClick={() => {
+                if (studioMode === 'lab') {
+                  openUnitLab();
+                  return;
+                }
                 setCategory('units');
                 openCatalogMode();
               }}
-              title="Browse chess-piece units."
+              disabled={studioMode === 'lab' && !hasLabUnits}
+              title={studioMode === 'lab' ? (hasLabUnits ? 'Inspect the selected unit.' : 'Place or select a unit first.') : 'Browse chess-piece units.'}
             >
               Units
-            </button>
-          </span>
-          <span className="tileset-mode-tabs" aria-label="Lab context">
-            <button type="button" className={studioMode === 'lab' && labMode === 'board' ? 'is-active' : ''} onClick={openBoardLab} title="Inspect the whole board.">
-              Board
-            </button>
-            <button
-              type="button"
-              className={studioMode === 'lab' && labMode === 'tile' ? 'is-active' : ''}
-              onClick={openTileLab}
-              disabled={!hasLabTiles}
-              title={hasLabTiles ? 'Inspect the selected tile.' : 'Place or select a tile first.'}
-            >
-              Tile
-            </button>
-            <button
-              type="button"
-              className={studioMode === 'lab' && labMode === 'unit' ? 'is-active' : ''}
-              onClick={openUnitLab}
-              disabled={!hasLabUnits}
-              title={hasLabUnits ? 'Inspect the selected unit.' : 'Place or select a unit first.'}
-            >
-              Unit
             </button>
           </span>
           <a href="/settings">Settings</a>
