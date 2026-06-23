@@ -130,6 +130,26 @@ unitAnchorY: '80.241%'
 
 The mitre was hand-fitted in Blender (not scripted) — the assembled `.blend` is the source. Unlike the king, the mitre's front peak gives a genuine per-direction facing across the 8 sprites.
 
+## Active Blender Queen
+
+Asset:
+
+- `frontend/public/assets/units/queen/blender-render-tiara/*.png` (navy Staunton queen + jeweled gold tiara, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/queen-tiara/` (`queen_tiara.blend` is the hand-assembled source of truth; `render_queen_tiara.py` re-renders it).
+
+Calibration (same camera + base-at-origin normalization as the rest of the roster):
+
+- Source canvas: `512x512px`
+- Contact footprint (max projected base width): `150px`
+- **Anchor: `x=50%`, `y=80.241%`** — computed via `world_to_camera_view(scene, cam, (0,0,0))`.
+
+```ts
+footprint: circleFootprint(512, 150)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
+```
+
+The tiara was hand-fitted in Blender (not scripted) — the assembled `.blend` is the source. Like the bishop, the tiara's front gives a genuine per-direction facing across the 8 sprites.
+
 ## Next Blender Export Rule
 
 For every new Blender unit export:

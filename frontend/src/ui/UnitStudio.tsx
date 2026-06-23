@@ -85,6 +85,11 @@ const BISHOP_MITRE_CANVAS_PX = 512;
 const BISHOP_MITRE_CONTACT_FOOTPRINT_PX = 158;
 const BISHOP_MITRE_CONTACT_ANCHOR_X = '50%';
 const BISHOP_MITRE_CONTACT_ANCHOR_Y = '80.241%';
+// Queen + tiara — jeweled tiara hand-fitted on the head; same computed-anchor calibration.
+const QUEEN_TIARA_CANVAS_PX = 512;
+const QUEEN_TIARA_CONTACT_FOOTPRINT_PX = 150;
+const QUEEN_TIARA_CONTACT_ANCHOR_X = '50%';
+const QUEEN_TIARA_CONTACT_ANCHOR_Y = '80.241%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -140,6 +145,9 @@ const kingCrownSprite = (_faction: Faction, direction: Direction) => `/assets/un
 // Bishop: classic Staunton bishop (FBX) wearing a separate mitre (OBJ) hand-seated on
 // the head, navy-styled; the mitre's front peak gives a per-direction facing. 8 directions.
 const bishopMitreSprite = (_faction: Faction, direction: Direction) => `/assets/units/bishop/blender-render-mitre/${direction}.png`;
+// Queen: navy Staunton queen (blend) wearing a separate jeweled tiara (FBX) hand-seated on
+// the crown collar; the tiara's front gives a per-direction facing. 8 directions.
+const queenTiaraSprite = (_faction: Faction, direction: Direction) => `/assets/units/queen/blender-render-tiara/${direction}.png`;
 
 // Shown when a unit has no sprite for the chosen facing — a placeholder, never a
 // disabled control. Directions are always selectable.
@@ -203,6 +211,22 @@ const unitAssets: UnitAsset[] = [
     unitAnchorX: BISHOP_MITRE_CONTACT_ANCHOR_X,
     unitAnchorY: BISHOP_MITRE_CONTACT_ANCHOR_Y,
     sprite: bishopMitreSprite,
+  },
+  {
+    id: 'queen-tiara',
+    family: 'queen',
+    label: 'Queen',
+    badge: '8 directions · calibrated',
+    preview: '/assets/units/queen/blender-render-tiara/south.png',
+    read: 'Navy Staunton queen wearing a hand-fitted jeweled tiara (the front faces the unit\'s direction); true-isometric Blender render',
+    status: 'active Blender production unit',
+    directions: rookDirections,
+    factionMode: 'fixed',
+    defaultScale: 100,
+    footprint: circleFootprint(QUEEN_TIARA_CANVAS_PX, QUEEN_TIARA_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: QUEEN_TIARA_CONTACT_ANCHOR_X,
+    unitAnchorY: QUEEN_TIARA_CONTACT_ANCHOR_Y,
+    sprite: queenTiaraSprite,
   },
   {
     id: 'rook-blender-v4-calibrated',
