@@ -19,6 +19,7 @@ export type UnitPlacementStyle = CSSProperties & {
   '--unit-anchor-y': string;
   '--unit-size': string;
   '--unit-footprint-size': string;
+  '--stack-shift-y': string;
 };
 
 export type UnitAsset = {

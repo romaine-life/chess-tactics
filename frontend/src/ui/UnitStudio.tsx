@@ -150,6 +150,9 @@ export function UnitStudio() {
     if (!query) return true;
     return [unit.label, unit.badge, unit.read, unit.status, unit.family].join(' ').toLowerCase().includes(query);
   });
+  const STACK_HEIGHT = 280;
+  const unitAnchorFrac = (parseFloat(selectedUnit.unitAnchorY ?? '80') || 80) / 100;
+  const stackShiftY = Math.round((STACK_HEIGHT / 2 - TILE_TOP_HEIGHT) + (unitAnchorFrac - 0.5) * unitRenderSize);
   const unitPlacementStyle: UnitPlacementStyle = {
     '--tile-anchor-x': '50%',
     '--tile-anchor-y': `${TILE_TOP_HEIGHT}px`,
@@ -157,6 +160,7 @@ export function UnitStudio() {
     '--unit-anchor-y': selectedUnit.unitAnchorY ?? '92%',
     '--unit-size': `${unitRenderSize}px`,
     '--unit-footprint-size': `${unitFootprintSize}px`,
+    '--stack-shift-y': `${stackShiftY}px`,
   };
 
   useEffect(() => {

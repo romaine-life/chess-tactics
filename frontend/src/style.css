@@ -11704,7 +11704,7 @@ button.tileset-relationship-cell {
   position: relative;
   width: 192px;
   height: 280px;
-  transform: translate(var(--view-pan-x, 0px), var(--view-pan-y, 0px)) scale(var(--view-zoom, 1));
+  transform: translate(var(--view-pan-x, 0px), calc(var(--view-pan-y, 0px) + var(--stack-shift-y, 0px))) scale(var(--view-zoom, 1));
   transform-origin: center;
   image-rendering: pixelated;
   --tile-anchor-x: 50%;
