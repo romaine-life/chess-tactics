@@ -28,6 +28,23 @@ regions; ordinary religious and agricultural life continued around loss.
 Residues: tended graves, empty chapel, overgrown lane, tools near fields, tiny
 figure near a road, no visible bodies.
 
+### Destruction Of Jerusalem And The Second Temple, 70 CE
+
+Fit: sacred center destroyed, city broken, empire made visible as an enduring
+structure, religious life forced to survive by transforming.
+
+Survival / aftereffect: Jewish religious life continued without the Temple;
+memory, law, teaching, exile, and rebuilt forms of practice carried life beyond
+the catastrophe.
+
+Residues: ruined temple stone, emptied courtyards, roads away from the city,
+covered scrolls, teaching room without sanctuary, Roman administrative residue,
+no battle scene.
+
+Dedicated note: [`jerusalem-second-temple-70-ce.md`](jerusalem-second-temple-70-ce.md)
+
+Set candidate: **After The Sanctuary**
+
 ### Great Famine, Europe, 1315-1317
 
 Fit: rural bleakness, failed harvests, wet fields, hunger, and survival without
