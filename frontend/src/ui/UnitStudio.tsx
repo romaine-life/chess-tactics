@@ -74,6 +74,12 @@ const PAWN_HELMET_CANVAS_PX = 512;
 const PAWN_HELMET_CONTACT_FOOTPRINT_PX = 188;
 const PAWN_HELMET_CONTACT_ANCHOR_X = '50%';
 const PAWN_HELMET_CONTACT_ANCHOR_Y = '80.241%';
+// Crowned king — Staunton king (OBJ) with a gold/jewel crown (FBX) hand-fitted on the
+// head; navy body, real gold crown material. Same computed-anchor calibration.
+const KING_CROWN_CANVAS_PX = 512;
+const KING_CROWN_CONTACT_FOOTPRINT_PX = 148;
+const KING_CROWN_CONTACT_ANCHOR_X = '50%';
+const KING_CROWN_CONTACT_ANCHOR_Y = '80.241%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -123,6 +129,9 @@ const knightFurSprite = (_faction: Faction, direction: Direction) => `/assets/un
 // (COLLADA) seated on the ball head, navy-styled; the visor gives the symmetric pawn
 // a real per-direction facing. True-isometric, 8 fixed directions.
 const pawnHelmetSprite = (_faction: Faction, direction: Direction) => `/assets/units/pawn/blender-render-helmet/${direction}.png`;
+// Crowned king: Staunton king (OBJ) wearing a gold/jewel crown (FBX) hand-seated on the
+// head; navy body, real gold crown material. Rotationally symmetric, 8 fixed directions.
+const kingCrownSprite = (_faction: Faction, direction: Direction) => `/assets/units/king/blender-render-crown/${direction}.png`;
 
 // Shown when a unit has no sprite for the chosen facing — a placeholder, never a
 // disabled control. Directions are always selectable.
@@ -154,6 +163,22 @@ const unitAssets: UnitAsset[] = [
     unitAnchorX: PAWN_HELMET_CONTACT_ANCHOR_X,
     unitAnchorY: PAWN_HELMET_CONTACT_ANCHOR_Y,
     sprite: pawnHelmetSprite,
+  },
+  {
+    id: 'king-crown',
+    family: 'king',
+    label: 'King',
+    badge: '8 directions · calibrated',
+    preview: '/assets/units/king/blender-render-crown/south.png',
+    read: 'Navy Staunton king wearing a gold-and-jewel crown, hand-fitted; true-isometric Blender render',
+    status: 'active Blender production unit',
+    directions: rookDirections,
+    factionMode: 'fixed',
+    defaultScale: 100,
+    footprint: circleFootprint(KING_CROWN_CANVAS_PX, KING_CROWN_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: KING_CROWN_CONTACT_ANCHOR_X,
+    unitAnchorY: KING_CROWN_CONTACT_ANCHOR_Y,
+    sprite: kingCrownSprite,
   },
   {
     id: 'rook-blender-v4-calibrated',
