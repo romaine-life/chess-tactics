@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { acceptedAssetFrameSrc, acceptedTileAssets, acceptedTileFamilies, type AcceptedTileAsset } from '../art/acceptedTiles';
+import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGenerator';
 import type { Piece, TerrainType } from '../core/types';
 import { enemyThreats, legalMoves, pieceHp, pieceMaxHp } from '../core/rules';
@@ -41,14 +41,14 @@ function terrainMapForGame(game: ReturnType<typeof useSkirmish.getState>['game']
 function solveSkirmishBoard(
   game: ReturnType<typeof useSkirmish.getState>['game'],
   seed: number,
-): SocketBoardResult<AcceptedTileAsset> {
+): SocketBoardResult<TileAsset> {
   return solveSocketBoard({
-    assets: acceptedTileAssets,
+    assets: tileAssets,
     terrainMap: terrainMapForGame(game),
     seed,
     columns: game.size.cols,
     rows: game.size.rows,
-    familyAssets: acceptedTileFamilies,
+    familyAssets: tileFamilies,
   });
 }
 
@@ -104,7 +104,7 @@ export function SkirmishBoard() {
     <div data-testid="skirmish-board" className="skirmish-board-lab">
       <BoardLabBoard
         board={board}
-        assetFrameSrc={acceptedAssetFrameSrc}
+        assetFrameSrc={tileFrameSrc}
         boardZoom={0.78}
         boardPan={{ x: 0, y: -18 }}
         className="skirmish-board-surface"

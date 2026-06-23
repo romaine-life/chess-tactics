@@ -5,7 +5,7 @@
 import type { BoardSize, GameState, Piece, PieceType, Side, TerrainCell, TerrainType } from '../core/types';
 import { createRng, type Rng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
-import { acceptedTileAssets, acceptedTileFamilies } from '../art/acceptedTiles';
+import { tileAssets, tileFamilies } from '../art/tileset';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
 
@@ -20,11 +20,11 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
 
 function buildTerrain(size: BoardSize, seed: number): TerrainCell[] {
   const board = generateSocketBoard({
-    assets: acceptedTileAssets,
+    assets: tileAssets,
     seed,
     columns: size.cols,
     rows: size.rows,
-    familyAssets: acceptedTileFamilies,
+    familyAssets: tileFamilies,
   });
   return board.cells.map((cell) => ({
     x: cell.x,

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createSkirmish } from './setup';
 import { livingPieces } from '../core/rules';
 import { isPassableTerrain } from '../core/terrain';
-import { acceptedTileAssets, acceptedTileFamilies } from '../art/acceptedTiles';
+import { tileAssets, tileFamilies } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import type { TerrainType } from '../core/types';
 import type { TileFamilyId } from '../core/tileSockets';
@@ -79,17 +79,17 @@ describe('createSkirmish', () => {
     }
   });
 
-  it('authors terrain that resolves to a legal accepted socket board', () => {
+  it('authors terrain that resolves to a legal socket board', () => {
     for (const seed of [1, 7, 13, 42, 99]) {
       const s = createSkirmish({ seed });
       const terrainMap = s.terrain!.map((cell) => terrainToFamily[cell.terrain]);
       const board = solveSocketBoard({
-        assets: acceptedTileAssets,
+        assets: tileAssets,
         terrainMap,
         seed,
         columns: s.size.cols,
         rows: s.size.rows,
-        familyAssets: acceptedTileFamilies,
+        familyAssets: tileFamilies,
       });
       expect(board.stats.illegalEdges).toBe(0);
       expect(board.stats.missingPlacements).toBe(0);
