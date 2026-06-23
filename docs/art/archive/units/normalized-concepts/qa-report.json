@@ -1,0 +1,1958 @@
+{
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "sourceRoot": "docs/art/unit-concepts/directions",
+  "outputRoot": "frontend/public/assets/units/normalized-concepts",
+  "outputSize": 160,
+  "maxForegroundHeight": 132,
+  "baselineY": 148,
+  "directions": [
+    "north",
+    "north-east",
+    "east",
+    "south-east",
+    "south",
+    "south-west",
+    "west",
+    "north-west"
+  ],
+  "pieces": {
+    "bishop": {
+      "north": {
+        "piece": "bishop",
+        "direction": "north",
+        "source": "docs/art/unit-concepts/directions/bishop/north.png",
+        "output": "frontend/public/assets/units/normalized-concepts/bishop/north.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 368,
+          "y": 138,
+          "width": 515,
+          "height": 1003,
+          "maxX": 882,
+          "maxY": 1140
+        },
+        "scale": 0.131605,
+        "drawnWidth": 68,
+        "drawnHeight": 132,
+        "offsetX": 46,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5239,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 301166,
+          "backgroundPixels": 1271350,
+          "foregroundPixels": 301166,
+          "foregroundCoverage": 0.1915
+        }
+      },
+      "north-east": {
+        "piece": "bishop",
+        "direction": "north-east",
+        "source": "docs/art/unit-concepts/directions/bishop/north-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/bishop/north-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 357,
+          "y": 117,
+          "width": 522,
+          "height": 1024,
+          "maxX": 878,
+          "maxY": 1140
+        },
+        "scale": 0.128906,
+        "drawnWidth": 67,
+        "drawnHeight": 132,
+        "offsetX": 46,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5366,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 323748,
+          "backgroundPixels": 1248768,
+          "foregroundPixels": 323748,
+          "foregroundCoverage": 0.2059
+        }
+      },
+      "east": {
+        "piece": "bishop",
+        "direction": "east",
+        "source": "docs/art/unit-concepts/directions/bishop/east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/bishop/east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 369,
+          "y": 113,
+          "width": 516,
+          "height": 1031,
+          "maxX": 884,
+          "maxY": 1143
+        },
+        "scale": 0.128031,
+        "drawnWidth": 66,
+        "drawnHeight": 132,
+        "offsetX": 47,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5222,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 319400,
+          "backgroundPixels": 1253116,
+          "foregroundPixels": 319400,
+          "foregroundCoverage": 0.2031
+        }
+      },
+      "south-east": {
+        "piece": "bishop",
+        "direction": "south-east",
+        "source": "docs/art/unit-concepts/directions/bishop/south-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/bishop/south-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 378,
+          "y": 113,
+          "width": 512,
+          "height": 1024,
+          "maxX": 889,
+          "maxY": 1136
+        },
+        "scale": 0.128906,
+        "drawnWidth": 66,
+        "drawnHeight": 132,
+        "offsetX": 47,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5189,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 314435,
+          "backgroundPixels": 1258081,
+          "foregroundPixels": 314435,
+          "foregroundCoverage": 0.2
+        }
+      },
+      "south": {
+        "piece": "bishop",
+        "direction": "south",
+        "source": "docs/art/unit-concepts/directions/bishop/south.png",
+        "output": "frontend/public/assets/units/normalized-concepts/bishop/south.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 367,
+          "y": 115,
+          "width": 516,
+          "height": 1023,
+          "maxX": 882,
+          "maxY": 1137
+        },
+        "scale": 0.129032,
+        "drawnWidth": 67,
+        "drawnHeight": 132,
+        "offsetX": 46,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5268,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 316867,
+          "backgroundPixels": 1255649,
+          "foregroundPixels": 316867,
+          "foregroundCoverage": 0.2015
+        }
+      },
+      "south-west": {
+        "piece": "bishop",
+        "direction": "south-west",
+        "source": "docs/art/unit-concepts/directions/bishop/south-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/bishop/south-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 366,
+          "y": 119,
+          "width": 504,
+          "height": 1019,
+          "maxX": 869,
+          "maxY": 1137
+        },
+        "scale": 0.129539,
+        "drawnWidth": 65,
+        "drawnHeight": 132,
+        "offsetX": 47,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5164,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 307550,
+          "backgroundPixels": 1264966,
+          "foregroundPixels": 307550,
+          "foregroundCoverage": 0.1956
+        }
+      },
+      "west": {
+        "piece": "bishop",
+        "direction": "west",
+        "source": "docs/art/unit-concepts/directions/bishop/west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/bishop/west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 370,
+          "y": 115,
+          "width": 487,
+          "height": 1023,
+          "maxX": 856,
+          "maxY": 1137
+        },
+        "scale": 0.129032,
+        "drawnWidth": 63,
+        "drawnHeight": 132,
+        "offsetX": 48,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4763,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 286372,
+          "backgroundPixels": 1286144,
+          "foregroundPixels": 286372,
+          "foregroundCoverage": 0.1821
+        }
+      },
+      "north-west": {
+        "piece": "bishop",
+        "direction": "north-west",
+        "source": "docs/art/unit-concepts/directions/bishop/north-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/bishop/north-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 362,
+          "y": 129,
+          "width": 531,
+          "height": 1014,
+          "maxX": 892,
+          "maxY": 1142
+        },
+        "scale": 0.130178,
+        "drawnWidth": 69,
+        "drawnHeight": 132,
+        "offsetX": 45,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5590,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 331222,
+          "backgroundPixels": 1241294,
+          "foregroundPixels": 331222,
+          "foregroundCoverage": 0.2106
+        }
+      }
+    },
+    "king": {
+      "north": {
+        "piece": "king",
+        "direction": "north",
+        "source": "docs/art/unit-concepts/directions/king/north.png",
+        "output": "frontend/public/assets/units/normalized-concepts/king/north.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 395,
+          "y": 100,
+          "width": 464,
+          "height": 1037,
+          "maxX": 858,
+          "maxY": 1136
+        },
+        "scale": 0.12729,
+        "drawnWidth": 59,
+        "drawnHeight": 132,
+        "offsetX": 50,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4329,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 267338,
+          "backgroundPixels": 1305178,
+          "foregroundPixels": 267338,
+          "foregroundCoverage": 0.17
+        }
+      },
+      "north-east": {
+        "piece": "king",
+        "direction": "north-east",
+        "source": "docs/art/unit-concepts/directions/king/north-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/king/north-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 398,
+          "y": 98,
+          "width": 460,
+          "height": 1054,
+          "maxX": 857,
+          "maxY": 1151
+        },
+        "scale": 0.125237,
+        "drawnWidth": 58,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4302,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 274550,
+          "backgroundPixels": 1297966,
+          "foregroundPixels": 274550,
+          "foregroundCoverage": 0.1746
+        }
+      },
+      "east": {
+        "piece": "king",
+        "direction": "east",
+        "source": "docs/art/unit-concepts/directions/king/east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/king/east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 384,
+          "y": 89,
+          "width": 461,
+          "height": 1047,
+          "maxX": 844,
+          "maxY": 1135
+        },
+        "scale": 0.126074,
+        "drawnWidth": 58,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4428,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 279032,
+          "backgroundPixels": 1293484,
+          "foregroundPixels": 279032,
+          "foregroundCoverage": 0.1774
+        }
+      },
+      "south-east": {
+        "piece": "king",
+        "direction": "south-east",
+        "source": "docs/art/unit-concepts/directions/king/south-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/king/south-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 324,
+          "y": 83,
+          "width": 466,
+          "height": 1066,
+          "maxX": 789,
+          "maxY": 1148
+        },
+        "scale": 0.123827,
+        "drawnWidth": 58,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4472,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 292470,
+          "backgroundPixels": 1280046,
+          "foregroundPixels": 292470,
+          "foregroundCoverage": 0.186
+        }
+      },
+      "south": {
+        "piece": "king",
+        "direction": "south",
+        "source": "docs/art/unit-concepts/directions/king/south.png",
+        "output": "frontend/public/assets/units/normalized-concepts/king/south.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 395,
+          "y": 97,
+          "width": 464,
+          "height": 1042,
+          "maxX": 858,
+          "maxY": 1138
+        },
+        "scale": 0.126679,
+        "drawnWidth": 59,
+        "drawnHeight": 132,
+        "offsetX": 50,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4389,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 273365,
+          "backgroundPixels": 1299151,
+          "foregroundPixels": 273365,
+          "foregroundCoverage": 0.1738
+        }
+      },
+      "south-west": {
+        "piece": "king",
+        "direction": "south-west",
+        "source": "docs/art/unit-concepts/directions/king/south-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/king/south-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 392,
+          "y": 97,
+          "width": 459,
+          "height": 1041,
+          "maxX": 850,
+          "maxY": 1137
+        },
+        "scale": 0.126801,
+        "drawnWidth": 58,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4209,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 261684,
+          "backgroundPixels": 1310832,
+          "foregroundPixels": 261684,
+          "foregroundCoverage": 0.1664
+        }
+      },
+      "west": {
+        "piece": "king",
+        "direction": "west",
+        "source": "docs/art/unit-concepts/directions/king/west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/king/west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 324,
+          "y": 83,
+          "width": 466,
+          "height": 1066,
+          "maxX": 789,
+          "maxY": 1148
+        },
+        "scale": 0.123827,
+        "drawnWidth": 58,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4472,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 292470,
+          "backgroundPixels": 1280046,
+          "foregroundPixels": 292470,
+          "foregroundCoverage": 0.186
+        }
+      },
+      "north-west": {
+        "piece": "king",
+        "direction": "north-west",
+        "source": "docs/art/unit-concepts/directions/king/north-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/king/north-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 354,
+          "y": 49,
+          "width": 467,
+          "height": 1131,
+          "maxX": 820,
+          "maxY": 1179
+        },
+        "scale": 0.116711,
+        "drawnWidth": 55,
+        "drawnHeight": 132,
+        "offsetX": 52,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4308,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 316285,
+          "backgroundPixels": 1256231,
+          "foregroundPixels": 316285,
+          "foregroundCoverage": 0.2011
+        }
+      }
+    },
+    "knight": {
+      "north": {
+        "piece": "knight",
+        "direction": "north",
+        "source": "docs/art/unit-concepts/directions/knight/north.png",
+        "output": "frontend/public/assets/units/normalized-concepts/knight/north.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 344,
+          "y": 69,
+          "width": 562,
+          "height": 1125,
+          "maxX": 905,
+          "maxY": 1193
+        },
+        "scale": 0.117333,
+        "drawnWidth": 66,
+        "drawnHeight": 132,
+        "offsetX": 47,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5604,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 407165,
+          "backgroundPixels": 1165314,
+          "foregroundPixels": 407202,
+          "foregroundCoverage": 0.2589
+        }
+      },
+      "north-east": {
+        "piece": "knight",
+        "direction": "north-east",
+        "source": "docs/art/unit-concepts/directions/knight/north-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/knight/north-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 362,
+          "y": 65,
+          "width": 561,
+          "height": 1101,
+          "maxX": 922,
+          "maxY": 1165
+        },
+        "scale": 0.119891,
+        "drawnWidth": 67,
+        "drawnHeight": 132,
+        "offsetX": 46,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 6388,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 443721,
+          "backgroundPixels": 1128795,
+          "foregroundPixels": 443721,
+          "foregroundCoverage": 0.2822
+        }
+      },
+      "east": {
+        "piece": "knight",
+        "direction": "east",
+        "source": "docs/art/unit-concepts/directions/knight/east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/knight/east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 300,
+          "y": 68,
+          "width": 672,
+          "height": 1122,
+          "maxX": 971,
+          "maxY": 1189
+        },
+        "scale": 0.117647,
+        "drawnWidth": 79,
+        "drawnHeight": 132,
+        "offsetX": 40,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7095,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 513264,
+          "backgroundPixels": 1059185,
+          "foregroundPixels": 513331,
+          "foregroundCoverage": 0.3264
+        }
+      },
+      "south-east": {
+        "piece": "knight",
+        "direction": "south-east",
+        "source": "docs/art/unit-concepts/directions/knight/south-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/knight/south-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 325,
+          "y": 79,
+          "width": 606,
+          "height": 1105,
+          "maxX": 930,
+          "maxY": 1183
+        },
+        "scale": 0.119457,
+        "drawnWidth": 72,
+        "drawnHeight": 132,
+        "offsetX": 44,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7229,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 506410,
+          "backgroundPixels": 1065826,
+          "foregroundPixels": 506690,
+          "foregroundCoverage": 0.3222
+        }
+      },
+      "south": {
+        "piece": "knight",
+        "direction": "south",
+        "source": "docs/art/unit-concepts/directions/knight/south.png",
+        "output": "frontend/public/assets/units/normalized-concepts/knight/south.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 358,
+          "y": 69,
+          "width": 567,
+          "height": 1116,
+          "maxX": 924,
+          "maxY": 1184
+        },
+        "scale": 0.11828,
+        "drawnWidth": 67,
+        "drawnHeight": 132,
+        "offsetX": 46,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 6712,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 479414,
+          "backgroundPixels": 1092759,
+          "foregroundPixels": 479757,
+          "foregroundCoverage": 0.3051
+        }
+      },
+      "south-west": {
+        "piece": "knight",
+        "direction": "south-west",
+        "source": "docs/art/unit-concepts/directions/knight/south-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/knight/south-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 329,
+          "y": 69,
+          "width": 594,
+          "height": 1104,
+          "maxX": 922,
+          "maxY": 1172
+        },
+        "scale": 0.119565,
+        "drawnWidth": 71,
+        "drawnHeight": 132,
+        "offsetX": 44,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7074,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 495036,
+          "backgroundPixels": 1077264,
+          "foregroundPixels": 495252,
+          "foregroundCoverage": 0.3149
+        }
+      },
+      "west": {
+        "piece": "knight",
+        "direction": "west",
+        "source": "docs/art/unit-concepts/directions/knight/west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/knight/west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 251,
+          "y": 82,
+          "width": 674,
+          "height": 1105,
+          "maxX": 924,
+          "maxY": 1186
+        },
+        "scale": 0.119457,
+        "drawnWidth": 81,
+        "drawnHeight": 132,
+        "offsetX": 39,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7445,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 521735,
+          "backgroundPixels": 1050629,
+          "foregroundPixels": 521887,
+          "foregroundCoverage": 0.3319
+        }
+      },
+      "north-west": {
+        "piece": "knight",
+        "direction": "north-west",
+        "source": "docs/art/unit-concepts/directions/knight/north-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/knight/north-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 333,
+          "y": 56,
+          "width": 581,
+          "height": 1119,
+          "maxX": 913,
+          "maxY": 1174
+        },
+        "scale": 0.117962,
+        "drawnWidth": 69,
+        "drawnHeight": 132,
+        "offsetX": 45,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 6394,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 458836,
+          "backgroundPixels": 1113124,
+          "foregroundPixels": 459392,
+          "foregroundCoverage": 0.2921
+        }
+      }
+    },
+    "pawn": {
+      "north": {
+        "piece": "pawn",
+        "direction": "north",
+        "source": "docs/art/unit-concepts/directions/pawn/north.png",
+        "output": "frontend/public/assets/units/normalized-concepts/pawn/north.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 381,
+          "y": 76,
+          "width": 474,
+          "height": 1110,
+          "maxX": 854,
+          "maxY": 1185
+        },
+        "scale": 0.118919,
+        "drawnWidth": 56,
+        "drawnHeight": 132,
+        "offsetX": 52,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5018,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 356408,
+          "backgroundPixels": 1216108,
+          "foregroundPixels": 356408,
+          "foregroundCoverage": 0.2266
+        }
+      },
+      "north-east": {
+        "piece": "pawn",
+        "direction": "north-east",
+        "source": "docs/art/unit-concepts/directions/pawn/north-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/pawn/north-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 393,
+          "y": 76,
+          "width": 461,
+          "height": 1096,
+          "maxX": 853,
+          "maxY": 1171
+        },
+        "scale": 0.120438,
+        "drawnWidth": 56,
+        "drawnHeight": 132,
+        "offsetX": 52,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4965,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 342057,
+          "backgroundPixels": 1230336,
+          "foregroundPixels": 342180,
+          "foregroundCoverage": 0.2176
+        }
+      },
+      "east": {
+        "piece": "pawn",
+        "direction": "east",
+        "source": "docs/art/unit-concepts/directions/pawn/east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/pawn/east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 387,
+          "y": 82,
+          "width": 478,
+          "height": 1106,
+          "maxX": 864,
+          "maxY": 1187
+        },
+        "scale": 0.119349,
+        "drawnWidth": 57,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5219,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 365052,
+          "backgroundPixels": 1206230,
+          "foregroundPixels": 366286,
+          "foregroundCoverage": 0.2329
+        }
+      },
+      "south-east": {
+        "piece": "pawn",
+        "direction": "south-east",
+        "source": "docs/art/unit-concepts/directions/pawn/south-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/pawn/south-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 370,
+          "y": 75,
+          "width": 478,
+          "height": 1096,
+          "maxX": 847,
+          "maxY": 1170
+        },
+        "scale": 0.120438,
+        "drawnWidth": 58,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5257,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 360322,
+          "backgroundPixels": 1210417,
+          "foregroundPixels": 362099,
+          "foregroundCoverage": 0.2303
+        }
+      },
+      "south": {
+        "piece": "pawn",
+        "direction": "south",
+        "source": "docs/art/unit-concepts/directions/pawn/south.png",
+        "output": "frontend/public/assets/units/normalized-concepts/pawn/south.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 389,
+          "y": 81,
+          "width": 477,
+          "height": 1105,
+          "maxX": 865,
+          "maxY": 1185
+        },
+        "scale": 0.119457,
+        "drawnWidth": 57,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5061,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 353938,
+          "backgroundPixels": 1216449,
+          "foregroundPixels": 356067,
+          "foregroundCoverage": 0.2264
+        }
+      },
+      "south-west": {
+        "piece": "pawn",
+        "direction": "south-west",
+        "source": "docs/art/unit-concepts/directions/pawn/south-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/pawn/south-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 406,
+          "y": 75,
+          "width": 478,
+          "height": 1096,
+          "maxX": 883,
+          "maxY": 1170
+        },
+        "scale": 0.120438,
+        "drawnWidth": 58,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5273,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 360322,
+          "backgroundPixels": 1210417,
+          "foregroundPixels": 362099,
+          "foregroundCoverage": 0.2303
+        }
+      },
+      "west": {
+        "piece": "pawn",
+        "direction": "west",
+        "source": "docs/art/unit-concepts/directions/pawn/west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/pawn/west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 389,
+          "y": 82,
+          "width": 478,
+          "height": 1106,
+          "maxX": 866,
+          "maxY": 1187
+        },
+        "scale": 0.119349,
+        "drawnWidth": 57,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5221,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 365052,
+          "backgroundPixels": 1206230,
+          "foregroundPixels": 366286,
+          "foregroundCoverage": 0.2329
+        }
+      },
+      "north-west": {
+        "piece": "pawn",
+        "direction": "north-west",
+        "source": "docs/art/unit-concepts/directions/pawn/north-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/pawn/north-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 400,
+          "y": 76,
+          "width": 461,
+          "height": 1096,
+          "maxX": 860,
+          "maxY": 1171
+        },
+        "scale": 0.120438,
+        "drawnWidth": 56,
+        "drawnHeight": 132,
+        "offsetX": 52,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4954,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 342057,
+          "backgroundPixels": 1230336,
+          "foregroundPixels": 342180,
+          "foregroundCoverage": 0.2176
+        }
+      }
+    },
+    "queen": {
+      "north": {
+        "piece": "queen",
+        "direction": "north",
+        "source": "docs/art/unit-concepts/directions/queen/north.png",
+        "output": "frontend/public/assets/units/normalized-concepts/queen/north.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 383,
+          "y": 61,
+          "width": 484,
+          "height": 1108,
+          "maxX": 866,
+          "maxY": 1168
+        },
+        "scale": 0.119134,
+        "drawnWidth": 58,
+        "drawnHeight": 132,
+        "offsetX": 51,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4721,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 333300,
+          "backgroundPixels": 1239216,
+          "foregroundPixels": 333300,
+          "foregroundCoverage": 0.212
+        }
+      },
+      "north-east": {
+        "piece": "queen",
+        "direction": "north-east",
+        "source": "docs/art/unit-concepts/directions/queen/north-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/queen/north-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 379,
+          "y": 89,
+          "width": 492,
+          "height": 1068,
+          "maxX": 870,
+          "maxY": 1156
+        },
+        "scale": 0.123596,
+        "drawnWidth": 61,
+        "drawnHeight": 132,
+        "offsetX": 49,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5018,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 328699,
+          "backgroundPixels": 1243817,
+          "foregroundPixels": 328699,
+          "foregroundCoverage": 0.209
+        }
+      },
+      "east": {
+        "piece": "queen",
+        "direction": "east",
+        "source": "docs/art/unit-concepts/directions/queen/east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/queen/east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 378,
+          "y": 65,
+          "width": 498,
+          "height": 1094,
+          "maxX": 875,
+          "maxY": 1158
+        },
+        "scale": 0.120658,
+        "drawnWidth": 60,
+        "drawnHeight": 132,
+        "offsetX": 50,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4906,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 337344,
+          "backgroundPixels": 1235172,
+          "foregroundPixels": 337344,
+          "foregroundCoverage": 0.2145
+        }
+      },
+      "south-east": {
+        "piece": "queen",
+        "direction": "south-east",
+        "source": "docs/art/unit-concepts/directions/queen/south-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/queen/south-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 391,
+          "y": 83,
+          "width": 483,
+          "height": 1077,
+          "maxX": 873,
+          "maxY": 1159
+        },
+        "scale": 0.122563,
+        "drawnWidth": 59,
+        "drawnHeight": 132,
+        "offsetX": 50,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4951,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 330465,
+          "backgroundPixels": 1242051,
+          "foregroundPixels": 330465,
+          "foregroundCoverage": 0.2102
+        }
+      },
+      "south": {
+        "piece": "queen",
+        "direction": "south",
+        "source": "docs/art/unit-concepts/directions/queen/south.png",
+        "output": "frontend/public/assets/units/normalized-concepts/queen/south.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 380,
+          "y": 81,
+          "width": 492,
+          "height": 1071,
+          "maxX": 871,
+          "maxY": 1151
+        },
+        "scale": 0.123249,
+        "drawnWidth": 61,
+        "drawnHeight": 132,
+        "offsetX": 49,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5041,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 331837,
+          "backgroundPixels": 1240679,
+          "foregroundPixels": 331837,
+          "foregroundCoverage": 0.211
+        }
+      },
+      "south-west": {
+        "piece": "queen",
+        "direction": "south-west",
+        "source": "docs/art/unit-concepts/directions/queen/south-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/queen/south-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 376,
+          "y": 81,
+          "width": 495,
+          "height": 1074,
+          "maxX": 870,
+          "maxY": 1154
+        },
+        "scale": 0.122905,
+        "drawnWidth": 61,
+        "drawnHeight": 132,
+        "offsetX": 49,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5023,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 333197,
+          "backgroundPixels": 1239317,
+          "foregroundPixels": 333199,
+          "foregroundCoverage": 0.2119
+        }
+      },
+      "west": {
+        "piece": "queen",
+        "direction": "west",
+        "source": "docs/art/unit-concepts/directions/queen/west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/queen/west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 394,
+          "y": 78,
+          "width": 504,
+          "height": 1071,
+          "maxX": 897,
+          "maxY": 1148
+        },
+        "scale": 0.123249,
+        "drawnWidth": 62,
+        "drawnHeight": 132,
+        "offsetX": 49,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 5179,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 341393,
+          "backgroundPixels": 1231123,
+          "foregroundPixels": 341393,
+          "foregroundCoverage": 0.2171
+        }
+      },
+      "north-west": {
+        "piece": "queen",
+        "direction": "north-west",
+        "source": "docs/art/unit-concepts/directions/queen/north-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/queen/north-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 381,
+          "y": 77,
+          "width": 491,
+          "height": 1078,
+          "maxX": 871,
+          "maxY": 1154
+        },
+        "scale": 0.122449,
+        "drawnWidth": 60,
+        "drawnHeight": 132,
+        "offsetX": 50,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 4994,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 333051,
+          "backgroundPixels": 1239465,
+          "foregroundPixels": 333051,
+          "foregroundCoverage": 0.2118
+        }
+      }
+    },
+    "rook": {
+      "north": {
+        "piece": "rook",
+        "direction": "north",
+        "source": "docs/art/unit-concepts/directions/rook/north.png",
+        "output": "frontend/public/assets/units/normalized-concepts/rook/north.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 275,
+          "y": 57,
+          "width": 686,
+          "height": 1102,
+          "maxX": 960,
+          "maxY": 1158
+        },
+        "scale": 0.119782,
+        "drawnWidth": 82,
+        "drawnHeight": 132,
+        "offsetX": 39,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7700,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 537074,
+          "backgroundPixels": 1035442,
+          "foregroundPixels": 537074,
+          "foregroundCoverage": 0.3415
+        }
+      },
+      "north-east": {
+        "piece": "rook",
+        "direction": "north-east",
+        "source": "docs/art/unit-concepts/directions/rook/north-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/rook/north-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 231,
+          "y": 40,
+          "width": 778,
+          "height": 1159,
+          "maxX": 1008,
+          "maxY": 1198
+        },
+        "scale": 0.113891,
+        "drawnWidth": 89,
+        "drawnHeight": 132,
+        "offsetX": 35,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 8233,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 633253,
+          "backgroundPixels": 939263,
+          "foregroundPixels": 633253,
+          "foregroundCoverage": 0.4027
+        }
+      },
+      "east": {
+        "piece": "rook",
+        "direction": "east",
+        "source": "docs/art/unit-concepts/directions/rook/east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/rook/east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 283,
+          "y": 59,
+          "width": 703,
+          "height": 1121,
+          "maxX": 985,
+          "maxY": 1179
+        },
+        "scale": 0.117752,
+        "drawnWidth": 83,
+        "drawnHeight": 132,
+        "offsetX": 38,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7556,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 544613,
+          "backgroundPixels": 1027903,
+          "foregroundPixels": 544613,
+          "foregroundCoverage": 0.3463
+        }
+      },
+      "south-east": {
+        "piece": "rook",
+        "direction": "south-east",
+        "source": "docs/art/unit-concepts/directions/rook/south-east.png",
+        "output": "frontend/public/assets/units/normalized-concepts/rook/south-east.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 271,
+          "y": 49,
+          "width": 712,
+          "height": 1151,
+          "maxX": 982,
+          "maxY": 1199
+        },
+        "scale": 0.114683,
+        "drawnWidth": 82,
+        "drawnHeight": 132,
+        "offsetX": 39,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7462,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 569153,
+          "backgroundPixels": 1003363,
+          "foregroundPixels": 569153,
+          "foregroundCoverage": 0.3619
+        }
+      },
+      "south": {
+        "piece": "rook",
+        "direction": "south",
+        "source": "docs/art/unit-concepts/directions/rook/south.png",
+        "output": "frontend/public/assets/units/normalized-concepts/rook/south.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 289,
+          "y": 58,
+          "width": 679,
+          "height": 1102,
+          "maxX": 967,
+          "maxY": 1159
+        },
+        "scale": 0.119782,
+        "drawnWidth": 81,
+        "drawnHeight": 132,
+        "offsetX": 39,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7625,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 530344,
+          "backgroundPixels": 1042172,
+          "foregroundPixels": 530344,
+          "foregroundCoverage": 0.3373
+        }
+      },
+      "south-west": {
+        "piece": "rook",
+        "direction": "south-west",
+        "source": "docs/art/unit-concepts/directions/rook/south-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/rook/south-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 251,
+          "y": 50,
+          "width": 790,
+          "height": 1144,
+          "maxX": 1040,
+          "maxY": 1193
+        },
+        "scale": 0.115385,
+        "drawnWidth": 91,
+        "drawnHeight": 132,
+        "offsetX": 34,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 8357,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 627233,
+          "backgroundPixels": 945213,
+          "foregroundPixels": 627303,
+          "foregroundCoverage": 0.3989
+        }
+      },
+      "west": {
+        "piece": "rook",
+        "direction": "west",
+        "source": "docs/art/unit-concepts/directions/rook/west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/rook/west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 271,
+          "y": 54,
+          "width": 690,
+          "height": 1118,
+          "maxX": 960,
+          "maxY": 1171
+        },
+        "scale": 0.118068,
+        "drawnWidth": 81,
+        "drawnHeight": 132,
+        "offsetX": 39,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7424,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 534082,
+          "backgroundPixels": 1038434,
+          "foregroundPixels": 534082,
+          "foregroundCoverage": 0.3396
+        }
+      },
+      "north-west": {
+        "piece": "rook",
+        "direction": "north-west",
+        "source": "docs/art/unit-concepts/directions/rook/north-west.png",
+        "output": "frontend/public/assets/units/normalized-concepts/rook/north-west.png",
+        "sourceWidth": 1254,
+        "sourceHeight": 1254,
+        "bbox": {
+          "x": 263,
+          "y": 53,
+          "width": 700,
+          "height": 1107,
+          "maxX": 962,
+          "maxY": 1159
+        },
+        "scale": 0.119241,
+        "drawnWidth": 83,
+        "drawnHeight": 132,
+        "offsetX": 38,
+        "offsetY": 17,
+        "baselineY": 148,
+        "opaquePixels": 7938,
+        "edgeTouch": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flags": {
+          "foregroundTouchesSourceEdge": false,
+          "lowOpaquePixels": false
+        },
+        "stats": {
+          "sourcePixels": 1572516,
+          "protectedPixels": 557922,
+          "backgroundPixels": 1014594,
+          "foregroundPixels": 557922,
+          "foregroundCoverage": 0.3548
+        }
+      }
+    }
+  },
+  "flagged": [],
+  "notes": [
+    "Deterministic matte extends the south-facing sprite extractor with light/checker background flood fill.",
+    "Each direction is scaled to the shared max foreground height, horizontally centered, and bottom-aligned to the shared baseline.",
+    "Foreground edge-touch is reported as a QA flag; pass --strict to make flags fail the command."
+  ]
+}

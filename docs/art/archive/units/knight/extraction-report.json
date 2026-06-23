@@ -1,0 +1,58 @@
+{
+  "piece": "knight",
+  "label": "Knight",
+  "source": "public/assets/units/concepts/knight-south-concept.png",
+  "sourceWidth": 1254,
+  "sourceHeight": 1254,
+  "outputSize": 128,
+  "crop": {
+    "x": 334,
+    "y": 47,
+    "width": 614,
+    "height": 1161
+  },
+  "stats": {
+    "sourcePixels": 1572516,
+    "protectedPixels": 449268,
+    "backgroundPixels": 1100017,
+    "foregroundPixels": 471995,
+    "foregroundCoverage": 0.3002
+  },
+  "notes": [
+    "Deterministic first-pass matte from color salience plus edge-connected dark-background flood fill.",
+    "Background removal is approximate; dark outer shadow pixels can be lost and dark halo pixels near protected color regions can remain.",
+    "Team variants recolor only saturated blue/cyan sprite pixels; gold, white, black, red, and steel trim are intentionally preserved."
+  ],
+  "outputs": {
+    "blue": {
+      "path": "public/assets/units/knight/blue/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 68,
+      "drawnHeight": 128,
+      "offsetX": 30,
+      "offsetY": 0,
+      "opaquePixels": 5746
+    },
+    "red": {
+      "path": "public/assets/units/knight/red/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 68,
+      "drawnHeight": 128,
+      "offsetX": 30,
+      "offsetY": 0,
+      "opaquePixels": 5746
+    },
+    "neutral": {
+      "path": "public/assets/units/knight/neutral/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 68,
+      "drawnHeight": 128,
+      "offsetX": 30,
+      "offsetY": 0,
+      "opaquePixels": 5746
+    }
+  }
+}

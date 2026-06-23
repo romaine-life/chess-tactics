@@ -9,6 +9,7 @@ const ROLE: Record<PieceType, string> = {
   pawn: 'Forward footman',
   knight: 'L-shaped jumper',
   bishop: 'Diagonal runner',
+  rook: 'Orthogonal siege keep',
   queen: 'Promoted raider',
   king: 'Royal commander',
   rock: 'Impassable obstacle',

@@ -272,27 +272,27 @@ const canonicalTileAssets: Record<ConceptTerrain, string[]> = {
 
 const beforeTileAssets: Record<ConceptTerrain, string[]> = {
   grass: [
-    '/assets/tiles/canonical-accepted/grass-clean-a.png',
-    '/assets/tiles/canonical-accepted/grass-clean-b.png',
-    '/assets/tiles/canonical-accepted/grass-clean-c.png',
+    '/assets/tiles/canonical-clean/grass-clean-a.png',
+    '/assets/tiles/canonical-clean/grass-clean-b.png',
+    '/assets/tiles/canonical-clean/grass-clean-c.png',
   ],
   stone: [
-    '/assets/tiles/canonical-accepted/stone-clean-a.png',
-    '/assets/tiles/canonical-accepted/stone-clean-b.png',
+    '/assets/tiles/canonical-clean/stone-clean-a.png',
+    '/assets/tiles/canonical-clean/stone-clean-b.png',
   ],
   water: [
-    '/assets/tiles/canonical-accepted/water-clean-a.png',
-    '/assets/tiles/canonical-accepted/water-clean-b.png',
+    '/assets/tiles/canonical-clean/water-clean-a.png',
+    '/assets/tiles/canonical-clean/water-clean-b.png',
   ],
   grassStone: [
-    '/assets/tiles/canonical-accepted/transition-grass-stone-a.png',
-    '/assets/tiles/canonical-accepted/transition-grass-stone-b.png',
+    '/assets/tiles/canonical-clean/transition-grass-stone-a.png',
+    '/assets/tiles/canonical-clean/transition-grass-stone-b.png',
   ],
   grassWater: [
-    '/assets/tiles/canonical-accepted/transition-grass-water-a.png',
-    '/assets/tiles/canonical-accepted/transition-grass-water-b.png',
+    '/assets/tiles/canonical-clean/transition-grass-water-a.png',
+    '/assets/tiles/canonical-clean/transition-grass-water-b.png',
   ],
-  edge: ['/assets/tiles/canonical-accepted/grass-clean-a.png'],
+  edge: ['/assets/tiles/canonical-clean/grass-clean-a.png'],
 };
 
 type StudioFamilyId = TileFamilyId;

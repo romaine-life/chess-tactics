@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { acceptedAssetFrameSrc, acceptedTileAssets, acceptedTileFamilies, type AcceptedTileAsset } from '../art/acceptedTiles';
+import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
 import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGenerator';
 import type { Piece, TerrainType } from '../core/types';
 import { enemyThreats, legalMoves, pieceHp, pieceMaxHp } from '../core/rules';
-import { PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import { PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import type { TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
@@ -22,9 +22,16 @@ function isPlayablePieceType(type: Piece['type']): type is PlayablePieceType {
   return (PLAYABLE_PIECE_TYPES as readonly Piece['type'][]).includes(type);
 }
 
+// Team palettes: each side is assigned a body color so the two armies read apart.
+const SIDE_PALETTE: Record<Piece['side'], UnitPalette> = {
+  player: 'navy-blue',
+  enemy: 'crimson',
+  neutral: 'navy-blue',
+};
+
 function pieceImageSrc(piece: Piece): string | null {
   if (piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
-  return pieceSpritePath(piece.type);
+  return pieceSpritePath(piece.type, SIDE_PALETTE[piece.side]);
 }
 
 function terrainMapForGame(game: ReturnType<typeof useSkirmish.getState>['game']): TileFamilyId[] {
@@ -41,14 +48,14 @@ function terrainMapForGame(game: ReturnType<typeof useSkirmish.getState>['game']
 function solveSkirmishBoard(
   game: ReturnType<typeof useSkirmish.getState>['game'],
   seed: number,
-): SocketBoardResult<AcceptedTileAsset> {
+): SocketBoardResult<TileAsset> {
   return solveSocketBoard({
-    assets: acceptedTileAssets,
+    assets: tileAssets,
     terrainMap: terrainMapForGame(game),
     seed,
     columns: game.size.cols,
     rows: game.size.rows,
-    familyAssets: acceptedTileFamilies,
+    familyAssets: tileFamilies,
   });
 }
 
@@ -104,7 +111,7 @@ export function SkirmishBoard() {
     <div data-testid="skirmish-board" className="skirmish-board-lab">
       <BoardLabBoard
         board={board}
-        assetFrameSrc={acceptedAssetFrameSrc}
+        assetFrameSrc={tileFrameSrc}
         boardZoom={0.78}
         boardPan={{ x: 0, y: -18 }}
         className="skirmish-board-surface"

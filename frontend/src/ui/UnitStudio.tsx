@@ -1,10 +1,10 @@
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
-import { pieceSpritePath } from '../core/pieces';
+import { pieceSpritePath, type UnitPalette } from '../core/pieces';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 
-type Faction = 'blue' | 'red' | 'neutral';
-type PieceId = 'pawn' | 'knight' | 'bishop' | 'queen' | 'king';
+type Faction = UnitPalette;
+type PieceId = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king';
 type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 type TileContextId = 'grass' | 'stone' | 'water';
 type FootprintShape = 'square' | 'circle';
@@ -52,6 +52,11 @@ const circleFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanva
   sourceCanvasPx,
   sourceFootprintPx,
 });
+const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
+  shape: 'square',
+  sourceCanvasPx,
+  sourceFootprintPx,
+});
 // Fur knight calibration. anchor = the EXACT projection of the unit's ground-contact
 // point (base bottom-center, world origin) through the render camera — computed, not
 // eyeballed, so seating is mathematically correct. footprint = projected base width.
@@ -82,11 +87,17 @@ const QUEEN_TIARA_CANVAS_PX = 512;
 const QUEEN_TIARA_CONTACT_FOOTPRINT_PX = 150;
 const QUEEN_TIARA_CONTACT_ANCHOR_X = '50%';
 const QUEEN_TIARA_CONTACT_ANCHOR_Y = '80.241%';
+// Badass-keep rook — octagonal fortress; wide star base gives a square footprint.
+const ROOK_KEEP_CANVAS_PX = 512;
+const ROOK_KEEP_CONTACT_FOOTPRINT_PX = 428;
+const ROOK_KEEP_CONTACT_ANCHOR_X = '50%';
+const ROOK_KEEP_CONTACT_ANCHOR_Y = '80.241%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
   knight: 'Knight',
   bishop: 'Bishop',
+  rook: 'Rook',
   queen: 'Queen',
   king: 'King',
 };
@@ -121,7 +132,7 @@ const directionCompassCells: Array<Direction | 'center'> = [
   'east',
 ];
 
-const claudeSprite = (piece: PieceId) => (_faction: Faction, direction: Direction) => pieceSpritePath(piece, direction);
+const claudeSprite = (piece: PieceId) => (palette: Faction, direction: Direction) => pieceSpritePath(piece, palette, direction);
 
 // Shown when a unit has no sprite for the chosen facing — a placeholder, never a
 // disabled control. Directions are always selectable.
@@ -147,7 +158,7 @@ const unitAssets: UnitAsset[] = [
     read: 'Solidified Claude chess pawn render; true-isometric eight-direction unit',
     status: 'active Claude production unit',
     directions: rookDirections,
-    factionMode: 'fixed',
+    factionMode: 'palette',
     defaultScale: 100,
     footprint: circleFootprint(PAWN_HELMET_CANVAS_PX, PAWN_HELMET_CONTACT_FOOTPRINT_PX),
     unitAnchorX: PAWN_HELMET_CONTACT_ANCHOR_X,
@@ -163,7 +174,7 @@ const unitAssets: UnitAsset[] = [
     read: 'Solidified Claude chess king render; true-isometric eight-direction unit',
     status: 'active Claude production unit',
     directions: rookDirections,
-    factionMode: 'fixed',
+    factionMode: 'palette',
     defaultScale: 100,
     footprint: circleFootprint(KING_CROWN_CANVAS_PX, KING_CROWN_CONTACT_FOOTPRINT_PX),
     unitAnchorX: KING_CROWN_CONTACT_ANCHOR_X,
@@ -179,7 +190,7 @@ const unitAssets: UnitAsset[] = [
     read: 'Solidified Claude chess bishop render; true-isometric eight-direction unit',
     status: 'active Claude production unit',
     directions: rookDirections,
-    factionMode: 'fixed',
+    factionMode: 'palette',
     defaultScale: 100,
     footprint: circleFootprint(BISHOP_MITRE_CANVAS_PX, BISHOP_MITRE_CONTACT_FOOTPRINT_PX),
     unitAnchorX: BISHOP_MITRE_CONTACT_ANCHOR_X,
@@ -195,12 +206,28 @@ const unitAssets: UnitAsset[] = [
     read: 'Solidified Claude chess queen render; true-isometric eight-direction unit',
     status: 'active Claude production unit',
     directions: rookDirections,
-    factionMode: 'fixed',
+    factionMode: 'palette',
     defaultScale: 100,
     footprint: circleFootprint(QUEEN_TIARA_CANVAS_PX, QUEEN_TIARA_CONTACT_FOOTPRINT_PX),
     unitAnchorX: QUEEN_TIARA_CONTACT_ANCHOR_X,
     unitAnchorY: QUEEN_TIARA_CONTACT_ANCHOR_Y,
     sprite: claudeSprite('queen'),
+  },
+  {
+    id: 'rook-keep',
+    family: 'rook',
+    label: 'Rook',
+    badge: '8 directions · calibrated',
+    preview: pieceSpritePath('rook'),
+    read: 'Octagonal fortress keep (the “badass” rook); true-isometric eight-direction unit',
+    status: 'active Claude production unit',
+    directions: rookDirections,
+    factionMode: 'palette',
+    defaultScale: 100,
+    footprint: squareFootprint(ROOK_KEEP_CANVAS_PX, ROOK_KEEP_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: ROOK_KEEP_CONTACT_ANCHOR_X,
+    unitAnchorY: ROOK_KEEP_CONTACT_ANCHOR_Y,
+    sprite: claudeSprite('rook'),
   },
   {
     id: 'knight-fur',
@@ -211,7 +238,7 @@ const unitAssets: UnitAsset[] = [
     read: 'Solidified Claude chess knight render; true-isometric eight-direction unit',
     status: 'active Claude production unit',
     directions: rookDirections,
-    factionMode: 'fixed',
+    factionMode: 'palette',
     defaultScale: 100,
     footprint: circleFootprint(KNIGHT_FUR_CANVAS_PX, KNIGHT_FUR_CONTACT_FOOTPRINT_PX),
     unitAnchorX: KNIGHT_FUR_CONTACT_ANCHOR_X,
@@ -221,14 +248,15 @@ const unitAssets: UnitAsset[] = [
 ];
 const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
 
-const grassTile = '/assets/tiles/canonical-accepted/grass-clean-a.png';
-const stoneTile = '/assets/tiles/canonical-accepted/stone-clean-a.png';
-const waterTile = '/assets/tiles/canonical-accepted/water-clean-a.png';
+const grassTile = '/assets/tiles/canonical-clean/grass-clean-a.png';
+const stoneTile = '/assets/tiles/canonical-clean/stone-clean-a.png';
+const waterTile = '/assets/tiles/canonical-clean/water-clean-a.png';
 
 const factionLabels: Record<Faction, string> = {
-  blue: 'Blue',
-  red: 'Red',
-  neutral: 'Neutral',
+  'navy-blue': 'Navy',
+  crimson: 'Crimson',
+  golden: 'Golden',
+  emerald: 'Emerald',
 };
 
 const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
@@ -237,7 +265,7 @@ const tileContexts: Array<{ id: TileContextId; label: string; src: string }> = [
   { id: 'water', label: 'Water', src: waterTile },
 ];
 
-const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'knight' || value === 'bishop' || value === 'queen' || value === 'king';
+const isPieceId = (value: string | null): value is PieceId => value === 'pawn' || value === 'knight' || value === 'bishop' || value === 'rook' || value === 'queen' || value === 'king';
 const isUnitAssetId = (value: string | null): value is string => unitAssets.some((unit) => unit.id === value);
 type UnitStudioMode = 'catalog' | 'view';
 type UnitCollectionFilter = 'production' | 'candidates';
@@ -301,7 +329,7 @@ export function UnitStudio() {
   const initialRoute = useMemo(() => readUnitStudioRoute(), []);
   const [studioMode, setStudioMode] = useState<UnitStudioMode>(initialRoute.mode);
   const [unitId, setUnitId] = useState(initialRoute.unitId);
-  const [faction, setFaction] = useState<Faction>('blue');
+  const [faction, setFaction] = useState<Faction>('navy-blue');
   const [zoom, setZoom] = useState(1.15);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [unitScale, setUnitScale] = useState(initialRoute.unitScale);
@@ -746,8 +774,8 @@ export function UnitStudio() {
                   ))}
                 </div>
               </div>
-              <div className="unit-studio-control-group" aria-label="Faction">
-                <strong>Faction</strong>
+              <div className="unit-studio-control-group" aria-label="Palette">
+                <strong>Palette</strong>
                 <div className="unit-studio-factions">
                   {(Object.keys(factionLabels) as Faction[]).map((item) => (
                     <button

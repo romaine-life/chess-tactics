@@ -1,0 +1,58 @@
+{
+  "piece": "pawn",
+  "label": "Pawn",
+  "source": "public/assets/units/concepts/pawn-helmet-south-concept.png",
+  "sourceWidth": 1254,
+  "sourceHeight": 1254,
+  "outputSize": 128,
+  "crop": {
+    "x": 365,
+    "y": 58,
+    "width": 521,
+    "height": 1150
+  },
+  "stats": {
+    "sourcePixels": 1572516,
+    "protectedPixels": 326988,
+    "backgroundPixels": 1224709,
+    "foregroundPixels": 347525,
+    "foregroundCoverage": 0.221
+  },
+  "notes": [
+    "Deterministic first-pass matte from color salience plus edge-connected dark-background flood fill.",
+    "Background removal is approximate; dark outer shadow pixels can be lost and dark halo pixels near protected color regions can remain.",
+    "Team variants recolor only saturated blue/cyan sprite pixels; gold, white, black, red, and steel trim are intentionally preserved."
+  ],
+  "outputs": {
+    "blue": {
+      "path": "public/assets/units/pawn/blue/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 58,
+      "drawnHeight": 128,
+      "offsetX": 35,
+      "offsetY": 0,
+      "opaquePixels": 4292
+    },
+    "red": {
+      "path": "public/assets/units/pawn/red/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 58,
+      "drawnHeight": 128,
+      "offsetX": 35,
+      "offsetY": 0,
+      "opaquePixels": 4292
+    },
+    "neutral": {
+      "path": "public/assets/units/pawn/neutral/south.png",
+      "width": 128,
+      "height": 128,
+      "drawnWidth": 58,
+      "drawnHeight": 128,
+      "offsetX": 35,
+      "offsetY": 0,
+      "opaquePixels": 4292
+    }
+  }
+}
