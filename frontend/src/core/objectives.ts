@@ -8,7 +8,7 @@ import type { ObjectiveType } from './level';
 import { livingPieces } from './rules';
 
 /** The "royal" piece whose loss ends a capture-king objective. */
-const ROYAL: Piece['type'] = 'queen';
+const ROYAL: Piece['type'] = 'king';
 
 export interface ObjectiveContext {
   /** `survive`: number of player turns that must elapse to win. */

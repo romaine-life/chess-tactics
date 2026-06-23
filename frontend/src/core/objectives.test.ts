@@ -11,7 +11,7 @@ function state(pieces: Piece[]): GameState {
 
 describe('evaluateObjective', () => {
   it('loses on a full player wipe regardless of objective', () => {
-    const s = state([piece('e', 'enemy', 'queen', 0, 0)]);
+    const s = state([piece('e', 'enemy', 'king', 0, 0)]);
     for (const obj of ['capture-all', 'capture-king', 'survive', 'reach'] as const) {
       expect(evaluateObjective(s, obj)).toBe('enemy');
     }
@@ -23,10 +23,10 @@ describe('evaluateObjective', () => {
   });
 
   it('capture-king: won when the enemy royal is gone even if lesser pieces remain', () => {
-    const withQueen = state([piece('p', 'player', 'pawn', 0, 0), piece('eq', 'enemy', 'queen', 5, 5), piece('ep', 'enemy', 'pawn', 4, 4)]);
-    expect(evaluateObjective(withQueen, 'capture-king')).toBeNull();
-    const noQueen = state([piece('p', 'player', 'pawn', 0, 0), piece('ep', 'enemy', 'pawn', 4, 4)]);
-    expect(evaluateObjective(noQueen, 'capture-king')).toBe('player');
+    const withKing = state([piece('p', 'player', 'pawn', 0, 0), piece('ek', 'enemy', 'king', 5, 5), piece('ep', 'enemy', 'pawn', 4, 4)]);
+    expect(evaluateObjective(withKing, 'capture-king')).toBeNull();
+    const noKing = state([piece('p', 'player', 'pawn', 0, 0), piece('ep', 'enemy', 'pawn', 4, 4)]);
+    expect(evaluateObjective(noKing, 'capture-king')).toBe('player');
   });
 
   it('survive: won once the required turns elapse', () => {

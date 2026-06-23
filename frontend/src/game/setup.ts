@@ -5,55 +5,33 @@
 import type { BoardSize, GameState, Piece, PieceType, Side, TerrainCell, TerrainType } from '../core/types';
 import { createRng, type Rng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
+import { acceptedTileAssets, acceptedTileFamilies } from '../art/acceptedTiles';
+import { generateSocketBoard } from '../core/tileBoardGenerator';
+import type { TileFamilyId } from '../core/tileSockets';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
-const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'rook'];
+const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'queen'];
 
-/**
- * Author a moonlit-grassland island terrain layer for a board. Deterministic
- * (driven by `rng`). Design constraints that keep the skirmish always playable:
- *  - The two spawn bands (top two + bottom two rows) stay open grass.
- *  - Impassable tiles (water marking the island edge) only ever land on the
- *    OUTER columns, so the interior columns stay fully connected — pieces can
- *    never be walled off.
- *  - A stone road runs down the centre and a few stone flecks add texture; both
- *    stay passable.
- * Elevation is left at 0 this pass (the floating-island silhouette is rendered
- * as decorative skirt geometry, not gameplay height).
- */
-function buildTerrain(size: BoardSize, rng: Rng): TerrainCell[] {
-  const { cols, rows } = size;
-  const material: Record<string, TerrainType> = {};
-  const put = (x: number, y: number, t: TerrainType): void => { material[`${x},${y}`] = t; };
+const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
+  grass: 'grass',
+  stone: 'stone',
+  water: 'water',
+};
 
-  const interiorTop = 2;
-  const interiorBottom = rows - 3;
-  const roadCol = Math.floor(cols / 2);
-
-  // Island edge: water down the outer columns, inset one row from each spawn
-  // band so a grass shore separates the troops from the drop.
-  for (let y = interiorTop + 1; y <= interiorBottom - 1; y += 1) {
-    put(0, y, 'water');
-    put(cols - 1, y, 'water');
-  }
-  // Centre stone road through the grassland.
-  for (let y = interiorTop; y <= interiorBottom; y += 1) put(roadCol, y, 'road');
-  // A handful of stone flecks scattered across the interior for texture.
-  const interiorRowSpan = Math.max(0, interiorBottom - interiorTop + 1);
-  const flecks = interiorRowSpan ? 4 + rng.int(3) : 0;
-  for (let i = 0; i < flecks; i += 1) {
-    const x = 1 + rng.int(Math.max(1, cols - 2));
-    const y = interiorTop + rng.int(interiorRowSpan);
-    if (!material[`${x},${y}`]) put(x, y, 'stone');
-  }
-
-  const cells: TerrainCell[] = [];
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < cols; x += 1) {
-      cells.push({ x, y, terrain: material[`${x},${y}`] ?? 'grass', elevation: 0 });
-    }
-  }
-  return cells;
+function buildTerrain(size: BoardSize, seed: number): TerrainCell[] {
+  const board = generateSocketBoard({
+    assets: acceptedTileAssets,
+    seed,
+    columns: size.cols,
+    rows: size.rows,
+    familyAssets: acceptedTileFamilies,
+  });
+  return board.cells.map((cell) => ({
+    x: cell.x,
+    y: cell.y,
+    terrain: FAMILY_TO_TERRAIN[cell.terrain],
+    elevation: 0,
+  }));
 }
 
 export interface SkirmishOptions {
@@ -77,7 +55,7 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
   const size = opts.size ?? DEFAULT_SIZE;
   const party = opts.party ?? ['knight', 'bishop'];
   const rng = createRng(opts.seed);
-  const terrain = buildTerrain(size, rng);
+  const terrain = buildTerrain(size, opts.seed);
   const pieces: Piece[] = [];
   // Seed `taken` with impassable terrain so no piece spawns on water/cliff.
   const taken = new Set<string>();
@@ -101,7 +79,7 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
   };
 
   place('player', ['pawn', ...party], [size.rows - 1, size.rows - 2]);
-  place('enemy', ['pawn', rng.pick(ENEMY_CHOICES), rng.pick(ENEMY_CHOICES)], [0, 1]);
+  place('enemy', ['king', rng.pick(ENEMY_CHOICES), rng.pick(ENEMY_CHOICES)], [0, 1]);
 
   const midYs: number[] = [];
   for (let y = 2; y <= size.rows - 3; y += 1) midYs.push(y);
