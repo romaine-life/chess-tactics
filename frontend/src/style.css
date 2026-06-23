@@ -11001,8 +11001,11 @@ button.tileset-relationship-cell {
 .tileset-generated-board-tile {
   position: absolute;
   width: 96px;
-  height: 140px;
-  transform: translate(-48px, -27px);
+  height: 180px;
+  /* 180px frame: ~42px of headroom above the contact diamond (equator at y69) for 3D
+     protrusion (standing grass, relief). Anchor the equator to the cell so tiles still
+     tessellate and units seat exactly as before. */
+  transform: translate(-48px, -69px);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -11011,8 +11014,8 @@ button.tileset-relationship-cell {
 .tileset-generated-board-tile img {
   display: block;
   width: 96px;
-  height: 140px;
-  image-rendering: pixelated;
+  height: 180px;
+  image-rendering: auto;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
