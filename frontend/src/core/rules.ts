@@ -3,7 +3,7 @@
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
 // last-side-standing) — but deterministic and immutable.
 
-import type { BoardSize, EnemyIntent, GameEvent, GameState, Move, Piece, PieceType, Side, Vec, Winner } from './types';
+import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, Vec, Winner } from './types';
 import type { Rng } from './rng';
 import { canTraverse, elevationAt, type TerrainIndex } from './terrain';
 
@@ -69,12 +69,13 @@ export function isEnemy(piece: Piece, target: Piece | null): boolean {
 
 /**
  * Optional movement environment. When `terrain` is supplied, impassable tiles
- * (water/cliff/rock) and un-climbable elevation rises block movement — a terrain
+ * (cliff/rock) and un-climbable elevation rises block movement — a terrain
  * wall stops a ray and removes a step. Omitting it reproduces pure chess
  * movement, so every existing caller is unaffected.
  */
 export interface MoveEnv {
   terrain?: TerrainIndex;
+  lastMove?: LastMove;
 }
 
 /** Whether terrain in `env` forbids moving into (x, y) from `originElev`. */
@@ -137,13 +138,28 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
     const occ = pieceAt(pieces, x, y);
     if (isEnemy(piece, occ)) moves.push({ x, y, capture: occ!.id });
   }
+
+  const last = env?.lastMove;
+  if (
+    last?.pieceType === 'pawn' &&
+    last.side !== piece.side &&
+    Math.abs(last.from.y - last.to.y) === 2 &&
+    last.to.y === piece.y &&
+    Math.abs(last.to.x - piece.x) === 1
+  ) {
+    const x = last.to.x;
+    const y = piece.y + dir;
+    if (inBounds(x, y, size) && !pieceAt(pieces, x, y) && !blockedByTerrain(env, originElev, x, y)) {
+      moves.push({ x, y, capture: last.pieceId, enPassant: true });
+    }
+  }
   return moves;
 }
 
 /**
  * All legal destinations for a piece (excludes obstacles, which never move).
- * Pass `env.terrain` to apply terrain movement effects (water/cliff barriers and
- * elevation limits); omit it for pure chess movement.
+ * Pass `env.terrain` to apply terrain movement effects (cliff/rock barriers and
+ * elevation limits); omit it for pure chess movement. Water is passable.
  */
 export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Move[] {
   if (!piece || !piece.alive || isObstacle(piece)) return [];
@@ -228,6 +244,7 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
   if (!piece) return { state, events };
 
   const from: Vec = { x: piece.x, y: piece.y };
+  const movedPieceType = piece.type;
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
   // Attacker displaces onto the target square only when the target dies. With
   // hp > 1 the target survives the hit and the attacker stays put (an
@@ -289,7 +306,11 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
     }
   }
 
-  return { state: { ...state, pieces, winner, turn }, events };
+  const lastMove: LastMove | undefined = displaced
+    ? { pieceId: piece.id, pieceType: movedPieceType, side: piece.side, from, to: { x: piece.x, y: piece.y } }
+    : state.lastMove;
+
+  return { state: { ...state, pieces, winner, turn, lastMove }, events };
 }
 
 /**

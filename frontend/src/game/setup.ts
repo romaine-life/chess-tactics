@@ -60,7 +60,7 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
   const rng = createRng(opts.seed);
   const terrain = buildTerrain(size, opts.seed);
   const pieces: Piece[] = [];
-  // Seed `taken` with impassable terrain so no piece spawns on water/cliff.
+  // Seed `taken` with impassable terrain so no piece spawns on blocking cliffs/rocks.
   const taken = new Set<string>();
   for (const c of terrain) if (!isPassableTerrain(c.terrain)) taken.add(`${c.x},${c.y}`);
 
@@ -76,7 +76,7 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
         x: cell.x,
         y: cell.y,
         alive: true,
-        startY: side === 'player' ? size.rows - 1 : 0,
+        startY: cell.y,
       });
     });
   };

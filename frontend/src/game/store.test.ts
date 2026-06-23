@@ -15,7 +15,18 @@ describe('skirmish store', () => {
     const s = useSkirmish.getState();
     expect(s.game.turn).toBe('player');
     expect(s.selectedId).not.toBeNull();
+    expect(s.focusedId).toBe(s.selectedId);
     expect(livingPieces(s.game.pieces, 'player').length).toBeGreaterThan(0);
+  });
+
+  it('can focus an enemy without changing the player movement selection', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    const selectedId = useSkirmish.getState().selectedId;
+    const enemy = livingPieces(useSkirmish.getState().game.pieces, 'enemy')[0];
+    expect(enemy).toBeTruthy();
+    useSkirmish.getState().focus(enemy.id);
+    expect(useSkirmish.getState().focusedId).toBe(enemy.id);
+    expect(useSkirmish.getState().selectedId).toBe(selectedId);
   });
 
   it('a legal move advances state and hands the turn back to the player (or ends)', () => {

@@ -58,6 +58,15 @@ describe('createSkirmish', () => {
     for (const p of livingPieces(s.pieces, 'enemy')) expect(p.y).toBeLessThanOrEqual(1);
   });
 
+  it('marks spawned pawns as being on their home rank', () => {
+    for (const seed of [1, 2, 5, 7, 13, 42, 99]) {
+      const s = createSkirmish({ seed });
+      for (const pawn of s.pieces.filter((p) => p.type === 'pawn')) {
+        expect(pawn.startY).toBe(pawn.y);
+      }
+    }
+  });
+
   it('authors a full terrain grid (one cell per tile)', () => {
     const s = createSkirmish({ seed: 7 });
     expect(s.terrain).toBeDefined();
