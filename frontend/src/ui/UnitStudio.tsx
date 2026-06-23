@@ -80,6 +80,11 @@ const KING_CROWN_CANVAS_PX = 512;
 const KING_CROWN_CONTACT_FOOTPRINT_PX = 148;
 const KING_CROWN_CONTACT_ANCHOR_X = '50%';
 const KING_CROWN_CONTACT_ANCHOR_Y = '80.241%';
+// Bishop + mitre — mitre hand-fitted on the head; same computed-anchor calibration.
+const BISHOP_MITRE_CANVAS_PX = 512;
+const BISHOP_MITRE_CONTACT_FOOTPRINT_PX = 158;
+const BISHOP_MITRE_CONTACT_ANCHOR_X = '50%';
+const BISHOP_MITRE_CONTACT_ANCHOR_Y = '80.241%';
 
 const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -132,6 +137,9 @@ const pawnHelmetSprite = (_faction: Faction, direction: Direction) => `/assets/u
 // Crowned king: Staunton king (OBJ) wearing a gold/jewel crown (FBX) hand-seated on the
 // head; navy body, real gold crown material. Rotationally symmetric, 8 fixed directions.
 const kingCrownSprite = (_faction: Faction, direction: Direction) => `/assets/units/king/blender-render-crown/${direction}.png`;
+// Bishop: classic Staunton bishop (FBX) wearing a separate mitre (OBJ) hand-seated on
+// the head, navy-styled; the mitre's front peak gives a per-direction facing. 8 directions.
+const bishopMitreSprite = (_faction: Faction, direction: Direction) => `/assets/units/bishop/blender-render-mitre/${direction}.png`;
 
 // Shown when a unit has no sprite for the chosen facing — a placeholder, never a
 // disabled control. Directions are always selectable.
@@ -179,6 +187,22 @@ const unitAssets: UnitAsset[] = [
     unitAnchorX: KING_CROWN_CONTACT_ANCHOR_X,
     unitAnchorY: KING_CROWN_CONTACT_ANCHOR_Y,
     sprite: kingCrownSprite,
+  },
+  {
+    id: 'bishop-mitre',
+    family: 'bishop',
+    label: 'Bishop',
+    badge: '8 directions · calibrated',
+    preview: '/assets/units/bishop/blender-render-mitre/south.png',
+    read: 'Navy Staunton bishop wearing a hand-fitted mitre (the peak faces the unit\'s direction); true-isometric Blender render',
+    status: 'active Blender production unit',
+    directions: rookDirections,
+    factionMode: 'fixed',
+    defaultScale: 100,
+    footprint: circleFootprint(BISHOP_MITRE_CANVAS_PX, BISHOP_MITRE_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: BISHOP_MITRE_CONTACT_ANCHOR_X,
+    unitAnchorY: BISHOP_MITRE_CONTACT_ANCHOR_Y,
+    sprite: bishopMitreSprite,
   },
   {
     id: 'rook-blender-v4-calibrated',

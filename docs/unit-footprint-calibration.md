@@ -110,6 +110,26 @@ unitAnchorY: '80.241%'
 
 The crown was hand-fitted in Blender (not scripted), so unlike the pawn/knight there's no procedural recipe — the assembled `.blend` is the source. King + crown are rotationally symmetric (no per-direction facing).
 
+## Active Blender Bishop
+
+Asset:
+
+- `frontend/public/assets/units/bishop/blender-render-mitre/*.png` (navy Staunton bishop + navy mitre, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/bishop-mitre/` (`bishop_mitre.blend` is the hand-assembled source of truth; `render_bishop_mitre.py` re-renders it).
+
+Calibration (same camera + base-at-origin normalization as the rest of the roster):
+
+- Source canvas: `512x512px`
+- Contact footprint (max projected base width): `158px`
+- **Anchor: `x=50%`, `y=80.241%`** — computed via `world_to_camera_view(scene, cam, (0,0,0))`.
+
+```ts
+footprint: circleFootprint(512, 158)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
+```
+
+The mitre was hand-fitted in Blender (not scripted) — the assembled `.blend` is the source. Unlike the king, the mitre's front peak gives a genuine per-direction facing across the 8 sprites.
+
 ## Next Blender Export Rule
 
 For every new Blender unit export:
