@@ -1,6 +1,6 @@
 import { useSkirmish } from '../game/store';
 import { enemyThreats, livingPieces } from '../core/rules';
-import { PIECE_LABEL, PIECE_MARK } from '../core/pieces';
+import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, portraitPath } from '../core/pieces';
 import type { Piece, PieceType, Side } from '../core/types';
 
 const TYPE_LABEL = PIECE_LABEL;
@@ -99,7 +99,16 @@ export function SkirmishHud() {
         <h2>Selected Unit</h2>
         <div className="skirmish-selected-body">
           <div className="skirmish-portrait-frame">
-            <UnitBadge piece={selected} large />
+            {selected && isPlayablePieceType(selected.type) ? (
+              <img
+                className="skirmish-portrait"
+                src={portraitPath(selected.type, PALETTE_FOR_SIDE[selected.side])}
+                alt=""
+                draggable={false}
+              />
+            ) : (
+              <UnitBadge piece={selected} large />
+            )}
           </div>
           <div className="skirmish-selected-copy">
             <strong data-testid="selected-name">{selected ? TYPE_LABEL[selected.type] : 'None'}</strong>

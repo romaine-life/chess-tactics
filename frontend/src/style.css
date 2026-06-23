@@ -6679,6 +6679,17 @@ h1 {
   place-items: center;
 }
 
+/* Eye-level portrait bust (separate render contract from the iso board sprite). Smooth
+   (not pixelated) since it's a detailed hero render; bottom-anchored so the bust sits in
+   the frame instead of floating. */
+.skirmish-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  image-rendering: auto;
+}
+
 .skirmish-selected-copy {
   min-width: 0;
 }
