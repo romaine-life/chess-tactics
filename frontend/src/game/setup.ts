@@ -16,6 +16,9 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
   grass: 'grass',
   stone: 'stone',
   water: 'water',
+  dirt: 'dirt',
+  pebble: 'pebble',
+  sand: 'sand',
 };
 
 function buildTerrain(size: BoardSize, seed: number): TerrainCell[] {

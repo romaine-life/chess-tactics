@@ -11,7 +11,7 @@ export type PieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king'
  * in `core/level.ts` so both the editor's `Level` and the live `GameState` share
  * one terrain vocabulary; `core/level.ts` re-exports these for back-compat.
  */
-export type TerrainType = 'grass' | 'water' | 'stone' | 'road' | 'bridge' | 'cliff' | 'rock';
+export type TerrainType = 'grass' | 'water' | 'stone' | 'road' | 'bridge' | 'cliff' | 'rock' | 'dirt' | 'pebble' | 'sand';
 
 export interface Vec {
   x: number;

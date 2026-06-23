@@ -6,6 +6,9 @@ const families: Record<TileFamilyId, TileSocketAsset[]> = {
   grass: [{ id: 'grass', kind: 'tile', role: 'base', probability: 1 }],
   stone: [{ id: 'stone', kind: 'tile', role: 'base', probability: 1 }],
   water: [],
+  dirt: [],
+  pebble: [],
+  sand: [],
 };
 
 describe('buildTileCoverageReport', () => {
@@ -19,6 +22,6 @@ describe('buildTileCoverageReport', () => {
     expect(report.filledTransitionSlots).toBe(1);
     expect(report.missingTransitionSlots).toHaveLength(41);
     expect(report.invalidTransitionAssets.map((asset) => asset.id)).toEqual(['bad-transition']);
-    expect(report.familiesWithoutBase).toEqual(['water']);
+    expect(report.familiesWithoutBase).toEqual(['water', 'dirt', 'pebble', 'sand']);
   });
 });

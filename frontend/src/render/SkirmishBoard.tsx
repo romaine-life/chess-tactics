@@ -18,6 +18,9 @@ const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
   cliff: 'stone',
   rock: 'stone',
   water: 'water',
+  dirt: 'dirt',
+  pebble: 'pebble',
+  sand: 'sand',
 };
 
 function isPlayablePieceType(type: Piece['type']): type is PlayablePieceType {
