@@ -4,7 +4,7 @@
 
 export type Side = 'player' | 'enemy' | 'neutral';
 
-export type PieceType = 'pawn' | 'knight' | 'bishop' | 'queen' | 'king' | 'rock' | 'random-rock';
+export type PieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king' | 'rock' | 'random-rock';
 
 /**
  * Board tile materials. Defined here (the foundational type module) rather than

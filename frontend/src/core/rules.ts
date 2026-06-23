@@ -43,7 +43,7 @@ export function sideHasAp(state: GameState, side: Side): boolean {
 
 /** Relative worth, used to rank enemy targets when forecasting intents. */
 const PIECE_VALUE: Record<PieceType, number> = {
-  pawn: 1, knight: 3, bishop: 3, queen: 9, king: 100, rock: 0, 'random-rock': 0,
+  pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100, rock: 0, 'random-rock': 0,
 };
 
 const manhattan = (a: Vec, b: Vec): number => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -152,6 +152,7 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
     case 'pawn': return pawnMoves(piece, pieces, size, env, originElev);
     case 'knight': return stepMoves(piece, pieces, size, KNIGHT, env, originElev);
     case 'bishop': return rayMoves(piece, pieces, size, DIAG, env, originElev);
+    case 'rook': return rayMoves(piece, pieces, size, ORTHO, env, originElev);
     case 'queen': return rayMoves(piece, pieces, size, ALL8, env, originElev);
     case 'king': return stepMoves(piece, pieces, size, ALL8, env, originElev);
     default: return [];
@@ -177,7 +178,7 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
   if (piece.type === 'king') {
     return ALL8.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy })).filter((p) => inBounds(p.x, p.y, size));
   }
-  const dirs = piece.type === 'bishop' ? DIAG : ALL8;
+  const dirs = piece.type === 'bishop' ? DIAG : piece.type === 'rook' ? ORTHO : ALL8;
   const out: Vec[] = [];
   for (const [dx, dy] of dirs) {
     for (let step = 1; ; step += 1) {

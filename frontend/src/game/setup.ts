@@ -10,7 +10,7 @@ import { generateSocketBoard } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
-const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'queen'];
+const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'rook', 'queen'];
 
 const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
   grass: 'grass',
