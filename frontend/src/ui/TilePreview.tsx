@@ -879,11 +879,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const effectiveTileFilter =
     studioMode === 'catalog'
       ? routeTileFilter === 'board' ? studioDefaults.tileFilter : routeTileFilter
-      : routeLabMode === 'board'
-        ? 'board'
-        : routeTileFilter === 'board'
-          ? studioDefaults.tileFilter
-          : routeTileFilter;
+      : routeTileFilter;
   return {
     familyId: isStudioFamilyId(family) ? family : studioDefaults.familyId,
     studioMode,
@@ -906,11 +902,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   const routeTileFilter =
     route.studioMode === 'catalog'
       ? route.tileFilter === 'board' ? studioDefaults.tileFilter : route.tileFilter
-      : route.labMode === 'board'
-        ? 'board'
-        : route.tileFilter === 'board'
-          ? studioDefaults.tileFilter
-          : route.tileFilter;
+      : route.tileFilter;
   const params = new URLSearchParams();
   params.set('family', route.familyId);
   params.set('mode', route.studioMode);
@@ -2644,7 +2636,7 @@ export function TilesetStudio(): ReactElement {
   const editableGrid = viewKind === 'board' ? { columns: generatedBoardSize.columns, rows: generatedBoardSize.rows } : { columns: 8, rows: 6 };
   // Re-seed the editable board whenever the *loaded view* changes (a new tile,
   // transition, or a freshly generated board). Painting then mutates the seed.
-  const boardSeedKey = `${viewKind}|${selectedAsset.id}|${selectedSlotMask ?? ''}|${boardMode}|${boardSeed}|${boardSize}|${boardScope}|${transitionViewMode}|${labMode}|${unitBrushAsset.id}`;
+  const boardSeedKey = `${viewKind}|${selectedAsset.id}|${selectedSlotMask ?? ''}|${boardMode}|${boardSeed}|${boardSize}|${boardScope}|${transitionViewMode}`;
   const focusedViewBoardRef = useRef(focusedViewBoard);
   focusedViewBoardRef.current = focusedViewBoard;
   const editableGridRef = useRef(editableGrid);
@@ -2691,6 +2683,23 @@ export function TilesetStudio(): ReactElement {
     if (selectedAsset.kind === 'tile') setBrushId(selectedAsset.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardSeedKey]);
+
+  useEffect(() => {
+    if (labMode !== 'unit' || Object.keys(boardUnits).length > 0) return;
+    const placed = Object.keys(boardCells).map((key) => key.split(',').map(Number) as [number, number]);
+    if (placed.length === 0) return;
+    const xs = placed.map(([x]) => x);
+    const ys = placed.map(([, y]) => y);
+    const x = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
+    const y = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
+    setBoardUnits({
+      [`${x},${y}`]: {
+        unitId: unitBrushAsset.id,
+        direction: unitBrushDirection,
+        faction: unitBrushFaction,
+      },
+    });
+  }, [boardCells, boardUnits, labMode, unitBrushAsset.id, unitBrushDirection, unitBrushFaction]);
   // Select a tile, then "Fill cardinals" places the legal base tile of each edge
   // socket's family at N/E/S/W — recreating the old transition-proof view.
   const fillCardinals = (): void => {
@@ -2931,10 +2940,7 @@ export function TilesetStudio(): ReactElement {
   };
 
   const openBoardLab = () => {
-    setCategory('tiles');
     setLabMode('board');
-    setTileFilter('board');
-    setSelectedSlotMask(undefined);
     setViewHasTarget(true);
     setStudioMode('lab');
   };
