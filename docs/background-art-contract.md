@@ -5,6 +5,10 @@ This document converts the lore/anti-story direction in
 background images, unit-select portrait backdrops, prompts, review, and runtime
 integration.
 
+For each multi-image background set, first define a hidden-scenario brief in
+[`background-set-briefs.md`](background-set-briefs.md). Do not generate a set
+from generic medieval locations alone.
+
 Use the accepted generated main-menu background as the style anchor:
 
 - `frontend/public/assets/ui/main-menu/background-scene-v1.png`
@@ -70,6 +74,12 @@ material, and anti-story constraints, but they may be discontinuous fragments:
 different roads, courtyards, chapels, weather, or distances. This is preferred
 when it helps the project imply a larger universe without fulfilling that
 promise as literal story or map continuity.
+
+They should also echo the set's hidden scenario through role-specific residues:
+labor without worker, travel without traveler, ritual without congregation,
+defense without battle, court without court, command without commander. The
+specific residue changes per set; the important rule is that each portrait has a
+purpose-shaped absence, not merely a generic archetype location.
 
 ## Visual Rules
 
