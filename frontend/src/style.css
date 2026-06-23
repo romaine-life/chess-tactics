@@ -8792,6 +8792,8 @@ h1 {
   display: flex;
   gap: 8px;
   align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
 }
 
 /* Match the standalone Settings link's box height to the segmented tab groups
@@ -8801,7 +8803,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 92px;
+  min-width: 82px;
 }
 
 .tileset-studio-actions a,
@@ -8821,7 +8823,7 @@ h1 {
 
 .tileset-mode-tabs {
   display: grid;
-  grid-auto-columns: minmax(92px, 1fr);
+  grid-auto-columns: minmax(78px, 1fr);
   grid-auto-flow: column;
   gap: 5px;
   padding: 5px;
@@ -8831,7 +8833,7 @@ h1 {
 }
 
 .tileset-mode-tabs button {
-  min-width: 92px;
+  min-width: 78px;
   border-color: transparent;
 }
 
