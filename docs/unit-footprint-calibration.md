@@ -90,6 +90,26 @@ unitAnchorY: '80.241%'
 
 The pawn body is rotationally symmetric; the helmet's visor provides the per-direction facing (visor → game-south at yaw 0).
 
+## Active Blender King
+
+Asset:
+
+- `frontend/public/assets/units/king/blender-render-crown/*.png` (navy Staunton king + gold/jewel crown, hand-fitted). Source + recipe: `docs/art/unit-concepts/blender-units/king-crown/` (`king_crown.blend` is the hand-assembled source of truth; `render_king_crown.py` re-renders it).
+
+Calibration (same camera + base-at-origin normalization as the rest of the roster):
+
+- Source canvas: `512x512px`
+- Contact footprint (max projected base width): `148px`
+- **Anchor: `x=50%`, `y=80.241%`** — computed via `world_to_camera_view(scene, cam, (0,0,0))`.
+
+```ts
+footprint: circleFootprint(512, 148)
+unitAnchorX: '50%'
+unitAnchorY: '80.241%'
+```
+
+The crown was hand-fitted in Blender (not scripted), so unlike the pawn/knight there's no procedural recipe — the assembled `.blend` is the source. King + crown are rotationally symmetric (no per-direction facing).
+
 ## Next Blender Export Rule
 
 For every new Blender unit export:
