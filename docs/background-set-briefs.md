@@ -271,6 +271,24 @@ beautiful and dispossessed.
 Use the dedicated historical-anchor note for the full visible residues,
 forbidden explanations, and portrait echoes.
 
+### Set 03 Candidate: After The Sanctuary
+
+**Historical anchor:** [Destruction of Jerusalem and the Second Temple, 70 CE](lore/historical-anchors/jerusalem-second-temple-70-ce.md)
+
+**Status:** Locked candidate.
+
+**Hidden scenario:** the sacred center has been destroyed and the old ritual
+world cannot continue in its previous form; survival moves into roads, rooms,
+teaching, memory, and ordinary objects.
+
+**Emotional contradiction:** shattered and continuous; sacred and administrative;
+displaced and still living.
+
+This set may also carry the Philip K. Dick / *VALIS* resonance of Rome as the
+Empire that "never ended," but only as a hidden interpretive pressure. Do not
+literalize PKD, the Black Iron Prison, stopped time, or gnostic imagery in the
+art.
+
 ## Candidate Scenario Bank
 
 These are not accepted sets yet. They are seeds for brainstorming.
