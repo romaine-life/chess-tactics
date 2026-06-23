@@ -76,6 +76,18 @@ const KNIGHT_FUR_CANVAS_PX = 512;
 const KNIGHT_FUR_CONTACT_FOOTPRINT_PX = 178;
 const KNIGHT_FUR_CONTACT_ANCHOR_X = '50%';
 const KNIGHT_FUR_CONTACT_ANCHOR_Y = '80.241%';
+const BISHOP_MITRE_CANVAS_PX = 512;
+const BISHOP_MITRE_CONTACT_FOOTPRINT_PX = 126;
+const BISHOP_MITRE_CONTACT_ANCHOR_X = '50%';
+const BISHOP_MITRE_CONTACT_ANCHOR_Y = '80.241%';
+const QUEEN_TIARA_CANVAS_PX = 512;
+const QUEEN_TIARA_CONTACT_FOOTPRINT_PX = 150;
+const QUEEN_TIARA_CONTACT_ANCHOR_X = '50%';
+const QUEEN_TIARA_CONTACT_ANCHOR_Y = '80.241%';
+const KING_CROWN_CANVAS_PX = 512;
+const KING_CROWN_CONTACT_FOOTPRINT_PX = 148;
+const KING_CROWN_CONTACT_ANCHOR_X = '50%';
+const KING_CROWN_CONTACT_ANCHOR_Y = '80.241%';
 
 export const familyLabels: Record<PieceId, string> = {
   pawn: 'Pawn',
@@ -156,6 +168,54 @@ export const unitAssets: UnitAsset[] = [
     unitAnchorX: KNIGHT_FUR_CONTACT_ANCHOR_X,
     unitAnchorY: KNIGHT_FUR_CONTACT_ANCHOR_Y,
     sprite: paletteSprite('knight'),
+  },
+  {
+    id: 'bishop-mitre',
+    family: 'bishop',
+    label: 'Bishop',
+    badge: '8 directions · calibrated',
+    preview: pieceSpritePath('bishop'),
+    read: 'Mitre bishop rendered as a true-isometric eight-direction production unit',
+    status: 'active production unit',
+    directions: rookDirections,
+    factionMode: 'palette',
+    defaultScale: 100,
+    footprint: circleFootprint(BISHOP_MITRE_CANVAS_PX, BISHOP_MITRE_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: BISHOP_MITRE_CONTACT_ANCHOR_X,
+    unitAnchorY: BISHOP_MITRE_CONTACT_ANCHOR_Y,
+    sprite: paletteSprite('bishop'),
+  },
+  {
+    id: 'queen-tiara',
+    family: 'queen',
+    label: 'Queen',
+    badge: '8 directions · calibrated',
+    preview: pieceSpritePath('queen'),
+    read: 'Coronet queen rendered as a true-isometric eight-direction production unit',
+    status: 'active production unit',
+    directions: rookDirections,
+    factionMode: 'palette',
+    defaultScale: 100,
+    footprint: circleFootprint(QUEEN_TIARA_CANVAS_PX, QUEEN_TIARA_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: QUEEN_TIARA_CONTACT_ANCHOR_X,
+    unitAnchorY: QUEEN_TIARA_CONTACT_ANCHOR_Y,
+    sprite: paletteSprite('queen'),
+  },
+  {
+    id: 'king-crown',
+    family: 'king',
+    label: 'King',
+    badge: '8 directions · calibrated',
+    preview: pieceSpritePath('king'),
+    read: 'Crowned king rendered as a true-isometric eight-direction production unit',
+    status: 'active production unit',
+    directions: rookDirections,
+    factionMode: 'palette',
+    defaultScale: 100,
+    footprint: circleFootprint(KING_CROWN_CANVAS_PX, KING_CROWN_CONTACT_FOOTPRINT_PX),
+    unitAnchorX: KING_CROWN_CONTACT_ANCHOR_X,
+    unitAnchorY: KING_CROWN_CONTACT_ANCHOR_Y,
+    sprite: paletteSprite('king'),
   },
 ];
 
