@@ -2224,6 +2224,7 @@ export function TilesetStudio(): ReactElement {
   );
   const [catalogQuery, setCatalogQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
+  const skipNextRouteWriteRef = useRef(false);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [showFootprint, setShowFootprint] = useState(true);
   const [showBefore, setShowBefore] = useState(false);
@@ -2657,6 +2658,10 @@ export function TilesetStudio(): ReactElement {
   }, [boardMode, boardScope, boardSeed, boardSize, selectedAsset.id, selectedSlotMask, viewVisualKind]);
 
   useEffect(() => {
+    if (skipNextRouteWriteRef.current) {
+      skipNextRouteWriteRef.current = false;
+      return;
+    }
     writeTilesetStudioRoute({
       familyId,
       studioMode,
@@ -2841,10 +2846,12 @@ export function TilesetStudio(): ReactElement {
           ? 'Inspect the selected unit in board context.'
           : 'Inspect the selected tile in board context.';
   const openCatalogMode = (): void => {
+    skipNextRouteWriteRef.current = true;
     if (tileFilter === 'board') setTileFilter('base');
     setStudioMode('catalog');
   };
   const openLabMode = (): void => {
+    skipNextRouteWriteRef.current = true;
     if (!viewHasTarget) {
       openBoardLab();
       return;

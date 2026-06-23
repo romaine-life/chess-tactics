@@ -127,6 +127,7 @@ export function UnitStudio() {
   const [selectedFamilyFilters, setSelectedFamilyFilters] = useState<PieceId[]>(initialRoute.familyFilters);
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<UnitCollectionFilter[]>(initialRoute.collectionFilters);
   const filterDropdownRef = useRef<HTMLDivElement | null>(null);
+  const skipNextRouteWriteRef = useRef(false);
   const selectedUnit = unitAssets.find((unit) => unit.id === unitId) ?? unitAssets[0];
   const unitRenderSize = renderSizeForTileScale(selectedUnit, unitScale, UNIT_INSPECTION_TILE_SCALE);
   const unitFootprintSize = footprintSizeFromScale(selectedUnit, unitScale);
@@ -190,6 +191,10 @@ export function UnitStudio() {
   }, [filterOpen]);
 
   useEffect(() => {
+    if (skipNextRouteWriteRef.current) {
+      skipNextRouteWriteRef.current = false;
+      return;
+    }
     const params = new URLSearchParams();
     params.set('unit', selectedUnit.id);
     params.set('piece', selectedUnit.family);
@@ -286,10 +291,26 @@ export function UnitStudio() {
         </div>
         <nav className="tileset-studio-actions" aria-label="Unit studio navigation">
           <span className="tileset-mode-tabs" aria-label="Workspace mode">
-            <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={() => setStudioMode('catalog')} title="Browse unit catalogs.">
+            <button
+              type="button"
+              className={studioMode === 'catalog' ? 'is-active' : ''}
+              onClick={() => {
+                skipNextRouteWriteRef.current = true;
+                setStudioMode('catalog');
+              }}
+              title="Browse unit catalogs."
+            >
               Catalog
             </button>
-            <button type="button" className={studioMode === 'view' ? 'is-active' : ''} onClick={() => openBoardLab()} title="Open the shared lab with this unit placed.">
+            <button
+              type="button"
+              className={studioMode === 'view' ? 'is-active' : ''}
+              onClick={() => {
+                skipNextRouteWriteRef.current = true;
+                setStudioMode('view');
+              }}
+              title="Inspect this unit."
+            >
               Lab
             </button>
           </span>
