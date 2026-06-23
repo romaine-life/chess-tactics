@@ -9323,6 +9323,7 @@ h1 {
 }
 
 .tileset-view-header button {
+  order: 2;
   min-height: 36px;
   padding: 9px 12px;
   color: #d8eaff;
@@ -9331,6 +9332,17 @@ h1 {
   border-radius: 4px;
   cursor: pointer;
   font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.tileset-view-header > div {
+  order: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tileset-view-header .tileset-context-tabs {
+  order: 3;
+  flex: 0 0 auto;
 }
 
 .tileset-view-header h2,
@@ -9342,7 +9354,7 @@ h1 {
 }
 
 .tileset-view-header h2 {
-  font-size: 24px;
+  font-size: 30px;
 }
 
 .tileset-view-header p {
@@ -10027,7 +10039,7 @@ h1 {
 .tileset-catalog-heading {
   display: grid;
   gap: 3px;
-  min-width: 180px;
+  min-width: 240px;
   margin-right: auto;
 }
 
