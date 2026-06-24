@@ -173,7 +173,6 @@ function SettingsToggle({
       onClick={() => onChange(!checked)}
     >
       <img src={`/assets/ui/kit/toggle-${checked ? 'on' : 'off'}.png`} alt="" aria-hidden="true" />
-      <span>{checked ? 'On' : 'Off'}</span>
     </button>
   );
 }

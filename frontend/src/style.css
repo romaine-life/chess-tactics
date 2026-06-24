@@ -12608,8 +12608,7 @@ button.tileset-relationship-cell {
 .settings-tab em,
 .settings-panel-heading p,
 .settings-row p,
-.settings-row-value,
-.settings-toggle span {
+.settings-row-value {
   color: #9fc4d5;
   font-style: normal;
   line-height: 1.25;
@@ -12932,22 +12931,6 @@ button.tileset-relationship-cell {
   height: 45px;
   image-rendering: pixelated;
   width: 150px;
-}
-
-.settings-toggle span {
-  color: #f8fcff;
-  font-size: .82rem;
-  left: 50%;
-  pointer-events: none;
-  position: absolute;
-  text-shadow: 0 2px 0 #02070b;
-  text-transform: uppercase;
-  top: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.settings-toggle.is-off span {
-  color: #bdcad0;
 }
 
 .settings-tab:hover,
