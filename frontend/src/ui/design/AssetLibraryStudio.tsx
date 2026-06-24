@@ -119,27 +119,34 @@ export function AssetLab({ name, onBack }: { name: string; onBack: () => void })
         <button type="button" onClick={onBack}>← Catalog</button>
         <span className="al-lab-path">{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h} · {item.url}</span>
       </div>
-      <div className="al-lab-stages">
-        {found.kind === 'glyph' ? (
-          <>
-            <figure className="al-stage"><span className="al-checker"><img src={item.url} alt={item.name} className="al-glyph-lg" /></span><figcaption>default · transparency</figcaption></figure>
-            <figure className="al-stage"><span className="al-in-button"><img src={item.url} alt="" className="al-glyph-md" /></span><figcaption>in a button</figcaption></figure>
-            <figure className="al-stage"><span className="al-on-panel"><img src={item.url} alt="" className="al-glyph-md" /></span><figcaption>on a panel</figcaption></figure>
-          </>
-        ) : (
-          <>
-            <figure className="al-stage"><span className="al-checker"><img src={item.url} alt={item.name} className="al-frame-native" /></span><figcaption>native</figcaption></figure>
-            <figure className="al-stage"><span className="al-frame-stretch" style={{ borderImageSource: `url(${item.url})`, borderImageSlice: `${Math.max(2, Math.floor(Math.min(item.w, item.h) / 3))} fill`, borderImageWidth: `${Math.max(8, Math.floor(Math.min(item.w, item.h) / 3))}px` }} /><figcaption>stretched (9-slice)</figcaption></figure>
-          </>
-        )}
+      <div className="al-lab-main">
+        <div className="al-lab-stages">
+          {found.kind === 'glyph' ? (
+            <>
+              <figure className="al-stage"><span className="al-checker"><img src={item.url} alt={item.name} className="al-glyph-lg" /></span><figcaption>default · transparency</figcaption></figure>
+              <figure className="al-stage"><span className="al-in-button"><img src={item.url} alt="" className="al-glyph-md" /></span><figcaption>in a button</figcaption></figure>
+              <figure className="al-stage"><span className="al-on-panel"><img src={item.url} alt="" className="al-glyph-md" /></span><figcaption>on a panel</figcaption></figure>
+            </>
+          ) : (
+            <>
+              <figure className="al-stage"><span className="al-checker"><img src={item.url} alt={item.name} className="al-frame-native" /></span><figcaption>native</figcaption></figure>
+              <figure className="al-stage"><span className="al-frame-stretch" style={{ borderImageSource: `url(${item.url})`, borderImageSlice: `${Math.max(2, Math.floor(Math.min(item.w, item.h) / 3))} fill`, borderImageWidth: `${Math.max(8, Math.floor(Math.min(item.w, item.h) / 3))}px` }} /><figcaption>stretched (9-slice)</figcaption></figure>
+            </>
+          )}
+        </div>
       </div>
-      <dl className="al-meta">
-        <div><dt>Process</dt><dd className={prov ? 'al-ok' : 'al-no'}>{prov ? `forged ${prov.forged} (${prov.tries} tr)` : 'unverified'}</dd></div>
-        {glyph ? <div><dt>Gate</dt><dd className={glyph.pass ? 'al-ok' : 'al-no'}>{glyph.pass ? 'PASS' : glyph.fails.join(' · ')}</dd></div> : null}
-        {glyph ? <div><dt>Magenta</dt><dd>{glyph.magenta}</dd></div> : null}
-        {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}
-        {glyph ? <div><dt>Edge</dt><dd>{glyph.edge}</dd></div> : null}
-      </dl>
+      <aside className="tileset-view-controls" aria-label="Asset details">
+        <section className="tileset-inspector-section">
+          <h2>Controls</h2>
+          <dl className="al-meta">
+            <div><dt>Process</dt><dd className={prov ? 'al-ok' : 'al-no'}>{prov ? `forged ${prov.forged} (${prov.tries} tr)` : 'unverified'}</dd></div>
+            {glyph ? <div><dt>Gate</dt><dd className={glyph.pass ? 'al-ok' : 'al-no'}>{glyph.pass ? 'PASS' : glyph.fails.join(' · ')}</dd></div> : null}
+            {glyph ? <div><dt>Magenta</dt><dd>{glyph.magenta}</dd></div> : null}
+            {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}
+            {glyph ? <div><dt>Edge</dt><dd>{glyph.edge}</dd></div> : null}
+          </dl>
+        </section>
+      </aside>
     </section>
   );
 }

@@ -13346,3 +13346,10 @@ button.tileset-relationship-cell {
 .al-lab-path { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .72rem; }
 .al-lab-stages { margin: 6px 0 18px; }
 .al-lab .al-meta { max-width: 780px; }
+
+/* Asset lab uses the lab's grid (main + 260px Controls aside), like the board lab. */
+.al-lab { display: grid; padding: 12px; }
+.al-lab-bar { grid-column: 1 / -1; margin: 0; }
+.al-lab-main { min-height: 0; overflow-y: auto; }
+.al-lab-stages { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; }
+.tileset-view-controls .al-meta { grid-template-columns: 1fr; gap: 8px; max-width: none; }
