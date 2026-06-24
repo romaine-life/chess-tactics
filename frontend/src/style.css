@@ -769,6 +769,19 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .46));
 }
 
+/* Ambience shared-world effect canvas. Sits over the menu's background art
+   (the layer's CSS background) and under the menu UI (.main-menu-screen, z3).
+   The sim only paints lit pixels, so the background scene shows through. */
+.ambience-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
 .main-menu-left,
 .main-menu-right {
   pointer-events: auto;
