@@ -101,3 +101,16 @@ A new thing (e.g. portraits) is: a new **category** in Catalog, and — if it ha
 its own workbench — a new **surface** in Lab with its own focuses. It inherits
 the topbar, breadcrumb, Controls panel, and content-only main automatically. If
 adding it requires a new layout, the architecture (not the new thing) is wrong.
+
+**Mechanism — the catalog category registry.** Parity is enforced by code, not
+discipline. The Catalog is driven by a single `catalogCategories` array in
+`TilePreview.tsx`; each entry is `{ id, label, searchValue, onSearch,
+searchPlaceholder, onViewSelected, filter, main }`. The selector tabs, Search,
+Zoom, and View Selected are all rendered **by mapping over that array / reading
+the active entry** — never by per-category `if`/ternary branches. So adding a
+category means adding **one entry**: you supply its `main` (the grid) and an
+optional `filter` (its taxonomy control), and you get the selector tab, Search,
+Zoom, View Selected, and the stable frame for free. There is no second place to
+update, which is the whole point — a category cannot ship missing a shared
+control. If you find yourself writing `category === '…'` in the catalog
+controls, that's the regression this registry exists to prevent.

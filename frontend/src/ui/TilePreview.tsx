@@ -2767,12 +2767,232 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setBrushKind('unit');
     setStudioMode('lab');
   };
-  // Shared "View Selected" — open the active category's selection in the Lab.
-  const viewSelected = (): void => {
-    if (category === 'units') { inspectUnitInLab(unitBrushAsset.id); return; }
-    if (category === 'assets') { setStudioMode('lab'); return; }
-    viewCurrentSelection();
-  };
+  // One registry that every catalog category plugs into. A new asset type adds
+  // ONE entry here and inherits the selector tab, Search, Zoom, View Selected,
+  // and the frame automatically — only `main` (its grid) and `filter` (optional)
+  // are category-specific. This is what keeps control parity from drifting as
+  // categories are added. (See docs/studio-control-architecture.md — "Adding to
+  // the studio".)
+  const catalogCategories: Array<{
+    id: StudioCategory;
+    label: string;
+    searchValue: string;
+    onSearch: (value: string) => void;
+    searchPlaceholder: string;
+    onViewSelected: () => void;
+    filter: ReactElement | null;
+    main: ReactElement;
+  }> = [
+    {
+      id: 'tiles',
+      label: 'Tiles',
+      searchValue: catalogQuery,
+      onSearch: setCatalogQuery,
+      searchPlaceholder: 'label, source, socket…',
+      onViewSelected: viewCurrentSelection,
+      filter: (
+        <>
+          <div className="tileset-active-filters" aria-label="Active filters">
+            {activeFamilies.map((item) => (
+              <button key={item.id} type="button" onClick={() => toggleFamilyFilter(item.id)} title={`Remove ${item.label} filter`}>
+                {item.label}
+              </button>
+            ))}
+            {selectedCollectionFilters.map((filter) => (
+              <button key={filter} type="button" onClick={() => toggleCollectionFilter(filter)} title={`Remove ${filter} filter`}>
+                {collectionFilters.find(([id]) => id === filter)?.[1] ?? filter}
+              </button>
+            ))}
+          </div>
+          <div className="tileset-filter-dropdown" ref={filterDropdownRef}>
+            <button
+              type="button"
+              className={filterOpen ? 'is-active' : ''}
+              onClick={() => setFilterOpen((value) => !value)}
+              aria-expanded={filterOpen}
+              aria-controls="tileset-filter-menu"
+            >
+              Filters
+            </button>
+            {filterOpen ? (
+              <div id="tileset-filter-menu" className="tileset-filter-menu" role="dialog" aria-label="Tileset filters">
+                <div className="tileset-filter-menu-header">
+                  <strong>Filters</strong>
+                  <span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFamilyIds(studioFamilies.map((item) => item.id));
+                        setSelectedCollectionFilters(collectionFilters.map(([filter]) => filter));
+                      }}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFamilyIds([]);
+                        setSelectedCollectionFilters([]);
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </span>
+                </div>
+                <section className="tileset-filter-group" aria-label="Tile families">
+                  <h3>Tile Family</h3>
+                  {studioFamilies.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`tileset-filter-option${selectedFamilyIds.includes(item.id) ? ' is-active' : ''}`}
+                      aria-pressed={selectedFamilyIds.includes(item.id)}
+                      onClick={() => toggleFamilyFilter(item.id)}
+                    >
+                      <span className="tileset-filter-mark" aria-hidden="true" />
+                      <span className="tileset-filter-option-copy">
+                        <strong>{item.label}</strong>
+                        <span>{familyCounts(item)}</span>
+                      </span>
+                    </button>
+                  ))}
+                </section>
+                <section className="tileset-filter-group" aria-label="Collections">
+                  <h3>Collection</h3>
+                  {collectionFilters.map(([filter, label]) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      className={`tileset-filter-option${selectedCollectionFilters.includes(filter) ? ' is-active' : ''}`}
+                      aria-pressed={selectedCollectionFilters.includes(filter)}
+                      onClick={() => toggleCollectionFilter(filter)}
+                    >
+                      <span className="tileset-filter-mark" aria-hidden="true" />
+                      <span className="tileset-filter-option-copy">
+                        <strong>{label}</strong>
+                        <span>{filter === 'base' ? 'terrain variants' : filter === 'transitions' ? 'edge socket tiles' : 'footprint guides'}</span>
+                      </span>
+                    </button>
+                  ))}
+                </section>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ),
+      main: (
+        <section className="tileset-studio-main is-headless">
+          <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
+            <div className="tileset-asset-sections">
+              {selectedCollectionFilters.includes('base') ? (
+                <section className="tileset-asset-section" aria-label="Base tiles">
+                  <h3>Base Tiles</h3>
+                  <div className="tileset-studio-grid" aria-label="Base assets">
+                    {visibleCatalogBaseAssets.map((asset) => (
+                      <StudioTileCard
+                        key={asset.id}
+                        asset={asset}
+                        selected={!selectedSlotMask && asset.id === selectedAsset.id}
+                        showFootprint={showFootprint}
+                        zoom={zoom}
+                        animationFrame={animationFrame}
+                        onSelect={() => inspectAsset(asset)}
+                        onInspect={() => inspectAsset(asset)}
+                        onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
+                        onOpenBoard={() => inspectAsset(asset)}
+                        onWheel={ignoreTileWheel}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              {selectedCollectionFilters.includes('transitions') ? (
+                <section className="tileset-asset-section" aria-label="Transition tiles">
+                  <h3>Transition Tiles</h3>
+                  <div className="tileset-studio-grid" aria-label="Transition assets">
+                    {visibleCatalogTransitionAssets.map((asset) => (
+                      <StudioTileCard
+                        key={asset.id}
+                        asset={asset}
+                        selected={!selectedSlotMask && asset.id === selectedAsset.id}
+                        showFootprint={showFootprint}
+                        zoom={zoom}
+                        animationFrame={animationFrame}
+                        onSelect={() => inspectAsset(asset)}
+                        onInspect={() => inspectAsset(asset)}
+                        onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
+                        onOpenBoard={() => inspectAsset(asset)}
+                        onWheel={ignoreTileWheel}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              {selectedCollectionFilters.includes('references') ? (
+                <section className="tileset-asset-section" aria-label="Reference tiles">
+                  <h3>References</h3>
+                  <div className="tileset-studio-grid" aria-label="Reference assets">
+                    {visibleCatalogReferenceAssets.map((asset) => (
+                      <StudioTileCard
+                        key={asset.id}
+                        asset={asset}
+                        selected={!selectedSlotMask && asset.id === selectedAsset.id}
+                        showFootprint={showFootprint}
+                        zoom={zoom}
+                        animationFrame={animationFrame}
+                        onSelect={() => inspectAsset(asset)}
+                        onInspect={() => inspectAsset(asset)}
+                        onOpenBoard={() => inspectAsset(asset)}
+                        onWheel={zoomTilesWithWheel}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          </section>
+        </section>
+      ),
+    },
+    {
+      id: 'units',
+      label: 'Units',
+      searchValue: unitQuery,
+      onSearch: setUnitQuery,
+      searchPlaceholder: 'unit name…',
+      onViewSelected: () => inspectUnitInLab(unitBrushAsset.id),
+      filter: null,
+      main: (
+        <UnitsStudio
+          selectedUnitId={unitBrushAsset.id}
+          search={unitQuery}
+          zoom={zoom}
+          onSelect={selectUnitInCatalog}
+          onInspect={inspectUnitInLab}
+          onArmBrush={placeUnitOnLoadedBoard}
+        />
+      ),
+    },
+    {
+      id: 'assets',
+      label: 'Assets',
+      searchValue: assetSearch,
+      onSearch: setAssetSearch,
+      searchPlaceholder: 'asset name…',
+      onViewSelected: () => setStudioMode('lab'),
+      filter: (
+        <div className="tileset-tier-seg" aria-label="Process filter">
+          {(['all', 'forged', 'unverified'] as const).map((option) => (
+            <button key={option} type="button" className={assetFilter === option ? 'is-active' : ''} onClick={() => setAssetFilter(option)}>
+              {option === 'all' ? 'All' : option === 'forged' ? 'Forged' : 'Unverified'}
+            </button>
+          ))}
+        </div>
+      ),
+      main: <AssetLibraryStudio filter={assetFilter} search={assetSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} />,
+    },
+  ];
+  const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
 
   return (
     <main className="tileset-studio-page">
@@ -2802,129 +3022,33 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
-        {category === 'units' ? (
-          <UnitsStudio
-            selectedUnitId={unitBrushAsset.id}
-            search={unitQuery}
-            zoom={zoom}
-            onSelect={selectUnitInCatalog}
-            onInspect={inspectUnitInLab}
-            onArmBrush={placeUnitOnLoadedBoard}
-          />
-        ) : category === 'assets' ? (
-          <AssetLibraryStudio filter={assetFilter} search={assetSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} />
-        ) : (
-          <section className="tileset-studio-main is-headless">
-          <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
-              <div className="tileset-asset-sections">
-                {selectedCollectionFilters.includes('base') ? (
-                  <section className="tileset-asset-section" aria-label="Base tiles">
-                    <h3>Base Tiles</h3>
-                    <div className="tileset-studio-grid" aria-label="Base assets">
-                      {visibleCatalogBaseAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-                {selectedCollectionFilters.includes('transitions') ? (
-                  <section className="tileset-asset-section" aria-label="Transition tiles">
-                    <h3>Transition Tiles</h3>
-                    <div className="tileset-studio-grid" aria-label="Transition assets">
-                      {visibleCatalogTransitionAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-                {selectedCollectionFilters.includes('references') ? (
-                  <section className="tileset-asset-section" aria-label="Reference tiles">
-                    <h3>References</h3>
-                    <div className="tileset-studio-grid" aria-label="Reference assets">
-                      {visibleCatalogReferenceAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={zoomTilesWithWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-              </div>
-            </section>
-          </section>
-        )}
+        {activeCatalog.main}
         <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Catalog controls">
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
               <div className="tileset-tier-seg" aria-label="Catalog asset type">
-                <button
-                  type="button"
-                  className={category === 'tiles' ? 'is-active' : ''}
-                  onClick={() => setCategory('tiles')}
-                  title="Browse terrain tiles."
-                >
-                  Tiles
-                </button>
-                <button
-                  type="button"
-                  className={category === 'units' ? 'is-active' : ''}
-                  onClick={() => setCategory('units')}
-                  title="Browse chess-piece units."
-                >
-                  Units
-                </button>
-                <button
-                  type="button"
-                  className={category === 'assets' ? 'is-active' : ''}
-                  onClick={() => setCategory('assets')}
-                  title="Browse the UI kit asset library."
-                >
-                  Assets
-                </button>
+                {catalogCategories.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className={category === entry.id ? 'is-active' : ''}
+                    onClick={() => setCategory(entry.id)}
+                    title={`Browse ${entry.label.toLowerCase()}.`}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
               </div>
-              {/* Shared browse controls — every catalog category gets the same
-                  Search + Zoom, in the same place (parity across Tiles/Units/Assets). */}
+              {/* Shared browse controls — every category inherits these from the
+                  registry, in the same place (parity by construction). */}
               <label className="tileset-catalog-search">
                 <span>Search</span>
                 <input
                   type="search"
-                  value={category === 'tiles' ? catalogQuery : category === 'units' ? unitQuery : assetSearch}
-                  onChange={(event) => (category === 'tiles' ? setCatalogQuery : category === 'units' ? setUnitQuery : setAssetSearch)(event.target.value)}
-                  placeholder={category === 'tiles' ? 'label, source, socket…' : category === 'units' ? 'unit name…' : 'asset name…'}
+                  value={activeCatalog.searchValue}
+                  onChange={(event) => activeCatalog.onSearch(event.target.value)}
+                  placeholder={activeCatalog.searchPlaceholder}
                 />
               </label>
               <label className="tileset-catalog-zoom">
@@ -2938,108 +3062,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   onChange={(event) => setZoom(Number(event.target.value))}
                 />
               </label>
-              {category === 'tiles' ? (
-                <>
-                  <div className="tileset-active-filters" aria-label="Active filters">
-                    {activeFamilies.map((item) => (
-                      <button key={item.id} type="button" onClick={() => toggleFamilyFilter(item.id)} title={`Remove ${item.label} filter`}>
-                        {item.label}
-                      </button>
-                    ))}
-                    {selectedCollectionFilters.map((filter) => (
-                      <button key={filter} type="button" onClick={() => toggleCollectionFilter(filter)} title={`Remove ${filter} filter`}>
-                        {collectionFilters.find(([id]) => id === filter)?.[1] ?? filter}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="tileset-filter-dropdown" ref={filterDropdownRef}>
-                    <button
-                      type="button"
-                      className={filterOpen ? 'is-active' : ''}
-                      onClick={() => setFilterOpen((value) => !value)}
-                      aria-expanded={filterOpen}
-                      aria-controls="tileset-filter-menu"
-                    >
-                      Filters
-                    </button>
-                    {filterOpen ? (
-                      <div id="tileset-filter-menu" className="tileset-filter-menu" role="dialog" aria-label="Tileset filters">
-                        <div className="tileset-filter-menu-header">
-                          <strong>Filters</strong>
-                          <span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedFamilyIds(studioFamilies.map((item) => item.id));
-                                setSelectedCollectionFilters(collectionFilters.map(([filter]) => filter));
-                              }}
-                            >
-                              Select all
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedFamilyIds([]);
-                                setSelectedCollectionFilters([]);
-                              }}
-                            >
-                              Clear
-                            </button>
-                          </span>
-                        </div>
-                        <section className="tileset-filter-group" aria-label="Tile families">
-                          <h3>Tile Family</h3>
-                          {studioFamilies.map((item) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              className={`tileset-filter-option${selectedFamilyIds.includes(item.id) ? ' is-active' : ''}`}
-                              aria-pressed={selectedFamilyIds.includes(item.id)}
-                              onClick={() => toggleFamilyFilter(item.id)}
-                            >
-                              <span className="tileset-filter-mark" aria-hidden="true" />
-                              <span className="tileset-filter-option-copy">
-                                <strong>{item.label}</strong>
-                                <span>{familyCounts(item)}</span>
-                              </span>
-                            </button>
-                          ))}
-                        </section>
-                        <section className="tileset-filter-group" aria-label="Collections">
-                          <h3>Collection</h3>
-                          {collectionFilters.map(([filter, label]) => (
-                            <button
-                              key={filter}
-                              type="button"
-                              className={`tileset-filter-option${selectedCollectionFilters.includes(filter) ? ' is-active' : ''}`}
-                              aria-pressed={selectedCollectionFilters.includes(filter)}
-                              onClick={() => toggleCollectionFilter(filter)}
-                            >
-                              <span className="tileset-filter-mark" aria-hidden="true" />
-                              <span className="tileset-filter-option-copy">
-                                <strong>{label}</strong>
-                                <span>{filter === 'base' ? 'terrain variants' : filter === 'transitions' ? 'edge socket tiles' : 'footprint guides'}</span>
-                              </span>
-                            </button>
-                          ))}
-                        </section>
-                      </div>
-                    ) : null}
-                  </div>
-                </>
-              ) : category === 'units' ? null : (
-                <>
-                  <div className="tileset-tier-seg" aria-label="Process filter">
-                    {(['all', 'forged', 'unverified'] as const).map((option) => (
-                      <button key={option} type="button" className={assetFilter === option ? 'is-active' : ''} onClick={() => setAssetFilter(option)}>
-                        {option === 'all' ? 'All' : option === 'forged' ? 'Forged' : 'Unverified'}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              {/* Shared action — open the selected item in the Lab (parity). */}
-              <button type="button" className="tileset-view-action" onClick={viewSelected}>
+              {/* Category-specific filter (optional) — supplied by the registry. */}
+              {activeCatalog.filter}
+              {/* Shared action — open the selected item in the Lab. */}
+              <button type="button" className="tileset-view-action" onClick={activeCatalog.onViewSelected}>
                 View Selected
               </button>
             </div>
