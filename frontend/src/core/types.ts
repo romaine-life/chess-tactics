@@ -6,6 +6,8 @@ export type Side = 'player' | 'enemy' | 'neutral';
 
 export type PieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king' | 'rock' | 'random-rock';
 
+export type UnitFacing = 'north' | 'north-east' | 'east' | 'south-east' | 'south' | 'south-west' | 'west' | 'north-west';
+
 /**
  * Board tile materials. Defined here (the foundational type module) rather than
  * in `core/level.ts` so both the editor's `Level` and the live `GameState` share
@@ -39,6 +41,8 @@ export interface Piece {
   x: number;
   y: number;
   alive: boolean;
+  /** Board-facing direction for the rendered directional sprite. */
+  facing?: UnitFacing;
   /** Home rank — used for the pawn double-step. */
   startY: number;
   /**

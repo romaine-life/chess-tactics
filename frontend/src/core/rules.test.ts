@@ -147,6 +147,15 @@ describe('applyMove', () => {
     // immutability: the input arrays/objects are unchanged
     expect(state.pieces.find((p) => p.id === foePawn.id)?.alive).toBe(true);
   });
+  it('turns the acting piece toward its move or attack destination', () => {
+    const queen = P('player', 'queen', 4, 6, { facing: 'south' });
+    const foePawn = P('enemy', 'pawn', 5, 5);
+    const foeKing = P('enemy', 'king', 7, 0);
+    const state = { size: SIZE, pieces: [queen, foePawn, foeKing], turn: 'player' as const, winner: null };
+    const res = applyMove(state, queen.id, { x: 5, y: 5, capture: foePawn.id });
+    expect(res.state.pieces.find((p) => p.id === queen.id)?.facing).toBe('north-east');
+    expect(state.pieces.find((p) => p.id === queen.id)?.facing).toBe('south');
+  });
   it('promotes a pawn reaching the far rank', () => {
     const pawn = P('player', 'pawn', 4, 1);
     const foe = P('enemy', 'queen', 7, 0);

@@ -9,6 +9,7 @@ import { isPassableTerrain } from '../core/terrain';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
+import { defaultFacingForSide } from '../core/pieces';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
 const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'rook', 'queen'];
@@ -98,6 +99,7 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
         type,
         x: cell.x,
         y: cell.y,
+        facing: defaultFacingForSide(side),
         alive: true,
         startY: cell.y,
       });

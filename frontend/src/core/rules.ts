@@ -6,6 +6,7 @@
 import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, Vec, Winner } from './types';
 import type { Rng } from './rng';
 import { canTraverse, elevationAt, type TerrainIndex } from './terrain';
+import { facingFromDelta } from './pieces';
 
 const KNIGHT: ReadonlyArray<readonly [number, number]> = [
   [-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1],
@@ -245,6 +246,8 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
 
   const from: Vec = { x: piece.x, y: piece.y };
   const movedPieceType = piece.type;
+  const nextFacing = facingFromDelta(move.x - from.x, move.y - from.y);
+  if (nextFacing) piece.facing = nextFacing;
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
   // Attacker displaces onto the target square only when the target dies. With
   // hp > 1 the target survives the hit and the attacker stays put (an

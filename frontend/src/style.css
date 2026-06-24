@@ -6208,8 +6208,11 @@ h1 {
 
 .skirmish-screen::before {
   background:
-    radial-gradient(760px 440px at 42% 38%, rgba(21, 95, 137, .3), transparent 66%),
-    linear-gradient(90deg, rgba(2, 8, 13, .95), rgba(3, 15, 26, .68) 46%, rgba(2, 7, 12, .94));
+    radial-gradient(760px 440px at 42% 38%, rgba(21, 95, 137, .12), transparent 66%),
+    linear-gradient(90deg, rgba(2, 8, 13, .72), rgba(3, 15, 26, .22) 46%, rgba(2, 7, 12, .78)),
+    var(--skirmish-world-bg, linear-gradient(180deg, #071017, #02070c));
+  background-position: center;
+  background-size: auto, auto, cover;
   content: "";
   inset: 0;
   pointer-events: none;
@@ -6375,8 +6378,8 @@ h1 {
 
 .skirmish-field::before {
   background:
-    radial-gradient(640px 320px at 52% 38%, rgba(50, 159, 209, .24), transparent 70%),
-    linear-gradient(180deg, rgba(5, 20, 34, .56), rgba(1, 5, 9, .72));
+    radial-gradient(640px 320px at 52% 38%, rgba(50, 159, 209, .16), transparent 70%),
+    linear-gradient(180deg, rgba(5, 20, 34, .28), rgba(1, 5, 9, .56));
   border: 1px solid rgba(45, 105, 139, .58);
   box-shadow: inset 0 0 72px rgba(0, 0, 0, .38);
   content: "";
@@ -6411,7 +6414,7 @@ h1 {
 .skirmish-board-lab {
   background:
     radial-gradient(760px 360px at 50% 42%, rgba(54, 135, 162, .18), transparent 72%),
-    linear-gradient(180deg, rgba(5, 18, 28, .34), rgba(2, 7, 12, .72));
+    linear-gradient(180deg, rgba(5, 18, 28, .18), rgba(2, 7, 12, .46));
 }
 
 .skirmish-board-lab .tileset-view-stage {
@@ -6420,7 +6423,7 @@ h1 {
   padding: 0;
   background:
     radial-gradient(820px 420px at 50% 44%, rgba(67, 111, 128, .18), transparent 70%),
-    linear-gradient(180deg, rgba(3, 14, 23, .08), rgba(1, 5, 9, .5));
+    linear-gradient(180deg, rgba(3, 14, 23, .06), rgba(1, 5, 9, .34));
 }
 
 .skirmish-board-lab .tileset-view-stage:focus-within {
@@ -6833,6 +6836,19 @@ h1 {
   place-items: center;
 }
 
+.skirmish-portrait-frame.has-backdrop {
+  background:
+    linear-gradient(180deg, rgba(2, 8, 13, .1), rgba(2, 8, 13, .34)),
+    var(--skirmish-portrait-bg),
+    rgba(3, 12, 19, .74);
+  background-position: center;
+  background-size: cover;
+  box-shadow:
+    inset 0 0 0 1px rgba(2, 8, 13, .58),
+    inset 0 -22px 26px rgba(0, 0, 0, .42);
+  overflow: hidden;
+}
+
 /* Eye-level portrait bust (separate render contract from the iso board sprite). Smooth
    (not pixelated) since it's a detailed hero render; bottom-anchored so the bust sits in
    the frame instead of floating. */
@@ -6842,6 +6858,7 @@ h1 {
   object-fit: contain;
   object-position: center bottom;
   image-rendering: auto;
+  filter: drop-shadow(0 9px 8px rgba(0, 0, 0, .52));
 }
 
 .skirmish-selected-copy {
