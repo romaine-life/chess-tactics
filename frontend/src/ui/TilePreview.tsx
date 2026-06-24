@@ -2686,7 +2686,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         : `${family.label} · ${selectedAsset.role}`;
   const hasLabTiles = Object.keys(boardCells).length > 0;
   const hasLabUnits = Object.keys(boardUnits).length > 0;
-  const headerKicker = studioMode === 'catalog' ? (category === 'assets' ? 'UI Kit' : category === 'units' ? 'Unit Catalog' : 'Tile Catalog') : 'Lab';
+  const headerKicker = studioMode === 'catalog' ? (category === 'assets' ? 'UI Kit' : category === 'units' ? 'Unit Catalog' : 'Tile Catalog') : (category === 'assets' ? 'Asset lab' : 'Lab');
   const headerTitle =
     studioMode === 'catalog'
       ? category === 'assets'
@@ -2694,7 +2694,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         : category === 'units'
           ? 'Units'
           : selectedFamilyLabel
-      : 'Lab';
+      : category === 'assets'
+        ? (selectedAssetName || 'Asset Library')
+        : 'Lab';
   const headerSubtitle =
     studioMode === 'catalog'
       ? category === 'assets'
@@ -2702,7 +2704,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         : category === 'units'
           ? 'Browse chess-piece units.'
           : activeFamilies.map((item) => item.purpose).join(' · ')
-      : labMode === 'board'
+      : category === 'assets'
+        ? 'Preview the selected asset on backdrops.'
+        : labMode === 'board'
         ? 'Edit and test tiles and units on one shared board surface.'
         : labMode === 'unit'
           ? 'Inspect the selected unit in board context.'

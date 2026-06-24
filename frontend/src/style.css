@@ -13339,3 +13339,10 @@ button.tileset-relationship-cell {
 /* Asset lab (the Lab's Asset surface) — reuses the al-stage backdrops. */
 .al-lab { overflow-y: auto; padding: 18px 22px; }
 .al-lab-stages { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0; }
+
+/* Asset lab slim bar (studio header carries the breadcrumb; no double header). */
+.al-lab { display: flex; flex-direction: column; }
+.al-lab-bar { align-items: center; display: flex; gap: 12px; margin-bottom: 10px; }
+.al-lab-path { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .72rem; }
+.al-lab-stages { margin: 6px 0 18px; }
+.al-lab .al-meta { max-width: 780px; }

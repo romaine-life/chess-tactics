@@ -103,9 +103,9 @@ export function AssetLab({ name, onBack }: { name: string; onBack: () => void })
   if (!found) {
     return (
       <section className="tileset-view-mode al-lab" aria-label="Asset lab">
-        <div className="tileset-view-header">
-          <button type="button" onClick={onBack}>Back to Catalog</button>
-          <div><p className="tileset-studio-kicker">Asset</p><h2>No asset selected</h2><p>Pick an asset card in Catalog, then open Lab to preview it.</p></div>
+        <div className="al-lab-bar">
+          <button type="button" onClick={onBack}>← Catalog</button>
+          <span className="al-lab-path">No asset selected — pick a card in Catalog.</span>
         </div>
       </section>
     );
@@ -115,13 +115,9 @@ export function AssetLab({ name, onBack }: { name: string; onBack: () => void })
   const glyph = found.kind === 'glyph' ? found.item : null;
   return (
     <section className="tileset-view-mode al-lab" aria-label="Asset lab">
-      <div className="tileset-view-header">
-        <button type="button" onClick={onBack}>Back to Catalog</button>
-        <div>
-          <p className="tileset-studio-kicker">{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'}</p>
-          <h2>{item.name}</h2>
-          <p>{item.w}×{item.h} · {item.url}</p>
-        </div>
+      <div className="al-lab-bar">
+        <button type="button" onClick={onBack}>← Catalog</button>
+        <span className="al-lab-path">{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h} · {item.url}</span>
       </div>
       <div className="al-lab-stages">
         {found.kind === 'glyph' ? (
