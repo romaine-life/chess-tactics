@@ -7,7 +7,9 @@ roughly gestures at it.
 
 Use this contract together with `docs/asset-terminology.md` (the vocabulary:
 asset, frame, part, slot, state, assembly), `docs/ui-art-direction.md`, and
-`docs/asset-pipeline-proposal.md`.
+`docs/asset-pipeline-proposal.md`. For scenic backgrounds and unit portrait
+backdrops, also use `docs/lore-anti-story.md` and
+`docs/background-art-contract.md`.
 
 ## Core Decision
 

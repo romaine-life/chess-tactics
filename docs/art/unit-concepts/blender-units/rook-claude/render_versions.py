@@ -34,10 +34,10 @@ while ROOT.parent != ROOT and not (ROOT / "frontend").exists():
     ROOT = ROOT.parent
 FRONTEND_ROOK = ROOT / "frontend" / "public" / "assets" / "units" / "rook"
 
-# Board-calibrated camera (matches the production rook / tile viewing angle).
+# Board-calibrated camera (true-isometric projection contract).
 BOARD_TARGET = Vector((0, 0, 0.92))
 BOARD_DISTANCE = 5.0
-BOARD_ELEVATION_DEGREES = 44.1
+BOARD_ELEVATION_DEGREES = 35.264389682754654
 BOARD_ORTHO = 3.05
 DIRECTIONS = {
     "north": 180, "north-east": 135, "east": 90, "south-east": 45,

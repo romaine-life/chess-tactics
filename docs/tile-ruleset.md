@@ -19,11 +19,11 @@ This document is the durable contract for board terrain assets. It defines what 
 All terrain tiles must use the canonical board footprint:
 
 - Top diamond width: `96px`
-- Top diamond height: `54px`
+- Top diamond height: `55.426px`
 - Side height: `86px`
 - Grid step X: `48px`
 - Grid step Y: `27px`
-- Edge angle: about `29.36deg`
+- Edge angle: `30deg`
 
 Source of truth:
 

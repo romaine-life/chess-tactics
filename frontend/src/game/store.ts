@@ -9,9 +9,16 @@ import { buildTerrainIndex } from '../core/terrain';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 
+const OBJECTIVE_LOG_COPY = {
+  'capture-all': 'capture all enemy pieces',
+  'capture-king': 'capture the enemy King',
+  survive: 'survive the assault',
+  reach: 'reach the objective',
+} as const;
+
 /** Movement environment for a state: indexes its terrain layer (if authored). */
 function envFor(game: GameState): MoveEnv {
-  return { terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined };
+  return { terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined, lastMove: game.lastMove };
 }
 
 function describeEvent(ev: GameEvent): string | null {
@@ -46,11 +53,13 @@ export interface SkirmishState {
   /** Indexed terrain for the current game; movement generation reads this. */
   env: MoveEnv;
   selectedId: string | null;
+  focusedId: string | null;
   seed: number;
   tick: number;
   log: string[];
   newSkirmish: (opts: SkirmishOptions) => void;
   select: (id: string | null) => void;
+  focus: (id: string | null) => void;
   movesForSelected: () => Move[];
   tryMoveTo: (x: number, y: number) => void;
   endTurn: () => void;
@@ -62,19 +71,31 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
   game: INITIAL_GAME,
   env: envFor(INITIAL_GAME),
   selectedId: null,
+  focusedId: null,
   seed: 1,
   tick: 0,
   log: [],
 
   newSkirmish: (opts) => {
     const game = createSkirmish(opts);
-    set({ game, env: envFor(game), seed: opts.seed, tick: 0, selectedId: firstPlayerId(game), log: ['Skirmish begins — move or capture; last side standing wins.'] });
+    const intro = opts.level
+      ? `Test play begins — objective: ${OBJECTIVE_LOG_COPY[opts.level.objective]}.`
+      : 'Skirmish begins — move or capture; last side standing wins.';
+    const selectedId = firstPlayerId(game);
+    set({ game, env: envFor(game), seed: opts.seed, tick: 0, selectedId, focusedId: selectedId, log: [intro] });
   },
 
   select: (id) => {
-    if (id === null) { set({ selectedId: null }); return; }
+    if (id === null) { set({ selectedId: null, focusedId: null }); return; }
     const p = get().game.pieces.find((q) => q.id === id && q.alive);
-    if (p && p.side === 'player') set({ selectedId: id });
+    if (p && p.side === 'player') set({ selectedId: id, focusedId: id });
+  },
+
+  focus: (id) => {
+    if (id === null) { set({ focusedId: get().selectedId }); return; }
+    const p = get().game.pieces.find((q) => q.id === id && q.alive);
+    if (!p) return;
+    set({ focusedId: id, selectedId: p.side === 'player' ? id : get().selectedId });
   },
 
   movesForSelected: () => {
@@ -92,12 +113,14 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
     const playerRes = applyMove(s.game, p.id, mv);
-    const enemyRes = resolveEnemy(playerRes.state, s.seed, s.tick, s.env);
+    const enemyRes = resolveEnemy(playerRes.state, s.seed, s.tick, envFor(playerRes.state));
     const msgs = [...playerRes.events, ...enemyRes.events].map(describeEvent).filter((m): m is string => m !== null);
     set({
       game: enemyRes.game,
+      env: envFor(enemyRes.game),
       tick: enemyRes.tick,
       selectedId: firstPlayerId(enemyRes.game),
+      focusedId: firstPlayerId(enemyRes.game),
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
     });
   },
@@ -105,8 +128,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
   endTurn: () => {
     const s = get();
     if (s.game.turn !== 'player' || s.game.winner) return;
-    const enemyRes = resolveEnemy({ ...s.game, turn: 'enemy' }, s.seed, s.tick, s.env);
+    const enemyStart = { ...s.game, turn: 'enemy' as const };
+    const enemyRes = resolveEnemy(enemyStart, s.seed, s.tick, envFor(enemyStart));
     const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
-    set({ game: enemyRes.game, tick: enemyRes.tick, selectedId: firstPlayerId(enemyRes.game), log: [...msgs.reverse(), ...s.log].slice(0, 12) });
+    const selectedId = firstPlayerId(enemyRes.game);
+    set({ game: enemyRes.game, env: envFor(enemyRes.game), tick: enemyRes.tick, selectedId, focusedId: selectedId, log: [...msgs.reverse(), ...s.log].slice(0, 12) });
   },
 }));

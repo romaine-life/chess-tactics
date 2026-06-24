@@ -45,11 +45,11 @@ Current phase: asset-pipeline stabilization. The goal is to get out of UI/proces
 The canonical board tile geometry is locked unless a deliberate art-direction decision changes it.
 
 - Top diamond width: `96px`
-- Top diamond height: `54px`
+- Top diamond height: `55.426px`
 - Side height: `86px`
 - Grid step X: `48px`
 - Grid step Y: `27px`
-- Edge angle: about `29.36deg`
+- Edge angle: `30deg`
 
 Source of truth:
 
@@ -203,13 +203,14 @@ Current deterministic asset scripts:
 
 Current generated folders:
 
+- `frontend/public/assets/tiles/canonical-true-iso/` - active production catalog tiles, normalized to the true-isometric footprint.
 - `frontend/public/assets/tiles/canonical-clean/`
 - `frontend/public/assets/tiles/canonical-accepted/`
 - `frontend/public/assets/tiles/canonical-template/`
 - `frontend/public/assets/tiles/canonical-transition-fill/`
 - `frontend/public/assets/tiles/concept-materials/`
 
-PixelLab can be useful for inspiration, raw candidates, and object/animation experiments. It should not be treated as the geometry authority. Generated assets must be normalized to the canonical board angle before being accepted.
+`canonical-clean` and `canonical-accepted` are retained as legacy/source and before/after comparison folders; they should not be wired as active production tile catalog assets. PixelLab can be useful for inspiration, raw candidates, and object/animation experiments. It should not be treated as the geometry authority. Generated assets must be normalized to the canonical board angle before being accepted.
 
 ## Collaboration Rules
 

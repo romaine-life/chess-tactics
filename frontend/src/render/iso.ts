@@ -1,11 +1,13 @@
-// Isometric projection math (2:1 diamond) with elevation. Engine-agnostic;
+import { TILE_STEP_Y, TILE_TOP_HEIGHT, TILE_TOP_WIDTH } from '../art/projectionContract';
+
+// Isometric projection math with elevation. Engine-agnostic;
 // PixiJS draws using these. Depth sorting uses elevation bands so a unit on a
 // raised tile never draws behind a lower one (the canonical iso pitfall).
 
 export interface IsoConfig {
   /** Full diamond width in px. */
   tileW: number;
-  /** Full diamond height in px (tileW / 2 for classic 2:1). */
+  /** Full diamond height in px. */
   tileH: number;
   originX: number;
   originY: number;
@@ -13,7 +15,13 @@ export interface IsoConfig {
   elevationStep: number;
 }
 
-export const DEFAULT_ISO: IsoConfig = { tileW: 64, tileH: 32, originX: 0, originY: 0, elevationStep: 16 };
+export const DEFAULT_ISO: IsoConfig = {
+  tileW: TILE_TOP_WIDTH,
+  tileH: TILE_TOP_HEIGHT,
+  originX: 0,
+  originY: 0,
+  elevationStep: TILE_STEP_Y,
+};
 
 /** Tile (grid) coordinate -> screen pixel (tile centre), with elevation lift. */
 export function tileToScreen(x: number, y: number, elevation: number, cfg: IsoConfig): { x: number; y: number } {

@@ -3,6 +3,7 @@
 // Replaces the legacy startGame() placement with a seeded, testable version.
 
 import type { BoardSize, GameState, Piece, PieceType, Side, TerrainCell, TerrainType } from '../core/types';
+import type { Level } from '../core/level';
 import { createRng, type Rng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
 import { tileAssets, tileFamilies } from '../art/tileset';
@@ -16,6 +17,9 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
   grass: 'grass',
   stone: 'stone',
   water: 'water',
+  dirt: 'dirt',
+  pebble: 'pebble',
+  sand: 'sand',
 };
 
 function buildTerrain(size: BoardSize, seed: number): TerrainCell[] {
@@ -39,6 +43,27 @@ export interface SkirmishOptions {
   size?: BoardSize;
   /** Player party (a pawn is always also fielded). */
   party?: PieceType[];
+  /** Authored campaign level to test play. */
+  level?: Level;
+}
+
+function createFromLevel(level: Level): GameState {
+  const pieces: Piece[] = level.layers.units.map((unit, index) => ({
+    id: `${unit.side}-${unit.type}-${index}`,
+    side: unit.side,
+    type: unit.type,
+    x: unit.x,
+    y: unit.y,
+    alive: true,
+    startY: unit.side === 'player' ? level.board.rows - 1 : 0,
+  }));
+  return {
+    size: { cols: level.board.cols, rows: level.board.rows },
+    pieces,
+    terrain: level.layers.terrain,
+    turn: 'player',
+    winner: null,
+  };
 }
 
 function pickEmptyCell(taken: Set<string>, cols: number, ys: readonly number[], rng: Rng): { x: number; y: number } | null {
@@ -52,12 +77,13 @@ function pickEmptyCell(taken: Set<string>, cols: number, ys: readonly number[], 
 }
 
 export function createSkirmish(opts: SkirmishOptions): GameState {
+  if (opts.level) return createFromLevel(opts.level);
   const size = opts.size ?? DEFAULT_SIZE;
   const party = opts.party ?? ['knight', 'bishop'];
   const rng = createRng(opts.seed);
   const terrain = buildTerrain(size, opts.seed);
   const pieces: Piece[] = [];
-  // Seed `taken` with impassable terrain so no piece spawns on water/cliff.
+  // Seed `taken` with impassable terrain so no piece spawns on blocking cliffs/rocks.
   const taken = new Set<string>();
   for (const c of terrain) if (!isPassableTerrain(c.terrain)) taken.add(`${c.x},${c.y}`);
 
@@ -73,7 +99,7 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
         x: cell.x,
         y: cell.y,
         alive: true,
-        startY: side === 'player' ? size.rows - 1 : 0,
+        startY: cell.y,
       });
     });
   };

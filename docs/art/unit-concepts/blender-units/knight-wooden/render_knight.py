@@ -1,7 +1,7 @@
 """Render the wooden chess knight (OBJ source) into board-calibrated
 eight-direction candidate sprites, recolored into the family's navy-blue style.
 
-Mirrors the rook's board camera contract (fixed ortho camera at a 44.1-degree
+Mirrors the rook's board camera contract (fixed true-isometric ortho camera at a 35.264-degree
 elevation; the piece rotates per compass direction) so the knight drops onto the
 same isometric tile scale as every other unit.
 
@@ -27,9 +27,9 @@ FRONTEND_KNIGHT = ROOT / "frontend" / "public" / "assets" / "units" / "knight"
 CONTACT = HERE / "contact"
 CONTACT.mkdir(parents=True, exist_ok=True)
 
-# Board-calibrated camera (identical contract to the production rook render).
+# Board-calibrated camera (identical true-isometric contract to the production rook render).
 BOARD_DISTANCE = 5.0
-BOARD_ELEVATION_DEGREES = 44.1
+BOARD_ELEVATION_DEGREES = 35.264389682754654
 TARGET_HEIGHT = 1.86          # Blender units the uprighted knight is scaled to.
 BOARD_ORTHO = 2.6             # frames the slim knight a touch tighter than the rook.
 

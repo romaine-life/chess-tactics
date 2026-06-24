@@ -47,6 +47,7 @@ export interface Level {
   formatVersion: number;
   id: string;
   name: string;
+  notes: string;
   board: BoardSize & { heightLevels: number };
   objective: ObjectiveType;
   difficulty: string;
@@ -65,6 +66,7 @@ export interface CampaignLevelRef {
   ordinal: number;
   objective?: ObjectiveType;
   stars?: number;
+  completed?: boolean;
 }
 
 export interface Campaign {
@@ -73,6 +75,9 @@ export interface Campaign {
   name: string;
   difficulty: string;
   chapters: number;
+  favorite?: boolean;
+  locked?: boolean;
+  unlockRequirement?: string;
   levels: CampaignLevelRef[];
 }
 
@@ -85,6 +90,7 @@ export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows 
     formatVersion: LEVEL_FORMAT_VERSION,
     id,
     name,
+    notes: '',
     board: { cols, rows, heightLevels: 1 },
     objective: 'capture-all',
     difficulty: 'normal',
@@ -105,6 +111,7 @@ export function validateLevel(value: unknown): ValidateResult {
   if (v.formatVersion !== LEVEL_FORMAT_VERSION) errors.push(`formatVersion must be ${LEVEL_FORMAT_VERSION}`);
   if (typeof v.id !== 'string' || !v.id) errors.push('id is required');
   if (typeof v.name !== 'string') errors.push('name is required');
+  if (v.notes !== undefined && typeof v.notes !== 'string') errors.push('notes must be a string');
 
   const b = v.board;
   if (!b || typeof b.cols !== 'number' || typeof b.rows !== 'number') {

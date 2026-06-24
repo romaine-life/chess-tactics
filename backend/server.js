@@ -1259,6 +1259,89 @@ function isLevelBody(body) {
   );
 }
 
+const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'survive', 'reach']);
+const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock']);
+const WORKSPACE_ZONE_TYPES = new Set(['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock']);
+const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
+const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
+const WORKSPACE_BOARD_COLS = { min: 4, max: 16 };
+const WORKSPACE_BOARD_ROWS = { min: 4, max: 20 };
+
+function isFiniteInteger(value) {
+  return Number.isInteger(value) && Number.isFinite(value);
+}
+
+function validateWorkspaceCoord(cell, cols, rows) {
+  return cell && isFiniteInteger(cell.x) && isFiniteInteger(cell.y)
+    && cell.x >= 0 && cell.x < cols && cell.y >= 0 && cell.y < rows;
+}
+
+function validateWorkspaceLevel(level, key) {
+  if (!level || typeof level !== 'object') return `levels.${key} must be an object`;
+  if (level.formatVersion !== 1) return `levels.${key}.formatVersion must be 1`;
+  if (typeof level.id !== 'string' || !level.id) return `levels.${key}.id is required`;
+  if (level.id !== key) return `levels.${key}.id must match its workspace key`;
+  if (typeof level.name !== 'string') return `levels.${key}.name is required`;
+  if (level.notes !== undefined && typeof level.notes !== 'string') return `levels.${key}.notes must be a string`;
+  if (!WORKSPACE_OBJECTIVES.has(level.objective)) return `levels.${key}.objective is invalid`;
+  const board = level.board;
+  if (!board || !isFiniteInteger(board.cols) || !isFiniteInteger(board.rows)) return `levels.${key}.board is invalid`;
+  if (board.cols < WORKSPACE_BOARD_COLS.min || board.cols > WORKSPACE_BOARD_COLS.max) return `levels.${key}.board.cols is out of range`;
+  if (board.rows < WORKSPACE_BOARD_ROWS.min || board.rows > WORKSPACE_BOARD_ROWS.max) return `levels.${key}.board.rows is out of range`;
+  if (board.heightLevels !== undefined && (!isFiniteInteger(board.heightLevels) || board.heightLevels < 1)) return `levels.${key}.board.heightLevels is invalid`;
+  const layers = level.layers;
+  if (!layers || typeof layers !== 'object') return `levels.${key}.layers is required`;
+  for (const layerName of ['terrain', 'decals', 'zones', 'units']) {
+    if (!Array.isArray(layers[layerName])) return `levels.${key}.layers.${layerName} must be an array`;
+  }
+  for (const tile of layers.terrain) {
+    if (!validateWorkspaceCoord(tile, board.cols, board.rows) || !WORKSPACE_TERRAIN.has(tile.terrain)) return `levels.${key}.layers.terrain contains an invalid tile`;
+    if (tile.elevation !== undefined && !isFiniteInteger(tile.elevation)) return `levels.${key}.layers.terrain contains an invalid elevation`;
+  }
+  for (const unit of layers.units) {
+    if (!validateWorkspaceCoord(unit, board.cols, board.rows) || !WORKSPACE_PIECES.has(unit.type) || !WORKSPACE_SIDES.has(unit.side)) return `levels.${key}.layers.units contains an invalid unit`;
+  }
+  for (const zone of layers.zones) {
+    if (!zone || typeof zone.id !== 'string' || !WORKSPACE_ZONE_TYPES.has(zone.type) || !Array.isArray(zone.tiles)) return `levels.${key}.layers.zones contains an invalid zone`;
+    for (const tile of zone.tiles) {
+      if (!Array.isArray(tile) || tile.length !== 2 || !isFiniteInteger(tile[0]) || !isFiniteInteger(tile[1]) || tile[0] < 0 || tile[0] >= board.cols || tile[1] < 0 || tile[1] >= board.rows) {
+        return `levels.${key}.layers.zones contains an out-of-bounds tile`;
+      }
+    }
+  }
+  return null;
+}
+
+function validateWorkspaceBody(raw) {
+  if (!Array.isArray(raw.campaigns) || !raw.levels || typeof raw.levels !== 'object' || Array.isArray(raw.levels)) {
+    return 'invalid_workspace';
+  }
+  const levelEntries = Object.entries(raw.levels);
+  if (levelEntries.length > 200) return 'workspace_too_large';
+  for (const [key, level] of levelEntries) {
+    const levelError = validateWorkspaceLevel(level, key);
+    if (levelError) return levelError;
+  }
+  if (raw.campaigns.length > 100) return 'workspace_too_large';
+  const campaignIds = new Set();
+  for (const campaign of raw.campaigns) {
+    if (!campaign || typeof campaign !== 'object') return 'campaigns must contain objects';
+    if (campaign.formatVersion !== 1) return `campaigns.${campaign.id || '?'} formatVersion must be 1`;
+    if (typeof campaign.id !== 'string' || !campaign.id) return 'campaign id is required';
+    if (campaignIds.has(campaign.id)) return `duplicate campaign id ${campaign.id}`;
+    campaignIds.add(campaign.id);
+    if (typeof campaign.name !== 'string') return `campaigns.${campaign.id}.name is required`;
+    if (!Array.isArray(campaign.levels)) return `campaigns.${campaign.id}.levels must be an array`;
+    for (const ref of campaign.levels) {
+      if (!ref || typeof ref !== 'object' || typeof ref.levelId !== 'string' || !raw.levels[ref.levelId]) return `campaigns.${campaign.id}.levels contains a missing level reference`;
+      if (!isFiniteInteger(ref.ordinal) || ref.ordinal < 0) return `campaigns.${campaign.id}.levels contains an invalid ordinal`;
+      if (ref.objective !== undefined && !WORKSPACE_OBJECTIVES.has(ref.objective)) return `campaigns.${campaign.id}.levels contains an invalid objective`;
+      if (ref.stars !== undefined && (!isFiniteInteger(ref.stars) || ref.stars < 0 || ref.stars > 3)) return `campaigns.${campaign.id}.levels contains invalid stars`;
+    }
+  }
+  return null;
+}
+
 async function dbListLevels(ownerEmail) {
   await ensureDbReady();
   const { rows } = await pool.query(
@@ -1381,8 +1464,9 @@ app.put('/api/campaign-workspace', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
   const raw = req.body && typeof req.body === 'object' ? req.body : {};
-  if (!Array.isArray(raw.campaigns) || !raw.levels || typeof raw.levels !== 'object') {
-    res.status(400).json({ error: 'invalid_workspace' });
+  const validationError = validateWorkspaceBody(raw);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_workspace', details: validationError });
     return;
   }
   try {

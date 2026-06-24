@@ -84,6 +84,7 @@ export function ViewPane({
       onPointerMove={movePan}
       onPointerUp={endPan}
       onPointerCancel={endPan}
+      onContextMenu={(event) => event.preventDefault()}
       onWheel={zoomPane}
     >
       <div

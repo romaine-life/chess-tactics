@@ -14,7 +14,7 @@ For Chess Tactics, every generated tile still has to land in the canonical tile
 contract:
 
 - `96px` top diamond width
-- `54px` top diamond height
+- `55.426px` true-isometric top diamond height
 - `86px` side height
 - shared camera angle and edge sockets
 - no generated crop junk, chess pieces, or mismatched perspective
