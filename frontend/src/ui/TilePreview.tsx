@@ -1587,7 +1587,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>([initialRoute.familyId]);
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<CollectionFilter[]>(
-    initialRoute.tileFilter === 'board' ? ['base', 'transitions', 'references'] : [initialRoute.tileFilter],
+    initialRoute.tileFilter === 'board' ? ['base'] : [initialRoute.tileFilter],
   );
   const [catalogQuery, setCatalogQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
@@ -1620,10 +1620,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const filterDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const family = studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
+  // The Blender textured tileset is hard-edged: only base tiles, no transition or
+  // reference collections. (The transition/reference code paths are now unreachable.)
   const collectionFilters: Array<[CollectionFilter, string]> = [
     ['base', 'Base'],
-    ['transitions', 'Transitions'],
-    ['references', 'References'],
   ];
   const selectedFamilies = studioFamilies.filter((item) => selectedFamilyIds.includes(item.id));
   const activeFamilies = selectedFamilies;
