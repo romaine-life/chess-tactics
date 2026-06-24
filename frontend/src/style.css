@@ -3180,6 +3180,36 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
 .kit-badge.is-ok { background: rgba(84, 230, 160, .14); border: 1px solid rgba(84, 230, 160, .4); color: #54e6a0; }
 .kit-badge.is-no { background: rgba(255, 122, 138, .14); border: 1px solid rgba(255, 122, 138, .4); color: #ff7a8a; }
 
+/* process provenance: forged through the single-shot forge vs not */
+.kit-badges { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
+.kit-badges .kit-badge { margin-top: 0; }
+.kit-prov {
+  border-radius: 999px;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .58rem;
+  letter-spacing: .06em;
+  padding: 3px 8px;
+}
+.kit-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .45); color: #79d3ff; }
+.kit-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
+
+.kit-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.kit-filter button {
+  background: #0e1722;
+  border: 1px solid #1f3346;
+  border-radius: 999px;
+  color: #9fc4d5;
+  cursor: pointer;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .74rem;
+  padding: 7px 14px;
+  transition: border-color .12s, color .12s;
+}
+.kit-filter button:hover { border-color: #5fb8ff; color: #eaf4ff; }
+.kit-filter button.is-active { background: rgba(95, 184, 255, .16); border-color: #5fb8ff; color: #eaf4ff; }
+.kit-filter-n { color: #5d7a8c; margin-left: 4px; }
+.kit-filter button.is-active .kit-filter-n { color: #79d3ff; }
+
 .catalog-family-card {
   background: var(--c-surface);
   border: 1px solid var(--c-line);

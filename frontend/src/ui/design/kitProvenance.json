@@ -1,0 +1,24 @@
+{
+  "process": "kit-forge single-shot + gate",
+  "lastRun": "2026-06-24",
+  "assets": {
+    "effects": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "music": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "gear": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    }
+  }
+}
