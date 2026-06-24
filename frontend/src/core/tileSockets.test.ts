@@ -6,12 +6,16 @@ import {
   transitionSocketsForMask,
   tileSocketsForAsset,
   type TileSocketAsset,
+  type TileFamilyId,
 } from './tileSockets';
 
-const familyAssets: Record<'grass' | 'stone' | 'water', TileSocketAsset[]> = {
+const familyAssets: Record<TileFamilyId, TileSocketAsset[]> = {
   grass: [{ id: 'grass-a', kind: 'tile', role: 'base', probability: 1 }],
   stone: [{ id: 'stone-a', kind: 'tile', role: 'base', probability: 1 }],
   water: [{ id: 'water-a', kind: 'tile', role: 'base', probability: 1 }],
+  dirt: [],
+  pebble: [],
+  sand: [],
 };
 
 describe('tile socket masks', () => {

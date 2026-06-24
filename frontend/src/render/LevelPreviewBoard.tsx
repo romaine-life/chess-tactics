@@ -12,6 +12,9 @@ const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
   stone: 'stone',
   bridge: 'stone',
   cliff: 'stone',
+  dirt: 'dirt',
+  pebble: 'pebble',
+  sand: 'sand',
   rock: 'stone',
   water: 'water',
 };

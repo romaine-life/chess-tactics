@@ -15,6 +15,9 @@ const terrainToFamily: Record<TerrainType, TileFamilyId> = {
   cliff: 'stone',
   rock: 'stone',
   water: 'water',
+  dirt: 'dirt',
+  pebble: 'pebble',
+  sand: 'sand',
 };
 
 describe('createSkirmish', () => {
@@ -53,6 +56,15 @@ describe('createSkirmish', () => {
     const s = createSkirmish({ seed: 5 });
     for (const p of livingPieces(s.pieces, 'player')) expect(p.y).toBeGreaterThanOrEqual(s.size.rows - 2);
     for (const p of livingPieces(s.pieces, 'enemy')) expect(p.y).toBeLessThanOrEqual(1);
+  });
+
+  it('marks spawned pawns as being on their home rank', () => {
+    for (const seed of [1, 2, 5, 7, 13, 42, 99]) {
+      const s = createSkirmish({ seed });
+      for (const pawn of s.pieces.filter((p) => p.type === 'pawn')) {
+        expect(pawn.startY).toBe(pawn.y);
+      }
+    }
   });
 
   it('authors a full terrain grid (one cell per tile)', () => {

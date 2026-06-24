@@ -261,12 +261,20 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     const terrain = terrainAt(terrainMap, x, y, columns, rows) ?? 'grass';
     const sockets = socketGrid[index];
     const candidates = boardAssets.filter((asset) => assetMatchesSockets(asset, sockets, familyAssets));
-    if (candidates.length === 0) {
+    if (candidates.length > 0) {
+      cells.push({ x, y, sockets, terrain, asset: pickWeightedAsset(candidates, rng.next) });
+      continue;
+    }
+    // Hard edge: no socket-legal tile (a terrain boundary with no transition asset).
+    // Fall back to the cell's own family base/variants so the tile butts up directly
+    // instead of leaving a gap. The socket mismatch at the seam is intentional.
+    const familyTiles = (familyAssets[terrain] ?? []).filter((asset) => asset.kind === 'tile' && asset.probability > 0) as TAsset[];
+    if (familyTiles.length > 0) {
+      cells.push({ x, y, sockets, terrain, asset: pickWeightedAsset(familyTiles, rng.next) });
+    } else {
       const missing = missingForSockets(sockets);
       fallbacks.push({ x, y, requiredNorth: sockets.north, requiredWest: sockets.west, candidateCount: candidates.length });
       cells.push({ x, y, sockets, terrain, missing });
-    } else {
-      cells.push({ x, y, sockets, terrain, asset: pickWeightedAsset(candidates, rng.next) });
     }
   }
 

@@ -7,7 +7,7 @@ import { loadSpriteAtlas, type SpriteAtlas } from './sprites';
 
 const MARGIN = 44;
 const TERRAIN: Record<string, number> = {
-  grass: 0x356a42, water: 0x2f5d86, stone: 0x6b6f76, road: 0xa9905f, bridge: 0x7a5a36, cliff: 0x3a3f46, rock: 0x595e66,
+  grass: 0x356a42, water: 0x2f5d86, stone: 0x6b6f76, road: 0xa9905f, bridge: 0x7a5a36, cliff: 0x3a3f46, rock: 0x595e66, dirt: 0x6b513a, pebble: 0x7d7a70, sand: 0xb8a06a,
 };
 const SIDE_COLOR: Record<string, number> = { player: 0x3b76d6, enemy: 0xc0473a, neutral: 0x6b6f76 };
 

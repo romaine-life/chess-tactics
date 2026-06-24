@@ -6148,16 +6148,18 @@ h1 {
   --skirmish-red: #f0643e;
   --skirmish-ink: #edf7ff;
   --skirmish-muted: #a7c1ce;
+  --skirmish-panel: rgba(7, 19, 29, .86);
+  --skirmish-panel-strong: rgba(10, 29, 42, .94);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) minmax(316px, 374px);
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 360px);
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 10px;
+  padding: 0;
   position: relative;
   z-index: 5;
 }
@@ -6179,10 +6181,8 @@ h1 {
   overflow: hidden;
 }
 
-.shell.skirmish-active + .bgm-control {
-  bottom: 16px;
-  right: 400px;
-}
+.shell.skirmish-active + .bgm-control,
+.shell.skirmish-active ~ .bgm-control { display: none; }
 
 .skirmish-screen::before {
   background:
@@ -6197,7 +6197,7 @@ h1 {
 
 .skirmish-war-room {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
@@ -6205,12 +6205,14 @@ h1 {
 
 .skirmish-topbar {
   align-items: center;
-  background: url("/assets/ui/skirmish/top-bar.png") center / 100% 100% no-repeat;
+  background:
+    linear-gradient(180deg, rgba(14, 35, 48, .94), rgba(6, 16, 25, .94));
+  border-bottom: 1px solid rgba(80, 148, 181, .38);
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(220px, 1.05fr) minmax(220px, .76fr) minmax(220px, .88fr) auto auto;
-  min-height: 72px;
-  padding: 11px 18px;
+  gap: 12px;
+  grid-template-columns: minmax(190px, .9fr) minmax(200px, .72fr) minmax(220px, .86fr) auto auto;
+  min-height: 68px;
+  padding: 10px 14px 10px 18px;
 }
 
 .skirmish-brand,
@@ -6228,6 +6230,11 @@ h1 {
   min-width: 0;
 }
 
+.skirmish-brand {
+  color: inherit;
+  text-decoration: none;
+}
+
 .skirmish-brand strong,
 .skirmish-turn-plate strong,
 .skirmish-card h2,
@@ -6242,8 +6249,8 @@ h1 {
 
 .skirmish-brand strong {
   display: block;
-  font-size: clamp(1.6rem, 2.15vw, 2.25rem);
-  line-height: .9;
+  font-size: clamp(1.15rem, 1.55vw, 1.55rem);
+  line-height: 1;
   text-shadow: 0 3px 0 #02070b;
   white-space: nowrap;
 }
@@ -6270,18 +6277,21 @@ h1 {
 
 .skirmish-turn-plate {
   align-self: stretch;
-  background: url("/assets/ui/skirmish/turn-tab.png") center / 100% 100% no-repeat;
+  background:
+    linear-gradient(180deg, rgba(18, 61, 88, .76), rgba(8, 24, 36, .88));
+  border: 1px solid rgba(96, 183, 221, .32);
+  border-radius: 6px;
   display: grid;
   justify-items: center;
   min-width: 0;
-  padding: 9px 18px;
+  padding: 8px 14px;
   text-align: center;
 }
 
 .skirmish-turn-plate strong {
   color: #d9f4ff;
-  font-size: clamp(1.45rem, 1.85vw, 2.05rem);
-  line-height: .92;
+  font-size: clamp(1rem, 1.34vw, 1.34rem);
+  line-height: 1;
   text-shadow: 0 2px 0 #02070b, 0 0 14px rgba(56, 215, 255, .22);
 }
 
@@ -6336,7 +6346,7 @@ h1 {
   display: grid;
   min-height: 0;
   overflow: hidden;
-  padding: 8px 10px;
+  padding: 0;
   place-items: center;
   position: relative;
 }
@@ -6354,35 +6364,95 @@ h1 {
 }
 
 .skirmish-board-frame {
-  border: 24px solid transparent;
-  border-image: url("/assets/ui/skirmish/unit-panel.png") 28 fill / 24px stretch;
   display: grid;
-  image-rendering: pixelated;
-  max-height: 100%;
-  max-width: 100%;
-  overflow: auto;
-  padding: clamp(4px, .7vw, 10px);
+  height: 100%;
+  max-height: none;
+  max-width: none;
+  overflow: hidden;
+  padding: 0;
   place-items: center;
   position: relative;
-  scrollbar-color: #315160 #071017;
-  scrollbar-width: thin;
-  width: min(98%, 1080px);
+  width: 100%;
   z-index: 1;
 }
 
 .skirmish-board-frame [data-testid="skirmish-board"] {
-  aspect-ratio: 1.42;
-  display: block;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
   max-width: 100%;
   overflow: hidden;
   position: relative;
-  width: min(100%, 1000px);
+  width: 100%;
 }
 
 .skirmish-board-lab {
   background:
-    radial-gradient(580px 260px at 50% 42%, rgba(52, 144, 190, .2), transparent 68%),
-    linear-gradient(180deg, rgba(5, 20, 34, .72), rgba(2, 7, 12, .9));
+    radial-gradient(760px 360px at 50% 42%, rgba(54, 135, 162, .18), transparent 72%),
+    linear-gradient(180deg, rgba(5, 18, 28, .34), rgba(2, 7, 12, .72));
+}
+
+.skirmish-board-lab .tileset-view-stage {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background:
+    radial-gradient(820px 420px at 50% 44%, rgba(67, 111, 128, .18), transparent 70%),
+    linear-gradient(180deg, rgba(3, 14, 23, .08), rgba(1, 5, 9, .5));
+}
+
+.skirmish-board-lab .tileset-view-stage:focus-within {
+  outline: none;
+}
+
+.skirmish-board-tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  min-height: 44px;
+  padding: 6px 10px;
+  position: relative;
+  z-index: 3;
+}
+
+.skirmish-board-tools button {
+  align-items: center;
+  background: rgba(7, 24, 36, .78);
+  border: 1px solid rgba(83, 156, 190, .38);
+  border-radius: 5px;
+  color: #dff4ff;
+  display: grid;
+  font: 800 .82rem/1 var(--ds-font-sans, system-ui, sans-serif);
+  min-height: 30px;
+  min-width: 32px;
+  padding: 6px 9px;
+  text-shadow: none;
+}
+
+.skirmish-board-tools button.active {
+  background: rgba(24, 87, 125, .9);
+  border-color: rgba(111, 210, 255, .72);
+  box-shadow: 0 0 0 2px rgba(56, 215, 255, .12);
+}
+
+.skirmish-board-tools select {
+  min-height: 30px;
+  max-width: 170px;
+  color: #dff4ff;
+  background: rgba(7, 24, 36, .86);
+  border: 1px solid rgba(83, 156, 190, .38);
+  border-radius: 5px;
+  font: 800 .78rem/1 var(--ds-font-sans, system-ui, sans-serif);
+  padding: 5px 8px;
+}
+
+.skirmish-board-tools span {
+  color: #a9c4d4;
+  font: 800 .78rem/1 var(--ds-font-sans, system-ui, sans-serif);
+  min-width: 42px;
+  text-align: center;
 }
 
 .skirmish-board-surface .tileset-generated-board-tile {
@@ -6394,12 +6464,16 @@ h1 {
   border: 0;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   cursor: pointer;
-  height: 54px;
+  height: 62px;
   left: 0;
+  min-height: 0;
   padding: 0;
+  pointer-events: auto;
   position: absolute;
-  top: 0;
-  width: 96px;
+  top: -4px;
+  width: 104px;
+  transform: translateX(-4px);
+  z-index: 5;
 }
 
 .skirmish-board-cell-hit::before,
@@ -6420,11 +6494,43 @@ h1 {
   opacity: 1;
 }
 
+.skirmish-board-cell-hit.is-blocked-candidate::before {
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 214, 97, .42) 0 7px, rgba(81, 43, 14, .38) 7px 14px);
+  opacity: 1;
+}
+
 .skirmish-board-cell-hit.is-selected::after,
+.skirmish-board-cell-hit.is-focused-piece::after,
 .skirmish-board-cell-hit:focus-visible::after,
 .skirmish-board-cell-hit:hover::after {
-  box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .92);
   opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-selected::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(120, 232, 255, .26), transparent 58%),
+    rgba(54, 212, 255, .16);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-selected::after {
+  box-shadow:
+    inset 0 0 0 2px rgba(219, 251, 255, .98),
+    inset 0 0 0 4px rgba(20, 121, 160, .48),
+    0 0 14px rgba(71, 222, 255, .62);
+}
+
+.skirmish-board-cell-hit.is-focused-piece:not(.is-selected)::after {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 221, 112, .96),
+    inset 0 0 0 4px rgba(128, 55, 25, .42),
+    0 0 12px rgba(255, 151, 68, .54);
+}
+
+.skirmish-board-cell-hit:focus-visible::after,
+.skirmish-board-cell-hit:hover::after {
+  box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .82);
 }
 
 .skirmish-board-unit {
@@ -6435,15 +6541,25 @@ h1 {
   pointer-events: none;
   position: absolute;
   transform: translate(-50%, -78%);
+  transition:
+    left 170ms cubic-bezier(.2, .8, .2, 1),
+    top 170ms cubic-bezier(.2, .8, .2, 1);
   width: 72px;
+  will-change: left, top;
+}
+
+.skirmish-board-unit.is-moving {
+  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, .34));
 }
 
 .skirmish-board-unit img {
   display: block;
-  image-rendering: pixelated;
+  image-rendering: auto;
   max-height: 92px;
   max-width: 78px;
   object-fit: contain;
+  position: relative;
+  z-index: 1;
 }
 
 .skirmish-board-unit span {
@@ -6456,6 +6572,8 @@ h1 {
   font: 800 22px/1 var(--ds-font-sans, system-ui, sans-serif);
   height: 42px;
   justify-items: center;
+  position: relative;
+  z-index: 1;
   width: 42px;
 }
 
@@ -6481,12 +6599,19 @@ h1 {
   top: 4px;
   transform: translateX(-50%);
   width: 30px;
+  z-index: 2;
 }
 
 .skirmish-board-hp b {
   background: var(--skirmish-cyan);
   display: block;
   height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skirmish-board-unit {
+    transition: none;
+  }
 }
 
 .skirmish-left-panel {
@@ -6591,24 +6716,31 @@ h1 {
 
 .skirmish-hud {
   display: grid;
-  gap: 6px;
+  align-content: start;
+  gap: 8px;
   grid-auto-rows: max-content;
-  max-height: 100%;
+  height: 100%;
+  max-height: none;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
-  padding-right: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 10px 12px 12px 0;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
 }
 
 .skirmish-score-panel,
 .skirmish-card {
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/skirmish/hud-panel.png") 22 fill / 16px stretch;
-  image-rendering: pixelated;
+  background:
+    linear-gradient(180deg, rgba(13, 34, 48, .92), rgba(5, 15, 24, .92));
+  border: 1px solid rgba(76, 140, 171, .36);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(221, 244, 255, .05),
+    0 10px 22px rgba(0, 0, 0, .18);
   min-width: 0;
-  padding: 4px 8px;
+  padding: 12px;
   position: relative;
 }
 
@@ -6630,10 +6762,10 @@ h1 {
 .skirmish-card h2 {
   color: #94daf5;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 1.08rem;
+  font-size: .9rem;
   font-weight: 400;
   line-height: 1;
-  margin: 0 0 6px;
+  margin: 0 0 10px;
   text-transform: uppercase;
 }
 
@@ -6660,23 +6792,34 @@ h1 {
   color: #ffc0ae;
 }
 
-.skirmish-selected-card {
-  border-image-source: url("/assets/ui/skirmish/side-panel.png");
-}
-
 .skirmish-selected-body {
   display: grid;
-  gap: 10px;
-  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+  grid-template-columns: 86px minmax(0, 1fr);
 }
 
 .skirmish-portrait-frame {
   align-items: center;
-  background: url("/assets/ui/skirmish/portrait-frame.png") center / 100% 100% no-repeat;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(65, 151, 190, .18), transparent 62%),
+    rgba(3, 12, 19, .74);
+  border: 1px solid rgba(87, 153, 184, .35);
+  border-radius: 5px;
   display: grid;
-  min-height: 92px;
-  padding: 15px;
+  min-height: 86px;
+  padding: 8px;
   place-items: center;
+}
+
+/* Eye-level portrait bust (separate render contract from the iso board sprite). Smooth
+   (not pixelated) since it's a detailed hero render; bottom-anchored so the bust sits in
+   the frame instead of floating. */
+.skirmish-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  image-rendering: auto;
 }
 
 .skirmish-selected-copy {
@@ -6687,9 +6830,9 @@ h1 {
   color: #fff5df;
   display: block;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 1.55rem;
+  font-size: 1.16rem;
   font-weight: 400;
-  line-height: .96;
+  line-height: 1;
   overflow-wrap: anywhere;
   text-transform: uppercase;
 }
@@ -6699,8 +6842,8 @@ h1 {
 .skirmish-log-card li {
   color: var(--skirmish-muted);
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 1.12rem;
-  line-height: 1.15;
+  font-size: .92rem;
+  line-height: 1.18;
 }
 
 .skirmish-selected-copy dl {
@@ -6711,7 +6854,8 @@ h1 {
 
 .skirmish-selected-copy dl div {
   align-items: center;
-  display: flex;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -6728,7 +6872,7 @@ h1 {
   color: #f3ead8;
   display: grid;
   gap: 8px;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
   margin: 0;
   width: 100%;
 }
@@ -6757,12 +6901,10 @@ h1 {
 
 .skirmish-action-button {
   align-items: center;
-  background-color: transparent;
-  background-image: url("/assets/ui/skirmish/action-dark-normal.png");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
-  border: 0;
+  background:
+    linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94));
+  border: 1px solid rgba(82, 142, 170, .34);
+  border-radius: 5px;
   display: grid;
   gap: 9px;
   grid-template-columns: 34px minmax(0, 1fr) auto;
@@ -6771,30 +6913,27 @@ h1 {
   text-align: left;
 }
 
-.skirmish-action-button.blue { background-image: url("/assets/ui/skirmish/action-blue-normal.png"); }
-.skirmish-action-button.red { background-image: url("/assets/ui/skirmish/action-red-normal.png"); }
+.skirmish-action-button.blue {
+  background:
+    linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
+  border-color: rgba(99, 190, 255, .46);
+}
+
+.skirmish-action-button.red {
+  background:
+    linear-gradient(180deg, rgba(126, 49, 35, .95), rgba(48, 18, 17, .96));
+  border-color: rgba(255, 121, 86, .46);
+}
 
 .skirmish-action-button:hover,
 .skirmish-action-button:focus-visible {
-  background-image: url("/assets/ui/skirmish/action-dark-hover.png");
-  box-shadow: none;
+  border-color: rgba(241, 216, 134, .82);
+  box-shadow: 0 0 0 2px rgba(241, 216, 134, .12);
   outline: 2px solid rgba(255, 215, 116, .7);
-  outline-offset: -4px;
+  outline-offset: -3px;
 }
 
-.skirmish-action-button.blue:hover,
-.skirmish-action-button.blue:focus-visible {
-  background-image: url("/assets/ui/skirmish/action-blue-hover.png");
-}
-
-.skirmish-action-button.red:hover,
-.skirmish-action-button.red:focus-visible {
-  background-image: url("/assets/ui/skirmish/action-red-hover.png");
-}
-
-.skirmish-action-button:active { background-image: url("/assets/ui/skirmish/action-dark-pressed.png"); }
-.skirmish-action-button.blue:active { background-image: url("/assets/ui/skirmish/action-blue-pressed.png"); }
-.skirmish-action-button.red:active { background-image: url("/assets/ui/skirmish/action-red-pressed.png"); }
+.skirmish-action-button:active { transform: translateY(1px); }
 
 .skirmish-action-button:disabled {
   filter: grayscale(.35) brightness(.78);
@@ -6812,27 +6951,28 @@ h1 {
   white-space: nowrap;
 }
 
-.skirmish-roster-card {
-  border-image-source: url("/assets/ui/skirmish/roster-panel.png");
-}
-
 .skirmish-roster-rows {
   display: grid;
-  gap: 5px;
+  gap: 8px;
 }
 
 .skirmish-roster-strip {
   display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(7, minmax(32px, 1fr));
+  gap: 7px;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
 }
 
 .skirmish-roster-slot {
-  aspect-ratio: 51 / 43;
-  background: url("/assets/ui/skirmish/roster-slot.png") center / 100% 100% no-repeat;
-  border: 0;
-  min-height: 38px;
-  padding: 3px;
+  aspect-ratio: 1;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(63, 148, 190, .16), transparent 66%),
+    rgba(4, 13, 20, .72);
+  border: 1px solid rgba(82, 142, 170, .34);
+  border-radius: 5px;
+  display: grid;
+  min-height: 42px;
+  padding: 4px;
+  place-items: center;
 }
 
 .skirmish-roster-slot.active,
@@ -6860,8 +7000,14 @@ h1 {
 .skirmish-threat-card li {
   align-items: center;
   display: grid;
-  gap: 7px;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 10px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  min-height: 40px;
+}
+
+.skirmish-threat-card .skirmish-icon {
+  height: 34px;
+  width: 34px;
 }
 
 .skirmish-threat-card strong {
@@ -6871,10 +7017,7 @@ h1 {
   font-weight: 400;
 }
 
-.skirmish-log-card {
-  border-image-source: url("/assets/ui/skirmish/log-panel.png");
-  min-height: 108px;
-}
+.skirmish-log-card { min-height: 108px; }
 
 .skirmish-log-card li {
   align-items: start;
@@ -6918,17 +7061,20 @@ h1 {
 
 .skirmish-end-turn,
 .skirmish-new-run {
-  background: url("/assets/ui/skirmish/bottom-button.png") center / 100% 100% no-repeat;
-  border: 0;
+  background:
+    linear-gradient(180deg, rgba(27, 101, 145, .96), rgba(13, 51, 83, .96));
+  border: 1px solid rgba(104, 198, 255, .42);
+  border-radius: 5px;
   color: #f5eee3;
-  font-size: 1.35rem;
+  font-size: 1rem;
   min-height: 44px;
   text-shadow: 0 2px 0 #02070b;
 }
 
 .skirmish-new-run {
-  background-image: url("/assets/ui/skirmish/action-dark-normal.png");
-  font-size: 1.05rem;
+  background:
+    linear-gradient(180deg, rgba(22, 45, 58, .96), rgba(8, 20, 30, .96));
+  font-size: .9rem;
 }
 
 .skirmish-icon {
@@ -6967,8 +7113,8 @@ h1 {
 
 .skirmish-unit-badge {
   align-items: center;
-  background: linear-gradient(180deg, #15385e, #07131d);
-  border: 1px solid rgba(92, 168, 212, .7);
+  background: transparent;
+  border: 0;
   color: #dff4ff;
   display: grid;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
@@ -6981,26 +7127,33 @@ h1 {
   width: 100%;
 }
 
+.skirmish-unit-badge img {
+  display: block;
+  height: 100%;
+  max-height: 78px;
+  max-width: 100%;
+  object-fit: contain;
+  width: 100%;
+  image-rendering: auto;
+}
+
 .skirmish-unit-badge.enemy {
-  background: linear-gradient(180deg, #78311f, #160907);
-  border-color: rgba(255, 111, 70, .78);
   color: #ffe0d7;
 }
 
 .skirmish-unit-badge.neutral {
-  background: linear-gradient(180deg, #404d55, #11191f);
-  border-color: rgba(176, 192, 200, .48);
+  color: #d4e1e7;
 }
 
 .skirmish-unit-badge.large {
-  font-size: 2.4rem;
-  min-height: 62px;
-  min-width: 62px;
+  font-size: 2rem;
+  min-height: 70px;
+  min-width: 70px;
 }
 
 @media (max-width: 1180px) {
   .skirmish-screen {
-    grid-template-columns: minmax(0, 1fr) minmax(292px, 330px);
+    grid-template-columns: minmax(0, 1fr) minmax(286px, 324px);
   }
 
   .skirmish-topbar {
@@ -7011,15 +7164,12 @@ h1 {
     display: none;
   }
 
-  .skirmish-left-panel {
-    width: min(190px, 24%);
-  }
 }
 
 @media (max-width: 860px) {
   .skirmish-screen {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto;
+    grid-template-rows: minmax(520px, 62vh) auto;
     overflow: auto;
   }
 
@@ -7029,8 +7179,10 @@ h1 {
 
   .skirmish-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: auto;
     max-height: none;
     overflow: visible;
+    padding: 0 8px 12px;
   }
 
   .skirmish-score-panel {
@@ -7047,15 +7199,8 @@ h1 {
   }
 
   .skirmish-turn-plate,
-  .skirmish-top-counts,
-  .skirmish-left-panel {
+  .skirmish-top-counts {
     display: none;
-  }
-
-  .shell.skirmish-active + .bgm-control {
-    bottom: auto;
-    right: 16px;
-    top: 96px;
   }
 }
 
@@ -11028,8 +11173,11 @@ button.tileset-relationship-cell {
 .tileset-generated-board-tile {
   position: absolute;
   width: 96px;
-  height: 140px;
-  transform: translate(-48px, -27px);
+  height: 180px;
+  /* 180px frame: ~42px of headroom above the contact diamond (equator at y69) for 3D
+     protrusion (standing grass, relief). Anchor the equator to the cell so tiles still
+     tessellate and units seat exactly as before. */
+  transform: translate(-48px, -69px);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -11038,11 +11186,19 @@ button.tileset-relationship-cell {
 .tileset-generated-board-tile img {
   display: block;
   width: 96px;
-  height: 140px;
-  image-rendering: pixelated;
+  height: 180px;
+  image-rendering: auto;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.tileset-generated-board-overlay-cell {
+  position: absolute;
+  width: 96px;
+  height: 140px;
+  transform: translate(-48px, -27px);
+  pointer-events: none;
 }
 
 .tileset-generated-board-tile.is-missing {
@@ -11843,7 +11999,7 @@ button.tileset-relationship-cell {
   position: relative;
   width: 192px;
   height: 280px;
-  transform: translate(var(--view-pan-x, 0px), var(--view-pan-y, 0px)) scale(var(--view-zoom, 1));
+  transform: translate(var(--view-pan-x, 0px), calc(var(--view-pan-y, 0px) + var(--stack-shift-y, 0px))) scale(var(--view-zoom, 1));
   transform-origin: center;
   image-rendering: pixelated;
   --tile-anchor-x: 50%;

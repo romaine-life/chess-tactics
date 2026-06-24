@@ -1,7 +1,10 @@
-import type { PieceType } from './types';
+import type { PieceType, Side } from './types';
 
 export const PLAYABLE_PIECE_TYPES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const satisfies readonly PieceType[];
 export type PlayablePieceType = typeof PLAYABLE_PIECE_TYPES[number];
+
+export const isPlayablePieceType = (type: PieceType): type is PlayablePieceType =>
+  (PLAYABLE_PIECE_TYPES as readonly PieceType[]).includes(type);
 
 export const PIECE_LABEL: Record<PieceType, string> = {
   pawn: 'Pawn',
@@ -34,3 +37,15 @@ export const DEFAULT_PALETTE: UnitPalette = 'navy-blue';
 
 export const pieceSpritePath = (type: PlayablePieceType, palette: UnitPalette = DEFAULT_PALETTE, direction = 'south') =>
   `/assets/units/${type}/${palette}/${direction}.png`;
+
+// Which palette a board side wears. Shared by the board and the HUD portrait.
+export const PALETTE_FOR_SIDE: Record<Side, UnitPalette> = {
+  player: 'navy-blue',
+  enemy: 'crimson',
+  neutral: 'navy-blue',
+};
+
+// Piece portraits: a dedicated eye-level perspective bust (separate contract from the
+// true-iso board sprite), one per palette. See docs/portrait-contract.md.
+export const portraitPath = (type: PlayablePieceType, palette: UnitPalette = DEFAULT_PALETTE) =>
+  `/assets/units/${type}/portrait/${palette}.png`;
