@@ -30,9 +30,14 @@ pts=[]
 for o in [o for o in sc.objects if o.type=="MESH"]:
     for v in o.data.vertices: pts.append(o.matrix_world @ v.co)
 P=np.array([[p.x,p.y,p.z] for p in pts]); topZ=float(P[:,2].max())
-# bust: frame the upper portion of the piece
-Tz = 0.70*topZ
-span = 0.82*topZ            # world-vertical height to fit in frame
+# bust framing: the distinctive top + upper body fill the frame and the body bleeds
+# off the bottom edge -- a portrait, not a full figurine (no base/"feet" on show) and
+# not a flat-sliced disc. The HUD anchors object-position:center bottom, so keeping the
+# crop through the (roughly vertical) column reads as a clean portrait crop.
+TZ_F = float(os.environ.get("PORTRAIT_TZ", "0.62"))
+SPAN_F = float(os.environ.get("PORTRAIT_SPAN", "0.96"))
+Tz = TZ_F*topZ              # look-at high on the piece
+span = SPAN_F*topZ          # vertical span to fit -> base sits below the frame
 LENS=55.0; SENSOR=36.0
 vfov = 2*math.atan((SENSOR/2)/LENS)
 D = (span/2)/math.tan(vfov/2)
@@ -45,7 +50,8 @@ cam.rotation_euler=(T-cam.location).to_track_quat("-Z","Y").to_euler()
 cam.data.type="PERSP"; cam.data.lens=LENS; cam.data.sensor_width=SENSOR
 sc.render.engine="CYCLES"; sc.cycles.samples=64; sc.cycles.use_denoising=True
 sc.view_settings.view_transform="Standard"
-sc.render.resolution_x=sc.render.resolution_y=512; sc.render.film_transparent=True
+_RES=int(os.environ.get("PORTRAIT_RES","512"))
+sc.render.resolution_x=sc.render.resolution_y=_RES; sc.render.film_transparent=True
 sc.render.image_settings.file_format="PNG"; sc.render.filepath=OUTFILE
 bpy.ops.render.render(write_still=True)
 print("PORTRAIT_DONE topZ=%.2f Tz=%.2f D=%.2f ->" % (topZ,Tz,D), OUTFILE)

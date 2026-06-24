@@ -31,7 +31,7 @@ PALETTES = {
 }
 P_DARK, P_MID, P_FLAT, P_METAL = PALETTES[PALETTE]
 
-ROOT = Path(r"D:/repos/chess-tactics/.claude/worktrees/fervent-bhaskara-15a39d")
+ROOT = Path(__file__).resolve().parents[4]  # repo root (docs/art/unit-concepts/portraits/..)
 OBJ = str(ROOT / "docs/art/unit-concepts/source-assets/knight/wooden-chess-knight-side-b/12936_Wooden_Chess_Knight_Side_B_V2_l3.obj")
 os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
 
@@ -114,7 +114,8 @@ bpy.ops.object.light_add(type="AREA", location=(-2, 4, 4.5)); bpy.context.object
 import numpy as np
 pts=[(kn.matrix_world @ v.co) for v in kn.data.vertices]
 P=np.array([[p.x,p.y,p.z] for p in pts]); topZ=float(P[:,2].max())
-Tz=0.70*topZ; span=0.82*topZ; LENS=55.0; SENSOR=36.0
+_TZ=float(os.environ.get("PORTRAIT_TZ","0.62")); _SP=float(os.environ.get("PORTRAIT_SPAN","0.96"))
+Tz=_TZ*topZ; span=_SP*topZ; LENS=55.0; SENSOR=36.0  # bust: upper body fills frame, base off-bottom
 vfov=2*math.atan((SENSOR/2)/LENS); D=(span/2)/math.tan(vfov/2)
 E=math.radians(10.0); A=math.radians(HERO_YAW)
 bpy.ops.object.camera_add(); cam=bpy.context.object; bpy.context.scene.camera=cam
@@ -124,7 +125,8 @@ cam.data.type="PERSP"; cam.data.lens=LENS; cam.data.sensor_width=SENSOR
 s2=bpy.context.scene
 s2.render.engine="CYCLES"; s2.cycles.samples=64; s2.cycles.use_denoising=True
 s2.view_settings.view_transform="Standard"
-s2.render.resolution_x=s2.render.resolution_y=512; s2.render.film_transparent=True
+_RES=int(os.environ.get("PORTRAIT_RES","512"))
+s2.render.resolution_x=s2.render.resolution_y=_RES; s2.render.film_transparent=True
 s2.render.image_settings.file_format="PNG"; s2.render.filepath=OUTFILE
 bpy.ops.render.render(write_still=True)
 print("KNIGHT_PORTRAIT_DONE topZ=%.2f ->" % topZ, OUTFILE)

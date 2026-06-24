@@ -17,6 +17,7 @@ const Skirmish = lazy(() => import('./Skirmish').then((m) => ({ default: m.Skirm
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 const TilesetStudio = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilesetStudio })));
 const LevelEditor = lazy(() => import('./TilePreview').then((m) => ({ default: m.LevelEditorPage })));
+const PortraitEditor = lazy(() => import('./PortraitEditor').then((m) => ({ default: m.PortraitEditor })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 const split = (node: ReactElement): ReactElement => <Suspense fallback={fallback}>{node}</Suspense>;
@@ -57,6 +58,7 @@ export function App(): ReactElement {
   // preselected — not a separate surface. Keeps old links working while the
   // catalog/lab/brush flow stays a single mounted component (no route swaps).
   if (path === '/unit-studio') return split(<TilesetStudio initialCategory="units" />);
+  if (path === '/portrait-editor') return split(<PortraitEditor />);
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return split(<LevelEditor />);
