@@ -29,7 +29,11 @@ export function boardLabCellPosition(cell: { x: number; y: number }): { left: nu
   };
 }
 
-function boardMetrics(cells: readonly { x: number; y: number }[]) {
+// The single source of truth for board centering. Exported so every surface
+// (the game board, previews, AND the editor) derives its origin the same way —
+// no renderer re-implements this and drifts (see the old StudioEditableBoard,
+// which had the headroom wrong at -27).
+export function boardLabMetrics(cells: readonly { x: number; y: number }[]) {
   const projectedPoints = cells.map((cell) => boardLabCellPosition(cell));
   const minLeft = Math.min(...projectedPoints.map((point) => point.left - 48));
   const maxLeft = Math.max(...projectedPoints.map((point) => point.left + 48));
@@ -57,7 +61,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   children,
 }: BoardLabBoardProps<TAsset>) {
   const cells = board.cells;
-  const metrics = boardMetrics(cells.length ? cells : [{ x: 0, y: 0 }]);
+  const metrics = boardLabMetrics(cells.length ? cells : [{ x: 0, y: 0 }]);
 
   return (
     <div

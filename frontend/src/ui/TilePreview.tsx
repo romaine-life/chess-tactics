@@ -25,7 +25,7 @@ import {
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath } from '../core/pieces';
 import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
-import { BoardLabBoard } from '../render/BoardLabBoard';
+import { BoardLabBoard, boardLabCellPosition, boardLabMetrics } from '../render/BoardLabBoard';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
@@ -1295,15 +1295,9 @@ function StudioEditableBoard({
   const paintingRef = useRef(false);
   const gridCells: { x: number; y: number }[] = [];
   for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) gridCells.push({ x, y });
-  const projected = gridCells.map((cell) => ({ left: (cell.x - cell.y) * TILE_TEMPLATE.stepX, top: (cell.x + cell.y) * TILE_TEMPLATE.stepY }));
-  const minLeft = Math.min(...projected.map((point) => point.left - 48));
-  const maxLeft = Math.max(...projected.map((point) => point.left + 48));
-  const minTop = Math.min(...projected.map((point) => point.top - 27));
-  const maxTop = Math.max(...projected.map((point) => point.top + 140));
-  const boardWidth = maxLeft - minLeft;
-  const boardHeight = maxTop - minTop;
-  const originLeft = -minLeft - boardWidth / 2;
-  const originTop = -minTop - boardHeight / 2;
+  // Derive centering from the shared board metrics (same path the game's
+  // BoardLabBoard uses) instead of a private copy that drifted to -27 headroom.
+  const { originLeft, originTop } = boardLabMetrics(gridCells);
   const stopPainting = () => { paintingRef.current = false; };
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
@@ -1333,8 +1327,7 @@ function StudioEditableBoard({
         const asset = assetId ? resolveAsset(assetId) : undefined;
         const unitPlacement = placedUnits[key];
         const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
-        const left = (cell.x - cell.y) * TILE_TEMPLATE.stepX;
-        const top = (cell.x + cell.y) * TILE_TEMPLATE.stepY;
+        const { left, top } = boardLabCellPosition(cell);
         const isSelected = selectedCell?.x === cell.x && selectedCell?.y === cell.y;
         const unitSprite =
           unitAsset && unitPlacement
