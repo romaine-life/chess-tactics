@@ -172,7 +172,11 @@ function SettingsToggle({
       aria-label={label}
       onClick={() => onChange(!checked)}
     >
-      <img src={`/assets/ui/kit/toggle-${checked ? 'on' : 'off'}.png`} alt="" aria-hidden="true" />
+      {/* Atom-built toggle: kit 9-slice track (border-image) + live label + sliding knob.
+          The track scales with --settings-ui-scale and the label is live text, so this
+          control survives resizing and could host any word, not just ON/OFF. */}
+      <span className="settings-toggle-label">{checked ? 'On' : 'Off'}</span>
+      <span className="settings-toggle-knob" aria-hidden="true" />
     </button>
   );
 }

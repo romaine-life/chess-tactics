@@ -27,6 +27,24 @@ Two PNGs — the **same pill geometry**, two states:
 The OFF state is the ON state with the knob slid left, the fill dimmed, and the
 border/label desaturated — same outer pill, mirrored knob.
 
+## Border — match the original EXACTLY (this is what the last pass got wrong)
+
+The first regeneration embellished the frame into a heavy double-walled border
+with oversized corner brackets. The original artwork is far simpler. Replicate
+it precisely:
+
+- **ONE** single continuous thin cyan stroke (~2 px) tracing a rounded
+  rectangle, inset ~3 px from the sprite edge. Nothing else.
+- **No second border.** No nested / concentric inner frame, no track-within-a-
+  track. One line only.
+- **No oversized corner brackets.** At each of the 4 corners, only a *tiny*
+  corner tick — a ~5 px L just inside the rounded corner, a touch brighter than
+  the stroke. They do not extend outward or dominate.
+- Interior is near-black, flat.
+- The **knob** is a single **solid** medium-blue rounded rectangle — flat fill,
+  **no inner outline, no bevel ring** — occupying the right ~40 px, inset from
+  the border with a small dark gap.
+
 ## Hard requirements (these are why the current pair failed)
 
 1. **Transparent background.** Fully transparent outside the rounded-pill

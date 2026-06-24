@@ -12916,21 +12916,45 @@ button.tileset-relationship-cell {
   align-items: center;
   appearance: none;
   background: transparent;
-  border: 0;
-  border-radius: 0;
-  display: grid;
-  justify-items: center;
-  min-height: 45px;
-  min-width: 150px;
-  padding: 0;
-  position: relative;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/toggle-track.png") 8 fill / 8px stretch;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  image-rendering: pixelated;
+  inline-size: 152px;
+  block-size: 48px;
+  justify-content: space-between;
+  padding: 0 10px;
 }
 
-.settings-toggle img {
-  display: block;
-  height: 48px;
+.settings-toggle-label {
+  font-size: .82rem;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+}
+
+.settings-toggle-knob {
+  background: url("/assets/ui/kit/toggle-knob.png") center / 100% 100% no-repeat;
+  block-size: 30px;
+  flex: none;
   image-rendering: pixelated;
-  width: 152px;
+  inline-size: 40px;
+}
+
+/* Off state: knob slides to the left, label to the right, both dimmed. */
+.settings-toggle.is-off {
+  flex-direction: row-reverse;
+}
+
+.settings-toggle.is-off .settings-toggle-label {
+  color: #9fb3c2;
+}
+
+.settings-toggle.is-off .settings-toggle-knob {
+  filter: grayscale(.55) brightness(.5);
 }
 
 .settings-tab:hover,
