@@ -1,9 +1,15 @@
-// Kit forge — the orchestrated, audited generation pipeline. The insight this
-// encodes: codex cuts corners when handed multiple subjects at once, so we give
-// it EXACTLY ONE asset per invocation, then audit before accepting. The script
-// is the orchestrator; codex does one job; the gate is the foreman; provenance
-// records what passed through this process (the real "is it safe" signal — older
-// assets can pass the gate yet still be subtly rotten).
+// Kit forge — the orchestrated, audited generation pipeline. ONE asset per codex
+// invocation, then audit before accepting. See docs/kit-forge.md for the full
+// story and the rule below.
+//
+// THE RULE (learned the hard way — a whole "30/30 forged" kit shipped broken):
+// codex cannot be trusted to have GENERATED the image. Its imagegen skill tells
+// it to hand-draw "code-native" icons, so for a 64px hard-alpha request it writes
+// a PIL/SVG script and the pixel gate can't tell. So we VERIFY THE METHOD first
+// (an `image_generation_call` event must be present, via --json) and only then
+// the pixels. Provenance records the verified method — it is NOT "safe" just
+// because it passed the gate; the gate certifies clean transparency, not a good
+// drawing. The human eyeball is still the required backstop before onboarding.
 //
 //   node frontend/scripts/kit-forge.mjs <name...> | --group <id> | --all  [--n 8] [--tries 3]
 //
@@ -74,15 +80,20 @@ const SPECS = [
 });
 
 function prompt(spec, prior) {
-  return `IMAGE-GENERATION task: paint ONE PNG file. Do NOT write a script, do NOT crop or extract from any file.
-Using the attached concept art as the exact style/palette reference, paint a single clean standalone icon of: ${spec.desc}. Size ${spec.w}x${spec.h}, centered, on a FULLY TRANSPARENT background. Save it as ./${spec.name}.png in the current working directory.
+  return `IMAGE-GENERATION task: create ONE PNG by GENERATING it with the built-in image generation tool. Do NOT hand-draw it with code (PIL/Pillow, cairo, matplotlib, SVG, HTML/CSS, canvas), do NOT write a script, and do NOT crop or extract from any file — programmatic output is automatically rejected and you will be asked again.
+Using the attached concept art as the exact style/palette reference, generate a single clean standalone icon of: ${spec.desc}. Size ${spec.w}x${spec.h}, centered, on a FULLY TRANSPARENT background. Save it as ./${spec.name}.png in the current working directory.
 CRISP HARD-ALPHA IS THE #1 REQUIREMENT: every pixel must be either fully opaque OR fully transparent (alpha exactly 0 or 255). Hard 1px edges, fully-opaque interior, fully-transparent exterior. Do NOT anti-alias the edges. Do NOT key out or erase a filled background — paint directly onto transparency. NO semi-transparent halo or fringe. Use only the colors the subject calls for; NO stray magenta / purple / pink keying fringe anywhere.${prior ? `\nIMPORTANT: your previous attempt FAILED the pixel audit with: ${prior}. Fix exactly that this time.` : ''}
 Write only ./${spec.name}.png, then stop.`;
 }
 
 function runCodex(refAbs, cwd, text) {
   return new Promise((res) => {
-    const p = spawn(CODEX, ['exec', '--sandbox', 'workspace-write', '--skip-git-repo-check', '-C', cwd, '-i', refAbs], { stdio: ['pipe', 'pipe', 'pipe'] });
+    // --json streams every codex event as JSONL so we can VERIFY THE METHOD,
+    // not just inspect the resulting pixels. This is non-negotiable: codex
+    // cannot be trusted to have generated an image — its imagegen skill tells
+    // it to hand-draw "code-native" icons, so for hard-alpha/64px requests it
+    // writes a PIL/SVG script and our pixel gate can't tell the difference.
+    const p = spawn(CODEX, ['exec', '--json', '--sandbox', 'workspace-write', '--skip-git-repo-check', '-C', cwd, '-i', refAbs], { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { out += d; });
@@ -92,17 +103,38 @@ function runCodex(refAbs, cwd, text) {
   });
 }
 
+// DEFINITIVE method check. A genuine generation emits an `image_generation_call`
+// event (id `ig_…`); a programmatic drawing (PIL/Pillow/cairo/SVG/canvas) emits
+// only `shell_command`. We require proof of real generation EVERY time before we
+// will even look at the pixels. No image_generation_call -> codex coded it ->
+// reject, regardless of how clean the bitmap looks.
+function usedImageGenerator(codexJsonl) {
+  for (const line of codexJsonl.split('\n')) {
+    let j;
+    try { j = JSON.parse(line); } catch { continue; }
+    const t = (j.payload && j.payload.type) || j.type;
+    if (t === 'image_generation_call') return true;
+  }
+  return false;
+}
+
 async function forgeOne(spec, maxTries) {
   let prior = '';
   for (let attempt = 1; attempt <= maxTries; attempt += 1) {
     const work = mkdtempSync(join(tmpdir(), `forge-${spec.name}-`));
     try {
-      const { code } = await runCodex(spec.refAbs, work, prompt(spec, prior));
-      const out = join(work, `${spec.name}.png`);
-      if (!existsSync(out)) { prior = code === 0 ? 'codex wrote no PNG file' : `codex exited ${code} with no file`; continue; }
+      const { code, out: codexJsonl } = await runCodex(spec.refAbs, work, prompt(spec, prior));
+      const outPng = join(work, `${spec.name}.png`);
+      if (!existsSync(outPng)) { prior = code === 0 ? 'codex wrote no PNG file' : `codex exited ${code} with no file`; continue; }
+      // GATE 1 (method, definitive): prove codex actually generated the image.
+      if (!usedImageGenerator(codexJsonl)) {
+        prior = 'you produced the PNG WITHOUT the image generation tool — you drew it programmatically (PIL/Pillow/cairo/SVG/canvas). That is auto-rejected. You MUST create the image with the built-in image generation tool.';
+        continue;
+      }
       try {
-        verifyGlyph(out, { label: spec.name }); // behaved on tool calls + passed the gate
-        copyFileSync(out, join(spec.outDir, `${spec.name}.png`));
+        // GATE 2 (pixels): magenta / hard-alpha / edge bleed.
+        verifyGlyph(outPng, { label: spec.name });
+        copyFileSync(outPng, join(spec.outDir, `${spec.name}.png`));
         return { name: spec.name, group: spec.group, pass: true, tries: attempt };
       } catch (e) {
         prior = String(e.message).split('\n').slice(1).join(' ').replace(/\s+/g, ' ').trim();
@@ -134,7 +166,7 @@ function recordProvenance(results) {
   try { prov = { ...prov, ...JSON.parse(readFileSync(PROV, 'utf8')) }; } catch { /* first run */ }
   prov.lastRun = TODAY;
   for (const r of results) {
-    if (r.pass) prov.assets[r.name] = { group: r.group, forged: TODAY, tries: r.tries, gate: 'pass' };
+    if (r.pass) prov.assets[r.name] = { group: r.group, forged: TODAY, tries: r.tries, method: 'image-generator (verified)', gate: 'pass' };
   }
   mkdirSync(join(FRONTEND, 'src/ui/design'), { recursive: true });
   writeFileSync(PROV, `${JSON.stringify(prov, null, 2)}\n`);
