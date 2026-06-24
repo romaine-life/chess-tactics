@@ -13443,6 +13443,7 @@ button.tileset-relationship-cell {
 .asset-prov { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; }
 .asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
 .asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
+.asset-prov.is-original { background: rgba(158, 177, 197, .12); border: 1px solid rgba(158, 177, 197, .34); color: #9eb1c5; }
 
 /* Asset lab (the Lab's Asset surface) — the main pane is one self-filling panel
    that mirrors the board lab's stage; the studio topbar carries the breadcrumb,

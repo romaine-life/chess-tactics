@@ -33,7 +33,7 @@ function Card({ name, url, sub, selected, onSelect }: { name: string; url: strin
       <span className="tileset-studio-card-image asset-card-image"><img src={url} alt="" draggable={false} /></span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text"><strong>{name}</strong><em>{sub}</em></span>
-        <span className={`asset-prov ${forged(name) ? 'is-forged' : 'is-unverified'}`}>{forged(name) ? 'forged' : 'unverified'}</span>
+        <span className={`asset-prov ${forged(name) ? 'is-forged' : 'is-original'}`}>{forged(name) ? 'forged' : 'original'}</span>
       </span>
     </button>
   );
@@ -130,7 +130,7 @@ export function AssetLab({ name, onPickBoard }: { name: string; onPickBoard: () 
             {found && item ? (
               <dl className="al-meta">
                 <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h}</dd></div>
-                <div><dt>Process</dt><dd className={prov ? 'al-ok' : 'al-no'}>{prov ? `forged ${prov.forged} (${prov.tries} tr)` : 'unverified'}</dd></div>
+                <div><dt>Process</dt><dd className={prov ? 'al-ok' : ''}>{prov ? `forged ${prov.forged} (${prov.tries} tr)` : 'original (pre-forge)'}</dd></div>
                 {glyph ? <div><dt>Gate</dt><dd className={glyph.pass ? 'al-ok' : 'al-no'}>{glyph.pass ? 'PASS' : glyph.fails.join(' · ')}</dd></div> : null}
                 {glyph ? <div><dt>Magenta</dt><dd>{glyph.magenta}</dd></div> : null}
                 {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}

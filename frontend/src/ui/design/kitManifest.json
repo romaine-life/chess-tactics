@@ -2,7 +2,7 @@
   "generated": "2026-06-24",
   "gate": "verify-kit-asset.mjs --glyph (magenta · binary-alpha · edge)",
   "summary": {
-    "pass": 30,
+    "pass": 11,
     "total": 30,
     "frames": 14
   },
@@ -17,17 +17,19 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 3.2,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 3.2%"
+          ]
         },
         {
           "name": "design-index",
           "url": "/assets/ui/kit/icons/design-index.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
+          "magenta": 1,
           "semiPct": 0,
           "edge": 0,
           "pass": true,
@@ -38,11 +40,13 @@
           "url": "/assets/ui/kit/icons/effects.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
+          "magenta": 3,
           "semiPct": 0,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "magenta 3"
+          ]
         },
         {
           "name": "gear",
@@ -61,7 +65,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 0.3,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -72,7 +76,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 1,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -94,7 +98,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 1.8,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -104,11 +108,13 @@
           "url": "/assets/ui/kit/icons/music.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
+          "magenta": 5,
           "semiPct": 0,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "magenta 5"
+          ]
         },
         {
           "name": "reset",
@@ -116,7 +122,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 1.8,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -127,7 +133,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 1,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -148,18 +154,20 @@
           "url": "/assets/ui/kit/icons/tileset-review.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
+          "magenta": 3,
           "semiPct": 0,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "magenta 3"
+          ]
         },
         {
           "name": "tileset-studio",
           "url": "/assets/ui/kit/icons/tileset-studio.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
+          "magenta": 2,
           "semiPct": 0,
           "edge": 0,
           "pass": true,
@@ -170,11 +178,13 @@
           "url": "/assets/ui/kit/icons/unit-studio.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
+          "magenta": 8,
           "semiPct": 0,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "magenta 8"
+          ]
         },
         {
           "name": "wrench",
@@ -198,11 +208,13 @@
           "url": "/assets/ui/kit/icons/game/attack.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
-          "semiPct": 0,
+          "magenta": 1,
+          "semiPct": 12.3,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 12.3%"
+          ]
         },
         {
           "name": "capture",
@@ -210,10 +222,12 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 21.5,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 21.5%"
+          ]
         },
         {
           "name": "defend",
@@ -221,10 +235,12 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 11.3,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 11.3%"
+          ]
         },
         {
           "name": "end-turn",
@@ -232,10 +248,12 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 17.8,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 17.8%"
+          ]
         },
         {
           "name": "move",
@@ -243,32 +261,38 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 12.9,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 12.9%"
+          ]
         },
         {
           "name": "objective",
           "url": "/assets/ui/kit/icons/game/objective.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
-          "semiPct": 0,
+          "magenta": 1,
+          "semiPct": 12.4,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 12.4%"
+          ]
         },
         {
           "name": "power",
           "url": "/assets/ui/kit/icons/game/power.png",
           "w": 64,
           "h": 64,
-          "magenta": 0,
-          "semiPct": 0,
+          "magenta": 2,
+          "semiPct": 12.6,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 12.6%"
+          ]
         },
         {
           "name": "wait",
@@ -276,10 +300,12 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 15.2,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 15.2%"
+          ]
         }
       ]
     },
@@ -293,10 +319,12 @@
           "w": 64,
           "h": 80,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 10.1,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 10.1%"
+          ]
         },
         {
           "name": "crown",
@@ -304,10 +332,12 @@
           "w": 64,
           "h": 80,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 11.5,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 11.5%"
+          ]
         },
         {
           "name": "flame",
@@ -315,10 +345,12 @@
           "w": 64,
           "h": 80,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 10,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 10%"
+          ]
         },
         {
           "name": "lion",
@@ -326,10 +358,12 @@
           "w": 64,
           "h": 80,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 10,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 10%"
+          ]
         },
         {
           "name": "rook",
@@ -337,10 +371,12 @@
           "w": 64,
           "h": 80,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 10,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 10%"
+          ]
         },
         {
           "name": "snow",
@@ -348,10 +384,12 @@
           "w": 64,
           "h": 80,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 10.8,
           "edge": 0,
-          "pass": true,
-          "fails": []
+          "pass": false,
+          "fails": [
+            "AA 10.8%"
+          ]
         }
       ]
     }

@@ -2711,7 +2711,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         ? `${visibleCatalogCount} assets · ${selectedCollectionLabel}`
         : category === 'units'
           ? `${unitAssets.length} units`
-          : `gate ${kitManifest.summary.pass}/${kitManifest.summary.total}`;
+          : `${kitManifest.summary.total} icons`;
   const openCatalogMode = (): void => {
     skipNextRouteWriteRef.current = true;
     if (tileFilter === 'board') setTileFilter('base');
