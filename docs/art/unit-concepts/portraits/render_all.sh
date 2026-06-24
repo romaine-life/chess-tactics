@@ -6,9 +6,10 @@
 #   BLENDER="/c/Program Files/Blender Foundation/Blender 5.1/blender.exe" \
 #     bash docs/art/unit-concepts/portraits/render_all.sh
 #
-# Framing: full figure with a small floor margin so the base is never sliced
-# (the HUD anchors object-position:center bottom). Defaults Tz=0.49 span=1.24;
-# the rook's wide keep base needs more floor room -> Tz=0.42 span=1.50.
+# Framing: bust -- the distinctive top + upper body fill the frame and the body
+# bleeds off the bottom edge (a portrait, not a full figurine with its base/"feet"
+# showing). Tz=0.62 span=0.96, baked as the default in portrait_render.py /
+# knight_portrait.py (override per-piece via PORTRAIT_TZ / PORTRAIT_SPAN if needed).
 #
 # Body colours (linear RGB) for the "navy stone" body material per palette:
 #   navy-blue is the canonical base (pieces_claude.py); crimson/golden/emerald
@@ -48,11 +49,9 @@ declare -A METAL=(
   [golden]="0.6 0.30"
 )
 
-render_piece() {  # piece palette
+render_piece() {  # piece palette  (framing defaults baked into portrait_render.py)
   local piece="$1" pal="$2"
-  local tz=0.49 span=1.24
-  if [ "$piece" = "rook" ]; then tz=0.42; span=1.50; fi
-  PORTRAIT_TZ=$tz PORTRAIT_SPAN=$span "$BLENDER" -b --python "$RENDER" -- \
+  "$BLENDER" -b --python "$RENDER" -- \
     "${BLEND[$piece]}" "$OUT/$piece/portrait/$pal.png" $pal ${PAL[$pal]} $YAW ${METAL[$pal]:-} >/dev/null 2>&1
 }
 

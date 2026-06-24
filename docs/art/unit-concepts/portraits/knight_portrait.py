@@ -114,7 +114,8 @@ bpy.ops.object.light_add(type="AREA", location=(-2, 4, 4.5)); bpy.context.object
 import numpy as np
 pts=[(kn.matrix_world @ v.co) for v in kn.data.vertices]
 P=np.array([[p.x,p.y,p.z] for p in pts]); topZ=float(P[:,2].max())
-Tz=0.49*topZ; span=1.24*topZ; LENS=55.0; SENSOR=36.0  # full figure, small floor margin
+_TZ=float(os.environ.get("PORTRAIT_TZ","0.62")); _SP=float(os.environ.get("PORTRAIT_SPAN","0.96"))
+Tz=_TZ*topZ; span=_SP*topZ; LENS=55.0; SENSOR=36.0  # bust: upper body fills frame, base off-bottom
 vfov=2*math.atan((SENSOR/2)/LENS); D=(span/2)/math.tan(vfov/2)
 E=math.radians(10.0); A=math.radians(HERO_YAW)
 bpy.ops.object.camera_add(); cam=bpy.context.object; bpy.context.scene.camera=cam

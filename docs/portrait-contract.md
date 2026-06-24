@@ -13,16 +13,15 @@ top-down gameplay projection; a portrait needs an eye-level, dimensional "hero" 
   convention); only the *camera* orbits, so every portrait faces south like the board
   sprite. No per-unit aesthetic facing offset — the knight is viewed frontal-¾ like the
   rest (its horse head reads fine at 30°), not turned to profile.
-- **Adaptive full-figure framing**: from each unit's actual top (`topZ`), the camera looks
-  at `Tz = 0.49·topZ` and frames a vertical span of `1.24·topZ`, so the **whole** piece —
-  distinctive top (crown / mitre / tiara / helmet / horse head / battlements) *and* the
-  base — sits inside the frame with a small floor margin (~5–8% top and bottom). The base
-  is never sliced. The HUD anchors `object-position:center bottom`, so a clipped base reads
-  as "cut off" and a big transparent floor reads as "floating"; the small even margin
-  avoids both. The rook's wide keep base flares toward the camera and needs more floor
-  room, so it uses `Tz = 0.42·topZ`, `span = 1.50·topZ` (set per-piece in `render_all.sh`
-  via the `PORTRAIT_TZ` / `PORTRAIT_SPAN` env overrides). Adapts to each piece's height
-  automatically.
+- **Adaptive bust framing**: from each unit's actual top (`topZ`), the camera looks at
+  `Tz = 0.62·topZ` and frames a vertical span of `0.96·topZ`, so the distinctive top
+  (crown / mitre / tiara / helmet / horse head / battlements) and the upper body fill the
+  frame and the body **bleeds off the bottom edge** — a portrait, not a full figurine. Two
+  failure modes to avoid, both anchored by the HUD's `object-position:center bottom`: a base
+  sliced flat reads as "cut off", and showing the whole piece down to its base reads as a
+  figurine standing on its feet. Cropping through the (roughly vertical) column, flush to
+  the bottom edge, avoids both. Override per piece via the `PORTRAIT_TZ` / `PORTRAIT_SPAN`
+  env vars if a piece needs it. Adapts to each piece's height automatically.
 - 512×512, transparent background (`film_transparent`), Cycles, Standard view transform.
   Lighting + materials come from the unit's source `.blend` (same look as the board).
 
