@@ -1,135 +1,84 @@
-// The "Assets" catalog category for the studio — folds the UI-kit Asset Library
-// into the studio's existing category-pluggable shell (sibling to UnitsStudio),
-// so it inherits the topbar/title/tabs chrome with zero duplication. Layout: a
-// flush left tree (browse + the provenance filter) and a per-asset viewer that
-// previews the selected asset in a context appropriate to what it is.
-import { useMemo, useState, type ReactElement } from 'react';
+// The "Assets" catalog category for the studio — browses exactly like Tiles:
+// a grouped grid of asset cards in the main pane (the browser). Search + the
+// process filter live in the studio's Controls panel (tier-2), passed in as
+// props, so this component is purely the catalog. The per-asset viewer is the
+// Lab's job (Asset surface), not the catalog's. Data: the build-time manifest +
+// provenance (frontend/scripts/kit-manifest.mjs / kit-forge.mjs).
+import { type ReactElement } from 'react';
 import manifest from './kitManifest.json';
 import provenance from './kitProvenance.json';
 
-type Filter = 'all' | 'forged' | 'unverified';
-interface Glyph { name: string; url: string; w: number; h: number; magenta: number; semiPct: number; edge: number; pass: boolean; fails: string[] }
+export type AssetFilter = 'all' | 'forged' | 'unverified';
+
+interface Glyph { name: string; url: string; w: number; h: number; pass: boolean }
 interface Group { id: string; label: string; items: Glyph[] }
 interface Frame { name: string; url: string; w: number; h: number }
-interface Manifest { generated: string; gate: string; summary: { pass: number; total: number; frames: number }; groups: Group[]; frames: Frame[] }
-interface Provenance { process: string; lastRun: string | null; assets: Record<string, { group: string; forged: string; tries: number; gate: string }> }
+interface Manifest { summary: { pass: number; total: number; frames: number }; groups: Group[]; frames: Frame[] }
+interface Provenance { assets: Record<string, { forged: string; tries: number }> }
 
 const KIT = manifest as Manifest;
 const PROV = provenance as Provenance;
 const forged = (name: string): boolean => Object.prototype.hasOwnProperty.call(PROV.assets, name);
+const GROUP_LABEL: Record<string, string> = { settings: 'Icons', game: 'Game', shields: 'Shields' };
 
-type Entry =
-  | { kind: 'glyph'; groupLabel: string; item: Glyph }
-  | { kind: 'frame'; item: Frame };
-
-function find(name: string): Entry | null {
-  for (const g of KIT.groups) {
-    const item = g.items.find((i) => i.name === name);
-    if (item) return { kind: 'glyph', groupLabel: g.label.split(' ·')[0], item };
-  }
-  const f = KIT.frames.find((fr) => fr.name === name);
-  return f ? { kind: 'frame', item: f } : null;
-}
-
-// A reasonable, type-based preview: glyphs are shown bare and composited into a
-// neutral button (their most common home); frames are shown native and stretched
-// to a sample box. (Cyclable backdrops come later.)
-function Viewer({ entry }: { entry: Entry }): ReactElement {
-  const { item } = entry;
-  const prov = forged(item.name) ? PROV.assets[item.name] : null;
-  const glyph = entry.kind === 'glyph' ? entry.item : null;
+function Card({ name, url, sub, selected, onSelect }: { name: string; url: string; sub: string; selected: boolean; onSelect: (name: string) => void }): ReactElement {
   return (
-    <div className="al-viewer">
-      <header className="al-viewer-head">
-        <span className="al-kicker">{entry.kind === 'glyph' ? `${entry.groupLabel} · glyph` : 'frame'}</span>
-        <h2>{item.name}</h2>
-        <p>{item.w}×{item.h} · {item.url}</p>
-      </header>
-
-      <div className="al-stages">
-        {entry.kind === 'glyph' ? (
-          <>
-            <figure className="al-stage"><span className="al-checker"><img src={item.url} alt={item.name} className="al-glyph-lg" /></span><figcaption>default · transparency</figcaption></figure>
-            <figure className="al-stage"><span className="al-in-button"><img src={item.url} alt="" className="al-glyph-md" /></span><figcaption>in a button</figcaption></figure>
-            <figure className="al-stage"><span className="al-on-panel"><img src={item.url} alt="" className="al-glyph-md" /></span><figcaption>on a panel</figcaption></figure>
-          </>
-        ) : (
-          <>
-            <figure className="al-stage"><span className="al-checker"><img src={item.url} alt={item.name} className="al-frame-native" /></span><figcaption>native</figcaption></figure>
-            <figure className="al-stage">
-              <span className="al-frame-stretch" style={{ borderImageSource: `url(${item.url})`, borderImageSlice: `${Math.max(2, Math.floor(Math.min(item.w, item.h) / 3))} fill`, borderImageWidth: `${Math.max(8, Math.floor(Math.min(item.w, item.h) / 3))}px` }} />
-              <figcaption>stretched (9-slice)</figcaption>
-            </figure>
-          </>
-        )}
-      </div>
-
-      <dl className="al-meta">
-        <div><dt>Process</dt><dd className={prov ? 'al-ok' : 'al-no'}>{prov ? `forged ${prov.forged} (${prov.tries} tr)` : 'unverified'}</dd></div>
-        {glyph ? <div><dt>Gate</dt><dd className={glyph.pass ? 'al-ok' : 'al-no'}>{glyph.pass ? 'PASS' : glyph.fails.join(' · ')}</dd></div> : null}
-        {glyph ? <div><dt>Magenta</dt><dd>{glyph.magenta}</dd></div> : null}
-        {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}
-        {glyph ? <div><dt>Edge</dt><dd>{glyph.edge}</dd></div> : null}
-      </dl>
-    </div>
+    <button
+      type="button"
+      className={`tileset-studio-card is-asset ${selected ? 'is-selected' : ''}`}
+      onClick={() => onSelect(name)}
+      aria-pressed={selected}
+      title={`Select ${name}`}
+    >
+      <span className="tileset-studio-card-image asset-card-image"><img src={url} alt="" draggable={false} /></span>
+      <span className="tileset-studio-card-meta">
+        <span className="tileset-studio-card-text"><strong>{name}</strong><em>{sub}</em></span>
+        <span className={`asset-prov ${forged(name) ? 'is-forged' : 'is-unverified'}`}>{forged(name) ? 'forged' : 'unverified'}</span>
+      </span>
+    </button>
   );
 }
 
-export function AssetLibraryStudio(): ReactElement {
-  const [filter, setFilter] = useState<Filter>('all');
-  const [selected, setSelected] = useState<string>(KIT.groups[0]?.items[0]?.name ?? '');
-  const matches = (name: string): boolean => filter === 'all' || (filter === 'forged' ? forged(name) : !forged(name));
-  const entry = useMemo(() => find(selected), [selected]);
+export function AssetLibraryStudio({ filter, search, selected, onSelect }: {
+  filter: AssetFilter;
+  search: string;
+  selected: string;
+  onSelect: (name: string) => void;
+}): ReactElement {
+  const q = search.trim().toLowerCase();
+  const ok = (name: string): boolean =>
+    (filter === 'all' || (filter === 'forged' ? forged(name) : !forged(name))) && (!q || name.toLowerCase().includes(q));
 
-  const forgedCount = KIT.groups.flatMap((g) => g.items).filter((i) => forged(i.name)).length;
-  const tabs: [Filter, string, number][] = [
-    ['all', 'All', KIT.summary.total],
-    ['forged', 'Forged', forgedCount],
-    ['unverified', 'Unverified', KIT.summary.total - forgedCount],
-  ];
+  const sections = [
+    ...KIT.groups.map((g) => ({ key: g.id, label: GROUP_LABEL[g.id] ?? g.label, items: g.items.filter((i) => ok(i.name)).map((i) => ({ name: i.name, url: i.url, sub: `${i.w}×${i.h}` })) })),
+    { key: 'frames', label: 'Frames', items: KIT.frames.filter((f) => ok(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `${f.w}×${f.h}` })) },
+  ].filter((s) => s.items.length);
+
+  const shown = sections.reduce((n, s) => n + s.items.length, 0);
 
   return (
-    <section className="tileset-studio-main al-root" aria-label="Asset library">
-      <aside className="al-tree" aria-label="Assets">
-        <div className="al-filter" role="group" aria-label="Filter by process">
-          {tabs.map(([key, label, n]) => (
-            <button type="button" key={key} className={filter === key ? 'is-active' : ''} aria-pressed={filter === key} onClick={() => setFilter(key)}>
-              {label} <span>{n}</span>
-            </button>
-          ))}
+    <section className="tileset-studio-main">
+      <div className="tileset-studio-toolbar">
+        <div className="tileset-studio-title-row">
+          <div className="tileset-catalog-heading">
+            <h2>Asset Library</h2>
+            <p className="tileset-filter-summary">{shown} assets · gate {KIT.summary.pass}/{KIT.summary.total} · select a card, then open Lab to preview it</p>
+          </div>
         </div>
-        <div className="al-tree-scroll">
-          {KIT.groups.map((g) => {
-            const items = g.items.filter((i) => matches(i.name));
-            if (!items.length) return null;
-            return (
-              <div className="al-tree-group" key={g.id}>
-                <p className="al-tree-label">{g.label.split(' ·')[0]}</p>
-                {items.map((i) => (
-                  <button type="button" key={i.name} className={`al-tree-leaf ${selected === i.name ? 'is-selected' : ''}`} onClick={() => setSelected(i.name)}>
-                    <img src={i.url} alt="" />
-                    <span>{i.name}</span>
-                    <em className={forged(i.name) ? 'al-dot-ok' : 'al-dot-no'} aria-hidden="true" />
-                  </button>
-                ))}
+      </div>
+      <section className="tileset-studio-tab-panel">
+        <div className="tileset-asset-sections">
+          {sections.map((s) => (
+            <section className="tileset-asset-section" aria-label={s.label} key={s.key}>
+              <h3>{s.label}</h3>
+              <div className="tileset-studio-grid">
+                {s.items.map((it) => <Card key={it.name} name={it.name} url={it.url} sub={it.sub} selected={selected === it.name} onSelect={onSelect} />)}
               </div>
-            );
-          })}
-          {KIT.frames.filter((f) => matches(f.name)).length ? (
-            <div className="al-tree-group">
-              <p className="al-tree-label">Frames</p>
-              {KIT.frames.filter((f) => matches(f.name)).map((f) => (
-                <button type="button" key={f.name} className={`al-tree-leaf ${selected === f.name ? 'is-selected' : ''}`} onClick={() => setSelected(f.name)}>
-                  <img src={f.url} alt="" />
-                  <span>{f.name}</span>
-                  <em className={forged(f.name) ? 'al-dot-ok' : 'al-dot-no'} aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-          ) : null}
+            </section>
+          ))}
+          {!sections.length ? <p className="tileset-catalog-note">No assets match this filter.</p> : null}
         </div>
-      </aside>
-      {entry ? <Viewer entry={entry} /> : <div className="al-viewer al-empty">Select an asset.</div>}
+      </section>
     </section>
   );
 }

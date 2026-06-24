@@ -13323,3 +13323,15 @@ button.tileset-relationship-cell {
 .al-meta dd { margin: 4px 0 0; font-size: .92rem; }
 .al-ok { color: #54e6a0; } .al-no { color: #ff7a8a; }
 .al-empty { align-items: center; justify-content: center; color: #5d7a8c; }
+
+/* Asset catalog cards (reuse the studio card chrome; glyph on a checker stage). */
+.tileset-studio-card.is-asset .asset-card-image {
+  align-items: center;
+  background: repeating-conic-gradient(#0c141d 0 25%, #0a1018 0 50%) 0 / 16px 16px;
+  display: flex;
+  justify-content: center;
+}
+.tileset-studio-card.is-asset .asset-card-image img { image-rendering: pixelated; max-height: 72%; max-width: 72%; object-fit: contain; }
+.asset-prov { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; }
+.asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
+.asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }

@@ -2070,6 +2070,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
   const [category, setCategory] = useState<StudioCategory>(initialCategory);
+  const [assetFilter, setAssetFilter] = useState<'all' | 'forged' | 'unverified'>('all');
+  const [assetSearch, setAssetSearch] = useState('');
+  const [selectedAssetName, setSelectedAssetName] = useState('');
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
@@ -2803,7 +2806,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             onArmBrush={placeUnitOnLoadedBoard}
           />
         ) : category === 'assets' ? (
-          <AssetLibraryStudio />
+          <AssetLibraryStudio filter={assetFilter} search={assetSearch} selected={selectedAssetName} onSelect={setSelectedAssetName} />
         ) : (
           <section className="tileset-studio-main">
           <div className="tileset-studio-toolbar">
@@ -3037,7 +3040,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               ) : category === 'units' ? (
                 <p className="tileset-catalog-note">Select a unit card to place it in the shared lab board.</p>
               ) : (
-                <p className="tileset-catalog-note">Browse and filter on the left; pick an asset to preview it.</p>
+                <>
+                  <label className="tileset-catalog-search">
+                    <span>Search</span>
+                    <input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="asset name…" />
+                  </label>
+                  <div className="tileset-segmented-control" aria-label="Process filter">
+                    {(['all', 'forged', 'unverified'] as const).map((option) => (
+                      <button key={option} type="button" className={assetFilter === option ? 'is-active' : ''} onClick={() => setAssetFilter(option)}>
+                        {option === 'all' ? 'All' : option === 'forged' ? 'Forged' : 'Unverified'}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </section>
