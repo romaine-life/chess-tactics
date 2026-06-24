@@ -1231,7 +1231,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
-  const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>([initialRoute.familyId]);
+  const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<CollectionFilter[]>(
     initialRoute.tileFilter === 'board' ? ['base'] : [initialRoute.tileFilter],
   );
@@ -1273,7 +1273,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const selectedFamilies = studioFamilies.filter((item) => selectedFamilyIds.includes(item.id));
   const activeFamilies = selectedFamilies;
   const selectedFamilyLabel =
-    activeFamilies.length === 0 ? 'No families' : activeFamilies.length === 1 ? activeFamilies[0].label : `${activeFamilies.length} families`;
+    activeFamilies.length === 0
+      ? 'No families'
+      : activeFamilies.length === studioFamilies.length
+        ? 'All Tiles'
+        : activeFamilies.length === 1
+          ? activeFamilies[0].label
+          : `${activeFamilies.length} families`;
   const selectedCollectionLabel =
     selectedCollectionFilters.length === 0
       ? 'No collections'
