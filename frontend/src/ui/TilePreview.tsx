@@ -49,7 +49,7 @@ const TRUE_ISO_TILE_SOURCE = 'canonical-true-iso';
 type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
 type StudioMode = 'catalog' | 'lab';
-type TileFilter = 'base' | 'transitions' | 'references' | 'board';
+type TileFilter = 'base' | 'board';
 type LabMode = 'board' | 'tile' | 'unit';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
 type TransitionViewMode = 'tile' | 'proof' | 'sample';
@@ -1682,14 +1682,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setSelectedCell(null);
     setLabMode('board');
   };
-  const filteredTileAssets =
-    tileFilter === 'base'
-      ? family.assets.filter((asset) => asset.kind === 'tile')
-      : tileFilter === 'transitions'
-        ? transitionAssets.filter((asset) => asset.terrains?.includes(family.id))
-        : tileFilter === 'references'
-          ? family.assets.filter((asset) => asset.kind === 'reference')
-          : [];
+  const filteredTileAssets = tileFilter === 'base' ? family.assets.filter((asset) => asset.kind === 'tile') : [];
   const catalogBaseAssets = activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile'));
   const catalogReferenceAssets = activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'reference'));
   const catalogTransitionAssets = transitionAssets.filter((asset) => asset.terrains?.some((terrain) => selectedFamilyIds.includes(terrain)));
@@ -1704,10 +1697,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const visibleCatalogBaseAssets = catalogBaseAssets.filter(matchesCatalogQuery);
   const visibleCatalogReferenceAssets = catalogReferenceAssets.filter(matchesCatalogQuery);
   const visibleCatalogTransitionAssets = catalogTransitionAssets.filter(matchesCatalogQuery);
-  const visibleCatalogCount =
-    (selectedCollectionFilters.includes('base') ? visibleCatalogBaseAssets.length : 0) +
-    (selectedCollectionFilters.includes('transitions') ? visibleCatalogTransitionAssets.length : 0) +
-    (selectedCollectionFilters.includes('references') ? visibleCatalogReferenceAssets.length : 0);
+  const visibleCatalogCount = selectedCollectionFilters.includes('base') ? visibleCatalogBaseAssets.length : 0;
   const generatedAssets =
     boardScope === 'family'
       ? activeFamilies
@@ -1731,10 +1721,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   );
   const coverageReport = useMemo(() => buildTileCoverageReport(studioFamilyAssets, transitionAssets), []);
   const familyMissingTransitionSlots = coverageReport.missingTransitionSlots.filter((slot) => transitionPairById(slot.pairId).terrains.includes(family.id));
-  const selectedTransitionSlot =
-    selectedSlotMask && tileFilter === 'transitions'
-      ? transitionSlotsForPair(selectedPair, transitionAssets).find((slot) => slot.mask === selectedSlotMask)
-      : undefined;
+  const selectedTransitionSlot = selectedSlotMask
+    ? transitionSlotsForPair(selectedPair, transitionAssets).find((slot) => slot.mask === selectedSlotMask)
+    : undefined;
   const selectedAssetPair = selectedAsset.pairId ? transitionPairById(selectedAsset.pairId) : undefined;
   const selectedAssetTransitionSlot =
     selectedAssetPair && selectedAsset.socketMask
@@ -1890,11 +1879,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const reviewItems: ReviewItem[] =
     tileFilter === 'board'
       ? Array.from(new Map(generatedBoard.cells.flatMap((cell) => (cell.asset ? [[cell.asset.id, cell.asset] as const] : []))).values()).map((asset) => ({ type: 'asset', asset }))
-      : tileFilter === 'transitions'
-        ? transitionSlotsForPair(selectedPair, transitionAssets).map((slot) =>
-            slot.assets[0] ? ({ type: 'asset', asset: slot.assets[0] } as ReviewItem) : ({ type: 'slot', pair: selectedPair, slot } as ReviewItem),
-          )
-        : filteredTileAssets.map((asset) => ({ type: 'asset', asset }));
+      : filteredTileAssets.map((asset) => ({ type: 'asset', asset }));
   const selectedReviewIndex = Math.max(
     0,
     reviewItems.findIndex((item) =>
@@ -1969,23 +1954,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   }, [familyTransitionPairs, selectedPairId]);
 
   useEffect(() => {
-    const visibleAssets =
-      tileFilter === 'base'
-        ? [...family.assets.filter((asset) => asset.kind === 'tile'), ...transitionAssets.filter((asset) => asset.terrains?.includes(family.id))]
-        : tileFilter === 'transitions'
-          ? transitionAssets.filter((asset) => asset.pairId === selectedPair.id)
-          : tileFilter === 'references'
-            ? family.assets.filter((asset) => asset.kind === 'reference')
-            : [];
+    const visibleAssets = tileFilter === 'base' ? family.assets.filter((asset) => asset.kind === 'tile') : [];
     if (tileFilter !== 'board' && visibleAssets.length > 0) {
       setSelectedAssetId((currentAssetId) => (visibleAssets.some((asset) => asset.id === currentAssetId) ? currentAssetId : visibleAssets[0].id));
     }
   }, [family, selectedPair.id, tileFilter]);
 
   useEffect(() => {
-    if (tileFilter !== 'transitions') {
-      setSelectedSlotMask(undefined);
-    }
+    setSelectedSlotMask(undefined);
   }, [tileFilter]);
 
   useEffect(() => {
@@ -2083,15 +2059,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const inspectAsset = (asset: StudioAsset) => {
     setSelectedAssetId(asset.id);
     setSelectedSlotMask(undefined);
-    if (asset.pairId) {
-      setSelectedPairId(asset.pairId);
-      setTileFilter('transitions');
-      setTransitionViewMode('tile');
-    } else if (asset.kind === 'reference') {
-      setTileFilter('references');
-    } else {
-      setTileFilter('base');
-    }
+    setTileFilter('base');
     setLabMode('tile');
     setViewHasTarget(true);
     setStudioMode('lab');
@@ -2108,10 +2076,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setStudioMode('lab');
   };
 
+  // Inert: the hard-edged textured tileset has no transition slots, so this is
+  // never reached (kept type-valid for the unused transition catalog scaffolding).
   const inspectSlot = (pair: TransitionPair, slot: TransitionSlot<StudioAsset>) => {
     setSelectedPairId(pair.id);
     setSelectedSlotMask(slot.mask);
-    setTileFilter('transitions');
+    setTileFilter('base');
     setTransitionViewMode(slot.assets[0] ? 'tile' : 'proof');
     setLabMode('tile');
     setViewHasTarget(true);
@@ -2336,49 +2306,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                           onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
                           onOpenBoard={() => inspectAsset(asset)}
                           onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-                {selectedCollectionFilters.includes('transitions') ? (
-                  <section className="tileset-asset-section" aria-label="Transition tiles">
-                    <h3>Transition Tiles</h3>
-                    <div className="tileset-studio-grid" aria-label="Transition assets">
-                      {visibleCatalogTransitionAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-                {selectedCollectionFilters.includes('references') ? (
-                  <section className="tileset-asset-section" aria-label="Reference tiles">
-                    <h3>References</h3>
-                    <div className="tileset-studio-grid" aria-label="Reference assets">
-                      {visibleCatalogReferenceAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={zoomTilesWithWheel}
                         />
                       ))}
                     </div>
