@@ -51,18 +51,13 @@ function CroppedView({ src, crop }: { src: string; crop: Crop }): ReactElement {
   );
 }
 
-// The HUD's real portrait frame: square frame, 8px top/side padding (none at the
-// bottom), and the square portrait contained + bottom-anchored so it bleeds to the
-// bottom border. Mirrors .skirmish-portrait-frame so the preview is faithful.
+// The HUD's real portrait frame: a square frame the crop FILLS edge-to-edge (no
+// padding) — mirrors .skirmish-portrait-frame so the preview is faithful.
 function HudFrame({ src, crop, size, label }: { src: string; crop: Crop; size: number; label?: string }): ReactElement {
-  const pad = Math.max(2, Math.round((size * 8) / 86)); // scale the 8px@86 padding
-  const inner = size - 2 * pad; // contained square width (and height, bottom-anchored)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <div className="skirmish-portrait-frame" style={{ width: size, height: size, padding: `${pad}px ${pad}px 0`, position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', left: pad, bottom: 0, width: inner, height: inner, overflow: 'hidden' }}>
-          <CroppedView src={src} crop={crop} />
-        </div>
+      <div className="skirmish-portrait-frame" style={{ width: size, height: size, padding: 0, position: 'relative', overflow: 'hidden' }}>
+        <CroppedView src={src} crop={crop} />
       </div>
       {label ? <span style={{ fontSize: 11, color: '#7fa8bd' }}>{label}</span> : null}
     </div>
