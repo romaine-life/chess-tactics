@@ -3079,6 +3079,80 @@ h1 {
   width: 100%;
 }
 
+/* Kit branch — generated glyphs + frames with a per-asset gate health badge. */
+.kit-health {
+  align-items: center;
+  background: rgba(20, 34, 50, .45);
+  border: 1px solid #1f3346;
+  border-radius: 12px;
+  display: flex;
+  gap: 16px;
+  margin-bottom: 26px;
+  padding: 16px 20px;
+}
+.kit-health .kit-score {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.kit-score.is-ok { color: #54e6a0; }
+.kit-score.is-no { color: #ff7a8a; }
+.kit-health strong { display: block; font-size: .92rem; }
+.kit-dim {
+  color: #5d7a8c;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .66rem;
+}
+.kit-group { margin-bottom: 30px; }
+.kit-count {
+  color: #54e6a0;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .8rem;
+  margin-left: 10px;
+}
+.kit-note { color: #5d7a8c; font-size: .8rem; margin: -6px 0 14px; }
+.kit-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+}
+.kit-cell {
+  background: linear-gradient(180deg, #111e2b, #0e1722);
+  border: 1px solid #1f3346;
+  border-radius: 11px;
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+}
+.kit-cell.is-bad { border-color: rgba(255, 122, 138, .55); box-shadow: 0 0 0 1px rgba(255, 122, 138, .25); }
+.kit-thumb {
+  align-items: center;
+  background: repeating-conic-gradient(#0c141d 0 25%, #0a1018 0 50%) 0 / 18px 18px;
+  border-radius: 7px;
+  display: flex;
+  height: 84px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.kit-thumb img { image-rendering: pixelated; max-height: 80px; max-width: 84px; }
+.kit-thumb.is-wide { height: 60px; }
+.kit-thumb.is-wide img { image-rendering: auto; max-height: 56px; max-width: 100%; }
+.kit-cell figcaption { display: flex; flex-direction: column; gap: 2px; }
+.kit-cell figcaption b { font-size: .82rem; }
+.kit-badge {
+  border-radius: 999px;
+  display: inline-block;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  margin-top: 8px;
+  padding: 3px 9px;
+}
+.kit-badge.is-ok { background: rgba(84, 230, 160, .14); border: 1px solid rgba(84, 230, 160, .4); color: #54e6a0; }
+.kit-badge.is-no { background: rgba(255, 122, 138, .14); border: 1px solid rgba(255, 122, 138, .4); color: #ff7a8a; }
+
 .catalog-family-card {
   background: var(--c-surface);
   border: 1px solid var(--c-line);

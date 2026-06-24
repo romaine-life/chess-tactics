@@ -161,6 +161,16 @@ export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
     ],
   },
   {
+    label: 'kit',
+    href: '/design/catalog/kit',
+    children: [
+      { label: 'Settings icons', href: '/design/catalog/kit#kit-group-settings' },
+      { label: 'Game icons', href: '/design/catalog/kit#kit-group-game' },
+      { label: 'Faction shields', href: '/design/catalog/kit#kit-group-shields' },
+      { label: 'Frames & components', href: '/design/catalog/kit#kit-group-frames' },
+    ],
+  },
+  {
     label: 'widget',
     href: '/design/catalog/widgets/main-menu',
     children: [

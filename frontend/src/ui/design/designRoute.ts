@@ -4,7 +4,7 @@
 // place) so moving between catalog views never triggers a full reload or the
 // "flash of the game screen" the user flagged in session 930 (turns 56, 60).
 export type DesignView = 'hub' | 'catalog' | 'glossaryPage' | 'widgetsPage' | 'prototype';
-export type CatalogMode = 'home' | 'glossary' | 'widgets' | 'browser' | 'nineSliceCategory';
+export type CatalogMode = 'home' | 'glossary' | 'widgets' | 'browser' | 'nineSliceCategory' | 'kit';
 export type PrototypeKind = 'drilldown' | 'tree' | 'hybrid';
 
 export interface DesignRoute {
@@ -51,6 +51,7 @@ export function parseDesignRoute(pathname: string): DesignRoute {
   if (path === '/design/catalog/navigation-hybrid') return { view: 'prototype', catalogMode: 'home', prototype: 'hybrid' };
 
   if (path === '/design/catalog') return { view: 'catalog', catalogMode: 'home' };
+  if (path === '/design/catalog/kit') return { view: 'catalog', catalogMode: 'kit' };
   if (path === '/design/catalog/glossary') return { view: 'catalog', catalogMode: 'glossary', glossaryTerm: 'asset' };
 
   const glossaryTerm = path.match(/^\/design\/catalog\/glossary\/(.+)$/);

@@ -15,6 +15,7 @@ import { TreeList, allBranchKeys } from './TreeList';
 import { CatalogHome, CatalogBrowser, NineSliceCategoryView, countsByType } from './catalogContent';
 import { GlossaryEntry } from './glossary';
 import { WidgetGallery } from './widgets';
+import { KitView } from './kitView';
 
 type Navigate = (href: string, e?: { preventDefault: () => void }) => void;
 
@@ -113,6 +114,10 @@ export function DesignCatalog({ route, path, onNavigate }: { route: DesignRoute;
     title = cat ? `${cat.label} 9-slice` : '9-slice';
     intro = 'A 9-slice category — its contract is the slots and states every 9-slice of this type must expose.';
     content = <NineSliceCategoryView categoryId={route.nineSliceCategory} onNavigate={onNavigate} />;
+  } else if (route.catalogMode === 'kit') {
+    title = 'Kit';
+    intro = 'The shared UI kit — generated glyphs and 9-slice frames, each verified by the asset gate (magenta · binary-alpha · edge). Re-run kit-manifest.mjs to refresh.';
+    content = <KitView />;
   } else if (route.catalogMode === 'browser' && route.assetType) {
     title = `${assetTypeLabel(route.assetType)} Assets`;
     content = <CatalogBrowser assetType={route.assetType} assetId={route.assetId} />;
