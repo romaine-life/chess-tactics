@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode, type WheelEvent } from 'react';
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
+import { AssetLibraryStudio } from './design/AssetLibraryStudio';
 import { tileFamilies } from '../art/tileset';
 import { buildTileCoverageReport } from '../core/tileCoverage';
 import { generateSocketBoard, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
@@ -2061,12 +2062,14 @@ export function LevelEditorPage(): ReactElement {
   );
 }
 
-export function TilesetStudio(): ReactElement {
+type StudioCategory = 'tiles' | 'units' | 'assets';
+
+export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: StudioCategory } = {}): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
-  const [category, setCategory] = useState<'tiles' | 'units'>('tiles');
+  const [category, setCategory] = useState<StudioCategory>(initialCategory);
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
@@ -2680,18 +2683,22 @@ export function TilesetStudio(): ReactElement {
         : `${family.label} · ${selectedAsset.role}`;
   const hasLabTiles = Object.keys(boardCells).length > 0;
   const hasLabUnits = Object.keys(boardUnits).length > 0;
-  const headerKicker = studioMode === 'catalog' ? (category === 'units' ? 'Unit Catalog' : 'Tile Catalog') : 'Lab';
+  const headerKicker = studioMode === 'catalog' ? (category === 'assets' ? 'UI Kit' : category === 'units' ? 'Unit Catalog' : 'Tile Catalog') : 'Lab';
   const headerTitle =
     studioMode === 'catalog'
-      ? category === 'units'
-        ? 'Units'
-        : selectedFamilyLabel
+      ? category === 'assets'
+        ? 'Asset Library'
+        : category === 'units'
+          ? 'Units'
+          : selectedFamilyLabel
       : 'Lab';
   const headerSubtitle =
     studioMode === 'catalog'
-      ? category === 'units'
-        ? 'Browse chess-piece units.'
-        : activeFamilies.map((item) => item.purpose).join(' · ')
+      ? category === 'assets'
+        ? 'Browse the verified UI kit — glyphs and 9-slice frames.'
+        : category === 'units'
+          ? 'Browse chess-piece units.'
+          : activeFamilies.map((item) => item.purpose).join(' · ')
       : labMode === 'board'
         ? 'Edit and test tiles and units on one shared board surface.'
         : labMode === 'unit'
@@ -2775,9 +2782,11 @@ export function TilesetStudio(): ReactElement {
             <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse asset catalogs.">
               Catalog
             </button>
-            <button type="button" className={studioMode === 'lab' ? 'is-active' : ''} onClick={openLabMode} title="Open the shared board lab.">
-              Lab
-            </button>
+            {category !== 'assets' ? (
+              <button type="button" className={studioMode === 'lab' ? 'is-active' : ''} onClick={openLabMode} title="Open the shared board lab.">
+                Lab
+              </button>
+            ) : null}
           </span>
           <a href="/settings">Settings</a>
         </nav>
@@ -2793,6 +2802,8 @@ export function TilesetStudio(): ReactElement {
             onInspect={inspectUnitInLab}
             onArmBrush={placeUnitOnLoadedBoard}
           />
+        ) : category === 'assets' ? (
+          <AssetLibraryStudio />
         ) : (
           <section className="tileset-studio-main">
           <div className="tileset-studio-toolbar">
@@ -2897,6 +2908,14 @@ export function TilesetStudio(): ReactElement {
                   title="Browse chess-piece units."
                 >
                   Units
+                </button>
+                <button
+                  type="button"
+                  className={category === 'assets' ? 'is-active' : ''}
+                  onClick={() => setCategory('assets')}
+                  title="Browse the UI kit asset library."
+                >
+                  Assets
                 </button>
               </div>
               {category === 'tiles' ? (
@@ -3015,8 +3034,10 @@ export function TilesetStudio(): ReactElement {
                     View Selected
                   </button>
                 </>
-              ) : (
+              ) : category === 'units' ? (
                 <p className="tileset-catalog-note">Select a unit card to place it in the shared lab board.</p>
+              ) : (
+                <p className="tileset-catalog-note">Browse and filter on the left; pick an asset to preview it.</p>
               )}
             </div>
           </section>
