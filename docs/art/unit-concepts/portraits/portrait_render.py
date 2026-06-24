@@ -30,9 +30,13 @@ pts=[]
 for o in [o for o in sc.objects if o.type=="MESH"]:
     for v in o.data.vertices: pts.append(o.matrix_world @ v.co)
 P=np.array([[p.x,p.y,p.z] for p in pts]); topZ=float(P[:,2].max())
-# bust: frame the upper portion of the piece
-Tz = 0.70*topZ
-span = 0.82*topZ            # world-vertical height to fit in frame
+# full-figure framing: fit the whole piece with a small floor margin so the base
+# is never sliced (the HUD anchors object-position:center bottom). The flared base
+# tilts toward the camera, so it needs extra floor room beyond the naive window.
+TZ_F = float(os.environ.get("PORTRAIT_TZ", "0.49"))
+SPAN_F = float(os.environ.get("PORTRAIT_SPAN", "1.24"))
+Tz = TZ_F*topZ              # look-at below centre -> lifts the piece off the bottom edge
+span = SPAN_F*topZ          # world-vertical height to fit
 LENS=55.0; SENSOR=36.0
 vfov = 2*math.atan((SENSOR/2)/LENS)
 D = (span/2)/math.tan(vfov/2)
