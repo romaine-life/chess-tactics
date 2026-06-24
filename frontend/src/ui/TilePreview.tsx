@@ -2061,12 +2061,12 @@ export function LevelEditorPage(): ReactElement {
   );
 }
 
-export function TilesetStudio(): ReactElement {
+export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: 'tiles' | 'units' } = {}): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
-  const [category, setCategory] = useState<'tiles' | 'units'>('tiles');
+  const [category, setCategory] = useState<'tiles' | 'units'>(initialCategory);
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
@@ -2680,23 +2680,31 @@ export function TilesetStudio(): ReactElement {
         : `${family.label} · ${selectedAsset.role}`;
   const hasLabTiles = Object.keys(boardCells).length > 0;
   const hasLabUnits = Object.keys(boardUnits).length > 0;
-  const headerKicker = studioMode === 'catalog' ? (category === 'units' ? 'Unit Catalog' : 'Tile Catalog') : 'Lab';
+  const headerKicker =
+    studioMode === 'catalog'
+      ? category === 'units'
+        ? 'Unit Catalog'
+        : 'Tile Catalog'
+      : labMode === 'unit'
+        ? 'Lab · Unit'
+        : labMode === 'tile'
+          ? 'Lab · Tile'
+          : 'Lab · Board';
+  // In the Lab the shared header carries the loaded element's name/subtitle, so
+  // there is no second header row inside the board surface (that re-nested
+  // header is what made the controls rail jump down between Catalog and Lab).
   const headerTitle =
     studioMode === 'catalog'
       ? category === 'units'
         ? 'Units'
         : selectedFamilyLabel
-      : 'Lab';
+      : viewTitle;
   const headerSubtitle =
     studioMode === 'catalog'
       ? category === 'units'
         ? 'Browse chess-piece units.'
         : activeFamilies.map((item) => item.purpose).join(' · ')
-      : labMode === 'board'
-        ? 'Edit and test tiles and units on one shared board surface.'
-        : labMode === 'unit'
-          ? 'Inspect the selected unit in board context.'
-          : 'Inspect the selected tile in board context.';
+      : viewSubtitle;
   const openCatalogMode = (): void => {
     skipNextRouteWriteRef.current = true;
     if (tileFilter === 'board') setTileFilter('base');
@@ -3023,56 +3031,14 @@ export function TilesetStudio(): ReactElement {
         </aside>
         </>
         ) : (
-          <section className="tileset-view-mode" aria-label="Focused tileset view">
-            <div className="tileset-view-header">
-              <button type="button" onClick={() => setStudioMode('catalog')}>
-                Back to Catalog
-              </button>
-              <div>
-                <p className="tileset-studio-kicker">{labMode === 'unit' ? 'Unit' : viewKind === 'board' ? 'Board' : viewKind === 'transition' && transitionViewMode !== 'tile' ? 'Transition Showcase' : 'Tile'}</p>
-                <h2>{viewTitle}</h2>
-                <p>{viewSubtitle}</p>
-              </div>
-              <span className="tileset-mode-tabs tileset-context-tabs tileset-lab-tabs" aria-label="Lab view">
-                <button
-                  type="button"
-                  className={labMode === 'board' ? 'is-active' : ''}
-                  onClick={openBoardLab}
-                  title="Inspect and edit the loaded board."
-                >
-                  Board
-                </button>
-                <button
-                  type="button"
-                  className={labMode === 'tile' ? 'is-active' : ''}
-                  onClick={openTileLab}
-                  disabled={!hasLabTiles}
-                  title={hasLabTiles ? 'Inspect the selected tile on the loaded board.' : 'Place or select a tile first.'}
-                >
-                  Tile
-                </button>
-                <button
-                  type="button"
-                  className={labMode === 'unit' ? 'is-active' : ''}
-                  onClick={openUnitLab}
-                  disabled={!hasLabUnits}
-                  title={hasLabUnits ? 'Inspect the selected unit on the loaded board.' : 'Place or select a unit first.'}
-                >
-                  Unit
-                </button>
-              </span>
-            </div>
-
+          <>
+            <section className="tileset-lab-stage" aria-label="Lab board surface">
             {!viewHasTarget ? (
-              <section className="tileset-view-empty" aria-label="Empty focused view">
+              <div className="tileset-view-empty" aria-label="Empty focused view">
                 <h2>Choose an element from the catalog to inspect</h2>
-                <p>Select a tile, transition, or board setup in Catalog, then send it here for zoomed visual review.</p>
-                <button type="button" onClick={() => setStudioMode('catalog')}>
-                  Back to Catalog
-                </button>
-              </section>
+                <p>Select a tile, transition, or board setup in the Catalog tab, then send it here for board-context review.</p>
+              </div>
             ) : (
-              <>
             <ViewPane
               kind={viewVisualKind}
               ariaLabel={`${viewTitle} visual inspection`}
@@ -3116,8 +3082,38 @@ export function TilesetStudio(): ReactElement {
                 )}
               </div>
             </ViewPane>
+            )}
+            </section>
 
-            <aside className="tileset-view-controls" aria-label="View controls">
+            <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Lab controls">
+              <span className="tileset-mode-tabs tileset-lab-component-tabs" aria-label="Component view">
+                <button
+                  type="button"
+                  className={labMode === 'board' ? 'is-active' : ''}
+                  onClick={openBoardLab}
+                  title="Inspect and edit the loaded board."
+                >
+                  Board
+                </button>
+                <button
+                  type="button"
+                  className={labMode === 'tile' ? 'is-active' : ''}
+                  onClick={openTileLab}
+                  disabled={!hasLabTiles}
+                  title={hasLabTiles ? 'Inspect the selected tile on the loaded board.' : 'Place or select a tile first.'}
+                >
+                  Tile
+                </button>
+                <button
+                  type="button"
+                  className={labMode === 'unit' ? 'is-active' : ''}
+                  onClick={openUnitLab}
+                  disabled={!hasLabUnits}
+                  title={hasLabUnits ? 'Inspect the selected unit on the loaded board.' : 'Place or select a unit first.'}
+                >
+                  Unit
+                </button>
+              </span>
               <section className="tileset-inspector-section">
                 <h2>Controls</h2>
                 <div className="tileset-control-stack">
@@ -3392,9 +3388,7 @@ export function TilesetStudio(): ReactElement {
                 <p>{labMode === 'unit' ? unitBrushAsset.read : viewTransitionSlot ? viewTransitionAsset?.notes ?? 'This transition slot is required but has no production tile assigned yet.' : selectedAsset.notes}</p>
               </section>
             </aside>
-              </>
-            )}
-          </section>
+          </>
         )}
       </section>
     </main>

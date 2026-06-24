@@ -53,8 +53,7 @@ const tabs: TabDefinition[] = [
 
 const creatorTools: CreatorTool[] = [
   { label: 'Design Index', href: '/design', icon: 'icon-design-index.png', description: 'Open the system map for UI, content, and art references.' },
-  { label: 'Tileset Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'Build and inspect tactical terrain tile sets.' },
-  { label: 'Unit Studio', href: '/unit-studio', icon: 'icon-unit-studio.png', description: 'Review unit sprites against terrain and facing rules.' },
+  { label: 'Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'Catalog, inspect, and paint tiles and units on one shared board.' },
   { label: 'Tileset Review', href: '/tileset-review', icon: 'icon-tileset-review.png', description: 'Check generated tile coverage before it ships.' },
 ];
 

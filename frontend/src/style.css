@@ -9329,12 +9329,15 @@ h1 {
   overflow: hidden;
 }
 
-.tileset-studio-shell.is-catalog {
+/* Catalog and Lab share one fixed skeleton: a stretchy main pane on the left
+   and a 260px Controls rail on the right. The grid never changes between modes,
+   so the rail and pane hold their position — only their contents swap. */
+.tileset-studio-shell.is-catalog,
+.tileset-studio-shell.is-lab {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
-.tileset-studio-shell.is-view,
-.tileset-studio-shell.is-lab {
+.tileset-studio-shell.is-view {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -9355,12 +9358,31 @@ h1 {
 .tileset-candidate-main,
 .tileset-studio-inspector,
 .tileset-view-mode,
+.tileset-lab-stage,
 .tileset-view-controls,
 .tileset-studio-panel {
   background: rgba(5, 16, 25, 0.92);
   border: 1px solid rgba(67, 127, 179, 0.28);
   border-radius: 6px;
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+
+/* The Lab's left pane: the board surface. Same outer box as the catalog's
+   main pane, so switching Catalog <-> Lab keeps the left column identical. */
+.tileset-lab-stage {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+/* Component-view tabs (Board / Tile / Unit) sit at the top of the Controls
+   rail and stretch full-width, so they line up with the rail's other rows. */
+.tileset-view-controls > .tileset-lab-component-tabs {
+  width: 100%;
+  margin: 0;
 }
 
 .tileset-studio-rail {
