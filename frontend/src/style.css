@@ -2906,13 +2906,21 @@ h1 {
    the header aligns to the grid (same width/left edge) instead of centering
    narrow above a wide grid. */
 .asset-catalog-screen {
-  gap: 16px;
+  gap: 12px;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
-  padding-top: clamp(16px, 2.4vw, 26px);
-  padding-bottom: clamp(14px, 2vw, 22px);
+  /* edge-to-edge tool surface: the chrome hugs the viewport, content gets the room */
+  padding: clamp(12px, 1.6vw, 18px) clamp(12px, 1.4vw, 20px) clamp(12px, 1.6vw, 18px);
 }
+
+/* Slim toolbar header: ← Menu and the title share one line; no tall editorial
+   sub-header eating vertical space. */
+.asset-catalog-screen .catalog-header { padding-bottom: 6px; }
+.catalog-header-bar { align-items: center; display: flex; gap: 14px; }
+.catalog-header-bar h2 { margin: 0; }
+.asset-catalog-screen .catalog-header .design-back { margin: 0; flex: none; }
+.asset-catalog-screen .main-assets-intro { color: var(--c-ink-3); font-size: .8rem; margin: 4px 0 0; }
 
 /* Compact tool header: the catalog is a working surface, not an editorial page.
    The chrome stays small and out of the way so the tree + items lead. */

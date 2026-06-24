@@ -53,8 +53,10 @@ function CatalogControls({ mode, treeControls, onNavigate, onExpandAll, onCollap
 function CatalogHeader({ title, intro, onNavigate }: { title: string; intro: ReactNode; onNavigate: Navigate }): ReactNode {
   return (
     <header className="main-assets-header catalog-header">
-      <a className="design-back" href="/design" onClick={(e) => onNavigate('/design', e)}>← Design</a>
-      <h2>{title}</h2>
+      <div className="catalog-header-bar">
+        <a className="design-back" href="/" onClick={(e) => onNavigate('/', e)}>← Menu</a>
+        <h2>{title}</h2>
+      </div>
       <p className="main-assets-intro">{intro}</p>
     </header>
   );
@@ -98,8 +100,8 @@ export function DesignCatalog({ route, path, onNavigate }: { route: DesignRoute;
   }
 
   // Catalog modes: home | browser | widgets — the full classification tree.
-  let title = 'Catalog';
-  let intro: ReactNode = 'Buildable game entities, grouped by type. Open one to inspect its states, slots, source art, and previews.';
+  let title = 'Asset Library';
+  let intro: ReactNode = 'The project’s reusable UI assets, grouped by type and verified by the gate.';
   let content: ReactNode;
   if (route.catalogMode === 'widgets') {
     const modes = route.widgetSlug ? MENU_MODES.filter((m) => m.slug === route.widgetSlug) : MENU_MODES;
@@ -115,10 +117,10 @@ export function DesignCatalog({ route, path, onNavigate }: { route: DesignRoute;
     intro = 'A 9-slice category — its contract is the slots and states every 9-slice of this type must expose.';
     content = <NineSliceCategoryView categoryId={route.nineSliceCategory} onNavigate={onNavigate} />;
   } else if (route.catalogMode === 'kit') {
-    title = route.kitAsset ? `Kit · ${route.kitAsset}` : 'Kit';
+    title = route.kitAsset ? `Asset Library · ${route.kitAsset}` : 'Asset Library';
     intro = route.kitAsset
       ? 'A single kit asset, with its gate verdict and metrics.'
-      : 'The shared UI kit — generated glyphs and 9-slice frames, each verified by the asset gate (magenta · binary-alpha · edge). Re-run kit-manifest.mjs to refresh.';
+      : 'The shared UI kit — generated glyphs and 9-slice frames, each verified by the gate and tracked by process provenance.';
     content = <KitView selected={route.kitAsset} onNavigate={onNavigate} />;
   } else if (route.catalogMode === 'browser' && route.assetType) {
     title = `${assetTypeLabel(route.assetType)} Assets`;

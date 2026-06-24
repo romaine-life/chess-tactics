@@ -43,7 +43,10 @@ export function parseDesignRoute(pathname: string): DesignRoute {
   const path = normalizeDesignPath(pathname);
   const hub: DesignRoute = { view: 'hub', catalogMode: 'home' };
 
-  if (path === '/design') return hub;
+  // /design lands directly on the Asset Library (kit view, where the process
+  // filter lives) — the old 3-card hub was redundant with the in-catalog
+  // Catalog/Glossary toggle and the tree.
+  if (path === '/design') return { view: 'catalog', catalogMode: 'kit' };
   if (path === '/design/glossary') return { view: 'glossaryPage', catalogMode: 'home' };
   if (path === '/design/widgets') return { view: 'widgetsPage', catalogMode: 'home' };
 
