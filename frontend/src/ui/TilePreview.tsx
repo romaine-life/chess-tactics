@@ -1388,40 +1388,27 @@ function StudioEditableBoard({
 // unitCatalog.ts so the catalog, lab brush, and standalone Unit Studio stay in sync.
 function UnitsStudio({
   selectedUnitId,
-  query,
+  units,
   zoom,
   onSelect,
   onInspect,
   onArmBrush,
 }: {
   selectedUnitId: string;
-  query: string;
+  units: UnitAsset[];
   zoom: number;
   onSelect: (unitId: string) => void;
   onInspect: (unitId: string) => void;
   onArmBrush: (unitId: string) => void;
 }): ReactElement {
-  const normalizedQuery = query.trim().toLowerCase();
-  const visibleUnits = normalizedQuery
-    ? unitAssets.filter((unit) => [unit.label, unit.badge, unit.family, unit.read, unit.status].join(' ').toLowerCase().includes(normalizedQuery))
-    : unitAssets;
   return (
     <section className="tileset-studio-main">
-      <div className="tileset-studio-toolbar">
-        <div className="tileset-studio-title-row">
-          <div className="tileset-catalog-heading">
-            <p className="tileset-filter-summary">
-              {normalizedQuery ? `${visibleUnits.length} of ${unitAssets.length}` : unitAssets.length} production units
-            </p>
-          </div>
-        </div>
-      </div>
       <section className="tileset-studio-tab-panel">
         <div className="tileset-asset-sections">
           <section className="tileset-asset-section" aria-label="Production units">
             <h3>Production Units</h3>
             <div className="tileset-studio-grid" aria-label="Unit assets">
-              {visibleUnits.map((unit) => (
+              {units.map((unit) => (
                 <button
                   key={unit.id}
                   type="button"
@@ -1471,7 +1458,7 @@ function UnitsStudio({
                   </span>
                 </button>
               ))}
-              {visibleUnits.length === 0 ? (
+              {units.length === 0 ? (
                 <div className="unit-catalog-empty">
                   <h3>No units match</h3>
                   <p>Try a different search.</p>
@@ -2695,6 +2682,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         : `${family.label} · ${selectedAsset.role}`;
   const hasLabTiles = Object.keys(boardCells).length > 0;
   const hasLabUnits = Object.keys(boardUnits).length > 0;
+  const normalizedUnitQuery = catalogQuery.trim().toLowerCase();
+  const visibleUnits = normalizedUnitQuery
+    ? unitAssets.filter((unit) => [unit.label, unit.badge, unit.family, unit.read, unit.status].join(' ').toLowerCase().includes(normalizedUnitQuery))
+    : unitAssets;
   const headerKicker =
     studioMode === 'catalog'
       ? category === 'units'
@@ -2717,8 +2708,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const headerSubtitle =
     studioMode === 'catalog'
       ? category === 'units'
-        ? 'Browse chess-piece units.'
-        : activeFamilies.map((item) => item.purpose).join(' · ')
+        ? `${visibleUnits.length} production unit${visibleUnits.length === 1 ? '' : 's'}`
+        : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
       : viewSubtitle;
   const openCatalogMode = (): void => {
     skipNextRouteWriteRef.current = true;
@@ -2812,7 +2803,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         {category === 'units' ? (
           <UnitsStudio
             selectedUnitId={unitBrushAsset.id}
-            query={catalogQuery}
+            units={visibleUnits}
             zoom={zoom}
             onSelect={selectUnitInCatalog}
             onInspect={inspectUnitInLab}
@@ -2820,16 +2811,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           />
         ) : (
           <section className="tileset-studio-main">
-          <div className="tileset-studio-toolbar">
-            <div className="tileset-studio-title-row">
-              <div className="tileset-catalog-heading">
-                <p className="tileset-filter-summary">
-                  {visibleCatalogCount} assets · {selectedCollectionLabel}
-                </p>
-              </div>
-            </div>
-          </div>
-
           <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
               <div className="tileset-asset-sections">
                 {selectedCollectionFilters.includes('base') ? (
@@ -3117,6 +3098,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             </section>
 
             <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Lab controls">
+              <section className="tileset-inspector-section">
+                <h2>Controls</h2>
+                <div className="tileset-control-stack">
               <span className="tileset-mode-tabs tileset-lab-component-tabs" aria-label="Component view">
                 <button
                   type="button"
@@ -3145,9 +3129,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   Unit
                 </button>
               </span>
-              <section className="tileset-inspector-section">
-                <h2>Controls</h2>
-                <div className="tileset-control-stack">
                   {!(viewKind === 'board' && boardMode === 'concept') ? (
                     <>
                       <div className="tileset-segmented-control tileset-tools" aria-label="Board tool">
