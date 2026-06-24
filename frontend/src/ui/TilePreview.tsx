@@ -121,36 +121,6 @@ const studioDefaults: TilesetStudioRouteState = {
   brushKind: 'tile',
 };
 
-const waterShimmerAFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/water-shimmer-a/frame-${String(index).padStart(2, '0')}.png?v=3`,
-);
-
-const pixellabWaterCleanAFrames = Array.from(
-  { length: 9 },
-  (_, index) => `/assets/tiles/canonical-animated/pixellab-water-clean-a/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
-const aiWaterSheetAFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
-const aiWaterSheetALockedFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a-locked/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
-const aiWaterSheetAUvLockedFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a-uv-locked/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
-const pixellabNativeWaterAFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/pixellab-native-water-a/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
 const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
   asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
 
