@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode, type WheelEvent } from 'react';
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
+import { tileFamilies } from '../art/tileset';
 import { buildTileCoverageReport } from '../core/tileCoverage';
 import { generateSocketBoard, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { createRng } from '../core/rng';
@@ -505,293 +506,23 @@ const transitionAssets: StudioAsset[] = [
   ...transitionFillAssets,
 ];
 
-const studioFamilies: StudioFamily[] = [
-  {
-    id: 'grass',
-    label: 'Grass',
-    purpose: 'High-volume base terrain for most playable board cells.',
-    status: 'Next production family',
-    review: 'Check variation, highlight readability, and same-footprint repetition.',
-    assets: [
-      {
-        id: 'grass-clean-a',
-        label: 'Grass A',
-        src: trueIsoTileAsset('grass-clean-a.png'),
-        role: 'base',
-        kind: 'tile',
-        source: TRUE_ISO_TILE_SOURCE,
-        probability: 1,
-        notes: 'Projection-locked current board base tile.',
-      },
-      {
-        id: 'grass-clean-b',
-        label: 'Grass B',
-        src: trueIsoTileAsset('grass-clean-b.png'),
-        role: 'variant',
-        kind: 'tile',
-        source: TRUE_ISO_TILE_SOURCE,
-        probability: 0.75,
-        notes: 'Projection-locked darker texture variation.',
-      },
-      {
-        id: 'grass-clean-c',
-        label: 'Grass C',
-        src: trueIsoTileAsset('grass-clean-c.png'),
-        role: 'variant',
-        kind: 'tile',
-        source: TRUE_ISO_TILE_SOURCE,
-        probability: 0.75,
-        notes: 'Projection-locked light texture variation.',
-      },
-      {
-        id: 'grass-refresh-a',
-        label: 'Grass D',
-        src: '/assets/tiles/canonical-refresh/grass-refresh-a.png',
-        role: 'variant',
-        kind: 'tile',
-        source: 'canonical-refresh',
-        probability: 0.65,
-        notes: 'Approved refresh variant with darker moss and richer shared cliff treatment.',
-      },
-      {
-        id: 'grass-refresh-b',
-        label: 'Grass E',
-        src: '/assets/tiles/canonical-refresh/grass-refresh-b.png',
-        role: 'variant',
-        kind: 'tile',
-        source: 'canonical-refresh',
-        probability: 0.55,
-        notes: 'Approved refresh variant for repetition testing.',
-      },
-      {
-        id: 'grass-refresh-c',
-        label: 'Grass F',
-        src: '/assets/tiles/canonical-refresh/grass-refresh-c.png',
-        role: 'variant',
-        kind: 'tile',
-        source: 'canonical-refresh',
-        probability: 0.55,
-        notes: 'Approved high-detail refresh variant for board-scale readability checks.',
-      },
-      {
-        id: 'grass-guide',
-        label: 'Grass Guide',
-        src: '/assets/tiles/canonical-template/guide-grass-tile.png',
-        role: 'footprint',
-        kind: 'reference',
-        source: 'canonical-template',
-        probability: 0,
-        notes: 'Geometry authority for grass-like terrain.',
-      },
-    ],
-  },
-  {
-    id: 'stone',
-    label: 'Stone',
-    purpose: 'Hard board terrain and tactical contrast against grass.',
-    status: 'Candidate family',
-    review: 'Check whether stone belongs to the same board as grass.',
-    assets: [
-      {
-        id: 'stone-clean-a',
-        label: 'Stone A',
-        src: trueIsoTileAsset('stone-clean-a.png'),
-        role: 'base',
-        kind: 'tile',
-        source: TRUE_ISO_TILE_SOURCE,
-        probability: 1,
-        notes: 'Projection-locked current board stone base.',
-      },
-      {
-        id: 'stone-clean-b',
-        label: 'Stone B',
-        src: trueIsoTileAsset('stone-clean-b.png'),
-        role: 'variant',
-        kind: 'tile',
-        source: TRUE_ISO_TILE_SOURCE,
-        probability: 0.75,
-        notes: 'Projection-locked alternate stone value pass.',
-      },
-      {
-        id: 'stone-refresh-a',
-        label: 'Stone C',
-        src: '/assets/tiles/canonical-refresh/stone-refresh-a.png',
-        role: 'variant',
-        kind: 'tile',
-        source: 'canonical-refresh',
-        probability: 0.65,
-        notes: 'Approved refresh variant with cooler slab detail and shared cliff depth.',
-      },
-      {
-        id: 'stone-refresh-b',
-        label: 'Stone D',
-        src: '/assets/tiles/canonical-refresh/stone-refresh-b.png',
-        role: 'variant',
-        kind: 'tile',
-        source: 'canonical-refresh',
-        probability: 0.55,
-        notes: 'Approved alternate stone refresh variant for board repetition testing.',
-      },
-      {
-        id: 'stone-guide',
-        label: 'Stone Guide',
-        src: '/assets/tiles/canonical-template/guide-stone-tile.png',
-        role: 'footprint',
-        kind: 'reference',
-        source: 'canonical-template',
-        probability: 0,
-        notes: 'Geometry authority for stone-like terrain.',
-      },
-    ],
-  },
-  {
-    id: 'water',
-    label: 'Water',
-    purpose: 'Animated or animation-ready board terrain.',
-    status: 'Candidate family',
-    review: 'Check shape, value, and whether the tile is ready for frame animation.',
-    assets: [
-      {
-        id: 'water-clean-a',
-        label: 'Water A',
-        src: trueIsoTileAsset('water-clean-a.png'),
-        animation: {
-          label: 'Water shimmer prototype',
-          frames: waterShimmerAFrames,
-          frameMs: 150,
-          status: 'prototype',
-        },
-        role: 'base',
-        kind: 'tile',
-        source: TRUE_ISO_TILE_SOURCE,
-        probability: 1,
-        notes: 'Projection-locked current board water base.',
-      },
-      {
-        id: 'water-clean-b',
-        label: 'Water B',
-        src: trueIsoTileAsset('water-clean-b.png'),
-        role: 'variant',
-        kind: 'tile',
-        source: TRUE_ISO_TILE_SOURCE,
-        probability: 0.75,
-        notes: 'Projection-locked alternate water surface.',
-      },
-      {
-        id: 'water-ai-pixellab-clean-a',
-        label: 'Water AI A',
-        src: '/assets/tiles/canonical-animated/pixellab-water-clean-static.png',
-        animation: {
-          label: 'PixelLab water shimmer',
-          frames: pixellabWaterCleanAFrames,
-          frameMs: 150,
-          status: 'raw candidate',
-        },
-        role: 'variant',
-        kind: 'tile',
-        source: 'pixellab-ai-raw',
-        probability: 0,
-        notes: 'Raw PixelLab animated water candidate. Review animation quality only; geometry is not yet normalized to the accepted board footprint.',
-      },
-      {
-        id: 'water-ai-sheet-a',
-        label: 'Water AI B',
-        src: '/assets/tiles/canonical-animated/ai-water-sheet-a-static.png',
-        animation: {
-          label: 'Direct AI water sheet',
-          frames: aiWaterSheetAFrames,
-          frameMs: 150,
-          status: 'raw candidate',
-        },
-        role: 'variant',
-        kind: 'tile',
-        source: 'openai-image-raw',
-        probability: 0,
-        notes: 'Direct AI-generated sprite sheet candidate, sliced and normalized to 96x140. Review frame stability, edge cleanup, and style fit.',
-      },
-      {
-        id: 'water-ai-sheet-a-locked',
-        label: 'Water AI C',
-        src: '/assets/tiles/canonical-animated/ai-water-sheet-a-locked-static.png',
-        animation: {
-          label: 'Direct AI water sheet, geometry locked',
-          frames: aiWaterSheetALockedFrames,
-          frameMs: 150,
-          status: 'raw candidate',
-        },
-        role: 'variant',
-        kind: 'tile',
-        source: 'openai-image-locked',
-        probability: 0,
-        notes: 'Direct AI top-water animation composited onto the canonical water tile body. Side walls and silhouette are mathematically frozen; only the top diamond changes.',
-      },
-      {
-        id: 'water-ai-sheet-a-uv-locked',
-        label: 'Water AI D',
-        src: '/assets/tiles/canonical-animated/ai-water-sheet-a-uv-locked-static.png',
-        animation: {
-          label: 'Direct AI water sheet, UV locked',
-          frames: aiWaterSheetAUvLockedFrames,
-          frameMs: 150,
-          status: 'raw candidate',
-        },
-        role: 'variant',
-        kind: 'tile',
-        source: 'openai-image-uv-locked',
-        probability: 0,
-        notes:
-          'Direct AI top-water animation remapped from the source top diamond into the canonical top diamond. Side walls and silhouette are mathematically frozen.',
-      },
-      {
-        id: 'water-pixellab-native-a',
-        label: 'Water AI E',
-        src: '/assets/tiles/canonical-animated/pixellab-native-water-a-static.png',
-        animation: {
-          label: 'PixelLab native-footprint water (no resample)',
-          frames: pixellabNativeWaterAFrames,
-          frameMs: 150,
-          status: 'raw candidate',
-        },
-        role: 'variant',
-        kind: 'tile',
-        source: 'pixellab-v3-native',
-        probability: 0,
-        notes:
-          'PixelLab v3 animation seeded from the canonical 96x140 water tile via custom_start_frame, so every frame is the NATIVE canonical footprint — no fractional downscale, no edge fringe. Top diamond grafted 1:1 onto the frozen canonical body. Verified: identical alpha bounds across frames (no wobble), zero changes outside the top diamond (sides frozen).',
-      },
-      {
-        id: 'water-refresh-a',
-        label: 'Water C',
-        src: '/assets/tiles/canonical-refresh/water-refresh-a.png',
-        role: 'variant',
-        kind: 'tile',
-        source: 'canonical-refresh',
-        probability: 0.65,
-        notes: 'Approved refresh variant with brighter glints and darker depth.',
-      },
-      {
-        id: 'water-refresh-b',
-        label: 'Water D',
-        src: '/assets/tiles/canonical-refresh/water-refresh-b.png',
-        role: 'variant',
-        kind: 'tile',
-        source: 'canonical-refresh',
-        probability: 0.55,
-        notes: 'Approved alternate water refresh variant for animation-readiness checks.',
-      },
-      {
-        id: 'water-guide',
-        label: 'Water Guide',
-        src: '/assets/tiles/canonical-template/guide-water-tile.png',
-        role: 'footprint',
-        kind: 'reference',
-        source: 'canonical-template',
-        probability: 0,
-        notes: 'Geometry authority for water-like terrain.',
-      },
-    ],
-  },
-];
+const STUDIO_FAMILY_META: Record<TileFamilyId, { purpose: string; status: string; review: string }> = {
+  grass: { purpose: 'High-volume base terrain for most playable cells.', status: 'Production', review: 'Variation + same-footprint repetition.' },
+  dirt: { purpose: 'Bare-earth ground.', status: 'Production', review: 'Variation across the patch.' },
+  stone: { purpose: 'Stone / cobble footing.', status: 'Production', review: 'Variation + readability.' },
+  pebble: { purpose: 'Loose pebble ground.', status: 'Production', review: 'Variation.' },
+  sand: { purpose: 'Sandy ground.', status: 'Production', review: 'Variation.' },
+  water: { purpose: 'Open water (impassable to land units).', status: 'Production', review: 'Variation + surface read.' },
+};
+
+// Derived from the shipped tileset registry (frontend/src/art/tileset.ts) so the tile
+// studio ALWAYS mirrors the board — a tile can't exist on the board but not here.
+const studioFamilies: StudioFamily[] = (Object.keys(tileFamilies) as TileFamilyId[]).map((id) => ({
+  id,
+  label: terrainLabels[id],
+  ...STUDIO_FAMILY_META[id],
+  assets: tileFamilies[id].map((asset): StudioAsset => ({ ...asset })),
+}));
 
 interface CandidateBatch {
   id: string;
@@ -832,6 +563,9 @@ const studioFamilyAssets: Record<StudioFamilyId, readonly StudioAsset[]> = {
   grass: studioFamilies.find((family) => family.id === 'grass')?.assets ?? [],
   stone: studioFamilies.find((family) => family.id === 'stone')?.assets ?? [],
   water: studioFamilies.find((family) => family.id === 'water')?.assets ?? [],
+  dirt: studioFamilies.find((family) => family.id === 'dirt')?.assets ?? [],
+  pebble: studioFamilies.find((family) => family.id === 'pebble')?.assets ?? [],
+  sand: studioFamilies.find((family) => family.id === 'sand')?.assets ?? [],
 };
 
 const familyCounts = (family: StudioFamily): string => {
@@ -1735,11 +1469,14 @@ function UnitsStudio({
 }
 
 type LevelBrush = TileFamilyId | 'erase';
-const levelTerrainOrder: TileFamilyId[] = ['grass', 'stone', 'water'];
+const levelTerrainOrder: TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
 const levelFamilySwatch: Record<TileFamilyId, string> = {
   grass: '#5b8c3a',
   stone: '#8c8c95',
   water: '#3a6ea5',
+  dirt: '#6b513a',
+  pebble: '#7d7a70',
+  sand: '#b8a06a',
 };
 const levelSizes = {
   small: { cols: 10, rows: 8 },

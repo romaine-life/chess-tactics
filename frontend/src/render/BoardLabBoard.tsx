@@ -33,7 +33,9 @@ function boardMetrics(cells: readonly { x: number; y: number }[]) {
   const projectedPoints = cells.map((cell) => boardLabCellPosition(cell));
   const minLeft = Math.min(...projectedPoints.map((point) => point.left - 48));
   const maxLeft = Math.max(...projectedPoints.map((point) => point.left + 48));
-  const minTop = Math.min(...projectedPoints.map((point) => point.top - 27));
+  // -69: tiles are anchored at their contact diamond (equator), and the 180px frame rises
+  // 69px above it for 3D protrusion (standing grass, relief). Include that in the bounds.
+  const minTop = Math.min(...projectedPoints.map((point) => point.top - 69));
   const maxTop = Math.max(...projectedPoints.map((point) => point.top + 140));
   const boardWidth = maxLeft - minLeft;
   const boardHeight = maxTop - minTop;
@@ -84,10 +86,21 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
             style={{ left, top, zIndex }}
           >
             {cell.asset ? <img src={assetFrameSrc(cell.asset)} alt="" draggable={false} /> : <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>}
-            {renderCellOverlay?.({ cell, left, top })}
           </div>
         );
       })}
+      {renderCellOverlay ? cells.map((cell) => {
+        const { left, top, zIndex } = boardLabCellPosition(cell);
+        return (
+          <div
+            key={`overlay-${cell.x}-${cell.y}`}
+            className="tileset-generated-board-overlay-cell"
+            style={{ left, top, zIndex: zIndex + 10000 }}
+          >
+            {renderCellOverlay({ cell, left, top })}
+          </div>
+        );
+      }) : null}
       {children}
     </div>
   );

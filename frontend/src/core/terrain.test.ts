@@ -26,8 +26,8 @@ describe('terrain index', () => {
 });
 
 describe('isPassableTerrain', () => {
-  it('treats water, cliff and rock as barriers and the rest as walkable', () => {
-    expect(isPassableTerrain('water')).toBe(false);
+  it('treats water as walkable and cliff/rock as barriers', () => {
+    expect(isPassableTerrain('water')).toBe(true);
     expect(isPassableTerrain('cliff')).toBe(false);
     expect(isPassableTerrain('rock')).toBe(false);
     for (const t of ['grass', 'stone', 'road', 'bridge'] as const) expect(isPassableTerrain(t)).toBe(true);
@@ -37,13 +37,14 @@ describe('isPassableTerrain', () => {
 describe('canTraverse', () => {
   const idx = index([
     { x: 1, y: 0, terrain: 'water', elevation: 0 },
-    { x: 2, y: 0, terrain: 'grass', elevation: 1 },
+    { x: 2, y: 0, terrain: 'cliff', elevation: 0 },
     { x: 3, y: 0, terrain: 'grass', elevation: 2 },
     { x: 4, y: 0, terrain: 'bridge', elevation: 0 },
   ]);
   it('allows open/unauthored ground', () => expect(canTraverse(idx, 0, 7, 7)).toBe(true));
-  it('blocks impassable terrain', () => expect(canTraverse(idx, 0, 1, 0)).toBe(false));
-  it('allows a climb within MAX_CLIMB', () => expect(canTraverse(idx, 0, 2, 0)).toBe(true));
+  it('allows water terrain', () => expect(canTraverse(idx, 0, 1, 0)).toBe(true));
+  it('blocks impassable terrain', () => expect(canTraverse(idx, 0, 2, 0)).toBe(false));
+  it('allows a climb within MAX_CLIMB', () => expect(canTraverse(index([{ x: 2, y: 0, terrain: 'grass', elevation: 1 }]), 0, 2, 0)).toBe(true));
   it('blocks a rise greater than MAX_CLIMB', () => expect(canTraverse(idx, 0, 3, 0)).toBe(false));
   it('allows descending any height', () => expect(canTraverse(idx, 5, 3, 0)).toBe(true));
   it('keeps bridges passable over notional gaps', () => expect(canTraverse(idx, 0, 4, 0)).toBe(true));
@@ -51,11 +52,11 @@ describe('canTraverse', () => {
 });
 
 describe('legalMoves with terrain env', () => {
-  it('stops a queen ray at a water wall', () => {
+  it('allows a queen ray through water', () => {
     const queen = piece('r', 'player', 'queen', 4, 4);
     const env = { terrain: index([{ x: 4, y: 2, terrain: 'water', elevation: 0 }]) };
     const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
-    expect(up).toEqual([3]); // (4,3) only; the ray dies before the water at (4,2)
+    expect(up).toEqual([3, 2, 1, 0]);
   });
 
   it('removes a knight step that lands on a cliff', () => {
@@ -66,12 +67,12 @@ describe('legalMoves with terrain env', () => {
     expect(moves.some((m) => m.x === 6 && m.y === 3)).toBe(true); // sibling step still legal
   });
 
-  it('blocks a pawn advance into water but keeps the diagonal capture', () => {
+  it('allows a pawn advance into water', () => {
     const pawn = piece('p', 'player', 'pawn', 3, 6);
     const foe = piece('foe', 'enemy', 'pawn', 2, 5);
     const env = { terrain: index([{ x: 3, y: 5, terrain: 'water', elevation: 0 }]) };
     const moves = legalMoves(pawn, [pawn, foe], { cols: 8, rows: 8 }, env);
-    expect(moves).toEqual([{ x: 2, y: 5, capture: 'foe' }]);
+    expect(moves).toEqual([{ x: 3, y: 5 }, { x: 3, y: 4 }, { x: 2, y: 5, capture: 'foe' }]);
   });
 
   it('uses the origin elevation: a piece cannot ray up past a +1 rise', () => {
