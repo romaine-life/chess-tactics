@@ -10605,9 +10605,12 @@ h1 {
   width: 100%;
 }
 
+/* Keep the filter menu inside the 260px Controls rail. The rail is an overflow
+   scroll container, so a menu wider than the rail spills left over the main pane
+   and gets clipped. Match the rail width so it stays fully visible. */
 .tileset-catalog-controls .tileset-filter-menu {
   right: 0;
-  width: min(320px, calc(100vw - 32px));
+  width: 100%;
 }
 
 .tileset-transition-workbench {
@@ -11437,7 +11440,9 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
+  /* Same top-surface plane as the grid diamond, so the footprint guide overlays
+     the tile's top face instead of floating above it. */
+  top: calc(var(--iso-tile-height) / 2);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11455,7 +11460,9 @@ button.tileset-relationship-cell {
 .tileset-cell-hit {
   position: absolute;
   left: 0;
-  top: 0;
+  /* Align the clickable diamond with the tile's top-surface plane (matching the
+     grid and footprint) so a click lands on the tile you see, not ~28px above it. */
+  top: calc(var(--iso-tile-height) / 2);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11467,7 +11474,10 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
+  /* Sit the grid diamond on the tile's top-surface plane (where units stand,
+     top: var(--iso-tile-height)) rather than the top of the 180px protrusion
+     frame, so empty cells line up with the surface of placed tiles. */
+  top: calc(var(--iso-tile-height) / 2);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11485,7 +11495,7 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
+  top: calc(var(--iso-tile-height) / 2);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11555,7 +11565,9 @@ button.tileset-relationship-cell {
 .tileset-cell-ring {
   position: absolute;
   left: 0;
-  top: 0;
+  /* Sit on the tile's top-surface plane, matching the grid/footprint/hit diamond,
+     instead of the top of the 180px protrusion frame (which floated it ~28px high). */
+  top: calc(var(--iso-tile-height) / 2);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);

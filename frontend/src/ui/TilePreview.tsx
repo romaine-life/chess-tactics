@@ -26,295 +26,34 @@ import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath } from '
 import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
 import { BoardLabBoard } from '../render/BoardLabBoard';
+import { TileGrid, type TileGridCell } from '../render/TileGrid';
+import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 import {
   MISSING_DIRECTION_SPRITE,
+  activeUnitFamilies,
+  familyLabels,
   hasDirectionSprite,
   renderSizeForTileScale,
   unitAssets,
   type Direction,
   type Faction,
+  type PieceId,
   type UnitAsset,
 } from './unitCatalog';
 
-type TileRun = 'grass' | 'stone' | 'water' | 'transition';
 
-interface TileRef {
-  run: TileRun;
-  index: number;
-  label: string;
-}
 
-interface PreviewCell extends TileRef {
-  x: number;
-  y: number;
-}
-
-const PIXELLAB_ACCOUNT_ID = '3b4f0480-f3cc-4383-b662-7259f13e2d7d';
-
-const tileRuns: Record<TileRun, string> = {
-  grass: 'e3964123-619e-4251-967a-e4c3677e943d',
-  stone: 'd5865e1f-828c-4a9d-b89b-9e4ef81ae29b',
-  water: '71db72aa-ae58-4b17-9d9c-8a00cdd66d26',
-  transition: 'a449e26c-0106-4d83-8def-354981c5a8a2',
-};
-
-const tileUrl = ({ run, index }: TileRef): string =>
-  `https://backblaze.pixellab.ai/file/pixellab-tiles/${PIXELLAB_ACCOUNT_ID}/${tileRuns[run]}/tile_${index}.png`;
-
-const tile = (run: TileRun, index: number, label: string): TileRef => ({ run, index, label });
-
-const kit = {
-  grassA: tile('grass', 0, 'grass flat'),
-  grassB: tile('grass', 1, 'grass dark'),
-  grassC: tile('grass', 2, 'grass texture'),
-  grassD: tile('grass', 3, 'grass shadow'),
-  grassStone: tile('grass', 4, 'grass stone edge'),
-  grassWater: tile('grass', 5, 'grass water edge'),
-  grassEdge: tile('grass', 6, 'grass rim'),
-  grassCorner: tile('grass', 7, 'grass corner'),
-  transGrassStoneA: tile('transition', 0, 'grass stone transition'),
-  transGrassStoneB: tile('transition', 1, 'grass stone corner'),
-  transGrassWaterA: tile('transition', 2, 'grass water transition'),
-  transGrassWaterB: tile('transition', 3, 'grass water corner'),
-  transStoneWaterA: tile('transition', 4, 'stone water transition'),
-  transStoneWaterB: tile('transition', 5, 'stone water corner'),
-  transEdge: tile('transition', 6, 'dark edge'),
-  transCorner: tile('transition', 7, 'dark corner'),
-  stoneA: tile('stone', 0, 'stone flat'),
-  stoneB: tile('stone', 1, 'stone dark'),
-  stoneC: tile('stone', 2, 'stone cracked'),
-  stoneD: tile('stone', 3, 'stone moss'),
-  stoneE: tile('stone', 4, 'stone cobble'),
-  stoneGrass: tile('stone', 5, 'stone grass edge'),
-  stoneEdge: tile('stone', 6, 'stone rim'),
-  stoneCorner: tile('stone', 7, 'stone corner'),
-  waterA: tile('water', 0, 'water flat'),
-  waterB: tile('water', 1, 'water deep'),
-  waterC: tile('water', 2, 'water ripple'),
-  waterD: tile('water', 3, 'water moonlit'),
-  waterGrass: tile('water', 4, 'water grass edge'),
-  waterStone: tile('water', 5, 'water stone edge'),
-  waterShallow: tile('water', 6, 'water shallow'),
-  waterEdge: tile('water', 7, 'water rim'),
-} satisfies Record<string, TileRef>;
-
-const board: PreviewCell[] = [
-  { x: 2, y: 0, ...kit.transEdge },
-  { x: 3, y: 0, ...kit.grassA },
-  { x: 4, y: 0, ...kit.grassC },
-  { x: 5, y: 0, ...kit.transCorner },
-  { x: 1, y: 1, ...kit.grassA },
-  { x: 2, y: 1, ...kit.grassB },
-  { x: 3, y: 1, ...kit.transGrassStoneA },
-  { x: 4, y: 1, ...kit.stoneGrass },
-  { x: 5, y: 1, ...kit.grassB },
-  { x: 6, y: 1, ...kit.grassEdge },
-  { x: 0, y: 2, ...kit.waterB },
-  { x: 1, y: 2, ...kit.transGrassWaterA },
-  { x: 2, y: 2, ...kit.grassC },
-  { x: 3, y: 2, ...kit.stoneC },
-  { x: 4, y: 2, ...kit.stoneD },
-  { x: 5, y: 2, ...kit.stoneGrass },
-  { x: 6, y: 2, ...kit.grassA },
-  { x: 7, y: 2, ...kit.transCorner },
-  { x: 0, y: 3, ...kit.waterA },
-  { x: 1, y: 3, ...kit.transGrassWaterB },
-  { x: 2, y: 3, ...kit.grassB },
-  { x: 3, y: 3, ...kit.stoneA },
-  { x: 4, y: 3, ...kit.stoneE },
-  { x: 5, y: 3, ...kit.transGrassStoneB },
-  { x: 6, y: 3, ...kit.grassC },
-  { x: 7, y: 3, ...kit.transEdge },
-  { x: 1, y: 4, ...kit.waterC },
-  { x: 2, y: 4, ...kit.transGrassWaterA },
-  { x: 3, y: 4, ...kit.grassA },
-  { x: 4, y: 4, ...kit.grassB },
-  { x: 5, y: 4, ...kit.stoneCorner },
-  { x: 6, y: 4, ...kit.stoneB },
-  { x: 2, y: 5, ...kit.waterD },
-  { x: 3, y: 5, ...kit.transStoneWaterA },
-  { x: 4, y: 5, ...kit.transGrassWaterB },
-  { x: 5, y: 5, ...kit.transCorner },
-];
-
-const candidates: TileRef[] = [
-  kit.grassA,
-  kit.grassB,
-  kit.grassC,
-  kit.transGrassStoneA,
-  kit.stoneA,
-  kit.stoneC,
-  kit.stoneD,
-  kit.stoneE,
-  kit.waterA,
-  kit.waterC,
-  kit.transGrassWaterA,
-  kit.transStoneWaterA,
-];
-
-const runLinks = [
-  { label: 'flat grass', id: tileRuns.grass },
-  { label: 'flat stone', id: tileRuns.stone },
-  { label: 'flat water', id: tileRuns.water },
-  { label: 'transitions', id: tileRuns.transition },
-  { label: 'water ripple object', id: '96757902-6a20-4ffc-bc5b-94e7a8396969' },
-  { label: 'running water object', id: '06a4cf3f-2ad8-4ecb-8aa7-f4e3d326de2d' },
-  { label: 'tree rustle object', id: '8fa3fca6-d2e3-453e-8eb8-a7e75b09b3b4' },
-  { label: 'tree prop alt', id: 'b39a9f09-1383-4818-ba4e-68ceeb590115' },
-  { label: 'tree prop alt', id: 'e6d827ae-c99d-470c-8055-249736f80c1d' },
-];
-
-const animationPreviews = [
-  {
-    label: 'subtle ripple',
-    frames: Array.from({ length: 9 }, (_, i) =>
-      `https://backblaze.pixellab.ai/file/pixellab-characters/objects/${PIXELLAB_ACCOUNT_ID}/96757902-6a20-4ffc-bc5b-94e7a8396969/animations/8f41dc2f-bb29-47b8-a0c5-7c11d02c8be0/unknown/${i}.png`,
-    ),
-  },
-  {
-    label: 'running water',
-    frames: Array.from({ length: 9 }, (_, i) =>
-      `https://backblaze.pixellab.ai/file/pixellab-characters/objects/${PIXELLAB_ACCOUNT_ID}/06a4cf3f-2ad8-4ecb-8aa7-f4e3d326de2d/animations/8b5e43b6-a96a-4a8e-acb9-18ec308a11af/unknown/${i}.png`,
-    ),
-  },
-  {
-    label: 'wind rustle',
-    frames: Array.from({ length: 9 }, (_, i) =>
-      `https://backblaze.pixellab.ai/file/pixellab-characters/objects/${PIXELLAB_ACCOUNT_ID}/8fa3fca6-d2e3-453e-8eb8-a7e75b09b3b4/animations/aceb158e-5056-4c72-b71c-9cfa9e2bbc31/unknown/${i}.png`,
-    ),
-  },
-];
-
-type ConceptTerrain = 'grass' | 'stone' | 'water' | 'grassStone' | 'grassWater' | 'edge';
-
-interface ConceptCell {
-  x: number;
-  y: number;
-  terrain: ConceptTerrain;
-}
-
-const conceptCells: ConceptCell[] = [
-  { x: 3, y: 0, terrain: 'grass' },
-  { x: 4, y: 0, terrain: 'grass' },
-  { x: 5, y: 0, terrain: 'stone' },
-  { x: 6, y: 0, terrain: 'grass' },
-  { x: 2, y: 1, terrain: 'grass' },
-  { x: 3, y: 1, terrain: 'grass' },
-  { x: 4, y: 1, terrain: 'stone' },
-  { x: 5, y: 1, terrain: 'stone' },
-  { x: 6, y: 1, terrain: 'grass' },
-  { x: 7, y: 1, terrain: 'grass' },
-  { x: 1, y: 2, terrain: 'grass' },
-  { x: 2, y: 2, terrain: 'water' },
-  { x: 3, y: 2, terrain: 'grassStone' },
-  { x: 4, y: 2, terrain: 'stone' },
-  { x: 5, y: 2, terrain: 'stone' },
-  { x: 6, y: 2, terrain: 'grassWater' },
-  { x: 7, y: 2, terrain: 'water' },
-  { x: 8, y: 2, terrain: 'grass' },
-  { x: 0, y: 3, terrain: 'grass' },
-  { x: 1, y: 3, terrain: 'grassWater' },
-  { x: 2, y: 3, terrain: 'water' },
-  { x: 3, y: 3, terrain: 'grass' },
-  { x: 4, y: 3, terrain: 'grassStone' },
-  { x: 5, y: 3, terrain: 'stone' },
-  { x: 6, y: 3, terrain: 'grassWater' },
-  { x: 7, y: 3, terrain: 'water' },
-  { x: 8, y: 3, terrain: 'grass' },
-  { x: 9, y: 3, terrain: 'grass' },
-  { x: 1, y: 4, terrain: 'grass' },
-  { x: 2, y: 4, terrain: 'grass' },
-  { x: 3, y: 4, terrain: 'grass' },
-  { x: 4, y: 4, terrain: 'grass' },
-  { x: 5, y: 4, terrain: 'stone' },
-  { x: 6, y: 4, terrain: 'grassWater' },
-  { x: 7, y: 4, terrain: 'water' },
-  { x: 8, y: 4, terrain: 'grass' },
-  { x: 2, y: 5, terrain: 'grass' },
-  { x: 3, y: 5, terrain: 'stone' },
-  { x: 4, y: 5, terrain: 'stone' },
-  { x: 5, y: 5, terrain: 'grass' },
-  { x: 6, y: 5, terrain: 'grass' },
-  { x: 7, y: 5, terrain: 'water' },
-  { x: 3, y: 6, terrain: 'grass' },
-  { x: 4, y: 6, terrain: 'grass' },
-  { x: 5, y: 6, terrain: 'grass' },
-  { x: 6, y: 6, terrain: 'grass' },
-];
-
-const overlayCells = [
-  { x: 1, y: 4, type: 'move' },
-  { x: 2, y: 4, type: 'move' },
-  { x: 3, y: 4, type: 'move' },
-  { x: 3, y: 5, type: 'move' },
-  { x: 4, y: 4, type: 'move' },
-  { x: 5, y: 3, type: 'danger' },
-  { x: 6, y: 3, type: 'danger' },
-  { x: 6, y: 2, type: 'danger' },
-] satisfies Array<{ x: number; y: number; type: 'move' | 'danger' }>;
-
-const TRUE_ISO_TILE_ASSET_ROOT = '/assets/tiles/canonical-true-iso';
 const TRUE_ISO_TILE_SOURCE = 'canonical-true-iso';
-const trueIsoTileAsset = (filename: string): string => `${TRUE_ISO_TILE_ASSET_ROOT}/${filename}`;
 
-const canonicalTileAssets: Record<ConceptTerrain, string[]> = {
-  grass: [
-    trueIsoTileAsset('grass-clean-a.png'),
-    trueIsoTileAsset('grass-clean-b.png'),
-    trueIsoTileAsset('grass-clean-c.png'),
-  ],
-  stone: [
-    trueIsoTileAsset('stone-clean-a.png'),
-    trueIsoTileAsset('stone-clean-b.png'),
-  ],
-  water: [
-    trueIsoTileAsset('water-clean-a.png'),
-    trueIsoTileAsset('water-clean-b.png'),
-  ],
-  grassStone: [
-    trueIsoTileAsset('transition-grass-stone-a.png'),
-    trueIsoTileAsset('transition-grass-stone-b.png'),
-  ],
-  grassWater: [
-    trueIsoTileAsset('transition-grass-water-a.png'),
-    trueIsoTileAsset('transition-grass-water-b.png'),
-  ],
-  edge: [trueIsoTileAsset('grass-clean-a.png')],
-};
-
-const beforeTileAssets: Record<ConceptTerrain, string[]> = {
-  grass: [
-    '/assets/tiles/canonical-clean/grass-clean-a.png',
-    '/assets/tiles/canonical-clean/grass-clean-b.png',
-    '/assets/tiles/canonical-clean/grass-clean-c.png',
-  ],
-  stone: [
-    '/assets/tiles/canonical-clean/stone-clean-a.png',
-    '/assets/tiles/canonical-clean/stone-clean-b.png',
-  ],
-  water: [
-    '/assets/tiles/canonical-clean/water-clean-a.png',
-    '/assets/tiles/canonical-clean/water-clean-b.png',
-  ],
-  grassStone: [
-    '/assets/tiles/canonical-clean/transition-grass-stone-a.png',
-    '/assets/tiles/canonical-clean/transition-grass-stone-b.png',
-  ],
-  grassWater: [
-    '/assets/tiles/canonical-clean/transition-grass-water-a.png',
-    '/assets/tiles/canonical-clean/transition-grass-water-b.png',
-  ],
-  edge: ['/assets/tiles/canonical-clean/grass-clean-a.png'],
-};
 
 type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
 type StudioMode = 'catalog' | 'lab';
-type TileFilter = 'base' | 'transitions' | 'references' | 'board';
+type TileFilter = 'base' | 'board';
 type LabMode = 'board' | 'tile' | 'unit';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
 type TransitionViewMode = 'tile' | 'proof' | 'sample';
@@ -384,129 +123,10 @@ const studioDefaults: TilesetStudioRouteState = {
   brushKind: 'tile',
 };
 
-const waterShimmerAFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/water-shimmer-a/frame-${String(index).padStart(2, '0')}.png?v=3`,
-);
-
-const pixellabWaterCleanAFrames = Array.from(
-  { length: 9 },
-  (_, index) => `/assets/tiles/canonical-animated/pixellab-water-clean-a/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
-const aiWaterSheetAFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
-const aiWaterSheetALockedFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a-locked/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
-const aiWaterSheetAUvLockedFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/ai-water-sheet-a-uv-locked/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
-const pixellabNativeWaterAFrames = Array.from(
-  { length: 8 },
-  (_, index) => `/assets/tiles/canonical-animated/pixellab-native-water-a/frame-${String(index).padStart(2, '0')}.png?v=1`,
-);
-
 const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
   asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
 
-const transitionFillMissingMasks: Record<TerrainPairId, number[]> = {
-  'grass-stone': [2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-  'grass-water': [2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-  'stone-water': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-};
-
-const titleCasePair = (pairId: TerrainPairId): string =>
-  pairId
-    .split('-')
-    .map((part) => `${part[0].toUpperCase()}${part.slice(1)}`)
-    .join(' ');
-
-const transitionFillAsset = (pairId: TerrainPairId, socketMask: number): StudioAsset => {
-  const pair = transitionPairById(pairId);
-  const code = transitionMaskCode(socketMask);
-  const slotLabel = transitionSlotLabel(socketMask, pair);
-  return {
-    id: `transition-${pairId}-${code}`,
-    label: `${titleCasePair(pairId)} ${slotLabel}`,
-    src: `/assets/tiles/canonical-transition-fill/transition-${pairId}-${code}.png`,
-    role: 'transition',
-    kind: 'tile',
-    source: 'canonical-transition-fill',
-    probability: 1,
-    terrains: [...pair.terrains],
-    pairId,
-    socketMask,
-    notes: `Generated first-pass ${pair.label} transition fill for socket mask ${code}.`,
-  };
-};
-
-const transitionFillAssets = (Object.entries(transitionFillMissingMasks) as Array<[TerrainPairId, number[]]>).flatMap(([pairId, masks]) =>
-  masks.map((mask) => transitionFillAsset(pairId, mask)),
-);
-
-const transitionAssets: StudioAsset[] = [
-  {
-    id: 'transition-grass-stone-a',
-    label: 'Grass Stone A',
-    src: trueIsoTileAsset('transition-grass-stone-a.png'),
-    role: 'transition',
-    kind: 'tile',
-    source: TRUE_ISO_TILE_SOURCE,
-    probability: 1,
-    terrains: ['grass', 'stone'],
-    pairId: 'grass-stone',
-    socketMask: 1,
-    notes: 'Projection-locked grass to stone transition tile.',
-  },
-  {
-    id: 'transition-grass-stone-b',
-    label: 'Grass Stone B',
-    src: trueIsoTileAsset('transition-grass-stone-b.png'),
-    role: 'transition',
-    kind: 'tile',
-    source: TRUE_ISO_TILE_SOURCE,
-    probability: 1,
-    terrains: ['grass', 'stone'],
-    pairId: 'grass-stone',
-    socketMask: 3,
-    notes: 'Projection-locked alternate grass to stone transition tile.',
-  },
-  {
-    id: 'transition-grass-water-a',
-    label: 'Grass Water A',
-    src: trueIsoTileAsset('transition-grass-water-a.png'),
-    role: 'transition',
-    kind: 'tile',
-    source: TRUE_ISO_TILE_SOURCE,
-    probability: 1,
-    terrains: ['grass', 'water'],
-    pairId: 'grass-water',
-    socketMask: 1,
-    notes: 'Projection-locked grass to water transition tile.',
-  },
-  {
-    id: 'transition-grass-water-b',
-    label: 'Grass Water B',
-    src: trueIsoTileAsset('transition-grass-water-b.png'),
-    role: 'transition',
-    kind: 'tile',
-    source: TRUE_ISO_TILE_SOURCE,
-    probability: 1,
-    terrains: ['grass', 'water'],
-    pairId: 'grass-water',
-    socketMask: 3,
-    notes: 'Projection-locked alternate grass to water transition tile.',
-  },
-  ...transitionFillAssets,
-];
+const transitionAssets: StudioAsset[] = [];
 
 const STUDIO_FAMILY_META: Record<TileFamilyId, { purpose: string; status: string; review: string }> = {
   grass: { purpose: 'High-volume base terrain for most playable cells.', status: 'Production', review: 'Variation + same-footprint repetition.' },
@@ -572,9 +192,7 @@ const studioFamilyAssets: Record<StudioFamilyId, readonly StudioAsset[]> = {
 
 const familyCounts = (family: StudioFamily): string => {
   const variants = family.assets.filter((asset) => asset.kind === 'tile').length;
-  const transitions = transitionPairsForFamily(family.id).length * 14;
-  const references = family.assets.filter((asset) => asset.kind === 'reference').length;
-  return `${variants} tiles · ${transitions} slots · ${references} refs`;
+  return `${variants} ${variants === 1 ? 'tile' : 'tiles'}`;
 };
 
 const CANDIDATE_REVIEW_KEY = 'chess-tactics:tileset-review-decisions:v1';
@@ -837,60 +455,6 @@ const tileTypeLabel = (asset: StudioAsset): string => {
   return 'Transition tile';
 };
 
-const assetForCell = (assets: Record<ConceptTerrain, string[]>, cell: ConceptCell): string => {
-  const options = assets[cell.terrain];
-  return options[Math.abs(cell.x * 17 + cell.y * 31) % options.length];
-};
-
-function unit({ x, y, side, label }: { x: number; y: number; side: 'blue' | 'red'; label: string }): ReactElement {
-  const left = 422 + (x - y) * 64;
-  const top = 58 + (x + y) * 32;
-  return (
-    <div className={`tile-preview-unit is-${side}`} style={{ left, top }} aria-hidden="true">
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function ConceptBoardReconstruction({ mode }: { mode: 'before' | 'after' }): ReactElement {
-  const ordered = conceptCells.slice().sort((a, b) => a.x + a.y - (b.x + b.y));
-  const assets = mode === 'before' ? beforeTileAssets : canonicalTileAssets;
-
-  return (
-    <div className="concept-board-reconstruction" aria-label="Concept board plane reconstruction">
-      {ordered.map((cell) => {
-        const left = TILE_TEMPLATE.originX + (cell.x - cell.y) * TILE_TEMPLATE.stepX;
-        const top = TILE_TEMPLATE.originY + (cell.x + cell.y) * TILE_TEMPLATE.stepY;
-        return (
-          <div
-            key={`${cell.x}-${cell.y}`}
-            className={`concept-board-tile is-${cell.terrain}`}
-            style={{ left, top, zIndex: cell.x + cell.y }}
-            aria-hidden="true"
-          >
-            <img src={assetForCell(assets, cell)} alt="" draggable={false} />
-          </div>
-        );
-      })}
-      {overlayCells.map((cell) => {
-        const left = TILE_TEMPLATE.originX + (cell.x - cell.y) * TILE_TEMPLATE.stepX;
-        const top = TILE_TEMPLATE.originY + (cell.x + cell.y) * TILE_TEMPLATE.stepY;
-        return (
-          <div
-            key={`overlay-${cell.x}-${cell.y}`}
-            className={`concept-board-overlay is-${cell.type}`}
-            style={{ left, top, zIndex: cell.x + cell.y + 24 }}
-            aria-hidden="true"
-          />
-        );
-      })}
-      <div className="concept-board-selection is-blue" style={{ left: 390, top: 305 }} />
-      <div className="concept-board-selection is-cyan" style={{ left: 486, top: 359 }} />
-      <div className="concept-board-selection is-red" style={{ left: 630, top: 278 }} />
-    </div>
-  );
-}
-
 function useAnimationFrameIndex(): number {
   const [animationFrame, setAnimationFrame] = useState(0);
 
@@ -916,316 +480,6 @@ function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 150): num
   }, [frameCount]);
 
   return animationFrame;
-}
-
-function PreviewBoard({ className = '' }: { className?: string }): ReactElement {
-  const ordered = board.slice().sort((a, b) => a.x + a.y - (b.x + b.y));
-
-  return (
-    <div className={`tile-preview-board ${className}`} aria-label="Composed board preview">
-      {ordered.map((cell) => {
-        const left = 360 + (cell.x - cell.y) * 64;
-        const top = 34 + (cell.x + cell.y) * 32;
-        return (
-          <img
-            key={`${cell.x}-${cell.y}`}
-            className="tile-preview-img"
-            src={tileUrl(cell)}
-            alt=""
-            style={{ left, top, zIndex: cell.x + cell.y }}
-            draggable={false}
-          />
-        );
-      })}
-      {unit({ x: 2, y: 3, side: 'blue', label: 'N' })}
-      {unit({ x: 4, y: 2, side: 'blue', label: 'R' })}
-      {unit({ x: 5, y: 3, side: 'red', label: 'B' })}
-      {unit({ x: 6, y: 2, side: 'red', label: 'K' })}
-    </div>
-  );
-}
-
-function AnimatedTerrainStrip({ animationFrame }: { animationFrame: number }): ReactElement {
-  return (
-    <div className="tile-preview-animation-strip" aria-label="Animated terrain previews">
-      {animationPreviews.map((preview) => (
-        <figure key={preview.label}>
-          <img src={preview.frames[animationFrame]} alt="" draggable={false} />
-          <figcaption>{preview.label}</figcaption>
-        </figure>
-      ))}
-    </div>
-  );
-}
-
-function StudioTileCard({
-  asset,
-  selected,
-  showFootprint,
-  zoom,
-  animationFrame,
-  onSelect,
-  onInspect,
-  onArmBrush,
-  onOpenBoard,
-  onWheel,
-}: {
-  asset: StudioAsset;
-  selected: boolean;
-  showFootprint: boolean;
-  zoom: number;
-  animationFrame: number;
-  onSelect: () => void;
-  onInspect: () => void;
-  onArmBrush?: () => void;
-  onOpenBoard?: () => void;
-  onWheel: (event: WheelEvent<HTMLButtonElement>) => void;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      className={`tileset-studio-card is-${asset.kind} ${selected ? 'is-selected' : ''} ${showFootprint ? 'has-footprint' : ''}`}
-      onClick={onSelect}
-      onWheel={onWheel}
-      aria-pressed={selected}
-    >
-      <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-        <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" />
-      </span>
-      <span className="tileset-studio-card-meta">
-        <span
-          className="tileset-studio-card-text"
-          onClick={(event) => { event.stopPropagation(); onInspect(); }}
-        >
-          <strong>{asset.label}</strong>
-          <em>{asset.role}</em>
-        </span>
-        {onArmBrush || onOpenBoard ? (
-          <span className="tileset-card-actions">
-            {onArmBrush ? (
-              <span
-                className="tileset-card-action"
-                role="button"
-                tabIndex={0}
-                title={`Paint with ${asset.label} on the current board`}
-                aria-label={`Paint with ${asset.label}`}
-                onClick={(event) => { event.stopPropagation(); onArmBrush(); }}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onArmBrush(); } }}
-              >
-                🖌
-              </span>
-            ) : null}
-            {onOpenBoard ? (
-              <span
-                className="tileset-card-action"
-                role="button"
-                tabIndex={0}
-                title={`Open ${asset.label} as a fresh board (replaces the current board)`}
-                aria-label={`Open ${asset.label} as a fresh board`}
-                onClick={(event) => { event.stopPropagation(); onOpenBoard(); }}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onOpenBoard(); } }}
-              >
-                <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                  <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                  <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            ) : null}
-          </span>
-        ) : null}
-      </span>
-    </button>
-  );
-}
-
-function TransitionRelationshipGrid({
-  family,
-  pair,
-  selectedAsset,
-  selectedSlotMask,
-  showFootprint,
-  animationFrame,
-  onPairSelect,
-  onAssetSelect,
-  onSlotSelect,
-  onAssetInspect,
-  onSlotInspect,
-}: {
-  family: StudioFamily;
-  pair: TransitionPair;
-  selectedAsset: StudioAsset;
-  selectedSlotMask?: number;
-  showFootprint: boolean;
-  animationFrame: number;
-  onPairSelect: (pairId: TerrainPairId) => void;
-  onAssetSelect: (asset: StudioAsset) => void;
-  onSlotSelect: (slot: TransitionSlot<StudioAsset>) => void;
-  onAssetInspect: (asset: StudioAsset) => void;
-  onSlotInspect: (pair: TransitionPair, slot: TransitionSlot<StudioAsset>) => void;
-}): ReactElement {
-  const pairs = transitionPairsForFamily(family.id);
-  const slots = transitionSlotsForPair(pair, transitionAssets);
-
-  return (
-    <div className="tileset-transition-workbench" aria-label={`${family.label} transition relationships`}>
-      <nav className="tileset-pair-tabs" aria-label="Transition pairs">
-        {pairs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={item.id === pair.id ? 'is-active' : ''}
-            onClick={() => onPairSelect(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-      <div className="tileset-relationship-grid" aria-label={`${pair.label} connection previews`}>
-        {slots.map((slot) => {
-          const firstAsset = slot.assets[0];
-          const isSelected = selectedSlotMask === slot.mask || slot.assets.some((asset) => asset.id === selectedAsset.id);
-          const cells = [
-            { edge: 'north' as EdgeName, x: 1, y: 0, asset: familyBaseAsset(slot.sockets.north) },
-            { edge: 'west' as EdgeName, x: 0, y: 1, asset: familyBaseAsset(slot.sockets.west) },
-            { edge: 'center' as const, x: 1, y: 1, asset: firstAsset },
-            { edge: 'east' as EdgeName, x: 2, y: 1, asset: familyBaseAsset(slot.sockets.east) },
-            { edge: 'south' as EdgeName, x: 1, y: 2, asset: familyBaseAsset(slot.sockets.south) },
-          ];
-
-          return (
-            <article
-              key={slot.mask}
-              className={`tileset-relationship-card ${firstAsset ? 'has-asset' : 'is-missing'} ${isSelected ? 'is-selected' : ''} ${showFootprint ? 'has-footprint' : ''}`}
-              onClick={() => {
-                if (firstAsset) {
-                  onAssetSelect(firstAsset);
-                } else {
-                  onSlotSelect(slot);
-                }
-              }}
-            >
-              <span
-                className="tileset-relationship-head"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (firstAsset) {
-                    onAssetInspect(firstAsset);
-                  } else {
-                    onSlotInspect(pair, slot);
-                  }
-                }}
-              >
-                <strong>{slot.label}</strong>
-                <span>{slot.code}</span>
-              </span>
-              <span className="tileset-relationship-board" aria-label={`${slot.label} transition relationship`}>
-                {cells.map((cell) => {
-                  const left = 110 + (cell.x - cell.y) * 32;
-                  const top = 10 + (cell.x + cell.y) * 16;
-                  return (
-                    <span
-                      key={cell.edge}
-                      className={`tileset-relationship-cell is-${cell.edge} ${cell.asset ? '' : 'is-empty'}`}
-                      style={{ left, top, zIndex: cell.x + cell.y }}
-                    >
-                      {cell.asset ? <img src={assetFrameSrc(cell.asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
-                    </span>
-                  );
-                })}
-                {cells
-                  .filter((cell): cell is typeof cell & { asset: StudioAsset } => Boolean(cell.asset))
-                  .map((cell) => {
-                    const left = 110 + (cell.x - cell.y) * 32;
-                    const top = 10 + (cell.x + cell.y) * 16;
-                    return (
-                      <button
-                        key={`hit-${cell.edge}`}
-                        type="button"
-                        className={`tileset-relationship-hit-target is-${cell.edge}`}
-                        style={{ left, top, zIndex: 100 + cell.x + cell.y }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onAssetSelect(cell.asset);
-                        }}
-                        aria-label={`Inspect ${cell.asset.label}`}
-                      />
-                    );
-                  })}
-              </span>
-              <span
-                className="tileset-relationship-foot"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (firstAsset) {
-                    onAssetInspect(firstAsset);
-                  } else {
-                    onSlotInspect(pair, slot);
-                  }
-                }}
-              >
-                {firstAsset ? `${firstAsset.label} · transition tile` : 'Needs transition art'}
-              </span>
-            </article>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function TransitionSlotPreview({
-  slot,
-  asset,
-  showFootprint,
-  animationFrame,
-}: {
-  slot: TransitionSlot<StudioAsset>;
-  asset?: StudioAsset;
-  showFootprint: boolean;
-  animationFrame: number;
-}): ReactElement {
-  const cells = [
-    { edge: 'north' as EdgeName, x: 1, y: 0, asset: familyBaseAsset(slot.sockets.north) },
-    { edge: 'west' as EdgeName, x: 0, y: 1, asset: familyBaseAsset(slot.sockets.west) },
-    { edge: 'center' as const, x: 1, y: 1, asset },
-    { edge: 'east' as EdgeName, x: 2, y: 1, asset: familyBaseAsset(slot.sockets.east) },
-    { edge: 'south' as EdgeName, x: 1, y: 2, asset: familyBaseAsset(slot.sockets.south) },
-  ];
-
-  return (
-    <span className={`tileset-relationship-board ${showFootprint ? 'has-footprint' : ''}`} aria-label={`${slot.label} transition relationship`}>
-      {cells.map((cell) => {
-        const left = 110 + (cell.x - cell.y) * 32;
-        const top = 10 + (cell.x + cell.y) * 16;
-        const cellClassName = `tileset-relationship-cell is-${cell.edge} ${cell.asset ? '' : 'is-empty'}`;
-        const cellStyle = { '--relationship-left': `${left}px`, '--relationship-top': `${top}px`, zIndex: cell.x + cell.y } as CSSProperties;
-        const cellAsset = cell.asset;
-        if (cellAsset) {
-          return (
-            <button
-              key={cell.edge}
-              type="button"
-              className={cellClassName}
-              style={cellStyle}
-              data-asset-id={cellAsset.id}
-              aria-label={`Inspect ${cellAsset.label}`}
-            >
-              <img src={assetFrameSrc(cellAsset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" />
-            </button>
-          );
-        }
-        return (
-          <span
-            key={cell.edge}
-            className={cellClassName}
-            style={cellStyle}
-          >
-            {cell.asset ? <img src={assetFrameSrc(cell.asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
-          </span>
-        );
-      })}
-    </span>
-  );
 }
 
 function StudioGeneratedBoard({
@@ -1293,17 +547,6 @@ function StudioEditableBoard({
   overlay?: ReactNode;
 }): ReactElement {
   const paintingRef = useRef(false);
-  const gridCells: { x: number; y: number }[] = [];
-  for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) gridCells.push({ x, y });
-  const projected = gridCells.map((cell) => ({ left: (cell.x - cell.y) * TILE_TEMPLATE.stepX, top: (cell.x + cell.y) * TILE_TEMPLATE.stepY }));
-  const minLeft = Math.min(...projected.map((point) => point.left - 48));
-  const maxLeft = Math.max(...projected.map((point) => point.left + 48));
-  const minTop = Math.min(...projected.map((point) => point.top - 27));
-  const maxTop = Math.max(...projected.map((point) => point.top + 140));
-  const boardWidth = maxLeft - minLeft;
-  const boardHeight = maxTop - minTop;
-  const originLeft = -minLeft - boardWidth / 2;
-  const originTop = -minTop - boardHeight / 2;
   const stopPainting = () => { paintingRef.current = false; };
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
@@ -1311,43 +554,31 @@ function StudioEditableBoard({
     else onSelect(x, y);
   };
 
-  return (
-    <div
-      className={`tileset-generated-board tileset-placement-board is-tool-${tool} ${showFootprint ? 'has-footprint' : ''}`}
-      style={
-        {
-          '--board-zoom': boardZoom,
-          '--board-pan-x': `${boardPan.x}px`,
-          '--board-pan-y': `${boardPan.y}px`,
-          '--board-origin-left': `${originLeft}px`,
-          '--board-origin-top': `${originTop}px`,
-        } as CSSProperties
-      }
-      aria-label="Editable tile board"
-      onPointerUp={stopPainting}
-      onPointerLeave={stopPainting}
-    >
-      {gridCells.map((cell) => {
-        const key = `${cell.x},${cell.y}`;
-        const assetId = placed[key];
-        const asset = assetId ? resolveAsset(assetId) : undefined;
-        const unitPlacement = placedUnits[key];
-        const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
-        const left = (cell.x - cell.y) * TILE_TEMPLATE.stepX;
-        const top = (cell.x + cell.y) * TILE_TEMPLATE.stepY;
-        const isSelected = selectedCell?.x === cell.x && selectedCell?.y === cell.y;
-        const unitSprite =
-          unitAsset && unitPlacement
-            ? hasDirectionSprite(unitAsset, unitPlacement.direction)
-              ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
-              : MISSING_DIRECTION_SPRITE
-            : undefined;
-        return (
-          <div
-            key={key}
-            className={`tileset-generated-board-tile tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`}
-            style={{ left, top, zIndex: cell.x + cell.y }}
-          >
+  // The editor is an adapter over the shared TileGrid core (the same one the
+  // game's BoardLabBoard uses). It only supplies per-cell content: the tile art,
+  // the placed unit, the selection ring, and the paint/erase/select hit target.
+  const cells: TileGridCell[] = [];
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const key = `${x},${y}`;
+      const assetId = placed[key];
+      const asset = assetId ? resolveAsset(assetId) : undefined;
+      const unitPlacement = placedUnits[key];
+      const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
+      const isSelected = selectedCell?.x === x && selectedCell?.y === y;
+      const unitSprite =
+        unitAsset && unitPlacement
+          ? hasDirectionSprite(unitAsset, unitPlacement.direction)
+            ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
+            : MISSING_DIRECTION_SPRITE
+          : undefined;
+      cells.push({
+        key,
+        x,
+        y,
+        className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
+        children: (
+          <>
             {asset ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
             {unitAsset && unitSprite ? (
               <img
@@ -1371,107 +602,35 @@ function StudioEditableBoard({
                 if (event.button === 2) return; // right-click erases via onContextMenu
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
                 if (tool !== 'select') paintingRef.current = true;
-                applyTool(cell.x, cell.y);
+                applyTool(x, y);
               }}
-              onPointerEnter={() => { if (paintingRef.current) applyTool(cell.x, cell.y); }}
-              onContextMenu={(event) => { event.preventDefault(); onErase(cell.x, cell.y); }}
+              onPointerEnter={() => { if (paintingRef.current) applyTool(x, y); }}
+              onContextMenu={(event) => { event.preventDefault(); onErase(x, y); }}
             />
-          </div>
-        );
-      })}
+          </>
+        ),
+      });
+    }
+  }
+
+  return (
+    <TileGrid
+      cells={cells}
+      className={`tileset-placement-board is-tool-${tool}`}
+      ariaLabel="Editable tile board"
+      showFootprint={showFootprint}
+      boardZoom={boardZoom}
+      boardPan={boardPan}
+      onPointerUp={stopPainting}
+      onPointerLeave={stopPainting}
+    >
       {overlay}
-    </div>
+    </TileGrid>
   );
 }
 
 // Units browser folded into the shared studio catalog. Unit data comes from
 // unitCatalog.ts so the catalog, lab brush, and standalone Unit Studio stay in sync.
-function UnitsStudio({
-  selectedUnitId,
-  units,
-  zoom,
-  onSelect,
-  onInspect,
-  onArmBrush,
-}: {
-  selectedUnitId: string;
-  units: UnitAsset[];
-  zoom: number;
-  onSelect: (unitId: string) => void;
-  onInspect: (unitId: string) => void;
-  onArmBrush: (unitId: string) => void;
-}): ReactElement {
-  return (
-    <section className="tileset-studio-main">
-      <section className="tileset-studio-tab-panel">
-        <div className="tileset-asset-sections">
-          <section className="tileset-asset-section" aria-label="Production units">
-            <h3>Production Units</h3>
-            <div className="tileset-studio-grid" aria-label="Unit assets">
-              {units.map((unit) => (
-                <button
-                  key={unit.id}
-                  type="button"
-                  className={`tileset-studio-card is-unit ${unit.id === selectedUnitId ? 'is-selected' : ''}`}
-                  onClick={() => onSelect(unit.id)}
-                  title={`Select ${unit.label}`}
-                  aria-pressed={unit.id === selectedUnitId}
-                >
-                  <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-                    <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
-                  </span>
-                  <span className="tileset-studio-card-meta">
-                    <span
-                      className="tileset-studio-card-text"
-                      onClick={(event) => { event.stopPropagation(); onSelect(unit.id); }}
-                    >
-                      <strong>{unit.label}</strong>
-                      <em>{unit.badge}</em>
-                    </span>
-                    <span className="tileset-card-actions">
-                      <span
-                        className="tileset-card-action"
-                        role="button"
-                        tabIndex={0}
-                        title={`Place ${unit.label} on the current board`}
-                        aria-label={`Place ${unit.label}`}
-                        onClick={(event) => { event.stopPropagation(); onArmBrush(unit.id); }}
-                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onArmBrush(unit.id); } }}
-                      >
-                        🖌
-                      </span>
-                      <span
-                        className="tileset-card-action"
-                        role="button"
-                        tabIndex={0}
-                        title={`Inspect ${unit.label} in the lab`}
-                        aria-label={`Inspect ${unit.label}`}
-                        onClick={(event) => { event.stopPropagation(); onInspect(unit.id); }}
-                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onInspect(unit.id); } }}
-                      >
-                        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                          <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                          <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </span>
-                    </span>
-                  </span>
-                </button>
-              ))}
-              {units.length === 0 ? (
-                <div className="unit-catalog-empty">
-                  <h3>No units match</h3>
-                  <p>Try a different search.</p>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        </div>
-      </section>
-    </section>
-  );
-}
-
 type LevelBrush = TileFamilyId | 'erase';
 const levelTerrainOrder: TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
 const levelFamilySwatch: Record<TileFamilyId, string> = {
@@ -2072,16 +1231,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
-  const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>([initialRoute.familyId]);
+  const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<CollectionFilter[]>(
-    initialRoute.tileFilter === 'board' ? ['base', 'transitions', 'references'] : [initialRoute.tileFilter],
+    initialRoute.tileFilter === 'board' ? ['base'] : [initialRoute.tileFilter],
   );
   const [catalogQuery, setCatalogQuery] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
   const skipNextRouteWriteRef = useRef(false);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [showFootprint, setShowFootprint] = useState(true);
-  const [showBefore, setShowBefore] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
@@ -2105,18 +1263,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [boardSectionOpen, setBoardSectionOpen] = useState(true);
   const [viewSectionOpen, setViewSectionOpen] = useState(true);
-  const filterDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const family = studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
+  // The Blender textured tileset is hard-edged: only base tiles, no transition or
+  // reference collections. (The transition/reference code paths are now unreachable.)
   const collectionFilters: Array<[CollectionFilter, string]> = [
     ['base', 'Base'],
-    ['transitions', 'Transitions'],
-    ['references', 'References'],
   ];
   const selectedFamilies = studioFamilies.filter((item) => selectedFamilyIds.includes(item.id));
   const activeFamilies = selectedFamilies;
   const selectedFamilyLabel =
-    activeFamilies.length === 0 ? 'No families' : activeFamilies.length === 1 ? activeFamilies[0].label : `${activeFamilies.length} families`;
+    activeFamilies.length === 0
+      ? 'No families'
+      : activeFamilies.length === studioFamilies.length
+        ? 'All Tiles'
+        : activeFamilies.length === 1
+          ? activeFamilies[0].label
+          : `${activeFamilies.length} families`;
   const selectedCollectionLabel =
     selectedCollectionFilters.length === 0
       ? 'No collections'
@@ -2170,14 +1333,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setSelectedCell(null);
     setLabMode('board');
   };
-  const filteredTileAssets =
-    tileFilter === 'base'
-      ? family.assets.filter((asset) => asset.kind === 'tile')
-      : tileFilter === 'transitions'
-        ? transitionAssets.filter((asset) => asset.terrains?.includes(family.id))
-        : tileFilter === 'references'
-          ? family.assets.filter((asset) => asset.kind === 'reference')
-          : [];
+  const filteredTileAssets = tileFilter === 'base' ? family.assets.filter((asset) => asset.kind === 'tile') : [];
   const catalogBaseAssets = activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile'));
   const catalogReferenceAssets = activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'reference'));
   const catalogTransitionAssets = transitionAssets.filter((asset) => asset.terrains?.some((terrain) => selectedFamilyIds.includes(terrain)));
@@ -2192,10 +1348,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const visibleCatalogBaseAssets = catalogBaseAssets.filter(matchesCatalogQuery);
   const visibleCatalogReferenceAssets = catalogReferenceAssets.filter(matchesCatalogQuery);
   const visibleCatalogTransitionAssets = catalogTransitionAssets.filter(matchesCatalogQuery);
-  const visibleCatalogCount =
-    (selectedCollectionFilters.includes('base') ? visibleCatalogBaseAssets.length : 0) +
-    (selectedCollectionFilters.includes('transitions') ? visibleCatalogTransitionAssets.length : 0) +
-    (selectedCollectionFilters.includes('references') ? visibleCatalogReferenceAssets.length : 0);
+  const visibleCatalogCount = selectedCollectionFilters.includes('base') ? visibleCatalogBaseAssets.length : 0;
   const generatedAssets =
     boardScope === 'family'
       ? activeFamilies
@@ -2219,10 +1372,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   );
   const coverageReport = useMemo(() => buildTileCoverageReport(studioFamilyAssets, transitionAssets), []);
   const familyMissingTransitionSlots = coverageReport.missingTransitionSlots.filter((slot) => transitionPairById(slot.pairId).terrains.includes(family.id));
-  const selectedTransitionSlot =
-    selectedSlotMask && tileFilter === 'transitions'
-      ? transitionSlotsForPair(selectedPair, transitionAssets).find((slot) => slot.mask === selectedSlotMask)
-      : undefined;
+  const selectedTransitionSlot = selectedSlotMask
+    ? transitionSlotsForPair(selectedPair, transitionAssets).find((slot) => slot.mask === selectedSlotMask)
+    : undefined;
   const selectedAssetPair = selectedAsset.pairId ? transitionPairById(selectedAsset.pairId) : undefined;
   const selectedAssetTransitionSlot =
     selectedAssetPair && selectedAsset.socketMask
@@ -2378,11 +1530,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const reviewItems: ReviewItem[] =
     tileFilter === 'board'
       ? Array.from(new Map(generatedBoard.cells.flatMap((cell) => (cell.asset ? [[cell.asset.id, cell.asset] as const] : []))).values()).map((asset) => ({ type: 'asset', asset }))
-      : tileFilter === 'transitions'
-        ? transitionSlotsForPair(selectedPair, transitionAssets).map((slot) =>
-            slot.assets[0] ? ({ type: 'asset', asset: slot.assets[0] } as ReviewItem) : ({ type: 'slot', pair: selectedPair, slot } as ReviewItem),
-          )
-        : filteredTileAssets.map((asset) => ({ type: 'asset', asset }));
+      : filteredTileAssets.map((asset) => ({ type: 'asset', asset }));
   const selectedReviewIndex = Math.max(
     0,
     reviewItems.findIndex((item) =>
@@ -2457,54 +1605,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   }, [familyTransitionPairs, selectedPairId]);
 
   useEffect(() => {
-    const visibleAssets =
-      tileFilter === 'base'
-        ? [...family.assets.filter((asset) => asset.kind === 'tile'), ...transitionAssets.filter((asset) => asset.terrains?.includes(family.id))]
-        : tileFilter === 'transitions'
-          ? transitionAssets.filter((asset) => asset.pairId === selectedPair.id)
-          : tileFilter === 'references'
-            ? family.assets.filter((asset) => asset.kind === 'reference')
-            : [];
+    const visibleAssets = tileFilter === 'base' ? family.assets.filter((asset) => asset.kind === 'tile') : [];
     if (tileFilter !== 'board' && visibleAssets.length > 0) {
       setSelectedAssetId((currentAssetId) => (visibleAssets.some((asset) => asset.id === currentAssetId) ? currentAssetId : visibleAssets[0].id));
     }
   }, [family, selectedPair.id, tileFilter]);
 
   useEffect(() => {
-    if (tileFilter !== 'transitions') {
-      setSelectedSlotMask(undefined);
-    }
+    setSelectedSlotMask(undefined);
   }, [tileFilter]);
-
-  useEffect(() => {
-    if (boardMode !== 'concept' && showBefore) {
-      setShowBefore(false);
-    }
-  }, [boardMode, showBefore]);
 
   useEffect(() => {
     setManualAnimationFrame((frame) => frame % animationFrameCount);
   }, [animationFrameCount, inspectedAnimatedAsset?.id]);
-
-  useEffect(() => {
-    if (!filterOpen) return;
-
-    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Node && filterDropdownRef.current?.contains(target)) return;
-      setFilterOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setFilterOpen(false);
-    };
-
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [filterOpen]);
 
   useEffect(() => {
     setViewPan({ x: 0, y: 0 });
@@ -2532,16 +1645,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedUnitId: unitBrushId,
     });
   }, [boardMode, boardScope, boardSeed, boardSize, brushKind, familyId, labMode, selectedAsset.id, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
-
-  const zoomTilesWithWheel = (event: WheelEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    const direction = event.deltaY < 0 ? 1 : -1;
-    setZoom((value) => clamp(Number((value + direction * 0.05).toFixed(2)), 0.75, 2));
-  };
-
-  const ignoreTileWheel = (event: WheelEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-  };
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
@@ -2577,15 +1680,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const inspectAsset = (asset: StudioAsset) => {
     setSelectedAssetId(asset.id);
     setSelectedSlotMask(undefined);
-    if (asset.pairId) {
-      setSelectedPairId(asset.pairId);
-      setTileFilter('transitions');
-      setTransitionViewMode('tile');
-    } else if (asset.kind === 'reference') {
-      setTileFilter('references');
-    } else {
-      setTileFilter('base');
-    }
+    setTileFilter('base');
     setLabMode('tile');
     setViewHasTarget(true);
     setStudioMode('lab');
@@ -2602,10 +1697,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setStudioMode('lab');
   };
 
+  // Inert: the hard-edged textured tileset has no transition slots, so this is
+  // never reached (kept type-valid for the unused transition catalog scaffolding).
   const inspectSlot = (pair: TransitionPair, slot: TransitionSlot<StudioAsset>) => {
     setSelectedPairId(pair.id);
     setSelectedSlotMask(slot.mask);
-    setTileFilter('transitions');
+    setTileFilter('base');
     setTransitionViewMode(slot.assets[0] ? 'tile' : 'proof');
     setLabMode('tile');
     setViewHasTarget(true);
@@ -2770,6 +1867,76 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setStudioMode('lab');
   };
 
+  // Catalog asset-type descriptors. The generic <CatalogGrid>/<CatalogControls>
+  // render either of these; a new asset type is just another descriptor.
+  const tileFamilyOf = new Map<string, StudioFamilyId>();
+  for (const fam of studioFamilies) for (const a of fam.assets) tileFamilyOf.set(a.id, fam.id);
+  const tilesCatalogType: CatalogType<StudioAsset> = {
+    id: 'tiles',
+    label: 'Tiles',
+    assets: studioFamilies.flatMap((fam) => fam.assets),
+    card: (a) => ({ img: assetFrameSrc(a, animationFrame), title: a.label, badge: a.role }),
+    sections: (visible) => [{ id: 'base', label: 'Base Tiles', assets: visible.filter((a) => a.kind === 'tile') }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'label, source, socket...',
+      match: (a, q) => [a.label, a.role, a.source, a.notes, ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    filters: [
+      {
+        id: 'family',
+        label: 'Tile Family',
+        options: studioFamilies.map((fam) => ({ id: fam.id, label: fam.label, sub: familyCounts(fam) })),
+        memberOf: (a) => [tileFamilyOf.get(a.id) ?? 'grass'],
+        selected: selectedFamilyIds,
+        toggle: (id) => toggleFamilyFilter(id as StudioFamilyId),
+        selectAll: () => setSelectedFamilyIds(studioFamilies.map((fam) => fam.id)),
+        clear: () => setSelectedFamilyIds([]),
+      },
+    ],
+    onSelect: (a) => { setSelectedAssetId(a.id); setSelectedSlotMask(undefined); },
+    onView: inspectAsset,
+    onArm: armBrush,
+    selectedId: selectedAssetId,
+  };
+  const unitFamilyCount = (family: PieceId) => unitAssets.filter((u) => u.family === family).length;
+  const unitsCatalogType: CatalogType<UnitAsset> = {
+    id: 'units',
+    label: 'Units',
+    assets: unitAssets,
+    card: (u) => ({ img: u.preview, title: u.label, badge: u.badge, isUnit: true }),
+    sections: (visible) => [{ id: 'units', label: 'Production Units', assets: [...visible] }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'piece, read, status...',
+      match: (u, q) => [u.label, u.badge, u.family, u.read, u.status].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    filters: [
+      {
+        id: 'family',
+        label: 'Unit Family',
+        options: activeUnitFamilies.map((family) => {
+          const n = unitFamilyCount(family);
+          return { id: family, label: familyLabels[family], sub: `${n} ${n === 1 ? 'unit' : 'units'}` };
+        }),
+        memberOf: (u) => [u.family],
+        selected: selectedUnitFamilies,
+        toggle: (id) => setSelectedUnitFamilies((cur) => (cur.includes(id as PieceId) ? cur.filter((x) => x !== id) : [...cur, id as PieceId])),
+        selectAll: () => setSelectedUnitFamilies(activeUnitFamilies),
+        clear: () => setSelectedUnitFamilies([]),
+      },
+    ],
+    onSelect: (u) => selectUnitInCatalog(u.id),
+    onView: (u) => inspectUnitInLab(u.id),
+    onArm: (u) => placeUnitOnLoadedBoard(u.id),
+    selectedId: unitBrushId,
+    note: 'Select a unit card to place it in the shared lab board.',
+  };
+
   return (
     <main className="tileset-studio-page">
       <header className="tileset-studio-header">
@@ -2800,88 +1967,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
-        {category === 'units' ? (
-          <UnitsStudio
-            selectedUnitId={unitBrushAsset.id}
-            units={visibleUnits}
-            zoom={zoom}
-            onSelect={selectUnitInCatalog}
-            onInspect={inspectUnitInLab}
-            onArmBrush={placeUnitOnLoadedBoard}
-          />
-        ) : (
-          <section className="tileset-studio-main">
-          <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
-              <div className="tileset-asset-sections">
-                {selectedCollectionFilters.includes('base') ? (
-                  <section className="tileset-asset-section" aria-label="Base tiles">
-                    <h3>Base Tiles</h3>
-                    <div className="tileset-studio-grid" aria-label="Base assets">
-                      {visibleCatalogBaseAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-                {selectedCollectionFilters.includes('transitions') ? (
-                  <section className="tileset-asset-section" aria-label="Transition tiles">
-                    <h3>Transition Tiles</h3>
-                    <div className="tileset-studio-grid" aria-label="Transition assets">
-                      {visibleCatalogTransitionAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-                {selectedCollectionFilters.includes('references') ? (
-                  <section className="tileset-asset-section" aria-label="Reference tiles">
-                    <h3>References</h3>
-                    <div className="tileset-studio-grid" aria-label="Reference assets">
-                      {visibleCatalogReferenceAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={zoomTilesWithWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-              </div>
-            </section>
-          </section>
-        )}
+        {category === 'units' ? <CatalogGrid type={unitsCatalogType} /> : <CatalogGrid type={tilesCatalogType} />}
         <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Catalog controls">
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
@@ -2904,147 +1990,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   Units
                 </button>
               </div>
-              {category === 'tiles' ? (
-                <>
-                  <label className="tileset-catalog-search">
-                    <span>Search</span>
-                    <input
-                      type="search"
-                      value={catalogQuery}
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                      placeholder="label, source, socket..."
-                    />
-                  </label>
-                  <label className="tileset-catalog-zoom">
-                    <span>Zoom</span>
-                    <input
-                      type="range"
-                      min="0.75"
-                      max="2"
-                      step="0.05"
-                      value={zoom}
-                      onChange={(event) => setZoom(Number(event.target.value))}
-                    />
-                  </label>
-                  <div className="tileset-active-filters" aria-label="Active filters">
-                    {activeFamilies.map((item) => (
-                      <button key={item.id} type="button" onClick={() => toggleFamilyFilter(item.id)} title={`Remove ${item.label} filter`}>
-                        {item.label}
-                      </button>
-                    ))}
-                    {selectedCollectionFilters.map((filter) => (
-                      <button key={filter} type="button" onClick={() => toggleCollectionFilter(filter)} title={`Remove ${filter} filter`}>
-                        {collectionFilters.find(([id]) => id === filter)?.[1] ?? filter}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="tileset-filter-dropdown" ref={filterDropdownRef}>
-                    <button
-                      type="button"
-                      className={filterOpen ? 'is-active' : ''}
-                      onClick={() => setFilterOpen((value) => !value)}
-                      aria-expanded={filterOpen}
-                      aria-controls="tileset-filter-menu"
-                    >
-                      Filters
-                    </button>
-                    {filterOpen ? (
-                      <div id="tileset-filter-menu" className="tileset-filter-menu" role="dialog" aria-label="Tileset filters">
-                        <div className="tileset-filter-menu-header">
-                          <strong>Filters</strong>
-                          <span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedFamilyIds(studioFamilies.map((item) => item.id));
-                                setSelectedCollectionFilters(collectionFilters.map(([filter]) => filter));
-                              }}
-                            >
-                              Select all
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedFamilyIds([]);
-                                setSelectedCollectionFilters([]);
-                              }}
-                            >
-                              Clear
-                            </button>
-                          </span>
-                        </div>
-                        <section className="tileset-filter-group" aria-label="Tile families">
-                          <h3>Tile Family</h3>
-                          {studioFamilies.map((item) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              className={`tileset-filter-option${selectedFamilyIds.includes(item.id) ? ' is-active' : ''}`}
-                              aria-pressed={selectedFamilyIds.includes(item.id)}
-                              onClick={() => toggleFamilyFilter(item.id)}
-                            >
-                              <span className="tileset-filter-mark" aria-hidden="true" />
-                              <span className="tileset-filter-option-copy">
-                                <strong>{item.label}</strong>
-                                <span>{familyCounts(item)}</span>
-                              </span>
-                            </button>
-                          ))}
-                        </section>
-                        <section className="tileset-filter-group" aria-label="Collections">
-                          <h3>Collection</h3>
-                          {collectionFilters.map(([filter, label]) => (
-                            <button
-                              key={filter}
-                              type="button"
-                              className={`tileset-filter-option${selectedCollectionFilters.includes(filter) ? ' is-active' : ''}`}
-                              aria-pressed={selectedCollectionFilters.includes(filter)}
-                              onClick={() => toggleCollectionFilter(filter)}
-                            >
-                              <span className="tileset-filter-mark" aria-hidden="true" />
-                              <span className="tileset-filter-option-copy">
-                                <strong>{label}</strong>
-                                <span>{filter === 'base' ? 'terrain variants' : filter === 'transitions' ? 'edge socket tiles' : 'footprint guides'}</span>
-                              </span>
-                            </button>
-                          ))}
-                        </section>
-                      </div>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="tileset-view-action"
-                    onClick={viewCurrentSelection}
-                  >
-                    View Selected
-                  </button>
-                </>
-              ) : (
-                <>
-                  <label className="tileset-catalog-search">
-                    <span>Search</span>
-                    <input
-                      type="search"
-                      value={catalogQuery}
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                      placeholder="piece, read, status..."
-                    />
-                  </label>
-                  <label className="tileset-catalog-zoom">
-                    <span>Zoom</span>
-                    <input
-                      type="range"
-                      min="0.75"
-                      max="2"
-                      step="0.05"
-                      value={zoom}
-                      onChange={(event) => setZoom(Number(event.target.value))}
-                    />
-                  </label>
-                  <p className="tileset-catalog-note">Select a unit card to place it in the shared lab board.</p>
-                </>
-              )}
+              {category === 'units' ? <CatalogControls type={unitsCatalogType} /> : <CatalogControls type={tilesCatalogType} />}
             </div>
           </section>
         </aside>
@@ -3067,32 +2013,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               }}
             >
               <div className={`tileset-view-board-content is-${viewVisualKind}`}>
-                {viewKind === 'board' && boardMode === 'concept' ? (
-                  <div
-                    className="tileset-concept-board-zoom"
-                    style={{ '--board-zoom': viewZoom, '--board-pan-x': `${viewPan.x}px`, '--board-pan-y': `${viewPan.y}px` } as CSSProperties}
-                  >
-                    <ConceptBoardReconstruction mode={showBefore ? 'before' : 'after'} />
-                  </div>
-                ) : (
-                  <StudioEditableBoard
-                    cols={editableGrid.columns}
-                    rows={editableGrid.rows}
-                    cells={boardCells}
-                    units={boardUnits}
-                    resolveAsset={resolveStudioAsset}
-                    resolveUnit={resolveUnitAsset}
-                    tool={tool}
-                    selectedCell={selectedCell}
-                    showFootprint={showFootprint}
-                    boardZoom={viewZoom}
-                    boardPan={viewPan}
-                    animationFrame={animationFrame}
-                    onPaint={paintCell}
-                    onErase={eraseCell}
-                    onSelect={selectBoardCell}
-                  />
-                )}
+                <StudioEditableBoard
+                  cols={editableGrid.columns}
+                  rows={editableGrid.rows}
+                  cells={boardCells}
+                  units={boardUnits}
+                  resolveAsset={resolveStudioAsset}
+                  resolveUnit={resolveUnitAsset}
+                  tool={tool}
+                  selectedCell={selectedCell}
+                  showFootprint={showFootprint}
+                  boardZoom={viewZoom}
+                  boardPan={viewPan}
+                  animationFrame={animationFrame}
+                  onPaint={paintCell}
+                  onErase={eraseCell}
+                  onSelect={selectBoardCell}
+                />
               </div>
             </ViewPane>
             </section>
@@ -3129,8 +2066,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   Unit
                 </button>
               </span>
-                  {!(viewKind === 'board' && boardMode === 'concept') ? (
-                    <>
                       <div className="tileset-segmented-control tileset-tools" aria-label="Board tool">
                         <button type="button" className={tool === 'select' ? 'is-active' : ''} onClick={() => setTool('select')} title="Select tool — click a tile to highlight it (then fill its neighbors). Doesn't paint or erase.">
                           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 2 L3 13 L6 10 L8 14.6 L9.8 13.8 L7.8 9.4 L12.5 9.4 Z" fill="currentColor" /></svg>
@@ -3208,8 +2143,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                           </button>
                         </div>
                       )}
-                    </>
-                  ) : null}
 
                   {viewKind === 'board' ? (
                     <>
@@ -3220,45 +2153,22 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       </button>
                       {boardSectionOpen ? (
                         <>
-                          <div className="tileset-segmented-control" aria-label="Board source">
-                            <button type="button" className={boardMode === 'generated' ? 'is-active' : ''} onClick={() => setBoardMode('generated')} title="Show a procedurally generated, socket-legal board you can paint on.">
-                              Generated
+                          <div className="tileset-segmented-control" aria-label="Terrain scope">
+                            <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} title="Generate using only the current family's tiles.">
+                              Family
                             </button>
-                            <button type="button" className={boardMode === 'concept' ? 'is-active' : ''} onClick={() => setBoardMode('concept')} title="Show the fixed concept-art reference board (with before/after comparison).">
-                              Concept
+                            <button type="button" className={boardScope === 'mixed' ? 'is-active' : ''} onClick={() => setBoardScope('mixed')} title="Generate using all terrain families mixed together.">
+                              Mixed
                             </button>
                           </div>
-                          {boardMode === 'generated' ? (
-                            <>
-                              <div className="tileset-segmented-control" aria-label="Terrain scope">
-                                <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} title="Generate using only the current family's tiles.">
-                                  Family
-                                </button>
-                                <button type="button" className={boardScope === 'mixed' ? 'is-active' : ''} onClick={() => setBoardScope('mixed')} title="Generate using all terrain families mixed together.">
-                                  Mixed
-                                </button>
-                              </div>
-                              <div className="tileset-button-row">
-                                <button type="button" onClick={() => setBoardSeed(Math.floor(Math.random() * 999999) + 1)} title="Generate a fresh random board (new seed).">
-                                  New random
-                                </button>
-                                <button type="button" onClick={() => setBoardSize((size) => (size === 'small' ? 'wide' : 'small'))} title="Toggle board size (8×6 ↔ 10×7).">
-                                  {boardSize === 'small' ? '8 × 6' : '10 × 7'}
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              className={`tileset-toggle ${showBefore ? 'is-on' : ''}`}
-                              aria-pressed={showBefore}
-                              onClick={() => setShowBefore((value) => !value)}
-                              title="Toggle the concept board before/after view."
-                            >
-                              <span>Before / after</span>
-                              <span className="tileset-toggle-pill" aria-hidden="true" />
+                          <div className="tileset-button-row">
+                            <button type="button" onClick={() => setBoardSeed(Math.floor(Math.random() * 999999) + 1)} title="Generate a fresh random board (new seed).">
+                              New random
                             </button>
-                          )}
+                            <button type="button" onClick={() => setBoardSize((size) => (size === 'small' ? 'wide' : 'small'))} title="Toggle board size (8×6 ↔ 10×7).">
+                              {boardSize === 'small' ? '8 × 6' : '10 × 7'}
+                            </button>
+                          </div>
                         </>
                       ) : null}
                     </>
@@ -3402,497 +2312,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             </aside>
           </>
         )}
-      </section>
-    </main>
-  );
-}
-
-export function TilesetCandidateReview(): ReactElement {
-  const animationFrame = useAnimationFrameIndex();
-  const queueItems = useMemo(
-    (): ReviewQueueItem[] => {
-      const candidateItems: ReviewQueueItem[] = candidateBatches.flatMap((batch) =>
-        batch.assets.map((asset, assetIndex) => ({
-          type: 'candidate' as const,
-          id: asset.id,
-          asset,
-          assetIndex,
-          batch,
-          family: studioFamilyById(batch.familyId),
-        })),
-      );
-      const transitionWorkItems: ReviewQueueItem[] = transitionPairs.flatMap((pair) =>
-        transitionSlotsForPair(pair, transitionAssets)
-          .filter((slot) => slot.assets.length === 0)
-          .map((slot) => ({
-            type: 'transition-work' as const,
-            id: `transition-work-${pair.id}-${slot.code}`,
-            pair,
-            slot,
-            family: studioFamilyById(pair.terrains[0]),
-          })),
-      );
-      return [...candidateItems, ...transitionWorkItems];
-    },
-    [],
-  );
-  const [selectedQueueId, setSelectedQueueId] = useState(queueItems[0]?.id ?? '');
-  const [decisions, setDecisions] = useState<Record<string, CandidateReviewDecision>>(() => {
-    try {
-      const saved = window.localStorage.getItem(CANDIDATE_REVIEW_KEY);
-      return saved ? JSON.parse(saved) as Record<string, CandidateReviewDecision> : {};
-    } catch {
-      return {};
-    }
-  });
-  const [reviewStage, setReviewStage] = useState<CandidateReviewStage>('tile');
-  const [reviewBoardZoom, setReviewBoardZoom] = useState(0.78);
-  const [reviewBoardPan, setReviewBoardPan] = useState({ x: 0, y: 0 });
-  const reviewBoardDragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; assetId?: string } | null>(null);
-  const reviewBoardDidDragRef = useRef(false);
-  useEffect(() => {
-    const shell = document.querySelector('.shell');
-    shell?.classList.add('tileset-studio-active');
-    return () => shell?.classList.remove('tileset-studio-active');
-  }, []);
-
-  if (queueItems.length === 0) {
-    return (
-      <main className="tileset-studio-page tileset-candidate-page">
-        <header className="tileset-studio-header">
-          <div className="tileset-studio-brand">
-            <div className="tileset-studio-product">
-              <strong>Chess Tactics</strong>
-              <span>Tactical chess, infinite possibilities.</span>
-            </div>
-            <div className="tileset-studio-titleblock">
-              <p className="tileset-studio-kicker">Review Queue</p>
-              <h1>Queue Clear</h1>
-              <p className="tileset-studio-subtitle">All reviewed assets have been promoted into the catalog.</p>
-            </div>
-          </div>
-          <nav className="tileset-studio-actions" aria-label="Candidate review navigation">
-            <a href="/tileset-studio">Catalog</a>
-            <a href="/settings">Settings</a>
-          </nav>
-        </header>
-        <section className="tileset-empty-review" aria-label="Empty review queue">
-          <h2>No queued assets</h2>
-          <p>The approved refresh tiles are now part of the accepted tileset catalog.</p>
-          <a href="/tileset-studio">Open Tileset Studio</a>
-        </section>
-      </main>
-    );
-  }
-
-  const selectedQueueItem = queueItems.find((item) => item.id === selectedQueueId) ?? queueItems[0];
-  const selectedAsset = selectedQueueItem.type === 'candidate' ? selectedQueueItem.asset : undefined;
-  const selectedWorkSlot = selectedQueueItem.type === 'transition-work' ? selectedQueueItem.slot : undefined;
-  const selectedPair = selectedQueueItem.type === 'transition-work' ? selectedQueueItem.pair : undefined;
-  const family = selectedQueueItem.family;
-  const reviewTitle = selectedAsset?.label ?? `Missing ${selectedPair?.label ?? 'Transition'} ${selectedWorkSlot?.label ?? ''}`;
-  const reviewSubtitle =
-    selectedQueueItem.type === 'candidate'
-      ? selectedQueueItem.batch.label
-      : `${selectedPair?.label ?? 'Transition'} work order · mask ${selectedWorkSlot?.code ?? ''}`;
-  const reviewDescription =
-    selectedQueueItem.type === 'candidate'
-      ? selectedQueueItem.asset.notes
-      : 'This socket contract is required by the transition system but has no production tile assigned yet.';
-  const acceptedAssets = family.assets.filter((asset) => asset.kind === 'tile');
-  const selectedDecision = decisions[selectedQueueItem.id] ?? 'pending';
-  const pendingCount = queueItems.filter((item) => (decisions[item.id] ?? 'pending') === 'pending').length;
-  const reviewedCount = queueItems.length - pendingCount;
-  const boardProofAssets =
-    selectedQueueItem.type === 'candidate'
-      ? [selectedQueueItem.asset]
-      : studioFamilies
-          .flatMap((item) => item.assets)
-          .filter((asset) => asset.kind === 'tile')
-          .concat(transitionAssets);
-  const candidateBoard = useMemo(
-    () => {
-      const candidateFamilyAssets: Record<StudioFamilyId, readonly StudioAsset[]> = {
-        ...studioFamilyAssets,
-      };
-      return (
-      generateSocketBoard({
-        assets: boardProofAssets,
-        seed: 7103,
-        columns: 7,
-        rows: 5,
-        familyAssets: candidateFamilyAssets,
-      })
-      );
-    },
-    [boardProofAssets],
-  );
-
-  const setDecision = (candidateId: string, decision: CandidateReviewDecision) => {
-    setDecisions((current) => {
-      const next = { ...current };
-      if (decision === 'pending') {
-        delete next[candidateId];
-      } else {
-        next[candidateId] = decision;
-      }
-      try {
-        window.localStorage.setItem(CANDIDATE_REVIEW_KEY, JSON.stringify(next));
-      } catch {
-        // Local storage is a convenience for iteration, not critical app state.
-      }
-      return next;
-    });
-  };
-
-  const selectedIndex = queueItems.findIndex((item) => item.id === selectedQueueItem.id);
-  const goToOffset = (offset: number) => {
-    const nextIndex = Math.min(queueItems.length - 1, Math.max(0, selectedIndex + offset));
-    setSelectedQueueId(queueItems[nextIndex].id);
-  };
-
-  const startReviewBoardPan = (event: PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const tileElement = (event.target as HTMLElement).closest<HTMLElement>('.tileset-generated-board-tile');
-    reviewBoardDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: reviewBoardPan.x,
-      originY: reviewBoardPan.y,
-      assetId: tileElement?.dataset.assetId,
-    };
-    reviewBoardDidDragRef.current = false;
-  };
-
-  const moveReviewBoardPan = (event: PointerEvent<HTMLDivElement>) => {
-    const drag = reviewBoardDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
-      reviewBoardDidDragRef.current = true;
-    }
-    setReviewBoardPan({
-      x: drag.originX + event.clientX - drag.startX,
-      y: drag.originY + event.clientY - drag.startY,
-    });
-  };
-
-  const endReviewBoardPan = (event: PointerEvent<HTMLDivElement>) => {
-    const drag = reviewBoardDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    reviewBoardDragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    if (!reviewBoardDidDragRef.current && drag.assetId) {
-      const queueItem = queueItems.find((item) => item.type === 'candidate' && item.asset.id === drag.assetId);
-      if (queueItem) setSelectedQueueId(queueItem.id);
-    }
-  };
-
-  const zoomReviewBoardWithWheel = (event: WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const direction = event.deltaY < 0 ? 1 : -1;
-    setReviewBoardZoom((value) => clamp(Number((value + direction * 0.05).toFixed(2)), 0.55, 1.35));
-  };
-
-  return (
-    <main className="tileset-studio-page tileset-candidate-page">
-      <header className="tileset-studio-header">
-        <div className="tileset-studio-brand">
-          <div className="tileset-studio-product">
-            <strong>Chess Tactics</strong>
-            <span>Tactical chess, infinite possibilities.</span>
-          </div>
-          <div className="tileset-studio-titleblock">
-            <p className="tileset-studio-kicker">Review Queue</p>
-            <h1>{reviewTitle}</h1>
-            <p className="tileset-studio-subtitle">{pendingCount} pending · {reviewedCount} reviewed · {queueItems.length} total</p>
-          </div>
-        </div>
-        <nav className="tileset-studio-actions" aria-label="Candidate review navigation">
-          <a href="/tileset-studio">Catalog</a>
-          <a href="/settings">Settings</a>
-        </nav>
-      </header>
-
-      <section className="tileset-candidate-shell" aria-label="Candidate review workbench">
-        <aside className="tileset-studio-rail tileset-review-queue" aria-label="Candidate queue">
-          <div className="tileset-studio-rail-head">
-            <span>Queue</span>
-          </div>
-          {queueItems.map((item, index) => {
-            const decision = decisions[item.id] ?? 'pending';
-            return (
-            <button
-              key={item.id}
-              type="button"
-              className={item.id === selectedQueueItem.id ? `is-active is-${decision}` : `is-${decision}`}
-              onClick={() => setSelectedQueueId(item.id)}
-              data-review-decision={decision}
-            >
-              {item.type === 'candidate' ? (
-                <img src={assetFrameSrc(item.asset, animationFrame)} alt="" draggable={false} />
-              ) : (
-                <span className="tileset-queue-mask">{item.slot.code}</span>
-              )}
-              <span className="tileset-family-copy">
-                <strong>{index + 1}. {item.type === 'candidate' ? item.asset.label : `${item.pair.label} ${item.slot.label}`}</strong>
-                <span>{item.type === 'candidate' ? terrainLabels[item.batch.familyId] : 'transition work'} · {decision}</span>
-              </span>
-            </button>
-            );
-          })}
-        </aside>
-
-        <section className="tileset-candidate-main">
-          <nav className="tileset-review-stage-tabs" aria-label="Review stage">
-            {[
-              ['tile', 'Tile'],
-              ['board', 'Board'],
-              ['compare', 'Compare'],
-            ].map(([tab, label]) => (
-              <button
-                key={tab}
-                type="button"
-                className={reviewStage === tab ? 'is-active' : ''}
-                onClick={() => setReviewStage(tab as CandidateReviewStage)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-
-          {reviewStage === 'tile' ? (
-            <section className="tileset-review-focus" aria-label="Focused queue item">
-              <div className="tileset-review-stage">
-                {selectedAsset ? (
-                  <img src={assetFrameSrc(selectedAsset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" />
-                ) : selectedWorkSlot ? (
-                  <TransitionSlotPreview slot={selectedWorkSlot} showFootprint animationFrame={animationFrame} />
-                ) : null}
-              </div>
-              <div className="tileset-review-focus-copy">
-                <p className="tileset-studio-kicker">{reviewSubtitle}</p>
-                <h2>{reviewTitle}</h2>
-                <p>{reviewDescription}</p>
-                <dl>
-                  <InspectorRow label={selectedQueueItem.type === 'candidate' ? 'Family' : 'Pair'}>
-                    {selectedQueueItem.type === 'candidate' ? family.label : selectedPair?.label ?? 'Transition'}
-                  </InspectorRow>
-                  {selectedWorkSlot ? <InspectorRow label="Mask">{selectedWorkSlot.code}</InspectorRow> : null}
-                  <InspectorRow label="Queue Position">{`${selectedIndex + 1} of ${queueItems.length}`}</InspectorRow>
-                  <InspectorRow label="Decision">{selectedDecision}</InspectorRow>
-                  {selectedWorkSlot
-                    ? socketEdges.map((edge) => (
-                        <InspectorRow key={edge} label={`${edge[0].toUpperCase()}${edge.slice(1)}`}>
-                          {terrainLabels[selectedWorkSlot.sockets[edge]]}
-                        </InspectorRow>
-                      ))
-                    : null}
-                </dl>
-              </div>
-            </section>
-          ) : null}
-
-          {reviewStage === 'board' ? (
-            <section className="tileset-candidate-board" aria-label="Candidate board preview">
-              <div className="tileset-studio-panel-head">
-                <h3>Board Proof</h3>
-                <p className="tileset-generated-board-meta">
-                  focused item only · {candidateBoard.stats.illegalEdges === 0 ? 'legal sockets' : `${candidateBoard.stats.illegalEdges} illegal edges`}
-                  {candidateBoard.stats.missingPlacements > 0 ? ` · ${candidateBoard.stats.missingPlacements} missing art` : ''}
-                </p>
-              </div>
-              <div
-                className="tileset-studio-board-window"
-                onPointerDown={startReviewBoardPan}
-                onPointerMove={moveReviewBoardPan}
-                onPointerUp={endReviewBoardPan}
-                onPointerCancel={endReviewBoardPan}
-                onWheel={zoomReviewBoardWithWheel}
-              >
-                <StudioGeneratedBoard board={candidateBoard} showFootprint boardZoom={reviewBoardZoom} boardPan={reviewBoardPan} animationFrame={animationFrame} />
-              </div>
-            </section>
-          ) : null}
-
-          {reviewStage === 'compare' ? (
-            <section className="tileset-review-compare-stage" aria-label="Accepted family examples">
-              <div className="tileset-studio-panel-head">
-                <h3>Accepted {family.label}</h3>
-                <p className="tileset-generated-board-meta">current catalog examples for visual comparison</p>
-              </div>
-              <div className="tileset-review-accepted-grid">
-                {acceptedAssets.map((asset) => (
-                  <StudioTileCard
-                    key={asset.id}
-                    asset={asset}
-                    selected={false}
-                    showFootprint
-                    zoom={1}
-                    animationFrame={animationFrame}
-                    onSelect={() => undefined}
-                    onInspect={() => undefined}
-                    onWheel={(event) => event.preventDefault()}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </section>
-
-        <aside className="tileset-studio-inspector tileset-review-controls" aria-label="Candidate review controls">
-          <section className="tileset-inspector-section">
-            <h2>Review</h2>
-            <p>Mark this item, then move through the queue. Decisions are stored in this browser so I can read them back.</p>
-            <div className="tileset-review-decision" data-current-review-id={selectedQueueItem.id} data-current-review-decision={selectedDecision}>
-              <button type="button" className={selectedDecision === 'approved' ? 'is-active' : ''} onClick={() => setDecision(selectedQueueItem.id, 'approved')}>
-                {selectedQueueItem.type === 'candidate' ? 'Approve' : 'Queued'}
-              </button>
-              <button type="button" className={selectedDecision === 'revise' ? 'is-active' : ''} onClick={() => setDecision(selectedQueueItem.id, 'revise')}>
-                {selectedQueueItem.type === 'candidate' ? 'Revise' : 'In Progress'}
-              </button>
-              <button type="button" className={selectedDecision === 'rejected' ? 'is-active' : ''} onClick={() => setDecision(selectedQueueItem.id, 'rejected')}>
-                {selectedQueueItem.type === 'candidate' ? 'Reject' : 'Blocked'}
-              </button>
-              <button type="button" onClick={() => setDecision(selectedQueueItem.id, 'pending')}>
-                Clear
-              </button>
-            </div>
-            <div className="tileset-review-nav">
-              <button type="button" onClick={() => goToOffset(-1)} disabled={selectedIndex === 0}>Previous</button>
-              <button type="button" onClick={() => goToOffset(1)} disabled={selectedIndex === queueItems.length - 1}>Next</button>
-            </div>
-            <dl>
-              <InspectorRow label="Pending">{String(pendingCount)}</InspectorRow>
-              <InspectorRow label="Reviewed">{String(reviewedCount)}</InspectorRow>
-              <InspectorRow label={selectedQueueItem.type === 'candidate' ? 'Batch' : 'Work Type'}>
-                {selectedQueueItem.type === 'candidate' ? selectedQueueItem.batch.label : 'Missing transition art'}
-              </InspectorRow>
-            </dl>
-            <div className="tileset-control-divider" />
-            <h3>Board</h3>
-            <div className="tileset-control-stack">
-              <button type="button" onClick={() => setReviewBoardPan({ x: 0, y: 0 })}>
-                Center Board
-              </button>
-              <label>
-                Board Zoom
-                <input
-                  type="range"
-                  min="0.55"
-                  max="1.35"
-                  step="0.05"
-                  value={reviewBoardZoom}
-                  onChange={(event) => setReviewBoardZoom(Number(event.target.value))}
-                />
-              </label>
-            </div>
-          </section>
-
-        </aside>
-      </section>
-    </main>
-  );
-}
-
-export function TilePreview(): ReactElement {
-  const animationFrame = useAnimationFrameIndex();
-
-  return (
-    <main className="tile-preview-page">
-      <section className="tile-preview-hero">
-        <div>
-          <p className="tile-preview-kicker">PixelLab flat board kit</p>
-          <h1>Generated Tile Preview</h1>
-        </div>
-        <nav className="tile-preview-nav" aria-label="Preview navigation">
-          <a href="/skirmish">Skirmish</a>
-          <a href="/design">Design</a>
-        </nav>
-      </section>
-
-      <section className="tile-preview-layout">
-        <div className="tile-preview-board-shell">
-          <PreviewBoard />
-        </div>
-
-        <aside className="tile-preview-side">
-          <div className="tile-preview-reference">
-            <img src={tileUrl(kit.grassA)} alt="" draggable={false} />
-            <div>
-              <h2>Static Board Kit</h2>
-              <p>These use top-down isometric tiles with zero depth, loaded directly from PixelLab.</p>
-            </div>
-          </div>
-          <div className="tile-preview-run-list" aria-label="PixelLab run ids">
-            {runLinks.map((run) => (
-              <code key={run.id}>{run.label}: {run.id}</code>
-            ))}
-          </div>
-          <AnimatedTerrainStrip animationFrame={animationFrame} />
-          <div className="tile-preview-strip" aria-label="Candidate tiles">
-            {candidates.map((candidate) => (
-              <figure key={`${candidate.run}-${candidate.index}`}>
-                <img src={tileUrl(candidate)} alt="" draggable={false} />
-                <figcaption>{candidate.label}</figcaption>
-              </figure>
-            ))}
-          </div>
-        </aside>
-      </section>
-    </main>
-  );
-}
-
-export function TileReview(): ReactElement {
-  const [reviewMode, setReviewMode] = useState<'before' | 'after'>('after');
-
-  useEffect(() => {
-    const shell = document.querySelector('.shell');
-    shell?.classList.add('tile-review-active');
-    return () => shell?.classList.remove('tile-review-active');
-  }, []);
-
-  return (
-    <main className="tile-review-page">
-      <section className="tile-review-stage" aria-label="Tile art review">
-        <div className="tile-review-reference-frame">
-          <img src="/assets/art/skirmish-style-target.png" alt="" draggable={false} />
-        </div>
-        <div className="tile-review-board-shell" aria-label="Concept-matched board plane">
-          <ConceptBoardReconstruction mode={reviewMode} />
-        </div>
-        <aside className="tile-review-aside">
-          <h1>Target</h1>
-          <p>Canonical tile edge: {TILE_EDGE_ANGLE_DEGREES.toFixed(1)} degrees. Every generated tile must fit this template.</p>
-          <div className="tile-review-toggle" aria-label="Review mode">
-            <button type="button" className={reviewMode === 'before' ? 'is-active' : ''} onClick={() => setReviewMode('before')}>
-              Before
-            </button>
-            <button type="button" className={reviewMode === 'after' ? 'is-active' : ''} onClick={() => setReviewMode('after')}>
-              After
-            </button>
-          </div>
-          <ul>
-            <li>Geometry: locked</li>
-            <li>Stage: art quality pass 1</li>
-            <li>Before: accepted board kit pass</li>
-            <li>After: tuned terrain palette and detail</li>
-            <li>Question: does it still hold while feeling less placeholder?</li>
-            <li>No crop junk, no pieces</li>
-          </ul>
-          <div className="tile-template-guides" aria-label="Canonical tile templates">
-            <img src="/assets/tiles/canonical-template/guide-grass-tile.png" alt="" draggable={false} />
-            <img src="/assets/tiles/canonical-template/guide-stone-tile.png" alt="" draggable={false} />
-            <img src="/assets/tiles/canonical-template/guide-water-tile.png" alt="" draggable={false} />
-          </div>
-          <div className="tile-template-guides is-normalized" aria-label="Normalized PixelLab samples">
-            <img src={trueIsoTileAsset('grass-clean-a.png')} alt="" draggable={false} />
-            <img src={trueIsoTileAsset('stone-clean-a.png')} alt="" draggable={false} />
-            <img src={trueIsoTileAsset('water-clean-a.png')} alt="" draggable={false} />
-          </div>
-        </aside>
       </section>
     </main>
   );

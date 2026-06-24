@@ -1,7 +1,12 @@
-import type { CSSProperties, ReactNode } from 'react';
-import { TILE_TEMPLATE } from '../art/tileTemplate';
+import type { ReactNode } from 'react';
+import { boardLabCellPosition } from './boardProjection';
+import { TileGrid } from './TileGrid';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
+
+// Re-export the projection so existing importers (SkirmishBoard, LevelPreviewBoard,
+// TilePreview) keep working; the math itself now lives in one place: boardProjection.
+export { boardLabCellPosition, boardLabMetrics } from './boardProjection';
 
 export interface BoardLabBoardOverlayContext<TAsset extends TileSocketAsset> {
   cell: SocketBoardCell<TAsset>;
@@ -21,30 +26,7 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   children?: ReactNode;
 }
 
-export function boardLabCellPosition(cell: { x: number; y: number }): { left: number; top: number; zIndex: number } {
-  return {
-    left: (cell.x - cell.y) * TILE_TEMPLATE.stepX,
-    top: (cell.x + cell.y) * TILE_TEMPLATE.stepY,
-    zIndex: cell.x + cell.y,
-  };
-}
-
-function boardMetrics(cells: readonly { x: number; y: number }[]) {
-  const projectedPoints = cells.map((cell) => boardLabCellPosition(cell));
-  const minLeft = Math.min(...projectedPoints.map((point) => point.left - 48));
-  const maxLeft = Math.max(...projectedPoints.map((point) => point.left + 48));
-  // -69: tiles are anchored at their contact diamond (equator), and the 180px frame rises
-  // 69px above it for 3D protrusion (standing grass, relief). Include that in the bounds.
-  const minTop = Math.min(...projectedPoints.map((point) => point.top - 69));
-  const maxTop = Math.max(...projectedPoints.map((point) => point.top + 140));
-  const boardWidth = maxLeft - minLeft;
-  const boardHeight = maxTop - minTop;
-  return {
-    originLeft: -minLeft - boardWidth / 2,
-    originTop: -minTop - boardHeight / 2,
-  };
-}
-
+// Adapter: a generated socket board -> the shared TileGrid render core.
 export function BoardLabBoard<TAsset extends TileSocketAsset>({
   board,
   assetFrameSrc,
@@ -56,52 +38,46 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   renderCellOverlay,
   children,
 }: BoardLabBoardProps<TAsset>) {
-  const cells = board.cells;
-  const metrics = boardMetrics(cells.length ? cells : [{ x: 0, y: 0 }]);
+  const sourceCells = board.cells;
+  const byKey = new Map<string, SocketBoardCell<TAsset>>(
+    sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x}-${cell.y}`, cell]),
+  );
+  const cells = sourceCells.map((cell) => ({
+    key: `${cell.x}-${cell.y}`,
+    x: cell.x,
+    y: cell.y,
+    className: cell.missing ? 'is-missing' : '',
+    data: {
+      'data-asset-id': cell.asset?.id,
+      'data-missing': cell.missing?.label,
+      'data-board-x': cell.x,
+      'data-board-y': cell.y,
+    },
+    children: cell.asset ? (
+      <img src={assetFrameSrc(cell.asset)} alt="" draggable={false} />
+    ) : (
+      <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
+    ),
+  }));
 
   return (
-    <div
-      className={`tileset-generated-board ${showFootprint ? 'has-footprint' : ''} ${className}`}
-      style={
-        {
-          '--board-zoom': boardZoom,
-          '--board-pan-x': `${boardPan.x}px`,
-          '--board-pan-y': `${boardPan.y}px`,
-          '--board-origin-left': `${metrics.originLeft}px`,
-          '--board-origin-top': `${metrics.originTop}px`,
-        } as CSSProperties
+    <TileGrid
+      cells={cells}
+      className={className}
+      ariaLabel={ariaLabel}
+      showFootprint={showFootprint}
+      boardZoom={boardZoom}
+      boardPan={boardPan}
+      renderCellOverlay={
+        renderCellOverlay
+          ? (cell, position) => {
+              const original = byKey.get(cell.key);
+              return original ? renderCellOverlay({ cell: original, left: position.left, top: position.top }) : null;
+            }
+          : undefined
       }
-      aria-label={ariaLabel}
     >
-      {cells.map((cell) => {
-        const { left, top, zIndex } = boardLabCellPosition(cell);
-        return (
-          <div
-            key={`${cell.x}-${cell.y}`}
-            className={`tileset-generated-board-tile ${cell.missing ? 'is-missing' : ''}`}
-            data-asset-id={cell.asset?.id}
-            data-missing={cell.missing?.label}
-            data-board-x={cell.x}
-            data-board-y={cell.y}
-            style={{ left, top, zIndex }}
-          >
-            {cell.asset ? <img src={assetFrameSrc(cell.asset)} alt="" draggable={false} /> : <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>}
-          </div>
-        );
-      })}
-      {renderCellOverlay ? cells.map((cell) => {
-        const { left, top, zIndex } = boardLabCellPosition(cell);
-        return (
-          <div
-            key={`overlay-${cell.x}-${cell.y}`}
-            className="tileset-generated-board-overlay-cell"
-            style={{ left, top, zIndex: zIndex + 10000 }}
-          >
-            {renderCellOverlay({ cell, left, top })}
-          </div>
-        );
-      }) : null}
       {children}
-    </div>
+    </TileGrid>
   );
 }
