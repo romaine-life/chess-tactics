@@ -2686,31 +2686,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         : `${family.label} · ${selectedAsset.role}`;
   const hasLabTiles = Object.keys(boardCells).length > 0;
   const hasLabUnits = Object.keys(boardUnits).length > 0;
-  const headerKicker = studioMode === 'catalog' ? (category === 'assets' ? 'UI Kit' : category === 'units' ? 'Unit Catalog' : 'Tile Catalog') : (category === 'assets' ? 'Asset lab' : 'Lab');
-  const headerTitle =
+  // The breadcrumb is the only "where am I" signal — it replaces the old
+  // titleblock so the topbar stays slim and nothing below it shifts.
+  const crumbTrail =
     studioMode === 'catalog'
-      ? category === 'assets'
-        ? 'Asset Library'
-        : category === 'units'
-          ? 'Units'
-          : selectedFamilyLabel
+      ? ['Catalog', category === 'assets' ? 'Assets' : category === 'units' ? 'Units' : 'Tiles']
       : category === 'assets'
-        ? (selectedAssetName || 'Asset Library')
-        : 'Lab';
-  const headerSubtitle =
-    studioMode === 'catalog'
-      ? category === 'assets'
-        ? 'Browse the verified UI kit — glyphs and 9-slice frames.'
-        : category === 'units'
-          ? 'Browse chess-piece units.'
-          : activeFamilies.map((item) => item.purpose).join(' · ')
-      : category === 'assets'
-        ? 'Preview the selected asset on backdrops.'
-        : labMode === 'board'
-        ? 'Edit and test tiles and units on one shared board surface.'
-        : labMode === 'unit'
-          ? 'Inspect the selected unit in board context.'
-          : 'Inspect the selected tile in board context.';
+        ? ['Lab', 'Asset', selectedAssetName || '—']
+        : ['Lab', 'Board', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
   const openCatalogMode = (): void => {
     skipNextRouteWriteRef.current = true;
     if (tileFilter === 'board') setTileFilter('base');
@@ -2771,15 +2754,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     <main className="tileset-studio-page">
       <header className="tileset-studio-header">
         <div className="tileset-studio-brand">
-          <div className="tileset-studio-product">
-            <strong>Chess Tactics</strong>
-            <span>Tactical chess, infinite possibilities.</span>
-          </div>
-          <div className="tileset-studio-titleblock">
-            <p className="tileset-studio-kicker">{headerKicker}</p>
-            <h1>{headerTitle}</h1>
-            <p className="tileset-studio-subtitle">{headerSubtitle}</p>
-          </div>
+          <strong className="tileset-studio-wordmark">Studio</strong>
+          <nav className="tileset-crumb" aria-label="Location">
+            {crumbTrail.map((part, index) => (
+              <span key={index} className={index === crumbTrail.length - 1 ? 'is-current' : ''}>{part}</span>
+            ))}
+          </nav>
         </div>
         <nav className="tileset-studio-actions" aria-label="Tileset studio navigation">
           <span className="tileset-mode-tabs" aria-label="Workspace mode">
@@ -3058,48 +3038,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </aside>
         </>
         ) : category === 'assets' ? (
-          <AssetLab name={selectedAssetName} onBack={() => setStudioMode('catalog')} />
+          <AssetLab name={selectedAssetName} onPickBoard={() => { setCategory('tiles'); openBoardLab(); }} />
         ) : (
-          <section className="tileset-view-mode" aria-label="Focused tileset view">
-            <div className="tileset-view-header">
-              <button type="button" onClick={() => setStudioMode('catalog')}>
-                Back to Catalog
-              </button>
-              <div>
-                <p className="tileset-studio-kicker">{labMode === 'unit' ? 'Unit' : viewKind === 'board' ? 'Board' : viewKind === 'transition' && transitionViewMode !== 'tile' ? 'Transition Showcase' : 'Tile'}</p>
-                <h2>{viewTitle}</h2>
-                <p>{viewSubtitle}</p>
-              </div>
-              <span className="tileset-mode-tabs tileset-context-tabs tileset-lab-tabs" aria-label="Lab view">
-                <button
-                  type="button"
-                  className={labMode === 'board' ? 'is-active' : ''}
-                  onClick={openBoardLab}
-                  title="Inspect and edit the loaded board."
-                >
-                  Board
-                </button>
-                <button
-                  type="button"
-                  className={labMode === 'tile' ? 'is-active' : ''}
-                  onClick={openTileLab}
-                  disabled={!hasLabTiles}
-                  title={hasLabTiles ? 'Inspect the selected tile on the loaded board.' : 'Place or select a tile first.'}
-                >
-                  Tile
-                </button>
-                <button
-                  type="button"
-                  className={labMode === 'unit' ? 'is-active' : ''}
-                  onClick={openUnitLab}
-                  disabled={!hasLabUnits}
-                  title={hasLabUnits ? 'Inspect the selected unit on the loaded board.' : 'Place or select a unit first.'}
-                >
-                  Unit
-                </button>
-              </span>
-            </div>
-
+          <>
             {!viewHasTarget ? (
               <section className="tileset-view-empty" aria-label="Empty focused view">
                 <h2>Choose an element from the catalog to inspect</h2>
@@ -3109,7 +3050,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                 </button>
               </section>
             ) : (
-              <>
             <ViewPane
               kind={viewVisualKind}
               ariaLabel={`${viewTitle} visual inspection`}
@@ -3153,11 +3093,24 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                 )}
               </div>
             </ViewPane>
+            )}
 
             <aside className="tileset-view-controls" aria-label="View controls">
               <section className="tileset-inspector-section">
                 <h2>Controls</h2>
                 <div className="tileset-control-stack">
+                  <div className="tileset-segmented-control" aria-label="Lab surface">
+                    <button type="button" className="is-active" title="Work on the shared board.">Board</button>
+                    <button type="button" onClick={() => setCategory('assets')} title="Preview a UI-kit asset.">Asset</button>
+                  </div>
+                  <div className="tileset-segmented-control" aria-label="Board focus">
+                    <button type="button" className={labMode === 'board' ? 'is-active' : ''} onClick={openBoardLab} title="Inspect and edit the loaded board.">Board</button>
+                    <button type="button" className={labMode === 'tile' ? 'is-active' : ''} onClick={openTileLab} disabled={!hasLabTiles} title={hasLabTiles ? 'Inspect the selected tile on the loaded board.' : 'Place or select a tile first.'}>Tile</button>
+                    <button type="button" className={labMode === 'unit' ? 'is-active' : ''} onClick={openUnitLab} disabled={!hasLabUnits} title={hasLabUnits ? 'Inspect the selected unit on the loaded board.' : 'Place or select a unit first.'}>Unit</button>
+                  </div>
+                  {!viewHasTarget ? <p className="tileset-control-footnote">Pick something in Catalog to inspect it here.</p> : null}
+                  {viewHasTarget ? (
+                  <>
                   {!(viewKind === 'board' && boardMode === 'concept') ? (
                     <>
                       <div className="tileset-segmented-control tileset-tools" aria-label="Board tool">
@@ -3380,9 +3333,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                     </>
                   ) : null}
                   <p className="tileset-control-footnote">Board edits are temporary — not saved.</p>
+                  </>
+                  ) : null}
                 </div>
               </section>
 
+              {viewHasTarget ? (
               <section className="tileset-inspector-section" aria-label="Selected item details">
                 <h2>Details</h2>
                 {labMode === 'unit' ? (
@@ -3428,10 +3384,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                 )}
                 <p>{labMode === 'unit' ? unitBrushAsset.read : viewTransitionSlot ? viewTransitionAsset?.notes ?? 'This transition slot is required but has no production tile assigned yet.' : selectedAsset.notes}</p>
               </section>
+              ) : null}
             </aside>
-              </>
-            )}
-          </section>
+          </>
         )}
       </section>
     </main>
