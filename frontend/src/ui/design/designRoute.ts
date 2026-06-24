@@ -15,6 +15,7 @@ export interface DesignRoute {
   assetId?: string;
   widgetFamily?: string;
   widgetSlug?: string;
+  kitAsset?: string;
   prototype?: PrototypeKind;
   nineSliceCategory?: string;
 }
@@ -52,6 +53,8 @@ export function parseDesignRoute(pathname: string): DesignRoute {
 
   if (path === '/design/catalog') return { view: 'catalog', catalogMode: 'home' };
   if (path === '/design/catalog/kit') return { view: 'catalog', catalogMode: 'kit' };
+  const kitAsset = path.match(/^\/design\/catalog\/kit\/(.+)$/);
+  if (kitAsset) return { view: 'catalog', catalogMode: 'kit', kitAsset: decodeURIComponent(kitAsset[1]) };
   if (path === '/design/catalog/glossary') return { view: 'catalog', catalogMode: 'glossary', glossaryTerm: 'asset' };
 
   const glossaryTerm = path.match(/^\/design\/catalog\/glossary\/(.+)$/);

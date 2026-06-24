@@ -115,9 +115,11 @@ export function DesignCatalog({ route, path, onNavigate }: { route: DesignRoute;
     intro = 'A 9-slice category — its contract is the slots and states every 9-slice of this type must expose.';
     content = <NineSliceCategoryView categoryId={route.nineSliceCategory} onNavigate={onNavigate} />;
   } else if (route.catalogMode === 'kit') {
-    title = 'Kit';
-    intro = 'The shared UI kit — generated glyphs and 9-slice frames, each verified by the asset gate (magenta · binary-alpha · edge). Re-run kit-manifest.mjs to refresh.';
-    content = <KitView />;
+    title = route.kitAsset ? `Kit · ${route.kitAsset}` : 'Kit';
+    intro = route.kitAsset
+      ? 'A single kit asset, with its gate verdict and metrics.'
+      : 'The shared UI kit — generated glyphs and 9-slice frames, each verified by the asset gate (magenta · binary-alpha · edge). Re-run kit-manifest.mjs to refresh.';
+    content = <KitView selected={route.kitAsset} onNavigate={onNavigate} />;
   } else if (route.catalogMode === 'browser' && route.assetType) {
     title = `${assetTypeLabel(route.assetType)} Assets`;
     content = <CatalogBrowser assetType={route.assetType} assetId={route.assetId} />;
