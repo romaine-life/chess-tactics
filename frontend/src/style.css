@@ -206,6 +206,14 @@
   --iso-tile-step-x: 48px;
   --iso-tile-step-y: 27.713px;
   --iso-tile-canvas-height: 140px;
+  /* div-local Y of the tile's top-face centre (equator) inside the 180px frame.
+     This is the widest row of the sprite PNG; the frame's translate anchors it to
+     the cell. Every overlay diamond (grid, hit, footprint, selection ring) seats on
+     this same plane, so they line up with placed tiles' top faces. Change in ONE
+     place if the sprite's equator row ever moves. */
+  --iso-tile-equator: 69px;
+  /* Top edge of a top-face diamond: the equator minus half the diamond's height. */
+  --iso-tile-surface-top: calc(var(--iso-tile-equator) - var(--iso-tile-height) / 2);
 
   /* Grass-island tile field */
   --grass-a: #84ab61;
@@ -11362,10 +11370,10 @@ button.tileset-relationship-cell {
   position: absolute;
   width: 96px;
   height: 180px;
-  /* 180px frame: ~42px of headroom above the contact diamond (equator at y69) for 3D
-     protrusion (standing grass, relief). Anchor the equator to the cell so tiles still
-     tessellate and units seat exactly as before. */
-  transform: translate(-48px, -69px);
+  /* 180px frame: headroom above the contact diamond (equator) for 3D protrusion
+     (standing grass, relief). Anchor the equator to the cell so tiles tessellate and
+     units seat exactly. The equator offset is shared with the overlay diamonds. */
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-equator)));
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -11419,7 +11427,7 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   background: rgba(111, 210, 255, 0.09);
@@ -11442,7 +11450,7 @@ button.tileset-relationship-cell {
   left: 0;
   /* Same top-surface plane as the grid diamond, so the footprint guide overlays
      the tile's top face instead of floating above it. */
-  top: calc(var(--iso-tile-height) / 2);
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11462,7 +11470,7 @@ button.tileset-relationship-cell {
   left: 0;
   /* Align the clickable diamond with the tile's top-surface plane (matching the
      grid and footprint) so a click lands on the tile you see, not ~28px above it. */
-  top: calc(var(--iso-tile-height) / 2);
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11474,10 +11482,9 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  /* Sit the grid diamond on the tile's top-surface plane (where units stand,
-     top: var(--iso-tile-height)) rather than the top of the 180px protrusion
-     frame, so empty cells line up with the surface of placed tiles. */
-  top: calc(var(--iso-tile-height) / 2);
+  /* Centre the grid diamond on the tile equator (see --iso-tile-surface-top), so
+     an empty cell's outline coincides with the top face of a placed tile. */
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11495,7 +11502,7 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: calc(var(--iso-tile-height) / 2);
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11567,7 +11574,7 @@ button.tileset-relationship-cell {
   left: 0;
   /* Sit on the tile's top-surface plane, matching the grid/footprint/hit diamond,
      instead of the top of the 180px protrusion frame (which floated it ~28px high). */
-  top: calc(var(--iso-tile-height) / 2);
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
