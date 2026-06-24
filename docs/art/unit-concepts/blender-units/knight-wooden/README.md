@@ -16,9 +16,8 @@ The unit-render convention is documented in
 encoded in the production rook's `render_versions.py` `DIRECTIONS` dict, which
 `pieces_claude.py` (the `candidate-claude` pieces) also uses verbatim:
 
-- This pass used the older board camera in the +X / −Y / +Z (NE) quadrant at
-  44.1° elevation. That camera is now **legacy**. New Blender unit renders should
-  follow `docs/blender-projection-contract.md` instead.
+- New renders use the true-isometric camera in the +X / −Y / +Z (NE) quadrant at
+  `35.264°` elevation, following `docs/blender-projection-contract.md`.
 - **South = object yaw 0 with the piece's FRONT pointing local −Y.** The fixed
   camera projects −Y to screen lower-left, so a correctly-aligned knight shows its
   muzzle lower-left in a 3/4 profile — matching `candidate-claude/south.png`.

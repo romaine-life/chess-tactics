@@ -7,8 +7,8 @@ This document records how Blender-rendered unit sprites are sized against the lo
 Units are calibrated against the canonical tile contract:
 
 - Tile canvas: `96x140px`
-- Top diamond: `96x54px`
-- Top-plane center: center of the diamond, currently rendered in Unit Studio at `--tile-anchor-x: 50%` and `--tile-anchor-y: 54px` on the 2x preview tile
+- Top diamond: `96x55.426px` true-isometric geometry (`30 deg` screen-space edge)
+- Top-plane center: center of the diamond, currently rendered in Unit Studio at `--tile-anchor-x: 50%` and `--tile-anchor-y: 55.426px` on the 2x preview tile
 - Source of truth: `frontend/src/art/tileTemplate.ts`
 
 The tile is the measuring stick. Unit scale should not be based on full sprite canvas bounds.
@@ -32,20 +32,20 @@ Asset:
 Measured south-render source:
 
 - Source canvas: `512x512px`
-- Alpha bounds: `x=88..423`, `y=8..482`
-- Contact/anchor row: `y=367`
-- Contact footprint row: `x=89..422`, width `334px`
-- Anchor: `x=49.9%`, `y=71.753%`
+- Alpha bounds: `x=138..373`, `y=58..448`
+- Contact/anchor point: world origin `(0, 0, 0)`, projected through the Blender camera
+- Contact footprint row: `x=138..373`, width `236px`
+- Anchor: `x=50.000%`, `y=74.629%`
 
 Runtime metadata:
 
 ```ts
-footprint: squareFootprint(512, 334)
-unitAnchorX: '49.9%'
-unitAnchorY: '71.753%'
+footprint: squareFootprint(512, 236)
+unitAnchorX: '50%'
+unitAnchorY: '74.629%'
 ```
 
-At `100%` unit scale, the game renders the source image so the measured `334px` contact footprint maps to the canonical equal-area square footprint.
+At `100%` unit scale, the game renders the source image so the measured `236px` contact footprint maps to the canonical equal-area square footprint. The anchor comes from `docs/art/unit-concepts/blender-units/rook-v4-calibrated/measure_rook_anchor.py`, using the same deterministic camera projection method as the knight. The base footprint was fitted in Blender with `docs/art/unit-concepts/blender-units/rook-v4-calibrated/fit_rook_base_to_tile.py`.
 
 ## Active Blender Knight
 

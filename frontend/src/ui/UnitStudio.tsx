@@ -1,253 +1,27 @@
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
-import { pieceSpritePath, type UnitPalette } from '../core/pieces';
+import { TILE_TOP_HEIGHT } from '../art/projectionContract';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
+import {
+  MISSING_DIRECTION_SPRITE,
+  activeUnitFamilies,
+  directionCompassCells,
+  familyLabels,
+  footprintSizeFromScale,
+  hasDirectionSprite,
+  renderSizeForTileScale,
+  rookDirectionLabel,
+  rookDirections,
+  UNIT_INSPECTION_TILE_SCALE,
+  unitAssets,
+  type Direction,
+  type Faction,
+  type PieceId,
+  type UnitAsset,
+  type UnitPlacementStyle,
+} from './unitCatalog';
 
-type Faction = UnitPalette;
-type PieceId = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king';
-type Direction = 'south' | 'south-east' | 'east' | 'north-east' | 'north' | 'north-west' | 'west' | 'south-west';
 type TileContextId = 'grass' | 'stone' | 'water';
-type FootprintShape = 'square' | 'circle';
-type UnitFootprint = {
-  shape: FootprintShape;
-  sourceCanvasPx: number;
-  sourceFootprintPx: number;
-};
-type UnitPlacementStyle = CSSProperties & {
-  '--tile-anchor-x': string;
-  '--tile-anchor-y': string;
-  '--unit-anchor-x': string;
-  '--unit-anchor-y': string;
-  '--unit-size': string;
-  '--unit-footprint-size': string;
-  '--stack-shift-y': string;
-};
-
-type UnitAsset = {
-  id: string;
-  family: PieceId;
-  label: string;
-  badge: string;
-  preview: string;
-  read: string;
-  status: string;
-  directions?: Direction[];
-  factionMode: 'fixed' | 'palette';
-  defaultScale: number;
-  footprint: UnitFootprint;
-  unitAnchorX?: string;
-  unitAnchorY?: string;
-  sprite: (faction: Faction, direction: Direction) => string;
-};
-
-const CANONICAL_CIRCLE_FOOTPRINT_PX = 96;
-const SQUARE_EQUAL_AREA_FACTOR = Math.sqrt(Math.PI) / 2;
-const canonicalFootprintSize = (shape: FootprintShape) =>
-  shape === 'square' ? Math.round(CANONICAL_CIRCLE_FOOTPRINT_PX * SQUARE_EQUAL_AREA_FACTOR) : CANONICAL_CIRCLE_FOOTPRINT_PX;
-const renderSizeFromFootprint = (unit: UnitAsset, scale: number) =>
-  Math.round((canonicalFootprintSize(unit.footprint.shape) * (scale / 100) * unit.footprint.sourceCanvasPx) / unit.footprint.sourceFootprintPx);
-const footprintSizeFromScale = (unit: UnitAsset, scale: number) =>
-  Math.round(canonicalFootprintSize(unit.footprint.shape) * (scale / 100));
-const circleFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
-  shape: 'circle',
-  sourceCanvasPx,
-  sourceFootprintPx,
-});
-const squareFootprint = (sourceCanvasPx: number, sourceFootprintPx = sourceCanvasPx): UnitFootprint => ({
-  shape: 'square',
-  sourceCanvasPx,
-  sourceFootprintPx,
-});
-// Fur knight calibration. anchor = the EXACT projection of the unit's ground-contact
-// point (base bottom-center, world origin) through the render camera — computed, not
-// eyeballed, so seating is mathematically correct. footprint = projected base width.
-// (Camera: 45deg yaw / 35.264deg elevation / ortho_scale 2.7 / 512px — render_knight_fur.py.)
-const KNIGHT_FUR_CANVAS_PX = 512;
-const KNIGHT_FUR_CONTACT_FOOTPRINT_PX = 178;
-const KNIGHT_FUR_CONTACT_ANCHOR_X = '50%';
-const KNIGHT_FUR_CONTACT_ANCHOR_Y = '80.241%';
-// Helmeted pawn — same computed-anchor calibration (identical camera + base-at-origin
-// normalization, so anchor matches the knight; footprint = projected base width).
-const PAWN_HELMET_CANVAS_PX = 512;
-const PAWN_HELMET_CONTACT_FOOTPRINT_PX = 188;
-const PAWN_HELMET_CONTACT_ANCHOR_X = '50%';
-const PAWN_HELMET_CONTACT_ANCHOR_Y = '80.241%';
-// Crowned king — Staunton king (OBJ) with a gold/jewel crown (FBX) hand-fitted on the
-// head; navy body, real gold crown material. Same computed-anchor calibration.
-const KING_CROWN_CANVAS_PX = 512;
-const KING_CROWN_CONTACT_FOOTPRINT_PX = 148;
-const KING_CROWN_CONTACT_ANCHOR_X = '50%';
-const KING_CROWN_CONTACT_ANCHOR_Y = '80.241%';
-// Bishop + mitre — mitre hand-fitted on the head; same computed-anchor calibration.
-const BISHOP_MITRE_CANVAS_PX = 512;
-const BISHOP_MITRE_CONTACT_FOOTPRINT_PX = 126;
-const BISHOP_MITRE_CONTACT_ANCHOR_X = '50%';
-const BISHOP_MITRE_CONTACT_ANCHOR_Y = '80.241%';
-// Queen + tiara — jeweled tiara hand-fitted on the head; same computed-anchor calibration.
-const QUEEN_TIARA_CANVAS_PX = 512;
-const QUEEN_TIARA_CONTACT_FOOTPRINT_PX = 150;
-const QUEEN_TIARA_CONTACT_ANCHOR_X = '50%';
-const QUEEN_TIARA_CONTACT_ANCHOR_Y = '80.241%';
-// Badass-keep rook — octagonal fortress; wide star base gives a square footprint.
-const ROOK_KEEP_CANVAS_PX = 512;
-const ROOK_KEEP_CONTACT_FOOTPRINT_PX = 428;
-const ROOK_KEEP_CONTACT_ANCHOR_X = '50%';
-const ROOK_KEEP_CONTACT_ANCHOR_Y = '80.241%';
-
-const familyLabels: Record<PieceId, string> = {
-  pawn: 'Pawn',
-  knight: 'Knight',
-  bishop: 'Bishop',
-  rook: 'Rook',
-  queen: 'Queen',
-  king: 'King',
-};
-
-const rookDirections: Direction[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
-const rookDirectionLabel: Record<Direction, string> = {
-  south: 'S',
-  'south-east': 'SE',
-  east: 'E',
-  'north-east': 'NE',
-  north: 'N',
-  'north-west': 'NW',
-  west: 'W',
-  'south-west': 'SW',
-};
-// Laid out to match the isometric board, not a flat geographic compass: the NE
-// board camera projects each direction to a 45-deg-rotated screen position, so a
-// south-facing unit points to screen lower-left. Each cell therefore sits where
-// the unit actually points — south is the numpad-1 (bottom-left) cell, etc.
-//   7 W    8 NW   9 N
-//   4 SW   5 .    6 NE
-//   1 S    2 SE   3 E
-const directionCompassCells: Array<Direction | 'center'> = [
-  'west',
-  'north-west',
-  'north',
-  'south-west',
-  'center',
-  'north-east',
-  'south',
-  'south-east',
-  'east',
-];
-
-const claudeSprite = (piece: PieceId) => (palette: Faction, direction: Direction) => pieceSpritePath(piece, palette, direction);
-
-// Shown when a unit has no sprite for the chosen facing — a placeholder, never a
-// disabled control. Directions are always selectable.
-const MISSING_DIRECTION_SPRITE =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>" +
-      "<path d='M80 26 L144 80 L80 134 L16 80 Z' fill='none' stroke='#8fb8ff' stroke-width='3' stroke-dasharray='6 6' opacity='0.4'/>" +
-      "<text x='80' y='96' font-size='42' text-anchor='middle' fill='#8fb8ff' opacity='0.5' font-family='sans-serif'>?</text>" +
-      '</svg>',
-  );
-
-const hasDirectionSprite = (unit: UnitAsset, dir: Direction) =>
-  unit.directions ? unit.directions.includes(dir) : dir === 'south';
-
-const unitAssets: UnitAsset[] = [
-  {
-    id: 'pawn-helmet',
-    family: 'pawn',
-    label: 'Pawn',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('pawn'),
-    read: 'Solidified Claude chess pawn render; true-isometric eight-direction unit',
-    status: 'active Claude production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(PAWN_HELMET_CANVAS_PX, PAWN_HELMET_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: PAWN_HELMET_CONTACT_ANCHOR_X,
-    unitAnchorY: PAWN_HELMET_CONTACT_ANCHOR_Y,
-    sprite: claudeSprite('pawn'),
-  },
-  {
-    id: 'king-crown',
-    family: 'king',
-    label: 'King',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('king'),
-    read: 'Solidified Claude chess king render; true-isometric eight-direction unit',
-    status: 'active Claude production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(KING_CROWN_CANVAS_PX, KING_CROWN_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: KING_CROWN_CONTACT_ANCHOR_X,
-    unitAnchorY: KING_CROWN_CONTACT_ANCHOR_Y,
-    sprite: claudeSprite('king'),
-  },
-  {
-    id: 'bishop-mitre',
-    family: 'bishop',
-    label: 'Bishop',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('bishop'),
-    read: 'Solidified Claude chess bishop render; true-isometric eight-direction unit',
-    status: 'active Claude production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(BISHOP_MITRE_CANVAS_PX, BISHOP_MITRE_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: BISHOP_MITRE_CONTACT_ANCHOR_X,
-    unitAnchorY: BISHOP_MITRE_CONTACT_ANCHOR_Y,
-    sprite: claudeSprite('bishop'),
-  },
-  {
-    id: 'queen-tiara',
-    family: 'queen',
-    label: 'Queen',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('queen'),
-    read: 'Solidified Claude chess queen render; true-isometric eight-direction unit',
-    status: 'active Claude production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(QUEEN_TIARA_CANVAS_PX, QUEEN_TIARA_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: QUEEN_TIARA_CONTACT_ANCHOR_X,
-    unitAnchorY: QUEEN_TIARA_CONTACT_ANCHOR_Y,
-    sprite: claudeSprite('queen'),
-  },
-  {
-    id: 'rook-keep',
-    family: 'rook',
-    label: 'Rook',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('rook'),
-    read: 'Octagonal fortress keep (the “badass” rook); true-isometric eight-direction unit',
-    status: 'active Claude production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: squareFootprint(ROOK_KEEP_CANVAS_PX, ROOK_KEEP_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: ROOK_KEEP_CONTACT_ANCHOR_X,
-    unitAnchorY: ROOK_KEEP_CONTACT_ANCHOR_Y,
-    sprite: claudeSprite('rook'),
-  },
-  {
-    id: 'knight-fur',
-    family: 'knight',
-    label: 'Knight',
-    badge: '8 directions · calibrated',
-    preview: pieceSpritePath('knight'),
-    read: 'Solidified Claude chess knight render; true-isometric eight-direction unit',
-    status: 'active Claude production unit',
-    directions: rookDirections,
-    factionMode: 'palette',
-    defaultScale: 100,
-    footprint: circleFootprint(KNIGHT_FUR_CANVAS_PX, KNIGHT_FUR_CONTACT_FOOTPRINT_PX),
-    unitAnchorX: KNIGHT_FUR_CONTACT_ANCHOR_X,
-    unitAnchorY: KNIGHT_FUR_CONTACT_ANCHOR_Y,
-    sprite: claudeSprite('knight'),
-  },
-];
-const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
 
 const grassTile = '/assets/tiles/canonical-clean/grass-clean-a.png';
 const stoneTile = '/assets/tiles/canonical-clean/stone-clean-a.png';
@@ -324,14 +98,23 @@ const readUnitStudioRoute = () => {
   };
 };
 const clampUnitScale = (value: number) => Math.min(500, Math.max(25, value));
-const scaleFromLegacySize = (unit: UnitAsset, size: number) => clampUnitScale(Math.round((size / renderSizeFromFootprint(unit, 100)) * 100));
+const scaleFromLegacySize = (unit: UnitAsset, size: number) =>
+  clampUnitScale(Math.round((size / renderSizeForTileScale(unit, 100, UNIT_INSPECTION_TILE_SCALE)) * 100));
+const DEFAULT_VIEW_ZOOM = 1.15;
+
+const ResetIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M7 7h6a5 5 0 1 1-4.3 7.55" />
+    <path d="M7 7V3L3 7l4 4V7Z" />
+  </svg>
+);
 
 export function UnitStudio() {
   const initialRoute = useMemo(() => readUnitStudioRoute(), []);
   const [studioMode, setStudioMode] = useState<UnitStudioMode>(initialRoute.mode);
   const [unitId, setUnitId] = useState(initialRoute.unitId);
   const [faction, setFaction] = useState<Faction>('navy-blue');
-  const [zoom, setZoom] = useState(1.15);
+  const [zoom, setZoom] = useState(DEFAULT_VIEW_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [unitScale, setUnitScale] = useState(initialRoute.unitScale);
   const [footprintVisible, setFootprintVisible] = useState(initialRoute.footprintVisible);
@@ -344,8 +127,9 @@ export function UnitStudio() {
   const [selectedFamilyFilters, setSelectedFamilyFilters] = useState<PieceId[]>(initialRoute.familyFilters);
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<UnitCollectionFilter[]>(initialRoute.collectionFilters);
   const filterDropdownRef = useRef<HTMLDivElement | null>(null);
+  const skipNextRouteWriteRef = useRef(false);
   const selectedUnit = unitAssets.find((unit) => unit.id === unitId) ?? unitAssets[0];
-  const unitRenderSize = renderSizeFromFootprint(selectedUnit, unitScale);
+  const unitRenderSize = renderSizeForTileScale(selectedUnit, unitScale, UNIT_INSPECTION_TILE_SCALE);
   const unitFootprintSize = footprintSizeFromScale(selectedUnit, unitScale);
   const directionAvailable = hasDirectionSprite(selectedUnit, direction);
   const selectedSprite = directionAvailable ? selectedUnit.sprite(faction, direction) : MISSING_DIRECTION_SPRITE;
@@ -367,17 +151,12 @@ export function UnitStudio() {
     if (!query) return true;
     return [unit.label, unit.badge, unit.read, unit.status, unit.family].join(' ').toLowerCase().includes(query);
   });
-  // Center the view on the UNIT, not the tile block. The contact point sits
-  // TILE_ANCHOR_Y px below the tile-stack top and the unit extends anchorFrac*size
-  // above it, so a tall unit (e.g. the bishop's mitre) overruns the frame top. Shift
-  // the whole stack down so the unit's vertical midpoint lands at the frame center.
-  const TILE_ANCHOR_Y = 54; // px — matches CSS --tile-anchor-y
-  const STACK_HEIGHT = 280; // px — matches .unit-studio-tile-stack height
+  const STACK_HEIGHT = 280;
   const unitAnchorFrac = (parseFloat(selectedUnit.unitAnchorY ?? '80') || 80) / 100;
-  const stackShiftY = Math.round((STACK_HEIGHT / 2 - TILE_ANCHOR_Y) + (unitAnchorFrac - 0.5) * unitRenderSize);
+  const stackShiftY = Math.round((STACK_HEIGHT / 2 - TILE_TOP_HEIGHT) + (unitAnchorFrac - 0.5) * unitRenderSize);
   const unitPlacementStyle: UnitPlacementStyle = {
     '--tile-anchor-x': '50%',
-    '--tile-anchor-y': '54px',
+    '--tile-anchor-y': `${TILE_TOP_HEIGHT}px`,
     '--unit-anchor-x': selectedUnit.unitAnchorX ?? '50%',
     '--unit-anchor-y': selectedUnit.unitAnchorY ?? '92%',
     '--unit-size': `${unitRenderSize}px`,
@@ -412,6 +191,18 @@ export function UnitStudio() {
   }, [filterOpen]);
 
   useEffect(() => {
+    if (skipNextRouteWriteRef.current) {
+      skipNextRouteWriteRef.current = false;
+      return;
+    }
+    if (studioMode === 'catalog') {
+      const nextHref = window.location.pathname;
+      const currentHref = `${window.location.pathname}${window.location.search}`;
+      if (nextHref !== currentHref) {
+        window.history.replaceState(null, '', nextHref);
+      }
+      return;
+    }
     const params = new URLSearchParams();
     params.set('unit', selectedUnit.id);
     params.set('piece', selectedUnit.family);
@@ -426,9 +217,12 @@ export function UnitStudio() {
   const selectUnit = (nextUnitId: string) => {
     const nextUnit = unitAssets.find((unit) => unit.id === nextUnitId);
     if (!nextUnit) return;
-    setUnitId(nextUnitId);
-    if (!nextUnit.directions?.includes(direction)) setDirection('south');
+    setUnitId(nextUnit.id);
     setUnitScale(nextUnit.defaultScale);
+  };
+
+  const inspectUnit = (nextUnitId: string) => {
+    selectUnit(nextUnitId);
     setStudioMode('view');
   };
 
@@ -462,6 +256,22 @@ export function UnitStudio() {
       current.includes(nextCollection) ? current.filter((item) => item !== nextCollection) : [...current, nextCollection],
     );
   };
+  const openBoardLab = (unitToPlace = selectedUnit.id) => {
+    const params = new URLSearchParams();
+    params.set('family', 'grass');
+    params.set('mode', 'lab');
+    params.set('lab', 'unit');
+    params.set('collection', 'base');
+    params.set('asset', 'grass-clean-a');
+    params.set('pair', 'grass-stone');
+    params.set('board', 'generated');
+    params.set('scope', 'mixed');
+    params.set('size', 'small');
+    params.set('seed', '4217');
+    params.set('brush', 'unit');
+    params.set('unit', unitToPlace);
+    navigateApp(`/tileset-studio?${params.toString()}`);
+  };
 
   return (
     <main className="tileset-studio-page unit-studio-route">
@@ -480,20 +290,29 @@ export function UnitStudio() {
           </div>
         </div>
         <nav className="tileset-studio-actions" aria-label="Unit studio navigation">
-          <span className="tileset-mode-tabs" aria-label="Asset category">
-            <button type="button" onClick={() => navigateApp('/tileset-studio')} title="Browse terrain tiles.">
-              Tiles
+          <span className="tileset-mode-tabs" aria-label="Workspace mode">
+            <button
+              type="button"
+              className={studioMode === 'catalog' ? 'is-active' : ''}
+              onClick={() => {
+                skipNextRouteWriteRef.current = true;
+                setStudioMode('catalog');
+              }}
+              title="Browse unit catalogs."
+            >
+              Catalog
             </button>
-            <button type="button" className="is-active" title="Browse chess-piece units.">
-              Units
+            <button
+              type="button"
+              className={studioMode === 'view' ? 'is-active' : ''}
+              onClick={() => {
+                skipNextRouteWriteRef.current = true;
+                setStudioMode('view');
+              }}
+              title="Inspect this unit."
+            >
+              Lab
             </button>
-          </span>
-          <span className="tileset-mode-tabs" aria-label="Unit studio mode">
-            {(['catalog', 'view'] as UnitStudioMode[]).map((mode) => (
-              <button key={mode} type="button" className={studioMode === mode ? 'is-active' : ''} onClick={() => setStudioMode(mode)}>
-                {mode === 'catalog' ? 'Catalog' : 'View'}
-              </button>
-            ))}
           </span>
           <a href="/settings">Settings</a>
         </nav>
@@ -501,12 +320,108 @@ export function UnitStudio() {
 
       <section className={`tileset-studio-shell is-${studioMode} is-units`} aria-label="Unit studio">
         {studioMode === 'catalog' ? (
+          <>
           <section className="tileset-studio-main">
             <div className="tileset-studio-toolbar">
               <div className="tileset-studio-title-row">
                 <div className="tileset-catalog-heading">
                   <h2>Unit Catalog</h2>
                   <p className="tileset-filter-summary">{filteredUnits.length} units · {activeFamilyLabel} · {activeCollectionLabel}</p>
+                </div>
+              </div>
+            </div>
+            <section className="tileset-studio-tab-panel">
+              <div className="tileset-asset-sections">
+                <section className="tileset-asset-section" aria-label="Unit assets">
+                  <h3>Units</h3>
+                  <div className="tileset-studio-grid" aria-label="Filtered units">
+                    {filteredUnits.map((unit) => (
+                      <button
+                        key={unit.id}
+                        type="button"
+                        className={`tileset-studio-card is-unit ${unit.id === selectedUnit.id ? 'is-selected' : ''}`}
+                        onClick={() => selectUnit(unit.id)}
+                        title={`Select ${unit.label}`}
+                        aria-pressed={unit.id === selectedUnit.id}
+                      >
+                        <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': catalogZoom } as CSSProperties}>
+                          <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
+                        </span>
+                        <span className="tileset-studio-card-meta">
+                          <span className="tileset-studio-card-text">
+                            <strong>{unit.label}</strong>
+                            <em>{unit.badge}</em>
+                          </span>
+                          <span className="tileset-card-actions">
+                            <span
+                              className="tileset-card-action"
+                              role="button"
+                              tabIndex={0}
+                              title={`Place ${unit.label} on the board`}
+                              aria-label={`Place ${unit.label} on the board`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openBoardLab(unit.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  openBoardLab(unit.id);
+                                }
+                              }}
+                            >
+                              🖌
+                            </span>
+                            <span
+                              className="tileset-card-action"
+                              role="button"
+                              tabIndex={0}
+                              title={`Inspect ${unit.label}`}
+                              aria-label={`Inspect ${unit.label}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                inspectUnit(unit.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  inspectUnit(unit.id);
+                                }
+                              }}
+                            >
+                              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                                <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                                <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                    {filteredUnits.length === 0 ? (
+                      <div className="unit-catalog-empty">
+                        <h3>No units match</h3>
+                        <p>Change the family, collection, or search filters.</p>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+          <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Unit catalog controls">
+            <section className="tileset-inspector-section">
+              <h2>Controls</h2>
+              <div className="tileset-control-stack">
+                <div className="tileset-segmented-control" aria-label="Catalog asset type">
+                  <button type="button" onClick={() => navigateApp('/tileset-studio')} title="Browse terrain tiles.">
+                    Tiles
+                  </button>
+                  <button type="button" className="is-active" onClick={() => setStudioMode('catalog')} title="Browse chess-piece units.">
+                    Units
+                  </button>
                 </div>
                 <label className="tileset-catalog-search">
                   <span>Search</span>
@@ -613,42 +528,9 @@ export function UnitStudio() {
                   ) : null}
                 </div>
               </div>
-            </div>
-            <section className="tileset-studio-tab-panel">
-              <div className="tileset-asset-sections">
-                <section className="tileset-asset-section" aria-label="Unit assets">
-                  <h3>Units</h3>
-                  <div className="tileset-studio-grid" aria-label="Filtered units">
-                    {filteredUnits.map((unit) => (
-                      <button
-                        key={unit.id}
-                        type="button"
-                        className={`tileset-studio-card is-tile ${unit.id === selectedUnit.id ? 'is-selected' : ''}`}
-                        onClick={() => selectUnit(unit.id)}
-                        title={`Inspect ${unit.label}`}
-                      >
-                        <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': catalogZoom } as CSSProperties}>
-                          <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
-                        </span>
-                        <span className="tileset-studio-card-meta">
-                          <span className="tileset-studio-card-text">
-                            <strong>{unit.label}</strong>
-                            <em>{unit.badge}</em>
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                    {filteredUnits.length === 0 ? (
-                      <div className="unit-catalog-empty">
-                        <h3>No units match</h3>
-                        <p>Change the family, collection, or search filters.</p>
-                      </div>
-                    ) : null}
-                  </div>
-                </section>
-              </div>
             </section>
-          </section>
+          </aside>
+          </>
         ) : (
           <section className="tileset-view-mode unit-view-mode" aria-label="Focused unit view">
             <div className="tileset-view-header">
@@ -700,27 +582,42 @@ export function UnitStudio() {
                   Center View
                 </button>
               </div>
-              <label className="unit-studio-zoom">
+              <div className="unit-studio-zoom">
                 <span>View Zoom</span>
-                <input
-                  type="range"
-                  min="0.75"
-                  max="1.85"
-                  step="0.05"
-                  value={zoom}
-                  onChange={(event) => setZoom(Number(event.target.value))}
-                />
-              </label>
-              <label className="unit-studio-zoom">
+                <div className="unit-studio-slider-row">
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.85"
+                    step="0.05"
+                    value={zoom}
+                    onChange={(event) => setZoom(Number(event.target.value))}
+                  />
+                  <button type="button" className="unit-studio-icon-button" aria-label="Reset view zoom" onClick={() => setZoom(DEFAULT_VIEW_ZOOM)}>
+                    <ResetIcon />
+                  </button>
+                </div>
+              </div>
+              <div className="unit-studio-zoom">
                 <span>Unit Scale</span>
-                <input
-                  type="range"
-                  min="25"
-                  max="500"
-                  step="1"
-                  value={unitScale}
-                  onChange={(event) => selectUnitScale(Number(event.target.value))}
-                />
+                <div className="unit-studio-slider-row">
+                  <input
+                    type="range"
+                    min="25"
+                    max="500"
+                    step="1"
+                    value={unitScale}
+                    onChange={(event) => selectUnitScale(Number(event.target.value))}
+                  />
+                  <button
+                    type="button"
+                    className="unit-studio-icon-button"
+                    aria-label={`Reset unit scale to ${selectedUnit.defaultScale}%`}
+                    onClick={() => selectUnitScale(selectedUnit.defaultScale)}
+                  >
+                    <ResetIcon />
+                  </button>
+                </div>
                 <input
                   type="number"
                   min="25"
@@ -730,7 +627,7 @@ export function UnitStudio() {
                   aria-label="Unit scale percent"
                 />
                 <em>{unitScale}%</em>
-              </label>
+              </div>
               <div className="unit-studio-control-group" aria-label="Unit footprint">
                 <strong>Footprint</strong>
                 <button type="button" className={footprintVisible ? 'is-active' : ''} onClick={toggleFootprint}>

@@ -5,8 +5,8 @@ This manifest defines the next production art batch for the Tileset Studio board
 ## Fixed Inputs
 
 - Canonical canvas: `96x140px`
-- Top diamond: `96x54px`
-- Grid step: `stepX 48`, `stepY 27`
+- Top diamond: `96x55.426px`
+- Grid step: `stepX 48`, `stepY 27.713`
 - Style target: `frontend/public/assets/art/skirmish-style-target.png`
 - Current base families: Grass, Stone, Water
 - Current transition pairs: Grass-Stone, Grass-Water, Stone-Water
@@ -79,7 +79,7 @@ Each accepted transition must include:
 
 - Name the exact terrain pair and mask role.
 - Ask for pixel-art terrain matching the skirmish style target, not generic fantasy terrain.
-- Preserve a `96x140px` transparent canvas with a `96x54px` top diamond.
+- Preserve a `96x140px` transparent canvas with a `96x55.426px` true-isometric top diamond.
 - Keep the top plane clean enough for chess-like tactics readability.
 - Describe materials, edges, and depth; do not ask for pieces, UI, labels, arrows, highlights, or board coordinates.
 - Prefer compact material language over noisy micro-detail.
@@ -87,12 +87,12 @@ Each accepted transition must include:
 
 ## Normalization Gates
 
-Before an asset can enter `canonical-accepted` or equivalent production folders, verify:
+Before an asset can enter `canonical-true-iso` or equivalent production folders, verify:
 
 - Canvas is exactly `96x140px`.
 - Top diamond aligns to the canonical template.
 - Transparent pixels remain transparent outside the tile silhouette.
-- Neighboring tiles line up on `stepX 48` and `stepY 27`.
+- Neighboring tiles line up on `stepX 48` and `stepY 27.713`.
 - Pixel rendering holds up at intended board scale with image smoothing disabled.
 - Palette and contrast fit beside the current Grass, Stone, and Water base tiles.
 - No accidental chess pieces, UI fragments, labels, shadows outside bounds, or crop artifacts.
