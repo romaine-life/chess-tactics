@@ -26,6 +26,8 @@ import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath } from '
 import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
 import { BoardLabBoard } from '../render/BoardLabBoard';
+import { useCampaigns } from '../campaign/store';
+import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 
@@ -1562,6 +1564,27 @@ const levelSizes = {
 
 type LevelUnitCell = { type: PieceType; side: Side };
 type LevelSnapshot = { t: Record<string, TileFamilyId>; u: Record<string, LevelUnitCell> };
+
+function levelTerrainToFamily(terrain: string): TileFamilyId {
+  if (terrain === 'water') return 'water';
+  if (terrain === 'stone' || terrain === 'road' || terrain === 'bridge' || terrain === 'rock' || terrain === 'cliff') return 'stone';
+  return 'grass';
+}
+
+function levelToEditorTerrain(level: Level | null): Record<string, TileFamilyId> {
+  if (!level) return {};
+  return Object.fromEntries(level.layers.terrain.map((cell) => [`${cell.x},${cell.y}`, levelTerrainToFamily(cell.terrain)]));
+}
+
+function levelToEditorUnits(level: Level | null): Record<string, LevelUnitCell> {
+  if (!level) return {};
+  return Object.fromEntries(level.layers.units.map((unit) => [`${unit.x},${unit.y}`, { type: unit.type, side: unit.side }]));
+}
+
+function levelToSizeKey(level: Level | null): 'small' | 'wide' {
+  if (!level) return 'small';
+  return level.board.cols === levelSizes.wide.cols && level.board.rows === levelSizes.wide.rows ? 'wide' : 'small';
+}
 const LE_ICON_ROOT = '/assets/ui/level-editor';
 const leIcon = (name: string, active = false): string => `${LE_ICON_ROOT}/icons/${name}${active ? '-active' : ''}.png`;
 const levelPieceTypes: PieceType[] = [...PLAYABLE_PIECE_TYPES];
@@ -1646,20 +1669,25 @@ function LeActionButton({ label, icon, primary = false, disabled = false, title,
 // region, transitions where families meet); place chess-piece units on top.
 // This replaces the old Pixi EditorBoard surface while keeping its chrome/art.
 export function LevelEditorPage(): ReactElement {
-  const [terrainCells, setTerrainCells] = useState<Record<string, TileFamilyId>>({});
-  const [unitCells, setUnitCells] = useState<Record<string, LevelUnitCell>>({});
+  const routeParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const routeCampaignId = routeParams.get('campaignId');
+  const routeLevelId = routeParams.get('levelId');
+  const returnTo = routeParams.get('returnTo') ?? '/campaigns-next';
+  const routeLevel = routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null;
+  const [terrainCells, setTerrainCells] = useState<Record<string, TileFamilyId>>(() => levelToEditorTerrain(routeLevel));
+  const [unitCells, setUnitCells] = useState<Record<string, LevelUnitCell>>(() => levelToEditorUnits(routeLevel));
   const [layer, setLayer] = useState<'terrain' | 'units'>('terrain');
   const [brush, setBrush] = useState<LevelBrush>('grass');
   const [unitType, setUnitType] = useState<PieceType>('pawn');
   const [unitSide, setUnitSide] = useState<Side>('player');
   const [unitErase, setUnitErase] = useState(false);
-  const [sizeKey, setSizeKey] = useState<'small' | 'wide'>('small');
+  const [sizeKey, setSizeKey] = useState<'small' | 'wide'>(() => levelToSizeKey(routeLevel));
   const [viewZoom, setViewZoom] = useState(0.95);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [showGrid, setShowGrid] = useState(true);
   const [past, setPast] = useState<LevelSnapshot[]>([]);
   const [future, setFuture] = useState<LevelSnapshot[]>([]);
-  const [status, setStatus] = useState('Ready');
+  const [status, setStatus] = useState(routeLevel ? `Editing ${routeLevel.name}` : 'Ready');
   const { cols, rows } = levelSizes[sizeKey];
   const animationFrame = useAnimationClock(true, 8, 150);
 
@@ -1668,6 +1696,29 @@ export function LevelEditorPage(): ReactElement {
     shell?.classList.add('level-editor-active');
     return () => shell?.classList.remove('level-editor-active');
   }, []);
+
+  useEffect(() => {
+    if (!routeLevelId || useCampaigns.getState().levels[routeLevelId]) return;
+    let active = true;
+    loadWorkspace()
+      .then((workspace) => {
+        if (!active) return;
+        useCampaigns.getState().hydrate(workspace);
+        const level = useCampaigns.getState().levels[routeLevelId];
+        if (!level) {
+          setStatus(`Level ${routeLevelId} was not found in the campaign workspace`);
+          return;
+        }
+        setTerrainCells(levelToEditorTerrain(level));
+        setUnitCells(levelToEditorUnits(level));
+        setSizeKey(levelToSizeKey(level));
+        if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
+        useCampaigns.getState().selectLevel(routeLevelId);
+        setStatus(`Editing ${level.name}`);
+      })
+      .catch((error) => setStatus(`Load failed: ${(error as Error).message}`));
+    return () => { active = false; };
+  }, [routeCampaignId, routeLevelId]);
 
   const levelAssets = useMemo(
     () => [...studioFamilies.flatMap((family) => family.assets.filter((asset) => asset.kind === 'tile')), ...transitionAssets],
@@ -1806,6 +1857,7 @@ export function LevelEditorPage(): ReactElement {
   // Build the durable Level doc from the painted board so we can validate now and
   // save to the server once the editor is hosted. Family ids are valid TerrainTypes.
   const buildLevel = (): Level => {
+    const sourceLevel = routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null;
     const terrain = Object.entries(terrainCells).map(([key, family]) => {
       const [x, y] = key.split(',').map(Number);
       return { x, y, terrain: family, elevation: 0 };
@@ -1816,19 +1868,37 @@ export function LevelEditorPage(): ReactElement {
     });
     return {
       formatVersion: LEVEL_FORMAT_VERSION,
-      id: 'draft',
-      name: 'Untitled',
+      id: sourceLevel?.id ?? routeLevelId ?? 'draft',
+      name: sourceLevel?.name ?? 'Untitled',
+      notes: sourceLevel?.notes ?? '',
       board: { cols, rows, heightLevels: 1 },
-      objective: 'capture-all',
-      difficulty: 'normal',
-      economy: { startingFunds: 1200, incomePerTurn: 150 },
-      theme: 'grassland',
+      objective: sourceLevel?.objective ?? 'capture-all',
+      difficulty: sourceLevel?.difficulty ?? 'normal',
+      economy: sourceLevel?.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
+      theme: sourceLevel?.theme ?? 'grassland',
       layers: { terrain, decals: [], zones: [], units },
     };
   };
   const validate = () => {
     const result = validateLevel(buildLevel());
     setStatus(result.ok ? `Valid · ${unitCount} units · ${cols} × ${rows}` : `Invalid: ${result.errors[0]}`);
+  };
+  const saveCampaignLevel = () => {
+    const level = buildLevel();
+    const result = validateLevel(level);
+    if (!result.ok) {
+      setStatus(`Invalid: ${result.errors[0]}`);
+      return;
+    }
+    useCampaigns.getState().replaceLevel(result.level);
+    if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
+    useCampaigns.getState().selectLevel(result.level.id);
+    setStatus(`Saved ${result.level.name} to campaign workspace`);
+    if (routeCampaignId) {
+      void saveWorkspace({ campaigns: useCampaigns.getState().campaigns, levels: useCampaigns.getState().levels })
+        .then(() => setStatus(`Saved ${result.level.name} to campaign workspace`))
+        .catch((error) => setStatus(`Saved locally; server save failed: ${(error as Error).message}`));
+    }
   };
 
   const setTerrainBrush = (family: TileFamilyId) => { setBrush(family); setLayer('terrain'); };
@@ -1897,8 +1967,8 @@ export function LevelEditorPage(): ReactElement {
         </div>
         <div className="le-save-actions">
           <LeActionButton label="Test" icon="play" onClick={validate} />
-          <LeActionButton label="Save" icon="save" primary disabled title="Saving unlocks on the hosted environment." />
-          <a className="le-menu-link" href="/" aria-label="Main menu">
+          <LeActionButton label="Save" icon="save" primary onClick={saveCampaignLevel} />
+          <a className="le-menu-link" href={returnTo} aria-label="Return">
             <img src={leIcon('menu')} alt="" aria-hidden="true" />
           </a>
         </div>

@@ -20,6 +20,12 @@ export interface DesignRoute {
 }
 
 const ASSET_ROUTE_TYPES: Record<string, string> = {
+  'campaign-editor-buttons': 'button-9slice.campaign-editor',
+  'campaign-editor-fields': 'field.campaign-editor',
+  'campaign-editor-icon-buttons': 'icon-button.campaign-editor',
+  'campaign-editor-panels': 'panel-9slice.campaign-editor',
+  'campaign-editor-rows': 'row.campaign-editor',
+  'campaign-editor-shields': 'shield.campaign-editor',
   'main-menu-buttons': 'button-9slice.main-menu',
   'main-menu-button-rows': 'button-row.main-menu',
   'main-menu-panels': 'panel-9slice.main-menu',

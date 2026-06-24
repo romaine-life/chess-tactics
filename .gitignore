@@ -17,3 +17,5 @@ npm-debug.log
 # for headless screenshot capture (Playwright + Chromium). Never committed.
 .claude/
 .pwshot/
+frontend/.codex-vite-*.log
+frontend/.chrome-campaign-proof/

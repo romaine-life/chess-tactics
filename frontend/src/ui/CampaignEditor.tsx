@@ -1,12 +1,27 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
-import type { Campaign, CampaignLevelRef, Level, ObjectiveType } from '../core/level';
+import { createDemoWorkspace, DEMO_SELECTED_CAMPAIGN_ID, DEMO_SELECTED_LEVEL_ID } from '../campaign/demoWorkspace';
+import { validateLevel, type Campaign, type CampaignLevelRef, type Level, type ObjectiveType } from '../core/level';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
+import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
+import { campaignEditorAssetVars } from './campaignEditorAssets';
 
 const OBJECTIVES: ObjectiveType[] = ['capture-all', 'capture-king', 'survive', 'reach'];
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
-const SHIELDS = ['lion', 'rook', 'crescent', 'snow', 'flame', 'crown'] as const;
+const SHIELDS = ['crown', 'rook', 'crescent', 'snow', 'flame', 'lion'] as const;
+const CE_ICONS = {
+  menu: '/assets/ui/level-editor/icons/menu.png',
+  save: '/assets/ui/level-editor/icons/save.png',
+  settings: '/assets/ui/skirmish/icon-gear.png',
+  up: '/assets/ui/level-editor/icons/height-up.png',
+  down: '/assets/ui/level-editor/icons/height-down.png',
+  delete: '/assets/ui/skirmish/icon-crossed-swords.png',
+  play: '/assets/ui/level-editor/icons/play.png',
+  import: '/assets/ui/level-editor/icons/upload.png',
+  duplicate: '/assets/ui/level-editor/icons/download.png',
+  lock: '/assets/ui/level-editor/icons/lock.png',
+} as const;
 
 const objectiveLabel: Record<ObjectiveType, string> = {
   'capture-all': 'Capture all enemy pieces',
@@ -14,6 +29,35 @@ const objectiveLabel: Record<ObjectiveType, string> = {
   survive: 'Survive the assault',
   reach: 'Reach the objective',
 };
+
+function workspaceSignature(ws: { campaigns: Campaign[]; levels: Record<string, Level> }): string {
+  return JSON.stringify(ws);
+}
+
+function workspaceFromStore(): { campaigns: Campaign[]; levels: Record<string, Level> } {
+  const state = useCampaigns.getState();
+  return { campaigns: state.campaigns, levels: state.levels };
+}
+
+function validateWorkspaceImport(ws: Partial<{ campaigns: Campaign[]; levels: Record<string, Level> }>): string | null {
+  if (!Array.isArray(ws.campaigns)) return 'campaigns must be an array';
+  if (!ws.levels || typeof ws.levels !== 'object') return 'levels must be an object';
+  for (const campaign of ws.campaigns) {
+    if (!campaign || typeof campaign !== 'object') return 'campaign is not an object';
+    if (typeof campaign.id !== 'string' || !campaign.id) return 'campaign id is required';
+    if (typeof campaign.name !== 'string') return `campaign ${campaign.id} is missing a name`;
+    if (!Array.isArray(campaign.levels)) return `campaign ${campaign.id} levels must be an array`;
+    for (const ref of campaign.levels) {
+      if (!ref || typeof ref.levelId !== 'string') return `campaign ${campaign.id} has an invalid level reference`;
+      if (!ws.levels[ref.levelId]) return `campaign ${campaign.id} references missing level ${ref.levelId}`;
+    }
+  }
+  for (const [id, level] of Object.entries(ws.levels)) {
+    const result = validateLevel(level);
+    if (!result.ok) return `level ${id} is invalid: ${result.errors[0]}`;
+  }
+  return null;
+}
 
 function AssetButton({
   children,
@@ -59,48 +103,63 @@ function Stars({ count = 0 }: { count?: number }): ReactElement {
   );
 }
 
-function MiniBoard({ level }: { level: Level | null }): ReactElement {
-  const cells = useMemo(() => Array.from({ length: 48 }, (_, i) => i), []);
-  const unitCount = level?.layers.units.length ?? 0;
-  return (
-    <div className="ce-mini-board" aria-label={level ? `${level.name} board preview` : 'Level board preview'}>
-      <div className="ce-mini-board-grid" aria-hidden="true">
-        {cells.map((cell) => (
-          <span
-            key={cell}
-            className={[
-              cell % 11 === 0 || cell % 17 === 0 ? 'is-water' : '',
-              cell % 13 === 0 ? 'is-stone' : '',
-              cell < unitCount * 3 ? (cell % 2 ? 'is-red-unit' : 'is-blue-unit') : '',
-            ].join(' ')}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function CampaignRow({
   campaign,
   index,
   active,
   onSelect,
+  onFavorite,
 }: {
   campaign: Campaign;
   index: number;
   active: boolean;
   onSelect: () => void;
+  onFavorite: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
+  const completed = campaign.levels.filter((level) => level.completed).length;
+  const locked = Boolean(campaign.locked);
+  const selectCampaign = () => {
+    if (!locked) onSelect();
+  };
   return (
-    <button type="button" className={`ce-campaign-row ${active ? 'is-selected' : ''}`} onClick={onSelect}>
+    <div
+      role="button"
+      tabIndex={locked ? -1 : 0}
+      aria-disabled={locked || undefined}
+      className={`ce-campaign-row ${active ? 'is-selected' : ''} ${campaign.locked ? 'is-locked' : ''}`.trim()}
+      onClick={selectCampaign}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          selectCampaign();
+        }
+      }}
+    >
       <ShieldBadge index={index} active={active} />
       <span className="ce-row-copy">
         <strong>{campaign.name}</strong>
-        <small>{campaign.levels.length} levels</small>
+        <small>{completed} / {campaign.levels.length} levels</small>
       </span>
-      <span className="ce-row-favorite" aria-hidden="true">★</span>
-    </button>
+      {locked ? (
+        <span className="ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
+          <CeIcon icon="lock" />
+        </span>
+      ) : (
+        <button
+          type="button"
+          className={`ce-row-favorite ${campaign.favorite ? 'is-selected' : ''}`.trim()}
+          aria-label={campaign.favorite ? `Unfavorite ${campaign.name}` : `Favorite ${campaign.name}`}
+          onClick={onFavorite}
+        >
+          ★
+        </button>
+      )}
+    </div>
   );
+}
+
+function CeIcon({ icon }: { icon: keyof typeof CE_ICONS }): ReactElement {
+  return <img className="ce-icon-img" src={CE_ICONS[icon]} alt="" aria-hidden="true" draggable={false} />;
 }
 
 function LevelRow({
@@ -137,17 +196,17 @@ function LevelRow({
       }}
     >
       <span className="ce-level-thumb" aria-hidden="true">
-        <span />
+        <LevelPreviewBoard level={level ?? null} compact />
       </span>
       <span className="ce-row-copy">
         <strong>{index + 1}. {level?.name ?? levelRef.levelId}</strong>
         <small>{objectiveLabel[objective]}</small>
       </span>
-      <Stars count={levelRef.stars ?? (active ? 2 : 1)} />
+      <Stars count={levelRef.stars ?? 0} />
       <span className="ce-row-actions" aria-label="Level actions">
-        <IconButton onClick={onMoveUp} aria-label="Move level up">↑</IconButton>
-        <IconButton onClick={onMoveDown} aria-label="Move level down">↓</IconButton>
-        <IconButton danger onClick={onDelete} aria-label="Delete level">×</IconButton>
+        <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="up" /></IconButton>
+        <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="down" /></IconButton>
+        <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
       </span>
     </div>
   );
@@ -160,6 +219,21 @@ export function CampaignEditor() {
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+  const currentWorkspace = useMemo(() => ({ campaigns, levels }), [campaigns, levels]);
+  const currentSignature = useMemo(() => workspaceSignature(currentWorkspace), [currentWorkspace]);
+  const [savedSignature, setSavedSignature] = useState(() => currentSignature);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const dirty = currentSignature !== savedSignature;
+
+  const hydrateDemoWorkspace = (message?: string) => {
+    const demo = createDemoWorkspace();
+    const store = useCampaigns.getState();
+    store.hydrate(demo);
+    store.selectCampaign(DEMO_SELECTED_CAMPAIGN_ID);
+    store.selectLevel(DEMO_SELECTED_LEVEL_ID);
+    setSavedSignature(workspaceSignature(workspaceFromStore()));
+    if (message) setStatus(message);
+  };
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -171,18 +245,92 @@ export function CampaignEditor() {
     let active = true;
     fetchMe().then((user) => { if (active) setMe(user); });
     loadWorkspace()
-      .then((ws) => { if (ws.campaigns.length) useCampaigns.getState().hydrate(ws); })
-      .catch((e) => { if (isUnauthorized(e)) setStatus('Sign in to load and save your campaigns.'); });
+      .then((ws) => {
+        if (!active) return;
+        if (ws.campaigns.length) {
+          useCampaigns.getState().hydrate(ws);
+          setSavedSignature(workspaceSignature(workspaceFromStore()));
+        } else {
+          setSavedSignature(workspaceSignature(workspaceFromStore()));
+        }
+      })
+      .catch((e) => {
+        if (isUnauthorized(e)) {
+          hydrateDemoWorkspace('Demo workspace. Sign in to save.');
+          return;
+        }
+        if (useCampaigns.getState().campaigns.length === 0) {
+          hydrateDemoWorkspace('Demo workspace.');
+        }
+      });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
 
   const saveWorkspaceNow = async () => {
     try {
       await saveWorkspace({ campaigns: useCampaigns.getState().campaigns, levels: useCampaigns.getState().levels });
+      setSavedSignature(workspaceSignature(workspaceFromStore()));
       setStatus('Saved to server');
     } catch (e) {
       if (isUnauthorized(e)) { goSignIn(); return; }
       setStatus(`Save failed: ${(e as Error).message}`);
+    }
+  };
+
+  const importCampaignFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as Partial<{ campaigns: Campaign[]; levels: Record<string, Level> }>;
+      const validationError = validateWorkspaceImport(parsed);
+      if (validationError) {
+        setStatus(`Import failed: ${validationError}.`);
+        return;
+      }
+      const importedCampaigns = parsed.campaigns!;
+      const importedLevels = parsed.levels!;
+      useCampaigns.getState().importWorkspace({ campaigns: importedCampaigns, levels: importedLevels });
+      setStatus(`Imported ${importedCampaigns.length} campaign${importedCampaigns.length === 1 ? '' : 's'}. Save to keep them.`);
+    } catch (error) {
+      setStatus(`Import failed: ${(error as Error).message}`);
+    }
+  };
+
+  const exportWorkspace = () => {
+    const workspace = workspaceFromStore();
+    const blob = new Blob([`${JSON.stringify(workspace, null, 2)}\n`], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    const safeName = (camp?.name ?? 'campaign-workspace').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'campaign-workspace';
+    anchor.href = url;
+    anchor.download = `${safeName}.json`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setStatus('Exported campaign workspace JSON.');
+  };
+
+  const confirmDeleteCampaign = (campaign: Campaign) => {
+    if (window.confirm(`Delete campaign "${campaign.name}"? This removes it from the workspace when you save.`)) {
+      useCampaigns.getState().deleteCampaign(campaign.id);
+      setStatus('Campaign deleted. Save to keep this change.');
+    }
+  };
+
+  const confirmDeleteLevel = (level: Level) => {
+    if (window.confirm(`Delete level "${level.name}"? This removes it from the workspace when you save.`)) {
+      useCampaigns.getState().deleteLevel(level.id);
+      setStatus('Level deleted. Save to keep this change.');
     }
   };
 
@@ -192,9 +340,14 @@ export function CampaignEditor() {
   const levelRef = camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
   const selectedLevelIndex = orderedLevels.findIndex((r) => r.levelId === selectedLevelId);
   const totalLevels = orderedLevels.length;
+  const completedLevels = orderedLevels.filter((level) => level.completed).length;
+  const enemyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'enemy').length ?? 0;
+  const allyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'player').length ?? totalLevels;
+  const editHref = camp && levelDoc ? `/edit?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent('/campaigns-next')}` : '/edit';
+  const playHref = camp && levelDoc ? `/play?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent('/campaigns-next')}` : '/play';
 
   return (
-    <div className="ce-screen" data-testid="campaign-editor">
+    <div className="ce-screen" data-testid="campaign-editor" style={campaignEditorAssetVars()}>
       <header className="ce-topbar">
         <a className="ce-brand" href="/" aria-label="Back to main menu">
           <img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />
@@ -204,13 +357,14 @@ export function CampaignEditor() {
           </span>
         </a>
         <div className="ce-topbar-stats" aria-label="Campaign workspace stats">
-          <span><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{totalLevels || 0}</strong></span>
-          <span><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{campaigns.length}</strong></span>
+          <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
+          <span><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
+          <span><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
         </div>
         <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
-          <a href="/" aria-label="Main menu">M</a>
-          <button type="button" onClick={saveWorkspaceNow} aria-label="Save workspace">S</button>
-          <a href="/settings" aria-label="Settings">G</a>
+          <a href="/" aria-label="Main menu"><CeIcon icon="menu" /></a>
+          <button type="button" onClick={saveWorkspaceNow} aria-label="Save workspace"><CeIcon icon="save" /></button>
+          <a href="/settings" aria-label="Settings"><CeIcon icon="settings" /></a>
         </nav>
       </header>
 
@@ -223,6 +377,16 @@ export function CampaignEditor() {
           <AssetButton data-testid="new-campaign" className="ce-new-campaign" onClick={() => useCampaigns.getState().newCampaign()}>
             + New Campaign
           </AssetButton>
+          <input
+            ref={importInputRef}
+            className="ce-file-input"
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              void importCampaignFile(event.currentTarget.files?.[0]);
+              event.currentTarget.value = '';
+            }}
+          />
           {status ? <div data-testid="workspace-status" className="ce-status">{status}</div> : null}
           {me && !me.signed_in ? (
             <a href={signInHref()} data-testid="campaign-sign-in" className="ce-sign-in">Sign in to save</a>
@@ -236,9 +400,16 @@ export function CampaignEditor() {
                 index={index}
                 active={campaign.id === selectedCampaignId}
                 onSelect={() => useCampaigns.getState().selectCampaign(campaign.id)}
+                onFavorite={(event) => {
+                  event.stopPropagation();
+                  useCampaigns.getState().toggleCampaignFavorite(campaign.id);
+                }}
               />
             ))}
           </div>
+          <AssetButton className="ce-import-campaign" onClick={() => importInputRef.current?.click()}>
+            Import Campaign
+          </AssetButton>
         </aside>
 
         <section className="ce-panel ce-details-panel" aria-label="Campaign details and levels">
@@ -259,7 +430,7 @@ export function CampaignEditor() {
                 </label>
                 <dl>
                   <div><dt>Chapters</dt><dd>{camp.chapters}</dd></div>
-                  <div><dt>Levels</dt><dd>{camp.levels.length}</dd></div>
+                  <div><dt>Levels</dt><dd>{completedLevels} / {camp.levels.length}</dd></div>
                   <div><dt>Difficulty</dt><dd>{camp.difficulty}</dd></div>
                 </dl>
               </div>
@@ -280,14 +451,14 @@ export function CampaignEditor() {
                     onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
                     onMoveUp={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, -1); }}
                     onMoveDown={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, 1); }}
-                    onDelete={(event) => { event.stopPropagation(); useCampaigns.getState().deleteLevel(ref.levelId); }}
+                    onDelete={(event) => { event.stopPropagation(); if (levels[ref.levelId]) confirmDeleteLevel(levels[ref.levelId]); }}
                   />
                 ))}
               </div>
               <div className="ce-mid-actions">
-                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, -1)} aria-label="Move selected level up">↑</IconButton>
-                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, 1)} aria-label="Move selected level down">↓</IconButton>
-                <AssetButton danger onClick={() => useCampaigns.getState().deleteCampaign(camp.id)}>Delete Campaign</AssetButton>
+                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, -1)} aria-label="Move selected level up"><CeIcon icon="up" /></IconButton>
+                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, 1)} aria-label="Move selected level down"><CeIcon icon="down" /></IconButton>
+                <AssetButton danger onClick={() => confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
               </div>
             </>
           ) : (
@@ -301,14 +472,22 @@ export function CampaignEditor() {
             <span aria-hidden="true">✎</span>
           </div>
           <div className="ce-preview-frame">
-            <MiniBoard level={levelDoc} />
+            <LevelPreviewBoard level={levelDoc} />
           </div>
           {levelDoc && levelRef ? (
             <>
+              <label className="ce-name-field ce-level-name-field">
+                <span>Level Name</span>
+                <input
+                  data-testid="level-name"
+                  value={levelDoc.name}
+                  onChange={(e) => useCampaigns.getState().renameLevel(levelDoc.id, e.target.value)}
+                />
+              </label>
               <div className="ce-preview-actions">
-                <a className="ce-link-button" href="/edit">Edit Board</a>
-                <a className="ce-link-button ce-link-button-ghost" href="/play">Test Play</a>
-                <IconButton selected aria-label="Level settings">G</IconButton>
+                <a className="ce-link-button" href={editHref}><span>Edit Board</span></a>
+                <a className="ce-link-button ce-link-button-ghost" href={playHref}><span>Test Play</span></a>
+                <IconButton selected aria-label="Level settings"><CeIcon icon="settings" /></IconButton>
               </div>
 
               <div className="ce-settings-grid">
@@ -348,7 +527,12 @@ export function CampaignEditor() {
 
               <div className="ce-notes-card">
                 <span>Notes</span>
-                <p>{objectiveLabel[levelRef.objective ?? levelDoc.objective]}. Board size {levelDoc.board.cols} x {levelDoc.board.rows}. Theme: {levelDoc.theme}.</p>
+                <textarea
+                  data-testid="level-notes"
+                  value={levelDoc.notes}
+                  placeholder={`${objectiveLabel[levelRef.objective ?? levelDoc.objective]}. Board size ${levelDoc.board.cols} x ${levelDoc.board.rows}. Theme: ${levelDoc.theme}.`}
+                  onChange={(event) => useCampaigns.getState().setLevelNotes(levelDoc.id, event.target.value)}
+                />
               </div>
             </>
           ) : (
@@ -359,8 +543,9 @@ export function CampaignEditor() {
 
       <footer className="ce-footer">
         <AssetButton data-testid="save-workspace" onClick={saveWorkspaceNow}>Save Campaign</AssetButton>
-        <a className="ce-footer-link" href="/edit">Open Board Editor</a>
-        <AssetButton danger disabled={!levelDoc} onClick={() => levelDoc && useCampaigns.getState().deleteLevel(levelDoc.id)}>Delete Level</AssetButton>
+        <AssetButton disabled={!camp} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
+        <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
+        <AssetButton danger disabled={!levelDoc} onClick={() => levelDoc && confirmDeleteLevel(levelDoc)}>Delete Level</AssetButton>
       </footer>
     </div>
   );

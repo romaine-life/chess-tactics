@@ -1,10 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { useSkirmish } from '../game/store';
+import { useCampaigns } from '../campaign/store';
+import { loadWorkspace } from '../net/campaignWorkspace';
 import { livingPieces } from '../core/rules';
 
+const OBJECTIVE_COPY = {
+  'capture-all': 'Capture all enemy pieces',
+  'capture-king': 'Capture the enemy King',
+  survive: 'Survive the assault',
+  reach: 'Reach the objective',
+} as const;
+
 export function Skirmish() {
+  const routeParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const routeCampaignId = routeParams.get('campaignId');
+  const routeLevelId = routeParams.get('levelId');
+  const [routeLevel, setRouteLevel] = useState(() => (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null));
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const game = useSkirmish((s) => s.game);
   const playerPieces = livingPieces(game.pieces, 'player');
@@ -20,8 +33,24 @@ export function Skirmish() {
   }, []);
 
   useEffect(() => {
-    newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1 });
-  }, [newSkirmish]);
+    if (!routeLevelId || routeLevel) {
+      newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: routeLevel ?? undefined });
+      return;
+    }
+    let active = true;
+    loadWorkspace()
+      .then((workspace) => {
+        if (!active) return;
+        useCampaigns.getState().hydrate(workspace);
+        if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
+        useCampaigns.getState().selectLevel(routeLevelId);
+        const level = useCampaigns.getState().levels[routeLevelId] ?? null;
+        setRouteLevel(level);
+        newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: level ?? undefined });
+      })
+      .catch(() => newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1 }));
+    return () => { active = false; };
+  }, [newSkirmish, routeCampaignId, routeLevel, routeLevelId]);
 
   return (
     <div data-testid="skirmish" className="skirmish-screen">
@@ -40,10 +69,10 @@ export function Skirmish() {
           </div>
           <div className="skirmish-objective">
             <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
-            <span>
-              <strong>Objective</strong>
-              <small>Capture the enemy King</small>
-            </span>
+              <span>
+                <strong>Objective</strong>
+              <small>{routeLevel ? OBJECTIVE_COPY[routeLevel.objective] : 'Capture the enemy King'}</small>
+              </span>
           </div>
           <div className="skirmish-top-counts" aria-label="Remaining forces">
             <span><span className="skirmish-icon skirmish-icon-rook-blue" aria-hidden="true" />{playerPieces.length}</span>

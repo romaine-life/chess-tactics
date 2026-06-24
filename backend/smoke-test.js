@@ -546,7 +546,34 @@ async function main() {
     throw new Error(`Invalid workspace should fail: ${invalidWorkspace.statusCode} ${invalidWorkspace.body}`);
   }
 
-  const workspaceDoc = { campaigns: [{ id: 'c1', title: 'Smoke Campaign', levelIds: ['smoke-1'] }], levels: { 'smoke-1': levelBody } };
+  const workspaceLevel = {
+    formatVersion: 1,
+    id: 'smoke-1',
+    name: 'Smoke Level',
+    notes: '',
+    board: { cols: 8, rows: 12, heightLevels: 1 },
+    objective: 'capture-all',
+    difficulty: 'normal',
+    economy: { startingFunds: 1200, incomePerTurn: 150 },
+    theme: 'grassland',
+    layers: {
+      terrain: [{ x: 0, y: 0, terrain: 'grass', elevation: 0 }],
+      decals: [],
+      zones: [],
+      units: [{ x: 0, y: 0, type: 'king', side: 'player' }],
+    },
+  };
+  const workspaceDoc = {
+    campaigns: [{
+      formatVersion: 1,
+      id: 'c1',
+      name: 'Smoke Campaign',
+      difficulty: 'normal',
+      chapters: 1,
+      levels: [{ levelId: 'smoke-1', ordinal: 0, objective: 'capture-all', stars: 0 }],
+    }],
+    levels: { 'smoke-1': workspaceLevel },
+  };
   const savedWorkspace = await request(
     'PUT', '/api/campaign-workspace',
     { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
@@ -562,7 +589,7 @@ async function main() {
   if (
     loadedWorkspace.statusCode !== 200 ||
     loadedWorkspaceBody.campaigns.length !== 1 ||
-    loadedWorkspaceBody.campaigns[0].title !== 'Smoke Campaign' ||
+    loadedWorkspaceBody.campaigns[0].name !== 'Smoke Campaign' ||
     !loadedWorkspaceBody.levels['smoke-1']
   ) {
     throw new Error(`Workspace did not persist: ${loadedWorkspace.statusCode} ${loadedWorkspace.body}`);
