@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
+import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -51,6 +52,22 @@ const tabs: TabDefinition[] = [
   { id: 'creator-tools', label: 'Creator Tools', icon: 'icon-wrench-generated.png', summary: 'Design and production workspaces' },
 ];
 
+// Each settings section is its own route (/settings/<tab>) so it can be linked,
+// reloaded, and back/forward-navigated. App.tsx mounts <Settings/> for the whole
+// /settings/* subtree; the active tab is derived from the URL, not local state.
+const TAB_PATHS: Record<SettingsTab, string> = {
+  general: '/settings/general',
+  audio: '/settings/audio',
+  gameplay: '/settings/gameplay',
+  'creator-tools': '/settings/creator-tools',
+};
+
+function tabFromPath(pathname: string): SettingsTab {
+  const id = normalizeRoutePath(pathname).match(/^\/settings\/(.+)$/)?.[1];
+  if (id === 'audio' || id === 'gameplay' || id === 'creator-tools' || id === 'general') return id;
+  return 'general';
+}
+
 const creatorTools: CreatorTool[] = [
   { label: 'Design Index', href: '/design', icon: 'icon-design-index.png', description: 'Open the system map for UI, content, and art references.' },
   { label: 'Tileset Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'Build and inspect tactical terrain tile sets.' },
@@ -59,7 +76,8 @@ const creatorTools: CreatorTool[] = [
 ];
 
 function asset(file: string): string {
-  return `${ASSET_BASE}/${file}`;
+  // Use the shared UI kit's generated glyphs: icon-gear-generated.png -> kit/icons/gear.png
+  return `/assets/ui/kit/icons/${file.replace(/^icon-/, '').replace(/-generated/, '')}`;
 }
 
 function readMuted(): boolean {
@@ -154,7 +172,7 @@ function SettingsToggle({
       aria-label={label}
       onClick={() => onChange(!checked)}
     >
-      <img src={asset(checked ? 'toggle-on.png' : 'toggle-off.png')} alt="" aria-hidden="true" />
+      <img src={`/assets/ui/kit/toggle-${checked ? 'on' : 'off'}.png`} alt="" aria-hidden="true" />
       <span>{checked ? 'On' : 'Off'}</span>
     </button>
   );
@@ -213,7 +231,7 @@ function Stepper({
 }
 
 export function Settings(): ReactElement {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
   const [me, setMe] = useState<AuthUser | null>(null);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
@@ -225,6 +243,20 @@ export function Settings(): ReactElement {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
     return () => shell?.classList.remove('settings-art-active');
+  }, []);
+
+  useEffect(() => {
+    // Bare /settings normalizes to the first section so the URL always names a tab.
+    if (normalizeRoutePath(window.location.pathname) === '/settings') {
+      navigateApp(TAB_PATHS.general, { replace: true, scroll: false });
+    }
+    const sync = () => setActiveTab(tabFromPath(window.location.pathname));
+    window.addEventListener('popstate', sync);
+    window.addEventListener(APP_NAVIGATION_EVENT, sync);
+    return () => {
+      window.removeEventListener('popstate', sync);
+      window.removeEventListener(APP_NAVIGATION_EVENT, sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -351,7 +383,7 @@ export function Settings(): ReactElement {
       <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
         <SettingsToggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
       </SettingsRow>
-      <SettingsRow icon="icon-music.png" title="Music Volume" description="Set the target music mix for this browser." value={<span>{settings.musicVolume}%</span>}>
+      <SettingsRow icon="icon-music.png" title="Music Volume" description="Set the target music mix for this browser.">
         <Stepper
           value={settings.musicVolume}
           suffix="%"
@@ -361,7 +393,7 @@ export function Settings(): ReactElement {
           onIncrease={() => updateSetting('musicVolume', clamp(settings.musicVolume + 5, 0, 100, DEFAULT_SETTINGS.musicVolume))}
         />
       </SettingsRow>
-      <SettingsRow icon="icon-effects.png" title="Effects Volume" description="Set the target effects mix for this browser." value={<span>{settings.effectsVolume}%</span>}>
+      <SettingsRow icon="icon-effects.png" title="Effects Volume" description="Set the target effects mix for this browser.">
         <Stepper
           value={settings.effectsVolume}
           suffix="%"
@@ -405,7 +437,7 @@ export function Settings(): ReactElement {
       <div className="settings-screen">
         <header className="settings-header-frame">
           <a className="settings-brand" href="/">
-            <img className="settings-brand-mark" src="/assets/ui/main-menu-brand-rook-mark-v1.png" alt="" aria-hidden="true" />
+            <img className="settings-brand-mark" src="/assets/ui/kit/icons/brand-shield.png" alt="" aria-hidden="true" />
             <span className="settings-brand-copy">
               <strong>Chess Tactics</strong>
               <em>Settings</em>
@@ -429,14 +461,12 @@ export function Settings(): ReactElement {
         <div className="settings-shell">
           <aside className="settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
-              <button
+              <a
                 key={tab.id}
-                type="button"
+                href={TAB_PATHS[tab.id]}
                 className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
-                onClick={() => {
-                  setConfirmingReset(false);
-                  setActiveTab(tab.id);
-                }}
+                aria-current={tab.id === activeTab ? 'page' : undefined}
+                onClick={() => setConfirmingReset(false)}
               >
                 <span className="settings-tab-icon" aria-hidden="true">
                   <img src={asset(tab.icon)} alt="" />
@@ -445,7 +475,7 @@ export function Settings(): ReactElement {
                   <strong>{tab.label}</strong>
                   <em>{tab.summary}</em>
                 </span>
-              </button>
+              </a>
             ))}
           </aside>
 
