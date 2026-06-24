@@ -3033,12 +3033,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
-            {!viewHasTarget ? (
-              <div className="tileset-view-empty" aria-label="Empty focused view">
-                <h2>Choose an element from the catalog to inspect</h2>
-                <p>Select a tile, transition, or board setup in the Catalog tab, then send it here for board-context review.</p>
-              </div>
-            ) : (
             <ViewPane
               kind={viewVisualKind}
               ariaLabel={`${viewTitle} visual inspection`}
@@ -3082,7 +3076,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                 )}
               </div>
             </ViewPane>
-            )}
             </section>
 
             <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Lab controls">
