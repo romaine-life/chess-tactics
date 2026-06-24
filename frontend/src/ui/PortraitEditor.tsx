@@ -90,6 +90,16 @@ export function PortraitEditor(): ReactElement {
   const setCrop = useCallback((next: Crop) => {
     setCrops((prev) => ({ ...prev, [piece]: clampCrop(next) }));
   }, [piece]);
+  // Zoom anchored to the crop's TOP edge: tightening trims the bottom (neck/
+  // shoulders) and keeps the head framed, instead of eating into it from the top.
+  const setZoom = useCallback((nextS: number) => {
+    setCrops((prev) => {
+      const c = prev[piece];
+      const top = c.cy - c.s / 2;
+      const s = clamp(nextS, 0.15, 1);
+      return { ...prev, [piece]: clampCrop({ cx: c.cx, s, cy: top + s / 2 }) };
+    });
+  }, [piece]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(crops)); } catch { /* ignore */ }
@@ -107,7 +117,7 @@ export function PortraitEditor(): ReactElement {
   const onPointerUp = () => { dragRef.current = null; };
   const onWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setCrop({ ...crop, s: crop.s * (e.deltaY > 0 ? 1.06 : 0.94) });
+    setZoom(crop.s * (e.deltaY > 0 ? 1.06 : 0.94));
   };
 
   const json = useMemo(() => JSON.stringify({
@@ -162,7 +172,7 @@ export function PortraitEditor(): ReactElement {
               <span style={{ width: 56 }}>Zoom</span>
               {/* invert so dragging right = tighter crop */}
               <input type="range" min={0.15} max={1} step={0.005} value={1.15 - crop.s}
-                onChange={(e) => setCrop({ ...crop, s: 1.15 - Number(e.target.value) })}
+                onChange={(e) => setZoom(1.15 - Number(e.target.value))}
                 style={{ flex: 1 }} />
               <span style={{ width: 44, textAlign: 'right' }}>{(1 / crop.s).toFixed(2)}×</span>
             </label>
