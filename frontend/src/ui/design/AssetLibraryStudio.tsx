@@ -10,7 +10,7 @@ import provenance from './kitProvenance.json';
 
 export type AssetFilter = 'all' | 'forged' | 'unverified';
 
-interface Glyph { name: string; url: string; w: number; h: number; pass: boolean }
+interface Glyph { name: string; url: string; w: number; h: number; magenta: number; semiPct: number; edge: number; pass: boolean; fails: string[] }
 interface Group { id: string; label: string; items: Glyph[] }
 interface Frame { name: string; url: string; w: number; h: number }
 interface Manifest { summary: { pass: number; total: number; frames: number }; groups: Group[]; frames: Frame[] }
@@ -79,6 +79,71 @@ export function AssetLibraryStudio({ filter, search, selected, onSelect }: {
           {!sections.length ? <p className="tileset-catalog-note">No assets match this filter.</p> : null}
         </div>
       </section>
+    </section>
+  );
+}
+
+type Found =
+  | { kind: 'glyph'; groupLabel: string; item: Glyph }
+  | { kind: 'frame'; item: Frame };
+
+function findAsset(name: string): Found | null {
+  for (const g of KIT.groups) {
+    const item = g.items.find((i) => i.name === name);
+    if (item) return { kind: 'glyph', groupLabel: GROUP_LABEL[g.id] ?? g.label, item };
+  }
+  const f = KIT.frames.find((fr) => fr.name === name);
+  return f ? { kind: 'frame', item: f } : null;
+}
+
+// The Lab's Asset surface — previews the selected asset in contexts chosen by
+// its type (glyph: bare / in a button / on a panel; frame: native / stretched).
+export function AssetLab({ name, onBack }: { name: string; onBack: () => void }): ReactElement {
+  const found = name ? findAsset(name) : null;
+  if (!found) {
+    return (
+      <section className="tileset-view-mode al-lab" aria-label="Asset lab">
+        <div className="tileset-view-header">
+          <button type="button" onClick={onBack}>Back to Catalog</button>
+          <div><p className="tileset-studio-kicker">Asset</p><h2>No asset selected</h2><p>Pick an asset card in Catalog, then open Lab to preview it.</p></div>
+        </div>
+      </section>
+    );
+  }
+  const { item } = found;
+  const prov = forged(item.name) ? PROV.assets[item.name] : null;
+  const glyph = found.kind === 'glyph' ? found.item : null;
+  return (
+    <section className="tileset-view-mode al-lab" aria-label="Asset lab">
+      <div className="tileset-view-header">
+        <button type="button" onClick={onBack}>Back to Catalog</button>
+        <div>
+          <p className="tileset-studio-kicker">{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'}</p>
+          <h2>{item.name}</h2>
+          <p>{item.w}×{item.h} · {item.url}</p>
+        </div>
+      </div>
+      <div className="al-lab-stages">
+        {found.kind === 'glyph' ? (
+          <>
+            <figure className="al-stage"><span className="al-checker"><img src={item.url} alt={item.name} className="al-glyph-lg" /></span><figcaption>default · transparency</figcaption></figure>
+            <figure className="al-stage"><span className="al-in-button"><img src={item.url} alt="" className="al-glyph-md" /></span><figcaption>in a button</figcaption></figure>
+            <figure className="al-stage"><span className="al-on-panel"><img src={item.url} alt="" className="al-glyph-md" /></span><figcaption>on a panel</figcaption></figure>
+          </>
+        ) : (
+          <>
+            <figure className="al-stage"><span className="al-checker"><img src={item.url} alt={item.name} className="al-frame-native" /></span><figcaption>native</figcaption></figure>
+            <figure className="al-stage"><span className="al-frame-stretch" style={{ borderImageSource: `url(${item.url})`, borderImageSlice: `${Math.max(2, Math.floor(Math.min(item.w, item.h) / 3))} fill`, borderImageWidth: `${Math.max(8, Math.floor(Math.min(item.w, item.h) / 3))}px` }} /><figcaption>stretched (9-slice)</figcaption></figure>
+          </>
+        )}
+      </div>
+      <dl className="al-meta">
+        <div><dt>Process</dt><dd className={prov ? 'al-ok' : 'al-no'}>{prov ? `forged ${prov.forged} (${prov.tries} tr)` : 'unverified'}</dd></div>
+        {glyph ? <div><dt>Gate</dt><dd className={glyph.pass ? 'al-ok' : 'al-no'}>{glyph.pass ? 'PASS' : glyph.fails.join(' · ')}</dd></div> : null}
+        {glyph ? <div><dt>Magenta</dt><dd>{glyph.magenta}</dd></div> : null}
+        {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}
+        {glyph ? <div><dt>Edge</dt><dd>{glyph.edge}</dd></div> : null}
+      </dl>
     </section>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode, type WheelEvent } from 'react';
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
-import { AssetLibraryStudio } from './design/AssetLibraryStudio';
+import { AssetLibraryStudio, AssetLab } from './design/AssetLibraryStudio';
 import { tileFamilies } from '../art/tileset';
 import { buildTileCoverageReport } from '../core/tileCoverage';
 import { generateSocketBoard, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
@@ -2072,7 +2072,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [category, setCategory] = useState<StudioCategory>(initialCategory);
   const [assetFilter, setAssetFilter] = useState<'all' | 'forged' | 'unverified'>('all');
   const [assetSearch, setAssetSearch] = useState('');
-  const [selectedAssetName, setSelectedAssetName] = useState('');
+  const [selectedAssetName, setSelectedAssetName] = useState('gear');
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
@@ -2714,10 +2714,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   };
   const openLabMode = (): void => {
     skipNextRouteWriteRef.current = true;
-    if (!viewHasTarget) {
-      openBoardLab();
-      return;
-    }
+    if (category === 'assets') { setStudioMode('lab'); return; }
     openBoardLab();
   };
   const selectUnitInCatalog = (unitId: string): void => {
@@ -2785,11 +2782,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse asset catalogs.">
               Catalog
             </button>
-            {category !== 'assets' ? (
-              <button type="button" className={studioMode === 'lab' ? 'is-active' : ''} onClick={openLabMode} title="Open the shared board lab.">
-                Lab
-              </button>
-            ) : null}
+            <button type="button" className={studioMode === 'lab' ? 'is-active' : ''} onClick={openLabMode} title={category === 'assets' ? 'Preview the selected asset.' : 'Open the shared board lab.'}>
+              Lab
+            </button>
           </span>
           <a href="/settings">Settings</a>
         </nav>
@@ -3058,6 +3053,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           </section>
         </aside>
         </>
+        ) : category === 'assets' ? (
+          <AssetLab name={selectedAssetName} onBack={() => setStudioMode('catalog')} />
         ) : (
           <section className="tileset-view-mode" aria-label="Focused tileset view">
             <div className="tileset-view-header">
