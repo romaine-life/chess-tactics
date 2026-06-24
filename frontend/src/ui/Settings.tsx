@@ -69,7 +69,7 @@ function tabFromPath(pathname: string): SettingsTab {
 }
 
 const creatorTools: CreatorTool[] = [
-  { label: 'Design Index', href: '/design', icon: 'icon-design-index.png', description: 'Open the system map for UI, content, and art references.' },
+  { label: 'Asset Library', href: '/design', icon: 'icon-design-index.png', description: 'Browse the shared UI kit and assets, each gate-verified and tracked by process provenance.' },
   { label: 'Tileset Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'Build and inspect tactical terrain tile sets.' },
   { label: 'Unit Studio', href: '/unit-studio', icon: 'icon-unit-studio.png', description: 'Review unit sprites against terrain and facing rules.' },
   { label: 'Tileset Review', href: '/tileset-review', icon: 'icon-tileset-review.png', description: 'Check generated tile coverage before it ships.' },

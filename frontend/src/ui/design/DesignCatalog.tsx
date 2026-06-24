@@ -53,11 +53,8 @@ function CatalogControls({ mode, treeControls, onNavigate, onExpandAll, onCollap
 function CatalogHeader({ title, intro, onNavigate }: { title: string; intro: ReactNode; onNavigate: Navigate }): ReactNode {
   return (
     <header className="main-assets-header catalog-header">
-      <div className="catalog-header-bar">
-        <a className="design-back" href="/" onClick={(e) => onNavigate('/', e)}>← Menu</a>
-        <h2>{title}</h2>
-      </div>
-      <p className="main-assets-intro">{intro}</p>
+      <a className="design-back" href="/" onClick={(e) => onNavigate('/', e)}>← Menu</a>
+      <h2>{title}</h2>
     </header>
   );
 }
