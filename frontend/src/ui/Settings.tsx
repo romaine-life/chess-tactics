@@ -68,11 +68,10 @@ function tabFromPath(pathname: string): SettingsTab {
   return 'general';
 }
 
+// One entry — the studio is the single creator workspace: tiles, units, and the
+// UI-kit asset library are all categories within it.
 const creatorTools: CreatorTool[] = [
-  { label: 'Asset Library', href: '/design', icon: 'icon-design-index.png', description: 'Browse the shared UI kit and assets, each gate-verified and tracked by process provenance.' },
-  { label: 'Tileset Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'Build and inspect tactical terrain tile sets.' },
-  { label: 'Unit Studio', href: '/unit-studio', icon: 'icon-unit-studio.png', description: 'Review unit sprites against terrain and facing rules.' },
-  { label: 'Tileset Review', href: '/tileset-review', icon: 'icon-tileset-review.png', description: 'Check generated tile coverage before it ships.' },
+  { label: 'Studio', href: '/tileset-studio', icon: 'icon-design-index.png', description: 'The creator workspace — browse, edit, and verify tiles, units, and UI-kit assets, all in one place.' },
 ];
 
 function asset(file: string): string {
