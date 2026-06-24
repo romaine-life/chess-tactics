@@ -58,12 +58,26 @@ lathe set: helmeted pawn (`docs/art/archive/units/pawn/pawn_helmet.blend`), orna
   from the selected piece's side (`PALETTE_FOR_SIDE`) and renders `<img class="skirmish-portrait">`,
   falling back to the badge glyph for non-roster pieces.
 
-## Reproduce
-- **All 24 at once** (the driver — encodes every blend, palette colour, and the rook/knight
-  special-casing):
-  `BLENDER="…/blender.exe" bash docs/art/unit-concepts/portraits/render_all.sh`
-- Single blend piece: `blender -b --python docs/art/unit-concepts/portraits/portrait_render.py -- <blend> <outfile> <palette> <r> <g> <b> <keep|iron> <yaw> [metal] [rough]` (optionally `PORTRAIT_TZ`/`PORTRAIT_SPAN` to override framing)
+## Framing workflow (current)
+The shipped headshots are **cropped from full-body "master" renders**, with the crop
+dialled in interactively rather than guessed:
+1. The **Portrait Editor** (`/portrait-editor`, `frontend/src/ui/PortraitEditor.tsx`) shows
+   each unit full-body and lets you drag/zoom a square crop with a live HUD-frame preview.
+   The HUD frame has no padding and uses `object-fit:cover`, so the crop **fills** the box.
+2. Export the JSON and save it to `docs/art/unit-concepts/portraits/crops.json` (per-piece
+   `cx, cy, s` over the master, plus the master framing).
+3. Bake: `BLENDER="…/blender.exe" bash docs/art/unit-concepts/portraits/bake_finals.sh` —
+   re-renders hi-res masters at the master framing, crops each by `crops.json`, resizes to
+   512, and writes `frontend/public/assets/units/<piece>/portrait/<palette>.png`.
+
+Master framing per piece lives in `crops.json` (`pawn/knight/bishop/queen/king` Tz 0.50
+span 1.45; `rook` Tz 0.45 span 1.75). Editor masters are at
+`/assets/portrait-editor/<piece>/<palette>.png`.
+
+## Reproduce (low-level)
+- Single blend piece: `blender -b --python docs/art/unit-concepts/portraits/portrait_render.py -- <blend> <outfile> <palette> <r> <g> <b> <keep|iron> <yaw> [metal] [rough]` (`PORTRAIT_TZ`/`PORTRAIT_SPAN`/`PORTRAIT_RES` env override framing/resolution)
 - Knight (procedural): `blender -b --python docs/art/unit-concepts/portraits/knight_portrait.py -- <palette> <outfile> <yaw>`
+- `render_all.sh` renders the older full-bust framing directly to the final paths — superseded by the editor+bake workflow above (running it overwrites the baked crops).
 
 Background art is intentionally **not** baked in — portraits ship transparent so a backdrop
 can be composited behind them later.

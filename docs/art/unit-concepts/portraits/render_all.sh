@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# DEPRECATED: the shipped portraits are now cropped headshots baked from the
+# Portrait Editor via bake_finals.sh + crops.json. This script renders the older
+# full-bust framing straight to the final paths and will OVERWRITE the baked
+# crops — keep it only for quick full-bust renders. See docs/portrait-contract.md.
+#
 # Render all 24 piece portraits (6 pieces x 4 palettes) into
 # frontend/public/assets/units/<piece>/portrait/<palette>.png
 #
