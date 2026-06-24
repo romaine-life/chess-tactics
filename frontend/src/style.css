@@ -6559,6 +6559,9 @@ h1 {
 }
 
 .skirmish-board-unit {
+  /* One knob for the whole move (travel + hop). Bump these to slow a move down;
+     the enemy override below makes its reply weightier. */
+  --move-duration: 360ms;
   align-items: center;
   display: grid;
   height: 86px;
@@ -6567,14 +6570,48 @@ h1 {
   position: absolute;
   transform: translate(-50%, -78%);
   transition:
-    left 170ms cubic-bezier(.2, .8, .2, 1),
-    top 170ms cubic-bezier(.2, .8, .2, 1);
+    left var(--move-duration) cubic-bezier(.22, .61, .36, 1),
+    top var(--move-duration) cubic-bezier(.22, .61, .36, 1);
   width: 72px;
   will-change: left, top;
 }
 
+/* The enemy answers with weight: a slower glide than the player's move. */
+.skirmish-board-unit.is-enemy {
+  --move-duration: 460ms;
+}
+
 .skirmish-board-unit.is-moving {
-  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, .34));
+  filter: drop-shadow(0 12px 11px rgba(0, 0, 0, .38));
+  z-index: 30000 !important;
+}
+
+/* A move is a small sequence, not a teleport: anticipation lift → arc through the
+   air → overshoot → settle. The container owns the travel (left/top); the sprite
+   owns the vertical hop spanning the same duration, so the two compose into an arc. */
+.skirmish-board-unit.is-moving img {
+  animation: unit-move-hop var(--move-duration) cubic-bezier(.4, 0, .2, 1);
+}
+
+.skirmish-board-unit.is-enemy.is-moving img {
+  animation: unit-move-hop-heavy var(--move-duration) cubic-bezier(.4, 0, .2, 1);
+}
+
+@keyframes unit-move-hop {
+  0% { transform: translateY(0) scale(1); }
+  14% { transform: translateY(-3px) scale(1.06); }  /* anticipation: brief wind-up */
+  48% { transform: translateY(-16px) scale(1.04); } /* apex of the arc */
+  80% { transform: translateY(2px) scale(.98); }    /* land + overshoot */
+  100% { transform: translateY(0) scale(1); }       /* settle */
+}
+
+@keyframes unit-move-hop-heavy {
+  0% { transform: translateY(0) scale(1); }
+  16% { transform: translateY(-2px) scale(1.07); }  /* bigger wind-up */
+  50% { transform: translateY(-12px) scale(1.03); } /* lower arc reads heavier */
+  78% { transform: translateY(4px) scale(.96); }    /* heavier landing */
+  90% { transform: translateY(-1px) scale(1.01); }  /* small bounce-back */
+  100% { transform: translateY(0) scale(1); }       /* settle */
 }
 
 .skirmish-board-unit img {
@@ -6634,9 +6671,29 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skirmish-board-unit {
-    transition: none;
+  /* Movement is functional feedback (where did the piece go?), not decoration,
+     so keep a brief slide instead of teleporting — but drop the airborne hop and
+     the decorative lift shadow that motion-sensitive players don't want. The turn
+     staging (your move → beat → enemy reply) still applies; that's pacing, not
+     motion. */
+  /* Keep the same deliberate travel timing the game is tuned around (a slower
+     slide is gentler, not more motion), but swap the airborne arc + scale bounce
+     for a small calm lift. !important exempts this one functional cue from the
+     global `* { animation: none }` reduced-motion reset further down this file. */
+  .skirmish-board-unit.is-moving {
+    filter: none;
   }
+
+  .skirmish-board-unit.is-moving img,
+  .skirmish-board-unit.is-enemy.is-moving img {
+    animation: unit-move-hop-soft var(--move-duration) ease-in-out !important;
+  }
+}
+
+@keyframes unit-move-hop-soft {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
 }
 
 .skirmish-left-panel {
@@ -9332,12 +9389,15 @@ h1 {
   overflow: hidden;
 }
 
-.tileset-studio-shell.is-catalog {
+/* Catalog and Lab share one fixed skeleton: a stretchy main pane on the left
+   and a 260px Controls rail on the right. The grid never changes between modes,
+   so the rail and pane hold their position — only their contents swap. */
+.tileset-studio-shell.is-catalog,
+.tileset-studio-shell.is-lab {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
-.tileset-studio-shell.is-view,
-.tileset-studio-shell.is-lab {
+.tileset-studio-shell.is-view {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -9358,12 +9418,39 @@ h1 {
 .tileset-candidate-main,
 .tileset-studio-inspector,
 .tileset-view-mode,
+.tileset-lab-stage,
 .tileset-view-controls,
 .tileset-studio-panel {
   background: rgba(5, 16, 25, 0.92);
   border: 1px solid rgba(67, 127, 179, 0.28);
   border-radius: 6px;
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+
+/* The Lab's left pane: the board surface. Same outer box as the catalog's
+   main pane, so switching Catalog <-> Lab keeps the left column identical. */
+.tileset-lab-stage {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+/* Component-view tabs (Board / Tile / Unit) sit at the top of the Controls
+   rail and stretch full-width, so they line up with the rail's other rows.
+   Override .tileset-mode-tabs' 78px-min auto columns: in the 260px rail three
+   78px buttons (= 256px min-content) can't shrink and would force every sibling
+   control to that width, clipping the rail's right edge. Let them shrink to fit. */
+.tileset-lab-component-tabs {
+  width: 100%;
+  margin: 0;
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+.tileset-lab-component-tabs button {
+  min-width: 0;
 }
 
 .tileset-studio-rail {
@@ -9458,7 +9545,7 @@ h1 {
 
 .tileset-studio-main {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   min-height: 0;
   min-width: 0;
@@ -11521,24 +11608,15 @@ button.tileset-relationship-cell {
 
 /* Units category (chess pieces folded into the studio catalog). */
 .unit-card-image {
-  min-height: 150px;
+  min-height: calc(150px * var(--tile-zoom, 1));
 }
 
 .unit-card-image img {
   width: auto;
-  height: 132px;
+  height: calc(132px * var(--tile-zoom, 1));
   max-width: 90%;
   object-fit: contain;
   image-rendering: auto;
-}
-
-.unit-studio-route .unit-card-image {
-  min-height: calc(150px * var(--tile-zoom, 1));
-}
-
-.unit-studio-route .unit-card-image img {
-  width: auto;
-  height: calc(132px * var(--tile-zoom, 1));
 }
 
 .unit-catalog-empty {

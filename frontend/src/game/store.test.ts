@@ -1,11 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useSkirmish } from './store';
 import { livingPieces } from '../core/rules';
+
+// The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
+// turn-taking rather than a simultaneous swap. Fake timers let us drive that
+// reply deterministically and keep pending timeouts from leaking between tests.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
 
 function playFirstMove(seed: number) {
   useSkirmish.getState().newSkirmish({ seed });
   const moves = useSkirmish.getState().movesForSelected();
   if (moves.length) useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+  vi.runAllTimers(); // resolve the staged enemy reply
   return useSkirmish.getState().game;
 }
 
@@ -29,14 +39,22 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().selectedId).toBe(selectedId);
   });
 
-  it('a legal move advances state and hands the turn back to the player (or ends)', () => {
+  it('a legal move applies immediately and stages the enemy reply on a beat', () => {
     useSkirmish.getState().newSkirmish({ seed: 5 });
     const before = useSkirmish.getState().game;
     const moves = useSkirmish.getState().movesForSelected();
     expect(moves.length).toBeGreaterThan(0);
     useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+
+    // The player's move lands right away; the enemy hasn't answered yet, so the
+    // turn is held on 'enemy' (which also locks further player input).
+    const mid = useSkirmish.getState().game;
+    expect(mid).not.toBe(before); // new immutable state
+    expect(['enemy', 'done']).toContain(mid.turn);
+
+    // After the staged beat the enemy answers and the turn returns to the player.
+    vi.runAllTimers();
     const after = useSkirmish.getState().game;
-    expect(after).not.toBe(before); // new immutable state
     expect(['player', 'done']).toContain(after.turn);
   });
 
