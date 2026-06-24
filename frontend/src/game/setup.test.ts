@@ -58,6 +58,12 @@ describe('createSkirmish', () => {
     for (const p of livingPieces(s.pieces, 'enemy')) expect(p.y).toBeLessThanOrEqual(1);
   });
 
+  it('spawns opposing sides facing each other across the board', () => {
+    const s = createSkirmish({ seed: 5 });
+    for (const p of livingPieces(s.pieces, 'player')) expect(p.facing).toBe('north');
+    for (const p of livingPieces(s.pieces, 'enemy')) expect(p.facing).toBe('south');
+  });
+
   it('marks spawned pawns as being on their home rank', () => {
     for (const seed of [1, 2, 5, 7, 13, 42, 99]) {
       const s = createSkirmish({ seed });

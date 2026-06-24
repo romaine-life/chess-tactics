@@ -4,7 +4,7 @@ import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGener
 import type { BoardSize, Move, Piece, TerrainType, Vec } from '../core/types';
 import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
 import { canTraverse, elevationAt } from '../core/terrain';
-import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
+import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import type { TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
@@ -57,7 +57,7 @@ function rockSpritePath(piece: Piece): string {
 function pieceImageSrc(piece: Piece): string | null {
   if (piece.type === 'rock' || piece.type === 'random-rock') return rockSpritePath(piece);
   if (piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
-  return pieceSpritePath(piece.type, SIDE_PALETTE[piece.side]);
+  return pieceSpritePath(piece.type, SIDE_PALETTE[piece.side], piece.facing ?? defaultFacingForSide(piece.side));
 }
 
 function pieceName(piece: Piece): string {

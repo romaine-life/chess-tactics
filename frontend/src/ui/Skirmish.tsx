@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { useSkirmish } from '../game/store';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace } from '../net/campaignWorkspace';
 import { livingPieces } from '../core/rules';
+import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 
 const OBJECTIVE_COPY = {
   'capture-all': 'Capture all enemy pieces',
@@ -52,8 +53,12 @@ export function Skirmish() {
     return () => { active = false; };
   }, [newSkirmish, routeCampaignId, routeLevel, routeLevelId]);
 
+  const screenStyle = {
+    '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")`,
+  } as CSSProperties;
+
   return (
-    <div data-testid="skirmish" className="skirmish-screen">
+    <div data-testid="skirmish" className="skirmish-screen" style={screenStyle}>
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <header className="skirmish-topbar" aria-label="Skirmish status">
           <a className="skirmish-brand" href="/" aria-label="Chess Tactics home">

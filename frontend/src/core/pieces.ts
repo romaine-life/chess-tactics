@@ -1,4 +1,4 @@
-import type { PieceType, Side } from './types';
+import type { PieceType, Side, UnitFacing } from './types';
 
 export const PLAYABLE_PIECE_TYPES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const satisfies readonly PieceType[];
 export type PlayablePieceType = typeof PLAYABLE_PIECE_TYPES[number];
@@ -35,7 +35,28 @@ export const UNIT_PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald'] as co
 export type UnitPalette = typeof UNIT_PALETTES[number];
 export const DEFAULT_PALETTE: UnitPalette = 'navy-blue';
 
-export const pieceSpritePath = (type: PlayablePieceType, palette: UnitPalette = DEFAULT_PALETTE, direction = 'south') =>
+export const UNIT_FACINGS: readonly UnitFacing[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+
+export const defaultFacingForSide = (side: Side): UnitFacing => {
+  if (side === 'enemy') return 'south';
+  return 'north';
+};
+
+export const facingFromDelta = (dx: number, dy: number): UnitFacing | null => {
+  const sx = Math.sign(dx);
+  const sy = Math.sign(dy);
+  if (sx === 0 && sy === 0) return null;
+  if (sx === 0 && sy < 0) return 'north';
+  if (sx > 0 && sy < 0) return 'north-east';
+  if (sx > 0 && sy === 0) return 'east';
+  if (sx > 0 && sy > 0) return 'south-east';
+  if (sx === 0 && sy > 0) return 'south';
+  if (sx < 0 && sy > 0) return 'south-west';
+  if (sx < 0 && sy === 0) return 'west';
+  return 'north-west';
+};
+
+export const pieceSpritePath = (type: PlayablePieceType, palette: UnitPalette = DEFAULT_PALETTE, direction: UnitFacing = 'south') =>
   `/assets/units/${type}/${palette}/${direction}.png`;
 
 // Which palette a board side wears. Shared by the board and the HUD portrait.
