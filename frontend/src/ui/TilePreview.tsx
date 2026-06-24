@@ -27,17 +27,21 @@ import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
 import { BoardLabBoard } from '../render/BoardLabBoard';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
+import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 import {
   MISSING_DIRECTION_SPRITE,
+  activeUnitFamilies,
+  familyLabels,
   hasDirectionSprite,
   renderSizeForTileScale,
   unitAssets,
   type Direction,
   type Faction,
+  type PieceId,
   type UnitAsset,
 } from './unitCatalog';
 
@@ -478,276 +482,6 @@ function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 150): num
   return animationFrame;
 }
 
-function StudioTileCard({
-  asset,
-  selected,
-  showFootprint,
-  zoom,
-  animationFrame,
-  onSelect,
-  onInspect,
-  onArmBrush,
-  onOpenBoard,
-  onWheel,
-}: {
-  asset: StudioAsset;
-  selected: boolean;
-  showFootprint: boolean;
-  zoom: number;
-  animationFrame: number;
-  onSelect: () => void;
-  onInspect: () => void;
-  onArmBrush?: () => void;
-  onOpenBoard?: () => void;
-  onWheel: (event: WheelEvent<HTMLButtonElement>) => void;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      className={`tileset-studio-card is-${asset.kind} ${selected ? 'is-selected' : ''} ${showFootprint ? 'has-footprint' : ''}`}
-      onClick={onSelect}
-      onWheel={onWheel}
-      aria-pressed={selected}
-    >
-      <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-        <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" />
-      </span>
-      <span className="tileset-studio-card-meta">
-        <span
-          className="tileset-studio-card-text"
-          onClick={(event) => { event.stopPropagation(); onInspect(); }}
-        >
-          <strong>{asset.label}</strong>
-          <em>{asset.role}</em>
-        </span>
-        {onArmBrush || onOpenBoard ? (
-          <span className="tileset-card-actions">
-            {onArmBrush ? (
-              <span
-                className="tileset-card-action"
-                role="button"
-                tabIndex={0}
-                title={`Paint with ${asset.label} on the current board`}
-                aria-label={`Paint with ${asset.label}`}
-                onClick={(event) => { event.stopPropagation(); onArmBrush(); }}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onArmBrush(); } }}
-              >
-                🖌
-              </span>
-            ) : null}
-            {onOpenBoard ? (
-              <span
-                className="tileset-card-action"
-                role="button"
-                tabIndex={0}
-                title={`Open ${asset.label} as a fresh board (replaces the current board)`}
-                aria-label={`Open ${asset.label} as a fresh board`}
-                onClick={(event) => { event.stopPropagation(); onOpenBoard(); }}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onOpenBoard(); } }}
-              >
-                <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                  <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                  <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            ) : null}
-          </span>
-        ) : null}
-      </span>
-    </button>
-  );
-}
-
-function TransitionRelationshipGrid({
-  family,
-  pair,
-  selectedAsset,
-  selectedSlotMask,
-  showFootprint,
-  animationFrame,
-  onPairSelect,
-  onAssetSelect,
-  onSlotSelect,
-  onAssetInspect,
-  onSlotInspect,
-}: {
-  family: StudioFamily;
-  pair: TransitionPair;
-  selectedAsset: StudioAsset;
-  selectedSlotMask?: number;
-  showFootprint: boolean;
-  animationFrame: number;
-  onPairSelect: (pairId: TerrainPairId) => void;
-  onAssetSelect: (asset: StudioAsset) => void;
-  onSlotSelect: (slot: TransitionSlot<StudioAsset>) => void;
-  onAssetInspect: (asset: StudioAsset) => void;
-  onSlotInspect: (pair: TransitionPair, slot: TransitionSlot<StudioAsset>) => void;
-}): ReactElement {
-  const pairs = transitionPairsForFamily(family.id);
-  const slots = transitionSlotsForPair(pair, transitionAssets);
-
-  return (
-    <div className="tileset-transition-workbench" aria-label={`${family.label} transition relationships`}>
-      <nav className="tileset-pair-tabs" aria-label="Transition pairs">
-        {pairs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={item.id === pair.id ? 'is-active' : ''}
-            onClick={() => onPairSelect(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-      <div className="tileset-relationship-grid" aria-label={`${pair.label} connection previews`}>
-        {slots.map((slot) => {
-          const firstAsset = slot.assets[0];
-          const isSelected = selectedSlotMask === slot.mask || slot.assets.some((asset) => asset.id === selectedAsset.id);
-          const cells = [
-            { edge: 'north' as EdgeName, x: 1, y: 0, asset: familyBaseAsset(slot.sockets.north) },
-            { edge: 'west' as EdgeName, x: 0, y: 1, asset: familyBaseAsset(slot.sockets.west) },
-            { edge: 'center' as const, x: 1, y: 1, asset: firstAsset },
-            { edge: 'east' as EdgeName, x: 2, y: 1, asset: familyBaseAsset(slot.sockets.east) },
-            { edge: 'south' as EdgeName, x: 1, y: 2, asset: familyBaseAsset(slot.sockets.south) },
-          ];
-
-          return (
-            <article
-              key={slot.mask}
-              className={`tileset-relationship-card ${firstAsset ? 'has-asset' : 'is-missing'} ${isSelected ? 'is-selected' : ''} ${showFootprint ? 'has-footprint' : ''}`}
-              onClick={() => {
-                if (firstAsset) {
-                  onAssetSelect(firstAsset);
-                } else {
-                  onSlotSelect(slot);
-                }
-              }}
-            >
-              <span
-                className="tileset-relationship-head"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (firstAsset) {
-                    onAssetInspect(firstAsset);
-                  } else {
-                    onSlotInspect(pair, slot);
-                  }
-                }}
-              >
-                <strong>{slot.label}</strong>
-                <span>{slot.code}</span>
-              </span>
-              <span className="tileset-relationship-board" aria-label={`${slot.label} transition relationship`}>
-                {cells.map((cell) => {
-                  const left = 110 + (cell.x - cell.y) * 32;
-                  const top = 10 + (cell.x + cell.y) * 16;
-                  return (
-                    <span
-                      key={cell.edge}
-                      className={`tileset-relationship-cell is-${cell.edge} ${cell.asset ? '' : 'is-empty'}`}
-                      style={{ left, top, zIndex: cell.x + cell.y }}
-                    >
-                      {cell.asset ? <img src={assetFrameSrc(cell.asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
-                    </span>
-                  );
-                })}
-                {cells
-                  .filter((cell): cell is typeof cell & { asset: StudioAsset } => Boolean(cell.asset))
-                  .map((cell) => {
-                    const left = 110 + (cell.x - cell.y) * 32;
-                    const top = 10 + (cell.x + cell.y) * 16;
-                    return (
-                      <button
-                        key={`hit-${cell.edge}`}
-                        type="button"
-                        className={`tileset-relationship-hit-target is-${cell.edge}`}
-                        style={{ left, top, zIndex: 100 + cell.x + cell.y }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onAssetSelect(cell.asset);
-                        }}
-                        aria-label={`Inspect ${cell.asset.label}`}
-                      />
-                    );
-                  })}
-              </span>
-              <span
-                className="tileset-relationship-foot"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (firstAsset) {
-                    onAssetInspect(firstAsset);
-                  } else {
-                    onSlotInspect(pair, slot);
-                  }
-                }}
-              >
-                {firstAsset ? `${firstAsset.label} · transition tile` : 'Needs transition art'}
-              </span>
-            </article>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function TransitionSlotPreview({
-  slot,
-  asset,
-  showFootprint,
-  animationFrame,
-}: {
-  slot: TransitionSlot<StudioAsset>;
-  asset?: StudioAsset;
-  showFootprint: boolean;
-  animationFrame: number;
-}): ReactElement {
-  const cells = [
-    { edge: 'north' as EdgeName, x: 1, y: 0, asset: familyBaseAsset(slot.sockets.north) },
-    { edge: 'west' as EdgeName, x: 0, y: 1, asset: familyBaseAsset(slot.sockets.west) },
-    { edge: 'center' as const, x: 1, y: 1, asset },
-    { edge: 'east' as EdgeName, x: 2, y: 1, asset: familyBaseAsset(slot.sockets.east) },
-    { edge: 'south' as EdgeName, x: 1, y: 2, asset: familyBaseAsset(slot.sockets.south) },
-  ];
-
-  return (
-    <span className={`tileset-relationship-board ${showFootprint ? 'has-footprint' : ''}`} aria-label={`${slot.label} transition relationship`}>
-      {cells.map((cell) => {
-        const left = 110 + (cell.x - cell.y) * 32;
-        const top = 10 + (cell.x + cell.y) * 16;
-        const cellClassName = `tileset-relationship-cell is-${cell.edge} ${cell.asset ? '' : 'is-empty'}`;
-        const cellStyle = { '--relationship-left': `${left}px`, '--relationship-top': `${top}px`, zIndex: cell.x + cell.y } as CSSProperties;
-        const cellAsset = cell.asset;
-        if (cellAsset) {
-          return (
-            <button
-              key={cell.edge}
-              type="button"
-              className={cellClassName}
-              style={cellStyle}
-              data-asset-id={cellAsset.id}
-              aria-label={`Inspect ${cellAsset.label}`}
-            >
-              <img src={assetFrameSrc(cellAsset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" />
-            </button>
-          );
-        }
-        return (
-          <span
-            key={cell.edge}
-            className={cellClassName}
-            style={cellStyle}
-          >
-            {cell.asset ? <img src={assetFrameSrc(cell.asset, animationFrame)} alt="" draggable={false} loading="eager" decoding="sync" /> : <span>Missing</span>}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
-
 function StudioGeneratedBoard({
   board,
   showFootprint,
@@ -897,92 +631,6 @@ function StudioEditableBoard({
 
 // Units browser folded into the shared studio catalog. Unit data comes from
 // unitCatalog.ts so the catalog, lab brush, and standalone Unit Studio stay in sync.
-function UnitsStudio({
-  selectedUnitId,
-  units,
-  zoom,
-  onSelect,
-  onInspect,
-  onArmBrush,
-}: {
-  selectedUnitId: string;
-  units: UnitAsset[];
-  zoom: number;
-  onSelect: (unitId: string) => void;
-  onInspect: (unitId: string) => void;
-  onArmBrush: (unitId: string) => void;
-}): ReactElement {
-  return (
-    <section className="tileset-studio-main">
-      <section className="tileset-studio-tab-panel">
-        <div className="tileset-asset-sections">
-          <section className="tileset-asset-section" aria-label="Production units">
-            <h3>Production Units</h3>
-            <div className="tileset-studio-grid" aria-label="Unit assets">
-              {units.map((unit) => (
-                <button
-                  key={unit.id}
-                  type="button"
-                  className={`tileset-studio-card is-unit ${unit.id === selectedUnitId ? 'is-selected' : ''}`}
-                  onClick={() => onSelect(unit.id)}
-                  title={`Select ${unit.label}`}
-                  aria-pressed={unit.id === selectedUnitId}
-                >
-                  <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-                    <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
-                  </span>
-                  <span className="tileset-studio-card-meta">
-                    <span
-                      className="tileset-studio-card-text"
-                      onClick={(event) => { event.stopPropagation(); onSelect(unit.id); }}
-                    >
-                      <strong>{unit.label}</strong>
-                      <em>{unit.badge}</em>
-                    </span>
-                    <span className="tileset-card-actions">
-                      <span
-                        className="tileset-card-action"
-                        role="button"
-                        tabIndex={0}
-                        title={`Place ${unit.label} on the current board`}
-                        aria-label={`Place ${unit.label}`}
-                        onClick={(event) => { event.stopPropagation(); onArmBrush(unit.id); }}
-                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onArmBrush(unit.id); } }}
-                      >
-                        🖌
-                      </span>
-                      <span
-                        className="tileset-card-action"
-                        role="button"
-                        tabIndex={0}
-                        title={`Inspect ${unit.label} in the lab`}
-                        aria-label={`Inspect ${unit.label}`}
-                        onClick={(event) => { event.stopPropagation(); onInspect(unit.id); }}
-                        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onInspect(unit.id); } }}
-                      >
-                        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                          <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                          <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </span>
-                    </span>
-                  </span>
-                </button>
-              ))}
-              {units.length === 0 ? (
-                <div className="unit-catalog-empty">
-                  <h3>No units match</h3>
-                  <p>Try a different search.</p>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        </div>
-      </section>
-    </section>
-  );
-}
-
 type LevelBrush = TileFamilyId | 'erase';
 const levelTerrainOrder: TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
 const levelFamilySwatch: Record<TileFamilyId, string> = {
@@ -1588,7 +1236,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     initialRoute.tileFilter === 'board' ? ['base'] : [initialRoute.tileFilter],
   );
   const [catalogQuery, setCatalogQuery] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
   const skipNextRouteWriteRef = useRef(false);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [showFootprint, setShowFootprint] = useState(true);
@@ -1615,7 +1263,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [boardSectionOpen, setBoardSectionOpen] = useState(true);
   const [viewSectionOpen, setViewSectionOpen] = useState(true);
-  const filterDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const family = studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
   // The Blender textured tileset is hard-edged: only base tiles, no transition or
@@ -1967,26 +1614,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   }, [animationFrameCount, inspectedAnimatedAsset?.id]);
 
   useEffect(() => {
-    if (!filterOpen) return;
-
-    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Node && filterDropdownRef.current?.contains(target)) return;
-      setFilterOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setFilterOpen(false);
-    };
-
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [filterOpen]);
-
-  useEffect(() => {
     setViewPan({ x: 0, y: 0 });
     setViewZoom(defaultViewZoom(viewVisualKind));
   }, [boardMode, boardScope, boardSeed, boardSize, selectedAsset.id, selectedSlotMask, viewVisualKind]);
@@ -2012,16 +1639,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedUnitId: unitBrushId,
     });
   }, [boardMode, boardScope, boardSeed, boardSize, brushKind, familyId, labMode, selectedAsset.id, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
-
-  const zoomTilesWithWheel = (event: WheelEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    const direction = event.deltaY < 0 ? 1 : -1;
-    setZoom((value) => clamp(Number((value + direction * 0.05).toFixed(2)), 0.75, 2));
-  };
-
-  const ignoreTileWheel = (event: WheelEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-  };
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
@@ -2244,6 +1861,76 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setStudioMode('lab');
   };
 
+  // Catalog asset-type descriptors. The generic <CatalogGrid>/<CatalogControls>
+  // render either of these; a new asset type is just another descriptor.
+  const tileFamilyOf = new Map<string, StudioFamilyId>();
+  for (const fam of studioFamilies) for (const a of fam.assets) tileFamilyOf.set(a.id, fam.id);
+  const tilesCatalogType: CatalogType<StudioAsset> = {
+    id: 'tiles',
+    label: 'Tiles',
+    assets: studioFamilies.flatMap((fam) => fam.assets),
+    card: (a) => ({ img: assetFrameSrc(a, animationFrame), title: a.label, badge: a.role }),
+    sections: (visible) => [{ id: 'base', label: 'Base Tiles', assets: visible.filter((a) => a.kind === 'tile') }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'label, source, socket...',
+      match: (a, q) => [a.label, a.role, a.source, a.notes, ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    filters: [
+      {
+        id: 'family',
+        label: 'Tile Family',
+        options: studioFamilies.map((fam) => ({ id: fam.id, label: fam.label, sub: familyCounts(fam) })),
+        memberOf: (a) => [tileFamilyOf.get(a.id) ?? 'grass'],
+        selected: selectedFamilyIds,
+        toggle: (id) => toggleFamilyFilter(id as StudioFamilyId),
+        selectAll: () => setSelectedFamilyIds(studioFamilies.map((fam) => fam.id)),
+        clear: () => setSelectedFamilyIds([]),
+      },
+    ],
+    onSelect: (a) => { setSelectedAssetId(a.id); setSelectedSlotMask(undefined); },
+    onView: inspectAsset,
+    onArm: armBrush,
+    selectedId: selectedAssetId,
+  };
+  const unitFamilyCount = (family: PieceId) => unitAssets.filter((u) => u.family === family).length;
+  const unitsCatalogType: CatalogType<UnitAsset> = {
+    id: 'units',
+    label: 'Units',
+    assets: unitAssets,
+    card: (u) => ({ img: u.preview, title: u.label, badge: u.badge, isUnit: true }),
+    sections: (visible) => [{ id: 'units', label: 'Production Units', assets: [...visible] }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'piece, read, status...',
+      match: (u, q) => [u.label, u.badge, u.family, u.read, u.status].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    filters: [
+      {
+        id: 'family',
+        label: 'Unit Family',
+        options: activeUnitFamilies.map((family) => {
+          const n = unitFamilyCount(family);
+          return { id: family, label: familyLabels[family], sub: `${n} ${n === 1 ? 'unit' : 'units'}` };
+        }),
+        memberOf: (u) => [u.family],
+        selected: selectedUnitFamilies,
+        toggle: (id) => setSelectedUnitFamilies((cur) => (cur.includes(id as PieceId) ? cur.filter((x) => x !== id) : [...cur, id as PieceId])),
+        selectAll: () => setSelectedUnitFamilies(activeUnitFamilies),
+        clear: () => setSelectedUnitFamilies([]),
+      },
+    ],
+    onSelect: (u) => selectUnitInCatalog(u.id),
+    onView: (u) => inspectUnitInLab(u.id),
+    onArm: (u) => placeUnitOnLoadedBoard(u.id),
+    selectedId: unitBrushId,
+    note: 'Select a unit card to place it in the shared lab board.',
+  };
+
   return (
     <main className="tileset-studio-page">
       <header className="tileset-studio-header">
@@ -2274,45 +1961,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
-        {category === 'units' ? (
-          <UnitsStudio
-            selectedUnitId={unitBrushAsset.id}
-            units={visibleUnits}
-            zoom={zoom}
-            onSelect={selectUnitInCatalog}
-            onInspect={inspectUnitInLab}
-            onArmBrush={placeUnitOnLoadedBoard}
-          />
-        ) : (
-          <section className="tileset-studio-main">
-          <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
-              <div className="tileset-asset-sections">
-                {selectedCollectionFilters.includes('base') ? (
-                  <section className="tileset-asset-section" aria-label="Base tiles">
-                    <h3>Base Tiles</h3>
-                    <div className="tileset-studio-grid" aria-label="Base assets">
-                      {visibleCatalogBaseAssets.map((asset) => (
-                        <StudioTileCard
-                          key={asset.id}
-                          asset={asset}
-                          selected={!selectedSlotMask && asset.id === selectedAsset.id}
-                          showFootprint={showFootprint}
-                          zoom={zoom}
-                          animationFrame={animationFrame}
-                          onSelect={() => inspectAsset(asset)}
-                          onInspect={() => inspectAsset(asset)}
-                          onArmBrush={asset.kind === 'tile' ? () => armBrush(asset) : undefined}
-                          onOpenBoard={() => inspectAsset(asset)}
-                          onWheel={ignoreTileWheel}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-              </div>
-            </section>
-          </section>
-        )}
+        {category === 'units' ? <CatalogGrid type={unitsCatalogType} /> : <CatalogGrid type={tilesCatalogType} />}
         <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Catalog controls">
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
@@ -2335,147 +1984,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   Units
                 </button>
               </div>
-              {category === 'tiles' ? (
-                <>
-                  <label className="tileset-catalog-search">
-                    <span>Search</span>
-                    <input
-                      type="search"
-                      value={catalogQuery}
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                      placeholder="label, source, socket..."
-                    />
-                  </label>
-                  <label className="tileset-catalog-zoom">
-                    <span>Zoom</span>
-                    <input
-                      type="range"
-                      min="0.75"
-                      max="2"
-                      step="0.05"
-                      value={zoom}
-                      onChange={(event) => setZoom(Number(event.target.value))}
-                    />
-                  </label>
-                  <div className="tileset-active-filters" aria-label="Active filters">
-                    {activeFamilies.map((item) => (
-                      <button key={item.id} type="button" onClick={() => toggleFamilyFilter(item.id)} title={`Remove ${item.label} filter`}>
-                        {item.label}
-                      </button>
-                    ))}
-                    {selectedCollectionFilters.map((filter) => (
-                      <button key={filter} type="button" onClick={() => toggleCollectionFilter(filter)} title={`Remove ${filter} filter`}>
-                        {collectionFilters.find(([id]) => id === filter)?.[1] ?? filter}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="tileset-filter-dropdown" ref={filterDropdownRef}>
-                    <button
-                      type="button"
-                      className={filterOpen ? 'is-active' : ''}
-                      onClick={() => setFilterOpen((value) => !value)}
-                      aria-expanded={filterOpen}
-                      aria-controls="tileset-filter-menu"
-                    >
-                      Filters
-                    </button>
-                    {filterOpen ? (
-                      <div id="tileset-filter-menu" className="tileset-filter-menu" role="dialog" aria-label="Tileset filters">
-                        <div className="tileset-filter-menu-header">
-                          <strong>Filters</strong>
-                          <span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedFamilyIds(studioFamilies.map((item) => item.id));
-                                setSelectedCollectionFilters(collectionFilters.map(([filter]) => filter));
-                              }}
-                            >
-                              Select all
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedFamilyIds([]);
-                                setSelectedCollectionFilters([]);
-                              }}
-                            >
-                              Clear
-                            </button>
-                          </span>
-                        </div>
-                        <section className="tileset-filter-group" aria-label="Tile families">
-                          <h3>Tile Family</h3>
-                          {studioFamilies.map((item) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              className={`tileset-filter-option${selectedFamilyIds.includes(item.id) ? ' is-active' : ''}`}
-                              aria-pressed={selectedFamilyIds.includes(item.id)}
-                              onClick={() => toggleFamilyFilter(item.id)}
-                            >
-                              <span className="tileset-filter-mark" aria-hidden="true" />
-                              <span className="tileset-filter-option-copy">
-                                <strong>{item.label}</strong>
-                                <span>{familyCounts(item)}</span>
-                              </span>
-                            </button>
-                          ))}
-                        </section>
-                        <section className="tileset-filter-group" aria-label="Collections">
-                          <h3>Collection</h3>
-                          {collectionFilters.map(([filter, label]) => (
-                            <button
-                              key={filter}
-                              type="button"
-                              className={`tileset-filter-option${selectedCollectionFilters.includes(filter) ? ' is-active' : ''}`}
-                              aria-pressed={selectedCollectionFilters.includes(filter)}
-                              onClick={() => toggleCollectionFilter(filter)}
-                            >
-                              <span className="tileset-filter-mark" aria-hidden="true" />
-                              <span className="tileset-filter-option-copy">
-                                <strong>{label}</strong>
-                                <span>{filter === 'base' ? 'terrain variants' : filter === 'transitions' ? 'edge socket tiles' : 'footprint guides'}</span>
-                              </span>
-                            </button>
-                          ))}
-                        </section>
-                      </div>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="tileset-view-action"
-                    onClick={viewCurrentSelection}
-                  >
-                    View Selected
-                  </button>
-                </>
-              ) : (
-                <>
-                  <label className="tileset-catalog-search">
-                    <span>Search</span>
-                    <input
-                      type="search"
-                      value={catalogQuery}
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                      placeholder="piece, read, status..."
-                    />
-                  </label>
-                  <label className="tileset-catalog-zoom">
-                    <span>Zoom</span>
-                    <input
-                      type="range"
-                      min="0.75"
-                      max="2"
-                      step="0.05"
-                      value={zoom}
-                      onChange={(event) => setZoom(Number(event.target.value))}
-                    />
-                  </label>
-                  <p className="tileset-catalog-note">Select a unit card to place it in the shared lab board.</p>
-                </>
-              )}
+              {category === 'units' ? <CatalogControls type={unitsCatalogType} /> : <CatalogControls type={tilesCatalogType} />}
             </div>
           </section>
         </aside>
