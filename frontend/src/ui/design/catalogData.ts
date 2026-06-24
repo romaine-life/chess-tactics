@@ -114,8 +114,21 @@ export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
             href: '/design/catalog/9-slice/panel',
             children: [
               { label: 'Main Menu', href: '/design/catalog/main-menu-panels/panel-9slice.main-menu.profile' },
+              { label: 'Campaign Editor', href: '/design/catalog/campaign-editor-panels/panel-9slice.campaign-editor.large' },
             ],
           },
+        ],
+      },
+      {
+        label: 'Campaign Editor',
+        href: '/design/catalog/campaign-editor-panels',
+        children: [
+          { label: 'Panels', href: '/design/catalog/campaign-editor-panels' },
+          { label: 'Buttons', href: '/design/catalog/campaign-editor-buttons' },
+          { label: 'Icon Buttons', href: '/design/catalog/campaign-editor-icon-buttons' },
+          { label: 'Rows', href: '/design/catalog/campaign-editor-rows' },
+          { label: 'Fields', href: '/design/catalog/campaign-editor-fields' },
+          { label: 'Shields', href: '/design/catalog/campaign-editor-shields' },
         ],
       },
       {
@@ -294,6 +307,12 @@ export function insetStyle(inset: Rect | undefined, frame: Rect | undefined): CS
 }
 
 export function assetTypeLabel(type: string): string {
+  if (type === 'button-9slice.campaign-editor') return 'Campaign Editor Button 9-Slice';
+  if (type === 'field.campaign-editor') return 'Campaign Editor Field';
+  if (type === 'icon-button.campaign-editor') return 'Campaign Editor Icon Button';
+  if (type === 'panel-9slice.campaign-editor') return 'Campaign Editor Panel 9-Slice';
+  if (type === 'row.campaign-editor') return 'Campaign Editor Row';
+  if (type === 'shield.campaign-editor') return 'Campaign Editor Shield';
   if (type === 'button-9slice.main-menu') return 'Main Menu Button 9-Slice';
   if (type === 'button-row.main-menu') return 'Main Menu Button Row';
   if (type === 'panel-9slice.main-menu') return 'Main Menu Panel 9-Slice';
@@ -303,6 +322,12 @@ export function assetTypeLabel(type: string): string {
 }
 
 export function assetTypePath(type: string): string {
+  if (type === 'button-9slice.campaign-editor') return '/design/catalog/campaign-editor-buttons';
+  if (type === 'field.campaign-editor') return '/design/catalog/campaign-editor-fields';
+  if (type === 'icon-button.campaign-editor') return '/design/catalog/campaign-editor-icon-buttons';
+  if (type === 'panel-9slice.campaign-editor') return '/design/catalog/campaign-editor-panels';
+  if (type === 'row.campaign-editor') return '/design/catalog/campaign-editor-rows';
+  if (type === 'shield.campaign-editor') return '/design/catalog/campaign-editor-shields';
   if (type === 'button-9slice.main-menu') return '/design/catalog/main-menu-buttons';
   if (type === 'button-row.main-menu') return '/design/catalog/main-menu-button-rows';
   if (type === 'panel-9slice.main-menu') return '/design/catalog/main-menu-panels';

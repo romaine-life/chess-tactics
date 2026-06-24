@@ -20,7 +20,7 @@ function AssetFrame({ asset, frame, label }: { asset: Asset; frame: Rect; label?
 }
 
 function ButtonAssetCard({ asset }: { asset: Asset }): React.ReactElement {
-  const states = Object.entries(asset.states || {});
+  const states = Object.entries(asset.states || (asset.rect ? { asset: { label: 'Asset', rect: asset.rect } } : {}));
   const rules = asset.rules || {};
   return (
     <article className="catalog-asset-card" id={asset.id}>
@@ -66,7 +66,7 @@ function ButtonAssetCard({ asset }: { asset: Asset }): React.ReactElement {
 }
 
 function ButtonRowAssetCard({ asset }: { asset: Asset }): React.ReactElement {
-  const states = Object.entries(asset.states || {});
+  const states = Object.entries(asset.states || (asset.rect ? { asset: { label: 'Asset', rect: asset.rect } } : {}));
   const rules = asset.rules || {};
   return (
     <article className="catalog-asset-card" id={asset.id}>
@@ -179,12 +179,61 @@ function IconAssetCard({ asset }: { asset: Asset }): React.ReactElement {
   );
 }
 
+function GenericAssetCard({ asset }: { asset: Asset }): React.ReactElement {
+  const rules = asset.rules || {};
+  const rect = asset.rect;
+  const states = Object.entries(asset.states || {});
+  return (
+    <article className="catalog-asset-card" id={asset.id}>
+      <header className="catalog-asset-head">
+        <span className="design-hub-kicker">{asset.type} · {asset.status || 'draft'}</span>
+        <h3>{asset.title || asset.id}</h3>
+        <p>{asset.summary || ''}</p>
+      </header>
+
+      <section className="catalog-asset-meta" aria-label="Asset metadata">
+        <div><dt>ID</dt><dd>{asset.id}</dd></div>
+        <div><dt>Source</dt><dd>{asset.source?.kind || 'unknown'}</dd></div>
+        <div><dt>Text</dt><dd>{rules.text || 'unknown'}</dd></div>
+        <div><dt>Sizing</dt><dd>{rules.sizing || 'unknown'}</dd></div>
+      </section>
+
+      {states.length ? (
+        <section className="catalog-state-grid" aria-label="Asset states">
+          {states.map(([stateKey, state]) => (
+            <div className="catalog-state-card" key={stateKey}>
+              <strong>{state.label || stateKey}</strong>
+              <AssetFrame asset={asset} frame={state.rect} />
+              <code>x:{state.rect.x} y:{state.rect.y} w:{state.rect.w} h:{state.rect.h}</code>
+            </div>
+          ))}
+        </section>
+      ) : (
+        <section className="catalog-icon-preview" aria-label="Asset preview">
+          <div className="catalog-state-card">
+            <strong>Asset Crop</strong>
+            {rect ? <AssetFrame asset={asset} frame={rect} /> : null}
+            {rect ? <code>x:{rect.x} y:{rect.y} w:{rect.w} h:{rect.h}</code> : null}
+          </div>
+        </section>
+      )}
+
+      <section className="catalog-rule-grid" aria-label="Asset rules">
+        <div><h4>Content Inset</h4><code>{JSON.stringify(rules.contentInset || {})}</code></div>
+        <div><h4>Patch Margins</h4><code>{JSON.stringify(rules.patchMargins || {})}</code></div>
+        <div><h4>Text Inset</h4><code>{JSON.stringify(rules.textInset || {})}</code></div>
+        <div><h4>Notes</h4><ul>{(rules.notes || []).map((note, i) => <li key={i}>{note}</li>)}</ul></div>
+      </section>
+    </article>
+  );
+}
+
 export function CatalogAssetCard({ asset }: { asset: Asset }): React.ReactElement | null {
-  if (asset.type === 'button-9slice.main-menu') return <ButtonAssetCard asset={asset} />;
-  if (asset.type === 'button-row.main-menu') return <ButtonRowAssetCard asset={asset} />;
-  if (asset.type === 'panel-9slice.main-menu') return <PanelAssetCard asset={asset} />;
-  if (asset.type === 'button-icon.main-menu' || asset.type === 'profile-icon.main-menu') return <IconAssetCard asset={asset} />;
-  return null;
+  if (asset.type.startsWith('button-9slice.')) return <ButtonAssetCard asset={asset} />;
+  if (asset.type === 'button-row.main-menu' || asset.type === 'row.campaign-editor') return <ButtonRowAssetCard asset={asset} />;
+  if (asset.type.startsWith('panel-9slice.')) return <PanelAssetCard asset={asset} />;
+  if (asset.type === 'button-icon.main-menu' || asset.type === 'profile-icon.main-menu' || asset.type === 'icon-button.campaign-editor' || asset.type === 'shield.campaign-editor') return <IconAssetCard asset={asset} />;
+  return <GenericAssetCard asset={asset} />;
 }
 
 interface ClassKind { title: string; href: string; count: number; planned?: boolean; summary: string }
@@ -199,6 +248,11 @@ export function CatalogHome({ countsByType, onNavigate }: { countsByType: Record
         { title: 'panel 9-slice', href: '/design/catalog/main-menu-panels', count: countsByType['panel-9slice.main-menu'] || 0, summary: 'Scalable panel frames for profile, daily challenge, news, and other grouped content.' },
         { title: 'button icon', href: '/design/catalog/main-menu-button-icons', count: countsByType['button-icon.main-menu'] || 0, summary: 'Standalone images composited into button icon slots.' },
         { title: 'profile icon', href: '/design/catalog/main-menu-profile-icons', count: countsByType['profile-icon.main-menu'] || 0, summary: 'Standalone images composited into the profile/status panel.' },
+        { title: 'campaign editor panels', href: '/design/catalog/campaign-editor-panels', count: countsByType['panel-9slice.campaign-editor'] || 0, summary: 'Bitmap panel, preview, and footer frames for the campaign editor surface.' },
+        { title: 'campaign editor buttons', href: '/design/catalog/campaign-editor-buttons', count: countsByType['button-9slice.campaign-editor'] || 0, summary: 'Primary and danger button skins used by live campaign editor commands.' },
+        { title: 'campaign editor rows', href: '/design/catalog/campaign-editor-rows', count: countsByType['row.campaign-editor'] || 0, summary: 'Campaign and level row skins with normal and selected states.' },
+        { title: 'campaign editor fields', href: '/design/catalog/campaign-editor-fields', count: countsByType['field.campaign-editor'] || 0, summary: 'Input and select field bitmap skins for campaign metadata.' },
+        { title: 'campaign editor shields', href: '/design/catalog/campaign-editor-shields', count: countsByType['shield.campaign-editor'] || 0, summary: 'Standalone heraldic campaign emblems composited into live rows.' },
         { title: 'sprite atlas', href: '#', count: 0, planned: true, summary: 'One image packing several unrelated sprites.' },
       ],
     },

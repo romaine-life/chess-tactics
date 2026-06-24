@@ -9,6 +9,13 @@ import { buildTerrainIndex } from '../core/terrain';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 
+const OBJECTIVE_LOG_COPY = {
+  'capture-all': 'capture all enemy pieces',
+  'capture-king': 'capture the enemy King',
+  survive: 'survive the assault',
+  reach: 'reach the objective',
+} as const;
+
 /** Movement environment for a state: indexes its terrain layer (if authored). */
 function envFor(game: GameState): MoveEnv {
   return { terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined };
@@ -68,7 +75,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
 
   newSkirmish: (opts) => {
     const game = createSkirmish(opts);
-    set({ game, env: envFor(game), seed: opts.seed, tick: 0, selectedId: firstPlayerId(game), log: ['Skirmish begins — move or capture; last side standing wins.'] });
+    const intro = opts.level
+      ? `Test play begins — objective: ${OBJECTIVE_LOG_COPY[opts.level.objective]}.`
+      : 'Skirmish begins — move or capture; last side standing wins.';
+    set({ game, env: envFor(game), seed: opts.seed, tick: 0, selectedId: firstPlayerId(game), log: [intro] });
   },
 
   select: (id) => {

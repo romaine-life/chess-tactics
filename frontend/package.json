@@ -20,6 +20,7 @@
     "units:normalize-concepts": "node scripts/normalize-unit-direction-concepts.mjs",
     "units:review-directions": "node scripts/generate-unit-direction-review.mjs",
     "units:rook-pixel-first-review": "node scripts/generate-rook-pixel-first-review.mjs",
+    "campaign:assets": "node scripts/generate-campaign-editor-ui-assets.mjs",
     "pixellab:download": "node scripts/download-pixellab-tiles.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
