@@ -188,9 +188,7 @@ const studioFamilyAssets: Record<StudioFamilyId, readonly StudioAsset[]> = {
 
 const familyCounts = (family: StudioFamily): string => {
   const variants = family.assets.filter((asset) => asset.kind === 'tile').length;
-  const transitions = transitionPairsForFamily(family.id).length * 14;
-  const references = family.assets.filter((asset) => asset.kind === 'reference').length;
-  return `${variants} tiles · ${transitions} slots · ${references} refs`;
+  return `${variants} ${variants === 1 ? 'tile' : 'tiles'}`;
 };
 
 const CANDIDATE_REVIEW_KEY = 'chess-tactics:tileset-review-decisions:v1';

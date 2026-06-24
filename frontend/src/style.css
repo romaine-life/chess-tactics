@@ -10602,9 +10602,12 @@ h1 {
   width: 100%;
 }
 
+/* Keep the filter menu inside the 260px Controls rail. The rail is an overflow
+   scroll container, so a menu wider than the rail spills left over the main pane
+   and gets clipped. Match the rail width so it stays fully visible. */
 .tileset-catalog-controls .tileset-filter-menu {
   right: 0;
-  width: min(320px, calc(100vw - 32px));
+  width: 100%;
 }
 
 .tileset-transition-workbench {
