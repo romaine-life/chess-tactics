@@ -2767,6 +2767,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setBrushKind('unit');
     setStudioMode('lab');
   };
+  // Shared "View Selected" — open the active category's selection in the Lab.
+  const viewSelected = (): void => {
+    if (category === 'units') { inspectUnitInLab(unitBrushAsset.id); return; }
+    if (category === 'assets') { setStudioMode('lab'); return; }
+    viewCurrentSelection();
+  };
 
   return (
     <main className="tileset-studio-page">
@@ -3020,13 +3026,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       </div>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    className="tileset-view-action"
-                    onClick={viewCurrentSelection}
-                  >
-                    View Selected
-                  </button>
                 </>
               ) : category === 'units' ? null : (
                 <>
@@ -3039,6 +3038,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   </div>
                 </>
               )}
+              {/* Shared action — open the selected item in the Lab (parity). */}
+              <button type="button" className="tileset-view-action" onClick={viewSelected}>
+                View Selected
+              </button>
             </div>
           </section>
         </aside>
