@@ -11548,24 +11548,15 @@ button.tileset-relationship-cell {
 
 /* Units category (chess pieces folded into the studio catalog). */
 .unit-card-image {
-  min-height: 150px;
+  min-height: calc(150px * var(--tile-zoom, 1));
 }
 
 .unit-card-image img {
   width: auto;
-  height: 132px;
+  height: calc(132px * var(--tile-zoom, 1));
   max-width: 90%;
   object-fit: contain;
   image-rendering: auto;
-}
-
-.unit-studio-route .unit-card-image {
-  min-height: calc(150px * var(--tile-zoom, 1));
-}
-
-.unit-studio-route .unit-card-image img {
-  width: auto;
-  height: calc(132px * var(--tile-zoom, 1));
 }
 
 .unit-catalog-empty {

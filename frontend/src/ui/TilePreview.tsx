@@ -1388,22 +1388,31 @@ function StudioEditableBoard({
 // unitCatalog.ts so the catalog, lab brush, and standalone Unit Studio stay in sync.
 function UnitsStudio({
   selectedUnitId,
+  query,
+  zoom,
   onSelect,
   onInspect,
   onArmBrush,
 }: {
   selectedUnitId: string;
+  query: string;
+  zoom: number;
   onSelect: (unitId: string) => void;
   onInspect: (unitId: string) => void;
   onArmBrush: (unitId: string) => void;
 }): ReactElement {
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleUnits = normalizedQuery
+    ? unitAssets.filter((unit) => [unit.label, unit.badge, unit.family, unit.read, unit.status].join(' ').toLowerCase().includes(normalizedQuery))
+    : unitAssets;
   return (
     <section className="tileset-studio-main">
       <div className="tileset-studio-toolbar">
         <div className="tileset-studio-title-row">
           <div className="tileset-catalog-heading">
-            <h2>Units</h2>
-            <p className="tileset-filter-summary">{unitAssets.length} production units</p>
+            <p className="tileset-filter-summary">
+              {normalizedQuery ? `${visibleUnits.length} of ${unitAssets.length}` : unitAssets.length} production units
+            </p>
           </div>
         </div>
       </div>
@@ -1412,7 +1421,7 @@ function UnitsStudio({
           <section className="tileset-asset-section" aria-label="Production units">
             <h3>Production Units</h3>
             <div className="tileset-studio-grid" aria-label="Unit assets">
-              {unitAssets.map((unit) => (
+              {visibleUnits.map((unit) => (
                 <button
                   key={unit.id}
                   type="button"
@@ -1421,7 +1430,7 @@ function UnitsStudio({
                   title={`Select ${unit.label}`}
                   aria-pressed={unit.id === selectedUnitId}
                 >
-                  <span className="tileset-studio-card-image unit-card-image">
+                  <span className="tileset-studio-card-image unit-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
                     <img src={unit.preview} alt="" draggable={false} loading="eager" decoding="sync" />
                   </span>
                   <span className="tileset-studio-card-meta">
@@ -1462,6 +1471,12 @@ function UnitsStudio({
                   </span>
                 </button>
               ))}
+              {visibleUnits.length === 0 ? (
+                <div className="unit-catalog-empty">
+                  <h3>No units match</h3>
+                  <p>Try a different search.</p>
+                </div>
+              ) : null}
             </div>
           </section>
         </div>
@@ -2797,6 +2812,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         {category === 'units' ? (
           <UnitsStudio
             selectedUnitId={unitBrushAsset.id}
+            query={catalogQuery}
+            zoom={zoom}
             onSelect={selectUnitInCatalog}
             onInspect={inspectUnitInLab}
             onArmBrush={placeUnitOnLoadedBoard}
@@ -2806,7 +2823,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <div className="tileset-studio-toolbar">
             <div className="tileset-studio-title-row">
               <div className="tileset-catalog-heading">
-                <h2>{selectedFamilyLabel} Tileset</h2>
                 <p className="tileset-filter-summary">
                   {visibleCatalogCount} assets · {selectedCollectionLabel}
                 </p>
@@ -3024,7 +3040,29 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   </button>
                 </>
               ) : (
-                <p className="tileset-catalog-note">Select a unit card to place it in the shared lab board.</p>
+                <>
+                  <label className="tileset-catalog-search">
+                    <span>Search</span>
+                    <input
+                      type="search"
+                      value={catalogQuery}
+                      onChange={(event) => setCatalogQuery(event.target.value)}
+                      placeholder="piece, read, status..."
+                    />
+                  </label>
+                  <label className="tileset-catalog-zoom">
+                    <span>Zoom</span>
+                    <input
+                      type="range"
+                      min="0.75"
+                      max="2"
+                      step="0.05"
+                      value={zoom}
+                      onChange={(event) => setZoom(Number(event.target.value))}
+                    />
+                  </label>
+                  <p className="tileset-catalog-note">Select a unit card to place it in the shared lab board.</p>
+                </>
               )}
             </div>
           </section>
