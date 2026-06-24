@@ -2905,13 +2905,17 @@ h1 {
 /* Catalog is a two-pane tool: tighter than the article-style design pages, and
    the header aligns to the grid (same width/left edge) instead of centering
    narrow above a wide grid. */
+/* Full-bleed: the Asset Library route drops the global shell gutter so the tool
+   reaches the viewport edge (the topbar stays as the only chrome above it). */
+.shell.design-fullbleed { gap: 0; padding: 0; }
+
 .asset-catalog-screen {
   gap: 8px;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
   /* edge-to-edge tool surface: chrome hugs the viewport, content gets the room */
-  padding: 6px clamp(4px, 0.5vw, 8px) clamp(4px, 0.5vw, 8px);
+  padding: 8px clamp(6px, 0.6vw, 10px) clamp(6px, 0.6vw, 10px);
 }
 
 /* Minimal tool header: just ← Menu + title on one slim line — no editorial

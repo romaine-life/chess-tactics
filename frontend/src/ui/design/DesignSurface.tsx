@@ -99,6 +99,14 @@ export function DesignSurface(): ReactNode {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
+  // The Asset Library is a full-bleed tool surface (GitHub/GitLab/Grafana-style):
+  // drop the global 14px shell gutter so the rail + grid reach the viewport edge.
+  useEffect(() => {
+    const shell = document.querySelector('.shell');
+    shell?.classList.add('design-fullbleed');
+    return () => shell?.classList.remove('design-fullbleed');
+  }, []);
+
   const route = parseDesignRoute(path);
 
   if (route.view === 'catalog') return <DesignCatalog route={route} path={path} onNavigate={navigate} />;
