@@ -1390,23 +1390,34 @@ function StudioEditableBoard({
 // unitCatalog.ts so the catalog, lab brush, and standalone Unit Studio stay in sync.
 function UnitsStudio({
   selectedUnitId,
+  search,
+  zoom,
   onSelect,
   onInspect,
   onArmBrush,
 }: {
   selectedUnitId: string;
+  search: string;
+  zoom: number;
   onSelect: (unitId: string) => void;
   onInspect: (unitId: string) => void;
   onArmBrush: (unitId: string) => void;
 }): ReactElement {
+  const q = search.trim().toLowerCase();
+  const shownUnits = q
+    ? unitAssets.filter((unit) => unit.label.toLowerCase().includes(q) || unit.badge.toLowerCase().includes(q))
+    : unitAssets;
   return (
     <section className="tileset-studio-main is-headless">
       <section className="tileset-studio-tab-panel">
         <div className="tileset-asset-sections">
           <section className="tileset-asset-section" aria-label="Production units">
             <h3>Production Units</h3>
-            <div className="tileset-studio-grid" aria-label="Unit assets">
-              {unitAssets.map((unit) => (
+            {shownUnits.length === 0 ? (
+              <p className="tileset-catalog-note">No units match this search.</p>
+            ) : (
+            <div className="tileset-studio-grid" aria-label="Unit assets" style={{ '--tile-zoom': zoom } as CSSProperties}>
+              {shownUnits.map((unit) => (
                 <button
                   key={unit.id}
                   type="button"
@@ -1457,6 +1468,7 @@ function UnitsStudio({
                 </button>
               ))}
             </div>
+            )}
           </section>
         </div>
       </section>
@@ -2065,6 +2077,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [category, setCategory] = useState<StudioCategory>(initialCategory);
   const [assetFilter, setAssetFilter] = useState<'all' | 'forged' | 'unverified'>('all');
   const [assetSearch, setAssetSearch] = useState('');
+  const [unitQuery, setUnitQuery] = useState('');
   const [selectedAssetName, setSelectedAssetName] = useState('gear');
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
@@ -2786,12 +2799,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         {category === 'units' ? (
           <UnitsStudio
             selectedUnitId={unitBrushAsset.id}
+            search={unitQuery}
+            zoom={zoom}
             onSelect={selectUnitInCatalog}
             onInspect={inspectUnitInLab}
             onArmBrush={placeUnitOnLoadedBoard}
           />
         ) : category === 'assets' ? (
-          <AssetLibraryStudio filter={assetFilter} search={assetSearch} selected={selectedAssetName} onSelect={setSelectedAssetName} />
+          <AssetLibraryStudio filter={assetFilter} search={assetSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} />
         ) : (
           <section className="tileset-studio-main is-headless">
           <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
@@ -2895,28 +2910,30 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   Assets
                 </button>
               </div>
+              {/* Shared browse controls — every catalog category gets the same
+                  Search + Zoom, in the same place (parity across Tiles/Units/Assets). */}
+              <label className="tileset-catalog-search">
+                <span>Search</span>
+                <input
+                  type="search"
+                  value={category === 'tiles' ? catalogQuery : category === 'units' ? unitQuery : assetSearch}
+                  onChange={(event) => (category === 'tiles' ? setCatalogQuery : category === 'units' ? setUnitQuery : setAssetSearch)(event.target.value)}
+                  placeholder={category === 'tiles' ? 'label, source, socket…' : category === 'units' ? 'unit name…' : 'asset name…'}
+                />
+              </label>
+              <label className="tileset-catalog-zoom">
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min="0.75"
+                  max="2"
+                  step="0.05"
+                  value={zoom}
+                  onChange={(event) => setZoom(Number(event.target.value))}
+                />
+              </label>
               {category === 'tiles' ? (
                 <>
-                  <label className="tileset-catalog-search">
-                    <span>Search</span>
-                    <input
-                      type="search"
-                      value={catalogQuery}
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                      placeholder="label, source, socket..."
-                    />
-                  </label>
-                  <label className="tileset-catalog-zoom">
-                    <span>Zoom</span>
-                    <input
-                      type="range"
-                      min="0.75"
-                      max="2"
-                      step="0.05"
-                      value={zoom}
-                      onChange={(event) => setZoom(Number(event.target.value))}
-                    />
-                  </label>
                   <div className="tileset-active-filters" aria-label="Active filters">
                     {activeFamilies.map((item) => (
                       <button key={item.id} type="button" onClick={() => toggleFamilyFilter(item.id)} title={`Remove ${item.label} filter`}>
@@ -3011,14 +3028,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                     View Selected
                   </button>
                 </>
-              ) : category === 'units' ? (
-                <p className="tileset-catalog-note">Select a unit card to place it in the shared lab board.</p>
-              ) : (
+              ) : category === 'units' ? null : (
                 <>
-                  <label className="tileset-catalog-search">
-                    <span>Search</span>
-                    <input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="asset name…" />
-                  </label>
                   <div className="tileset-tier-seg" aria-label="Process filter">
                     {(['all', 'forged', 'unverified'] as const).map((option) => (
                       <button key={option} type="button" className={assetFilter === option ? 'is-active' : ''} onClick={() => setAssetFilter(option)}>

@@ -4,7 +4,7 @@
 // props, so this component is purely the catalog. The per-asset viewer is the
 // Lab's job (Asset surface), not the catalog's. Data: the build-time manifest +
 // provenance (frontend/scripts/kit-manifest.mjs / kit-forge.mjs).
-import { type ReactElement } from 'react';
+import { type CSSProperties, type ReactElement } from 'react';
 import manifest from './kitManifest.json';
 import provenance from './kitProvenance.json';
 
@@ -39,9 +39,10 @@ function Card({ name, url, sub, selected, onSelect }: { name: string; url: strin
   );
 }
 
-export function AssetLibraryStudio({ filter, search, selected, onSelect }: {
+export function AssetLibraryStudio({ filter, search, zoom, selected, onSelect }: {
   filter: AssetFilter;
   search: string;
+  zoom: number;
   selected: string;
   onSelect: (name: string) => void;
 }): ReactElement {
@@ -57,7 +58,7 @@ export function AssetLibraryStudio({ filter, search, selected, onSelect }: {
   return (
     <section className="tileset-studio-main is-headless">
       <section className="tileset-studio-tab-panel">
-        <div className="tileset-asset-sections">
+        <div className="tileset-asset-sections" style={{ '--tile-zoom': zoom } as CSSProperties}>
           {sections.map((s) => (
             <section className="tileset-asset-section" aria-label={s.label} key={s.key}>
               <h3>{s.label}</h3>

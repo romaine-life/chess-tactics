@@ -11792,12 +11792,12 @@ button.tileset-relationship-cell {
 
 /* Units category (chess pieces folded into the studio catalog). */
 .unit-card-image {
-  min-height: 150px;
+  min-height: calc(150px * var(--tile-zoom, 1));
 }
 
 .unit-card-image img {
   width: auto;
-  height: 132px;
+  height: calc(132px * var(--tile-zoom, 1));
   max-width: 90%;
   object-fit: contain;
   image-rendering: auto;
@@ -13437,8 +13437,9 @@ button.tileset-relationship-cell {
   background: repeating-conic-gradient(#0c141d 0 25%, #0a1018 0 50%) 0 / 16px 16px;
   display: flex;
   justify-content: center;
+  overflow: hidden;
 }
-.tileset-studio-card.is-asset .asset-card-image img { image-rendering: pixelated; max-height: 72%; max-width: 72%; object-fit: contain; }
+.tileset-studio-card.is-asset .asset-card-image img { image-rendering: pixelated; max-height: calc(72% * var(--tile-zoom, 1)); max-width: calc(72% * var(--tile-zoom, 1)); object-fit: contain; }
 .asset-prov { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; }
 .asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
 .asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
