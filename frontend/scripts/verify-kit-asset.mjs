@@ -14,6 +14,30 @@ export function verifyAsset(pngOrPath, { symmetric = false, label = '' } = {}) {
   return true;
 }
 
+// Gate for codex-painted GLYPHS (icons / shields). A clean-looking
+// "generate on a transparent background" prompt can still ship a DIRTY result:
+// codex satisfies it by keying out a filled background, which leaves magenta
+// despill, an anti-aliased alpha halo, and/or background bleeding to the sprite
+// edge. The prompt is a request, not a receipt — this audits the actual pixels.
+export function verifyGlyph(pngOrPath, { label = '', maxSemiPct = 2, allowEdgePx = 6 } = {}) {
+  const p = typeof pngOrPath === 'string' ? PNG.sync.read(readFileSync(pngOrPath)) : pngOrPath;
+  const { width: w, height: h, data: d } = p;
+  let magenta = 0, semi = 0, edge = 0;
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+    const i = (y * w + x) * 4; const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
+    if (a > 60 && r > g + 30 && b > g + 30) magenta += 1;                  // keying despill (R&B high, G low) — never intentional here
+    if (a > 0 && a < 255) semi += 1;                                       // AA halo — not binary alpha
+    if ((x < 1 || y < 1 || x >= w - 1 || y >= h - 1) && a > 40) edge += 1; // opaque against the frame edge — bg bled in / glyph clipped
+  }
+  const semiPct = 100 * semi / (w * h);
+  const fails = [];
+  if (magenta > 2) fails.push(`${magenta} magenta despill px (background-keying fringe)`);
+  if (semiPct > maxSemiPct) fails.push(`${semiPct.toFixed(1)}% semi-transparent px (AA halo, not binary alpha)`);
+  if (edge > allowEdgePx) fails.push(`${edge} opaque edge px (background bled to frame / glyph clipped)`);
+  if (fails.length) throw new Error(`glyph verify FAILED ${label}\n  - ${fails.join('\n  - ')}`);
+  return true;
+}
+
 function check(p, symmetric) {
 const A = (x, y) => p.data[(y * p.width + x) * 4 + 3];
 const L = (x, y) => { const i = (y * p.width + x) * 4; return p.data[i] + p.data[i + 1] + p.data[i + 2]; };
@@ -77,12 +101,17 @@ for (const [name, [v, e]] of Object.entries(edgeChecks)) {
   return fails;
 }
 
-// CLI: node verify-kit-asset.mjs <png> [--symmetric]
+// CLI: node verify-kit-asset.mjs <png> [--symmetric] [--glyph]
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const file = process.argv[2];
   const symmetric = process.argv.includes('--symmetric');
   const p = PNG.sync.read(readFileSync(file));
-  const fails = check(p, symmetric);
-  if (fails.length) { console.error(`FAIL ${file}\n  - ${fails.join('\n  - ')}`); process.exit(1); }
-  console.log(`PASS ${file} (${p.width}x${p.height}${symmetric ? ', symmetric' : ''})`);
+  if (process.argv.includes('--glyph')) {
+    try { verifyGlyph(p, { label: file }); console.log(`PASS glyph ${file} (${p.width}x${p.height})`); }
+    catch (e) { console.error(`FAIL ${e.message}`); process.exit(1); }
+  } else {
+    const fails = check(p, symmetric);
+    if (fails.length) { console.error(`FAIL ${file}\n  - ${fails.join('\n  - ')}`); process.exit(1); }
+    console.log(`PASS ${file} (${p.width}x${p.height}${symmetric ? ', symmetric' : ''})`);
+  }
 }
