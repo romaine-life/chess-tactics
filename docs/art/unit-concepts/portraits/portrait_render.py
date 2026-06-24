@@ -50,7 +50,8 @@ cam.rotation_euler=(T-cam.location).to_track_quat("-Z","Y").to_euler()
 cam.data.type="PERSP"; cam.data.lens=LENS; cam.data.sensor_width=SENSOR
 sc.render.engine="CYCLES"; sc.cycles.samples=64; sc.cycles.use_denoising=True
 sc.view_settings.view_transform="Standard"
-sc.render.resolution_x=sc.render.resolution_y=512; sc.render.film_transparent=True
+_RES=int(os.environ.get("PORTRAIT_RES","512"))
+sc.render.resolution_x=sc.render.resolution_y=_RES; sc.render.film_transparent=True
 sc.render.image_settings.file_format="PNG"; sc.render.filepath=OUTFILE
 bpy.ops.render.render(write_still=True)
 print("PORTRAIT_DONE topZ=%.2f Tz=%.2f D=%.2f ->" % (topZ,Tz,D), OUTFILE)

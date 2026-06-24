@@ -125,7 +125,8 @@ cam.data.type="PERSP"; cam.data.lens=LENS; cam.data.sensor_width=SENSOR
 s2=bpy.context.scene
 s2.render.engine="CYCLES"; s2.cycles.samples=64; s2.cycles.use_denoising=True
 s2.view_settings.view_transform="Standard"
-s2.render.resolution_x=s2.render.resolution_y=512; s2.render.film_transparent=True
+_RES=int(os.environ.get("PORTRAIT_RES","512"))
+s2.render.resolution_x=s2.render.resolution_y=_RES; s2.render.film_transparent=True
 s2.render.image_settings.file_format="PNG"; s2.render.filepath=OUTFILE
 bpy.ops.render.render(write_still=True)
 print("KNIGHT_PORTRAIT_DONE topZ=%.2f ->" % topZ, OUTFILE)
