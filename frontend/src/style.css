@@ -6559,6 +6559,9 @@ h1 {
 }
 
 .skirmish-board-unit {
+  /* One knob for the whole move (travel + hop). Bump these to slow a move down;
+     the enemy override below makes its reply weightier. */
+  --move-duration: 360ms;
   align-items: center;
   display: grid;
   height: 86px;
@@ -6567,14 +6570,48 @@ h1 {
   position: absolute;
   transform: translate(-50%, -78%);
   transition:
-    left 170ms cubic-bezier(.2, .8, .2, 1),
-    top 170ms cubic-bezier(.2, .8, .2, 1);
+    left var(--move-duration) cubic-bezier(.22, .61, .36, 1),
+    top var(--move-duration) cubic-bezier(.22, .61, .36, 1);
   width: 72px;
   will-change: left, top;
 }
 
+/* The enemy answers with weight: a slower glide than the player's move. */
+.skirmish-board-unit.is-enemy {
+  --move-duration: 460ms;
+}
+
 .skirmish-board-unit.is-moving {
-  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, .34));
+  filter: drop-shadow(0 12px 11px rgba(0, 0, 0, .38));
+  z-index: 30000 !important;
+}
+
+/* A move is a small sequence, not a teleport: anticipation lift → arc through the
+   air → overshoot → settle. The container owns the travel (left/top); the sprite
+   owns the vertical hop spanning the same duration, so the two compose into an arc. */
+.skirmish-board-unit.is-moving img {
+  animation: unit-move-hop var(--move-duration) cubic-bezier(.4, 0, .2, 1);
+}
+
+.skirmish-board-unit.is-enemy.is-moving img {
+  animation: unit-move-hop-heavy var(--move-duration) cubic-bezier(.4, 0, .2, 1);
+}
+
+@keyframes unit-move-hop {
+  0% { transform: translateY(0) scale(1); }
+  14% { transform: translateY(-3px) scale(1.06); }  /* anticipation: brief wind-up */
+  48% { transform: translateY(-16px) scale(1.04); } /* apex of the arc */
+  80% { transform: translateY(2px) scale(.98); }    /* land + overshoot */
+  100% { transform: translateY(0) scale(1); }       /* settle */
+}
+
+@keyframes unit-move-hop-heavy {
+  0% { transform: translateY(0) scale(1); }
+  16% { transform: translateY(-2px) scale(1.07); }  /* bigger wind-up */
+  50% { transform: translateY(-12px) scale(1.03); } /* lower arc reads heavier */
+  78% { transform: translateY(4px) scale(.96); }    /* heavier landing */
+  90% { transform: translateY(-1px) scale(1.01); }  /* small bounce-back */
+  100% { transform: translateY(0) scale(1); }       /* settle */
 }
 
 .skirmish-board-unit img {
@@ -6634,9 +6671,29 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skirmish-board-unit {
-    transition: none;
+  /* Movement is functional feedback (where did the piece go?), not decoration,
+     so keep a brief slide instead of teleporting — but drop the airborne hop and
+     the decorative lift shadow that motion-sensitive players don't want. The turn
+     staging (your move → beat → enemy reply) still applies; that's pacing, not
+     motion. */
+  /* Keep the same deliberate travel timing the game is tuned around (a slower
+     slide is gentler, not more motion), but swap the airborne arc + scale bounce
+     for a small calm lift. !important exempts this one functional cue from the
+     global `* { animation: none }` reduced-motion reset further down this file. */
+  .skirmish-board-unit.is-moving {
+    filter: none;
   }
+
+  .skirmish-board-unit.is-moving img,
+  .skirmish-board-unit.is-enemy.is-moving img {
+    animation: unit-move-hop-soft var(--move-duration) ease-in-out !important;
+  }
+}
+
+@keyframes unit-move-hop-soft {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
 }
 
 .skirmish-left-panel {
