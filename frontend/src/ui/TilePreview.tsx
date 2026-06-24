@@ -42,127 +42,11 @@ import {
 } from './unitCatalog';
 
 
-type ConceptTerrain = 'grass' | 'stone' | 'water' | 'grassStone' | 'grassWater' | 'edge';
-
-interface ConceptCell {
-  x: number;
-  y: number;
-  terrain: ConceptTerrain;
-}
-
-const conceptCells: ConceptCell[] = [
-  { x: 3, y: 0, terrain: 'grass' },
-  { x: 4, y: 0, terrain: 'grass' },
-  { x: 5, y: 0, terrain: 'stone' },
-  { x: 6, y: 0, terrain: 'grass' },
-  { x: 2, y: 1, terrain: 'grass' },
-  { x: 3, y: 1, terrain: 'grass' },
-  { x: 4, y: 1, terrain: 'stone' },
-  { x: 5, y: 1, terrain: 'stone' },
-  { x: 6, y: 1, terrain: 'grass' },
-  { x: 7, y: 1, terrain: 'grass' },
-  { x: 1, y: 2, terrain: 'grass' },
-  { x: 2, y: 2, terrain: 'water' },
-  { x: 3, y: 2, terrain: 'grassStone' },
-  { x: 4, y: 2, terrain: 'stone' },
-  { x: 5, y: 2, terrain: 'stone' },
-  { x: 6, y: 2, terrain: 'grassWater' },
-  { x: 7, y: 2, terrain: 'water' },
-  { x: 8, y: 2, terrain: 'grass' },
-  { x: 0, y: 3, terrain: 'grass' },
-  { x: 1, y: 3, terrain: 'grassWater' },
-  { x: 2, y: 3, terrain: 'water' },
-  { x: 3, y: 3, terrain: 'grass' },
-  { x: 4, y: 3, terrain: 'grassStone' },
-  { x: 5, y: 3, terrain: 'stone' },
-  { x: 6, y: 3, terrain: 'grassWater' },
-  { x: 7, y: 3, terrain: 'water' },
-  { x: 8, y: 3, terrain: 'grass' },
-  { x: 9, y: 3, terrain: 'grass' },
-  { x: 1, y: 4, terrain: 'grass' },
-  { x: 2, y: 4, terrain: 'grass' },
-  { x: 3, y: 4, terrain: 'grass' },
-  { x: 4, y: 4, terrain: 'grass' },
-  { x: 5, y: 4, terrain: 'stone' },
-  { x: 6, y: 4, terrain: 'grassWater' },
-  { x: 7, y: 4, terrain: 'water' },
-  { x: 8, y: 4, terrain: 'grass' },
-  { x: 2, y: 5, terrain: 'grass' },
-  { x: 3, y: 5, terrain: 'stone' },
-  { x: 4, y: 5, terrain: 'stone' },
-  { x: 5, y: 5, terrain: 'grass' },
-  { x: 6, y: 5, terrain: 'grass' },
-  { x: 7, y: 5, terrain: 'water' },
-  { x: 3, y: 6, terrain: 'grass' },
-  { x: 4, y: 6, terrain: 'grass' },
-  { x: 5, y: 6, terrain: 'grass' },
-  { x: 6, y: 6, terrain: 'grass' },
-];
-
-const overlayCells = [
-  { x: 1, y: 4, type: 'move' },
-  { x: 2, y: 4, type: 'move' },
-  { x: 3, y: 4, type: 'move' },
-  { x: 3, y: 5, type: 'move' },
-  { x: 4, y: 4, type: 'move' },
-  { x: 5, y: 3, type: 'danger' },
-  { x: 6, y: 3, type: 'danger' },
-  { x: 6, y: 2, type: 'danger' },
-] satisfies Array<{ x: number; y: number; type: 'move' | 'danger' }>;
 
 const TRUE_ISO_TILE_ASSET_ROOT = '/assets/tiles/canonical-true-iso';
 const TRUE_ISO_TILE_SOURCE = 'canonical-true-iso';
 const trueIsoTileAsset = (filename: string): string => `${TRUE_ISO_TILE_ASSET_ROOT}/${filename}`;
 
-const canonicalTileAssets: Record<ConceptTerrain, string[]> = {
-  grass: [
-    trueIsoTileAsset('grass-clean-a.png'),
-    trueIsoTileAsset('grass-clean-b.png'),
-    trueIsoTileAsset('grass-clean-c.png'),
-  ],
-  stone: [
-    trueIsoTileAsset('stone-clean-a.png'),
-    trueIsoTileAsset('stone-clean-b.png'),
-  ],
-  water: [
-    trueIsoTileAsset('water-clean-a.png'),
-    trueIsoTileAsset('water-clean-b.png'),
-  ],
-  grassStone: [
-    trueIsoTileAsset('transition-grass-stone-a.png'),
-    trueIsoTileAsset('transition-grass-stone-b.png'),
-  ],
-  grassWater: [
-    trueIsoTileAsset('transition-grass-water-a.png'),
-    trueIsoTileAsset('transition-grass-water-b.png'),
-  ],
-  edge: [trueIsoTileAsset('grass-clean-a.png')],
-};
-
-const beforeTileAssets: Record<ConceptTerrain, string[]> = {
-  grass: [
-    '/assets/tiles/canonical-clean/grass-clean-a.png',
-    '/assets/tiles/canonical-clean/grass-clean-b.png',
-    '/assets/tiles/canonical-clean/grass-clean-c.png',
-  ],
-  stone: [
-    '/assets/tiles/canonical-clean/stone-clean-a.png',
-    '/assets/tiles/canonical-clean/stone-clean-b.png',
-  ],
-  water: [
-    '/assets/tiles/canonical-clean/water-clean-a.png',
-    '/assets/tiles/canonical-clean/water-clean-b.png',
-  ],
-  grassStone: [
-    '/assets/tiles/canonical-clean/transition-grass-stone-a.png',
-    '/assets/tiles/canonical-clean/transition-grass-stone-b.png',
-  ],
-  grassWater: [
-    '/assets/tiles/canonical-clean/transition-grass-water-a.png',
-    '/assets/tiles/canonical-clean/transition-grass-water-b.png',
-  ],
-  edge: ['/assets/tiles/canonical-clean/grass-clean-a.png'],
-};
 
 type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
@@ -689,50 +573,6 @@ const tileTypeLabel = (asset: StudioAsset): string => {
   if (typeof asset.socketMask !== 'number' || asset.socketMask === 0 || asset.socketMask === 15) return 'Invalid transition';
   return 'Transition tile';
 };
-
-const assetForCell = (assets: Record<ConceptTerrain, string[]>, cell: ConceptCell): string => {
-  const options = assets[cell.terrain];
-  return options[Math.abs(cell.x * 17 + cell.y * 31) % options.length];
-};
-
-function ConceptBoardReconstruction({ mode }: { mode: 'before' | 'after' }): ReactElement {
-  const ordered = conceptCells.slice().sort((a, b) => a.x + a.y - (b.x + b.y));
-  const assets = mode === 'before' ? beforeTileAssets : canonicalTileAssets;
-
-  return (
-    <div className="concept-board-reconstruction" aria-label="Concept board plane reconstruction">
-      {ordered.map((cell) => {
-        const left = TILE_TEMPLATE.originX + (cell.x - cell.y) * TILE_TEMPLATE.stepX;
-        const top = TILE_TEMPLATE.originY + (cell.x + cell.y) * TILE_TEMPLATE.stepY;
-        return (
-          <div
-            key={`${cell.x}-${cell.y}`}
-            className={`concept-board-tile is-${cell.terrain}`}
-            style={{ left, top, zIndex: cell.x + cell.y }}
-            aria-hidden="true"
-          >
-            <img src={assetForCell(assets, cell)} alt="" draggable={false} />
-          </div>
-        );
-      })}
-      {overlayCells.map((cell) => {
-        const left = TILE_TEMPLATE.originX + (cell.x - cell.y) * TILE_TEMPLATE.stepX;
-        const top = TILE_TEMPLATE.originY + (cell.x + cell.y) * TILE_TEMPLATE.stepY;
-        return (
-          <div
-            key={`overlay-${cell.x}-${cell.y}`}
-            className={`concept-board-overlay is-${cell.type}`}
-            style={{ left, top, zIndex: cell.x + cell.y + 24 }}
-            aria-hidden="true"
-          />
-        );
-      })}
-      <div className="concept-board-selection is-blue" style={{ left: 390, top: 305 }} />
-      <div className="concept-board-selection is-cyan" style={{ left: 486, top: 359 }} />
-      <div className="concept-board-selection is-red" style={{ left: 630, top: 278 }} />
-    </div>
-  );
-}
 
 function useAnimationFrameIndex(): number {
   const [animationFrame, setAnimationFrame] = useState(0);
@@ -1875,7 +1715,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const skipNextRouteWriteRef = useRef(false);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [showFootprint, setShowFootprint] = useState(true);
-  const [showBefore, setShowBefore] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
@@ -2269,12 +2108,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       setSelectedSlotMask(undefined);
     }
   }, [tileFilter]);
-
-  useEffect(() => {
-    if (boardMode !== 'concept' && showBefore) {
-      setShowBefore(false);
-    }
-  }, [boardMode, showBefore]);
 
   useEffect(() => {
     setManualAnimationFrame((frame) => frame % animationFrameCount);
@@ -2861,32 +2694,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               }}
             >
               <div className={`tileset-view-board-content is-${viewVisualKind}`}>
-                {viewKind === 'board' && boardMode === 'concept' ? (
-                  <div
-                    className="tileset-concept-board-zoom"
-                    style={{ '--board-zoom': viewZoom, '--board-pan-x': `${viewPan.x}px`, '--board-pan-y': `${viewPan.y}px` } as CSSProperties}
-                  >
-                    <ConceptBoardReconstruction mode={showBefore ? 'before' : 'after'} />
-                  </div>
-                ) : (
-                  <StudioEditableBoard
-                    cols={editableGrid.columns}
-                    rows={editableGrid.rows}
-                    cells={boardCells}
-                    units={boardUnits}
-                    resolveAsset={resolveStudioAsset}
-                    resolveUnit={resolveUnitAsset}
-                    tool={tool}
-                    selectedCell={selectedCell}
-                    showFootprint={showFootprint}
-                    boardZoom={viewZoom}
-                    boardPan={viewPan}
-                    animationFrame={animationFrame}
-                    onPaint={paintCell}
-                    onErase={eraseCell}
-                    onSelect={selectBoardCell}
-                  />
-                )}
+                <StudioEditableBoard
+                  cols={editableGrid.columns}
+                  rows={editableGrid.rows}
+                  cells={boardCells}
+                  units={boardUnits}
+                  resolveAsset={resolveStudioAsset}
+                  resolveUnit={resolveUnitAsset}
+                  tool={tool}
+                  selectedCell={selectedCell}
+                  showFootprint={showFootprint}
+                  boardZoom={viewZoom}
+                  boardPan={viewPan}
+                  animationFrame={animationFrame}
+                  onPaint={paintCell}
+                  onErase={eraseCell}
+                  onSelect={selectBoardCell}
+                />
               </div>
             </ViewPane>
             </section>
@@ -2923,8 +2747,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   Unit
                 </button>
               </span>
-                  {!(viewKind === 'board' && boardMode === 'concept') ? (
-                    <>
                       <div className="tileset-segmented-control tileset-tools" aria-label="Board tool">
                         <button type="button" className={tool === 'select' ? 'is-active' : ''} onClick={() => setTool('select')} title="Select tool — click a tile to highlight it (then fill its neighbors). Doesn't paint or erase.">
                           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 2 L3 13 L6 10 L8 14.6 L9.8 13.8 L7.8 9.4 L12.5 9.4 Z" fill="currentColor" /></svg>
@@ -3002,8 +2824,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                           </button>
                         </div>
                       )}
-                    </>
-                  ) : null}
 
                   {viewKind === 'board' ? (
                     <>
@@ -3014,45 +2834,22 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       </button>
                       {boardSectionOpen ? (
                         <>
-                          <div className="tileset-segmented-control" aria-label="Board source">
-                            <button type="button" className={boardMode === 'generated' ? 'is-active' : ''} onClick={() => setBoardMode('generated')} title="Show a procedurally generated, socket-legal board you can paint on.">
-                              Generated
+                          <div className="tileset-segmented-control" aria-label="Terrain scope">
+                            <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} title="Generate using only the current family's tiles.">
+                              Family
                             </button>
-                            <button type="button" className={boardMode === 'concept' ? 'is-active' : ''} onClick={() => setBoardMode('concept')} title="Show the fixed concept-art reference board (with before/after comparison).">
-                              Concept
+                            <button type="button" className={boardScope === 'mixed' ? 'is-active' : ''} onClick={() => setBoardScope('mixed')} title="Generate using all terrain families mixed together.">
+                              Mixed
                             </button>
                           </div>
-                          {boardMode === 'generated' ? (
-                            <>
-                              <div className="tileset-segmented-control" aria-label="Terrain scope">
-                                <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} title="Generate using only the current family's tiles.">
-                                  Family
-                                </button>
-                                <button type="button" className={boardScope === 'mixed' ? 'is-active' : ''} onClick={() => setBoardScope('mixed')} title="Generate using all terrain families mixed together.">
-                                  Mixed
-                                </button>
-                              </div>
-                              <div className="tileset-button-row">
-                                <button type="button" onClick={() => setBoardSeed(Math.floor(Math.random() * 999999) + 1)} title="Generate a fresh random board (new seed).">
-                                  New random
-                                </button>
-                                <button type="button" onClick={() => setBoardSize((size) => (size === 'small' ? 'wide' : 'small'))} title="Toggle board size (8×6 ↔ 10×7).">
-                                  {boardSize === 'small' ? '8 × 6' : '10 × 7'}
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              className={`tileset-toggle ${showBefore ? 'is-on' : ''}`}
-                              aria-pressed={showBefore}
-                              onClick={() => setShowBefore((value) => !value)}
-                              title="Toggle the concept board before/after view."
-                            >
-                              <span>Before / after</span>
-                              <span className="tileset-toggle-pill" aria-hidden="true" />
+                          <div className="tileset-button-row">
+                            <button type="button" onClick={() => setBoardSeed(Math.floor(Math.random() * 999999) + 1)} title="Generate a fresh random board (new seed).">
+                              New random
                             </button>
-                          )}
+                            <button type="button" onClick={() => setBoardSize((size) => (size === 'small' ? 'wide' : 'small'))} title="Toggle board size (8×6 ↔ 10×7).">
+                              {boardSize === 'small' ? '8 × 6' : '10 × 7'}
+                            </button>
+                          </div>
                         </>
                       ) : null}
                     </>
