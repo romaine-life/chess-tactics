@@ -20,15 +20,36 @@ const MASTER_FRAMING: Record<Piece, { tz: number; span: number }> = {
   rook: { tz: 0.45, span: 1.75 }, queen: { tz: 0.5, span: 1.45 }, king: { tz: 0.5, span: 1.45 },
 };
 
-// A sensible starting headshot: centred, framed on the upper third.
-const DEFAULT_CROP: Crop = { cx: 0.5, cy: 0.32, s: 0.46 };
-const STORAGE_KEY = 'portrait-editor-crops-v1';
+// A sensible starting headshot: centred, framed on the upper third with headroom.
+const DEFAULT_CROP: Crop = { cx: 0.5, cy: 0.30, s: 0.50 };
+const STORAGE_KEY = 'portrait-editor-crops-v2'; // v2: stale (head-cutting) v1 crops discarded
+
+// Detect where the unit's head starts (first opaque row) in a master, so the crop
+// can be clamped to always keep the head in frame.
+async function detectHeadTop(src: string): Promise<number> {
+  const img = new Image();
+  img.src = src;
+  await img.decode().catch(() => {});
+  const H = 128;
+  const cv = document.createElement('canvas'); cv.width = H; cv.height = H;
+  const ctx = cv.getContext('2d'); if (!ctx) return 0.16;
+  ctx.drawImage(img, 0, 0, H, H);
+  const data = ctx.getImageData(0, 0, H, H).data;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < H; x++) if (data[(y * H + x) * 4 + 3] > 24) return Math.max(0, y / H - 0.02); // keep a sliver of headroom
+  }
+  return 0.16;
+}
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-function clampCrop({ cx, cy, s }: Crop): Crop {
+// headTop is the fraction (0..1) of the master where the unit's head begins; the
+// crop's top edge is never allowed below it, so the head is always in frame.
+function clampCrop({ cx, cy, s }: Crop, headTop = 1): Crop {
   const ss = clamp(s, 0.15, 1);
   const half = ss / 2;
-  return { s: ss, cx: clamp(cx, half, 1 - half), cy: clamp(cy, half, 1 - half) };
+  // cy upper bound: keep crop top (cy - half) at or above headTop, and within image.
+  const cyMax = Math.min(1 - half, headTop + half);
+  return { s: ss, cx: clamp(cx, half, 1 - half), cy: clamp(cy, half, Math.max(half, cyMax)) };
 }
 
 const masterSrc = (piece: Piece, pal: Palette) => `/assets/portrait-editor/${piece}/${pal}.png`;
@@ -79,17 +100,33 @@ function loadCrops(): Record<Piece, Crop> {
   return base;
 }
 
+const DEFAULT_HEAD_TOP = Object.fromEntries(PIECES.map((p) => [p, 0.16])) as Record<Piece, number>;
+
 export function PortraitEditor(): ReactElement {
   const [crops, setCrops] = useState<Record<Piece, Crop>>(loadCrops);
+  const [headTops, setHeadTops] = useState<Record<Piece, number>>(DEFAULT_HEAD_TOP);
   const [piece, setPiece] = useState<Piece>('pawn');
   const [palette, setPalette] = useState<Palette>('navy-blue');
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; cx: number; cy: number } | null>(null);
 
+  // Measure each unit's head-top once, then re-clamp every crop to keep heads in frame.
+  useEffect(() => {
+    let alive = true;
+    Promise.all(PIECES.map((p) => detectHeadTop(masterSrc(p, 'navy-blue')).then((t) => [p, t] as const)))
+      .then((pairs) => {
+        if (!alive) return;
+        const map = Object.fromEntries(pairs) as Record<Piece, number>;
+        setHeadTops(map);
+        setCrops((prev) => Object.fromEntries(PIECES.map((p) => [p, clampCrop(prev[p], map[p])])) as Record<Piece, Crop>);
+      });
+    return () => { alive = false; };
+  }, []);
+
   const crop = crops[piece];
   const setCrop = useCallback((next: Crop) => {
-    setCrops((prev) => ({ ...prev, [piece]: clampCrop(next) }));
-  }, [piece]);
+    setCrops((prev) => ({ ...prev, [piece]: clampCrop(next, headTops[piece]) }));
+  }, [piece, headTops]);
   // Zoom anchored to the crop's TOP edge: tightening trims the bottom (neck/
   // shoulders) and keeps the head framed, instead of eating into it from the top.
   const setZoom = useCallback((nextS: number) => {
@@ -97,9 +134,9 @@ export function PortraitEditor(): ReactElement {
       const c = prev[piece];
       const top = c.cy - c.s / 2;
       const s = clamp(nextS, 0.15, 1);
-      return { ...prev, [piece]: clampCrop({ cx: c.cx, s, cy: top + s / 2 }) };
+      return { ...prev, [piece]: clampCrop({ cx: c.cx, s, cy: top + s / 2 }, headTops[piece]) };
     });
-  }, [piece]);
+  }, [piece, headTops]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(crops)); } catch { /* ignore */ }
