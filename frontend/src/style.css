@@ -11562,7 +11562,9 @@ button.tileset-relationship-cell {
 .tileset-cell-ring {
   position: absolute;
   left: 0;
-  top: 0;
+  /* Sit on the tile's top-surface plane, matching the grid/footprint/hit diamond,
+     instead of the top of the 180px protrusion frame (which floated it ~28px high). */
+  top: calc(var(--iso-tile-height) / 2);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
