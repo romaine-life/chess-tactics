@@ -54,18 +54,8 @@ export function AssetLibraryStudio({ filter, search, selected, onSelect }: {
     { key: 'frames', label: 'Frames', items: KIT.frames.filter((f) => ok(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `${f.w}×${f.h}` })) },
   ].filter((s) => s.items.length);
 
-  const shown = sections.reduce((n, s) => n + s.items.length, 0);
-
   return (
-    <section className="tileset-studio-main">
-      <div className="tileset-studio-toolbar">
-        <div className="tileset-studio-title-row">
-          <div className="tileset-catalog-heading">
-            <h2>Asset Library</h2>
-            <p className="tileset-filter-summary">{shown} assets · gate {KIT.summary.pass}/{KIT.summary.total} · select a card, then open Lab to preview it</p>
-          </div>
-        </div>
-      </div>
+    <section className="tileset-studio-main is-headless">
       <section className="tileset-studio-tab-panel">
         <div className="tileset-asset-sections">
           {sections.map((s) => (
@@ -132,7 +122,7 @@ export function AssetLab({ name, onPickBoard }: { name: string; onPickBoard: () 
         <section className="tileset-inspector-section">
           <h2>Controls</h2>
           <div className="tileset-control-stack">
-            <div className="tileset-segmented-control" aria-label="Lab surface">
+            <div className="tileset-tier-seg" aria-label="Lab surface">
               <button type="button" onClick={onPickBoard} title="Work on the shared board.">Board</button>
               <button type="button" className="is-active" title="Preview a UI-kit asset.">Asset</button>
             </div>

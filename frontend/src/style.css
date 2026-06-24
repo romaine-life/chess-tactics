@@ -9420,6 +9420,19 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
   color: #3f5366;
 }
 
+/* The quiet count/context relocated from the old per-pane heading. */
+.tileset-crumb-meta {
+  flex: none;
+  padding-left: 14px;
+  border-left: 1px solid rgba(67, 127, 179, 0.22);
+  color: #6f87a0;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tileset-studio-kicker {
   margin: 0;
   color: #72bde8;
@@ -9677,6 +9690,12 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+/* No per-pane heading (the breadcrumb carries location) — the content panel is
+   the only row, so it fills and scrolls instead of clipping. */
+.tileset-studio-main.is-headless {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .tileset-filter-group {
@@ -11053,6 +11072,49 @@ button.tileset-relationship-cell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
+}
+
+/* Tier selector (category / surface / focus / process) — one tight joined
+   segmented control on a SINGLE row, never the fat two-row button stack.
+   This is the instrument-grade density the spec calls for. */
+.tileset-tier-seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  width: 100%;
+  border: 1px solid rgba(67, 127, 179, 0.32);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(2, 8, 13, 0.45);
+}
+
+.tileset-tier-seg button {
+  min-height: 27px;
+  padding: 5px 8px;
+  color: #aebfd2;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid rgba(67, 127, 179, 0.22);
+  border-radius: 0;
+  cursor: pointer;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tileset-tier-seg button:first-child {
+  border-left: 0;
+}
+
+.tileset-tier-seg button.is-active {
+  color: #f3fbff;
+  background: rgba(25, 94, 132, 0.95);
+}
+
+.tileset-tier-seg button:disabled {
+  color: rgba(174, 191, 210, 0.4);
+  cursor: default;
 }
 
 .tileset-segmented-control.tileset-tools {

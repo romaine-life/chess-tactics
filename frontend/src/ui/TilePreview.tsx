@@ -31,6 +31,7 @@ import { useCampaigns } from '../campaign/store';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
+import kitManifest from './design/kitManifest.json';
 import {
   MISSING_DIRECTION_SPRITE,
   hasDirectionSprite,
@@ -1399,15 +1400,7 @@ function UnitsStudio({
   onArmBrush: (unitId: string) => void;
 }): ReactElement {
   return (
-    <section className="tileset-studio-main">
-      <div className="tileset-studio-toolbar">
-        <div className="tileset-studio-title-row">
-          <div className="tileset-catalog-heading">
-            <h2>Units</h2>
-            <p className="tileset-filter-summary">{unitAssets.length} production units</p>
-          </div>
-        </div>
-      </div>
+    <section className="tileset-studio-main is-headless">
       <section className="tileset-studio-tab-panel">
         <div className="tileset-asset-sections">
           <section className="tileset-asset-section" aria-label="Production units">
@@ -2694,6 +2687,18 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       : category === 'assets'
         ? ['Lab', 'Asset', selectedAssetName || '—']
         : ['Lab', 'Board', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
+  // The quiet count/context that used to be a big per-pane heading — relocated
+  // beside the breadcrumb so the main pane is content-only.
+  const crumbMeta =
+    studioMode === 'lab'
+      ? category === 'assets'
+        ? ''
+        : viewSubtitle
+      : category === 'tiles'
+        ? `${visibleCatalogCount} assets · ${selectedCollectionLabel}`
+        : category === 'units'
+          ? `${unitAssets.length} units`
+          : `gate ${kitManifest.summary.pass}/${kitManifest.summary.total}`;
   const openCatalogMode = (): void => {
     skipNextRouteWriteRef.current = true;
     if (tileFilter === 'board') setTileFilter('base');
@@ -2760,6 +2765,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               <span key={index} className={index === crumbTrail.length - 1 ? 'is-current' : ''}>{part}</span>
             ))}
           </nav>
+          {crumbMeta ? <span className="tileset-crumb-meta">{crumbMeta}</span> : null}
         </div>
         <nav className="tileset-studio-actions" aria-label="Tileset studio navigation">
           <span className="tileset-mode-tabs" aria-label="Workspace mode">
@@ -2787,18 +2793,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         ) : category === 'assets' ? (
           <AssetLibraryStudio filter={assetFilter} search={assetSearch} selected={selectedAssetName} onSelect={setSelectedAssetName} />
         ) : (
-          <section className="tileset-studio-main">
-          <div className="tileset-studio-toolbar">
-            <div className="tileset-studio-title-row">
-              <div className="tileset-catalog-heading">
-                <h2>{selectedFamilyLabel} Tileset</h2>
-                <p className="tileset-filter-summary">
-                  {visibleCatalogCount} assets · {selectedCollectionLabel}
-                </p>
-              </div>
-            </div>
-          </div>
-
+          <section className="tileset-studio-main is-headless">
           <section className="tileset-studio-tab-panel is-tiles" aria-label={`${selectedFamilyLabel} tiles`}>
               <div className="tileset-asset-sections">
                 {selectedCollectionFilters.includes('base') ? (
@@ -2874,7 +2869,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
-              <div className="tileset-segmented-control" aria-label="Catalog asset type">
+              <div className="tileset-tier-seg" aria-label="Catalog asset type">
                 <button
                   type="button"
                   className={category === 'tiles' ? 'is-active' : ''}
@@ -3024,7 +3019,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                     <span>Search</span>
                     <input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="asset name…" />
                   </label>
-                  <div className="tileset-segmented-control" aria-label="Process filter">
+                  <div className="tileset-tier-seg" aria-label="Process filter">
                     {(['all', 'forged', 'unverified'] as const).map((option) => (
                       <button key={option} type="button" className={assetFilter === option ? 'is-active' : ''} onClick={() => setAssetFilter(option)}>
                         {option === 'all' ? 'All' : option === 'forged' ? 'Forged' : 'Unverified'}
@@ -3099,11 +3094,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               <section className="tileset-inspector-section">
                 <h2>Controls</h2>
                 <div className="tileset-control-stack">
-                  <div className="tileset-segmented-control" aria-label="Lab surface">
+                  <div className="tileset-tier-seg" aria-label="Lab surface">
                     <button type="button" className="is-active" title="Work on the shared board.">Board</button>
                     <button type="button" onClick={() => setCategory('assets')} title="Preview a UI-kit asset.">Asset</button>
                   </div>
-                  <div className="tileset-segmented-control" aria-label="Board focus">
+                  <div className="tileset-tier-seg" aria-label="Board focus">
                     <button type="button" className={labMode === 'board' ? 'is-active' : ''} onClick={openBoardLab} title="Inspect and edit the loaded board.">Board</button>
                     <button type="button" className={labMode === 'tile' ? 'is-active' : ''} onClick={openTileLab} disabled={!hasLabTiles} title={hasLabTiles ? 'Inspect the selected tile on the loaded board.' : 'Place or select a tile first.'}>Tile</button>
                     <button type="button" className={labMode === 'unit' ? 'is-active' : ''} onClick={openUnitLab} disabled={!hasLabUnits} title={hasLabUnits ? 'Inspect the selected unit on the loaded board.' : 'Place or select a unit first.'}>Unit</button>
