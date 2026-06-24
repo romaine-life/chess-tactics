@@ -43,9 +43,7 @@ import {
 
 
 
-const TRUE_ISO_TILE_ASSET_ROOT = '/assets/tiles/canonical-true-iso';
 const TRUE_ISO_TILE_SOURCE = 'canonical-true-iso';
-const trueIsoTileAsset = (filename: string): string => `${TRUE_ISO_TILE_ASSET_ROOT}/${filename}`;
 
 
 type StudioFamilyId = TileFamilyId;
@@ -124,96 +122,7 @@ const studioDefaults: TilesetStudioRouteState = {
 const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
   asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
 
-const transitionFillMissingMasks: Record<TerrainPairId, number[]> = {
-  'grass-stone': [2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-  'grass-water': [2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-  'stone-water': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-};
-
-const titleCasePair = (pairId: TerrainPairId): string =>
-  pairId
-    .split('-')
-    .map((part) => `${part[0].toUpperCase()}${part.slice(1)}`)
-    .join(' ');
-
-const transitionFillAsset = (pairId: TerrainPairId, socketMask: number): StudioAsset => {
-  const pair = transitionPairById(pairId);
-  const code = transitionMaskCode(socketMask);
-  const slotLabel = transitionSlotLabel(socketMask, pair);
-  return {
-    id: `transition-${pairId}-${code}`,
-    label: `${titleCasePair(pairId)} ${slotLabel}`,
-    src: `/assets/tiles/canonical-transition-fill/transition-${pairId}-${code}.png`,
-    role: 'transition',
-    kind: 'tile',
-    source: 'canonical-transition-fill',
-    probability: 1,
-    terrains: [...pair.terrains],
-    pairId,
-    socketMask,
-    notes: `Generated first-pass ${pair.label} transition fill for socket mask ${code}.`,
-  };
-};
-
-const transitionFillAssets = (Object.entries(transitionFillMissingMasks) as Array<[TerrainPairId, number[]]>).flatMap(([pairId, masks]) =>
-  masks.map((mask) => transitionFillAsset(pairId, mask)),
-);
-
-const transitionAssets: StudioAsset[] = [
-  {
-    id: 'transition-grass-stone-a',
-    label: 'Grass Stone A',
-    src: trueIsoTileAsset('transition-grass-stone-a.png'),
-    role: 'transition',
-    kind: 'tile',
-    source: TRUE_ISO_TILE_SOURCE,
-    probability: 1,
-    terrains: ['grass', 'stone'],
-    pairId: 'grass-stone',
-    socketMask: 1,
-    notes: 'Projection-locked grass to stone transition tile.',
-  },
-  {
-    id: 'transition-grass-stone-b',
-    label: 'Grass Stone B',
-    src: trueIsoTileAsset('transition-grass-stone-b.png'),
-    role: 'transition',
-    kind: 'tile',
-    source: TRUE_ISO_TILE_SOURCE,
-    probability: 1,
-    terrains: ['grass', 'stone'],
-    pairId: 'grass-stone',
-    socketMask: 3,
-    notes: 'Projection-locked alternate grass to stone transition tile.',
-  },
-  {
-    id: 'transition-grass-water-a',
-    label: 'Grass Water A',
-    src: trueIsoTileAsset('transition-grass-water-a.png'),
-    role: 'transition',
-    kind: 'tile',
-    source: TRUE_ISO_TILE_SOURCE,
-    probability: 1,
-    terrains: ['grass', 'water'],
-    pairId: 'grass-water',
-    socketMask: 1,
-    notes: 'Projection-locked grass to water transition tile.',
-  },
-  {
-    id: 'transition-grass-water-b',
-    label: 'Grass Water B',
-    src: trueIsoTileAsset('transition-grass-water-b.png'),
-    role: 'transition',
-    kind: 'tile',
-    source: TRUE_ISO_TILE_SOURCE,
-    probability: 1,
-    terrains: ['grass', 'water'],
-    pairId: 'grass-water',
-    socketMask: 3,
-    notes: 'Projection-locked alternate grass to water transition tile.',
-  },
-  ...transitionFillAssets,
-];
+const transitionAssets: StudioAsset[] = [];
 
 const STUDIO_FAMILY_META: Record<TileFamilyId, { purpose: string; status: string; review: string }> = {
   grass: { purpose: 'High-volume base terrain for most playable cells.', status: 'Production', review: 'Variation + same-footprint repetition.' },
