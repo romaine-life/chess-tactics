@@ -2868,7 +2868,7 @@ h1 {
   gap: var(--ds-space-5);
   height: 100%;
   min-height: 0;
-  max-width: 1320px;
+  max-width: none;
 }
 
 /* Locked rail: a full-height pane fixed beside the scrolling content (it
@@ -2918,7 +2918,7 @@ h1 {
    The chrome stays small and out of the way so the tree + items lead. */
 .asset-catalog-screen .main-assets-header {
   gap: 6px;
-  max-width: 1320px;
+  max-width: none;
   padding-bottom: 10px;
 }
 
@@ -3193,7 +3193,25 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
 .kit-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .45); color: #79d3ff; }
 .kit-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
 
-.kit-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.kit-filter {
+  align-items: center;
+  background: rgba(14, 23, 34, .6);
+  border: 1px solid #1f3346;
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 22px;
+  padding: 10px 14px;
+}
+.kit-filter-label {
+  color: #5d7a8c;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .64rem;
+  letter-spacing: .14em;
+  margin-right: 6px;
+  text-transform: uppercase;
+}
 .kit-filter button {
   background: #0e1722;
   border: 1px solid #1f3346;

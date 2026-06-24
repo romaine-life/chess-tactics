@@ -90,6 +90,7 @@ function KitOverview({ onNavigate }: { onNavigate: Navigate }): React.ReactEleme
       </div>
 
       <div className="kit-filter" role="group" aria-label="Filter by process provenance">
+        <span className="kit-filter-label">Filter · process</span>
         {tabs.map(([key, label, n]) => (
           <button type="button" key={key} className={filter === key ? 'is-active' : ''} aria-pressed={filter === key} onClick={() => setFilter(key)}>
             {label} <span className="kit-filter-n">{n}</span>
