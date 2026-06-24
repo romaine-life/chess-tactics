@@ -25,7 +25,8 @@ import {
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath } from '../core/pieces';
 import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
-import { BoardLabBoard, boardLabCellPosition, boardLabMetrics } from '../render/BoardLabBoard';
+import { BoardLabBoard } from '../render/BoardLabBoard';
+import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
@@ -1293,11 +1294,6 @@ function StudioEditableBoard({
   overlay?: ReactNode;
 }): ReactElement {
   const paintingRef = useRef(false);
-  const gridCells: { x: number; y: number }[] = [];
-  for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) gridCells.push({ x, y });
-  // Derive centering from the shared board metrics (same path the game's
-  // BoardLabBoard uses) instead of a private copy that drifted to -27 headroom.
-  const { originLeft, originTop } = boardLabMetrics(gridCells);
   const stopPainting = () => { paintingRef.current = false; };
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
@@ -1305,42 +1301,31 @@ function StudioEditableBoard({
     else onSelect(x, y);
   };
 
-  return (
-    <div
-      className={`tileset-generated-board tileset-placement-board is-tool-${tool} ${showFootprint ? 'has-footprint' : ''}`}
-      style={
-        {
-          '--board-zoom': boardZoom,
-          '--board-pan-x': `${boardPan.x}px`,
-          '--board-pan-y': `${boardPan.y}px`,
-          '--board-origin-left': `${originLeft}px`,
-          '--board-origin-top': `${originTop}px`,
-        } as CSSProperties
-      }
-      aria-label="Editable tile board"
-      onPointerUp={stopPainting}
-      onPointerLeave={stopPainting}
-    >
-      {gridCells.map((cell) => {
-        const key = `${cell.x},${cell.y}`;
-        const assetId = placed[key];
-        const asset = assetId ? resolveAsset(assetId) : undefined;
-        const unitPlacement = placedUnits[key];
-        const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
-        const { left, top } = boardLabCellPosition(cell);
-        const isSelected = selectedCell?.x === cell.x && selectedCell?.y === cell.y;
-        const unitSprite =
-          unitAsset && unitPlacement
-            ? hasDirectionSprite(unitAsset, unitPlacement.direction)
-              ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
-              : MISSING_DIRECTION_SPRITE
-            : undefined;
-        return (
-          <div
-            key={key}
-            className={`tileset-generated-board-tile tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`}
-            style={{ left, top, zIndex: cell.x + cell.y }}
-          >
+  // The editor is an adapter over the shared TileGrid core (the same one the
+  // game's BoardLabBoard uses). It only supplies per-cell content: the tile art,
+  // the placed unit, the selection ring, and the paint/erase/select hit target.
+  const cells: TileGridCell[] = [];
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const key = `${x},${y}`;
+      const assetId = placed[key];
+      const asset = assetId ? resolveAsset(assetId) : undefined;
+      const unitPlacement = placedUnits[key];
+      const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
+      const isSelected = selectedCell?.x === x && selectedCell?.y === y;
+      const unitSprite =
+        unitAsset && unitPlacement
+          ? hasDirectionSprite(unitAsset, unitPlacement.direction)
+            ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
+            : MISSING_DIRECTION_SPRITE
+          : undefined;
+      cells.push({
+        key,
+        x,
+        y,
+        className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
+        children: (
+          <>
             {asset ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
             {unitAsset && unitSprite ? (
               <img
@@ -1364,16 +1349,30 @@ function StudioEditableBoard({
                 if (event.button === 2) return; // right-click erases via onContextMenu
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
                 if (tool !== 'select') paintingRef.current = true;
-                applyTool(cell.x, cell.y);
+                applyTool(x, y);
               }}
-              onPointerEnter={() => { if (paintingRef.current) applyTool(cell.x, cell.y); }}
-              onContextMenu={(event) => { event.preventDefault(); onErase(cell.x, cell.y); }}
+              onPointerEnter={() => { if (paintingRef.current) applyTool(x, y); }}
+              onContextMenu={(event) => { event.preventDefault(); onErase(x, y); }}
             />
-          </div>
-        );
-      })}
+          </>
+        ),
+      });
+    }
+  }
+
+  return (
+    <TileGrid
+      cells={cells}
+      className={`tileset-placement-board is-tool-${tool}`}
+      ariaLabel="Editable tile board"
+      showFootprint={showFootprint}
+      boardZoom={boardZoom}
+      boardPan={boardPan}
+      onPointerUp={stopPainting}
+      onPointerLeave={stopPainting}
+    >
       {overlay}
-    </div>
+    </TileGrid>
   );
 }
 
