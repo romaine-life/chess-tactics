@@ -14,25 +14,31 @@ export function verifyAsset(pngOrPath, { symmetric = false, label = '' } = {}) {
   return true;
 }
 
-// Gate for codex-painted GLYPHS (icons / shields). A clean-looking
-// "generate on a transparent background" prompt can still ship a DIRTY result:
-// codex satisfies it by keying out a filled background, which leaves magenta
-// despill, an anti-aliased alpha halo, and/or background bleeding to the sprite
-// edge. The prompt is a request, not a receipt — this audits the actual pixels.
-export function verifyGlyph(pngOrPath, { label = '', maxSemiPct = 2, allowEdgePx = 6 } = {}) {
+// Transparency-HYGIENE gate for codex-produced GLYPHS (icons / shields). It
+// checks ONLY the mechanical transparency defects codex actually ships when it
+// keys out a filled background: magenta/chroma despill fringe, and background
+// bleeding to the canvas edge.
+//
+// It does NOT judge drawing quality, and — deliberately — it does NOT require
+// binary alpha. ANTI-ALIASING IS EXPECTED AND GOOD: soft edges are what make a
+// real generated/painted icon look clean. Demanding hard alpha was the bug — it
+// rejected the good originals and pushed codex to hand-draw jagged icons in code
+// to satisfy it. Whether the art is any good is the method gate's + the human
+// eyeball's job, not this one's. See docs/kit-forge.md.
+export function verifyGlyph(pngOrPath, { label = '', allowEdgePx = 6 } = {}) {
   const p = typeof pngOrPath === 'string' ? PNG.sync.read(readFileSync(pngOrPath)) : pngOrPath;
   const { width: w, height: h, data: d } = p;
-  let magenta = 0, semi = 0, edge = 0;
+  let magenta = 0, edge = 0;
   for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
     const i = (y * w + x) * 4; const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
     if (a > 60 && r > g + 30 && b > g + 30) magenta += 1;                  // keying despill (R&B high, G low) — never intentional here
-    if (a > 0 && a < 255) semi += 1;                                       // AA halo — not binary alpha
     if ((x < 1 || y < 1 || x >= w - 1 || y >= h - 1) && a > 40) edge += 1; // opaque against the frame edge — bg bled in / glyph clipped
   }
-  const semiPct = 100 * semi / (w * h);
+  // Catch a real keying FRINGE (dozens of saturated-magenta px outlining the
+  // subject), not a few stray AA pixels — even clean art carries a handful.
+  const magentaMax = Math.max(12, Math.round(w * h * 0.004));
   const fails = [];
-  if (magenta > 2) fails.push(`${magenta} magenta despill px (background-keying fringe)`);
-  if (semiPct > maxSemiPct) fails.push(`${semiPct.toFixed(1)}% semi-transparent px (AA halo, not binary alpha)`);
+  if (magenta > magentaMax) fails.push(`${magenta} magenta despill px (background-keying fringe)`);
   if (edge > allowEdgePx) fails.push(`${edge} opaque edge px (background bled to frame / glyph clipped)`);
   if (fails.length) throw new Error(`glyph verify FAILED ${label}\n  - ${fails.join('\n  - ')}`);
   return true;

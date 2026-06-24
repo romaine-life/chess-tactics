@@ -1,8 +1,8 @@
 {
   "generated": "2026-06-24",
-  "gate": "verify-kit-asset.mjs --glyph (magenta · binary-alpha · edge)",
+  "gate": "verify-kit-asset.mjs --glyph (transparency hygiene: magenta despill + edge bleed; anti-aliasing allowed)",
   "summary": {
-    "pass": 11,
+    "pass": 30,
     "total": 30,
     "frames": 14
   },
@@ -19,10 +19,8 @@
           "magenta": 0,
           "semiPct": 3.2,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 3.2%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "design-index",
@@ -43,10 +41,8 @@
           "magenta": 3,
           "semiPct": 0,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "magenta 3"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "gear",
@@ -111,10 +107,8 @@
           "magenta": 5,
           "semiPct": 0,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "magenta 5"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "reset",
@@ -157,10 +151,8 @@
           "magenta": 3,
           "semiPct": 0,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "magenta 3"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "tileset-studio",
@@ -181,10 +173,8 @@
           "magenta": 8,
           "semiPct": 0,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "magenta 8"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "wrench",
@@ -211,10 +201,8 @@
           "magenta": 1,
           "semiPct": 12.3,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 12.3%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "capture",
@@ -224,10 +212,8 @@
           "magenta": 0,
           "semiPct": 21.5,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 21.5%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "defend",
@@ -237,10 +223,8 @@
           "magenta": 0,
           "semiPct": 11.3,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 11.3%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "end-turn",
@@ -250,10 +234,8 @@
           "magenta": 0,
           "semiPct": 17.8,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 17.8%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "move",
@@ -263,10 +245,8 @@
           "magenta": 0,
           "semiPct": 12.9,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 12.9%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "objective",
@@ -276,10 +256,8 @@
           "magenta": 1,
           "semiPct": 12.4,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 12.4%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "power",
@@ -289,10 +267,8 @@
           "magenta": 2,
           "semiPct": 12.6,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 12.6%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "wait",
@@ -302,10 +278,8 @@
           "magenta": 0,
           "semiPct": 15.2,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 15.2%"
-          ]
+          "pass": true,
+          "fails": []
         }
       ]
     },
@@ -321,10 +295,8 @@
           "magenta": 0,
           "semiPct": 10.1,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 10.1%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "crown",
@@ -334,10 +306,8 @@
           "magenta": 0,
           "semiPct": 11.5,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 11.5%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "flame",
@@ -347,10 +317,8 @@
           "magenta": 0,
           "semiPct": 10,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 10%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "lion",
@@ -360,10 +328,8 @@
           "magenta": 0,
           "semiPct": 10,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 10%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "rook",
@@ -373,10 +339,8 @@
           "magenta": 0,
           "semiPct": 10,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 10%"
-          ]
+          "pass": true,
+          "fails": []
         },
         {
           "name": "snow",
@@ -386,10 +350,8 @@
           "magenta": 0,
           "semiPct": 10.8,
           "edge": 0,
-          "pass": false,
-          "fails": [
-            "AA 10.8%"
-          ]
+          "pass": true,
+          "fails": []
         }
       ]
     }

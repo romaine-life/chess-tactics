@@ -36,7 +36,11 @@ programmatic drawing emits only `shell_command` / `view_image`. So:
 
 - **Method gate (first, definitive):** require an `image_generation_call` event
   in the run. No event → codex coded it → reject, no matter how clean the pixels.
-- **Pixel gate (second):** magenta / hard-alpha / edge bleed (`verifyGlyph`).
+- **Pixel gate (second):** transparency hygiene only — a gross magenta keying
+  fringe or background bleeding to the canvas edge (`verifyGlyph`). It does **not**
+  require binary alpha; **anti-aliasing is allowed and expected**. It does not
+  judge whether the drawing is any good — that's the method gate's and the
+  eyeball's job.
 
 The forge enforces method-then-pixels in `forgeOne` via `usedImageGenerator()`,
 and records `method: "image-generator (verified)"` in
@@ -50,12 +54,22 @@ not *a good drawing*. Always eyeball generated assets before onboarding them, an
 never replace known-good art with a batch of "30/30 PASS" output you haven't
 looked at. The eyeball is the required backstop; do not automate it away.
 
-## Open tension (resolve before the next re-forge)
+## The gate is transparency hygiene, NOT a quality judge
 
-Requiring real generation conflicts with the current **binary-alpha** pixel gate:
-the image model produces anti-aliased edges, which the gate rejects as
-semi-transparent. Decide the transparency path deliberately — generate on a flat
+`verifyGlyph` only fails on real mechanical transparency defects: a gross
+magenta keying fringe (dozens of saturated-magenta px outlining the subject) or
+opaque pixels bleeding to the canvas edge. It used to *also* demand binary alpha
+(no semi-transparent pixels) — that was a bug, removed. Anti-aliased edges are
+what make icons look clean; demanding hard alpha rejected the good originals and
+pushed codex to hand-draw jagged icons in code to satisfy it. Don't reintroduce
+a binary-alpha fail. Whether the art is *good* is decided by the method gate
+(was it really generated) plus a human eyeball — never by this pixel check.
+
+## Still open: the transparency path for a real re-forge
+
+When you do regenerate via the image model, decide deliberately how the
+transparent background is produced: native transparency, or generate on a flat
 chroma-key background and despill locally
-(`$CODEX_HOME/skills/.system/imagegen/scripts/remove_chroma_key.py`), or relax the
-gate for these icons — rather than leaving constraints that quietly push codex
-back into drawing them in code.
+(`$CODEX_HOME/skills/.system/imagegen/scripts/remove_chroma_key.py`). The gate
+now tolerates the anti-aliased, despilled edges either path produces — but a
+sloppy chroma removal that leaves a magenta fringe will (correctly) be caught.

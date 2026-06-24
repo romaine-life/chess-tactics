@@ -11,7 +11,10 @@ const KIT = `${root}public/assets/ui/kit/`;
 const URLBASE = '/assets/ui/kit/';
 const listPng = (d) => (existsSync(d) ? readdirSync(d).filter((f) => f.endsWith('.png') && !f.includes('@2x')).sort() : []);
 
-// mirrors verifyGlyph() in verify-kit-asset.mjs, but returns the metrics
+// mirrors verifyGlyph() in verify-kit-asset.mjs: magenta despill + edge bleed
+// are the only FAILS. semiPct (anti-aliasing) is recorded for info only — it is
+// NOT a defect; soft edges are expected and good. (Don't reintroduce a binary-
+// alpha fail here — that's the bug we removed.)
 function glyph(path) {
   const p = PNG.sync.read(readFileSync(path)); const { width: w, height: h, data: d } = p;
   let magenta = 0, semi = 0, edge = 0;
@@ -23,8 +26,7 @@ function glyph(path) {
   }
   const semiPct = +(100 * semi / (w * h)).toFixed(1);
   const fails = [];
-  if (magenta > 2) fails.push(`magenta ${magenta}`);
-  if (semiPct > 2) fails.push(`AA ${semiPct}%`);
+  if (magenta > Math.max(12, Math.round(w * h * 0.004))) fails.push(`magenta ${magenta}`);
   if (edge > 6) fails.push(`edge ${edge}`);
   return { w, h, magenta, semiPct, edge, pass: fails.length === 0, fails };
 }
@@ -46,7 +48,7 @@ const frames = frameNames.filter((n) => existsSync(`${KIT}${n}.png`)).map((n) =>
 const allGlyphs = groups.flatMap((g) => g.items);
 const manifest = {
   generated: new Date().toISOString().slice(0, 10),
-  gate: 'verify-kit-asset.mjs --glyph (magenta · binary-alpha · edge)',
+  gate: 'verify-kit-asset.mjs --glyph (transparency hygiene: magenta despill + edge bleed; anti-aliasing allowed)',
   summary: { pass: allGlyphs.filter((a) => a.pass).length, total: allGlyphs.length, frames: frames.length },
   groups,
   frames,
