@@ -6832,8 +6832,11 @@ h1 {
   border-radius: 5px;
   display: grid;
   min-height: 86px;
-  padding: 8px;
+  /* no bottom padding: the bust bleeds to the bottom border instead of floating
+     above it with a strip of backdrop showing under the cropped lower body. */
+  padding: 8px 8px 0;
   place-items: center;
+  overflow: hidden;
 }
 
 .skirmish-portrait-frame.has-backdrop {
@@ -7288,7 +7291,7 @@ h1 {
 
   .skirmish-portrait-frame {
     min-height: 84px;
-    padding: 14px;
+    padding: 14px 14px 0;
   }
 
   .skirmish-action-button {
