@@ -19,6 +19,168 @@
       "forged": "2026-06-24",
       "tries": 1,
       "gate": "pass"
+    },
+    "reset": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "knight": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "info": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "speaker": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "monitor": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "wrench": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "save": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "brand-shield": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "attack": {
+      "group": "game",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "tileset-studio": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "unit-studio": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "tileset-review": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "design-index": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "move": {
+      "group": "game",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "interface-sounds": {
+      "group": "settings",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "capture": {
+      "group": "game",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "power": {
+      "group": "game",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "objective": {
+      "group": "game",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "rook": {
+      "group": "shields",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "end-turn": {
+      "group": "game",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "wait": {
+      "group": "game",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "defend": {
+      "group": "game",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "crown": {
+      "group": "shields",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "flame": {
+      "group": "shields",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "lion": {
+      "group": "shields",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "snow": {
+      "group": "shields",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
+    },
+    "crescent": {
+      "group": "shields",
+      "forged": "2026-06-24",
+      "tries": 1,
+      "gate": "pass"
     }
   }
 }
