@@ -68,9 +68,11 @@ function tabFromPath(pathname: string): SettingsTab {
   return 'general';
 }
 
+// One creator-tools entry — the studio is the single workspace: tiles, units,
+// and the UI-kit asset library are all categories within it. (The broader Design
+// Index still lives at /design directly.)
 const creatorTools: CreatorTool[] = [
-  { label: 'Design Index', href: '/design', icon: 'icon-design-index.png', description: 'Open the system map for UI, content, and art references.' },
-  { label: 'Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'Catalog, inspect, and paint tiles and units on one shared board.' },
+  { label: 'Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'The creator workspace — browse tiles, units, and the UI-kit asset library, all in one place.' },
 ];
 
 function asset(file: string): string {
