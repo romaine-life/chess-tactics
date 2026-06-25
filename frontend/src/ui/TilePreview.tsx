@@ -89,6 +89,8 @@ interface StudioFamily {
 interface TilesetStudioRouteState {
   familyId: StudioFamilyId;
   studioMode: StudioMode;
+  category?: 'tiles' | 'units' | 'assets';
+  selectedAssetName?: string;
   labMode: LabMode;
   tileFilter: TileFilter;
   selectedPairId: TerrainPairId;
@@ -210,6 +212,7 @@ const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab';
+const isStudioCategory = (value: string | null): value is 'tiles' | 'units' | 'assets' => value === 'tiles' || value === 'units' || value === 'assets';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -221,6 +224,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const params = new URLSearchParams(window.location.search);
   const family = params.get('family');
   const mode = params.get('mode');
+  const cat = params.get('cat');
+  const kit = params.get('kit');
   const lab = params.get('lab');
   const view = params.get('view');
   const collection = params.get('collection');
@@ -241,6 +246,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   return {
     familyId: isStudioFamilyId(family) ? family : studioDefaults.familyId,
     studioMode,
+    category: isStudioCategory(cat) ? cat : undefined,
+    selectedAssetName: kit || undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -258,7 +265,13 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (window.location.pathname !== '/tileset-studio') return;
   if (route.studioMode === 'catalog') {
-    const nextHref = window.location.pathname;
+    // Tiles is the default, so it stays a clean bare URL; Units/Assets get a
+    // ?cat= so the chosen catalog survives a reload and is directly linkable.
+    const catalogParams = new URLSearchParams();
+    if (route.category && route.category !== 'tiles') catalogParams.set('cat', route.category);
+    if (route.category === 'assets' && route.selectedAssetName) catalogParams.set('kit', route.selectedAssetName);
+    const catalogQuery = catalogParams.toString();
+    const nextHref = catalogQuery ? `${window.location.pathname}?${catalogQuery}` : window.location.pathname;
     const currentHref = `${window.location.pathname}${window.location.search}`;
     if (nextHref !== currentHref) {
       window.history.replaceState({}, '', nextHref);
@@ -268,6 +281,8 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   const params = new URLSearchParams();
   params.set('family', route.familyId);
   params.set('mode', route.studioMode);
+  if (route.category && route.category !== 'tiles') params.set('cat', route.category);
+  if (route.category === 'assets' && route.selectedAssetName) params.set('kit', route.selectedAssetName);
   if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
@@ -1229,7 +1244,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
-  const [category, setCategory] = useState<'tiles' | 'units' | 'assets'>(initialCategory);
+  const [category, setCategory] = useState<'tiles' | 'units' | 'assets'>(initialRoute.category ?? initialCategory);
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
@@ -1240,7 +1255,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [catalogQuery, setCatalogQuery] = useState('');
   const [assetFilter, setAssetFilter] = useState<AssetFilter>('all');
   const [assetSearch, setAssetSearch] = useState('');
-  const [selectedAssetName, setSelectedAssetName] = useState('gear');
+  const [selectedAssetName, setSelectedAssetName] = useState(initialRoute.selectedAssetName ?? 'gear');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
   const skipNextRouteWriteRef = useRef(false);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
@@ -1575,6 +1590,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       setFamilyId(route.familyId);
       setSelectedFamilyIds([route.familyId]);
       setStudioMode(route.studioMode);
+      if (route.category) setCategory(route.category);
+      if (route.selectedAssetName) setSelectedAssetName(route.selectedAssetName);
       setViewHasTarget(Boolean(route.selectedAssetId || route.selectedSlotMask || route.tileFilter === 'board'));
       setTileFilter(route.tileFilter);
       setLabMode(route.labMode);
@@ -1637,6 +1654,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     writeTilesetStudioRoute({
       familyId,
       studioMode,
+      category,
+      selectedAssetName,
       labMode,
       tileFilter,
       selectedPairId,
@@ -1649,7 +1668,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, familyId, labMode, selectedAsset.id, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
