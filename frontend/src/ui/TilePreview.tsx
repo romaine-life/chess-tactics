@@ -2054,6 +2054,16 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
 
+  // The Viewer's tier selector — the Asset|Artwork split, represented as a control
+  // like the Catalog's category tabs and the Lab's Board/Tile/Unit focus. One
+  // selector, injected into whichever Viewer surface is active.
+  const viewerKindTabs = (
+    <div className="tileset-tier-seg" aria-label="Viewer kind">
+      <button type="button" className={viewerKind === 'asset' ? 'is-active' : ''} onClick={() => setViewerKind('asset')} title="View the selected UI-kit asset.">Asset</button>
+      <button type="button" className={viewerKind === 'artwork' ? 'is-active' : ''} onClick={() => setViewerKind('artwork')} title="View the selected artwork.">Artwork</button>
+    </div>
+  );
+
   return (
     <main className="tileset-studio-page">
       <header className="tileset-studio-header">
@@ -2110,8 +2120,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
         ) : studioMode === 'viewer' ? (
           viewerKind === 'artwork'
-            ? <ArtworkLab name={selectedArtworkName} />
-            : <AssetLab name={selectedAssetName} />
+            ? <ArtworkLab name={selectedArtworkName} header={viewerKindTabs} />
+            : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">

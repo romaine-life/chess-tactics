@@ -4,7 +4,7 @@
 // props, so this component is purely the catalog. The per-asset viewer is the
 // Lab's job (Asset surface), not the catalog's. Data: the build-time manifest +
 // provenance (frontend/scripts/kit-manifest.mjs / kit-forge.mjs).
-import { type CSSProperties, type ReactElement } from 'react';
+import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import manifest from './kitManifest.json';
 import provenance from './kitProvenance.json';
 
@@ -89,11 +89,11 @@ function findAsset(name: string): Found | null {
 
 // The Asset Viewer surface — main pane previews the selected asset in contexts
 // chosen by its type (glyph: bare / in a button / on a panel; frame: native /
-// stretched); the aside is a read-only Details panel (provenance/gate readout).
-// Assets are inspected, not manipulated, so this is the Viewer destination, not
-// the board Lab — there is no surface toggle. It renders [main][aside] straight
-// into the shell so the frame matches every other mode.
-export function AssetLab({ name }: { name: string }): ReactElement {
+// stretched); the aside carries the Viewer's Asset|Artwork kind selector (the
+// `header` slot) above a read-only Details readout (provenance/gate). Assets are
+// inspected, not manipulated, so this is the Viewer destination, not the board
+// Lab. It renders [main][aside] straight into the shell to match every other mode.
+export function AssetLab({ name, header }: { name: string; header?: ReactNode }): ReactElement {
   const found = name ? findAsset(name) : null;
   const item = found?.item;
   const prov = item && forged(item.name) ? PROV.assets[item.name] : null;
@@ -122,8 +122,9 @@ export function AssetLab({ name }: { name: string }): ReactElement {
       </section>
       <aside className="tileset-view-controls" aria-label="Asset details">
         <section className="tileset-inspector-section">
-          <h2>Details</h2>
+          <h2>Controls</h2>
           <div className="tileset-control-stack">
+            {header}
             {found && item ? (
               <dl className="al-meta">
                 <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h}</dd></div>
