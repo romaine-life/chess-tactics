@@ -1510,6 +1510,19 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .5));
 }
 
+/* Coordinated reveal: the menu content (brand + buttons + profile) stays hidden
+   until its sprites are decoded, then fades in together over the gradient
+   backdrop above — no per-asset pop-in. The ::before backdrop and the rain
+   canvas are unaffected (rain fades in on its own when its runtime is ready). */
+.main-menu-layer .main-menu-left,
+.main-menu-layer .main-menu-right {
+  transition: opacity 320ms ease;
+}
+.main-menu-layer.is-loading .main-menu-left,
+.main-menu-layer.is-loading .main-menu-right {
+  opacity: 0;
+}
+
 
 /* ── Design-system token layer ────────────────────────────────────────────
    Single source of truth for the design surfaces (catalog, glossary, widgets)

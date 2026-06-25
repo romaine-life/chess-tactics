@@ -4,6 +4,7 @@ import { AmbienceBackground } from './AmbienceBackground';
 import {
   MENU_MODES,
   assetById,
+  bestImageUrl,
   frameStyleForAsset,
   insetStyle,
   type MenuMode,
@@ -111,14 +112,39 @@ function ProfilePanel(): ReactElement {
 }
 
 export function MainMenu(): ReactElement {
+  // Coordinated reveal: hold the menu content until its sprites are decoded, then
+  // fade the whole screen in at once — instead of letting each button / icon /
+  // brand mark pop in independently as it streams in on a cold first boot. The
+  // rain (AmbienceBackground) is intentionally NOT gated; it fades in on its own
+  // whenever the ambience runtime is ready.
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
   }, []);
 
+  useEffect(() => {
+    const urls = new Set<string>();
+    const want = (image?: string) => { if (image) urls.add(bestImageUrl(image)); };
+    want(assetById('button-9slice.main-menu')?.sheet?.image);
+    for (const mode of MENU_MODES) {
+      want(assetById(mode.row)?.sheet?.image);
+      want(assetById(mode.icon)?.sheet?.image);
+    }
+    want('/assets/ui/main-menu-brand-rook-mark-v1.png');
+    want('/assets/ui/main-menu/profile-cog.png');
+
+    let done = false;
+    const reveal = () => { if (!done) { done = true; setReady(true); } };
+    Promise.allSettled([...urls].map((src) => { const img = new Image(); img.src = src; return img.decode(); })).then(reveal);
+    const fallback = window.setTimeout(reveal, 1500); // never block the menu on one slow asset
+    return () => window.clearTimeout(fallback);
+  }, []);
+
   return (
-    <div className="menu-layer main-menu-layer" data-testid="main-menu-next">
+    <div className={`menu-layer main-menu-layer ${ready ? 'is-ready' : 'is-loading'}`} data-testid="main-menu-next">
       <AmbienceBackground />
       <section className="main-menu-screen main-menu-skeleton-screen" aria-label="Chess Tactics main menu">
         <div className="main-menu-left">
