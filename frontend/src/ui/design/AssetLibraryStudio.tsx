@@ -87,12 +87,13 @@ function findAsset(name: string): Found | null {
   return f ? { kind: 'frame', item: f } : null;
 }
 
-// The Lab's Asset surface — main pane previews the selected asset in contexts
+// The Asset Viewer surface — main pane previews the selected asset in contexts
 // chosen by its type (glyph: bare / in a button / on a panel; frame: native /
-// stretched); the aside carries the same cascade as the board lab (Surface
-// segmented at the top) plus the asset's provenance/gate readout. It renders
-// [main][aside] straight into the shell so the frame matches every other mode.
-export function AssetLab({ name, onPickBoard }: { name: string; onPickBoard: () => void }): ReactElement {
+// stretched); the aside is a read-only Details panel (provenance/gate readout).
+// Assets are inspected, not manipulated, so this is the Viewer destination, not
+// the board Lab — there is no surface toggle. It renders [main][aside] straight
+// into the shell so the frame matches every other mode.
+export function AssetLab({ name }: { name: string }): ReactElement {
   const found = name ? findAsset(name) : null;
   const item = found?.item;
   const prov = item && forged(item.name) ? PROV.assets[item.name] : null;
@@ -119,14 +120,10 @@ export function AssetLab({ name, onPickBoard }: { name: string; onPickBoard: () 
           </div>
         )}
       </section>
-      <aside className="tileset-view-controls" aria-label="Asset controls">
+      <aside className="tileset-view-controls" aria-label="Asset details">
         <section className="tileset-inspector-section">
-          <h2>Controls</h2>
+          <h2>Details</h2>
           <div className="tileset-control-stack">
-            <div className="tileset-tier-seg" aria-label="Lab surface">
-              <button type="button" onClick={onPickBoard} title="Work on the shared board.">Board</button>
-              <button type="button" className="is-active" title="Preview a UI-kit asset.">Asset</button>
-            </div>
             {found && item ? (
               <dl className="al-meta">
                 <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h}</dd></div>
@@ -136,7 +133,9 @@ export function AssetLab({ name, onPickBoard }: { name: string; onPickBoard: () 
                 {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}
                 {glyph ? <div><dt>Edge</dt><dd>{glyph.edge}</dd></div> : null}
               </dl>
-            ) : null}
+            ) : (
+              <p className="tileset-catalog-note">No asset selected — pick a card in the Assets catalog.</p>
+            )}
           </div>
         </section>
       </aside>

@@ -74,10 +74,11 @@ function findArtwork(id: string): { group: ArtworkGroup; item: ArtworkItem } | n
   return null;
 }
 
-// The Lab's Artwork surface — one big contained preview of the selected piece on a
+// The Artwork viewer surface — one big contained preview of the selected piece on a
 // checker stage, plus a metadata readout (group, dimensions, served path). Renders
-// [main][aside] straight into the shell so the frame matches every other mode.
-export function ArtworkLab({ name, onPickBoard }: { name: string; onPickBoard: () => void }): ReactElement {
+// [main][aside] straight into the shell so the frame matches every other mode. This
+// is its own studio mode ('viewer'), not the board Lab — so no board/surface toggle.
+export function ArtworkLab({ name }: { name: string }): ReactElement {
   const found = name ? findArtwork(name) : null;
   return (
     <>
@@ -95,19 +96,17 @@ export function ArtworkLab({ name, onPickBoard }: { name: string; onPickBoard: (
       </section>
       <aside className="tileset-view-controls" aria-label="Artwork controls">
         <section className="tileset-inspector-section">
-          <h2>Controls</h2>
+          <h2>Details</h2>
           <div className="tileset-control-stack">
-            <div className="tileset-tier-seg" aria-label="Lab surface">
-              <button type="button" onClick={onPickBoard} title="Work on the shared board.">Board</button>
-              <button type="button" className="is-active" title="Preview artwork.">Artwork</button>
-            </div>
             {found ? (
               <dl className="al-meta">
                 <div><dt>Group</dt><dd>{found.group.label}</dd></div>
                 <div><dt>Size</dt><dd>{found.item.w && found.item.h ? `${found.item.w}×${found.item.h}` : '—'}</dd></div>
                 <div><dt>Path</dt><dd>{found.item.url}</dd></div>
               </dl>
-            ) : null}
+            ) : (
+              <p className="tileset-catalog-note">No artwork selected — pick a card in the Artwork catalog.</p>
+            )}
           </div>
         </section>
       </aside>

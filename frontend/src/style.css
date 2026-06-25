@@ -8767,7 +8767,8 @@ h1 {
    and a 260px Controls rail on the right. The grid never changes between modes,
    so the rail and pane hold their position — only their contents swap. */
 .tileset-studio-shell.is-catalog,
-.tileset-studio-shell.is-lab {
+.tileset-studio-shell.is-lab,
+.tileset-studio-shell.is-viewer {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
