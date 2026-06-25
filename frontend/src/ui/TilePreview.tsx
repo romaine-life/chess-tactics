@@ -2155,7 +2155,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               <section className="tileset-inspector-section">
                 <h2>Controls</h2>
                 <div className="tileset-control-stack">
-              <span className="tileset-mode-tabs tileset-lab-component-tabs" aria-label="Component view">
+              <div className="tileset-segmented-control tileset-focus-seg" aria-label="Component view">
                 <button
                   type="button"
                   className={labMode === 'board' ? 'is-active' : ''}
@@ -2182,7 +2182,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                 >
                   Unit
                 </button>
-              </span>
+              </div>
                       <div className="tileset-segmented-control tileset-tools" aria-label="Board tool">
                         <button type="button" className={tool === 'select' ? 'is-active' : ''} onClick={() => setTool('select')} title="Select tool — click a tile to highlight it (then fill its neighbors). Doesn't paint or erase.">
                           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 2 L3 13 L6 10 L8 14.6 L9.8 13.8 L7.8 9.4 L12.5 9.4 Z" fill="currentColor" /></svg>

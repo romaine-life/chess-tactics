@@ -8820,21 +8820,6 @@ h1 {
   padding: 12px;
 }
 
-/* Component-view tabs (Board / Tile / Unit) sit at the top of the Controls
-   rail and stretch full-width, so they line up with the rail's other rows.
-   Override .tileset-mode-tabs' 78px-min auto columns: in the 260px rail three
-   78px buttons (= 256px min-content) can't shrink and would force every sibling
-   control to that width, clipping the rail's right edge. Let them shrink to fit. */
-.tileset-lab-component-tabs {
-  width: 100%;
-  margin: 0;
-  grid-auto-columns: minmax(0, 1fr);
-}
-
-.tileset-lab-component-tabs button {
-  min-width: 0;
-}
-
 .tileset-studio-rail {
   display: grid;
   grid-auto-rows: max-content;
@@ -10367,7 +10352,8 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
-.tileset-segmented-control.tileset-tools {
+.tileset-segmented-control.tileset-tools,
+.tileset-segmented-control.tileset-focus-seg {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
