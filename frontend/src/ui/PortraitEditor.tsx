@@ -5,7 +5,7 @@
 // portrait frame. The crop is per-piece (geometry), previewable in any palette.
 // Export the JSON and hand it back — it maps to camera framing for crisp finals.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, WheelEvent as ReactWheelEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
 
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
 const PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald'] as const;
@@ -76,7 +76,10 @@ function loadCrops(): Record<Piece, Crop> {
   return base;
 }
 
-export function PortraitEditor(): ReactElement {
+// Shared editor core — crop state per piece, pan/zoom handlers, persistence and
+// JSON export. Consumed both by the standalone PortraitEditor page and by the
+// in-studio PortraitLab Viewer surface, so the two never diverge.
+function usePortraitEditor() {
   const [crops, setCrops] = useState<Record<Piece, Crop>>(loadCrops);
   const [piece, setPiece] = useState<Piece>('pawn');
   const [palette, setPalette] = useState<Palette>('navy-blue');
@@ -128,6 +131,92 @@ export function PortraitEditor(): ReactElement {
   const copy = async () => {
     try { await navigator.clipboard.writeText(json); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
   };
+  const resetPiece = () => setCrop({ ...DEFAULT_CROP });
+  const resetAll = () => setCrops(Object.fromEntries(PIECES.map((p) => [p, { ...DEFAULT_CROP }])) as Record<Piece, Crop>);
+
+  return { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll };
+}
+
+const overlayStyle = (crop: Crop): CSSProperties => ({
+  position: 'absolute', boxSizing: 'border-box',
+  left: `${(crop.cx - crop.s / 2) * 100}%`, top: `${(crop.cy - crop.s / 2) * 100}%`,
+  width: `${crop.s * 100}%`, height: `${crop.s * 100}%`,
+  border: '2px solid #7fd0ff', boxShadow: '0 0 0 9999px rgba(2,8,13,.55)', borderRadius: 4, cursor: 'grab',
+});
+const checkerBg = 'repeating-conic-gradient(#15202b 0% 25%, #0e161e 0% 50%) 50% / 28px 28px';
+
+// In-studio Viewer surface — the same crop editor in the studio's [main][aside]
+// frame. `header` carries the Viewer's Asset|Artwork|Portrait kind selector.
+export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
+  const ed = usePortraitEditor();
+  const { crops, piece, palette, crop } = ed;
+  const CANVAS = 360;
+  return (
+    <>
+      <section className="al-lab-main" aria-label="Portrait crop editor">
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap', padding: 16 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div className="tileset-tier-seg" style={{ width: CANVAS }} aria-label="Unit">
+              {PIECES.map((p) => (
+                <button key={p} type="button" className={p === piece ? 'is-active' : ''} onClick={() => ed.setPiece(p)} style={{ textTransform: 'capitalize' }}>{p}</button>
+              ))}
+            </div>
+            <div
+              ref={ed.canvasRef}
+              onPointerDown={ed.onPointerDown} onPointerMove={ed.onPointerMove} onPointerUp={ed.onPointerUp} onWheel={ed.onWheel}
+              style={{ position: 'relative', width: CANVAS, height: CANVAS, borderRadius: 8, overflow: 'hidden', background: checkerBg, touchAction: 'none', userSelect: 'none' }}
+            >
+              <img src={masterSrc(piece, palette)} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
+              <div style={overlayStyle(crop)} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <HudFrame src={masterSrc(piece, palette)} crop={crop} size={150} label={`${piece} · large`} />
+              <HudFrame src={masterSrc(piece, palette)} crop={crop} size={86} label="actual HUD size" />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: '#7fa8bd', marginBottom: 6 }}>All units · {palette}</div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {PIECES.map((p) => <HudFrame key={p} src={masterSrc(p, palette)} crop={crops[p]} size={72} label={p} />)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <aside className="tileset-view-controls" aria-label="Portrait controls">
+        <section className="tileset-inspector-section">
+          <h2>Controls</h2>
+          <div className="tileset-control-stack">
+            {header}
+            <div className="tileset-tier-seg" aria-label="Palette">
+              {PALETTES.map((p) => (
+                <button key={p} type="button" className={p === palette ? 'is-active' : ''} onClick={() => ed.setPalette(p)} style={{ textTransform: 'capitalize' }}>{p.replace('-', ' ')}</button>
+              ))}
+            </div>
+            <label className="tileset-catalog-zoom"><span>Zoom</span>
+              <input type="range" min={0.15} max={1} step={0.005} value={1.15 - crop.s} onChange={(e) => ed.setZoom(1.15 - Number(e.target.value))} />
+            </label>
+            <label className="tileset-catalog-zoom"><span>Vertical</span>
+              <input type="range" min={0} max={1} step={0.002} value={crop.cy} onChange={(e) => ed.setCrop({ ...crop, cy: Number(e.target.value) })} />
+            </label>
+            <label className="tileset-catalog-zoom"><span>Horizontal</span>
+              <input type="range" min={0} max={1} step={0.002} value={crop.cx} onChange={(e) => ed.setCrop({ ...crop, cx: Number(e.target.value) })} />
+            </label>
+            <div className="tileset-button-row">
+              <button type="button" onClick={ed.resetPiece}>Reset piece</button>
+              <button type="button" onClick={ed.resetAll}>Reset all</button>
+            </div>
+            <button type="button" className="tileset-view-action" onClick={ed.copy}>{ed.copied ? 'Copied ✓' : 'Copy JSON'}</button>
+          </div>
+        </section>
+      </aside>
+    </>
+  );
+}
+
+export function PortraitEditor(): ReactElement {
+  const { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll } = usePortraitEditor();
 
   const CANVAS = 420;
   const overlay: CSSProperties = {
@@ -184,8 +273,8 @@ export function PortraitEditor(): ReactElement {
                 onChange={(e) => setCrop({ ...crop, cx: Number(e.target.value) })} style={{ flex: 1 }} />
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button style={btnStyle(false)} onClick={() => setCrop({ ...DEFAULT_CROP })}>Reset piece</button>
-              <button style={btnStyle(false)} onClick={() => setCrops(Object.fromEntries(PIECES.map((p) => [p, { ...DEFAULT_CROP }])) as Record<Piece, Crop>)}>Reset all</button>
+              <button style={btnStyle(false)} onClick={resetPiece}>Reset piece</button>
+              <button style={btnStyle(false)} onClick={resetAll}>Reset all</button>
             </div>
           </div>
         </div>
