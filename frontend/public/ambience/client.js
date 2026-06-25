@@ -19,10 +19,11 @@
 //   data-ambience-transparent="false"  — paint solid bg (default: true)
 //   data-ambience-entropy="off"        — disable keystroke entropy upload
 //   data-ambience-delay-ticks="0"      — pin how many authority ticks behind the
-//     replica renders. Omit it to follow the world's per-effect suggestion: 0
-//     (live edge, no join freeze) for "fresh" effects like rain, a small delay
-//     for "restore" effects so their broadcast events line up across clients.
-//     Set a value only to override that.
+//     replica renders, forcing the clocked playback path. Omit it to follow the
+//     world's per-effect model: "fresh" effects like rain FREE-RUN (the local sim
+//     steps once per frame, never gated on the authority clock — no join freeze,
+//     no stutter), while "restore" effects render a small delay behind so their
+//     broadcast events line up across clients. Set a value only to override that.
 //   data-ambience-initial-fade-ms="1200" — fade in after the first authority snapshot
 //   data-ambience-initial-fade-color="#050505" — startup cover color
 //   data-ambience-intro-on-join="off" — disable the join intro. By default a
@@ -159,8 +160,8 @@
 		canvas.dataset.ambienceWasmExecUrl || trimSlashes(SERVER) + '/wasm_exec.js';
 	const RUNTIME_URL =
 		canvas.dataset.ambienceRuntimeUrl || trimSlashes(SERVER) + '/wasm_runtime.js';
-	const GRID_W = parseInt(canvas.dataset.ambienceGridW || '320', 10);
-	const GRID_H = parseInt(canvas.dataset.ambienceGridH || '180', 10);
+	const GRID_W = parseInt(canvas.dataset.ambienceGridW || '640', 10);
+	const GRID_H = parseInt(canvas.dataset.ambienceGridH || '360', 10);
 	const TRANSPARENT = canvas.dataset.ambienceTransparent !== 'false';
 	const ENTROPY_ENABLED = canvas.dataset.ambienceEntropy !== 'off';
 	const TICK_MS = 1000 / 60;
@@ -179,6 +180,16 @@
 	const ctx = canvas.getContext('2d');
 	if (canvas.style) canvas.style.imageRendering = canvas.style.imageRendering || 'pixelated';
 	ctx.imageSmoothingEnabled = false;
+	// Optional second canvas the consumer stacks ABOVE its own UI. When present
+	// we paint the near/overlay plane into it each tick (the drops the world
+	// promotes via the effect's overlay lever) so a few drops cross in front of
+	// the page. The main field is unchanged whether or not this canvas exists.
+	const overlayCanvas = document.querySelector('canvas[data-ambience-overlay]');
+	const overlayCtx = overlayCanvas ? overlayCanvas.getContext('2d') : null;
+	if (overlayCtx) {
+		if (overlayCanvas.style) overlayCanvas.style.imageRendering = overlayCanvas.style.imageRendering || 'pixelated';
+		overlayCtx.imageSmoothingEnabled = false;
+	}
 	let initialFadeCover = null;
 
 	// Mark body so consumer CSS can conditionally adapt (e.g. make terminal
@@ -189,6 +200,10 @@
 		const dpr = window.devicePixelRatio || 1;
 		canvas.width = Math.floor(window.innerWidth * dpr);
 		canvas.height = Math.floor(window.innerHeight * dpr);
+		if (overlayCanvas) {
+			overlayCanvas.width = canvas.width;
+			overlayCanvas.height = canvas.height;
+		}
 	}
 	resize();
 	window.addEventListener('resize', resize);
@@ -199,6 +214,9 @@
 	let effectType = null;
 	let sim = null;
 	let ready = false;
+	// freeRun: when the active effect is "fresh" (rain), step the local sim once
+	// per frame instead of chasing the authority clock. See stepFreeRun.
+	let freeRun = false;
 	let initialFadePending = false;
 	let initialFadeStarted = false;
 	let lastError = null;
@@ -311,6 +329,18 @@
 		if (Number.isFinite(data.sceneRemaining)) sceneState.sceneRemaining = data.sceneRemaining;
 	}
 
+	// stepFreeRun advances a "fresh" effect (rain) exactly one tick per frame,
+	// applying any buffered commands as the sim reaches their tick. The big
+	// command buffer still does its real job — commands arrive with lead time so
+	// there's no race on delivery — but the rain itself is never gated on an
+	// authority-clock estimate. Rain is steady-state and unsynced by design, so
+	// it just runs: no freeze on join, no per-sample stutter.
+	function stepFreeRun() {
+		applyDueCommands(getSimTick(sim) + 1);
+		sim.step();
+		applyDueCommands(getSimTick(sim));
+	}
+
 	function stepTowardAuthorityClock() {
 		const current = getSimTick(sim);
 		const steps = clock.stepsFor(current);
@@ -399,11 +429,19 @@
 				// persistent state — a structure that's already there — so we replay
 				// the snapshot as-is. Unknown/legacy snapshots default to restore.
 				const fresh = !!(data && data.joinMode === 'fresh');
-				// Fresh effects render at the live edge so they never freeze on join.
-				// The server already suggests delay 0 for them via the clock command;
-				// pin it now too so the window before that command arrives is covered.
-				// A consumer that explicitly set a delay keeps it.
-				if (fresh && !HAS_DELAY_ATTR) clock.configure({ delayTicks: 0 });
+				// A "fresh" effect (rain) is steady-state with no history to miss, so
+				// it free-runs: the local sim steps once per frame and is never gated
+				// on the authority-clock estimate. That gating is what produced both
+				// failure modes — a freeze on join (with a delay, the replica waits for
+				// playback to fall back to it) and a per-sample stutter at the live edge
+				// (a backward nudge in the estimate skipped a frame). The command buffer
+				// still does its real job, so scene/knob changes never race on delivery.
+				// "restore" effects keep the clocked, delayed playback. A consumer that
+				// explicitly pinned a delay opts back into clocked playback either way.
+				freeRun = fresh && !HAS_DELAY_ATTR;
+				// Keep the clock's delay at 0 for fresh effects so debug telemetry and
+				// any clocked fallback agree with the live edge.
+				if (freeRun) clock.configure({ delayTicks: 0 });
 				if (!sim) {
 					sim = new ctor(GRID_W, GRID_H, {});
 					try { sim.restoreSnapshot(data); } catch (err) { console.error('bad snapshot', err); }
@@ -515,7 +553,10 @@
 		// simulation clock so background-tab throttling cannot silently change
 		// the replica's tick math.
 		setInterval(() => {
-			if (ready) stepTowardAuthorityClock();
+			if (ready) {
+				if (freeRun) stepFreeRun();
+				else stepTowardAuthorityClock();
+			}
 			// Unwrap a finished crossfade so we drop the outgoing sim and stop
 			// paying its render cost.
 			if (!sim) return;
@@ -524,6 +565,13 @@
 				sim = sim.incoming;
 			}
 			sim.render(ctx, canvas.width, canvas.height, { transparent: TRANSPARENT });
+			if (overlayCtx) {
+				if (typeof sim.renderOverlay === 'function') {
+					sim.renderOverlay(overlayCtx, overlayCanvas.width, overlayCanvas.height, { transparent: true });
+				} else {
+					overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+				}
+			}
 			if (initialFadePending) {
 				initialFadePending = false;
 				revealInitialScene();
