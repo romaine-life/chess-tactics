@@ -3,6 +3,7 @@ import { MainMenu } from './MainMenu';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
+import { UpdateBanner } from './UpdateBanner';
 import {
   APP_NAVIGATION_EVENT,
   navigateApp,
@@ -51,6 +52,15 @@ export function App(): ReactElement {
     };
   }, []);
 
+  return (
+    <>
+      <UpdateBanner />
+      {renderRoute(path)}
+    </>
+  );
+}
+
+function renderRoute(path: string): ReactElement {
   if (path === '/play' || path === '/skirmish') return split(<Skirmish />);
   if (path === '/tileset-studio') return split(<TilesetStudio />);
   // /unit-studio is a deep-link into the one Studio with the Units shelf

@@ -7,6 +7,22 @@ import { App } from './ui/App';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
 import { initBgm } from './bgm.js';
 
+// Stale-deploy self-heal. index.html is served no-cache and the chunks are
+// content-hashed + immutable — correct — but that does NOT save a tab that
+// loaded an older build and then client-side-navigates to a route whose chunk
+// hash a newer deploy has replaced: the dynamic import 404s and the route goes
+// blank. Vite fires `vite:preloadError` for exactly that. Reload once to fetch
+// the fresh index.html + current chunks. The 10s window breaks any reload loop
+// from a chunk that is genuinely broken (not merely stale).
+window.addEventListener('vite:preloadError', (event) => {
+  const KEY = 'ct:preload-reload-at';
+  const last = Number(sessionStorage.getItem(KEY) || '0');
+  if (Date.now() - last < 10_000) return; // just reloaded — real error, let it surface
+  sessionStorage.setItem(KEY, String(Date.now()));
+  event.preventDefault();
+  window.location.reload();
+});
+
 // The shell ships hidden (avoids an unstyled flash); reveal it once JS runs.
 const shell = document.querySelector('.shell');
 if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
