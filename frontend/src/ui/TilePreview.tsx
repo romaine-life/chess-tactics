@@ -1257,7 +1257,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [assetSearch, setAssetSearch] = useState('');
   const [selectedAssetName, setSelectedAssetName] = useState(initialRoute.selectedAssetName ?? 'gear');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
-  const skipNextRouteWriteRef = useRef(false);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [showFootprint, setShowFootprint] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -1647,10 +1646,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   }, [boardMode, boardScope, boardSeed, boardSize, selectedAsset.id, selectedSlotMask, viewVisualKind]);
 
   useEffect(() => {
-    if (skipNextRouteWriteRef.current) {
-      skipNextRouteWriteRef.current = false;
-      return;
-    }
     writeTilesetStudioRoute({
       familyId,
       studioMode,
@@ -1827,12 +1822,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         ? 'preview on backdrops'
         : viewSubtitle;
   const openCatalogMode = (): void => {
-    skipNextRouteWriteRef.current = true;
     if (tileFilter === 'board') setTileFilter('base');
     setStudioMode('catalog');
   };
   const openLabMode = (): void => {
-    skipNextRouteWriteRef.current = true;
     if (category === 'assets') { setStudioMode('lab'); return; }
     openBoardLab();
   };
