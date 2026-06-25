@@ -12479,10 +12479,12 @@ button.tileset-relationship-cell {
   padding: 0 14px;
 }
 
-/* Sign In — distinguished with a cyan ring (symmetric). The kit has no cyan
-   corner-bracket frame, so a true cyan-bracket button is a later forge job. */
+/* Sign In / Sign Out is the promoted account action — the one primary in the bar.
+   Give it the kit's filled-blue primary art (same as the Studio "Open" button), so
+   it reads as the primary while Back/Menu recede as neutral framed secondaries. */
 .settings-header-button-active {
-  box-shadow: 0 0 0 2px rgba(95, 184, 255, .5), 0 0 12px rgba(58, 160, 255, .3);
+  border-image: url("/assets/ui/kit/button-primary.png") 9 16 fill / 9px 16px stretch;
+  border-width: 9px 16px;
 }
 
 .settings-stepper {
