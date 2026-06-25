@@ -2039,7 +2039,16 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     {
       id: 'artwork', label: 'Artwork', hint: 'Browse the artwork library — scenes, portraits, key art, concepts.',
-      main: <ArtworkLibraryStudio search={artworkSearch} zoom={zoom} selected={selectedArtworkName} onSelect={setSelectedArtworkName} />,
+      main: (
+        <ArtworkLibraryStudio
+          search={artworkSearch}
+          zoom={zoom}
+          selected={selectedArtworkName}
+          onSelect={setSelectedArtworkName}
+          onView={(id) => { setSelectedArtworkName(id); openViewer('artwork'); }}
+          onEditPortrait={() => openViewer('portrait')}
+        />
+      ),
       controls: (
         <>
           <label className="tileset-catalog-search">

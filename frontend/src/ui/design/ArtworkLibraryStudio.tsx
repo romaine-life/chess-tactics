@@ -5,7 +5,7 @@
 // per-piece viewer is the Lab's job. Data: the build-time manifest from
 // scripts/artwork-manifest.mjs (parallel to Assets' kit-manifest). No forge/gate
 // here — these are authored artworks, not generated hard-alpha glyphs.
-import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
 import manifest from './artworkManifest.json';
 
 interface ArtworkItem { id: string; label: string; url: string; w: number; h: number; sub: string }
@@ -13,9 +13,38 @@ interface ArtworkGroup { id: string; label: string; items: ArtworkItem[] }
 interface ArtworkManifest { generated: string; summary: { total: number; groups: number }; groups: ArtworkGroup[] }
 
 const ART = manifest as ArtworkManifest;
+const PORTRAIT_GROUP = 'unit-portraits';
 const dimOf = (it: ArtworkItem): string => (it.w && it.h ? `${it.w}×${it.h}` : '');
 
-function Card({ item, selected, onSelect }: { item: ArtworkItem; selected: boolean; onSelect: (id: string) => void }): ReactElement {
+// Stop a card-action icon's click from also triggering the card's select.
+const cardAction = (run: () => void) => ({
+  role: 'button' as const,
+  tabIndex: 0,
+  onClick: (e: ReactMouseEvent) => { e.stopPropagation(); run(); },
+  onKeyDown: (e: ReactKeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); run(); } },
+});
+
+const ViewIcon = (): ReactElement => (
+  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+    <rect x="1.6" y="6.4" width="12.8" height="8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M8 1.2 V5.4 M5.4 3.2 L8 5.8 L10.6 3.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const EditIcon = (): ReactElement => (
+  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+    <path d="M10.8 2.3 L13.7 5.2 L5.6 13.3 L2.4 13.9 L3 10.7 Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    <path d="M9.4 3.7 L12.3 6.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+function Card({ item, selected, onSelect, onView, onEdit }: {
+  item: ArtworkItem;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  onView: (id: string) => void;
+  onEdit?: (id: string) => void;
+}): ReactElement {
   const dim = dimOf(item);
   return (
     <button
@@ -28,16 +57,28 @@ function Card({ item, selected, onSelect }: { item: ArtworkItem; selected: boole
       <span className="tileset-studio-card-image"><img src={item.url} alt="" loading="lazy" draggable={false} /></span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text"><strong>{item.label}</strong><em>{[item.sub, dim].filter(Boolean).join(' · ')}</em></span>
+        <span className="tileset-card-actions">
+          {onEdit ? (
+            <span className="tileset-card-action" title={`Edit ${item.label} portrait crop`} aria-label={`Edit ${item.label} portrait crop`} {...cardAction(() => onEdit(item.id))}>
+              <EditIcon />
+            </span>
+          ) : null}
+          <span className="tileset-card-action" title={`View ${item.label}`} aria-label={`View ${item.label}`} {...cardAction(() => onView(item.id))}>
+            <ViewIcon />
+          </span>
+        </span>
       </span>
     </button>
   );
 }
 
-export function ArtworkLibraryStudio({ search, zoom, selected, onSelect }: {
+export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView, onEditPortrait }: {
   search: string;
   zoom: number;
   selected: string;
   onSelect: (id: string) => void;
+  onView: (id: string) => void;
+  onEditPortrait: (id: string) => void;
 }): ReactElement {
   const q = search.trim().toLowerCase();
   const sections = ART.groups
@@ -55,7 +96,16 @@ export function ArtworkLibraryStudio({ search, zoom, selected, onSelect }: {
             <section className="tileset-asset-section" aria-label={s.label} key={s.id}>
               <h3>{s.label}</h3>
               <div className="tileset-studio-grid">
-                {s.items.map((it) => <Card key={it.id} item={it} selected={selected === it.id} onSelect={onSelect} />)}
+                {s.items.map((it) => (
+                  <Card
+                    key={it.id}
+                    item={it}
+                    selected={selected === it.id}
+                    onSelect={onSelect}
+                    onView={onView}
+                    onEdit={s.id === PORTRAIT_GROUP ? onEditPortrait : undefined}
+                  />
+                ))}
               </div>
             </section>
           ))}
