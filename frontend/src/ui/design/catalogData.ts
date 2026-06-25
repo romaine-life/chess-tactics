@@ -86,6 +86,15 @@ export function imageCssValue(imageUrl: string): string {
   return `url(${clean})`;
 }
 
+// The single URL the browser actually fetches for this image — the top candidate
+// of imageCssValue's image-set (AVIF when optimized, else the PNG). Lets callers
+// preload/await exactly what the CSS background will use, with no double-fetch.
+export function bestImageUrl(imageUrl: string): string {
+  const clean = sanitizeCssUrl(imageUrl);
+  if (clean.endsWith('.png') && OPTIMIZED_IMAGE_PATHS.has(clean)) return clean.replace(/\.png$/, '.avif');
+  return clean;
+}
+
 // ---------------------------------------------------------------------------
 // The classification tree. asset → 9-slice → Main Menu; asset → icon → 5 icons;
 // asset → sprite atlas (planned); widget → button → Main Menu → 5 buttons.
