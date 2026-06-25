@@ -65,7 +65,7 @@ export function App(): ReactElement {
   if (path === '/campaigns-next' || path === '/campaigns') return split(<CampaignEditor />);
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
-  if (path === '/settings') return <Settings />;
+  if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
   if (path === '/design' || path.startsWith('/design/')) return <DesignSurface />;
   return <MainMenu />;
 }

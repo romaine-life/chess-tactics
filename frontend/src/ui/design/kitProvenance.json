@@ -1,0 +1,6 @@
+{
+  "process": "kit-forge single-shot + gate",
+  "lastRun": "2026-06-24",
+  "note": "Kit reverted to the original painted glyphs (commit 41243cb). The single-shot forge was found to hand-draw icons in code (PIL) instead of generating them, so its output was untrusted and looked broken (see docs/kit-forge.md). These are restored ORIGINALS, not forge-verified — that is why no asset is marked 'forged'. Re-forge through the verified pipeline (method gate) before claiming 'forged' again.",
+  "assets": {}
+}

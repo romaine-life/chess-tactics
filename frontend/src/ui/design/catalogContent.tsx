@@ -7,6 +7,7 @@ import {
   frameStyleForAsset, insetStyle,
   type Asset, type Rect,
 } from './catalogData';
+import kitManifest from './kitManifest.json';
 
 type Navigate = (href: string, e?: { preventDefault: () => void }) => void;
 
@@ -254,6 +255,12 @@ export function CatalogHome({ countsByType, onNavigate }: { countsByType: Record
         { title: 'campaign editor fields', href: '/design/catalog/campaign-editor-fields', count: countsByType['field.campaign-editor'] || 0, summary: 'Input and select field bitmap skins for campaign metadata.' },
         { title: 'campaign editor shields', href: '/design/catalog/campaign-editor-shields', count: countsByType['shield.campaign-editor'] || 0, summary: 'Standalone heraldic campaign emblems composited into live rows.' },
         { title: 'sprite atlas', href: '#', count: 0, planned: true, summary: 'One image packing several unrelated sprites.' },
+      ],
+    },
+    {
+      label: 'kit',
+      kinds: [
+        { title: 'shared kit', href: '/design/catalog/kit', count: kitManifest.summary.total, summary: 'Generated glyphs + 9-slice frames for settings / skirmish / campaign editor, each gate-verified (magenta · binary-alpha · edge).' },
       ],
     },
     {

@@ -8,6 +8,7 @@
 import type { CSSProperties } from 'react';
 import assetCatalogRaw from '../../asset-catalog.json';
 import optimizedImagesRaw from './optimized-images.json';
+import kitManifest from './kitManifest.json';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface AssetState { label?: string; rect: Rect }
@@ -93,6 +94,26 @@ export function imageCssValue(imageUrl: string): string {
 // ---------------------------------------------------------------------------
 export interface TreeNode { label: string; href: string; planned?: boolean; children?: TreeNode[] }
 
+// The kit branch is generated from the manifest so the tree drills down to every
+// individual glyph/frame (like `icon › Sword`), not just group nodes. Each leaf
+// links to that one asset's detail view.
+const KIT_TREE: TreeNode = {
+  label: 'kit',
+  href: '/design/catalog/kit',
+  children: [
+    ...kitManifest.groups.map((g) => ({
+      label: g.label.split(' ·')[0],
+      href: '/design/catalog/kit',
+      children: g.items.map((it) => ({ label: it.name, href: `/design/catalog/kit/${it.name}` })),
+    })),
+    {
+      label: 'Frames & components',
+      href: '/design/catalog/kit',
+      children: kitManifest.frames.map((f) => ({ label: f.name, href: `/design/catalog/kit/${f.name}` })),
+    },
+  ],
+};
+
 export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
   {
     label: 'asset',
@@ -160,6 +181,7 @@ export const ASSET_TREE_PROTOTYPE: TreeNode[] = [
       { label: 'sprite atlas', href: '#', planned: true },
     ],
   },
+  KIT_TREE,
   {
     label: 'widget',
     href: '/design/catalog/widgets/main-menu',

@@ -4,7 +4,7 @@
 // place) so moving between catalog views never triggers a full reload or the
 // "flash of the game screen" the user flagged in session 930 (turns 56, 60).
 export type DesignView = 'hub' | 'catalog' | 'glossaryPage' | 'widgetsPage' | 'prototype';
-export type CatalogMode = 'home' | 'glossary' | 'widgets' | 'browser' | 'nineSliceCategory';
+export type CatalogMode = 'home' | 'glossary' | 'widgets' | 'browser' | 'nineSliceCategory' | 'kit';
 export type PrototypeKind = 'drilldown' | 'tree' | 'hybrid';
 
 export interface DesignRoute {
@@ -15,6 +15,7 @@ export interface DesignRoute {
   assetId?: string;
   widgetFamily?: string;
   widgetSlug?: string;
+  kitAsset?: string;
   prototype?: PrototypeKind;
   nineSliceCategory?: string;
 }
@@ -42,7 +43,10 @@ export function parseDesignRoute(pathname: string): DesignRoute {
   const path = normalizeDesignPath(pathname);
   const hub: DesignRoute = { view: 'hub', catalogMode: 'home' };
 
-  if (path === '/design') return hub;
+  // /design lands directly on the Asset Library (kit view, where the process
+  // filter lives) — the old 3-card hub was redundant with the in-catalog
+  // Catalog/Glossary toggle and the tree.
+  if (path === '/design') return { view: 'catalog', catalogMode: 'kit' };
   if (path === '/design/glossary') return { view: 'glossaryPage', catalogMode: 'home' };
   if (path === '/design/widgets') return { view: 'widgetsPage', catalogMode: 'home' };
 
@@ -51,6 +55,9 @@ export function parseDesignRoute(pathname: string): DesignRoute {
   if (path === '/design/catalog/navigation-hybrid') return { view: 'prototype', catalogMode: 'home', prototype: 'hybrid' };
 
   if (path === '/design/catalog') return { view: 'catalog', catalogMode: 'home' };
+  if (path === '/design/catalog/kit') return { view: 'catalog', catalogMode: 'kit' };
+  const kitAsset = path.match(/^\/design\/catalog\/kit\/(.+)$/);
+  if (kitAsset) return { view: 'catalog', catalogMode: 'kit', kitAsset: decodeURIComponent(kitAsset[1]) };
   if (path === '/design/catalog/glossary') return { view: 'catalog', catalogMode: 'glossary', glossaryTerm: 'asset' };
 
   const glossaryTerm = path.match(/^\/design\/catalog\/glossary\/(.+)$/);

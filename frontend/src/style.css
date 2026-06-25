@@ -2889,7 +2889,7 @@ h1 {
   gap: var(--ds-space-5);
   height: 100%;
   min-height: 0;
-  max-width: 1320px;
+  max-width: none;
 }
 
 /* Locked rail: a full-height pane fixed beside the scrolling content (it
@@ -2926,20 +2926,38 @@ h1 {
 /* Catalog is a two-pane tool: tighter than the article-style design pages, and
    the header aligns to the grid (same width/left edge) instead of centering
    narrow above a wide grid. */
+/* Full-bleed: the Asset Library route drops the global shell gutter so the tool
+   reaches the viewport edge (the topbar stays as the only chrome above it). */
+.shell.design-fullbleed { gap: 0; padding: 0; }
+
 .asset-catalog-screen {
-  gap: 16px;
+  gap: 8px;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
-  padding-top: clamp(16px, 2.4vw, 26px);
-  padding-bottom: clamp(14px, 2vw, 22px);
+  /* edge-to-edge tool surface: chrome hugs the viewport, content gets the room */
+  padding: 8px clamp(6px, 0.6vw, 10px) clamp(6px, 0.6vw, 10px);
 }
+
+/* Minimal tool header: just ← Menu + title on one slim line — no editorial
+   sub-header, no big chrome. */
+.asset-catalog-screen .catalog-header {
+  align-items: center;
+  border-bottom: 1px solid var(--c-line);
+  display: flex;
+  gap: 14px;
+  margin: 0;
+  max-width: none;
+  padding: 0 4px 6px;
+}
+.asset-catalog-screen .catalog-header h2 { font-size: 1.05rem; margin: 0; }
+.asset-catalog-screen .catalog-header .design-back { flex: none; margin: 0; }
 
 /* Compact tool header: the catalog is a working surface, not an editorial page.
    The chrome stays small and out of the way so the tree + items lead. */
 .asset-catalog-screen .main-assets-header {
   gap: 6px;
-  max-width: 1320px;
+  max-width: none;
   padding-bottom: 10px;
 }
 
@@ -3099,6 +3117,155 @@ h1 {
   max-width: 980px;
   width: 100%;
 }
+
+/* Kit branch — generated glyphs + frames with a per-asset gate health badge. */
+.kit-health {
+  align-items: center;
+  background: rgba(20, 34, 50, .45);
+  border: 1px solid #1f3346;
+  border-radius: 12px;
+  display: flex;
+  gap: 16px;
+  margin-bottom: 26px;
+  padding: 16px 20px;
+}
+.kit-health .kit-score {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.kit-score.is-ok { color: #54e6a0; }
+.kit-score.is-no { color: #ff7a8a; }
+.kit-health strong { display: block; font-size: .92rem; }
+.kit-dim {
+  color: #5d7a8c;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .66rem;
+}
+.kit-group { margin-bottom: 30px; }
+.kit-count {
+  color: #54e6a0;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .8rem;
+  margin-left: 10px;
+}
+.kit-note { color: #5d7a8c; font-size: .8rem; margin: -6px 0 14px; }
+.kit-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+}
+.kit-cell {
+  background: linear-gradient(180deg, #111e2b, #0e1722);
+  border: 1px solid #1f3346;
+  border-radius: 11px;
+  color: inherit;
+  display: block;
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+  text-decoration: none;
+  transition: border-color .12s, transform .12s;
+}
+a.kit-cell:hover, a.kit-cell:focus-visible {
+  border-color: #5fb8ff;
+  outline: none;
+  transform: translateY(-2px);
+}
+.kit-cell.is-bad { border-color: rgba(255, 122, 138, .55); box-shadow: 0 0 0 1px rgba(255, 122, 138, .25); }
+.kit-thumb {
+  align-items: center;
+  background: repeating-conic-gradient(#0c141d 0 25%, #0a1018 0 50%) 0 / 18px 18px;
+  border-radius: 7px;
+  display: flex;
+  height: 84px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.kit-thumb img { image-rendering: pixelated; max-height: 80px; max-width: 84px; }
+.kit-thumb.is-wide { height: 60px; }
+.kit-thumb.is-wide img { image-rendering: auto; max-height: 56px; max-width: 100%; }
+.kit-caption { display: flex; flex-direction: column; gap: 2px; }
+.kit-caption b { font-size: .82rem; }
+/* detail view */
+.kit-detail-stage {
+  align-items: center;
+  background: repeating-conic-gradient(#0c141d 0 25%, #0a1018 0 50%) 0 / 22px 22px;
+  border: 1px solid #1f3346;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  margin: 14px 0;
+  padding: 28px;
+}
+.kit-detail-thumb { background: none; height: auto; }
+.kit-detail-thumb img { image-rendering: pixelated; max-height: 192px; max-width: 256px; }
+.kit-detail-thumb.is-wide img { image-rendering: auto; }
+.kit-ok { color: #54e6a0; }
+.kit-no { color: #ff7a8a; }
+.kit-detail-back { margin-top: 14px; }
+.kit-detail-back a { color: #79d3ff; text-decoration: none; }
+.kit-badge {
+  border-radius: 999px;
+  display: inline-block;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  margin-top: 8px;
+  padding: 3px 9px;
+}
+.kit-badge.is-ok { background: rgba(84, 230, 160, .14); border: 1px solid rgba(84, 230, 160, .4); color: #54e6a0; }
+.kit-badge.is-no { background: rgba(255, 122, 138, .14); border: 1px solid rgba(255, 122, 138, .4); color: #ff7a8a; }
+
+/* process provenance: forged through the single-shot forge vs not */
+.kit-badges { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
+.kit-badges .kit-badge { margin-top: 0; }
+.kit-prov {
+  border-radius: 999px;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .58rem;
+  letter-spacing: .06em;
+  padding: 3px 8px;
+}
+.kit-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .45); color: #79d3ff; }
+.kit-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
+
+.kit-filter {
+  align-items: center;
+  background: rgba(14, 23, 34, .6);
+  border: 1px solid #1f3346;
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 22px;
+  padding: 10px 14px;
+}
+.kit-filter-label {
+  color: #5d7a8c;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .64rem;
+  letter-spacing: .14em;
+  margin-right: 6px;
+  text-transform: uppercase;
+}
+.kit-filter button {
+  background: #0e1722;
+  border: 1px solid #1f3346;
+  border-radius: 999px;
+  color: #9fc4d5;
+  cursor: pointer;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: .74rem;
+  padding: 7px 14px;
+  transition: border-color .12s, color .12s;
+}
+.kit-filter button:hover { border-color: #5fb8ff; color: #eaf4ff; }
+.kit-filter button.is-active { background: rgba(95, 184, 255, .16); border-color: #5fb8ff; color: #eaf4ff; }
+.kit-filter-n { color: #5d7a8c; margin-left: 4px; }
+.kit-filter button.is-active .kit-filter-n { color: #79d3ff; }
 
 .catalog-family-card {
   background: var(--c-surface);
@@ -9298,6 +9465,55 @@ h1 {
   min-width: 0;
 }
 
+/* Slim topbar: a quiet wordmark + a breadcrumb that carries location. No big
+   titleblock, so the topbar height is constant and nothing below it shifts. */
+.tileset-studio-wordmark {
+  flex: none;
+  color: #f3f7fb;
+  font-family: var(--ds-font-display, var(--ds-font-sans, system-ui, sans-serif));
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.tileset-crumb {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tileset-crumb span {
+  color: #6f87a0;
+}
+
+.tileset-crumb span.is-current {
+  color: #cfe4f7;
+}
+
+.tileset-crumb span + span::before {
+  content: '›';
+  margin: 0 7px;
+  color: #3f5366;
+}
+
+/* The quiet count/context relocated from the old per-pane heading. */
+.tileset-crumb-meta {
+  flex: none;
+  padding-left: 14px;
+  border-left: 1px solid rgba(67, 127, 179, 0.22);
+  color: #6f87a0;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tileset-studio-kicker {
   margin: 0;
   color: #72bde8;
@@ -9361,17 +9577,20 @@ h1 {
 
 .tileset-mode-tabs {
   display: grid;
-  grid-auto-columns: minmax(78px, 1fr);
+  grid-auto-columns: minmax(66px, 1fr);
   grid-auto-flow: column;
-  gap: 5px;
-  padding: 5px;
+  gap: 3px;
+  padding: 3px;
   background: rgba(2, 8, 13, 0.5);
   border: 1px solid rgba(67, 127, 179, 0.24);
   border-radius: 6px;
 }
 
 .tileset-mode-tabs button {
-  min-width: 78px;
+  min-width: 64px;
+  min-height: 28px;
+  padding: 5px 12px;
+  font-size: 11px;
   border-color: transparent;
 }
 
@@ -9420,6 +9639,13 @@ h1 {
 
 .tileset-studio-shell.is-view {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* Lab uses the SAME 2-column frame as Catalog — same main, same 260px Controls
+   panel, anchored in the same place. Switching Catalog<->Lab must not move the
+   panel; only its contents reflow. (See docs/studio-control-architecture.md.) */
+.tileset-studio-shell.is-lab {
+  grid-template-columns: minmax(0, 1fr) 260px;
 }
 
 .tileset-candidate-shell {
@@ -9576,6 +9802,12 @@ h1 {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+/* No per-pane heading (the breadcrumb carries location) — the content panel is
+   the only row, so it fills and scrolls instead of clipping. */
+.tileset-studio-main.is-headless {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .tileset-filter-group {
@@ -9869,7 +10101,7 @@ h1 {
 
 .tileset-view-empty {
   display: grid;
-  grid-column: 1 / -1;
+  grid-column: 1;
   align-content: center;
   justify-items: center;
   gap: 12px;
@@ -10955,6 +11187,49 @@ button.tileset-relationship-cell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
+}
+
+/* Tier selector (category / surface / focus / process) — one tight joined
+   segmented control on a SINGLE row, never the fat two-row button stack.
+   This is the instrument-grade density the spec calls for. */
+.tileset-tier-seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  width: 100%;
+  border: 1px solid rgba(67, 127, 179, 0.32);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(2, 8, 13, 0.45);
+}
+
+.tileset-tier-seg button {
+  min-height: 27px;
+  padding: 5px 8px;
+  color: #aebfd2;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid rgba(67, 127, 179, 0.22);
+  border-radius: 0;
+  cursor: pointer;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tileset-tier-seg button:first-child {
+  border-left: 0;
+}
+
+.tileset-tier-seg button.is-active {
+  color: #f3fbff;
+  background: rgba(25, 94, 132, 0.95);
+}
+
+.tileset-tier-seg button:disabled {
+  color: rgba(174, 191, 210, 0.4);
+  cursor: default;
 }
 
 .tileset-segmented-control.tileset-tools {
@@ -12656,13 +12931,14 @@ button.tileset-relationship-cell {
 
 .settings-header-frame {
   align-items: center;
-  background: url("/assets/ui/settings/header-frame.png?v=frame-only1") center / 100% 100% no-repeat;
+  border: 9px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 36 fill / 9px round;
   block-size: clamp(94px, 7.6vw, 116px);
   box-sizing: border-box;
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
   grid-template-columns: minmax(360px, 1fr) 360px 402px;
-  padding: clamp(10px, 1.05vw, 16px) clamp(14px, 1.45vw, 24px);
+  padding: 2px clamp(12px, 1.3vw, 20px);
 }
 
 .settings-brand {
@@ -12720,8 +12996,7 @@ button.tileset-relationship-cell {
 .settings-tab em,
 .settings-panel-heading p,
 .settings-row p,
-.settings-row-value,
-.settings-toggle span {
+.settings-row-value {
   color: #9fc4d5;
   font-style: normal;
   line-height: 1.25;
@@ -12795,10 +13070,12 @@ button.tileset-relationship-cell {
 
 .settings-rail-frame {
   align-content: start;
-  background: url("/assets/ui/settings/rail-panel-frame.png?v=frame-only1") center / 100% 100% no-repeat;
+  border: 18px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 36 fill / 18px round;
+  box-sizing: border-box;
   display: grid;
   gap: clamp(9px, .8vw, 13px);
-  padding: clamp(18px, 1.7vw, 28px) clamp(13px, 1.25vw, 20px);
+  padding: clamp(6px, .7vw, 10px) clamp(4px, .5vw, 8px);
 }
 
 .settings-tab {
@@ -12806,15 +13083,16 @@ button.tileset-relationship-cell {
   --settings-tab-icon-size: 36px;
   align-items: center;
   appearance: none;
-  background: url("/assets/ui/settings/rail-tab-inactive-generated.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-radius: 0;
+  border: 10px solid transparent;
+  border-width: 10px 13px;
+  border-image: url("/assets/ui/kit/tab-inactive.png") 12 20 fill / 10px 13px stretch;
+  box-sizing: border-box;
   color: #eef8ff;
   display: grid;
   gap: 12px;
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
   min-height: clamp(62px, 5.35vw, 72px);
-  padding: 8px 18px 8px 22px;
+  padding: 4px 8px 4px 10px;
   text-align: left;
   text-decoration: none;
 }
@@ -12825,7 +13103,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab.is-active {
-  background-image: url("/assets/ui/settings/rail-tab-active-generated.png");
+  border-image-source: url("/assets/ui/kit/tab-active.png");
 }
 
 .settings-tab-icon {
@@ -12857,11 +13135,13 @@ button.tileset-relationship-cell {
 }
 
 .settings-main-frame {
-  background: url("/assets/ui/settings/main-panel-frame.png?v=frame-only1") center / 100% 100% no-repeat;
+  border: 24px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 36 fill / 24px round;
+  box-sizing: border-box;
   display: grid;
   grid-template-rows: clamp(74px, 7vw, 94px) minmax(0, 1fr);
   min-height: 0;
-  padding: clamp(22px, 2.1vw, 36px) clamp(24px, 2.3vw, 40px);
+  padding: clamp(6px, .8vw, 12px) clamp(10px, 1.1vw, 18px);
 }
 
 .settings-panel-heading {
@@ -12894,16 +13174,18 @@ button.tileset-relationship-cell {
 
 .settings-row {
   align-items: center;
-  background: url("/assets/ui/settings/setting-row-frame.png?v=clean2") center / 100% 100% no-repeat;
+  border: 12px solid transparent;
+  border-width: 11px 18px;
+  border-image: url("/assets/ui/kit/row.png") 14 20 fill / 11px 18px stretch;
+  box-sizing: border-box;
   display: grid;
   gap: clamp(9px, .9vw, 15px);
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   min-height: clamp(70px, 6.4vw, 86px);
-  padding: clamp(8px, .86vw, 13px) clamp(15px, 1.5vw, 25px);
+  padding: clamp(2px, .3vw, 5px) clamp(6px, .7vw, 12px);
 }
 
 .settings-row-tall {
-  background-image: url("/assets/ui/settings/setting-row-tall-frame.png?v=clean2");
   min-height: clamp(96px, 8.8vw, 116px);
 }
 
@@ -12943,9 +13225,10 @@ button.tileset-relationship-cell {
 .settings-chrome-button {
   align-items: center;
   appearance: none;
-  background: url("/assets/ui/settings/neutral-button.png?v=clean2") center / 100% 100% no-repeat;
-  border: 0;
-  border-radius: 0;
+  border: 9px solid transparent;
+  border-width: 9px 16px;
+  border-image: url("/assets/ui/kit/button-neutral.png") 9 16 fill / 9px 16px stretch;
+  box-sizing: border-box;
   color: #eff9ff;
   display: inline-flex;
   justify-content: center;
@@ -12953,18 +13236,18 @@ button.tileset-relationship-cell {
   inline-size: 176px;
   min-height: 0;
   min-width: 0;
-  padding: 8px 14px;
+  padding: 0 14px;
   text-align: center;
   text-decoration: none;
   text-shadow: 0 2px 0 #010407;
 }
 
 .settings-chrome-button-primary {
-  background-image: url("/assets/ui/settings/primary-button.png?v=clean2");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 .settings-chrome-button-danger {
-  background-image: url("/assets/ui/settings/danger-button.png?v=clean2");
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 .settings-chrome-button span {
@@ -13002,11 +13285,12 @@ button.tileset-relationship-cell {
 }
 
 .settings-stepper .settings-chrome-button {
-  background-image: url("/assets/ui/settings/stepper-button.png?v=clean2");
+  border-width: 9px 14px;
+  border-image: url("/assets/ui/kit/button-neutral.png") 9 16 fill / 9px 14px stretch;
   block-size: 48px;
   inline-size: 48px;
   min-width: 48px;
-  padding-inline: 10px;
+  padding: 0;
 }
 
 .settings-stepper output {
@@ -13020,37 +13304,45 @@ button.tileset-relationship-cell {
   align-items: center;
   appearance: none;
   background: transparent;
-  border: 0;
-  border-radius: 0;
-  display: grid;
-  justify-items: center;
-  min-height: 45px;
-  min-width: 150px;
-  padding: 0;
-  position: relative;
-}
-
-.settings-toggle img {
-  display: block;
-  height: 45px;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/toggle-track.png") 8 fill / 8px stretch;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
   image-rendering: pixelated;
-  width: 150px;
+  inline-size: 152px;
+  block-size: 48px;
+  justify-content: space-between;
+  padding: 0 10px;
 }
 
-.settings-toggle span {
-  color: #f8fcff;
+.settings-toggle-label {
   font-size: .82rem;
-  left: 50%;
-  pointer-events: none;
-  position: absolute;
+  letter-spacing: 1px;
   text-shadow: 0 2px 0 #02070b;
   text-transform: uppercase;
-  top: 50%;
-  transform: translate(-50%, -50%);
 }
 
-.settings-toggle.is-off span {
-  color: #bdcad0;
+.settings-toggle-knob {
+  background: url("/assets/ui/kit/toggle-knob.png") center / 100% 100% no-repeat;
+  block-size: 30px;
+  flex: none;
+  image-rendering: pixelated;
+  inline-size: 40px;
+}
+
+/* Off state: knob slides to the left, label to the right, both dimmed. */
+.settings-toggle.is-off {
+  flex-direction: row-reverse;
+}
+
+.settings-toggle.is-off .settings-toggle-label {
+  color: #9fb3c2;
+}
+
+.settings-toggle.is-off .settings-toggle-knob {
+  filter: grayscale(.55) brightness(.5);
 }
 
 .settings-tab:hover,
@@ -13210,3 +13502,78 @@ button.tileset-relationship-cell {
   object-fit: contain;
   image-rendering: pixelated;
 }
+
+/* Asset Library — the studio's "Assets" catalog category: a flush left tree
+   (browse + provenance filter) and a per-asset, type-aware preview viewer. */
+.al-root { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 0; height: 100%; min-height: 0; overflow: hidden; padding: 0; }
+.al-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #1f3346; background: rgba(10, 17, 24, .4); }
+.al-filter { display: flex; gap: 6px; padding: 10px; border-bottom: 1px solid #1f3346; }
+.al-filter button { flex: 1; background: #0e1722; border: 1px solid #1f3346; border-radius: 7px; color: #9fc4d5; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .64rem; padding: 6px 4px; cursor: pointer; }
+.al-filter button.is-active { background: rgba(95, 184, 255, .16); border-color: #5fb8ff; color: #eaf4ff; }
+.al-filter button span { color: #5d7a8c; }
+.al-tree-scroll { overflow-y: auto; padding: 8px; min-height: 0; }
+.al-tree-group { margin-bottom: 10px; }
+.al-tree-label { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; margin: 6px 4px; }
+.al-tree-leaf { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; border-radius: 6px; color: #cfe3ef; padding: 5px 6px; cursor: pointer; text-align: left; }
+.al-tree-leaf:hover { background: rgba(95, 184, 255, .1); }
+.al-tree-leaf.is-selected { background: rgba(95, 184, 255, .18); color: #fff; }
+.al-tree-leaf img { width: 20px; height: 20px; image-rendering: pixelated; object-fit: contain; flex: none; }
+.al-tree-leaf span { flex: 1; font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-dot-ok, .al-dot-no { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.al-dot-ok { background: #5fb8ff; }
+.al-dot-no { background: #d8b364; }
+
+.al-viewer { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding: 20px 24px; gap: 18px; }
+.al-viewer-head h2 { margin: 4px 0 0; font-size: 1.3rem; }
+.al-viewer-head .al-kicker { color: #79d3ff; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
+.al-viewer-head p { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .7rem; margin: 4px 0 0; }
+.al-stages { display: flex; flex-wrap: wrap; gap: 16px; }
+.al-stage { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.al-stage figcaption { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; text-align: center; }
+.al-checker, .al-in-button, .al-on-panel { display: flex; align-items: center; justify-content: center; width: 220px; height: 160px; border: 1px solid #1f3346; border-radius: 10px; box-sizing: border-box; }
+.al-checker { background: repeating-conic-gradient(#0c141d 0 25%, #0a1018 0 50%) 0 / 22px 22px; }
+.al-glyph-lg { width: 128px; height: 128px; image-rendering: pixelated; object-fit: contain; }
+.al-glyph-md { width: 44px; height: 44px; image-rendering: pixelated; object-fit: contain; }
+.al-in-button { background: url("/assets/ui/kit/button-neutral.png") center / auto 56px no-repeat, #0e1722; }
+.al-on-panel { background: url("/assets/ui/kit/panel.png") center / 150px 110px no-repeat, #0e1722; }
+.al-frame-native { image-rendering: pixelated; max-width: 200px; max-height: 140px; object-fit: contain; }
+.al-frame-stretch { display: block; width: 200px; height: 120px; border-style: solid; border-color: transparent; box-sizing: border-box; }
+.al-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0; }
+.al-meta div { background: #0e1722; border: 1px solid #1f3346; border-radius: 8px; padding: 10px 12px; }
+.al-meta dt { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; }
+.al-meta dd { margin: 4px 0 0; font-size: .92rem; }
+.al-ok { color: #54e6a0; } .al-no { color: #ff7a8a; }
+.al-empty { align-items: center; justify-content: center; color: #5d7a8c; }
+
+/* Asset catalog cards (reuse the studio card chrome; glyph on a checker stage). */
+.tileset-studio-card.is-asset .asset-card-image {
+  align-items: center;
+  background: repeating-conic-gradient(#0c141d 0 25%, #0a1018 0 50%) 0 / 16px 16px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+.tileset-studio-card.is-asset .asset-card-image img { image-rendering: pixelated; max-height: calc(72% * var(--tile-zoom, 1)); max-width: calc(72% * var(--tile-zoom, 1)); object-fit: contain; }
+.asset-prov { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; }
+.asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
+.asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
+.asset-prov.is-original { background: rgba(158, 177, 197, .12); border: 1px solid rgba(158, 177, 197, .34); color: #9eb1c5; }
+
+/* Asset lab (the Lab's Asset surface) — the main pane is one self-filling panel
+   that mirrors the board lab's stage; the studio topbar carries the breadcrumb,
+   so there is no second header. The Surface segmented + provenance live in the
+   shared Controls aside (rendered as a sibling, straight into the shell grid). */
+.al-lab-main {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  background: rgba(5, 16, 25, 0.92);
+  border: 1px solid rgba(67, 127, 179, 0.28);
+  border-radius: 6px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+.al-lab-empty { margin: 0; color: #9eb1c5; font-size: 13px; }
+.al-lab-stages { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; }
+.tileset-view-controls .al-meta { grid-template-columns: 1fr; gap: 8px; max-width: none; }
