@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
+import { BrandLockup } from './shared/BrandLockup';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -27,7 +28,6 @@ interface TabDefinition {
   id: SettingsTab;
   label: string;
   icon: string;
-  summary: string;
 }
 
 interface CreatorTool {
@@ -46,10 +46,10 @@ const DEFAULT_SETTINGS: LocalSettings = {
 };
 
 const tabs: TabDefinition[] = [
-  { id: 'general', label: 'General', icon: 'icon-gear-generated.png', summary: 'Account and interface defaults' },
-  { id: 'audio', label: 'Audio', icon: 'icon-speaker-generated.png', summary: 'Music, effects, and interface sound' },
-  { id: 'gameplay', label: 'Gameplay', icon: 'icon-knight-generated.png', summary: 'Rules and assists' },
-  { id: 'creator-tools', label: 'Creator Tools', icon: 'icon-wrench-generated.png', summary: 'Design and production workspaces' },
+  { id: 'general', label: 'General', icon: 'icon-gear-generated.png' },
+  { id: 'audio', label: 'Audio', icon: 'icon-speaker-generated.png' },
+  { id: 'gameplay', label: 'Gameplay', icon: 'icon-knight-generated.png' },
+  { id: 'creator-tools', label: 'Creator Tools', icon: 'icon-wrench-generated.png' },
 ];
 
 // Each settings section is its own route (/settings/<tab>) so it can be linked,
@@ -251,6 +251,35 @@ function Stepper({
   );
 }
 
+function Slider({
+  value,
+  suffix,
+  label,
+  onChange,
+}: {
+  value: number;
+  suffix: string;
+  label: string;
+  onChange: (value: number) => void;
+}): ReactElement {
+  return (
+    <div className="settings-slider">
+      {/* The track fills blue up to the thumb via --val (the live percentage). */}
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={value}
+        aria-label={label}
+        style={{ ['--val' as string]: `${value}%` }}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <output>{value}{suffix}</output>
+    </div>
+  );
+}
+
 export function Settings(): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
   const [me, setMe] = useState<AuthUser | null>(null);
@@ -404,43 +433,44 @@ export function Settings(): ReactElement {
 
   const renderAudio = () => (
     <>
-      <SettingsSection title="Output">
+      <SettingsSection title="Master">
         <SettingsRow title="Master Audio" description="Mute or restore all browser audio for Chess Tactics.">
           <SettingsToggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} />
         </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title="Music">
         <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
           <SettingsToggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
         </SettingsRow>
-      </SettingsSection>
-      <SettingsSection title="Mixing">
         <SettingsRow icon="icon-music.png" title="Music Volume" description="Set the target music mix for this browser.">
-          <Stepper
+          <Slider
             value={settings.musicVolume}
             suffix="%"
-            decreaseLabel="Lower Music Volume"
-            increaseLabel="Raise Music Volume"
-            onDecrease={() => updateSetting('musicVolume', clamp(settings.musicVolume - 5, 0, 100, DEFAULT_SETTINGS.musicVolume))}
-            onIncrease={() => updateSetting('musicVolume', clamp(settings.musicVolume + 5, 0, 100, DEFAULT_SETTINGS.musicVolume))}
+            label="Music Volume"
+            onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.musicVolume))}
           />
-        </SettingsRow>
-        <SettingsRow icon="icon-effects.png" title="Effects Volume" description="Set the target effects mix for this browser.">
-          <Stepper
-            value={settings.effectsVolume}
-            suffix="%"
-            decreaseLabel="Lower Effects Volume"
-            increaseLabel="Raise Effects Volume"
-            onDecrease={() => updateSetting('effectsVolume', clamp(settings.effectsVolume - 5, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
-            onIncrease={() => updateSetting('effectsVolume', clamp(settings.effectsVolume + 5, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
-          />
+          <SettingsButton onClick={viewTracks}>View Tracks</SettingsButton>
         </SettingsRow>
       </SettingsSection>
-      <SettingsSection title="Interface">
+      <SettingsSection title="Effects">
+        <SettingsRow icon="icon-effects.png" title="Effects Volume" description="Set the target effects mix for this browser.">
+          <Slider
+            value={settings.effectsVolume}
+            suffix="%"
+            label="Effects Volume"
+            onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
+          />
+        </SettingsRow>
         <SettingsRow icon="icon-interface-sounds.png" title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
           <SettingsToggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
         </SettingsRow>
-        <SettingsRow icon="icon-info.png" title="View Tracks" description={tracksStatus || (tracks ? `${tracks.length} tracks loaded.` : 'Load the active background music playlist.')}>
-          <SettingsButton onClick={viewTracks}>View Tracks</SettingsButton>
-        </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title="Notes">
+        <SettingsRow
+          icon="icon-info.png"
+          title="Local Settings"
+          description={tracksStatus || 'Audio settings are saved on this device.'}
+        />
       </SettingsSection>
     </>
   );
@@ -468,14 +498,8 @@ export function Settings(): ReactElement {
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
       <div className="settings-screen">
-        <header className="settings-frame settings-header-frame">
-          <a className="settings-brand" href="/">
-            <img className="settings-brand-mark" src="/assets/ui/kit/icons/brand-shield.png" alt="" aria-hidden="true" />
-            <span className="settings-brand-copy">
-              <strong>Chess Tactics</strong>
-              <em>Settings</em>
-            </span>
-          </a>
+        <header className="app-titlebar settings-header-frame">
+          <BrandLockup screenName="Settings" />
           <div className="settings-account" aria-label="Account">
             <span>
               <strong>{accountName}</strong>
@@ -506,7 +530,6 @@ export function Settings(): ReactElement {
                 </span>
                 <span>
                   <strong>{tab.label}</strong>
-                  <em>{tab.summary}</em>
                 </span>
               </a>
             ))}

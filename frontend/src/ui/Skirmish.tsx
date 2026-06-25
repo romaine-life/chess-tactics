@@ -1,6 +1,7 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
+import { BrandLockup } from './shared/BrandLockup';
 import { useSkirmish } from '../game/store';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace } from '../net/campaignWorkspace';
@@ -75,14 +76,8 @@ export function Skirmish() {
   return (
     <div data-testid="skirmish" className="skirmish-screen" style={screenStyle}>
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
-        <header className="skirmish-topbar" aria-label="Skirmish status">
-          <a className="skirmish-brand" href="/" aria-label="Chess Tactics home">
-            <span className="skirmish-icon skirmish-icon-rook-blue" aria-hidden="true" />
-            <span>
-              <strong>Chess Tactics</strong>
-              <small>Skirmish Mode</small>
-            </span>
-          </a>
+        <header className="app-titlebar skirmish-topbar" aria-label="Skirmish status">
+          <BrandLockup screenName="Skirmish" />
           <div className="skirmish-turn-plate">
             <strong>{turnLabel}</strong>
             <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
