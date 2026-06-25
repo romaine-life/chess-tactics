@@ -206,6 +206,14 @@
   --iso-tile-step-x: 48px;
   --iso-tile-step-y: 27.713px;
   --iso-tile-canvas-height: 140px;
+  /* div-local Y of the tile's top-face centre (equator) inside the 180px frame.
+     This is the widest row of the sprite PNG; the frame's translate anchors it to
+     the cell. Every overlay diamond (grid, hit, footprint, selection ring) seats on
+     this same plane, so they line up with placed tiles' top faces. Change in ONE
+     place if the sprite's equator row ever moves. */
+  --iso-tile-equator: 69px;
+  /* Top edge of a top-face diamond: the equator minus half the diamond's height. */
+  --iso-tile-surface-top: calc(var(--iso-tile-equator) - var(--iso-tile-height) / 2);
 
   /* Grass-island tile field */
   --grass-a: #84ab61;
@@ -759,6 +767,19 @@ h1 {
   background:
     linear-gradient(90deg, rgba(2, 7, 11, .9) 0%, rgba(2, 7, 11, .68) 32%, rgba(2, 7, 11, .08) 52%, rgba(2, 7, 11, .68) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .46));
+}
+
+/* Ambience shared-world effect canvas. Sits over the menu's background art
+   (the layer's CSS background) and under the menu UI (.main-menu-screen, z3).
+   The sim only paints lit pixels, so the background scene shows through. */
+.ambience-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  image-rendering: pixelated;
 }
 
 .main-menu-left,
@@ -6726,6 +6747,9 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
 }
 
 .skirmish-board-unit {
+  /* One knob for the whole move (travel + hop). Bump these to slow a move down;
+     the enemy override below makes its reply weightier. */
+  --move-duration: 360ms;
   align-items: center;
   display: grid;
   height: 86px;
@@ -6734,14 +6758,48 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
   position: absolute;
   transform: translate(-50%, -78%);
   transition:
-    left 170ms cubic-bezier(.2, .8, .2, 1),
-    top 170ms cubic-bezier(.2, .8, .2, 1);
+    left var(--move-duration) cubic-bezier(.22, .61, .36, 1),
+    top var(--move-duration) cubic-bezier(.22, .61, .36, 1);
   width: 72px;
   will-change: left, top;
 }
 
+/* The enemy answers with weight: a slower glide than the player's move. */
+.skirmish-board-unit.is-enemy {
+  --move-duration: 460ms;
+}
+
 .skirmish-board-unit.is-moving {
-  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, .34));
+  filter: drop-shadow(0 12px 11px rgba(0, 0, 0, .38));
+  z-index: 30000 !important;
+}
+
+/* A move is a small sequence, not a teleport: anticipation lift → arc through the
+   air → overshoot → settle. The container owns the travel (left/top); the sprite
+   owns the vertical hop spanning the same duration, so the two compose into an arc. */
+.skirmish-board-unit.is-moving img {
+  animation: unit-move-hop var(--move-duration) cubic-bezier(.4, 0, .2, 1);
+}
+
+.skirmish-board-unit.is-enemy.is-moving img {
+  animation: unit-move-hop-heavy var(--move-duration) cubic-bezier(.4, 0, .2, 1);
+}
+
+@keyframes unit-move-hop {
+  0% { transform: translateY(0) scale(1); }
+  14% { transform: translateY(-3px) scale(1.06); }  /* anticipation: brief wind-up */
+  48% { transform: translateY(-16px) scale(1.04); } /* apex of the arc */
+  80% { transform: translateY(2px) scale(.98); }    /* land + overshoot */
+  100% { transform: translateY(0) scale(1); }       /* settle */
+}
+
+@keyframes unit-move-hop-heavy {
+  0% { transform: translateY(0) scale(1); }
+  16% { transform: translateY(-2px) scale(1.07); }  /* bigger wind-up */
+  50% { transform: translateY(-12px) scale(1.03); } /* lower arc reads heavier */
+  78% { transform: translateY(4px) scale(.96); }    /* heavier landing */
+  90% { transform: translateY(-1px) scale(1.01); }  /* small bounce-back */
+  100% { transform: translateY(0) scale(1); }       /* settle */
 }
 
 .skirmish-board-unit img {
@@ -6801,9 +6859,29 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skirmish-board-unit {
-    transition: none;
+  /* Movement is functional feedback (where did the piece go?), not decoration,
+     so keep a brief slide instead of teleporting — but drop the airborne hop and
+     the decorative lift shadow that motion-sensitive players don't want. The turn
+     staging (your move → beat → enemy reply) still applies; that's pacing, not
+     motion. */
+  /* Keep the same deliberate travel timing the game is tuned around (a slower
+     slide is gentler, not more motion), but swap the airborne arc + scale bounce
+     for a small calm lift. !important exempts this one functional cue from the
+     global `* { animation: none }` reduced-motion reset further down this file. */
+  .skirmish-board-unit.is-moving {
+    filter: none;
   }
+
+  .skirmish-board-unit.is-moving img,
+  .skirmish-board-unit.is-enemy.is-moving img {
+    animation: unit-move-hop-soft var(--move-duration) ease-in-out !important;
+  }
+}
+
+@keyframes unit-move-hop-soft {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
 }
 
 .skirmish-left-panel {
@@ -6999,8 +7077,11 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
   border-radius: 5px;
   display: grid;
   min-height: 86px;
-  padding: 8px;
+  /* no padding: the portrait crop fills the frame edge-to-edge (the crop is the
+     framing; its transparent margins let the backdrop show through). */
+  padding: 0;
   place-items: center;
+  overflow: hidden;
 }
 
 .skirmish-portrait-frame.has-backdrop {
@@ -7022,8 +7103,8 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
 .skirmish-portrait {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  object-position: center bottom;
+  object-fit: cover;
+  object-position: center;
   image-rendering: auto;
   filter: drop-shadow(0 9px 8px rgba(0, 0, 0, .52));
 }
@@ -7455,7 +7536,7 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
 
   .skirmish-portrait-frame {
     min-height: 84px;
-    padding: 14px;
+    padding: 0;
   }
 
   .skirmish-action-button {
@@ -9548,7 +9629,11 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
   overflow: hidden;
 }
 
-.tileset-studio-shell.is-catalog {
+/* Catalog and Lab share one fixed skeleton: a stretchy main pane on the left
+   and a 260px Controls rail on the right. The grid never changes between modes,
+   so the rail and pane hold their position — only their contents swap. */
+.tileset-studio-shell.is-catalog,
+.tileset-studio-shell.is-lab {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
@@ -9580,12 +9665,39 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
 .tileset-candidate-main,
 .tileset-studio-inspector,
 .tileset-view-mode,
+.tileset-lab-stage,
 .tileset-view-controls,
 .tileset-studio-panel {
   background: rgba(5, 16, 25, 0.92);
   border: 1px solid rgba(67, 127, 179, 0.28);
   border-radius: 6px;
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+
+/* The Lab's left pane: the board surface. Same outer box as the catalog's
+   main pane, so switching Catalog <-> Lab keeps the left column identical. */
+.tileset-lab-stage {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+/* Component-view tabs (Board / Tile / Unit) sit at the top of the Controls
+   rail and stretch full-width, so they line up with the rail's other rows.
+   Override .tileset-mode-tabs' 78px-min auto columns: in the 260px rail three
+   78px buttons (= 256px min-content) can't shrink and would force every sibling
+   control to that width, clipping the rail's right edge. Let them shrink to fit. */
+.tileset-lab-component-tabs {
+  width: 100%;
+  margin: 0;
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+.tileset-lab-component-tabs button {
+  min-width: 0;
 }
 
 .tileset-studio-rail {
@@ -9680,7 +9792,7 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
 
 .tileset-studio-main {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   min-height: 0;
   min-width: 0;
@@ -10746,9 +10858,12 @@ a.kit-cell:hover, a.kit-cell:focus-visible {
   width: 100%;
 }
 
+/* Keep the filter menu inside the 260px Controls rail. The rail is an overflow
+   scroll container, so a menu wider than the rail spills left over the main pane
+   and gets clipped. Match the rail width so it stays fully visible. */
 .tileset-catalog-controls .tileset-filter-menu {
   right: 0;
-  width: min(320px, calc(100vw - 32px));
+  width: 100%;
 }
 
 .tileset-transition-workbench {
@@ -11543,10 +11658,10 @@ button.tileset-relationship-cell {
   position: absolute;
   width: 96px;
   height: 180px;
-  /* 180px frame: ~42px of headroom above the contact diamond (equator at y69) for 3D
-     protrusion (standing grass, relief). Anchor the equator to the cell so tiles still
-     tessellate and units seat exactly as before. */
-  transform: translate(-48px, -69px);
+  /* 180px frame: headroom above the contact diamond (equator) for 3D protrusion
+     (standing grass, relief). Anchor the equator to the cell so tiles tessellate and
+     units seat exactly. The equator offset is shared with the overlay diamonds. */
+  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-equator)));
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -11600,7 +11715,7 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   background: rgba(111, 210, 255, 0.09);
@@ -11621,7 +11736,9 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
+  /* Same top-surface plane as the grid diamond, so the footprint guide overlays
+     the tile's top face instead of floating above it. */
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11639,7 +11756,9 @@ button.tileset-relationship-cell {
 .tileset-cell-hit {
   position: absolute;
   left: 0;
-  top: 0;
+  /* Align the clickable diamond with the tile's top-surface plane (matching the
+     grid and footprint) so a click lands on the tile you see, not ~28px above it. */
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11651,7 +11770,9 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
+  /* Centre the grid diamond on the tile equator (see --iso-tile-surface-top), so
+     an empty cell's outline coincides with the top face of a placed tile. */
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11669,7 +11790,7 @@ button.tileset-relationship-cell {
   content: "";
   position: absolute;
   left: 0;
-  top: 0;
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11739,7 +11860,9 @@ button.tileset-relationship-cell {
 .tileset-cell-ring {
   position: absolute;
   left: 0;
-  top: 0;
+  /* Sit on the tile's top-surface plane, matching the grid/footprint/hit diamond,
+     instead of the top of the 180px protrusion frame (which floated it ~28px high). */
+  top: var(--iso-tile-surface-top);
   width: var(--iso-tile-width);
   height: var(--iso-tile-height);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -11801,15 +11924,6 @@ button.tileset-relationship-cell {
   max-width: 90%;
   object-fit: contain;
   image-rendering: auto;
-}
-
-.unit-studio-route .unit-card-image {
-  min-height: calc(150px * var(--tile-zoom, 1));
-}
-
-.unit-studio-route .unit-card-image img {
-  width: auto;
-  height: calc(132px * var(--tile-zoom, 1));
 }
 
 .unit-catalog-empty {

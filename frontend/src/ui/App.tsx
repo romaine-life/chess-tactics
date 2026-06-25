@@ -15,12 +15,9 @@ import {
 // don't pull the renderer bundle (preserving app.js's lazy-mount behaviour).
 const Skirmish = lazy(() => import('./Skirmish').then((m) => ({ default: m.Skirmish })));
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
-const TilePreview = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilePreview })));
-const TileReview = lazy(() => import('./TilePreview').then((m) => ({ default: m.TileReview })));
 const TilesetStudio = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilesetStudio })));
 const LevelEditor = lazy(() => import('./TilePreview').then((m) => ({ default: m.LevelEditorPage })));
-const TilesetCandidateReview = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilesetCandidateReview })));
-const UnitStudio = lazy(() => import('./UnitStudio').then((m) => ({ default: m.UnitStudio })));
+const PortraitEditor = lazy(() => import('./PortraitEditor').then((m) => ({ default: m.PortraitEditor })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 const split = (node: ReactElement): ReactElement => <Suspense fallback={fallback}>{node}</Suspense>;
@@ -57,10 +54,11 @@ export function App(): ReactElement {
 
   if (path === '/play' || path === '/skirmish') return split(<Skirmish />);
   if (path === '/tileset-studio') return split(<TilesetStudio />);
-  if (path === '/unit-studio') return split(<UnitStudio />);
-  if (path === '/tileset-review') return split(<TilesetCandidateReview />);
-  if (path === '/tile-review') return split(<TileReview />);
-  if (path === '/tile-preview') return split(<TilePreview />);
+  // /unit-studio is a deep-link into the one Studio with the Units shelf
+  // preselected — not a separate surface. Keeps old links working while the
+  // catalog/lab/brush flow stays a single mounted component (no route swaps).
+  if (path === '/unit-studio') return split(<TilesetStudio initialCategory="units" />);
+  if (path === '/portrait-editor') return split(<PortraitEditor />);
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return split(<LevelEditor />);

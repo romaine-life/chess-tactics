@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
+import { AmbienceBackground } from './AmbienceBackground';
 import {
   MENU_MODES,
   assetById,
@@ -118,6 +119,7 @@ export function MainMenu(): ReactElement {
 
   return (
     <div className="menu-layer main-menu-layer" data-testid="main-menu-next">
+      <AmbienceBackground />
       <section className="main-menu-screen main-menu-skeleton-screen" aria-label="Chess Tactics main menu">
         <div className="main-menu-left">
           <a className="main-menu-brand main-menu-brand-live" href="/" aria-label="Chess Tactics">

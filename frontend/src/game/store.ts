@@ -9,6 +9,11 @@ import { buildTerrainIndex } from '../core/terrain';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 
+// Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
+// lands, the board settles for a beat, the enemy "thinks", then answers. This
+// delay stages that read-beat + thinking pause before the enemy reply resolves.
+const ENEMY_REPLY_DELAY = 520;
+
 const OBJECTIVE_LOG_COPY = {
   'capture-all': 'capture all enemy pieces',
   'capture-king': 'capture the enemy King',
@@ -67,7 +72,29 @@ export interface SkirmishState {
 
 const INITIAL_GAME = createSkirmish({ seed: 1 });
 
-export const useSkirmish = create<SkirmishState>((set, get) => ({
+export const useSkirmish = create<SkirmishState>((set, get) => {
+  // Stage the enemy half-turn after a beat so it reads as a reply, not a mirror
+  // of the player's click. The turn is already flipped to 'enemy' (which locks
+  // player input) before this fires.
+  const scheduleEnemyReply = () => {
+    setTimeout(() => {
+      const cur = get();
+      // Bail if a new game reset the turn, or it somehow already resolved.
+      if (cur.game.turn !== 'enemy' || cur.game.winner) return;
+      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game));
+      const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
+      set({
+        game: enemyRes.game,
+        env: envFor(enemyRes.game),
+        tick: enemyRes.tick,
+        selectedId: firstPlayerId(enemyRes.game),
+        focusedId: firstPlayerId(enemyRes.game),
+        log: [...msgs.reverse(), ...cur.log].slice(0, 12),
+      });
+    }, ENEMY_REPLY_DELAY);
+  };
+
+  return {
   game: INITIAL_GAME,
   env: envFor(INITIAL_GAME),
   selectedId: null,
@@ -113,25 +140,26 @@ export const useSkirmish = create<SkirmishState>((set, get) => ({
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
     const playerRes = applyMove(s.game, p.id, mv);
-    const enemyRes = resolveEnemy(playerRes.state, s.seed, s.tick, envFor(playerRes.state));
-    const msgs = [...playerRes.events, ...enemyRes.events].map(describeEvent).filter((m): m is string => m !== null);
+    const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
+    // Beat 1: commit the player's move on its own so it animates and the board
+    // reads before the enemy answers. applyMove flips the turn to 'enemy', which
+    // also locks further player input until the reply resolves.
     set({
-      game: enemyRes.game,
-      env: envFor(enemyRes.game),
-      tick: enemyRes.tick,
-      selectedId: firstPlayerId(enemyRes.game),
-      focusedId: firstPlayerId(enemyRes.game),
+      game: playerRes.state,
+      env: envFor(playerRes.state),
+      selectedId: null,
+      focusedId: null,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
     });
+    // Beats 2–3: a read beat, then the enemy "thinks" and answers.
+    if (playerRes.state.turn === 'enemy' && !playerRes.state.winner) scheduleEnemyReply();
   },
 
   endTurn: () => {
     const s = get();
     if (s.game.turn !== 'player' || s.game.winner) return;
-    const enemyStart = { ...s.game, turn: 'enemy' as const };
-    const enemyRes = resolveEnemy(enemyStart, s.seed, s.tick, envFor(enemyStart));
-    const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
-    const selectedId = firstPlayerId(enemyRes.game);
-    set({ game: enemyRes.game, env: envFor(enemyRes.game), tick: enemyRes.tick, selectedId, focusedId: selectedId, log: [...msgs.reverse(), ...s.log].slice(0, 12) });
+    set({ game: { ...s.game, turn: 'enemy' }, selectedId: null, focusedId: null });
+    scheduleEnemyReply();
   },
-}));
+  };
+});

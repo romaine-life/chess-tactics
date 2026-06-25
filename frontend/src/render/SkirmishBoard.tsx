@@ -159,7 +159,9 @@ function UnitPiece({ piece, selected = false, focused = false }: { piece: Piece;
 
     setIsMoving(true);
     const frame = window.requestAnimationFrame(() => setDisplayPosition({ left, top }));
-    const done = window.setTimeout(() => setIsMoving(false), 190);
+    // Hold `is-moving` long enough to cover the full hop (lift → arc → settle),
+    // including the weightier enemy timing (--move-duration in style.css).
+    const done = window.setTimeout(() => setIsMoving(false), 520);
     return () => {
       window.cancelAnimationFrame(frame);
       window.clearTimeout(done);

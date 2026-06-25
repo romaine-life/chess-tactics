@@ -6,6 +6,8 @@ import { useCampaigns } from '../campaign/store';
 import { loadWorkspace } from '../net/campaignWorkspace';
 import { livingPieces } from '../core/rules';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
+import { PALETTE_FOR_SIDE, isPlayablePieceType, portraitPath } from '../core/pieces';
+import { preloadImages } from '../art/preload';
 
 const OBJECTIVE_COPY = {
   'capture-all': 'Capture all enemy pieces',
@@ -32,6 +34,19 @@ export function Skirmish() {
     shell?.classList.add('skirmish-active');
     return () => shell?.classList.remove('skirmish-active');
   }, []);
+
+  // Warm the portrait cache for the units actually on the board so the HUD bust
+  // paints instantly on the first click instead of waiting for a fetch+decode at
+  // that moment. Scoped to the current roster (both sides are focusable).
+  useEffect(() => {
+    const urls: string[] = [];
+    for (const piece of game.pieces) {
+      if (!isPlayablePieceType(piece.type)) continue;
+      urls.push(portraitPath(piece.type, PALETTE_FOR_SIDE[piece.side]));
+      urls.push(DEFAULT_BACKGROUND_SET.portraits[piece.type]);
+    }
+    preloadImages(urls);
+  }, [game.pieces]);
 
   useEffect(() => {
     if (!routeLevelId || routeLevel) {
