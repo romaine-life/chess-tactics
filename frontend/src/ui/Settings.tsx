@@ -476,13 +476,15 @@ export function Settings(): ReactElement {
   );
 
   const renderGameplay = () => (
-    <SettingsRow
-      icon="icon-knight.png"
-      title="Coming Soon"
-      description="Gameplay settings are not available yet."
-      value={<span>Locked</span>}
-      tall
-    />
+    <SettingsSection title="Gameplay">
+      <SettingsRow
+        icon="icon-knight.png"
+        title="Coming Soon"
+        description="Gameplay settings are not available yet."
+        value={<span>Locked</span>}
+        tall
+      />
+    </SettingsSection>
   );
 
   const renderCreatorTools = () => (
