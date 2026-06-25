@@ -52,7 +52,7 @@ const SPECS = [
   ['settings', 'music', ref.audio, 'a blue music note'],
   ['settings', 'effects', ref.audio, 'a blue equalizer of vertical waveform bars'],
   ['settings', 'interface-sounds', ref.audio, 'a blue UI-sound mark: a small speaker or panel with sound bars'],
-  ['settings', 'brand-shield', ref.general, 'the rook-on-shield brand emblem from the header'],
+  ['settings', 'brand-shield', ref.general, 'a heraldic crest badge: a bright blue chess rook (castle tower) centered on a dark navy field, enclosed by an ornate beveled gold border — the brand emblem from the header'],
   ['settings', 'design-index', ref.creator, 'a blue creator-tools design / grid mark'],
   ['settings', 'tileset-studio', ref.creator, 'a green grass terrain tile'],
   ['settings', 'unit-studio', ref.creator, 'a gray chess knight / unit bust'],
@@ -124,6 +124,16 @@ async function forgeOne(spec, maxTries) {
     const work = mkdtempSync(join(tmpdir(), `forge-${spec.name}-`));
     try {
       const { code, out: codexJsonl } = await runCodex(spec.refAbs, work, prompt(spec, prior));
+      // Persist codex's full event stream so the method check is AUDITABLE (not a
+      // black box): afterward we can prove it GENERATED the image from the style
+      // ref (image_generation_call) rather than hand-drawing it in PIL/SVG/canvas.
+      const evidDir = join(FRONTEND, 'tmp-forge-evidence');
+      mkdirSync(evidDir, { recursive: true });
+      const evidPath = join(evidDir, `${spec.name}-try${attempt}.jsonl`);
+      writeFileSync(evidPath, codexJsonl);
+      const eventTypes = [...new Set(codexJsonl.split('\n').map((l) => { try { const j = JSON.parse(l); return (j.payload && j.payload.type) || j.type; } catch { return null; } }).filter(Boolean))];
+      console.log(`        try ${attempt} METHOD: ${usedImageGenerator(codexJsonl) ? 'image_generation_call ✓ (GENERATED)' : 'no image-gen — CODE-DRAWN ✗'} | events: ${eventTypes.join(', ')}`);
+      console.log(`        evidence: ${evidPath}`);
       const outPng = join(work, `${spec.name}.png`);
       if (!existsSync(outPng)) { prior = code === 0 ? 'codex wrote no PNG file' : `codex exited ${code} with no file`; continue; }
       // GATE 1 (method, definitive): prove codex actually generated the image.
