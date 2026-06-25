@@ -59,8 +59,10 @@ modes, it is wrong**, no matter how correct the contents are.
   thing, it never says "you can't do that here."
 - **One right-hand panel** (fixed width), headed **Controls** in every mode. It
   is the cascading control unit: in Catalog its tier selector is the category;
-  in Lab, the Board/Tile/Unit focus; in the Viewer, the **Asset | Artwork** kind
-  selector over a read-only Details readout. The heading and panel never move.
+  in Lab, the Board/Tile/Unit focus; in the Viewer, the **Asset | Artwork |
+  Portrait** kind selector. Asset/Artwork are read-only (a Details readout);
+  Portrait is the embedded portrait crop editor (the one light-editing kind). The
+  heading and panel never move.
 - **Main pane:** content only. The catalog grid, the lab surface, or the Viewer
   stage.
 - **No sub-headers, no per-pane titles, no "Back" button.** The breadcrumb
@@ -91,11 +93,11 @@ mode  (Catalog · Lab · Viewer)                 ← topbar · tier-1 · 3 persi
 │           ├─ Tile focus  → tile controls (brush, picker, …)
 │           └─ Unit focus  → unit controls (brush, facing, …)
 │
-└─ Viewer  (read-only stage — holds the last item it opened)
-    └─ kind (Asset | Artwork)                  ← tier-2 · top of Controls
-        ├─ Asset   → preview-in-context stage + gate/provenance details
-        └─ Artwork → full-art preview stage + group/size/path details
-        (the kind selector is the only control; the items are never edited)
+└─ Viewer  (single-item stage — holds the last item it opened)
+    └─ kind (Asset | Artwork | Portrait)       ← tier-2 · top of Controls
+        ├─ Asset    → preview-in-context stage + gate/provenance details (read-only)
+        ├─ Artwork  → full-art preview stage + group/size/path details (read-only)
+        └─ Portrait → embedded unit-portrait crop editor (pan/zoom, per-piece)
 
 "View Selected" in the Catalog routes BY ITEM TYPE — a tile/unit opens in the Lab,
 an asset/artwork opens in the Viewer. The tabs themselves never route by type;
@@ -121,11 +123,12 @@ they are standing destinations.
   surface has three focuses — **Board / Tile / Unit** — each its own control set
   on the same board. They are **not** surfaces and **not** separate views; they
   are control sets that share the surface.
-- **Viewer** — the read-only destination for finished things with no workbench.
-  Its panel carries one tier selector — **Asset | Artwork** — over a read-only
-  Details readout. Switching kind is the only control; the items themselves are
-  never edited. Assets and Artwork use it today; any future finished-art library
-  (lore plates, a cutscene gallery) becomes another kind here.
+- **Viewer** — the single-item destination for finished things with no board
+  workbench. Its panel carries one tier selector — **Asset | Artwork | Portrait**.
+  Asset and Artwork are read-only (a Details readout); Portrait embeds the unit
+  portrait crop editor — light, single-item framing work, not board manipulation,
+  which is why it lives here rather than in the Lab. Any future finished-art
+  library (lore plates, a cutscene gallery) becomes another kind here.
 
 ## Visual standard — instrument-grade, not boxes
 

@@ -30,6 +30,7 @@ import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
 import { AssetLibraryStudio, AssetLab, type AssetFilter } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
+import { PortraitLab } from './PortraitEditor';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { useCampaigns } from '../campaign/store';
@@ -68,9 +69,9 @@ type StudioMode = 'catalog' | 'lab' | 'viewer';
 // does not decide which destination tab you can reach.
 type StudioCategory = 'tiles' | 'units' | 'assets' | 'artwork';
 
-// What the Viewer is currently holding. Assets and artwork both feed the one
-// Viewer; this records which the Viewer last opened.
-type ViewerKind = 'asset' | 'artwork';
+// What the Viewer is currently holding. Assets and artwork feed read-only stages;
+// 'portrait' is the embedded portrait crop editor. This records the active kind.
+type ViewerKind = 'asset' | 'artwork' | 'portrait';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -276,7 +277,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     category: routeCategory,
     selectedAssetName: kit || undefined,
     selectedArtworkName: art || undefined,
-    viewerKind: vk === 'asset' || vk === 'artwork' ? vk : undefined,
+    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -314,10 +315,11 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   params.set('mode', route.studioMode);
   if (route.category && route.category !== 'tiles') params.set('cat', route.category);
   if (route.studioMode === 'viewer') {
-    // The Viewer persists whichever item it last opened (asset or artwork).
+    // The Viewer persists which kind it last held (asset/artwork/portrait) and,
+    // for the read-only kinds, the item name. Portrait state lives in localStorage.
     params.set('vk', route.viewerKind ?? 'artwork');
     if (route.viewerKind === 'asset' && route.selectedAssetName) params.set('kit', route.selectedAssetName);
-    else if (route.selectedArtworkName) params.set('art', route.selectedArtworkName);
+    else if (route.viewerKind === 'artwork' && route.selectedArtworkName) params.set('art', route.selectedArtworkName);
   }
   if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', route.tileFilter);
@@ -1851,12 +1853,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
   // the header height constant (the Lab already shares this header — no second
   // row inside the board surface, which is what made the controls rail jump).
-  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : selectedAssetName;
+  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : '';
+  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
       ? ['Catalog', category === 'units' ? 'Units' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : 'Tiles']
       : studioMode === 'viewer'
-        ? ['Viewer', viewerKind === 'artwork' ? 'Artwork' : 'Asset', viewerName || '—']
+        ? (viewerKind === 'portrait' ? ['Viewer', 'Portrait'] : ['Viewer', viewerKindLabel, viewerName || '—'])
         : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
   const crumbMeta =
     studioMode === 'catalog'
@@ -1868,7 +1871,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? `${artworkManifest.summary.total} artworks`
             : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
       : studioMode === 'viewer'
-        ? (viewerKind === 'artwork' ? 'full-art preview' : 'preview on backdrops')
+        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : 'preview on backdrops')
         : viewSubtitle;
   const openCatalogMode = (): void => {
     if (tileFilter === 'board') setTileFilter('base');
@@ -2061,6 +2064,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     <div className="tileset-tier-seg" aria-label="Viewer kind">
       <button type="button" className={viewerKind === 'asset' ? 'is-active' : ''} onClick={() => setViewerKind('asset')} title="View the selected UI-kit asset.">Asset</button>
       <button type="button" className={viewerKind === 'artwork' ? 'is-active' : ''} onClick={() => setViewerKind('artwork')} title="View the selected artwork.">Artwork</button>
+      <button type="button" className={viewerKind === 'portrait' ? 'is-active' : ''} onClick={() => setViewerKind('portrait')} title="Edit unit portrait headshot crops.">Portrait</button>
     </div>
   );
 
@@ -2119,9 +2123,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </aside>
         </>
         ) : studioMode === 'viewer' ? (
-          viewerKind === 'artwork'
-            ? <ArtworkLab name={selectedArtworkName} header={viewerKindTabs} />
-            : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
+          viewerKind === 'portrait'
+            ? <PortraitLab header={viewerKindTabs} />
+            : viewerKind === 'artwork'
+              ? <ArtworkLab name={selectedArtworkName} header={viewerKindTabs} />
+              : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
