@@ -506,12 +506,12 @@ export function Settings(): ReactElement {
               <em>{accountStatus}</em>
             </span>
             {signedIn
-              ? <SettingsButton className="settings-header-button settings-header-button-account" onClick={signOut}>Sign Out</SettingsButton>
-              : <SettingsButton className="settings-header-button settings-header-button-account" href={signInHref('/settings')}>Sign In</SettingsButton>}
+              ? <SettingsButton className="settings-header-button settings-header-button-active" onClick={signOut}>Sign Out</SettingsButton>
+              : <SettingsButton className="settings-header-button settings-header-button-active" href={signInHref('/settings')}>Sign In</SettingsButton>}
           </div>
           <nav className="settings-header-actions" aria-label="Settings navigation">
-            <SettingsButton className="settings-header-button settings-header-button-back" onClick={() => window.history.back()}>Back</SettingsButton>
-            <SettingsButton className="settings-header-button settings-header-button-menu" href="/">Menu</SettingsButton>
+            <SettingsButton className="settings-header-button" onClick={() => window.history.back()}>Back</SettingsButton>
+            <SettingsButton className="settings-header-button" href="/">Menu</SettingsButton>
           </nav>
         </header>
 

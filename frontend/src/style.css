@@ -12084,7 +12084,7 @@ button.tileset-relationship-cell {
   block-size: var(--app-header-h);
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
-  grid-template-columns: minmax(360px, 1fr) 360px 402px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   padding: 0 clamp(12px, 1.3vw, 20px);
 }
 
@@ -12177,7 +12177,7 @@ button.tileset-relationship-cell {
   align-self: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) 196px;
+  grid-template-columns: minmax(0, 1fr) auto;
   justify-content: flex-end;
   min-height: 54px;
   min-width: 0;
@@ -12437,23 +12437,23 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* Header buttons wear the SYMMETRIC panel.png frame (square source → equal corners
+   on all four sides), matching the design's gold corner-bracket language. The tall
+   tab art was the wrong source for a short button (it rendered lopsided). */
 .settings-header-button {
-  block-size: 50px;
+  block-size: 46px;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 36 fill / 12px round;
   flex: none;
-  inline-size: 196px;
-  padding: 8px 10px;
+  inline-size: auto;
+  min-inline-size: 92px;
+  padding: 0 14px;
 }
 
-.settings-header-button-account {
-  inline-size: 196px;
-}
-
-.settings-header-button-back {
-  inline-size: 196px;
-}
-
-.settings-header-button-menu {
-  inline-size: 196px;
+/* Sign In — distinguished with a cyan ring (symmetric). The kit has no cyan
+   corner-bracket frame, so a true cyan-bracket button is a later forge job. */
+.settings-header-button-active {
+  box-shadow: 0 0 0 2px rgba(95, 184, 255, .5), 0 0 12px rgba(58, 160, 255, .3);
 }
 
 .settings-stepper {
@@ -12807,10 +12807,54 @@ button.tileset-relationship-cell {
 /* Artwork lab — one big contained preview on the checker stage. */
 .al-artwork-stage { height: min(58vh, 540px); width: min(720px, 100%); }
 .al-artwork-lg { image-rendering: auto; max-height: 100%; max-width: 100%; object-fit: contain; }
-.asset-prov { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; }
+
+/* Glossary studio surface — the term grid (catalog) and the full-term read (viewer).
+   Restores the design-portfolio glossary that #127 dropped. Catalog terms are real
+   catalog cards (same shape as asset/artwork cards), just text-only — no image. */
+.glossary-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.tileset-studio-card.is-glossary {
+  align-items: stretch;
+  min-height: 0;
+  padding: 12px 14px;
+}
+.tileset-studio-card.is-glossary .tileset-studio-card-meta { align-items: flex-start; gap: 10px; width: 100%; }
+.tileset-studio-card.is-glossary .tileset-studio-card-text { gap: 5px; }
+.tileset-studio-card.is-glossary .tileset-studio-card-text strong { align-items: center; color: #f0eadb; display: inline-flex; font-size: .98rem; gap: 7px; }
+.tileset-studio-card.is-glossary .tileset-studio-card-text em { color: #9fc4d5; font-size: .82rem; font-style: normal; line-height: 1.45; text-transform: none; white-space: normal; }
+.glossary-card-src { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; margin-top: 2px; }
+.glossary-doc-dot { background: #79d3ff; border-radius: 999px; box-shadow: 0 0 6px rgba(121, 211, 255, .8); height: 6px; width: 6px; }
+.glossary-tag { align-self: flex-start; border-radius: 999px; font-size: .56rem; letter-spacing: .04em; padding: 2px 7px; text-transform: uppercase; white-space: nowrap; }
+.glossary-tag.is-asset { background: rgba(143, 211, 154, .14); border: 1px solid rgba(143, 211, 154, .4); color: #8fd39a; }
+.glossary-tag.is-not-asset { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
+
+/* Glossary viewer — one term in full, with the long-form process doc. */
+.glossary-lab-main { overflow: auto; padding: 6px 10px; }
+.glossary-entry-full { color: #cfe3ef; line-height: 1.55; max-width: 760px; }
+.glossary-entry-full > header { align-items: center; display: flex; gap: 12px; margin-bottom: 8px; }
+.glossary-entry-full h2 { color: #f0eadb; margin: 0; }
+.glossary-entry-def { font-size: 1rem; margin: 0 0 6px; }
+.glossary-entry-src { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .68rem; margin: 0 0 18px; }
+.glossary-detail { border-top: 1px solid rgba(67, 127, 179, .24); padding-top: 16px; }
+.glossary-detail h3 { color: #79d3ff; font-size: 1.05rem; margin: 0 0 10px; }
+.glossary-detail h4 { color: #c9a877; font-size: .9rem; margin: 18px 0 6px; }
+.glossary-detail p { margin: 0 0 10px; }
+.glossary-detail ul { margin: 0 0 12px; padding-left: 22px; }
+.glossary-detail li { margin-bottom: 6px; }
+.glossary-detail code { background: rgba(95, 184, 255, .1); border-radius: 4px; color: #9fd0ff; font-size: .82em; padding: 1px 5px; }
+.glossary-detail-src { color: #5d7a8c; font-size: .72rem; margin-top: 14px; }
+.glossary-detail-none { color: #5d7a8c; font-style: italic; }
+/* Per-asset property chips (gate + provenance) stacked at the card's trailing edge. */
+.asset-card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.asset-prov,
+.asset-gate { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; text-transform: uppercase; }
 .asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
 .asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
 .asset-prov.is-original { background: rgba(158, 177, 197, .12); border: 1px solid rgba(158, 177, 197, .34); color: #9eb1c5; }
+.asset-gate.is-pass { background: rgba(143, 211, 154, .14); border: 1px solid rgba(143, 211, 154, .4); color: #8fd39a; }
+.asset-gate.is-fail { background: rgba(228, 120, 120, .14); border: 1px solid rgba(228, 120, 120, .46); color: #ec8a8a; }
+
+/* A labelled facet in the Controls panel: caption above a segmented control. */
+.tileset-filter-field { display: grid; gap: 7px; color: #9eb1c5; font-size: 11px; font-weight: 900; text-transform: uppercase; }
 
 /* Asset lab (the Lab's Asset surface) — the main pane is one self-filling panel
    that mirrors the board lab's stage; the studio topbar carries the breadcrumb,
