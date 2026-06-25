@@ -9,12 +9,18 @@ instead.
 
 ## Where the bytes live
 
-- **Durable archive (full originals, ~549 MB / 95 files):**
-  `D:\repos\chess-tactics-asset-sources\tiles_ex\` (rescued out of `%TEMP%`, where they were
-  previously stranded and one cleanup from gone).
-- **Canonical home:** the project asset blob container (same store the audio `bgm-manifest`
-  uses for delivery). **TODO:** mirror the archive there for off-machine / CI recovery — until
-  then the pointer is only resolvable on this machine.
+- **Azure Blob — canonical, off-machine recovery:** subscription `romaine-life`, resource
+  group `chess-tactics-sources`, storage account `chesstacticssrc`, **private** container
+  `tile-sources` (public blob access disabled — these are license-pending source packs, not
+  browser-delivered like BGM). Holds the full archive: `tiles_ex/` (originals) + `_drivers/`
+  (the render recipe). Recover with an authorized `az login`, then:
+  `az storage blob download-batch --account-name chesstacticssrc -s tile-sources -d <dir>`
+- **Local mirror:** `D:\repos\chess-tactics-asset-sources\` (rescued out of `%TEMP%`).
+
+> Infra note: the RG/account/container above were created directly (not via `tofu/storage.tf`,
+> whose `chesstacticsmedia` BGM account is a separate, not-yet-applied resource — kept distinct
+> on purpose so neither apply collides). Fold these into tofu and `import` them on the next
+> infra pass so the archive store is IaC-tracked.
 
 ## Render recipe
 
