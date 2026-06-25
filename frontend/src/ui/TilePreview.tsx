@@ -28,6 +28,8 @@ import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
 import { BoardLabBoard } from '../render/BoardLabBoard';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
+import { AssetLibraryStudio, AssetLab, type AssetFilter } from './design/AssetLibraryStudio';
+import kitManifest from './design/kitManifest.json';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
@@ -1222,12 +1224,12 @@ export function LevelEditorPage(): ReactElement {
   );
 }
 
-export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: 'tiles' | 'units' } = {}): ReactElement {
+export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: 'tiles' | 'units' | 'assets' } = {}): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
-  const [category, setCategory] = useState<'tiles' | 'units'>(initialCategory);
+  const [category, setCategory] = useState<'tiles' | 'units' | 'assets'>(initialCategory);
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
@@ -1236,6 +1238,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     initialRoute.tileFilter === 'board' ? ['base'] : [initialRoute.tileFilter],
   );
   const [catalogQuery, setCatalogQuery] = useState('');
+  const [assetFilter, setAssetFilter] = useState<AssetFilter>('all');
+  const [assetSearch, setAssetSearch] = useState('');
+  const [selectedAssetName, setSelectedAssetName] = useState('gear');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
   const skipNextRouteWriteRef = useRef(false);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
@@ -1788,14 +1793,20 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // row inside the board surface, which is what made the controls rail jump).
   const crumbTrail =
     studioMode === 'catalog'
-      ? ['Catalog', category === 'units' ? 'Units' : 'Tiles']
-      : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
+      ? ['Catalog', category === 'units' ? 'Units' : category === 'assets' ? 'Assets' : 'Tiles']
+      : category === 'assets'
+        ? ['Lab', 'Asset', selectedAssetName || '—']
+        : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
   const crumbMeta =
     studioMode === 'catalog'
       ? category === 'units'
         ? `${visibleUnits.length} unit${visibleUnits.length === 1 ? '' : 's'}`
-        : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
-      : viewSubtitle;
+        : category === 'assets'
+          ? `${kitManifest.summary.total} icons`
+          : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
+      : category === 'assets'
+        ? 'preview on backdrops'
+        : viewSubtitle;
   const openCatalogMode = (): void => {
     skipNextRouteWriteRef.current = true;
     if (tileFilter === 'board') setTileFilter('base');
@@ -1803,10 +1814,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   };
   const openLabMode = (): void => {
     skipNextRouteWriteRef.current = true;
-    if (!viewHasTarget) {
-      openBoardLab();
-      return;
-    }
+    if (category === 'assets') { setStudioMode('lab'); return; }
     openBoardLab();
   };
   const selectUnitInCatalog = (unitId: string): void => {
@@ -1953,7 +1961,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
-        {category === 'units' ? <CatalogGrid type={unitsCatalogType} /> : <CatalogGrid type={tilesCatalogType} />}
+        {category === 'units' ? <CatalogGrid type={unitsCatalogType} /> : category === 'assets' ? <AssetLibraryStudio filter={assetFilter} search={assetSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} /> : <CatalogGrid type={tilesCatalogType} />}
         <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Catalog controls">
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
@@ -1975,12 +1983,41 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                 >
                   Units
                 </button>
+                <button
+                  type="button"
+                  className={category === 'assets' ? 'is-active' : ''}
+                  onClick={() => setCategory('assets')}
+                  title="Browse the UI-kit asset library."
+                >
+                  Assets
+                </button>
               </div>
-              {category === 'units' ? <CatalogControls type={unitsCatalogType} /> : <CatalogControls type={tilesCatalogType} />}
+              {category === 'units' ? <CatalogControls type={unitsCatalogType} /> : category === 'assets' ? (
+                <>
+                  <label className="tileset-catalog-search">
+                    <span>Search</span>
+                    <input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="asset name…" />
+                  </label>
+                  <label className="tileset-catalog-zoom">
+                    <span>Zoom</span>
+                    <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+                  </label>
+                  <div className="tileset-tier-seg" aria-label="Process filter">
+                    {(['all', 'forged', 'unverified'] as const).map((option) => (
+                      <button key={option} type="button" className={assetFilter === option ? 'is-active' : ''} onClick={() => setAssetFilter(option)}>
+                        {option === 'all' ? 'All' : option === 'forged' ? 'Forged' : 'Unverified'}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="tileset-view-action" onClick={() => setStudioMode('lab')}>View Selected</button>
+                </>
+              ) : <CatalogControls type={tilesCatalogType} />}
             </div>
           </section>
         </aside>
         </>
+        ) : category === 'assets' ? (
+          <AssetLab name={selectedAssetName} onPickBoard={() => { setCategory('tiles'); openBoardLab(); }} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
