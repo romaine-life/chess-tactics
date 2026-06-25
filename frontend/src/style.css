@@ -782,6 +782,22 @@ h1 {
   image-rendering: pixelated;
 }
 
+/* Ambience near/overlay plane. Same full-bleed canvas as .ambience-background,
+   but stacked ABOVE the menu UI (.main-menu-screen, z3) so the drops the world
+   promotes to its overlay layer cross in front of the panels and buttons. Empty
+   wherever there's no near drop, and click-through, so it never blocks the menu.
+   The same drops also paint into .ambience-background, so the field is unchanged
+   if this canvas is absent or the world's overlay lever is 0. */
+.ambience-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
 .main-menu-left,
 .main-menu-right {
   pointer-events: auto;

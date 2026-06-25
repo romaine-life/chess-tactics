@@ -1,4 +1,4 @@
-import { useEffect, type ReactElement } from 'react';
+import { Fragment, useEffect, type ReactElement } from 'react';
 
 // AmbienceBackground renders cross-client-synchronized rain behind the main menu
 // by subscribing to ambience's rain-pinned `/chess` world
@@ -53,19 +53,27 @@ export function AmbienceBackground(): ReactElement {
   }, []);
 
   return (
-    <canvas
-      className="ambience-background"
-      aria-hidden="true"
-      data-ambience
-      // Stream: the rain-pinned world on ambience.
-      data-ambience-url={CHESS_WORLD_URL}
-      // Runtime: our own vendored, version-pinned copy (not ambience's origin).
-      data-ambience-wasm-url={`${VENDOR_BASE}/ambience-rain.wasm`}
-      data-ambience-wasm-exec-url={`${VENDOR_BASE}/wasm_exec.js`}
-      data-ambience-runtime-url={`${VENDOR_BASE}/wasm_runtime.js`}
-      data-ambience-transparent="true"
-      data-ambience-entropy="off"
-      data-ambience-initial-fade-ms="700"
-    />
+    <Fragment>
+      <canvas
+        className="ambience-background"
+        aria-hidden="true"
+        data-ambience
+        // Stream: the rain-pinned world on ambience.
+        data-ambience-url={CHESS_WORLD_URL}
+        // Runtime: our own vendored, version-pinned copy (not ambience's origin).
+        data-ambience-wasm-url={`${VENDOR_BASE}/ambience-rain.wasm`}
+        data-ambience-wasm-exec-url={`${VENDOR_BASE}/wasm_exec.js`}
+        data-ambience-runtime-url={`${VENDOR_BASE}/wasm_runtime.js`}
+        data-ambience-transparent="true"
+        data-ambience-entropy="off"
+        data-ambience-initial-fade-ms="700"
+      />
+      {/* Near/overlay plane: the vendored client paints the rain drops the world
+          promotes to its overlay layer into this canvas, which sits ABOVE the
+          menu so a few drops cross in front of it. Decorative + click-through;
+          the same drops also render in the background canvas, so if the client
+          ignores this canvas the rain is unchanged. */}
+      <canvas className="ambience-overlay" aria-hidden="true" data-ambience-overlay />
+    </Fragment>
   );
 }

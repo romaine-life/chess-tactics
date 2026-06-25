@@ -160,8 +160,8 @@
 		canvas.dataset.ambienceWasmExecUrl || trimSlashes(SERVER) + '/wasm_exec.js';
 	const RUNTIME_URL =
 		canvas.dataset.ambienceRuntimeUrl || trimSlashes(SERVER) + '/wasm_runtime.js';
-	const GRID_W = parseInt(canvas.dataset.ambienceGridW || '320', 10);
-	const GRID_H = parseInt(canvas.dataset.ambienceGridH || '180', 10);
+	const GRID_W = parseInt(canvas.dataset.ambienceGridW || '640', 10);
+	const GRID_H = parseInt(canvas.dataset.ambienceGridH || '360', 10);
 	const TRANSPARENT = canvas.dataset.ambienceTransparent !== 'false';
 	const ENTROPY_ENABLED = canvas.dataset.ambienceEntropy !== 'off';
 	const TICK_MS = 1000 / 60;
@@ -180,6 +180,16 @@
 	const ctx = canvas.getContext('2d');
 	if (canvas.style) canvas.style.imageRendering = canvas.style.imageRendering || 'pixelated';
 	ctx.imageSmoothingEnabled = false;
+	// Optional second canvas the consumer stacks ABOVE its own UI. When present
+	// we paint the near/overlay plane into it each tick (the drops the world
+	// promotes via the effect's overlay lever) so a few drops cross in front of
+	// the page. The main field is unchanged whether or not this canvas exists.
+	const overlayCanvas = document.querySelector('canvas[data-ambience-overlay]');
+	const overlayCtx = overlayCanvas ? overlayCanvas.getContext('2d') : null;
+	if (overlayCtx) {
+		if (overlayCanvas.style) overlayCanvas.style.imageRendering = overlayCanvas.style.imageRendering || 'pixelated';
+		overlayCtx.imageSmoothingEnabled = false;
+	}
 	let initialFadeCover = null;
 
 	// Mark body so consumer CSS can conditionally adapt (e.g. make terminal
@@ -190,6 +200,10 @@
 		const dpr = window.devicePixelRatio || 1;
 		canvas.width = Math.floor(window.innerWidth * dpr);
 		canvas.height = Math.floor(window.innerHeight * dpr);
+		if (overlayCanvas) {
+			overlayCanvas.width = canvas.width;
+			overlayCanvas.height = canvas.height;
+		}
 	}
 	resize();
 	window.addEventListener('resize', resize);
@@ -551,6 +565,13 @@
 				sim = sim.incoming;
 			}
 			sim.render(ctx, canvas.width, canvas.height, { transparent: TRANSPARENT });
+			if (overlayCtx) {
+				if (typeof sim.renderOverlay === 'function') {
+					sim.renderOverlay(overlayCtx, overlayCanvas.width, overlayCanvas.height, { transparent: true });
+				} else {
+					overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+				}
+			}
 			if (initialFadePending) {
 				initialFadePending = false;
 				revealInitialScene();
