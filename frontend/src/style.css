@@ -12234,32 +12234,43 @@ button.tileset-relationship-cell {
   padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
 }
 
+/* Clean sidebar nav — icon + label rows; the SELECTED item is highlighted with a
+   subtle fill + accent bar, the rest stay plain. No per-item frame (the rail panel
+   already carries the gold-bracket chrome). Mirrors the grouped-list content. */
 .settings-tab {
-  --settings-tab-icon-slot: 42px;
-  --settings-tab-icon-size: 36px;
+  --settings-tab-icon-slot: 36px;
+  --settings-tab-icon-size: 28px;
   align-items: center;
   appearance: none;
-  border: 10px solid transparent;
-  border-width: 10px 13px;
-  border-image: url("/assets/ui/kit/tab-inactive.png") 12 20 fill / 10px 13px stretch;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
   box-sizing: border-box;
-  color: #eef8ff;
+  color: #c4d6e6;
   display: grid;
-  gap: 12px;
+  gap: 11px;
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
-  min-height: clamp(48px, 4.3vw, 58px);
-  padding: 4px 8px 4px 10px;
+  min-height: 46px;
+  padding: 7px 12px;
   text-align: left;
   text-decoration: none;
+  transition: background .14s ease, color .14s ease;
 }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
-  transform: translateX(-3px);
+}
+
+.settings-tab:not(.is-active):hover {
+  background: rgba(47, 143, 230, 0.1);
+  color: #eaf4ff;
 }
 
 .settings-tab.is-active {
-  border-image-source: url("/assets/ui/kit/tab-active.png");
+  background: rgba(47, 143, 230, 0.16);
+  border-color: rgba(124, 209, 255, 0.45);
+  box-shadow: inset 3px 0 0 #6fd2ff;
+  color: #f3fbff;
 }
 
 .settings-tab-icon {
@@ -12609,7 +12620,6 @@ button.tileset-relationship-cell {
   transform: translateX(24px);
 }
 
-.settings-tab:hover,
 .settings-tab:focus-visible,
 .settings-chrome-button:hover,
 .settings-chrome-button:focus-visible,
