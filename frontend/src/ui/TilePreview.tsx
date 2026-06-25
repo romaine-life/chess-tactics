@@ -1783,29 +1783,17 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const visibleUnits = normalizedUnitQuery
     ? unitAssets.filter((unit) => [unit.label, unit.badge, unit.family, unit.read, unit.status].join(' ').toLowerCase().includes(normalizedUnitQuery))
     : unitAssets;
-  const headerKicker =
+  // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
+  // the header height constant (the Lab already shares this header — no second
+  // row inside the board surface, which is what made the controls rail jump).
+  const crumbTrail =
+    studioMode === 'catalog'
+      ? ['Catalog', category === 'units' ? 'Units' : 'Tiles']
+      : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
+  const crumbMeta =
     studioMode === 'catalog'
       ? category === 'units'
-        ? 'Unit Catalog'
-        : 'Tile Catalog'
-      : labMode === 'unit'
-        ? 'Lab · Unit'
-        : labMode === 'tile'
-          ? 'Lab · Tile'
-          : 'Lab · Board';
-  // In the Lab the shared header carries the loaded element's name/subtitle, so
-  // there is no second header row inside the board surface (that re-nested
-  // header is what made the controls rail jump down between Catalog and Lab).
-  const headerTitle =
-    studioMode === 'catalog'
-      ? category === 'units'
-        ? 'Units'
-        : selectedFamilyLabel
-      : viewTitle;
-  const headerSubtitle =
-    studioMode === 'catalog'
-      ? category === 'units'
-        ? `${visibleUnits.length} production unit${visibleUnits.length === 1 ? '' : 's'}`
+        ? `${visibleUnits.length} unit${visibleUnits.length === 1 ? '' : 's'}`
         : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
       : viewSubtitle;
   const openCatalogMode = (): void => {
@@ -1941,15 +1929,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     <main className="tileset-studio-page">
       <header className="tileset-studio-header">
         <div className="tileset-studio-brand">
-          <div className="tileset-studio-product">
-            <strong>Chess Tactics</strong>
-            <span>Tactical chess, infinite possibilities.</span>
-          </div>
-          <div className="tileset-studio-titleblock">
-            <p className="tileset-studio-kicker">{headerKicker}</p>
-            <h1>{headerTitle}</h1>
-            <p className="tileset-studio-subtitle">{headerSubtitle}</p>
-          </div>
+          <strong className="tileset-studio-wordmark">Studio</strong>
+          <nav className="tileset-crumb" aria-label="Location">
+            {crumbTrail.map((part, index) => (
+              <span key={index} className={index === crumbTrail.length - 1 ? 'is-current' : ''}>{part}</span>
+            ))}
+          </nav>
+          {crumbMeta ? <span className="tileset-crumb-meta">{crumbMeta}</span> : null}
         </div>
         <nav className="tileset-studio-actions" aria-label="Tileset studio navigation">
           <span className="tileset-mode-tabs" aria-label="Workspace mode">
@@ -1972,7 +1958,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
-              <div className="tileset-segmented-control" aria-label="Catalog asset type">
+              <div className="tileset-tier-seg" aria-label="Catalog asset type">
                 <button
                   type="button"
                   className={category === 'tiles' ? 'is-active' : ''}

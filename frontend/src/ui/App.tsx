@@ -66,8 +66,6 @@ export function App(): ReactElement {
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
   if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
-  // /design opens the Asset Library — the studio's "Assets" catalog category.
-  if (path === '/design') return split(<TilesetStudio initialCategory="assets" />);
-  if (path.startsWith('/design/')) return <DesignSurface />;
+  if (path === '/design' || path.startsWith('/design/')) return <DesignSurface />;
   return <MainMenu />;
 }
