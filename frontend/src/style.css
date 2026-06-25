@@ -8767,7 +8767,8 @@ h1 {
    and a 260px Controls rail on the right. The grid never changes between modes,
    so the rail and pane hold their position — only their contents swap. */
 .tileset-studio-shell.is-catalog,
-.tileset-studio-shell.is-lab {
+.tileset-studio-shell.is-lab,
+.tileset-studio-shell.is-viewer {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
@@ -8817,21 +8818,6 @@ h1 {
   min-width: 0;
   overflow: hidden;
   padding: 12px;
-}
-
-/* Component-view tabs (Board / Tile / Unit) sit at the top of the Controls
-   rail and stretch full-width, so they line up with the rail's other rows.
-   Override .tileset-mode-tabs' 78px-min auto columns: in the 260px rail three
-   78px buttons (= 256px min-content) can't shrink and would force every sibling
-   control to that width, clipping the rail's right edge. Let them shrink to fit. */
-.tileset-lab-component-tabs {
-  width: 100%;
-  margin: 0;
-  grid-auto-columns: minmax(0, 1fr);
-}
-
-.tileset-lab-component-tabs button {
-  min-width: 0;
 }
 
 .tileset-studio-rail {
@@ -9987,7 +9973,6 @@ h1 {
   align-self: stretch;
 }
 
-.tileset-catalog-controls .tileset-segmented-control,
 .tileset-catalog-controls .tileset-view-action {
   width: 100%;
 }
@@ -10235,7 +10220,6 @@ button.tileset-relationship-cell {
 }
 
 .tileset-inspector-tabs button,
-.tileset-segmented-control button,
 .tileset-control-stack button,
 .tileset-wide-action {
   min-height: 34px;
@@ -10255,7 +10239,6 @@ button.tileset-relationship-cell {
 }
 
 .tileset-inspector-tabs button.is-active,
-.tileset-segmented-control button.is-active,
 .tileset-control-stack button.is-active {
   color: #f3fbff;
   background: rgba(25, 94, 132, 0.95);
@@ -10266,7 +10249,6 @@ button.tileset-relationship-cell {
   border-color: transparent;
 }
 
-.tileset-segmented-control button:disabled,
 .tileset-control-stack button:disabled,
 .tileset-wide-action:disabled {
   cursor: default;
@@ -10317,15 +10299,10 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-.tileset-segmented-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 6px;
-}
-
-/* Tier selector (category / surface / focus / process) — one tight joined
-   segmented control on a SINGLE row, never the fat two-row button stack.
-   This is the instrument-grade density the spec calls for. */
+/* Tier selector (category / surface / focus / process / tool / option) — one
+   tight joined segmented control on a SINGLE row, never the fat two-row button
+   stack. This is the instrument-grade density the spec calls for, and it is the
+   ONE segmented-control primitive: Catalog tiers and every Lab selector use it. */
 .tileset-tier-seg {
   display: grid;
   grid-auto-flow: column;
@@ -10364,10 +10341,6 @@ button.tileset-relationship-cell {
 .tileset-tier-seg button:disabled {
   color: rgba(174, 191, 210, 0.4);
   cursor: default;
-}
-
-.tileset-segmented-control.tileset-tools {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .tileset-tools button {

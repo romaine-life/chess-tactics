@@ -30,6 +30,7 @@ import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
 import { AssetLibraryStudio, AssetLab, type AssetFilter } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
+import { PortraitLab } from './PortraitEditor';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { useCampaigns } from '../campaign/store';
@@ -56,7 +57,25 @@ const TRUE_ISO_TILE_SOURCE = 'canonical-true-iso';
 
 type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
-type StudioMode = 'catalog' | 'lab';
+// The studio has three persistent destinations (tier-1), all always reachable and
+// decoupled from the catalog category: 'catalog' browses a grid; 'lab' is the
+// board workbench (direct manipulation — tiles/units get placed there); 'viewer'
+// is the read-only stage for one finished, non-manipulable thing (an asset or an
+// artwork). Each remembers its own last state, so switching between them is free.
+// See docs/studio-control-architecture.md.
+type StudioMode = 'catalog' | 'lab' | 'viewer';
+
+// The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
+// does not decide which destination tab you can reach.
+type StudioCategory = 'tiles' | 'units' | 'assets' | 'artwork';
+
+// What the Viewer is currently holding. Assets and artwork feed read-only stages;
+// 'portrait' is the embedded portrait crop editor. This records the active kind.
+type ViewerKind = 'asset' | 'artwork' | 'portrait';
+
+// Default selection for the Artwork viewer, so the Viewer shows a real piece
+// instead of an empty stage before anything is opened.
+const FIRST_ARTWORK_ID: string = artworkManifest.groups[0]?.items[0]?.id ?? '';
 type TileFilter = 'base' | 'board';
 type LabMode = 'board' | 'tile' | 'unit';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
@@ -91,8 +110,10 @@ interface StudioFamily {
 interface TilesetStudioRouteState {
   familyId: StudioFamilyId;
   studioMode: StudioMode;
-  category?: 'tiles' | 'units' | 'assets' | 'artwork';
+  category?: StudioCategory;
   selectedAssetName?: string;
+  selectedArtworkName?: string;
+  viewerKind?: ViewerKind;
   labMode: LabMode;
   tileFilter: TileFilter;
   selectedPairId: TerrainPairId;
@@ -213,8 +234,8 @@ const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
 
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
-const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab';
-const isStudioCategory = (value: string | null): value is 'tiles' | 'units' | 'assets' | 'artwork' => value === 'tiles' || value === 'units' || value === 'assets' || value === 'artwork';
+const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'assets' || value === 'artwork';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -228,6 +249,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const mode = params.get('mode');
   const cat = params.get('cat');
   const kit = params.get('kit');
+  const art = params.get('art');
+  const vk = params.get('vk');
   const lab = params.get('lab');
   const view = params.get('view');
   const collection = params.get('collection');
@@ -236,7 +259,10 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const unit = params.get('unit');
   const slot = Number(params.get('slot'));
   const seed = Number(params.get('seed'));
+  // Destination is decoupled from category — any mode is valid with any category,
+  // so the URL is taken at face value (no normalization). 'view' is a legacy alias.
   const studioMode = isStudioMode(mode) ? mode : mode === 'view' ? 'lab' : studioDefaults.studioMode;
+  const routeCategory = isStudioCategory(cat) ? cat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushKind = params.get('brush') === 'unit' || explicitLabMode === 'unit' ? 'unit' : studioDefaults.brushKind;
@@ -248,8 +274,10 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   return {
     familyId: isStudioFamilyId(family) ? family : studioDefaults.familyId,
     studioMode,
-    category: isStudioCategory(cat) ? cat : undefined,
+    category: routeCategory,
     selectedAssetName: kit || undefined,
+    selectedArtworkName: art || undefined,
+    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -271,7 +299,9 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     // ?cat= so the chosen catalog survives a reload and is directly linkable.
     const catalogParams = new URLSearchParams();
     if (route.category && route.category !== 'tiles') catalogParams.set('cat', route.category);
-    if ((route.category === 'assets' || route.category === 'artwork') && route.selectedAssetName) catalogParams.set('kit', route.selectedAssetName);
+    // Keep the catalog URL clean: persist only the active category's own selection.
+    if (route.category === 'assets' && route.selectedAssetName) catalogParams.set('kit', route.selectedAssetName);
+    if (route.category === 'artwork' && route.selectedArtworkName) catalogParams.set('art', route.selectedArtworkName);
     const catalogQuery = catalogParams.toString();
     const nextHref = catalogQuery ? `${window.location.pathname}?${catalogQuery}` : window.location.pathname;
     const currentHref = `${window.location.pathname}${window.location.search}`;
@@ -284,7 +314,13 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   params.set('family', route.familyId);
   params.set('mode', route.studioMode);
   if (route.category && route.category !== 'tiles') params.set('cat', route.category);
-  if ((route.category === 'assets' || route.category === 'artwork') && route.selectedAssetName) params.set('kit', route.selectedAssetName);
+  if (route.studioMode === 'viewer') {
+    // The Viewer persists which kind it last held (asset/artwork/portrait) and,
+    // for the read-only kinds, the item name. Portrait state lives in localStorage.
+    params.set('vk', route.viewerKind ?? 'artwork');
+    if (route.viewerKind === 'asset' && route.selectedAssetName) params.set('kit', route.selectedAssetName);
+    else if (route.viewerKind === 'artwork' && route.selectedArtworkName) params.set('art', route.selectedArtworkName);
+  }
   if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
@@ -1241,12 +1277,12 @@ export function LevelEditorPage(): ReactElement {
   );
 }
 
-export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: 'tiles' | 'units' | 'assets' | 'artwork' } = {}): ReactElement {
+export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: StudioCategory } = {}): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
   const [familyId, setFamilyId] = useState<StudioFamilyId>(initialRoute.familyId);
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
-  const [category, setCategory] = useState<'tiles' | 'units' | 'assets' | 'artwork'>(initialRoute.category ?? initialCategory);
+  const [category, setCategory] = useState<StudioCategory>(initialRoute.category ?? initialCategory);
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
@@ -1258,7 +1294,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [assetFilter, setAssetFilter] = useState<AssetFilter>('all');
   const [assetSearch, setAssetSearch] = useState('');
   const [artworkSearch, setArtworkSearch] = useState('');
+  // Assets and artwork each own their own selection — never one shared field
+  // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
   const [selectedAssetName, setSelectedAssetName] = useState(initialRoute.selectedAssetName ?? 'gear');
+  const [selectedArtworkName, setSelectedArtworkName] = useState(initialRoute.selectedArtworkName ?? FIRST_ARTWORK_ID);
+  // Which item the Viewer is showing (independent of the catalog category).
+  const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [showFootprint, setShowFootprint] = useState(true);
@@ -1594,6 +1635,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       setStudioMode(route.studioMode);
       if (route.category) setCategory(route.category);
       if (route.selectedAssetName) setSelectedAssetName(route.selectedAssetName);
+      if (route.selectedArtworkName) setSelectedArtworkName(route.selectedArtworkName);
+      if (route.viewerKind) setViewerKind(route.viewerKind);
       setViewHasTarget(Boolean(route.selectedAssetId || route.selectedSlotMask || route.tileFilter === 'board'));
       setTileFilter(route.tileFilter);
       setLabMode(route.labMode);
@@ -1654,6 +1697,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       studioMode,
       category,
       selectedAssetName,
+      selectedArtworkName,
+      viewerKind,
       labMode,
       tileFilter,
       selectedPairId,
@@ -1666,7 +1711,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
@@ -1808,14 +1853,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
   // the header height constant (the Lab already shares this header — no second
   // row inside the board surface, which is what made the controls rail jump).
+  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : '';
+  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
       ? ['Catalog', category === 'units' ? 'Units' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : 'Tiles']
-      : category === 'assets'
-        ? ['Lab', 'Asset', selectedAssetName || '—']
-        : category === 'artwork'
-          ? ['Lab', 'Artwork', selectedAssetName || '—']
-          : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
+      : studioMode === 'viewer'
+        ? (viewerKind === 'portrait' ? ['Viewer', 'Portrait'] : ['Viewer', viewerKindLabel, viewerName || '—'])
+        : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
   const crumbMeta =
     studioMode === 'catalog'
       ? category === 'units'
@@ -1825,18 +1870,16 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           : category === 'artwork'
             ? `${artworkManifest.summary.total} artworks`
             : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
-      : category === 'assets'
-        ? 'preview on backdrops'
-        : category === 'artwork'
-          ? 'full-art preview'
-          : viewSubtitle;
+      : studioMode === 'viewer'
+        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : 'preview on backdrops')
+        : viewSubtitle;
   const openCatalogMode = (): void => {
     if (tileFilter === 'board') setTileFilter('base');
     setStudioMode('catalog');
   };
-  const openLabMode = (): void => {
-    if (category === 'assets' || category === 'artwork') { setStudioMode('lab'); return; }
-    openBoardLab();
+  const openViewer = (kind: ViewerKind): void => {
+    setViewerKind(kind);
+    setStudioMode('viewer');
   };
   const selectUnitInCatalog = (unitId: string): void => {
     setUnitBrushId(unitId);
@@ -1954,6 +1997,86 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     note: 'Select a unit card to place it in the shared lab board.',
   };
 
+  // The catalog is one registry, not a chain of `category === …` branches: every
+  // category supplies its grid (`main`) and its rail body (`controls`), and the
+  // selector tabs / main pane / controls are rendered by mapping or reading the
+  // active entry. Adding a category is one entry here — it cannot ship missing a
+  // shared control. (docs/studio-control-architecture.md)
+  const catalogCategories: { id: StudioCategory; label: string; hint: string; main: ReactElement; controls: ReactElement }[] = [
+    {
+      id: 'tiles', label: 'Tiles', hint: 'Browse terrain tiles.',
+      main: <CatalogGrid type={tilesCatalogType} />,
+      controls: <CatalogControls type={tilesCatalogType} />,
+    },
+    {
+      id: 'units', label: 'Units', hint: 'Browse chess-piece units.',
+      main: <CatalogGrid type={unitsCatalogType} />,
+      controls: <CatalogControls type={unitsCatalogType} />,
+    },
+    {
+      id: 'assets', label: 'Assets', hint: 'Browse the UI-kit asset library.',
+      main: <AssetLibraryStudio filter={assetFilter} search={assetSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="asset name…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <div className="tileset-tier-seg" aria-label="Process filter">
+            {(['all', 'forged', 'unverified'] as const).map((option) => (
+              <button key={option} type="button" className={assetFilter === option ? 'is-active' : ''} onClick={() => setAssetFilter(option)}>
+                {option === 'all' ? 'All' : option === 'forged' ? 'Forged' : 'Unverified'}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('asset')}>View Selected</button>
+        </>
+      ),
+    },
+    {
+      id: 'artwork', label: 'Artwork', hint: 'Browse the artwork library — scenes, portraits, key art, concepts.',
+      main: (
+        <ArtworkLibraryStudio
+          search={artworkSearch}
+          zoom={zoom}
+          selected={selectedArtworkName}
+          onSelect={setSelectedArtworkName}
+          onView={(id) => { setSelectedArtworkName(id); openViewer('artwork'); }}
+          onEditPortrait={() => openViewer('portrait')}
+        />
+      ),
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={artworkSearch} onChange={(event) => setArtworkSearch(event.target.value)} placeholder="artwork name…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('artwork')}>View Selected</button>
+        </>
+      ),
+    },
+  ];
+  const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
+
+  // The Viewer's tier selector — the Asset|Artwork split, represented as a control
+  // like the Catalog's category tabs and the Lab's Board/Tile/Unit focus. One
+  // selector, injected into whichever Viewer surface is active.
+  const viewerKindTabs = (
+    <div className="tileset-tier-seg" aria-label="Viewer kind">
+      <button type="button" className={viewerKind === 'asset' ? 'is-active' : ''} onClick={() => setViewerKind('asset')} title="View the selected UI-kit asset.">Asset</button>
+      <button type="button" className={viewerKind === 'artwork' ? 'is-active' : ''} onClick={() => setViewerKind('artwork')} title="View the selected artwork.">Artwork</button>
+      <button type="button" className={viewerKind === 'portrait' ? 'is-active' : ''} onClick={() => setViewerKind('portrait')} title="Edit unit portrait headshot crops.">Portrait</button>
+    </div>
+  );
+
   return (
     <main className="tileset-studio-page">
       <header className="tileset-studio-header">
@@ -1967,12 +2090,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           {crumbMeta ? <span className="tileset-crumb-meta">{crumbMeta}</span> : null}
         </div>
         <nav className="tileset-studio-actions" aria-label="Tileset studio navigation">
-          <span className="tileset-mode-tabs" aria-label="Workspace mode">
-            <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse asset catalogs.">
+          <span className="tileset-mode-tabs" aria-label="Workspace">
+            <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse the catalogs.">
               Catalog
             </button>
-            <button type="button" className={studioMode === 'lab' ? 'is-active' : ''} onClick={openLabMode} title="Open the shared board lab.">
+            <button type="button" className={studioMode === 'lab' ? 'is-active' : ''} onClick={openBoardLab} title="The board workbench — place and edit tiles and units.">
               Lab
+            </button>
+            <button type="button" className={studioMode === 'viewer' ? 'is-active' : ''} onClick={() => setStudioMode('viewer')} title="View one finished asset or artwork.">
+              Viewer
             </button>
           </span>
           <a href="/settings">Settings</a>
@@ -1982,85 +2108,35 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'artwork' ? 'is-artwork' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
-        {category === 'units' ? <CatalogGrid type={unitsCatalogType} /> : category === 'assets' ? <AssetLibraryStudio filter={assetFilter} search={assetSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} /> : category === 'artwork' ? <ArtworkLibraryStudio search={artworkSearch} zoom={zoom} selected={selectedAssetName} onSelect={setSelectedAssetName} /> : <CatalogGrid type={tilesCatalogType} />}
+        {activeCatalog.main}
         <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Catalog controls">
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
               <div className="tileset-tier-seg" aria-label="Catalog asset type">
-                <button
-                  type="button"
-                  className={category === 'tiles' ? 'is-active' : ''}
-                  onClick={() => setCategory('tiles')}
-                  title="Browse terrain tiles."
-                >
-                  Tiles
-                </button>
-                <button
-                  type="button"
-                  className={category === 'units' ? 'is-active' : ''}
-                  onClick={() => setCategory('units')}
-                  title="Browse chess-piece units."
-                >
-                  Units
-                </button>
-                <button
-                  type="button"
-                  className={category === 'assets' ? 'is-active' : ''}
-                  onClick={() => setCategory('assets')}
-                  title="Browse the UI-kit asset library."
-                >
-                  Assets
-                </button>
-                <button
-                  type="button"
-                  className={category === 'artwork' ? 'is-active' : ''}
-                  onClick={() => setCategory('artwork')}
-                  title="Browse the artwork library — scenes, portraits, key art, concepts."
-                >
-                  Artwork
-                </button>
+                {catalogCategories.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className={category === entry.id ? 'is-active' : ''}
+                    onClick={() => setCategory(entry.id)}
+                    title={entry.hint}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
               </div>
-              {category === 'units' ? <CatalogControls type={unitsCatalogType} /> : category === 'assets' ? (
-                <>
-                  <label className="tileset-catalog-search">
-                    <span>Search</span>
-                    <input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="asset name…" />
-                  </label>
-                  <label className="tileset-catalog-zoom">
-                    <span>Zoom</span>
-                    <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
-                  </label>
-                  <div className="tileset-tier-seg" aria-label="Process filter">
-                    {(['all', 'forged', 'unverified'] as const).map((option) => (
-                      <button key={option} type="button" className={assetFilter === option ? 'is-active' : ''} onClick={() => setAssetFilter(option)}>
-                        {option === 'all' ? 'All' : option === 'forged' ? 'Forged' : 'Unverified'}
-                      </button>
-                    ))}
-                  </div>
-                  <button type="button" className="tileset-view-action" onClick={() => setStudioMode('lab')}>View Selected</button>
-                </>
-              ) : category === 'artwork' ? (
-                <>
-                  <label className="tileset-catalog-search">
-                    <span>Search</span>
-                    <input type="search" value={artworkSearch} onChange={(event) => setArtworkSearch(event.target.value)} placeholder="artwork name…" />
-                  </label>
-                  <label className="tileset-catalog-zoom">
-                    <span>Zoom</span>
-                    <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
-                  </label>
-                  <button type="button" className="tileset-view-action" onClick={() => setStudioMode('lab')}>View Selected</button>
-                </>
-              ) : <CatalogControls type={tilesCatalogType} />}
+              {activeCatalog.controls}
             </div>
           </section>
         </aside>
         </>
-        ) : category === 'assets' ? (
-          <AssetLab name={selectedAssetName} onPickBoard={() => { setCategory('tiles'); openBoardLab(); }} />
-        ) : category === 'artwork' ? (
-          <ArtworkLab name={selectedAssetName} onPickBoard={() => { setCategory('tiles'); openBoardLab(); }} />
+        ) : studioMode === 'viewer' ? (
+          viewerKind === 'portrait'
+            ? <PortraitLab header={viewerKindTabs} />
+            : viewerKind === 'artwork'
+              ? <ArtworkLab name={selectedArtworkName} header={viewerKindTabs} />
+              : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
@@ -2104,7 +2180,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               <section className="tileset-inspector-section">
                 <h2>Controls</h2>
                 <div className="tileset-control-stack">
-              <span className="tileset-mode-tabs tileset-lab-component-tabs" aria-label="Component view">
+              <div className="tileset-tier-seg" aria-label="Component view">
                 <button
                   type="button"
                   className={labMode === 'board' ? 'is-active' : ''}
@@ -2131,8 +2207,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                 >
                   Unit
                 </button>
-              </span>
-                      <div className="tileset-segmented-control tileset-tools" aria-label="Board tool">
+              </div>
+                      <div className="tileset-tier-seg tileset-tools" aria-label="Board tool">
                         <button type="button" className={tool === 'select' ? 'is-active' : ''} onClick={() => setTool('select')} title="Select tool — click a tile to highlight it (then fill its neighbors). Doesn't paint or erase.">
                           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 2 L3 13 L6 10 L8 14.6 L9.8 13.8 L7.8 9.4 L12.5 9.4 Z" fill="currentColor" /></svg>
                           Select
@@ -2148,7 +2224,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       </div>
 
                       <p className="tileset-group-label">Brush</p>
-                      <div className="tileset-segmented-control" aria-label="Placeable brush type">
+                      <div className="tileset-tier-seg" aria-label="Placeable brush type">
                         <button type="button" className={brushKind === 'tile' ? 'is-active' : ''} onClick={() => setBrushKind('tile')} title="Paint terrain tiles.">
                           Tile
                         </button>
@@ -2171,7 +2247,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         <span className="tileset-brush-change">Pick in catalog ›</span>
                       </button>
                       {brushKind === 'unit' ? (
-                        <div className="tileset-segmented-control tileset-unit-facing" aria-label="Unit facing">
+                        <div className="tileset-tier-seg tileset-unit-facing" aria-label="Unit facing">
                           {(['south', 'east', 'north', 'west'] as Direction[]).map((dir) => (
                             <button
                               key={dir}
@@ -2219,7 +2295,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       </button>
                       {boardSectionOpen ? (
                         <>
-                          <div className="tileset-segmented-control" aria-label="Terrain scope">
+                          <div className="tileset-tier-seg" aria-label="Terrain scope">
                             <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} title="Generate using only the current family's tiles.">
                               Family
                             </button>
