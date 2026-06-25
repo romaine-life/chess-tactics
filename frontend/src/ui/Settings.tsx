@@ -72,7 +72,7 @@ function tabFromPath(pathname: string): SettingsTab {
 // and the UI-kit asset library are all categories within it. (The broader Design
 // Index still lives at /design directly.)
 const creatorTools: CreatorTool[] = [
-  { label: 'Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'The creator workspace — browse tiles, units, and the UI-kit asset library, all in one place.' },
+  { label: 'Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
 ];
 
 function asset(file: string): string {
@@ -200,11 +200,29 @@ function SettingsRow({
     <section className={`settings-row ${tall ? 'settings-row-tall' : ''}`}>
       {icon ? <img className="settings-row-icon" src={asset(icon)} alt="" aria-hidden="true" /> : null}
       <div className="settings-row-copy">
-        <h3>{title}</h3>
+        <h4>{title}</h4>
         {description ? <p>{description}</p> : null}
       </div>
       {value ? <div className="settings-row-value">{value}</div> : null}
       {children ? <div className="settings-row-control">{children}</div> : null}
+    </section>
+  );
+}
+
+// A labeled cluster of rows. Purely organizational: a small uppercase eyebrow
+// (h3, between the tab's h2 and each row's h4) plus its grouped rows, so a long
+// settings list reads as scannable sections instead of one undifferentiated stack.
+function SettingsSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">{title}</h3>
+      <div className="settings-section-rows">{children}</div>
     </section>
   );
 }
@@ -347,71 +365,83 @@ export function Settings(): ReactElement {
 
   const renderGeneral = () => (
     <>
-      <SettingsRow
-        icon="icon-info.png"
-        title="Account"
-        description={signedIn ? 'Signed in profile for this browser.' : 'Guest profile for this browser.'}
-        value={<span>{signedIn ? 'Ready' : 'Guest'}</span>}
-      />
-      <SettingsRow
-        icon="icon-monitor.png"
-        title="UI Scale"
-        description="Interface scale for this browser."
-      >
-        <Stepper
-          value={settings.uiScale}
-          suffix="%"
-          decreaseLabel="Decrease UI Scale"
-          increaseLabel="Increase UI Scale"
-          onDecrease={() => adjustScale(-5)}
-          onIncrease={() => adjustScale(5)}
+      <SettingsSection title="Account">
+        <SettingsRow
+          icon="icon-info.png"
+          title="Account"
+          description={signedIn ? 'Signed in profile for this browser.' : 'Guest profile for this browser.'}
+          value={<span>{signedIn ? 'Ready' : 'Guest'}</span>}
         />
-      </SettingsRow>
-      <SettingsRow
-        icon="icon-reset.png"
-        title="Reset to Defaults"
-        description={confirmingReset ? 'Press reset again to confirm.' : 'Restore General and Audio settings for this browser.'}
-        value={<span>{confirmingReset ? 'Confirm' : 'Ready'}</span>}
-      >
-        <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
-      </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title="Interface">
+        <SettingsRow
+          icon="icon-monitor.png"
+          title="UI Scale"
+          description="Interface scale for this browser."
+        >
+          <Stepper
+            value={settings.uiScale}
+            suffix="%"
+            decreaseLabel="Decrease UI Scale"
+            increaseLabel="Increase UI Scale"
+            onDecrease={() => adjustScale(-5)}
+            onIncrease={() => adjustScale(5)}
+          />
+        </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title="Defaults">
+        <SettingsRow
+          icon="icon-reset.png"
+          title="Reset to Defaults"
+          description={confirmingReset ? 'Press reset again to confirm.' : 'Restore General and Audio settings for this browser.'}
+          value={<span>{confirmingReset ? 'Confirm' : 'Ready'}</span>}
+        >
+          <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
+        </SettingsRow>
+      </SettingsSection>
     </>
   );
 
   const renderAudio = () => (
     <>
-      <SettingsRow title="Master Audio" description="Mute or restore all browser audio for Chess Tactics.">
-        <SettingsToggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} />
-      </SettingsRow>
-      <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
-        <SettingsToggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
-      </SettingsRow>
-      <SettingsRow icon="icon-music.png" title="Music Volume" description="Set the target music mix for this browser.">
-        <Stepper
-          value={settings.musicVolume}
-          suffix="%"
-          decreaseLabel="Lower Music Volume"
-          increaseLabel="Raise Music Volume"
-          onDecrease={() => updateSetting('musicVolume', clamp(settings.musicVolume - 5, 0, 100, DEFAULT_SETTINGS.musicVolume))}
-          onIncrease={() => updateSetting('musicVolume', clamp(settings.musicVolume + 5, 0, 100, DEFAULT_SETTINGS.musicVolume))}
-        />
-      </SettingsRow>
-      <SettingsRow icon="icon-effects.png" title="Effects Volume" description="Set the target effects mix for this browser.">
-        <Stepper
-          value={settings.effectsVolume}
-          suffix="%"
-          decreaseLabel="Lower Effects Volume"
-          increaseLabel="Raise Effects Volume"
-          onDecrease={() => updateSetting('effectsVolume', clamp(settings.effectsVolume - 5, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
-          onIncrease={() => updateSetting('effectsVolume', clamp(settings.effectsVolume + 5, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
-        />
-      </SettingsRow>
-      <SettingsRow icon="icon-interface-sounds.png" title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
-        <SettingsToggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
-      </SettingsRow>
-      <SettingsRow icon="icon-info.png" title="View Tracks" description={tracksStatus || (tracks ? `${tracks.length} tracks loaded.` : 'Load the active background music playlist.')}>
-        <SettingsButton onClick={viewTracks}>View Tracks</SettingsButton>
-      </SettingsRow>
+      <SettingsSection title="Output">
+        <SettingsRow title="Master Audio" description="Mute or restore all browser audio for Chess Tactics.">
+          <SettingsToggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} />
+        </SettingsRow>
+        <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
+          <SettingsToggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
+        </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title="Mixing">
+        <SettingsRow icon="icon-music.png" title="Music Volume" description="Set the target music mix for this browser.">
+          <Stepper
+            value={settings.musicVolume}
+            suffix="%"
+            decreaseLabel="Lower Music Volume"
+            increaseLabel="Raise Music Volume"
+            onDecrease={() => updateSetting('musicVolume', clamp(settings.musicVolume - 5, 0, 100, DEFAULT_SETTINGS.musicVolume))}
+            onIncrease={() => updateSetting('musicVolume', clamp(settings.musicVolume + 5, 0, 100, DEFAULT_SETTINGS.musicVolume))}
+          />
+        </SettingsRow>
+        <SettingsRow icon="icon-effects.png" title="Effects Volume" description="Set the target effects mix for this browser.">
+          <Stepper
+            value={settings.effectsVolume}
+            suffix="%"
+            decreaseLabel="Lower Effects Volume"
+            increaseLabel="Raise Effects Volume"
+            onDecrease={() => updateSetting('effectsVolume', clamp(settings.effectsVolume - 5, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
+            onIncrease={() => updateSetting('effectsVolume', clamp(settings.effectsVolume + 5, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
+          />
+        </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title="Interface">
+        <SettingsRow icon="icon-interface-sounds.png" title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
+          <SettingsToggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
+        </SettingsRow>
+        <SettingsRow icon="icon-info.png" title="View Tracks" description={tracksStatus || (tracks ? `${tracks.length} tracks loaded.` : 'Load the active background music playlist.')}>
+          <SettingsButton onClick={viewTracks}>View Tracks</SettingsButton>
+        </SettingsRow>
+      </SettingsSection>
     </>
   );
 
@@ -426,19 +456,19 @@ export function Settings(): ReactElement {
   );
 
   const renderCreatorTools = () => (
-    <>
+    <SettingsSection title="Workspaces">
       {creatorTools.map((tool) => (
         <SettingsRow key={tool.href} icon={tool.icon} title={tool.label} description={tool.description}>
           <SettingsButton tone="primary" href={tool.href} ariaLabel={`Open ${tool.label}`}>Open</SettingsButton>
         </SettingsRow>
       ))}
-    </>
+    </SettingsSection>
   );
 
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
       <div className="settings-screen">
-        <header className="settings-header-frame">
+        <header className="settings-frame settings-header-frame">
           <a className="settings-brand" href="/">
             <img className="settings-brand-mark" src="/assets/ui/kit/icons/brand-shield.png" alt="" aria-hidden="true" />
             <span className="settings-brand-copy">
@@ -462,7 +492,7 @@ export function Settings(): ReactElement {
         </header>
 
         <div className="settings-shell">
-          <aside className="settings-rail-frame" aria-label="Settings sections">
+          <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
               <a
                 key={tab.id}
@@ -482,7 +512,7 @@ export function Settings(): ReactElement {
             ))}
           </aside>
 
-          <main className="settings-main-frame">
+          <main className="settings-frame settings-main-frame">
             <div className="settings-panel-heading">
               <p>Settings</p>
               <h2>{active.label}</h2>

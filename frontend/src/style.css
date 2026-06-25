@@ -1549,10 +1549,17 @@ h1 {
   --ds-font-sans: "Advance Wars 2 GBA", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
   --ds-font-display: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
   --ds-font-pixel: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
-  --ds-text-xs: .72rem;
-  --ds-text-sm: .85rem;
-  --ds-text-md: 1rem;
-  --ds-text-lg: 1.3rem;
+  /* Type scale — one modular ramp (~1.2 ratio), responsive via clamp so every
+     surface scales together instead of each role inventing its own clamp triplet.
+     Map text ROLES onto these steps; don't hand-pick font-sizes per element.
+       2xs eyebrow/status · xs caption/button · sm control label · md body/row title
+       lg section/brand heading · xl page/panel display */
+  --ds-text-2xs: clamp(.62rem, .72vw, .72rem);
+  --ds-text-xs:  clamp(.72rem, .82vw, .82rem);
+  --ds-text-sm:  clamp(.82rem, .95vw, .95rem);
+  --ds-text-md:  clamp(.95rem, 1.1vw, 1.1rem);
+  --ds-text-lg:  clamp(1.18rem, 1.55vw, 1.6rem);
+  --ds-text-xl:  clamp(1.5rem, 2.1vw, 2.3rem);
   /* space */
   --ds-space-1: 4px;
   --ds-space-2: 8px;
@@ -12012,24 +12019,34 @@ button.tileset-relationship-cell {
   transform-origin: center;
 }
 
+/* Shared frame primitive. One panel.png 9-slice with a SINGLE corner-size token,
+   so every settings frame's gold corner brackets render at the same scale no matter
+   how thick or padded the individual frame is. Per-frame classes below layer only
+   layout (grid/padding/size) on top — they must NOT redeclare the border, or the
+   corners desync again (which is exactly the bug this replaces: header/rail/main
+   each set their own 9/18/24px border, scaling the shared 36px corner three ways). */
+.settings-frame {
+  --settings-frame-corner: 16px;
+  border: var(--settings-frame-corner) solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 36 fill / var(--settings-frame-corner) round;
+  box-sizing: border-box;
+}
+
 .settings-header-frame {
   align-items: center;
-  border: 9px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 36 fill / 9px round;
   block-size: clamp(94px, 7.6vw, 116px);
-  box-sizing: border-box;
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
   grid-template-columns: minmax(360px, 1fr) 360px 402px;
-  padding: 2px clamp(12px, 1.3vw, 20px);
+  padding: 0 clamp(12px, 1.3vw, 20px);
 }
 
 .settings-brand {
   align-items: center;
   color: #eef8ff;
   display: grid;
-  gap: clamp(12px, 1.15vw, 18px);
-  grid-template-columns: clamp(54px, 5vw, 72px) minmax(0, 1fr);
+  gap: clamp(10px, 1vw, 16px);
+  grid-template-columns: clamp(44px, 4vw, 58px) minmax(0, 1fr);
   min-width: 0;
   text-decoration: none;
   width: min(430px, 100%);
@@ -12037,11 +12054,11 @@ button.tileset-relationship-cell {
 
 .settings-brand-mark {
   display: block;
-  height: clamp(72px, 6.1vw, 94px);
+  height: clamp(44px, 4vw, 58px);
   image-rendering: pixelated;
   object-fit: contain;
   object-position: center;
-  width: clamp(54px, 5vw, 72px);
+  width: clamp(44px, 4vw, 58px);
 }
 
 .settings-brand-copy {
@@ -12058,7 +12075,7 @@ button.tileset-relationship-cell {
 
 .settings-brand strong,
 .settings-panel-heading h2,
-.settings-row h3,
+.settings-row h4,
 .settings-tab strong {
   color: #f6fbff;
   line-height: 1.05;
@@ -12068,7 +12085,7 @@ button.tileset-relationship-cell {
 
 .settings-brand strong {
   color: #f0eadb;
-  font-size: clamp(1.16rem, 1.72vw, 1.86rem);
+  font-size: var(--ds-text-lg);
   font-weight: 400;
   line-height: 1.08;
   text-transform: uppercase;
@@ -12088,7 +12105,7 @@ button.tileset-relationship-cell {
 .settings-brand em,
 .settings-panel-heading p {
   color: #79d3ff;
-  font-size: clamp(.64rem, .78vw, .84rem);
+  font-size: var(--ds-text-2xs);
   text-transform: uppercase;
 }
 
@@ -12121,7 +12138,7 @@ button.tileset-relationship-cell {
 
 .settings-account strong {
   color: #f6fbff;
-  font-size: clamp(.72rem, .86vw, .9rem);
+  font-size: var(--ds-text-sm);
   line-height: 1.05;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12131,7 +12148,7 @@ button.tileset-relationship-cell {
 
 .settings-account em {
   color: #79d3ff;
-  font-size: clamp(.54rem, .64vw, .68rem);
+  font-size: var(--ds-text-2xs);
   font-style: normal;
   line-height: 1.2;
   text-transform: uppercase;
@@ -12153,12 +12170,9 @@ button.tileset-relationship-cell {
 
 .settings-rail-frame {
   align-content: start;
-  border: 18px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 36 fill / 18px round;
-  box-sizing: border-box;
   display: grid;
   gap: clamp(9px, .8vw, 13px);
-  padding: clamp(6px, .7vw, 10px) clamp(4px, .5vw, 8px);
+  padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
 }
 
 .settings-tab {
@@ -12207,24 +12221,21 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab strong {
-  font-size: clamp(.82rem, .96vw, 1rem);
+  font-size: var(--ds-text-sm);
 }
 
 .settings-tab em {
-  font-size: clamp(.58rem, .66vw, .7rem);
+  font-size: var(--ds-text-2xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .settings-main-frame {
-  border: 24px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 36 fill / 24px round;
-  box-sizing: border-box;
   display: grid;
   grid-template-rows: clamp(74px, 7vw, 94px) minmax(0, 1fr);
   min-height: 0;
-  padding: clamp(6px, .8vw, 12px) clamp(10px, 1.1vw, 18px);
+  padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
 }
 
 .settings-panel-heading {
@@ -12237,7 +12248,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-panel-heading h2 {
-  font-size: clamp(1.42rem, 2.2vw, 2.48rem);
+  font-size: var(--ds-text-xl);
   max-inline-size: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12247,12 +12258,35 @@ button.tileset-relationship-cell {
 .settings-panel-content {
   align-content: start;
   display: grid;
-  gap: clamp(8px, .8vw, 12px);
+  /* Inter-section spacing — looser than the row gap so groups read as distinct. */
+  gap: clamp(14px, 1.3vw, 22px);
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
   scrollbar-color: #58bce8 #07121c;
   scrollbar-width: thin;
+}
+
+/* Labeled row groups: an uppercase eyebrow over a tight cluster of rows. */
+.settings-section {
+  display: grid;
+  gap: clamp(5px, .5vw, 9px);
+}
+
+.settings-section-title {
+  color: #79d3ff;
+  font-size: var(--ds-text-2xs);
+  font-weight: 400;
+  letter-spacing: .14em;
+  margin: 0;
+  padding-left: 6px;
+  text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+}
+
+.settings-section-rows {
+  display: grid;
+  gap: clamp(8px, .8vw, 12px);
 }
 
 .settings-row {
@@ -12280,18 +12314,18 @@ button.tileset-relationship-cell {
   width: clamp(38px, 4vw, 64px);
 }
 
-.settings-row h3 {
-  font-size: clamp(.9rem, 1.05vw, 1.12rem);
+.settings-row h4 {
+  font-size: var(--ds-text-md);
 }
 
 .settings-row p {
-  font-size: clamp(.7rem, .78vw, .84rem);
+  font-size: var(--ds-text-xs);
   margin-top: 3px;
 }
 
 .settings-row-value {
   color: #eaf7ff;
-  font-size: clamp(.86rem, 1vw, 1.08rem);
+  font-size: var(--ds-text-sm);
   min-width: 74px;
   text-align: right;
   text-transform: uppercase;
@@ -12335,7 +12369,7 @@ button.tileset-relationship-cell {
 
 .settings-chrome-button span {
   display: block;
-  font-size: clamp(.68rem, .74vw, .78rem);
+  font-size: var(--ds-text-xs);
   line-height: 1;
   pointer-events: none;
   text-transform: uppercase;
@@ -12401,7 +12435,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-toggle-label {
-  font-size: .82rem;
+  font-size: var(--ds-text-sm);
   letter-spacing: 1px;
   text-shadow: 0 2px 0 #02070b;
   text-transform: uppercase;
@@ -12637,6 +12671,21 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 .tileset-studio-card.is-asset .asset-card-image img { image-rendering: pixelated; max-height: calc(72% * var(--tile-zoom, 1)); max-width: calc(72% * var(--tile-zoom, 1)); object-fit: contain; }
+
+/* Artwork cards — large landscape thumbnails, smooth (NOT pixelated, these are
+   authored illustrations not 64px glyphs). Zoom scales the thumbnail height. */
+.tileset-studio-card.is-artwork .tileset-studio-card-image { min-height: calc(168px * var(--tile-zoom, 1)); }
+.tileset-studio-card.is-artwork .tileset-studio-card-image img {
+  box-sizing: border-box;
+  height: 100%;
+  image-rendering: auto;
+  object-fit: contain;
+  padding: 6px;
+  width: 100%;
+}
+/* Artwork lab — one big contained preview on the checker stage. */
+.al-artwork-stage { height: min(58vh, 540px); width: min(720px, 100%); }
+.al-artwork-lg { image-rendering: auto; max-height: 100%; max-width: 100%; object-fit: contain; }
 .asset-prov { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; }
 .asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
 .asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
