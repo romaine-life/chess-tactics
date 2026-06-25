@@ -9973,7 +9973,6 @@ h1 {
   align-self: stretch;
 }
 
-.tileset-catalog-controls .tileset-segmented-control,
 .tileset-catalog-controls .tileset-view-action {
   width: 100%;
 }
@@ -10221,7 +10220,6 @@ button.tileset-relationship-cell {
 }
 
 .tileset-inspector-tabs button,
-.tileset-segmented-control button,
 .tileset-control-stack button,
 .tileset-wide-action {
   min-height: 34px;
@@ -10241,7 +10239,6 @@ button.tileset-relationship-cell {
 }
 
 .tileset-inspector-tabs button.is-active,
-.tileset-segmented-control button.is-active,
 .tileset-control-stack button.is-active {
   color: #f3fbff;
   background: rgba(25, 94, 132, 0.95);
@@ -10252,7 +10249,6 @@ button.tileset-relationship-cell {
   border-color: transparent;
 }
 
-.tileset-segmented-control button:disabled,
 .tileset-control-stack button:disabled,
 .tileset-wide-action:disabled {
   cursor: default;
@@ -10303,15 +10299,10 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-.tileset-segmented-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 6px;
-}
-
-/* Tier selector (category / surface / focus / process) — one tight joined
-   segmented control on a SINGLE row, never the fat two-row button stack.
-   This is the instrument-grade density the spec calls for. */
+/* Tier selector (category / surface / focus / process / tool / option) — one
+   tight joined segmented control on a SINGLE row, never the fat two-row button
+   stack. This is the instrument-grade density the spec calls for, and it is the
+   ONE segmented-control primitive: Catalog tiers and every Lab selector use it. */
 .tileset-tier-seg {
   display: grid;
   grid-auto-flow: column;
@@ -10350,11 +10341,6 @@ button.tileset-relationship-cell {
 .tileset-tier-seg button:disabled {
   color: rgba(174, 191, 210, 0.4);
   cursor: default;
-}
-
-.tileset-segmented-control.tileset-tools,
-.tileset-segmented-control.tileset-focus-seg {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .tileset-tools button {
