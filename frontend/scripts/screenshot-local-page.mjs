@@ -16,7 +16,7 @@ const url = args.get('url') ?? 'http://localhost:3000/';
 const out = resolve(args.get('out') ?? '../.pwshot/local-page.png');
 const width = Number(args.get('width') ?? 1280);
 const height = Number(args.get('height') ?? 720);
-const budget = Number(args.get('budget') ?? 3000);
+const budget = Number(args.get('budget') ?? 8000); // --timeout cap (ms); normal pages still capture at load
 
 const candidates = [
   process.env.CHROME_PATH,
@@ -49,12 +49,20 @@ const chromeArgs = [
   `--user-data-dir=${profile}`,
   `--window-size=${width},${height}`,
   '--force-device-scale-factor=1',
-  `--virtual-time-budget=${budget}`,
+  '--hide-scrollbars',
+  // --timeout (cap the wait, then capture) instead of --virtual-time-budget.
+  // virtual-time advances a fake clock and waits for network IDLE, which hangs
+  // forever on pages that never go idle — e.g. the main menu's rain ambience
+  // keeps a socket open. --timeout captures after load, or after `budget` ms for
+  // never-idle pages, so every surface is screenshottable. The two are mutually
+  // exclusive (combining them crashes the renderer).
+  `--timeout=${budget}`,
   `--screenshot=${out}`,
   url,
 ];
 
-const result = spawnSync(browser, chromeArgs, { encoding: 'utf8' });
+// Hard wall-clock cap so a wedged Chrome can never hang the caller.
+const result = spawnSync(browser, chromeArgs, { encoding: 'utf8', timeout: budget + 8000, killSignal: 'SIGKILL' });
 if (result.status !== 0) {
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
