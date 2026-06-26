@@ -54,21 +54,27 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
         the same ground point, so they recombine pixel-perfectly when stacked back on the tile.
       </p>
 
-      <figure className="doodad-layer-figure" aria-label="The grass tuft's two halves and their recombination">
+      <figure className="doodad-layer-figure" aria-label="A unit on a grass tile, shown with the back layer only, then with the front layer added so it falls over the unit's shins">
         <span className="doodad-layer-cell">
-          <span className="doodad-layer-art"><img src="/assets/doodads/grass-tuft/back.png" alt="Back half of the grass tuft" /></span>
-          <figcaption className="doodad-layer-cap">Back · z base−1</figcaption>
-        </span>
-        <span className="doodad-layer-cell">
-          <span className="doodad-layer-art"><img src="/assets/doodads/grass-tuft/front.png" alt="Front half of the grass tuft" /></span>
-          <figcaption className="doodad-layer-cap">Front · z base+1</figcaption>
-        </span>
-        <span className="doodad-layer-cell">
-          <span className="doodad-layer-art">
-            <img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" />
-            <img src="/assets/doodads/grass-tuft/front.png" alt="" aria-hidden="true" />
+          <span className="doodad-layer-scene">
+            <span className="doodad-layer-stage">
+              <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
+              <span className="board-unit-seat" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
+            </span>
           </span>
-          <figcaption className="doodad-layer-cap">Recombined (unit sits between)</figcaption>
+          <figcaption className="doodad-layer-cap"><strong>Back layer only.</strong> The whole tuft is behind the unit — it just stands in front of it.</figcaption>
+        </span>
+        <span className="doodad-layer-cell">
+          <span className="doodad-layer-scene">
+            <span className="doodad-layer-stage">
+              <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
+              <span className="board-unit-seat" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/front.png" alt="" aria-hidden="true" /></span>
+            </span>
+          </span>
+          <figcaption className="doodad-layer-cap"><strong>Back + front.</strong> The front blades cross over the shins — now the unit stands <em>inside</em> the tuft.</figcaption>
         </span>
       </figure>
 
