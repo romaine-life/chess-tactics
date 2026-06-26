@@ -42,6 +42,16 @@ export function buildFrameFrom(corner, edge, fill, W, H) {
 export function buildFrame(W, H) { return buildFrameFrom(corner, edge, fill, W, H); }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  console.log(`
+┌─ assemble-frame · the canonical way to build a scalable 9-slice kit frame (ADR-0012) ─
+│ Source = ATOMS: corner / edge / fill. The ONE corner is mirrored into all four, so
+│ the frame is symmetric BY CONSTRUCTION — a lopsided / "J" corner is impossible.
+│ Codex's generate job is the ATOMS (above all the corner), never the whole frame;
+│ whole-frame generation is retired for chrome. New palette (e.g. steel vs the gold
+│ kit atoms)? Recolor the corner atom first (luminance-matched swap, ADR-0009), then
+│ assemble. Review the result live in /artwork-compare (ADR-0005) before landing.
+└───────────────────────────────────────────────────────────────────────────────────────
+`);
   const out = `${root}public/assets/ui/kit/_gen/`;
   mkdirSync(out, { recursive: true });
   writeFileSync(`${out}panel.png`, PNG.sync.write(buildFrame(128, 128)));

@@ -15,6 +15,8 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0009](0009-mode-button-from-atoms.md) | Settings mode buttons assembled from atoms (symmetric); retire extracted tab crops | accepted | 2026-06-26 |
 | [0010](0010-settings-header-buttons.md) | Header buttons unified to bracket frames (cyan/gold); header content centered | accepted | 2026-06-26 |
 | [0011](0011-chrome-art-generated-not-extracted.md) | Chrome art is generated (codex, method-verified) or atom-assembled — not extracted/redrawn | accepted | 2026-06-26 |
+| [0012](0012-nine-slice-frames-are-atom-assembled.md) | Scalable 9-slice chrome frames are atom-assembled (corner mirrored → symmetric); whole-frame generation retired for chrome | accepted | 2026-06-26 |
+| [0013](0013-transparency-chroma-key-via-subscription.md) | Generated-chrome transparency = chroma-key + despill via the subscription codex; native paid-API path rejected on cost | accepted | 2026-06-26 |
 
 ## Minor decisions (no ADR)
 

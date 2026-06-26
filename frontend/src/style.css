@@ -12420,15 +12420,20 @@ button.tileset-relationship-cell {
 .settings-row {
   align-items: center;
   box-sizing: border-box;
+  /* INTERIM row frame: this row.png came from the now-retired whole-frame method.
+     The canonical method is atom assembly (ADR-0012) — this asset must be replaced
+     by an atom-assembled steel row once the row's atoms exist. Slice 16. */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 16 fill / 12px stretch;
   display: grid;
   gap: 16px;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
-  min-height: 56px;
-  padding: 12px 16px;
+  min-height: 60px;
+  padding: 6px 16px;
 }
 
 .settings-row + .settings-row {
-  border-top: 1px solid rgba(67, 127, 179, 0.16);
+  margin-top: 10px;
 }
 
 .settings-row-tall {
