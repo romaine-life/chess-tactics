@@ -25,6 +25,11 @@ function unitSprite(piece: Piece | null): string | null {
   return pieceSpritePath(piece.type, PALETTE_FOR_SIDE[piece.side], piece.facing);
 }
 
+/** Whole numbers print bare; fractional distances print to one decimal (6.5). */
+function fmtStat(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
 function hpText(piece: Piece | null): string {
   if (!piece) return '--';
   const hp = piece.hp ?? 1;
@@ -146,6 +151,18 @@ export function SkirmishHud() {
             </dl>
           </div>
         </div>
+        {focused && (focused.side === 'player' || focused.side === 'enemy') && (
+          <div className="skirmish-service-record">
+            <h3>Service Record</h3>
+            <dl>
+              <div><dt>Used</dt><dd>{focused.timesUsed ?? 0}</dd></div>
+              <div><dt>Dist</dt><dd>{fmtStat(focused.squaresTraveled ?? 0)}</dd></div>
+              <div><dt>Kills</dt><dd>{focused.enemiesKilled ?? 0}</dd></div>
+              <div><dt>Escapes</dt><dd>{focused.escapes ?? 0}</dd></div>
+              <div><dt>Threats</dt><dd>{focused.threatsMade ?? 0}</dd></div>
+            </dl>
+          </div>
+        )}
       </section>
 
       <section className="skirmish-card skirmish-actions-card" aria-label="Actions">

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-24",
+  "generated": "2026-06-26",
   "gate": "verify-kit-asset.mjs --glyph (transparency hygiene: magenta despill + edge bleed; anti-aliasing allowed)",
   "summary": {
     "pass": 30,
@@ -14,10 +14,10 @@
         {
           "name": "brand-shield",
           "url": "/assets/ui/kit/icons/brand-shield.png",
-          "w": 64,
-          "h": 64,
+          "w": 256,
+          "h": 256,
           "magenta": 0,
-          "semiPct": 3.2,
+          "semiPct": 1.5,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -388,16 +388,16 @@
       "h": 46
     },
     {
-      "name": "tab-active",
-      "url": "/assets/ui/kit/tab-active.png",
-      "w": 44,
-      "h": 89
+      "name": "mode-button",
+      "url": "/assets/ui/kit/mode-button.png",
+      "w": 72,
+      "h": 72
     },
     {
-      "name": "tab-inactive",
-      "url": "/assets/ui/kit/tab-inactive.png",
-      "w": 44,
-      "h": 83
+      "name": "mode-button-active",
+      "url": "/assets/ui/kit/mode-button-active.png",
+      "w": 72,
+      "h": 72
     },
     {
       "name": "field-input",

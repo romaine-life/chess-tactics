@@ -30,6 +30,9 @@ existing one. That is the disease this standard ends.
 
 ## The decision
 
+> Recorded as [ADR-0002](adr/0002-nine-slice-border-image-for-pixel-art-chrome.md);
+> this section is the consolidated current-state of that decision.
+
 **One kit = the Settings art direction, rendered with the Lobbies technique.**
 
 1. **One technique — 9-slice via `border-image` of the full asset.** A single

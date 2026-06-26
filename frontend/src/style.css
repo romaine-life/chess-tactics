@@ -6353,6 +6353,69 @@ h1 {
   box-shadow: 0 0 7px rgba(56, 215, 255, .38);
 }
 
+.skirmish-service-record {
+  border-top: 1px solid rgba(76, 140, 171, .28);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.skirmish-service-record h3 {
+  color: #94daf5;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: .82rem;
+  font-weight: 400;
+  letter-spacing: .5px;
+  line-height: 1;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.skirmish-service-record dl {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin: 0;
+}
+
+/* Each stat is a self-contained chip: number on top, label beneath. Enclosure +
+   stacking keep the value tied to its own label (the old label-then-far-right
+   number read ambiguously against the neighbouring column). A single row of five
+   keeps the panel as short as the original so the rail still fits. */
+.skirmish-service-record dl div {
+  align-items: center;
+  background: rgba(3, 12, 19, .5);
+  border: 1px solid rgba(64, 115, 147, .32);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px 1px;
+}
+
+.skirmish-service-record dt {
+  color: #8fb6c8;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: .56rem;
+  letter-spacing: 0;
+  margin: 0;
+  max-width: 100%;
+  order: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.skirmish-service-record dd {
+  color: #fff5df;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.05rem;
+  line-height: 1;
+  margin: 0;
+  order: 1;
+}
+
 .skirmish-actions {
   display: grid;
   gap: 6px;
@@ -12110,11 +12173,12 @@ button.tileset-relationship-cell {
 }
 
 .settings-header-frame {
+  align-content: center;
   align-items: center;
   block-size: var(--app-header-h);
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
-  grid-template-columns: minmax(360px, 1fr) 360px 402px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   padding: 0 clamp(12px, 1.3vw, 20px);
 }
 
@@ -12148,7 +12212,7 @@ button.tileset-relationship-cell {
 .brand-lockup-copy strong {
   color: #f0eadb;
   font-size: var(--ds-text-lg);
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.04;
   text-shadow: 0 2px 0 #02070b;
   text-transform: uppercase;
@@ -12157,9 +12221,9 @@ button.tileset-relationship-cell {
 
 .brand-lockup-copy em {
   color: #79d3ff;
-  font-size: var(--ds-text-2xs);
+  font-size: var(--ds-text-sm);
   font-style: normal;
-  letter-spacing: .08em;
+  letter-spacing: .14em;
   line-height: 1.2;
   text-transform: uppercase;
 }
@@ -12207,11 +12271,10 @@ button.tileset-relationship-cell {
   align-self: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) 196px;
+  grid-template-columns: minmax(0, 1fr) auto;
   justify-content: flex-end;
-  min-height: 54px;
   min-width: 0;
-  padding: 4px 4px 4px 12px;
+  padding: 0 4px 0 12px;
 }
 
 .settings-account span {
@@ -12242,6 +12305,11 @@ button.tileset-relationship-cell {
   display: grid;
   grid-template-columns: minmax(244px, 304px) minmax(0, 1fr);
   gap: clamp(8px, .85vw, 14px);
+  /* Body (rail + content) is a centred contained block beneath the full-bleed top
+     bar, so rows don't stretch the full width while the title bar stays flush. */
+  inline-size: 100%;
+  max-inline-size: clamp(900px, 88vw, 1240px);
+  justify-self: center;
   min-height: 0;
   overflow: hidden;
 }
@@ -12259,32 +12327,47 @@ button.tileset-relationship-cell {
   padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
 }
 
+/* Clean sidebar nav — icon + label rows; the SELECTED item is highlighted with a
+   subtle fill + accent bar, the rest stay plain. No per-item frame (the rail panel
+   already carries the gold-bracket chrome). Mirrors the grouped-list content. */
 .settings-tab {
-  --settings-tab-icon-slot: 42px;
-  --settings-tab-icon-size: 36px;
+  --settings-tab-icon-slot: 36px;
+  --settings-tab-icon-size: 28px;
   align-items: center;
   appearance: none;
-  border: 10px solid transparent;
-  border-width: 10px 13px;
-  border-image: url("/assets/ui/kit/tab-inactive.png") 12 20 fill / 10px 13px stretch;
+  background: transparent;
+  /* Mode-button frame: atom-assembled (symmetric by construction), gold brackets;
+     active swaps to the cyan-bracket frame. Built by scripts/generate-mode-button.mjs. */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border-radius: 0;
   box-sizing: border-box;
-  color: #eef8ff;
+  color: #c4d6e6;
   display: grid;
-  gap: 12px;
+  gap: 11px;
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
-  min-height: clamp(48px, 4.3vw, 58px);
-  padding: 4px 8px 4px 10px;
+  image-rendering: pixelated;
+  min-height: 56px;
+  padding: 7px 12px;
   text-align: left;
   text-decoration: none;
+  transition: color .14s ease;
 }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
-  transform: translateX(-3px);
+}
+
+.settings-tab:not(.is-active):hover {
+  background: rgba(47, 143, 230, 0.1);
+  color: #eaf4ff;
 }
 
 .settings-tab.is-active {
-  border-image-source: url("/assets/ui/kit/tab-active.png");
+  background: transparent;
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  box-shadow: none;
+  color: #f3fbff;
 }
 
 .settings-tab-icon {
@@ -12322,6 +12405,8 @@ button.tileset-relationship-cell {
   block-size: clamp(64px, 6vw, 80px);
   display: grid;
   gap: 3px;
+  inline-size: min(100%, 880px);
+  justify-self: center;
   min-block-size: 0;
   padding: 0;
 }
@@ -12339,6 +12424,10 @@ button.tileset-relationship-cell {
   display: grid;
   /* Inter-section spacing — looser than the row gap so groups read as distinct. */
   gap: clamp(14px, 1.3vw, 22px);
+  /* Contain the row column to a comfortable reading width and centre it, so rows
+     don't stretch the full bleed and leave values floating at the far edge. */
+  inline-size: min(100%, 880px);
+  justify-self: center;
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
@@ -12374,34 +12463,41 @@ button.tileset-relationship-cell {
   height: 1px;
 }
 
+/* Grouped list: one subtle container per section, rows separated by hairline
+   dividers — not an ornate frame around every row. The gold-bracket chrome stays
+   on the outer panels; the content list reads clean and scannable. */
 .settings-section-rows {
+  background: rgba(8, 22, 34, 0.55);
+  border: 1px solid rgba(67, 127, 179, 0.26);
+  border-radius: 8px;
   display: grid;
-  gap: clamp(8px, .8vw, 12px);
+  overflow: hidden;
 }
 
 .settings-row {
   align-items: center;
-  border: 12px solid transparent;
-  border-width: 11px 18px;
-  border-image: url("/assets/ui/kit/row.png") 14 20 fill / 11px 18px stretch;
   box-sizing: border-box;
   display: grid;
-  gap: clamp(9px, .9vw, 15px);
+  gap: 16px;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
-  min-height: clamp(70px, 6.4vw, 86px);
-  padding: clamp(2px, .3vw, 5px) clamp(6px, .7vw, 12px);
+  min-height: 56px;
+  padding: 12px 16px;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid rgba(67, 127, 179, 0.16);
 }
 
 .settings-row-tall {
-  min-height: clamp(96px, 8.8vw, 116px);
+  min-height: 80px;
 }
 
 .settings-row-icon {
   display: block;
-  height: clamp(38px, 4vw, 64px);
+  height: 36px;
   image-rendering: pixelated;
   object-fit: contain;
-  width: clamp(38px, 4vw, 64px);
+  width: 36px;
 }
 
 .settings-row h4 {
@@ -12467,23 +12563,26 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* Header buttons wear the SYMMETRIC panel.png frame (square source → equal corners
+   on all four sides), matching the design's gold corner-bracket language. The tall
+   tab art was the wrong source for a short button (it rendered lopsided). */
 .settings-header-button {
-  block-size: 50px;
+  block-size: 46px;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
   flex: none;
-  inline-size: 196px;
-  padding: 8px 10px;
+  image-rendering: pixelated;
+  inline-size: auto;
+  min-inline-size: 92px;
+  padding: 0 14px;
 }
 
-.settings-header-button-account {
-  inline-size: 196px;
-}
-
-.settings-header-button-back {
-  inline-size: 196px;
-}
-
-.settings-header-button-menu {
-  inline-size: 196px;
+/* Sign In / Sign Out is the primary account action — the cyan-bracket mode-button
+   frame (same family as the nav active) marks it primary while Back/Menu stay
+   gold. Matches the concept's bracket buttons. */
+.settings-header-button-active {
+  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
+  border-width: 12px;
 }
 
 .settings-stepper {
@@ -12494,11 +12593,13 @@ button.tileset-relationship-cell {
 }
 
 .settings-stepper .settings-chrome-button {
-  border-width: 9px 14px;
-  border-image: url("/assets/ui/kit/button-neutral.png") 9 16 fill / 9px 14px stretch;
-  block-size: 48px;
-  inline-size: 48px;
-  min-width: 48px;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.5);
+  border-image: none;
+  border-radius: 6px;
+  block-size: 32px;
+  inline-size: 32px;
+  min-width: 32px;
   padding: 0;
 }
 
@@ -12572,52 +12673,53 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
+/* Clean pill switch — a rounded track that fills blue when on, with a sliding
+   white knob. The row title labels the control; the On/Off word is kept for
+   screen readers only. Replaces the heavy bracketed pixel-art track + knob. */
 .settings-toggle {
   align-items: center;
   appearance: none;
-  background: transparent;
-  border: 8px solid transparent;
-  border-image: url("/assets/ui/kit/toggle-track.png") 8 fill / 8px stretch;
+  background: rgba(70, 104, 132, 0.55);
+  border: 1px solid rgba(67, 127, 179, 0.45);
+  border-radius: 999px;
   box-sizing: border-box;
   cursor: pointer;
   display: flex;
-  gap: 8px;
-  image-rendering: pixelated;
-  inline-size: 152px;
-  block-size: 48px;
-  justify-content: space-between;
-  padding: 0 10px;
+  inline-size: 52px;
+  block-size: 28px;
+  justify-content: flex-start;
+  padding: 3px;
+  transition: background .16s ease, border-color .16s ease;
+}
+
+.settings-toggle.is-on {
+  background: #2f8fe6;
+  border-color: #7cd1ff;
 }
 
 .settings-toggle-label {
-  font-size: var(--ds-text-sm);
-  letter-spacing: 1px;
-  text-shadow: 0 2px 0 #02070b;
-  text-transform: uppercase;
+  block-size: 1px;
+  clip: rect(0 0 0 0);
+  inline-size: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
 }
 
 .settings-toggle-knob {
-  background: url("/assets/ui/kit/toggle-knob.png") center / 100% 100% no-repeat;
-  block-size: 30px;
+  background: #f3fbff;
+  border-radius: 999px;
+  block-size: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   flex: none;
-  image-rendering: pixelated;
-  inline-size: 40px;
+  inline-size: 20px;
+  transition: transform .16s ease;
 }
 
-/* Off state: knob slides to the left, label to the right, both dimmed. */
-.settings-toggle.is-off {
-  flex-direction: row-reverse;
+.settings-toggle.is-on .settings-toggle-knob {
+  transform: translateX(24px);
 }
 
-.settings-toggle.is-off .settings-toggle-label {
-  color: #9fb3c2;
-}
-
-.settings-toggle.is-off .settings-toggle-knob {
-  filter: grayscale(.55) brightness(.5);
-}
-
-.settings-tab:hover,
 .settings-tab:focus-visible,
 .settings-chrome-button:hover,
 .settings-chrome-button:focus-visible,
@@ -12837,10 +12939,54 @@ button.tileset-relationship-cell {
 /* Artwork lab — one big contained preview on the checker stage. */
 .al-artwork-stage { height: min(58vh, 540px); width: min(720px, 100%); }
 .al-artwork-lg { image-rendering: auto; max-height: 100%; max-width: 100%; object-fit: contain; }
-.asset-prov { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; }
+
+/* Glossary studio surface — the term grid (catalog) and the full-term read (viewer).
+   Restores the design-portfolio glossary that #127 dropped. Catalog terms are real
+   catalog cards (same shape as asset/artwork cards), just text-only — no image. */
+.glossary-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.tileset-studio-card.is-glossary {
+  align-items: stretch;
+  min-height: 0;
+  padding: 12px 14px;
+}
+.tileset-studio-card.is-glossary .tileset-studio-card-meta { align-items: flex-start; gap: 10px; width: 100%; }
+.tileset-studio-card.is-glossary .tileset-studio-card-text { gap: 5px; }
+.tileset-studio-card.is-glossary .tileset-studio-card-text strong { align-items: center; color: #f0eadb; display: inline-flex; font-size: .98rem; gap: 7px; }
+.tileset-studio-card.is-glossary .tileset-studio-card-text em { color: #9fc4d5; font-size: .82rem; font-style: normal; line-height: 1.45; text-transform: none; white-space: normal; }
+.glossary-card-src { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .62rem; margin-top: 2px; }
+.glossary-doc-dot { background: #79d3ff; border-radius: 999px; box-shadow: 0 0 6px rgba(121, 211, 255, .8); height: 6px; width: 6px; }
+.glossary-tag { align-self: flex-start; border-radius: 999px; font-size: .56rem; letter-spacing: .04em; padding: 2px 7px; text-transform: uppercase; white-space: nowrap; }
+.glossary-tag.is-asset { background: rgba(143, 211, 154, .14); border: 1px solid rgba(143, 211, 154, .4); color: #8fd39a; }
+.glossary-tag.is-not-asset { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
+
+/* Glossary viewer — one term in full, with the long-form process doc. */
+.glossary-lab-main { overflow: auto; padding: 6px 10px; }
+.glossary-entry-full { color: #cfe3ef; line-height: 1.55; max-width: 760px; }
+.glossary-entry-full > header { align-items: center; display: flex; gap: 12px; margin-bottom: 8px; }
+.glossary-entry-full h2 { color: #f0eadb; margin: 0; }
+.glossary-entry-def { font-size: 1rem; margin: 0 0 6px; }
+.glossary-entry-src { color: #5d7a8c; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .68rem; margin: 0 0 18px; }
+.glossary-detail { border-top: 1px solid rgba(67, 127, 179, .24); padding-top: 16px; }
+.glossary-detail h3 { color: #79d3ff; font-size: 1.05rem; margin: 0 0 10px; }
+.glossary-detail h4 { color: #c9a877; font-size: .9rem; margin: 18px 0 6px; }
+.glossary-detail p { margin: 0 0 10px; }
+.glossary-detail ul { margin: 0 0 12px; padding-left: 22px; }
+.glossary-detail li { margin-bottom: 6px; }
+.glossary-detail code { background: rgba(95, 184, 255, .1); border-radius: 4px; color: #9fd0ff; font-size: .82em; padding: 1px 5px; }
+.glossary-detail-src { color: #5d7a8c; font-size: .72rem; margin-top: 14px; }
+.glossary-detail-none { color: #5d7a8c; font-style: italic; }
+/* Per-asset property chips (gate + provenance) stacked at the card's trailing edge. */
+.asset-card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.asset-prov,
+.asset-gate { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; text-transform: uppercase; }
 .asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
 .asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
 .asset-prov.is-original { background: rgba(158, 177, 197, .12); border: 1px solid rgba(158, 177, 197, .34); color: #9eb1c5; }
+.asset-gate.is-pass { background: rgba(143, 211, 154, .14); border: 1px solid rgba(143, 211, 154, .4); color: #8fd39a; }
+.asset-gate.is-fail { background: rgba(228, 120, 120, .14); border: 1px solid rgba(228, 120, 120, .46); color: #ec8a8a; }
+
+/* A labelled facet in the Controls panel: caption above a segmented control. */
+.tileset-filter-field { display: grid; gap: 7px; color: #9eb1c5; font-size: 11px; font-weight: 900; text-transform: uppercase; }
 
 /* Asset lab (the Lab's Asset surface) — the main pane is one self-filling panel
    that mirrors the board lab's stage; the studio topbar carries the breadcrumb,

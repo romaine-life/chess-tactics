@@ -3,6 +3,7 @@ import { MainMenu } from './MainMenu';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
+import { ArtworkCompare } from './ArtworkCompare';
 import { UpdateBanner } from './UpdateBanner';
 import {
   APP_NAVIGATION_EVENT,
@@ -75,5 +76,6 @@ function renderRoute(path: string): ReactElement {
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
   if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
+  if (path === '/artwork-compare') return <ArtworkCompare />;
   return <MainMenu />;
 }

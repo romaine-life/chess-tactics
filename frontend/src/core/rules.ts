@@ -209,6 +209,27 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
   return out;
 }
 
+/** True when any living `bySide` piece attacks the square `sq` on this board. */
+function squareAttackedBy(sq: Vec, bySide: Side, pieces: readonly Piece[], size: BoardSize): boolean {
+  for (const p of pieces) {
+    if (!p.alive || p.side !== bySide || isObstacle(p)) continue;
+    for (const a of attackedSquares(p, pieces, size)) {
+      if (a.x === sq.x && a.y === sq.y) return true;
+    }
+  }
+  return false;
+}
+
+/** Ids of the opponents of `p` that currently sit on a square `p` attacks. */
+function opponentsUnderAttackBy(p: Piece, pieces: readonly Piece[], size: BoardSize): Set<string> {
+  const ids = new Set<string>();
+  for (const sq of attackedSquares(p, pieces, size)) {
+    const t = pieceAt(pieces, sq.x, sq.y);
+    if (t && t.alive && t.side !== p.side && !isObstacle(t)) ids.add(t.id);
+  }
+  return ids;
+}
+
 /** Union of every living enemy's attacked squares. */
 export function enemyThreats(pieces: readonly Piece[], size: BoardSize): Vec[] {
   const map = new Map<string, Vec>();
@@ -246,6 +267,19 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
 
   const from: Vec = { x: piece.x, y: piece.y };
   const movedPieceType = piece.type;
+
+  // Service-record bookkeeping: only player/enemy units accrue stats, and only
+  // from this (committed) move. Snapshot the threat picture BEFORE the move while
+  // the piece still sits on `from`.
+  const tracksStats = piece.side === 'player' || piece.side === 'enemy';
+  const opponentSide: Side | null = piece.side === 'player' ? 'enemy' : piece.side === 'enemy' ? 'player' : null;
+  const escapedThreat = tracksStats && opponentSide
+    ? squareAttackedBy(from, opponentSide, state.pieces, state.size)
+    : false;
+  const threatenedBefore = tracksStats
+    ? opponentsUnderAttackBy(piece, state.pieces, state.size)
+    : new Set<string>();
+
   const nextFacing = facingFromDelta(move.x - from.x, move.y - from.y);
   if (nextFacing) piece.facing = nextFacing;
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
@@ -265,6 +299,7 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
       } else {
         target.alive = false;
         target.hp = 0;
+        if (tracksStats) piece.enemiesKilled = (piece.enemiesKilled ?? 0) + 1;
         events.push({ kind: 'captured', pieceId: target.id, by: piece.id });
       }
     }
@@ -282,6 +317,24 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
         events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
       }
     }
+  }
+
+  // Tally the service record now that the piece sits at its final square.
+  if (tracksStats) {
+    piece.timesUsed = (piece.timesUsed ?? 0) + 1;
+    if (displaced) {
+      const dx = Math.abs(piece.x - from.x);
+      const dy = Math.abs(piece.y - from.y);
+      const diagonal = Math.min(dx, dy);
+      const straight = Math.abs(dx - dy);
+      piece.squaresTraveled = (piece.squaresTraveled ?? 0) + diagonal * 1.5 + straight;
+      if (escapedThreat) piece.escapes = (piece.escapes ?? 0) + 1;
+    }
+    // Opponents this piece newly placed under attack (in its post-move position).
+    const threatenedAfter = opponentsUnderAttackBy(piece, pieces, state.size);
+    let newlyThreatened = 0;
+    for (const id of threatenedAfter) if (!threatenedBefore.has(id)) newlyThreatened += 1;
+    if (newlyThreatened > 0) piece.threatsMade = (piece.threatsMade ?? 0) + newlyThreatened;
   }
 
   // Spend an action point in AP mode (an attack-in-place still costs an action).
