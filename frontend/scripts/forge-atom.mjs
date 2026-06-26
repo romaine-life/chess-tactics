@@ -43,6 +43,7 @@ function banner(key) {
 function buildPrompt(desc, key) {
   return `IMAGE-GENERATION task: GENERATE one PNG using the built-in image generation tool (img2img from the attached reference). Do NOT hand-draw it with code (PIL/cairo/SVG/HTML/CSS/canvas), do NOT write a script, and do NOT crop or extract pixels from any file — programmatic OR extracted output is automatically rejected.
 ${desc}
+FIDELITY (match the concept's low-fi element look — ADR-0014 / docs/ui-chrome-vocabulary.md): low-fi, pixellated, indie. Use a LIMITED palette (a few hundred colors for this element, not thousands), CHUNKY / stepped edges, authored at native footprint. Do NOT anti-alias into smooth edges, do NOT produce a high-fidelity or painterly render, no gradients, no glow.
 TRANSPARENCY (do it exactly this way): paint everything OUTSIDE the subject as a perfectly flat solid ${key} chroma-key background for local background removal. The background must be ONE uniform ${key} — no shadows, gradients, texture, reflections, floor plane, or lighting variation. Do NOT use ${key} anywhere in the subject. No cast shadow, no contact shadow, no reflection, no watermark, no text.
 Save it as ./atom.png in the current working directory, then stop.`;
 }
