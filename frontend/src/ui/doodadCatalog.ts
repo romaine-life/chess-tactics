@@ -19,6 +19,10 @@ const sprite = (id: string, half: 'back' | 'front') => `/assets/doodads/${id}/${
 
 export const DOODAD_ASSETS: DoodadAsset[] = [
   { id: 'grass-tuft', label: 'Grass tuft', status: 'placeholder', terrains: ['grass'], back: sprite('grass-tuft', 'back'), front: sprite('grass-tuft', 'front') },
+  { id: 'boulder', label: 'Boulder', status: 'render', terrains: ['stone'], back: sprite('boulder', 'back'), front: sprite('boulder', 'front') },
+  { id: 'stump', label: 'Tree stump', status: 'render', terrains: ['dirt'], back: sprite('stump', 'back'), front: sprite('stump', 'front') },
+  { id: 'fern', label: 'Fern', status: 'render', terrains: ['water'], back: sprite('fern', 'back'), front: sprite('fern', 'front') },
+  { id: 'flower', label: 'Flower', status: 'render', terrains: ['grass'], back: sprite('flower', 'back'), front: sprite('flower', 'front') },
 ];
 
 export const doodadAsset = (id: string): DoodadAsset => DOODAD_ASSETS.find((d) => d.id === id) ?? DOODAD_ASSETS[0];
