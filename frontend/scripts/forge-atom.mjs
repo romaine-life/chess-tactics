@@ -18,7 +18,7 @@
 //   node scripts/forge-atom.mjs --ref <ref.png> --out public/assets/ui/kit/atoms/<name>.png --desc "..."
 //   import { forgeAtom } from './forge-atom.mjs'   // for per-element generators
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, copyFileSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, copyFileSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -106,6 +106,28 @@ function transparencyOk(file) {
   return { ok: frac > 0.05 && frac < 0.97, frac };
 }
 
+// EDGE-FLUSH contract: a kit atom's frame must reach the atom's edge — no empty
+// exterior margin. Codex tends to draw the frame inset inside a transparent margin
+// (it reproduces the reference crop's surroundings); that inset margin is what the
+// assembler's full-canvas fill bleeds navy into. So we trim the atom to its opaque
+// bounding box, guaranteeing the frame is flush to the edge — the same property the
+// accepted gold atoms already have. Throws if the atom is empty.
+function trimToEdge(file) {
+  const png = PNG.sync.read(readFileSync(file));
+  const { width: w, height: h, data } = png;
+  const a = (x, y) => data[(y * w + x) * 4 + 3];
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (a(x, y) > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  if (maxX < 0) throw new Error('forge-atom: atom is fully transparent — no frame to trim to');
+  const margins = { top: minY, left: minX, bottom: h - 1 - maxY, right: w - 1 - maxX };
+  const cw = maxX - minX + 1, ch = maxY - minY + 1;
+  if (cw === w && ch === h) return { margins, w: cw, h: ch };
+  const o = new PNG({ width: cw, height: ch });
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) { const s = ((minY + y) * w + (minX + x)) * 4, d = (y * cw + x) * 4; o.data[d] = data[s]; o.data[d + 1] = data[s + 1]; o.data[d + 2] = data[s + 2]; o.data[d + 3] = data[s + 3]; }
+  writeFileSync(file, PNG.sync.write(o));
+  return { margins, w: cw, h: ch };
+}
+
 export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 48, colors = 64 }) {
   if (!existsSync(ref)) throw new Error(`forge-atom: ref not found: ${ref}`);
   banner(key);
@@ -124,11 +146,13 @@ export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 4
   if (cr.status !== 0) throw new Error(`forge-atom: despill failed: ${cr.stderr || cr.error}`);
   const lr = lofi(smooth, out, footprint, colors);       // ADR-0014: native footprint + limited palette
   if (lr.status !== 0) throw new Error(`forge-atom: low-fi step failed: ${lr.stderr || lr.error}`);
+  const trim = trimToEdge(out);                          // edge-flush: frame reaches the edge, no exterior margin to bleed into
   const t = transparencyOk(out);
   if (!t.ok) {
     throw new Error(`forge-atom: transparency gate failed — ${(t.frac * 100).toFixed(0)}% transparent (expected 5–97%). ~0% = opaque plate (key not removed); ~100% = empty. A mid-range miss can mean the art used the ${key} key color (holes) — re-run with a different --key (e.g. #ff00ff). Output: ${out}`);
   }
-  console.log(`forge-atom OK -> ${out}  (${footprint}px footprint, ${colors}-color low-fi; ${(t.frac * 100).toFixed(0)}% transparent)`);
+  const m = trim.margins;
+  console.log(`forge-atom OK -> ${out}  (${trim.w}x${trim.h} edge-flush, ${colors}-color low-fi; trimmed margin t${m.top}/l${m.left}/b${m.bottom}/r${m.right}; ${(t.frac * 100).toFixed(0)}% transparent)`);
   return out;
 }
 
