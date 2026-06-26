@@ -12357,7 +12357,7 @@ button.tileset-relationship-cell {
 
 .settings-main-frame {
   display: grid;
-  grid-template-rows: clamp(74px, 7vw, 94px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
 }
