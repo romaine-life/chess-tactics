@@ -152,9 +152,14 @@ const AC_CSS = `
 .ac-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
   background: #0b1220; border-bottom: 1px solid #1b2740; }
 .ac-tag { font-size: 11px; letter-spacing: .12em; font-weight: 700; color: #7fd4ff; }
-.ac-bar select, .ac-bar button { background: #111a2c; color: #dbe9ff;
-  border: 1px solid #2a3c5e; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
-.ac-bar button:hover { background: #17223a; }
+.ac-bar select, .ac-bar button {
+  appearance: none; -webkit-appearance: none;
+  font-family: var(--ds-font-sans, system-ui, sans-serif); font-size: 12px; line-height: 1;
+  min-height: 0; height: 30px; margin: 0; padding: 0 10px;
+  background: #111a2c; background-image: none; color: #dbe9ff;
+  border: 1px solid #2a3c5e; border-radius: 4px;
+  box-shadow: none; text-shadow: none; cursor: pointer; }
+.ac-bar button:hover { background: #17223a; border-color: #2a3c5e; box-shadow: none; }
 .ac-stage { position: relative; flex: 1 1 auto; overflow: auto; background: #06080d;
   display: flex; justify-content: center; align-items: flex-start; padding: 14px; }
 .ac-frame { width: 100%; box-sizing: border-box; overflow: hidden; position: relative;
