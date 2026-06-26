@@ -83,6 +83,15 @@ function despill(src, dst) {
     '--transparent-threshold', '12', '--opaque-threshold', '220', '--despill', '--force'], { encoding: 'utf8' });
 }
 
+// ADR-0014 low-fi step: bring the smooth despilled atom down to its native footprint
+// and quantize to a limited palette. Downscaling smooth art to its real on-screen
+// size IS the pixelation; the quantize collapses it toward the concept's few-hundred
+// colors. This is what makes the atom chunky/low-fi instead of a smooth render.
+function lofi(src, dst, footprint, colors) {
+  const py = "from PIL import Image\nimport sys\ninp,outp,fp,cols=sys.argv[1],sys.argv[2],int(sys.argv[3]),int(sys.argv[4])\nim=Image.open(inp).convert('RGBA')\nw,h=im.size\ns=fp/max(w,h)\nim2=im.resize((max(1,round(w*s)),max(1,round(h*s))),Image.LANCZOS)\na=im2.split()[3]\nrgb=im2.convert('RGB').quantize(colors=cols,method=Image.MEDIANCUT).convert('RGBA')\nrgb.putalpha(a)\nrgb.save(outp)";
+  return spawnSync(PY, ['-c', py, src, dst, String(footprint), String(colors)], { encoding: 'utf8' });
+}
+
 // Transparency gate: confirm the despill produced a real alpha cutout (the key
 // background was removed) rather than an opaque plate (the ADR-0013 failure mode).
 // We can't assume WHERE the transparency is — a corner atom keeps an opaque
@@ -97,7 +106,7 @@ function transparencyOk(file) {
   return { ok: frac > 0.05 && frac < 0.97, frac };
 }
 
-export async function forgeAtom({ ref, out, desc, key = '#00ff00' }) {
+export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 48, colors = 64 }) {
   if (!existsSync(ref)) throw new Error(`forge-atom: ref not found: ${ref}`);
   banner(key);
   const started = Date.now();
@@ -108,15 +117,18 @@ export async function forgeAtom({ ref, out, desc, key = '#00ff00' }) {
   const produced = join(work, 'atom.png');
   if (!existsSync(produced)) throw new Error(`forge-atom: codex produced no atom.png (workdir had: ${readdirSync(work).join(', ') || '(empty)'})`);
   mkdirSync(dirname(out), { recursive: true });
-  const raw = out.replace(/\.png$/i, '-raw.png');
+  const raw = out.replace(/\.png$/i, '-raw.png');        // green plate (raw generation)
+  const smooth = out.replace(/\.png$/i, '-smooth.png');  // despilled, pre-low-fi (inspection)
   copyFileSync(produced, raw);
-  const cr = despill(produced, out);
+  const cr = despill(produced, smooth);
   if (cr.status !== 0) throw new Error(`forge-atom: despill failed: ${cr.stderr || cr.error}`);
+  const lr = lofi(smooth, out, footprint, colors);       // ADR-0014: native footprint + limited palette
+  if (lr.status !== 0) throw new Error(`forge-atom: low-fi step failed: ${lr.stderr || lr.error}`);
   const t = transparencyOk(out);
   if (!t.ok) {
     throw new Error(`forge-atom: transparency gate failed — ${(t.frac * 100).toFixed(0)}% transparent (expected 5–97%). ~0% = opaque plate (key not removed); ~100% = empty. A mid-range miss can mean the art used the ${key} key color (holes) — re-run with a different --key (e.g. #ff00ff). Output: ${out}`);
   }
-  console.log(`forge-atom OK -> ${out}  (${(t.frac * 100).toFixed(0)}% transparent; raw kept: ${basename(raw)})`);
+  console.log(`forge-atom OK -> ${out}  (${footprint}px footprint, ${colors}-color low-fi; ${(t.frac * 100).toFixed(0)}% transparent)`);
   return out;
 }
 
@@ -124,12 +136,14 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const args = process.argv.slice(2);
   const get = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
   const ref = get('--ref'); const out = get('--out'); const key = get('--key') || '#00ff00';
+  const footprint = Number(get('--footprint')) || 48;
+  const colors = Number(get('--colors')) || 64;
   let desc = get('--desc');
   if (get('--desc-file')) desc = readFileSync(get('--desc-file'), 'utf8');
   if (!ref || !out || !desc) {
-    console.error('usage: forge-atom.mjs --ref <png> --out <atoms/x.png> --desc "<atom description>" [--key #00ff00]');
+    console.error('usage: forge-atom.mjs --ref <png> --out <atoms/x.png> --desc "..." [--key #00ff00] [--footprint 48] [--colors 64]');
     process.exit(2);
   }
-  try { await forgeAtom({ ref, out, desc, key }); }
+  try { await forgeAtom({ ref, out, desc, key, footprint, colors }); }
   catch (e) { console.error(String(e.message || e)); process.exit(1); }
 }

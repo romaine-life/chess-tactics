@@ -280,7 +280,7 @@ const AC_CSS = `
   padding: 6px; background: #06080d; border: 2px solid #79c4ff; border-radius: 5px;
   box-shadow: 0 0 0 1px rgba(2, 7, 11, .9), 0 8px 22px rgba(0, 0, 0, .5); }
 .ac-frame-spec { border-color: #ffd479; }
-.ac-art-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ac-art-img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: pixelated; }
 .ac-editor { flex: 0 0 auto; display: flex; gap: 12px; padding: 10px 12px; background: #0b1220; border-top: 1px solid #1b2740; }
 .ac-edit-col { flex: 1 1 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ac-editor textarea { width: 100%; height: 60px; resize: vertical; box-sizing: border-box;
