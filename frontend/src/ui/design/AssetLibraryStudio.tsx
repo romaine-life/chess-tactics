@@ -8,7 +8,24 @@ import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import manifest from './kitManifest.json';
 import provenance from './kitProvenance.json';
 
-export type AssetFilter = 'all' | 'forged' | 'unverified';
+// Every asset card carries three filterable properties: its TYPE (which shelf it
+// lives on — Icons/Game/Shields/Frames, restoring the portfolio's categorisation),
+// its PROVENANCE (forged through the kit pipeline vs. an original pre-forge asset),
+// and its GATE result (did the hard-alpha verifier pass). The Controls panel filters
+// on all three; the card surfaces gate + provenance as chips (type is the section).
+export type AssetTypeFacet = 'all' | 'settings' | 'game' | 'shields' | 'frames';
+export type AssetProvFacet = 'all' | 'forged' | 'original';
+export type AssetGateFacet = 'all' | 'pass' | 'fail';
+export interface AssetFilters { type: AssetTypeFacet; prov: AssetProvFacet; gate: AssetGateFacet }
+
+// The selectable type shelves, paired with their display label (group id -> label).
+export const ASSET_TYPE_FACETS: { value: AssetTypeFacet; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'settings', label: 'Icons' },
+  { value: 'game', label: 'Game' },
+  { value: 'shields', label: 'Shields' },
+  { value: 'frames', label: 'Frames' },
+];
 
 interface Glyph { name: string; url: string; w: number; h: number; magenta: number; semiPct: number; edge: number; pass: boolean; fails: string[] }
 interface Group { id: string; label: string; items: Glyph[] }
@@ -21,7 +38,7 @@ const PROV = provenance as Provenance;
 const forged = (name: string): boolean => Object.prototype.hasOwnProperty.call(PROV.assets, name);
 const GROUP_LABEL: Record<string, string> = { settings: 'Icons', game: 'Game', shields: 'Shields' };
 
-function Card({ name, url, sub, selected, onSelect }: { name: string; url: string; sub: string; selected: boolean; onSelect: (name: string) => void }): ReactElement {
+function Card({ name, url, sub, gate, selected, onSelect }: { name: string; url: string; sub: string; gate?: 'pass' | 'fail'; selected: boolean; onSelect: (name: string) => void }): ReactElement {
   return (
     <button
       type="button"
@@ -33,27 +50,43 @@ function Card({ name, url, sub, selected, onSelect }: { name: string; url: strin
       <span className="tileset-studio-card-image asset-card-image"><img src={url} alt="" draggable={false} /></span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text"><strong>{name}</strong><em>{sub}</em></span>
-        <span className={`asset-prov ${forged(name) ? 'is-forged' : 'is-original'}`}>{forged(name) ? 'forged' : 'original'}</span>
+        <span className="asset-card-chips">
+          {gate ? <span className={`asset-gate is-${gate}`}>{gate}</span> : null}
+          <span className={`asset-prov ${forged(name) ? 'is-forged' : 'is-original'}`}>{forged(name) ? 'forged' : 'original'}</span>
+        </span>
       </span>
     </button>
   );
 }
 
-export function AssetLibraryStudio({ filter, search, zoom, selected, onSelect }: {
-  filter: AssetFilter;
+export function AssetLibraryStudio({ filters, search, zoom, selected, onSelect }: {
+  filters: AssetFilters;
   search: string;
   zoom: number;
   selected: string;
   onSelect: (name: string) => void;
 }): ReactElement {
   const q = search.trim().toLowerCase();
-  const ok = (name: string): boolean =>
-    (filter === 'all' || (filter === 'forged' ? forged(name) : !forged(name))) && (!q || name.toLowerCase().includes(q));
+  const provOk = (name: string): boolean => filters.prov === 'all' || (filters.prov === 'forged' ? forged(name) : !forged(name));
+  const searchOk = (name: string): boolean => !q || name.toLowerCase().includes(q);
+  const gateOk = (g: Glyph): boolean => filters.gate === 'all' || (filters.gate === 'pass' ? g.pass : !g.pass);
 
-  const sections = [
-    ...KIT.groups.map((g) => ({ key: g.id, label: GROUP_LABEL[g.id] ?? g.label, items: g.items.filter((i) => ok(i.name)).map((i) => ({ name: i.name, url: i.url, sub: `${i.w}×${i.h}` })) })),
-    { key: 'frames', label: 'Frames', items: KIT.frames.filter((f) => ok(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `${f.w}×${f.h}` })) },
-  ].filter((s) => s.items.length);
+  const groupSections = KIT.groups
+    .filter((g) => filters.type === 'all' || filters.type === g.id)
+    .map((g) => ({
+      key: g.id,
+      label: GROUP_LABEL[g.id] ?? g.label,
+      items: g.items
+        .filter((i) => provOk(i.name) && searchOk(i.name) && gateOk(i))
+        .map((i) => ({ name: i.name, url: i.url, sub: `${i.w}×${i.h}`, gate: (i.pass ? 'pass' : 'fail') as 'pass' | 'fail' })),
+    }));
+
+  // Frames aren't gated, so they only appear when the gate facet isn't narrowing to pass/fail.
+  const frameSection = (filters.type === 'all' || filters.type === 'frames') && filters.gate === 'all'
+    ? [{ key: 'frames', label: 'Frames', items: KIT.frames.filter((f) => provOk(f.name) && searchOk(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `${f.w}×${f.h}`, gate: undefined as 'pass' | 'fail' | undefined })) }]
+    : [];
+
+  const sections = [...groupSections, ...frameSection].filter((s) => s.items.length);
 
   return (
     <section className="tileset-studio-main is-headless">
@@ -63,11 +96,11 @@ export function AssetLibraryStudio({ filter, search, zoom, selected, onSelect }:
             <section className="tileset-asset-section" aria-label={s.label} key={s.key}>
               <h3>{s.label}</h3>
               <div className="tileset-studio-grid">
-                {s.items.map((it) => <Card key={it.name} name={it.name} url={it.url} sub={it.sub} selected={selected === it.name} onSelect={onSelect} />)}
+                {s.items.map((it) => <Card key={it.name} name={it.name} url={it.url} sub={it.sub} gate={it.gate} selected={selected === it.name} onSelect={onSelect} />)}
               </div>
             </section>
           ))}
-          {!sections.length ? <p className="tileset-catalog-note">No assets match this filter.</p> : null}
+          {!sections.length ? <p className="tileset-catalog-note">No assets match these filters.</p> : null}
         </div>
       </section>
     </section>

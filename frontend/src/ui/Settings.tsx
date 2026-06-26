@@ -73,6 +73,7 @@ function tabFromPath(pathname: string): SettingsTab {
 // Index still lives at /design directly.)
 const creatorTools: CreatorTool[] = [
   { label: 'Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
+  { label: 'Artwork Compare', href: '/artwork-compare', icon: 'icon-design-index.png', description: 'Two-panel view — the accepted concept art beside the live screen, for matching the art direction.' },
 ];
 
 function asset(file: string): string {
@@ -476,13 +477,15 @@ export function Settings(): ReactElement {
   );
 
   const renderGameplay = () => (
-    <SettingsRow
-      icon="icon-knight.png"
-      title="Coming Soon"
-      description="Gameplay settings are not available yet."
-      value={<span>Locked</span>}
-      tall
-    />
+    <SettingsSection title="Gameplay">
+      <SettingsRow
+        icon="icon-knight.png"
+        title="Coming Soon"
+        description="Gameplay settings are not available yet."
+        value={<span>Locked</span>}
+        tall
+      />
+    </SettingsSection>
   );
 
   const renderCreatorTools = () => (
@@ -506,12 +509,12 @@ export function Settings(): ReactElement {
               <em>{accountStatus}</em>
             </span>
             {signedIn
-              ? <SettingsButton className="settings-header-button settings-header-button-account" onClick={signOut}>Sign Out</SettingsButton>
-              : <SettingsButton className="settings-header-button settings-header-button-account" href={signInHref('/settings')}>Sign In</SettingsButton>}
+              ? <SettingsButton className="settings-header-button settings-header-button-active" onClick={signOut}>Sign Out</SettingsButton>
+              : <SettingsButton className="settings-header-button settings-header-button-active" href={signInHref('/settings')}>Sign In</SettingsButton>}
           </div>
           <nav className="settings-header-actions" aria-label="Settings navigation">
-            <SettingsButton className="settings-header-button settings-header-button-back" onClick={() => window.history.back()}>Back</SettingsButton>
-            <SettingsButton className="settings-header-button settings-header-button-menu" href="/">Menu</SettingsButton>
+            <SettingsButton className="settings-header-button" onClick={() => window.history.back()}>Back</SettingsButton>
+            <SettingsButton className="settings-header-button" href="/">Menu</SettingsButton>
           </nav>
         </header>
 

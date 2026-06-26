@@ -4,6 +4,29 @@ This document is the source of truth for the current visual redesign. Treat it
 as binding for implementation work unless the product direction changes in a
 later design review.
 
+## Decision Records
+
+Individual decisions — with their context, alternatives, and rationale — are
+recorded as ADRs in [`adr/`](adr/) (see the [decision log](adr/decision-log.md)).
+Those records are authoritative for *why* a choice was made. This contract is the
+consolidated *current-state* view: it states the rules in force now and should
+cite the ADR each derives from. When the two disagree, the ADRs win and this doc
+is brought back into line.
+
+## Deciding UI Tradeoffs (game-UI vs product-UI)
+
+When game-UI guidance (immersion, theme, density) conflicts with product-UI
+guidance (clarity, breathing room, convention), decide with the criteria and
+surface-based tie-break in [ADR-0006](adr/0006-ui-decision-criteria.md):
+
+1. If it breaks the usability floor (legibility, contrast, target size,
+   label↔control proximity), usability wins.
+2. Otherwise pick the lean by surface — **in-game (board/HUD)** leans game-UI
+   (immersion, glanceability, density OK); **menus/chrome (settings, studio,
+   editors)** leans product-UI (clarity, breathing room) while still wearing the
+   game skin.
+3. Within that lean, the accepted concept art is the reference for the look.
+
 ## Chosen Direction
 
 **Dark Strategy Pixel battlefield inside a dark low-glare app shell.**
