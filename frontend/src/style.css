@@ -12243,18 +12243,22 @@ button.tileset-relationship-cell {
   align-items: center;
   appearance: none;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  /* Mode-button frame: atom-assembled (symmetric by construction), gold brackets;
+     active swaps to the cyan-bracket frame. Built by scripts/generate-mode-button.mjs. */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border-radius: 0;
   box-sizing: border-box;
   color: #c4d6e6;
   display: grid;
   gap: 11px;
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
-  min-height: 46px;
+  image-rendering: pixelated;
+  min-height: 56px;
   padding: 7px 12px;
   text-align: left;
   text-decoration: none;
-  transition: background .14s ease, color .14s ease;
+  transition: color .14s ease;
 }
 
 .settings-tab > span:not(.settings-tab-icon) {
@@ -12267,9 +12271,9 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab.is-active {
-  background: rgba(47, 143, 230, 0.16);
-  border-color: rgba(124, 209, 255, 0.45);
-  box-shadow: inset 3px 0 0 #6fd2ff;
+  background: transparent;
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  box-shadow: none;
   color: #f3fbff;
 }
 
