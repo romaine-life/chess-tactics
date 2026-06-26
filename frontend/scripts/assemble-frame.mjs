@@ -27,7 +27,10 @@ export function buildFrameFrom(corner, edge, fill, W, H) {
   const cw = corner.width, ch = corner.height;
   const o = np(W, H);
   tile(o, fill, 0, 0, W, H);                                   // fill base
-  const eL = rot90(edge), eR = flipH(eL), eB = flipV(edge);    // side/bottom edges from the one horizontal edge
+  // Side edges from the one horizontal edge. rot90 sends the edge's OUTER side to
+  // the RIGHT; mirror that for the LEFT so each side keeps outer-stays-outer (a
+  // directional bevel was landing reversed on left/right vs top/bottom).
+  const eR = rot90(edge), eL = flipH(eR), eB = flipV(edge);
   tile(o, edge, cw, 0, W - cw, edge.height);                   // top
   tile(o, eB, cw, H - edge.height, W - cw, H);                 // bottom
   tile(o, eL, 0, ch, eL.width, H - ch);                        // left
