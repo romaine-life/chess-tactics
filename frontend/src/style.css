@@ -12204,7 +12204,6 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 
-.settings-panel-heading h2,
 .settings-row h4,
 .settings-tab strong {
   color: #f6fbff;
@@ -12213,18 +12212,11 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
-.settings-panel-heading p,
 .settings-row p,
 .settings-row-value {
   color: #9fc4d5;
   font-style: normal;
   line-height: 1.25;
-}
-
-.settings-panel-heading p {
-  color: #79d3ff;
-  font-size: var(--ds-text-2xs);
-  text-transform: uppercase;
 }
 
 .settings-header-actions {
@@ -12368,25 +12360,6 @@ button.tileset-relationship-cell {
   grid-template-rows: clamp(74px, 7vw, 94px) minmax(0, 1fr);
   min-height: 0;
   padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
-}
-
-.settings-panel-heading {
-  align-content: center;
-  block-size: clamp(64px, 6vw, 80px);
-  display: grid;
-  gap: 3px;
-  inline-size: min(100%, 880px);
-  justify-self: center;
-  min-block-size: 0;
-  padding: 0;
-}
-
-.settings-panel-heading h2 {
-  font-size: var(--ds-text-xl);
-  max-inline-size: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .settings-panel-content {

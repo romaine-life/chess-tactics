@@ -14,3 +14,12 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0008](0008-brand-lockup-typography.md) | Brand lockup typography: app-header framing (screen name leads, real descriptor) | accepted | 2026-06-25 |
 | [0009](0009-mode-button-from-atoms.md) | Settings mode buttons assembled from atoms (symmetric); retire extracted tab crops | accepted | 2026-06-26 |
 | [0010](0010-settings-header-buttons.md) | Header buttons unified to bracket frames (cyan/gold); header content centered | accepted | 2026-06-26 |
+
+## Minor decisions (no ADR)
+
+Small, low-risk calls not worth a full record:
+
+- **2026-06-26 — Drop the Settings content-pane heading.** Removed the visible
+  "SETTINGS / General" heading: the brand lockup already shows the screen and the
+  active nav button shows the section, and the concept has no such heading. Kept a
+  visually-hidden `h2` for screen-reader structure.
