@@ -39,7 +39,7 @@ import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } fr
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
-import { doodadAsset, type DoodadAsset } from './doodadCatalog';
+import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { useCampaigns } from '../campaign/store';
@@ -75,7 +75,7 @@ type StudioMode = 'catalog' | 'lab' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'units' | 'assets' | 'artwork' | 'glossary';
+type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor; 'glossary' reads one term in
@@ -133,7 +133,7 @@ interface TilesetStudioRouteState {
   boardScope: 'family' | 'mixed';
   boardSize: 'small' | 'wide';
   boardSeed: number;
-  brushKind: 'tile' | 'unit';
+  brushKind: 'tile' | 'unit' | 'doodad';
   selectedUnitId?: string;
 }
 
@@ -245,7 +245,7 @@ const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'assets' || value === 'artwork' || value === 'glossary';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -276,8 +276,12 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const routeCategory = isStudioCategory(cat) ? cat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
-  const brushKind = params.get('brush') === 'unit' || explicitLabMode === 'unit' ? 'unit' : studioDefaults.brushKind;
-  const routeLabMode = explicitLabMode ?? (routeTileFilter === 'board' ? 'board' : brushKind === 'unit' ? 'unit' : 'tile');
+  const brushParam = params.get('brush');
+  const brushKind =
+    brushParam === 'unit' || explicitLabMode === 'unit' ? 'unit'
+    : brushParam === 'doodad' || explicitLabMode === 'doodad' ? 'doodad'
+    : studioDefaults.brushKind;
+  const routeLabMode = explicitLabMode ?? (routeTileFilter === 'board' ? 'board' : brushKind === 'unit' ? 'unit' : brushKind === 'doodad' ? 'doodad' : 'tile');
   const effectiveTileFilter =
     studioMode === 'catalog'
       ? routeTileFilter === 'board' ? studioDefaults.tileFilter : routeTileFilter
@@ -345,6 +349,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   params.set('size', route.boardSize);
   params.set('seed', String(route.boardSeed));
   if (route.brushKind === 'unit') params.set('brush', 'unit');
+  else if (route.brushKind === 'doodad') params.set('brush', 'doodad');
   if (route.selectedUnitId) params.set('unit', route.selectedUnitId);
   const nextHref = `${window.location.pathname}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
@@ -1305,7 +1310,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
   const [category, setCategory] = useState<StudioCategory>(initialRoute.category ?? initialCategory);
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
-  const [doodadBrushId] = useState<string>('grass-tuft');
+  const [doodadBrushId, setDoodadBrushId] = useState<string>('grass-tuft');
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
@@ -1325,6 +1330,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Which item the Viewer is showing (independent of the catalog category).
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
+  const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [showFootprint, setShowFootprint] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -1340,7 +1346,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [manualAnimationFrame, setManualAnimationFrame] = useState(0);
   // Unified editable board (temporary, in-memory only — re-seeds when a new view loads).
   const [tool, setTool] = useState<'select' | 'brush' | 'erase'>(initialRoute.brushKind === 'unit' ? 'brush' : 'select');
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit'>(initialRoute.brushKind);
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad'>(initialRoute.brushKind);
   const [brushId, setBrushId] = useState<string>(initialRoute.selectedAssetId ?? '');
   const [unitBrushId, setUnitBrushId] = useState<string>(initialRoute.selectedUnitId ?? unitAssets[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -1383,6 +1389,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAsset(id);
   const brushAsset = resolveStudioAsset(brushId) ?? selectedAsset;
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
+  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? DOODAD_ASSETS[0];
+  // A base tile's terrain IS its family (grass/stone/water) — base tiles don't carry a
+  // separate terrains tag, so resolve through the family that owns the tile id.
+  const terrainOfTileId = (id: string | undefined): StudioFamilyId | undefined =>
+    id ? studioFamilies.find((fam) => fam.assets.some((asset) => asset.id === id))?.id : undefined;
+  const doodadFitsTile = (doodad: DoodadAsset, tileId: string | undefined): boolean => {
+    const terrain = terrainOfTileId(tileId);
+    return terrain !== undefined && doodad.terrains.includes(terrain);
+  };
   const paintCell = (x: number, y: number): void => {
     if (brushKind === 'unit') {
       setBoardUnits((prev) => ({
@@ -1396,26 +1411,30 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       setLabMode('unit');
       return;
     }
+    if (brushKind === 'doodad') {
+      // HARD gate: a doodad only lands on a tile of its home terrain. Painting onto bare
+      // ground or the wrong terrain is a no-op (the cursor shows it's blocked — see the board).
+      if (!doodadFitsTile(doodadBrushAsset, boardCells[`${x},${y}`])) return;
+      setBoardDoodads((prev) => ({ ...prev, [`${x},${y}`]: { doodadId: doodadBrushAsset.id } }));
+      setLabMode('doodad');
+      return;
+    }
     setBoardCells((prev) => ({ ...prev, [`${x},${y}`]: brushAsset.id }));
     setLabMode('tile');
   };
-  const eraseCell = (x: number, y: number): void =>
-    brushKind === 'unit'
-      ? setBoardUnits((prev) => {
-          const key = `${x},${y}`;
-          if (!(key in prev)) return prev;
-          const next = { ...prev };
-          delete next[key];
-          return next;
-        })
-      :
-    setBoardCells((prev) => {
+  const eraseFrom = <T,>(setter: (updater: (prev: Record<string, T>) => Record<string, T>) => void, x: number, y: number): void =>
+    setter((prev) => {
       const key = `${x},${y}`;
       if (!(key in prev)) return prev;
       const next = { ...prev };
       delete next[key];
       return next;
     });
+  const eraseCell = (x: number, y: number): void => {
+    if (brushKind === 'unit') return eraseFrom(setBoardUnits, x, y);
+    if (brushKind === 'doodad') return eraseFrom(setBoardDoodads, x, y);
+    return eraseFrom(setBoardCells, x, y);
+  };
   const clearBoard = (): void => {
     setBoardCells({});
     setBoardUnits({});
@@ -1885,14 +1904,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
-      ? ['Catalog', category === 'units' ? 'Units' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : 'Tiles']
+      ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : 'Tiles']
       : studioMode === 'viewer'
         ? (viewerKind === 'portrait' ? ['Viewer', 'Portrait'] : ['Viewer', viewerKindLabel, viewerName || '—'])
-        : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : 'Board'];
+        : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
+  const visibleDoodads = normalizedCatalogQuery
+    ? DOODAD_ASSETS.filter((d) => [d.label, d.status, ...d.terrains].join(' ').toLowerCase().includes(normalizedCatalogQuery))
+    : DOODAD_ASSETS;
   const crumbMeta =
     studioMode === 'catalog'
       ? category === 'units'
         ? `${visibleUnits.length} unit${visibleUnits.length === 1 ? '' : 's'}`
+        : category === 'doodads'
+          ? `${visibleDoodads.length} doodad${visibleDoodads.length === 1 ? '' : 's'}`
         : category === 'assets'
           ? `${kitManifest.summary.total} icons`
           : category === 'artwork'
@@ -1970,6 +1994,18 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setLabMode('doodad');
     setStudioMode('lab');
   };
+  const selectDoodadInCatalog = (doodadId: string): void => {
+    setDoodadBrushId(doodadId);
+  };
+  const armDoodadBrush = (doodadId: string): void => {
+    // Arm the doodad as the active brush (mirrors armUnitBrush) — do NOT place it. The user
+    // paints it onto a matching-terrain tile; the paint itself enforces the hard gate.
+    setDoodadBrushId(doodadId);
+    setBrushKind('doodad');
+    setTool('brush');
+    setLabMode('board');
+    setStudioMode('lab');
+  };
 
   // Catalog asset-type descriptors. The generic <CatalogGrid>/<CatalogControls>
   // render either of these; a new asset type is just another descriptor.
@@ -2040,6 +2076,40 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     selectedId: unitBrushId,
     note: 'Select a unit card to place it in the shared lab board.',
   };
+  const doodadsCatalogType: CatalogType<DoodadAsset> = {
+    id: 'doodads',
+    label: 'Doodads',
+    assets: DOODAD_ASSETS,
+    card: (d) => ({ img: d.front, title: d.label, badge: d.terrains.join(', ') }),
+    sections: (visible) => [{ id: 'doodads', label: 'Doodads', assets: [...visible] }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'doodad, terrain, status...',
+      match: (d, q) => [d.label, d.status, ...d.terrains].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    filters: [
+      {
+        id: 'terrain',
+        label: 'Home Terrain',
+        options: studioFamilies.map((fam) => {
+          const n = DOODAD_ASSETS.filter((d) => d.terrains.includes(fam.id)).length;
+          return { id: fam.id, label: fam.label, sub: `${n} ${n === 1 ? 'doodad' : 'doodads'}` };
+        }),
+        memberOf: (d) => d.terrains,
+        selected: selectedDoodadTerrains,
+        toggle: (id) => setSelectedDoodadTerrains((cur) => (cur.includes(id as StudioFamilyId) ? cur.filter((x) => x !== id) : [...cur, id as StudioFamilyId])),
+        selectAll: () => setSelectedDoodadTerrains(studioFamilies.map((fam) => fam.id)),
+        clear: () => setSelectedDoodadTerrains([]),
+      },
+    ],
+    onSelect: (d) => selectDoodadInCatalog(d.id),
+    onView: (d) => openDoodadLab(),
+    onArm: (d) => armDoodadBrush(d.id),
+    selectedId: doodadBrushId,
+    note: 'Doodads place only on their home terrain. Pick one to arm the brush, then paint a matching tile.',
+  };
 
   // The catalog is one registry, not a chain of `category === …` branches: every
   // category supplies its grid (`main`) and its rail body (`controls`), and the
@@ -2056,6 +2126,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'units', label: 'Units', hint: 'Browse chess-piece units.',
       main: <CatalogGrid type={unitsCatalogType} />,
       controls: <CatalogControls type={unitsCatalogType} />,
+    },
+    {
+      id: 'doodads', label: 'Doodads', hint: 'Browse terrain doodads (placed on matching tiles).',
+      main: <CatalogGrid type={doodadsCatalogType} />,
+      controls: <CatalogControls type={doodadsCatalogType} />,
     },
     {
       id: 'assets', label: 'Assets', hint: 'Browse the UI-kit asset library.',
@@ -2330,19 +2405,22 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         <button type="button" className={brushKind === 'unit' ? 'is-active' : ''} onClick={() => setBrushKind('unit')} title="Place chess units on top of tiles.">
                           Unit
                         </button>
+                        <button type="button" className={brushKind === 'doodad' ? 'is-active' : ''} onClick={() => setBrushKind('doodad')} title="Place terrain doodads — only land on a tile of their home terrain.">
+                          Doodad
+                        </button>
                       </div>
                       <button
                         type="button"
                         className="tileset-brush-display"
                         onClick={() => {
-                          setCategory(brushKind === 'unit' ? 'units' : 'tiles');
+                          setCategory(brushKind === 'unit' ? 'units' : brushKind === 'doodad' ? 'doodads' : 'tiles');
                           setStudioMode('catalog');
                         }}
-                        title={brushKind === 'unit' ? 'Pick a different unit from the unit catalog' : 'Pick a different tile from the tile catalog'}
-                        aria-label={`Active brush: ${brushKind === 'unit' ? unitBrushAsset.label : brushAsset.label}. Pick a different ${brushKind}.`}
+                        title={brushKind === 'unit' ? 'Pick a different unit from the unit catalog' : brushKind === 'doodad' ? 'Pick a different doodad from the doodad catalog' : 'Pick a different tile from the tile catalog'}
+                        aria-label={`Active brush: ${brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushAsset.label}. Pick a different ${brushKind}.`}
                       >
-                        <img src={brushKind === 'unit' ? unitBrushAsset.preview : brushAsset.src} alt="" draggable={false} />
-                        <span className="tileset-brush-label">{brushKind === 'unit' ? unitBrushAsset.label : brushAsset.label}</span>
+                        <img src={brushKind === 'unit' ? unitBrushAsset.preview : brushKind === 'doodad' ? doodadBrushAsset.front : brushAsset.src} alt="" draggable={false} />
+                        <span className="tileset-brush-label">{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushAsset.label}</span>
                         <span className="tileset-brush-change">Pick in catalog ›</span>
                       </button>
                       {brushKind === 'unit' ? (
