@@ -12406,25 +12406,22 @@ button.tileset-relationship-cell {
   height: 1px;
 }
 
-/* Grouped list: one subtle container per section, rows separated by hairline
-   dividers — not an ornate frame around every row. The gold-bracket chrome stays
-   on the outer panels; the content list reads clean and scannable. */
+/* Layout container only. Each row carries its own atom-assembled frame
+   (ADR-0012/0014), so there is no CSS border/radius/background wrapping the rows. */
 .settings-section-rows {
-  background: rgba(8, 22, 34, 0.55);
-  border: 1px solid rgba(67, 127, 179, 0.26);
-  border-radius: 8px;
   display: grid;
-  overflow: hidden;
 }
 
 .settings-row {
   align-items: center;
   box-sizing: border-box;
-  /* INTERIM row frame: this row.png came from the now-retired whole-frame method.
-     The canonical method is atom assembly (ADR-0012) — this asset must be replaced
-     by an atom-assembled steel row once the row's atoms exist. Slice 16. */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/row.png") 16 fill / 12px stretch;
+  /* Atom-assembled low-fi steel row frame (ADR-0012/0014): row.png is built by
+     scripts/generate-row.mjs from the forged row-corner atom (mirrored) + derived
+     edge/fill. image-rendering: pixelated keeps the low-fi pixels crisp when the
+     border-image scales. Slice 16 captures the rail+notch in the corner's outer band. */
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
+  image-rendering: pixelated;
   display: grid;
   gap: 16px;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
