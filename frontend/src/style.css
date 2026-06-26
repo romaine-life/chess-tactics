@@ -6344,6 +6344,69 @@ h1 {
   box-shadow: 0 0 7px rgba(56, 215, 255, .38);
 }
 
+.skirmish-service-record {
+  border-top: 1px solid rgba(76, 140, 171, .28);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.skirmish-service-record h3 {
+  color: #94daf5;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: .82rem;
+  font-weight: 400;
+  letter-spacing: .5px;
+  line-height: 1;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.skirmish-service-record dl {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin: 0;
+}
+
+/* Each stat is a self-contained chip: number on top, label beneath. Enclosure +
+   stacking keep the value tied to its own label (the old label-then-far-right
+   number read ambiguously against the neighbouring column). A single row of five
+   keeps the panel as short as the original so the rail still fits. */
+.skirmish-service-record dl div {
+  align-items: center;
+  background: rgba(3, 12, 19, .5);
+  border: 1px solid rgba(64, 115, 147, .32);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 5px 1px;
+}
+
+.skirmish-service-record dt {
+  color: #8fb6c8;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: .56rem;
+  letter-spacing: 0;
+  margin: 0;
+  max-width: 100%;
+  order: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.skirmish-service-record dd {
+  color: #fff5df;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1.05rem;
+  line-height: 1;
+  margin: 0;
+  order: 1;
+}
+
 .skirmish-actions {
   display: grid;
   gap: 6px;

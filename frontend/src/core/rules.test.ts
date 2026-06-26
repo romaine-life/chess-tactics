@@ -183,6 +183,62 @@ describe('applyMove', () => {
   });
 });
 
+describe('applyMove service-record stats', () => {
+  const after = (pieces: Piece[], id: string, move: Move) =>
+    applyMove({ size: SIZE, pieces, turn: 'player' as const, winner: null }, id, move)
+      .state.pieces.find((p) => p.id === id)!;
+
+  it('counts every action in timesUsed', () => {
+    const queen = P('player', 'queen', 4, 6);
+    const moved = after([queen, P('player', 'king', 0, 11), P('enemy', 'king', 7, 0)], queen.id, { x: 2, y: 4 });
+    expect(moved.timesUsed).toBe(1);
+  });
+
+  it('measures distance with diagonals as 1.5 and orthogonals as 1', () => {
+    const ctx = (p: Piece) => [p, P('player', 'king', 0, 11), P('enemy', 'king', 7, 0)];
+    const diag = after(ctx(P('player', 'queen', 4, 6)), 'player-queen-4-6', { x: 2, y: 4 }); // 2 diagonal steps
+    expect(diag.squaresTraveled).toBe(3);
+    const orth = after(ctx(P('player', 'rook', 0, 6)), 'player-rook-0-6', { x: 3, y: 6 }); // 3 orthogonal steps
+    expect(orth.squaresTraveled).toBe(3);
+    const knight = after(ctx(P('player', 'knight', 4, 6)), 'player-knight-4-6', { x: 5, y: 4 }); // 1 diag + 1 straight
+    expect(knight.squaresTraveled).toBe(2.5);
+  });
+
+  it('counts a kill in enemiesKilled (but not a non-fatal hit)', () => {
+    const queen = P('player', 'queen', 4, 6);
+    const foe = P('enemy', 'pawn', 4, 3);
+    const killed = after([queen, foe, P('player', 'king', 0, 11), P('enemy', 'king', 7, 0)], queen.id, { x: 4, y: 3, capture: foe.id });
+    expect(killed.enemiesKilled).toBe(1);
+
+    const q2 = P('player', 'queen', 4, 6);
+    const tank = P('enemy', 'pawn', 4, 3, { hp: 2, maxHp: 2 });
+    const hit = after([q2, tank, P('player', 'king', 0, 11), P('enemy', 'king', 7, 0)], q2.id, { x: 4, y: 3, capture: tank.id });
+    expect(hit.enemiesKilled ?? 0).toBe(0);
+  });
+
+  it('counts an escape only when leaving a square an opponent attacks', () => {
+    const knight = P('player', 'knight', 4, 6);
+    const rook = P('enemy', 'rook', 4, 0); // attacks down column 4, including (4,6)
+    const fled = after([knight, rook, P('player', 'king', 0, 11), P('enemy', 'king', 7, 0)], knight.id, { x: 5, y: 4 });
+    expect(fled.escapes).toBe(1);
+
+    const safe = P('player', 'knight', 4, 6);
+    const calm = after([safe, P('player', 'king', 0, 11), P('enemy', 'king', 7, 0)], safe.id, { x: 5, y: 4 });
+    expect(calm.escapes ?? 0).toBe(0);
+  });
+
+  it('counts opponents newly placed under attack in threatsMade', () => {
+    const rook = P('player', 'rook', 0, 0);
+    const foe = P('enemy', 'pawn', 5, 5);
+    const aggressor = after([rook, foe, P('player', 'king', 1, 11), P('enemy', 'king', 7, 11)], rook.id, { x: 5, y: 0 });
+    expect(aggressor.threatsMade).toBe(1); // now attacks down column 5 onto the pawn
+
+    const idle = P('player', 'rook', 0, 0);
+    const quiet = after([idle, P('enemy', 'pawn', 5, 5), P('player', 'king', 1, 11), P('enemy', 'king', 7, 11)], idle.id, { x: 0, y: 3 });
+    expect(quiet.threatsMade ?? 0).toBe(0);
+  });
+});
+
 describe('enemy AI', () => {
   it('is deterministic for a given seed', () => {
     const pieces = [P('player', 'pawn', 4, 6), P('enemy', 'knight', 4, 2), P('enemy', 'queen', 1, 1)];
