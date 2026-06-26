@@ -62,6 +62,21 @@ export interface Piece {
   ap?: number;
   /** Max action points; refreshed to this at the start of the owner's turn. */
   maxAp?: number;
+  /**
+   * Lifetime "service record" stats for this skirmish, surfaced in the HUD.
+   * All optional + default to 0; accumulated by `applyMove` on committed moves
+   * only (never during hypothetical AI/telegraph evaluation).
+   */
+  /** Times this unit acted (moved or attacked-in-place). */
+  timesUsed?: number;
+  /** Cumulative distance moved; a diagonal step counts 1.5, an orthogonal 1. */
+  squaresTraveled?: number;
+  /** Opponents this unit has reduced to 0 hp (kills). */
+  enemiesKilled?: number;
+  /** Times this unit moved off a square an opponent was attacking. */
+  escapes?: number;
+  /** Opponents this unit newly placed under attack by moving. */
+  threatsMade?: number;
 }
 
 export interface LastMove {
