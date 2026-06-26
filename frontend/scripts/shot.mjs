@@ -1,69 +1,74 @@
 #!/usr/bin/env node
-// Headless-Chrome screenshot helper.
+// Deterministic UI screenshot tool — works on ANY live route, no per-target scaffolding.
 //
-// Why this exists: the in-editor preview/screenshot tool's *capture* step hangs
-// on this machine (the dev server is fine — only the screenshot grab times out).
-// Driving the installed Chrome/Edge in headless mode and writing a PNG to disk
-// is reliable, dependency-free, and scriptable. Read the PNG to view it.
+// Why: the in-editor preview capture hangs on this machine, and naive full-page grabs are
+// too many pixels. This drives the installed Chrome via puppeteer-core (no bundled browser
+// download), navigates to a real route, freezes animation for determinism, and — given a
+// CSS selector — clips the capture to that element's exact bounds. The result is a small,
+// focused, repeatable PNG. Read it to view.
 //
 // Usage:
-//   node frontend/scripts/shot.mjs <url> [outPath] [WxH]
+//   node scripts/shot.mjs <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>] [--full]
 //
 // Examples:
-//   node frontend/scripts/shot.mjs http://127.0.0.1:5199/unit-studio
-//   node frontend/scripts/shot.mjs "http://127.0.0.1:5199/tileset-studio?mode=lab&lab=board&view=board" tmp-shots/lab.png 1460x840
-//
-// Notes:
-//   * The studio encodes its state in the URL (mode=catalog|lab, lab=board|tile|unit,
-//     view=board, family=, collection=, asset=, unit=, seed=...), so any Catalog/Lab
-//     state is reachable as a deep link — no clicking required for a static shot.
-//   * --virtual-time-budget lets React render and settle before the grab.
+//   node scripts/shot.mjs http://127.0.0.1:5199/skirmish --select '[data-testid=skirmish-board]'
+//   node scripts/shot.mjs http://127.0.0.1:5199/unit-studio --select '.studio-stage' --out tmp-shots/unit.png
+//   node scripts/shot.mjs http://127.0.0.1:5199/doodad-proof/focus.html   (whole small fixture page)
 
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import puppeteer from 'puppeteer-core';
 
-const BROWSERS = [
+const argv = process.argv.slice(2);
+const url = argv[0];
+const flag = (name, def) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? (argv[i + 1] ?? true) : def; };
+const has = (name) => argv.includes(`--${name}`);
+
+const select = flag('select');
+const out = resolve(process.cwd(), flag('out', 'tmp-shots/shot.png'));
+const [w, h] = String(flag('size', '1280x800')).split('x').map(Number);
+const readyExpr = flag('ready');
+const fullPage = has('full');
+
+const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
-
-const url = process.argv[2];
-const outArg = process.argv[3] ?? 'tmp-shots/shot.png';
-const sizeArg = process.argv[4] ?? '1460x840';
-
-if (!url) {
-  console.error('Usage: node frontend/scripts/shot.mjs <url> [outPath] [WxH]');
-  process.exit(2);
-}
-
-const browser = BROWSERS.find((p) => existsSync(p));
-if (!browser) {
-  console.error('No Chrome/Edge binary found. Checked:\n' + BROWSERS.join('\n'));
-  process.exit(1);
-}
-
-const [w, h] = sizeArg.split('x');
-const out = resolve(process.cwd(), outArg);
+const executablePath = CHROMES.find(existsSync);
+if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--ready jsExpr] [--full]'); process.exit(2); }
+if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
 
-const args = [
-  '--headless=new',
-  '--no-sandbox',
-  '--disable-gpu',
-  '--hide-scrollbars',
-  '--force-device-scale-factor=1',
-  `--window-size=${w},${h}`,
-  '--virtual-time-budget=7000',
-  `--screenshot=${out}`,
-  url,
-];
+const browser = await puppeteer.launch({
+  executablePath,
+  headless: 'new',
+  args: ['--no-sandbox', '--disable-gpu', '--disable-software-rasterizer', '--disable-background-networking',
+    '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--hide-scrollbars'],
+});
+try {
+  const page = await browser.newPage();
+  await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
+  await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
 
-const res = spawnSync(browser, args, { stdio: 'inherit' });
-if (res.status !== 0 || !existsSync(out)) {
-  console.error(`Screenshot failed (exit ${res.status}).`);
-  process.exit(res.status || 1);
+  // Determinism: kill animations/transitions so a live screen captures identically every run.
+  await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });
+
+  // Readiness: explicit gate if given, else a quick best-effort wait on window.__ready (fixtures set it).
+  await page.waitForFunction(readyExpr || 'window.__ready===true', { timeout: readyExpr ? 15000 : 1200 }).catch(() => {});
+  await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+  await new Promise((r) => setTimeout(r, 200));
+
+  if (select) {
+    const el = await page.$(select);
+    if (!el) { console.error(`selector not found: ${select}`); process.exit(3); }
+    await el.screenshot({ path: out });
+  } else {
+    await page.screenshot({ path: out, fullPage });
+  }
+  const { size } = statSync(out);
+  console.log(`wrote ${out} (${(size / 1024).toFixed(1)} KB)`);
+} finally {
+  await browser.close();
 }
-console.log(`Wrote ${out}`);
