@@ -604,6 +604,7 @@ function StudioEditableBoard({
   onErase,
   onSelect,
   overlay,
+  hidden,
 }: {
   cols: number;
   rows: number;
@@ -623,6 +624,8 @@ function StudioEditableBoard({
   onErase: (x: number, y: number) => void;
   onSelect: (x: number, y: number) => void;
   overlay?: ReactNode;
+  /** Per-layer visibility — a true value hides that layer's elements on the board. */
+  hidden?: { tile: boolean; unit: boolean; doodad: boolean };
 }): ReactElement {
   const paintingRef = useRef(false);
   const stopPainting = () => { paintingRef.current = false; };
@@ -649,7 +652,7 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {asset ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
+            {asset && !hidden?.tile ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
@@ -676,7 +679,7 @@ function StudioEditableBoard({
     const [cx, cy] = key.split(',').map(Number);
     const { left, top, zIndex } = boardLabCellPosition({ x: cx, y: cy });
     const doodadEntry = placedDoodads[key] ? resolveDoodad(placedDoodads[key].doodadId) : undefined;
-    if (doodadEntry) {
+    if (doodadEntry && !hidden?.doodad) {
       overlaySprites.push(<DoodadSprite key={`dd-${key}`} doodad={{ x: cx, y: cy, type: doodadEntry.id }} />);
       // The doodad stands UP above its foot cell, but the shared sprite is pointer-events:none,
       // so clicking the visible prop body falls through to the cell behind it — erase/select
@@ -700,7 +703,7 @@ function StudioEditableBoard({
     }
     const unitPlacement = placedUnits[key];
     const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
-    if (unitAsset && unitPlacement) {
+    if (unitAsset && unitPlacement && !hidden?.unit) {
       const sprite = hasDirectionSprite(unitAsset, unitPlacement.direction)
         ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
         : MISSING_DIRECTION_SPRITE;
@@ -1375,6 +1378,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [boardCells, setBoardCells] = useState<Record<string, string>>({});
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>({});
+  // Per-layer visibility — each focus's eye toggle flips its own layer; the board hides it.
+  const [hiddenLayers, setHiddenLayers] = useState<{ tile: boolean; unit: boolean; doodad: boolean }>({ tile: false, unit: false, doodad: false });
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [boardSectionOpen, setBoardSectionOpen] = useState(true);
   const [viewSectionOpen, setViewSectionOpen] = useState(true);
@@ -1914,6 +1919,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         : `${family.label} · ${selectedAsset.role}`;
   const hasLabTiles = Object.keys(boardCells).length > 0;
   const hasLabUnits = Object.keys(boardUnits).length > 0;
+  // The layer the current focus governs — its eye toggle hides that layer on the board.
+  const visionLayer: 'tile' | 'unit' | 'doodad' = labMode === 'unit' ? 'unit' : labMode === 'doodad' ? 'doodad' : 'tile';
+  const visionLabel = visionLayer === 'unit' ? 'units' : visionLayer === 'doodad' ? 'doodads' : 'tiles';
   const normalizedUnitQuery = catalogQuery.trim().toLowerCase();
   const visibleUnits = normalizedUnitQuery
     ? unitAssets.filter((unit) => [unit.label, unit.badge, unit.family, unit.read, unit.status].join(' ').toLowerCase().includes(normalizedUnitQuery))
@@ -2363,6 +2371,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   onPaint={paintCell}
                   onErase={eraseCell}
                   onSelect={selectBoardCell}
+                  hidden={hiddenLayers}
                 />
               </div>
             </ViewPane>
@@ -2409,6 +2418,20 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   Doodad
                 </button>
               </div>
+                      <button
+                        type="button"
+                        className={`tileset-vision-toggle ${hiddenLayers[visionLayer] ? 'is-hidden' : ''}`.trim()}
+                        onClick={() => setHiddenLayers((h) => ({ ...h, [visionLayer]: !h[visionLayer] }))}
+                        aria-pressed={hiddenLayers[visionLayer]}
+                        title={`${hiddenLayers[visionLayer] ? 'Show' : 'Hide'} all ${visionLabel} on the board`}
+                      >
+                        {hiddenLayers[visionLayer] ? (
+                          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 8 C4 4.5 12 4.5 14 8 C12 11.5 4 11.5 2 8 Z" fill="none" stroke="currentColor" strokeWidth="1.3" /><circle cx="8" cy="8" r="2.1" fill="currentColor" /><line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+                        ) : (
+                          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 8 C4 4.5 12 4.5 14 8 C12 11.5 4 11.5 2 8 Z" fill="none" stroke="currentColor" strokeWidth="1.3" /><circle cx="8" cy="8" r="2.1" fill="currentColor" /></svg>
+                        )}
+                        {hiddenLayers[visionLayer] ? `${visionLabel} hidden` : `Hide ${visionLabel}`}
+                      </button>
                       <div className="tileset-tier-seg tileset-tools" aria-label="Board tool">
                         <button type="button" className={tool === 'select' ? 'is-active' : ''} onClick={() => setTool('select')} title="Select tool — click a tile to highlight it (then fill its neighbors). Doesn't paint or erase.">
                           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 2 L3 13 L6 10 L8 14.6 L9.8 13.8 L7.8 9.4 L12.5 9.4 Z" fill="currentColor" /></svg>

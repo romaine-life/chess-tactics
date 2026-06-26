@@ -10371,6 +10371,28 @@ button.tileset-relationship-cell {
   overflow-wrap: anywhere;
 }
 
+/* Per-focus layer-visibility toggle (the "vision" eye). Amber when the layer is hidden,
+   so it's obvious the board is concealing something rather than empty. */
+.tileset-vision-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 10px;
+  color: #cfe3ef;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.34);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 700 12px/1.1 var(--ds-font-sans, system-ui, sans-serif);
+}
+.tileset-vision-toggle svg { flex: none; }
+.tileset-vision-toggle.is-hidden {
+  color: #f0c98a;
+  background: rgba(58, 40, 16, 0.5);
+  border-color: rgba(216, 162, 92, 0.6);
+}
+
 .tileset-inspector-tabs button {
   border-color: transparent;
 }
