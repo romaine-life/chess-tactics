@@ -31,6 +31,8 @@ import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog
 import { AssetLibraryStudio, AssetLab, type AssetFilter } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
+import { DoodadLabView } from './DoodadLabView';
+import { doodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { useCampaigns } from '../campaign/store';
@@ -77,7 +79,7 @@ type ViewerKind = 'asset' | 'artwork' | 'portrait';
 // instead of an empty stage before anything is opened.
 const FIRST_ARTWORK_ID: string = artworkManifest.groups[0]?.items[0]?.id ?? '';
 type TileFilter = 'base' | 'board';
-type LabMode = 'board' | 'tile' | 'unit';
+type LabMode = 'board' | 'tile' | 'unit' | 'doodad';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
 type TransitionViewMode = 'tile' | 'proof' | 'sample';
 
@@ -236,7 +238,7 @@ const isStudioFamilyId = (value: string | null): value is StudioFamilyId => valu
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
 const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'assets' || value === 'artwork';
-const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit';
+const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
 
@@ -1284,6 +1286,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
   const [category, setCategory] = useState<StudioCategory>(initialRoute.category ?? initialCategory);
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
+  const [doodadBrushId] = useState<string>('grass-tuft');
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
@@ -1926,6 +1929,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setBrushKind('unit');
     setStudioMode('lab');
   };
+  const openDoodadLab = (): void => {
+    setLabMode('doodad');
+    setStudioMode('lab');
+  };
 
   // Catalog asset-type descriptors. The generic <CatalogGrid>/<CatalogControls>
   // render either of these; a new asset type is just another descriptor.
@@ -2155,6 +2162,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               }}
             >
               <div className={`tileset-view-board-content is-${viewVisualKind}`}>
+                {labMode === 'doodad' ? (
+                  <DoodadLabView doodad={doodadAsset(doodadBrushId)} />
+                ) : (
                 <StudioEditableBoard
                   cols={editableGrid.columns}
                   rows={editableGrid.rows}
@@ -2172,6 +2182,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   onErase={eraseCell}
                   onSelect={selectBoardCell}
                 />
+                )}
               </div>
             </ViewPane>
             </section>
@@ -2206,6 +2217,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   title={hasLabUnits ? 'Inspect the selected unit on the loaded board.' : 'Place or select a unit first.'}
                 >
                   Unit
+                </button>
+                <button
+                  type="button"
+                  className={labMode === 'doodad' ? 'is-active' : ''}
+                  onClick={openDoodadLab}
+                  title="Preview a doodad with a unit standing in it."
+                >
+                  Doodad
                 </button>
               </div>
                       <div className="tileset-tier-seg tileset-tools" aria-label="Board tool">

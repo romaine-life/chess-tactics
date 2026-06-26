@@ -191,6 +191,32 @@ function UnitPiece({ piece, selected = false, focused = false }: { piece: Piece;
   );
 }
 
+type Doodad = { x: number; y: number; type: 'grass-tuft' };
+
+// A doodad rendered as a back/front sprite pair, anchored at the tile contact point and
+// z-sorted to BRACKET any unit on its cell: the back half tucks behind the unit, the front
+// half falls over its shins — so the unit stands *in* the doodad, not on top of a flat billboard.
+function DoodadSprite({ doodad }: { doodad: Doodad }) {
+  const { left, top, zIndex } = boardLabCellPosition(doodad);
+  const base = zIndex + 20000; // share the unit depth band so cross-cell sorting still holds
+  const common = {
+    position: 'absolute' as const,
+    left,
+    top,
+    width: 96,
+    height: 180,
+    transform: 'translate(-50%, -38.333%)', // seat the (48,69) contact pixel on the cell centre
+    pointerEvents: 'none' as const,
+  };
+  const src = (half: 'back' | 'front') => `/assets/doodads/${doodad.type}/${half}.png`;
+  return (
+    <>
+      <img src={src('back')} alt="" data-doodad="back" draggable={false} style={{ ...common, zIndex: base - 1 }} />
+      <img src={src('front')} alt="" data-doodad="front" draggable={false} style={{ ...common, zIndex: base + 1 }} />
+    </>
+  );
+}
+
 export function SkirmishBoard() {
   const [boardZoom, setBoardZoom] = useState(0.9);
   const [boardPan, setBoardPan] = useState({ x: 0, y: -12 });
@@ -251,6 +277,16 @@ export function SkirmishBoard() {
 
   const setZoom = (zoom: number) => setBoardZoom(Math.min(1.45, Math.max(0.55, Number(zoom.toFixed(2)))));
 
+  // STEP 1 demo: a single real grass-tuft doodad seeded under the most central player unit
+  // (so it's clearly visible), to prove back/front embedding on the live board. Real
+  // placements move to the decals layer next.
+  const centroidX = livePieces.reduce((sum, piece) => sum + piece.x, 0) / Math.max(1, livePieces.length);
+  const centroidY = livePieces.reduce((sum, piece) => sum + piece.y, 0) / Math.max(1, livePieces.length);
+  const doodadAnchor = livePieces
+    .filter((piece) => piece.side === 'player')
+    .sort((a, b) => Math.hypot(a.x - centroidX, a.y - centroidY) - Math.hypot(b.x - centroidX, b.y - centroidY))[0];
+  const doodads: Doodad[] = doodadAnchor ? [{ x: doodadAnchor.x, y: doodadAnchor.y, type: 'grass-tuft' }] : [];
+
   return (
     <div data-testid="skirmish-board" className="skirmish-board-lab">
       <div className="skirmish-board-tools" aria-label="Board view controls">
@@ -305,6 +341,9 @@ export function SkirmishBoard() {
             );
           }}
         >
+          {doodads.map((doodad, index) => (
+            <DoodadSprite key={`doodad-${index}`} doodad={doodad} />
+          ))}
           {livePieces.map((piece) => (
             <UnitPiece
               key={piece.id}
