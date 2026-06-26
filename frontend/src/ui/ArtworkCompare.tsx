@@ -44,7 +44,8 @@ function readParams(): { image: string; route: string } {
 
 export function ArtworkCompare(): ReactElement {
   const [{ image, route }, setState] = useState(readParams);
-  const [frame, setFrame] = useState({ scale: 1, height: 900 });
+  const [aspect, setAspect] = useState(0.625);
+  const [frame, setFrame] = useState({ scale: 1, height: DESKTOP_W * 0.625 });
   const [reloadKey, setReloadKey] = useState(0);
   const liveStage = useRef<HTMLDivElement>(null);
 
@@ -58,19 +59,20 @@ export function ArtworkCompare(): ReactElement {
     window.history.replaceState(window.history.state, '', `${window.location.pathname}?${p.toString()}`);
   }, [image, route]);
 
-  // Recompute the live-panel scale whenever the panel resizes.
+  // Match the live panel to the art's aspect ratio so both panes show an
+  // identically sized viewing box. The app renders at desktop width, then scales
+  // down to fit the panel.
   useEffect(() => {
     const el = liveStage.current;
     if (!el) return;
     const recompute = () => {
-      const scale = el.clientWidth / DESKTOP_W;
-      setFrame({ scale, height: scale > 0 ? el.clientHeight / scale : el.clientHeight });
+      setFrame({ scale: el.clientWidth / DESKTOP_W, height: DESKTOP_W * aspect });
     };
     recompute();
     const ro = new ResizeObserver(recompute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [aspect]);
 
   const pickArt = (id: string) => {
     const next = ART.find((a) => a.id === id) ?? ART[0];
@@ -92,7 +94,11 @@ export function ArtworkCompare(): ReactElement {
           </select>
         </header>
         <div className="ac-stage ac-art-stage">
-          <img src={art.src} alt={`${art.label} concept art`} />
+          <img
+            src={art.src}
+            alt={`${art.label} concept art`}
+            onLoad={(e) => setAspect(e.currentTarget.naturalHeight / e.currentTarget.naturalWidth)}
+          />
         </div>
       </div>
 
