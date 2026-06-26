@@ -161,8 +161,9 @@ const AC_CSS = `
   box-shadow: none; text-shadow: none; cursor: pointer; }
 .ac-bar button:hover { background: #17223a; border-color: #2a3c5e; box-shadow: none; }
 .ac-stage { position: relative; flex: 1 1 auto; overflow: auto; background: #06080d;
-  display: flex; justify-content: center; align-items: flex-start; padding: 14px; }
+  display: flex; justify-content: center; align-items: flex-start; padding: 22px; }
 .ac-frame { width: 100%; box-sizing: border-box; overflow: hidden; position: relative;
-  background: #06080d; border: 2px solid #3a557f; border-radius: 4px; }
+  background: #06080d; border: 2px solid #79c4ff; border-radius: 5px;
+  box-shadow: 0 0 0 1px rgba(2, 7, 11, .9), 0 10px 28px rgba(0, 0, 0, .55); }
 .ac-art-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 `;
