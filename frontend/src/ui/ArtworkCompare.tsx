@@ -102,7 +102,7 @@ function ComparePane({ opts, value, css, onPick, onReload, reloadKey }: {
     const el = stage.current;
     if (!el) return;
     const recompute = () => {
-      const pad = 20;
+      const pad = 40; // leave room for the frame's own border + inner inset
       const availW = Math.max(1, el.clientWidth - pad);
       const availH = Math.max(1, el.clientHeight - pad);
       const w = Math.min(availW, availH / aspect);
@@ -266,8 +266,8 @@ const AC_CSS = `
 .ac-open:hover { background: #17223a; color: #cfeaff; }
 .ac-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; background: #06080d;
   display: flex; justify-content: center; align-items: center; padding: 12px; }
-.ac-frame { box-sizing: border-box; overflow: hidden; position: relative; flex: 0 0 auto;
-  background: #06080d; border: 2px solid #79c4ff; border-radius: 5px;
+.ac-frame { box-sizing: content-box; overflow: hidden; position: relative; flex: 0 0 auto;
+  padding: 6px; background: #06080d; border: 2px solid #79c4ff; border-radius: 5px;
   box-shadow: 0 0 0 1px rgba(2, 7, 11, .9), 0 8px 22px rgba(0, 0, 0, .5); }
 .ac-frame-spec { border-color: #ffd479; }
 .ac-art-img { width: 100%; height: 100%; object-fit: contain; display: block; }
