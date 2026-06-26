@@ -4,6 +4,15 @@ This document is the source of truth for the current visual redesign. Treat it
 as binding for implementation work unless the product direction changes in a
 later design review.
 
+## Decision Records
+
+Individual decisions — with their context, alternatives, and rationale — are
+recorded as ADRs in [`adr/`](adr/) (see the [decision log](adr/decision-log.md)).
+Those records are authoritative for *why* a choice was made. This contract is the
+consolidated *current-state* view: it states the rules in force now and should
+cite the ADR each derives from. When the two disagree, the ADRs win and this doc
+is brought back into line.
+
 ## Chosen Direction
 
 **Dark Strategy Pixel battlefield inside a dark low-glare app shell.**
