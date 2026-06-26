@@ -99,7 +99,7 @@ function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogT
         </span>
         <span className="tileset-card-actions">
           {type.onArm ? (
-            <span className="tileset-card-action" title={`Place ${model.title} on the board`} aria-label={`Place ${model.title}`} {...action(() => type.onArm!(asset))}>
+            <span className="tileset-card-action" title={`Use ${model.title} as the board brush`} aria-label={`Use ${model.title} as brush`} {...action(() => type.onArm!(asset))}>
               🖌
             </span>
           ) : null}
