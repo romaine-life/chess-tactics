@@ -676,7 +676,28 @@ function StudioEditableBoard({
     const [cx, cy] = key.split(',').map(Number);
     const { left, top, zIndex } = boardLabCellPosition({ x: cx, y: cy });
     const doodadEntry = placedDoodads[key] ? resolveDoodad(placedDoodads[key].doodadId) : undefined;
-    if (doodadEntry) overlaySprites.push(<DoodadSprite key={`dd-${key}`} doodad={{ x: cx, y: cy, type: doodadEntry.id }} />);
+    if (doodadEntry) {
+      overlaySprites.push(<DoodadSprite key={`dd-${key}`} doodad={{ x: cx, y: cy, type: doodadEntry.id }} />);
+      // The doodad stands UP above its foot cell, but the shared sprite is pointer-events:none,
+      // so clicking the visible prop body falls through to the cell behind it — erase/select
+      // would miss the doodad. This Studio-only hit target sits over the prop and routes the
+      // tool to the doodad's OWN cell. It's transparent in brush mode so painting still flows
+      // to the tiles underneath; it only catches clicks while erasing or selecting.
+      overlaySprites.push(
+        <span
+          key={`dd-hit-${key}`}
+          className="tileset-doodad-hit"
+          style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' ? 'none' : 'auto' }}
+          onPointerDown={(event) => {
+            if (event.button === 2) return;
+            event.stopPropagation();
+            if (tool !== 'select') paintingRef.current = true;
+            applyTool(cx, cy);
+          }}
+          onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
+        />,
+      );
+    }
     const unitPlacement = placedUnits[key];
     const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
     if (unitAsset && unitPlacement) {

@@ -11077,13 +11077,17 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-/* Cursor hints per tool (on the diamond hit overlay). */
+/* Cursor hints per tool (on the diamond hit overlay + the standing-doodad hit target). */
 .tileset-placement-board.is-tool-brush .tileset-cell-hit {
   cursor: crosshair;
 }
+.tileset-placement-board.is-tool-select .tileset-doodad-hit {
+  cursor: pointer;
+}
 /* An eraser-shaped cursor (mirrors the Erase toolbar icon). NOT `not-allowed` — the
    circle-slash reads as "you can't do this" even though erasing is the active action. */
-.tileset-placement-board.is-tool-erase .tileset-cell-hit {
+.tileset-placement-board.is-tool-erase .tileset-cell-hit,
+.tileset-placement-board.is-tool-erase .tileset-doodad-hit {
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 16 16'%3E%3Crect x='2.6' y='7.6' width='9.4' height='5' rx='1.2' transform='rotate(-40 7.3 10.1)' fill='%231a3550' stroke='%23eaf2fb' stroke-width='1.4'/%3E%3Cline x1='6' y1='13.6' x2='13.6' y2='13.6' stroke='%23eaf2fb' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 6 18, cell;
 }
 .tileset-placement-board.is-tool-select .tileset-cell-hit {
