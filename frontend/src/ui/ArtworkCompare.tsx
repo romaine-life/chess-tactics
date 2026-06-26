@@ -47,7 +47,7 @@ export function ArtworkCompare(): ReactElement {
   const [aspect, setAspect] = useState(0.625);
   const [frame, setFrame] = useState({ scale: 1, height: DESKTOP_W * 0.625 });
   const [reloadKey, setReloadKey] = useState(0);
-  const liveStage = useRef<HTMLDivElement>(null);
+  const liveFrame = useRef<HTMLDivElement>(null);
 
   const art = useMemo(() => ART.find((a) => a.id === image) ?? ART[0], [image]);
 
@@ -63,7 +63,7 @@ export function ArtworkCompare(): ReactElement {
   // identically sized viewing box. The app renders at desktop width, then scales
   // down to fit the panel.
   useEffect(() => {
-    const el = liveStage.current;
+    const el = liveFrame.current;
     if (!el) return;
     const recompute = () => {
       setFrame({ scale: el.clientWidth / DESKTOP_W, height: DESKTOP_W * aspect });
@@ -80,6 +80,10 @@ export function ArtworkCompare(): ReactElement {
   };
   const pickRoute = (r: string) => setState((s) => ({ ...s, route: r }));
 
+  // Both panes draw an identical bordered box of this height so the viewing
+  // area reads the same on each side.
+  const boxH = Math.round(frame.scale * frame.height);
+
   return (
     <section className="ac">
       <style>{AC_CSS}</style>
@@ -93,12 +97,15 @@ export function ArtworkCompare(): ReactElement {
             ))}
           </select>
         </header>
-        <div className="ac-stage ac-art-stage">
-          <img
-            src={art.src}
-            alt={`${art.label} concept art`}
-            onLoad={(e) => setAspect(e.currentTarget.naturalHeight / e.currentTarget.naturalWidth)}
-          />
+        <div className="ac-stage">
+          <div className="ac-frame" style={{ height: boxH }}>
+            <img
+              className="ac-art-img"
+              src={art.src}
+              alt={`${art.label} concept art`}
+              onLoad={(e) => setAspect(e.currentTarget.naturalHeight / e.currentTarget.naturalWidth)}
+            />
+          </div>
         </div>
       </div>
 
@@ -115,19 +122,21 @@ export function ArtworkCompare(): ReactElement {
             ↻ Reload
           </button>
         </header>
-        <div className="ac-stage" ref={liveStage}>
-          <iframe
-            key={reloadKey}
-            title="Live app"
-            src={route}
-            style={{
-              width: DESKTOP_W,
-              height: frame.height,
-              transform: `scale(${frame.scale})`,
-              transformOrigin: 'top left',
-              border: 0,
-            }}
-          />
+        <div className="ac-stage">
+          <div className="ac-frame" ref={liveFrame} style={{ height: boxH }}>
+            <iframe
+              key={reloadKey}
+              title="Live app"
+              src={route}
+              style={{
+                width: DESKTOP_W,
+                height: frame.height,
+                transform: `scale(${frame.scale})`,
+                transformOrigin: 'top left',
+                border: 0,
+              }}
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -146,7 +155,9 @@ const AC_CSS = `
 .ac-bar select, .ac-bar button { background: #111a2c; color: #dbe9ff;
   border: 1px solid #2a3c5e; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
 .ac-bar button:hover { background: #17223a; }
-.ac-stage { position: relative; flex: 1 1 auto; overflow: hidden; background: #06080d; }
-.ac-art-stage { display: flex; align-items: flex-start; justify-content: center; overflow: auto; }
-.ac-art-stage img { max-width: 100%; height: auto; display: block; }
+.ac-stage { position: relative; flex: 1 1 auto; overflow: auto; background: #06080d;
+  display: flex; justify-content: center; align-items: flex-start; padding: 14px; }
+.ac-frame { width: 100%; box-sizing: border-box; overflow: hidden; position: relative;
+  background: #06080d; border: 2px solid #3a557f; border-radius: 4px; }
+.ac-art-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 `;
