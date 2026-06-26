@@ -9,26 +9,31 @@ and don't tell the user screenshots are impossible. Use the helper below.
 
 ### How
 
-1. Start the dev server (from `frontend/`):
-   ```
-   npx vite --host 127.0.0.1 --port 5199 --strictPort
-   ```
-   It serves `index.html` for every route (SPA), so any path works.
+1. Start the dev server **persistently** — through devctl (the dev-servers skill), not a
+   backgrounded bash that dies between turns. Plain fallback from `frontend/`:
+   `npx vite --host 127.0.0.1 --port 5199 --strictPort`. It serves `index.html` for every
+   route (SPA), so any path works.
 
-2. Capture a route to a PNG with the helper, then read the PNG:
+2. Capture with the `shot` tool. It drives the installed Chrome via `puppeteer-core`
+   (system browser, no bundled download), freezes animation for determinism, and **clips
+   to a CSS selector** — so you get small, focused, analyzable pixels instead of a
+   full-page grab (too many pixels is what breaks image analysis):
    ```
-   npm run shot -- <url> [outPath] [WxH]
+   npm run shot -- <url> [--select <css>] [--out <path>] [--size <WxH>] [--ready <jsExpr>] [--full]
    ```
    Examples:
    ```
-   npm run shot -- http://127.0.0.1:5199/unit-studio
-   npm run shot -- "http://127.0.0.1:5199/tileset-studio?mode=lab&lab=board&view=board" tmp-shots/lab.png 1460x840
+   # one element off a REAL screen — small, exact, no fixture needed:
+   npm run shot -- http://127.0.0.1:5199/skirmish --select '[data-testid=skirmish-board]'
+   npm run shot -- http://127.0.0.1:5199/skirmish --select '.skirmish-board-unit' --out tmp-shots/unit.png
+   # whole viewport / a small fixture page:
+   npm run shot -- http://127.0.0.1:5199/unit-studio --size 1200x800
    ```
-   Output defaults to `frontend/tmp-shots/shot.png` (the dir is gitignored).
+   Output defaults to `frontend/tmp-shots/shot.png` (gitignored). **Default to showing the
+   small PNG inline — never substitute a link + description for the pixels.**
 
-This drives the installed Chrome/Edge headless (`frontend/scripts/shot.mjs`) — no
-dependencies, no flaky capture step. Chrome and Edge are both installed on this
-machine.
+This works on ANY live route by selector — no per-target fixture, so there's no "new
+screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 
 ### Reaching a specific UI state
 
