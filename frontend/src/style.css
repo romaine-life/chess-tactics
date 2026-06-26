@@ -10207,6 +10207,10 @@ button.tileset-relationship-cell {
   min-height: 0;
   min-width: 0;
   overflow: auto;
+  /* Reserve the scrollbar gutter permanently so the grid doesn't reflow when the scrollbar
+     toggles between scrolling/not (e.g. switching to a category with fewer items). This is
+     the "frame never moves" rule in docs/studio-control-architecture.md, at the scroll level. */
+  scrollbar-gutter: stable;
   padding: 12px;
   background: rgba(5, 16, 25, 0.92);
   border: 1px solid rgba(67, 127, 179, 0.28);
