@@ -12080,6 +12080,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-header-frame {
+  align-content: center;
   align-items: center;
   block-size: var(--app-header-h);
   display: grid;
@@ -12179,9 +12180,8 @@ button.tileset-relationship-cell {
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   justify-content: flex-end;
-  min-height: 54px;
   min-width: 0;
-  padding: 4px 4px 4px 12px;
+  padding: 0 4px 0 12px;
 }
 
 .settings-account span {
@@ -12476,19 +12476,20 @@ button.tileset-relationship-cell {
 .settings-header-button {
   block-size: 46px;
   border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 36 fill / 12px round;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
   flex: none;
+  image-rendering: pixelated;
   inline-size: auto;
   min-inline-size: 92px;
   padding: 0 14px;
 }
 
-/* Sign In / Sign Out is the promoted account action — the one primary in the bar.
-   Give it the kit's filled-blue primary art (same as the Studio "Open" button), so
-   it reads as the primary while Back/Menu recede as neutral framed secondaries. */
+/* Sign In / Sign Out is the primary account action — the cyan-bracket mode-button
+   frame (same family as the nav active) marks it primary while Back/Menu stay
+   gold. Matches the concept's bracket buttons. */
 .settings-header-button-active {
-  border-image: url("/assets/ui/kit/button-primary.png") 9 16 fill / 9px 16px stretch;
-  border-width: 9px 16px;
+  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
+  border-width: 12px;
 }
 
 .settings-stepper {
