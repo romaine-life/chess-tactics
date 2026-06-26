@@ -9417,6 +9417,21 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+/* An inspector property whose value is a link into the Glossary (e.g. Layering). */
+.tileset-inline-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #72bde8;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tileset-inline-link:hover {
+  color: #a6d8f5;
+}
+
 .tileset-view-controls p {
   margin: 0;
   color: #a9bdd2;

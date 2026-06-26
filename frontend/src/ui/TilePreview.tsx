@@ -1997,6 +1997,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const selectDoodadInCatalog = (doodadId: string): void => {
     setDoodadBrushId(doodadId);
   };
+  // Jump from an inspector property to its full explanation in the Glossary Viewer.
+  const openGlossaryTerm = (term: string): void => {
+    setSelectedGlossaryName(term);
+    setCategory('glossary');
+    openViewer('glossary');
+  };
   const armDoodadBrush = (doodadId: string): void => {
     // Arm the doodad as the active brush (mirrors armUnitBrush) — do NOT place it. The user
     // paints it onto a matching-terrain tile; the paint itself enforces the hard gate.
@@ -2585,7 +2591,18 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
 
               <section className="tileset-inspector-section" aria-label="Selected item details">
                 <h2>Details</h2>
-                {labMode === 'unit' ? (
+                {labMode === 'doodad' ? (
+                  <dl>
+                    <InspectorRow label="Doodad">{doodadBrushAsset.label}</InspectorRow>
+                    <InspectorRow label="Home Terrain">{doodadBrushAsset.terrains.join(', ') || '—'}</InspectorRow>
+                    <InspectorRow label="Layering">
+                      <button type="button" className="tileset-inline-link" onClick={() => openGlossaryTerm('split-layer doodad')}>
+                        Split-layer doodad →
+                      </button>
+                    </InspectorRow>
+                    <InspectorRow label="Status">{doodadBrushAsset.status}</InspectorRow>
+                  </dl>
+                ) : labMode === 'unit' ? (
                   <dl>
                     <InspectorRow label="Unit">{unitBrushAsset.label}</InspectorRow>
                     <InspectorRow label="Piece">{unitBrushAsset.family}</InspectorRow>
@@ -2626,7 +2643,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                     </InspectorRow>
                   </dl>
                 )}
-                <p>{labMode === 'unit' ? unitBrushAsset.read : viewTransitionSlot ? viewTransitionAsset?.notes ?? 'This transition slot is required but has no production tile assigned yet.' : selectedAsset.notes}</p>
+                <p>{labMode === 'doodad' ? 'A split-layer prop the unit stands inside; placeable only on its home terrain. See the Layering link for how the split works.' : labMode === 'unit' ? unitBrushAsset.read : viewTransitionSlot ? viewTransitionAsset?.notes ?? 'This transition slot is required but has no production tile assigned yet.' : selectedAsset.notes}</p>
               </section>
             </aside>
           </>
