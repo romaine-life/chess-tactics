@@ -1,3 +1,9 @@
+// This file implements the Studio. It MUST follow the control architecture spec in
+// docs/studio-control-architecture.md — read it before adding a mode, category, or surface.
+// Invariants: ONE persistent surface (the board); Board/Tile/Unit/Doodad are *focuses*
+// (control sets that share that board), NOT separate views; the frame never moves; a new
+// board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
+// `category === '…'` branch.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode, type WheelEvent } from 'react';
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
 import { tileFamilies } from '../art/tileset';
@@ -31,8 +37,7 @@ import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog
 import { AssetLibraryStudio, AssetLab, type AssetFilter } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
-import { DoodadLabView } from './DoodadLabView';
-import { doodadAsset } from './doodadCatalog';
+import { doodadAsset, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { useCampaigns } from '../campaign/store';
@@ -573,8 +578,10 @@ function StudioEditableBoard({
   rows,
   cells: placed,
   units: placedUnits,
+  doodads: placedDoodads,
   resolveAsset,
   resolveUnit,
+  resolveDoodad,
   tool,
   selectedCell,
   showFootprint,
@@ -590,8 +597,10 @@ function StudioEditableBoard({
   rows: number;
   cells: Record<string, string>;
   units: Record<string, BoardUnitPlacement>;
+  doodads: Record<string, { doodadId: string }>;
   resolveAsset: (id: string) => StudioAsset | undefined;
   resolveUnit: (id: string) => UnitAsset | undefined;
+  resolveDoodad: (id: string) => DoodadAsset | undefined;
   tool: 'select' | 'brush' | 'erase';
   selectedCell: { x: number; y: number } | null;
   showFootprint: boolean;
@@ -622,6 +631,8 @@ function StudioEditableBoard({
       const asset = assetId ? resolveAsset(assetId) : undefined;
       const unitPlacement = placedUnits[key];
       const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
+      const doodadPlacement = placedDoodads[key];
+      const doodadEntry = doodadPlacement ? resolveDoodad(doodadPlacement.doodadId) : undefined;
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
       const unitSprite =
         unitAsset && unitPlacement
@@ -637,6 +648,7 @@ function StudioEditableBoard({
         children: (
           <>
             {asset ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
+            {doodadEntry ? <img className="tileset-board-doodad is-back" src={doodadEntry.back} alt="" draggable={false} /> : null}
             {unitAsset && unitSprite ? (
               <img
                 className={`tileset-board-unit is-${unitAsset.family}`}
@@ -652,6 +664,7 @@ function StudioEditableBoard({
                 }
               />
             ) : null}
+            {doodadEntry ? <img className="tileset-board-doodad is-front" src={doodadEntry.front} alt="" draggable={false} /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
@@ -1173,8 +1186,10 @@ export function LevelEditorPage(): ReactElement {
                   rows={rows}
                   cells={renderedCells}
                   units={{}}
+                  doodads={{}}
                   resolveAsset={(id) => assetById.get(id)}
                   resolveUnit={() => undefined}
+                  resolveDoodad={() => undefined}
                   tool={boardTool}
                   selectedCell={null}
                   showFootprint={showGrid}
@@ -1326,6 +1341,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [unitBrushFaction] = useState<Faction>('navy-blue');
   const [boardCells, setBoardCells] = useState<Record<string, string>>({});
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
+  const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>({});
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [boardSectionOpen, setBoardSectionOpen] = useState(true);
   const [viewSectionOpen, setViewSectionOpen] = useState(true);
@@ -1358,6 +1374,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const selectedAsset = allStudioAssets.find((asset) => asset.id === selectedAssetId) ?? family.assets[0];
   const resolveStudioAsset = (id: string): StudioAsset | undefined => allStudioAssets.find((asset) => asset.id === id);
   const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
+  const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAsset(id);
   const brushAsset = resolveStudioAsset(brushId) ?? selectedAsset;
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
   const paintCell = (x: number, y: number): void => {
@@ -1505,23 +1522,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (cell.asset) seeded[`${cell.x + offX},${cell.y + offY}`] = cell.asset.id;
     }
     const seededUnits: Record<string, BoardUnitPlacement> = {};
-    if (labMode === 'unit' && placed.length) {
+    const seededDoodads: Record<string, { doodadId: string }> = {};
+    if ((labMode === 'unit' || labMode === 'doodad') && placed.length) {
       const xs = placed.map((cell) => cell.x + offX);
       const ys = placed.map((cell) => cell.y + offY);
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
-      const x = Math.round((minX + maxX) / 2);
-      const y = Math.round((minY + maxY) / 2);
+      const x = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
+      const y = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
       seededUnits[`${x},${y}`] = {
         unitId: unitBrushAsset.id,
         direction: unitBrushDirection,
         faction: unitBrushFaction,
       };
+      // Doodad focus: stand the unit IN a doodad so the back/front bracketing is visible.
+      if (labMode === 'doodad') seededDoodads[`${x},${y}`] = { doodadId: doodadBrushId };
     }
     setBoardCells(seeded);
-    if (viewKind !== 'board' || labMode === 'unit') setBoardUnits(seededUnits);
+    if (viewKind !== 'board' || labMode === 'unit' || labMode === 'doodad') setBoardUnits(seededUnits);
+    setBoardDoodads(seededDoodads);
     setSelectedCell(null);
     if (selectedAsset.kind === 'tile') setBrushId(selectedAsset.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1887,6 +1904,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const selectUnitInCatalog = (unitId: string): void => {
     setUnitBrushId(unitId);
   };
+  const armUnitBrush = (unitId: string): void => {
+    // Arm the unit as the active brush (mirrors armBrush for tiles) — do NOT place it.
+    // The user paints it by then clicking a board cell; arming must not draw.
+    setUnitBrushId(unitId);
+    setBrushKind('unit');
+    setTool('brush');
+    setLabMode('board');
+    setStudioMode('lab');
+  };
   const placeUnitOnLoadedBoard = (unitId: string): void => {
     const occupiedTileKeys = Object.keys(boardCells);
     const [x, y] = selectedCell
@@ -1930,6 +1956,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setStudioMode('lab');
   };
   const openDoodadLab = (): void => {
+    if (!hasLabTiles) return;
     setLabMode('doodad');
     setStudioMode('lab');
   };
@@ -1999,7 +2026,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     ],
     onSelect: (u) => selectUnitInCatalog(u.id),
     onView: (u) => inspectUnitInLab(u.id),
-    onArm: (u) => placeUnitOnLoadedBoard(u.id),
+    onArm: (u) => armUnitBrush(u.id),
     selectedId: unitBrushId,
     note: 'Select a unit card to place it in the shared lab board.',
   };
@@ -2162,16 +2189,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               }}
             >
               <div className={`tileset-view-board-content is-${viewVisualKind}`}>
-                {labMode === 'doodad' ? (
-                  <DoodadLabView doodad={doodadAsset(doodadBrushId)} />
-                ) : (
                 <StudioEditableBoard
                   cols={editableGrid.columns}
                   rows={editableGrid.rows}
                   cells={boardCells}
                   units={boardUnits}
+                  doodads={boardDoodads}
                   resolveAsset={resolveStudioAsset}
                   resolveUnit={resolveUnitAsset}
+                  resolveDoodad={resolveDoodadAsset}
                   tool={tool}
                   selectedCell={selectedCell}
                   showFootprint={showFootprint}
@@ -2182,7 +2208,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   onErase={eraseCell}
                   onSelect={selectBoardCell}
                 />
-                )}
               </div>
             </ViewPane>
             </section>
@@ -2222,7 +2247,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                   type="button"
                   className={labMode === 'doodad' ? 'is-active' : ''}
                   onClick={openDoodadLab}
-                  title="Preview a doodad with a unit standing in it."
+                  disabled={!hasLabTiles}
+                  title={hasLabTiles ? 'Inspect a doodad on the loaded board.' : 'Load a board first.'}
                 >
                   Doodad
                 </button>
