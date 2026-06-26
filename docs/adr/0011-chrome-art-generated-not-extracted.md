@@ -42,7 +42,14 @@ UI chrome art is produced by **codex image generation (img2img, method-verified
 via an `image_generation_call` event)**, or **assembled from codex-generated
 atoms** (`corner`/`edge`/`fill` → `assemble-frame.mjs`, symmetric by
 construction). **Extraction of concept crops and procedural/CSS/code redraw are
-retired.**
+retired — with NO exceptions, including for fine details** (see "When generation
+seems to miss a fine detail" below).
+
+This is **settled and rigorously resolved.** Do not reopen the extraction
+question, do not quote the superseded briefs as current, and do not treat a
+generation that misses a detail as evidence that extraction is needed. If you
+believe this is wrong, the bar is very high: bring it as an explicit new ADR
+proposal — do not drift back into extraction in passing.
 
 - The concept art is the **style/palette reference** (the img2img input) and the
   review target — never a crop source for runtime chrome.
@@ -57,6 +64,18 @@ retired.**
 - Note: some currently-*deployed* chrome may still be extraction-era assets not
   yet regenerated (e.g. the old `row.png`, possibly `panel.png`). Migrating those
   to generated/atom-assembled is separate follow-up, not blocked by this record.
+
+## When generation seems to miss a fine detail
+
+If a generated asset looks like it dropped a fine detail (e.g. the settings row's
+small notched corner accent), the fix is to **feed codex a close-up crop of that
+exact detail as the img2img reference and re-generate** — NOT to fall back to
+extraction.
+
+Proven on the row corner: from the full-screen reference codex produced a generic
+rounded box (no notch); given a tight close-up of the corner, it reproduced the
+notch. "Generation can't do fine detail" is **false** — it just needs the detail
+shown to it. This is the resolution; it is not grounds to reopen extraction.
 
 ## More Information
 
