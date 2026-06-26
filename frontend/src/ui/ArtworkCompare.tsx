@@ -253,16 +253,16 @@ const AC_CSS = `
 .ac-tag { font-size: 11px; letter-spacing: .12em; font-weight: 700; color: #7fd4ff; white-space: nowrap; }
 .ac-tag-spec { color: #ffd479; }
 .ac-bar select, .ac-bar button { appearance: none; -webkit-appearance: none;
-  font-family: var(--ds-font-sans, system-ui, sans-serif); font-size: 12px; line-height: 1;
-  min-height: 0; height: 30px; margin: 0; padding: 0 10px;
-  background: #111a2c; background-image: none; color: #dbe9ff;
+  font-family: var(--ds-font-sans, system-ui, sans-serif); font-size: 15px; line-height: 1;
+  min-height: 0; height: 38px; margin: 0; padding: 0 12px;
+  background: #111a2c; background-image: none; color: #eaf3ff;
   border: 1px solid #2a3c5e; border-radius: 4px; box-shadow: none; text-shadow: none; cursor: pointer; }
 .ac-bar select { flex: 1 1 auto; min-width: 0; }
-.ac-bar button { width: 34px; padding: 0; flex: 0 0 auto; }
+.ac-bar button { width: 38px; padding: 0; flex: 0 0 auto; }
 .ac-bar button:hover { background: #17223a; }
-.ac-open { display: inline-flex; align-items: center; justify-content: center; height: 30px; width: 34px;
+.ac-open { display: inline-flex; align-items: center; justify-content: center; height: 38px; width: 38px;
   flex: 0 0 auto; text-decoration: none; color: #9fd8ff; background: #111a2c;
-  border: 1px solid #2a3c5e; border-radius: 4px; font-size: 13px; }
+  border: 1px solid #2a3c5e; border-radius: 4px; font-size: 17px; }
 .ac-open:hover { background: #17223a; color: #cfeaff; }
 .ac-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; background: #06080d;
   display: flex; justify-content: center; align-items: center; padding: 12px; }
