@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 
 // A live design surface for matching screens to their accepted art direction.
-// Two side-by-side panes; each can independently be set to ANYTHING:
-//
-//   - an ACCEPTED ART image (any concept), or
-//   - a LIVE app route (the honest on-disk baseline), or
+// Two side-by-side panes; each pane picks from a list of OPTIONS, where each
+// option is one of:
+//   - an ACCEPTED ART image  (src "art:<id>")
+//   - a LIVE app route       (src "live:<route>")  — the honest on-disk baseline
 //   - a LIVE route + speculative CSS injected into it (a proposed change shown
 //     live, WITHOUT being saved to the app)
 //
-// So you can compare art<->live, live<->speculative, art<->art, etc. Everything
-// is URL-addressable:
-//   /artwork-compare?l=<src>&lcss=<css>&r=<src>&rcss=<css>
-// where <src> is "art:<id>" or "live:<route>".
+// By default the option list is every art + every route. But a curated, labeled
+// list can be baked into the URL so a crafted comparison only shows the few
+// relevant choices (e.g. "Art — concept", "Current — baseline", "Spec — 46px"):
 //
-// Iframes are same-origin, so the parent injects a <style> into a live pane's
-// document when that pane has speculative CSS — nothing touches the codebase.
+//   ?opts=<base64 JSON [{label,src,css}]>&l=<index>&r=<index>&lcss=&rcss=
+//
+// Iframes are same-origin, so the parent injects a <style> into a live pane when
+// it has speculative CSS — nothing touches the codebase.
 
 type ArtEntry = { id: string; label: string; src: string; route: string };
 
@@ -36,10 +37,19 @@ const ROUTES = Array.from(new Set(ART.map((a) => a.route)));
 const LIVE_W = 1440; // render live routes at desktop width, scaled to fit the pane
 const LIVE_H = 900;
 
+type Opt = { label: string; src: string; css: string };
 type Source = { kind: 'art'; id: string } | { kind: 'live'; route: string };
+
 function parseSource(s: string): Source {
   if (s.startsWith('live:')) return { kind: 'live', route: s.slice(5) };
   return { kind: 'art', id: s.startsWith('art:') ? s.slice(4) : s };
+}
+
+function defaultOpts(): Opt[] {
+  return [
+    ...ART.map((a) => ({ label: `ART · ${a.label}`, src: `art:${a.id}`, css: '' })),
+    ...ROUTES.map((r) => ({ label: `LIVE · ${r}`, src: `live:${r}`, css: '' })),
+  ];
 }
 
 function inject(ifr: HTMLIFrameElement | null, css: string): void {
@@ -59,16 +69,17 @@ function inject(ifr: HTMLIFrameElement | null, css: string): void {
   }
 }
 
-type PaneConfig = { src: string; css: string };
-
 // Module-level so it never remounts (which would reload the iframe on every keystroke).
-function ComparePane({ config, onSrc, onReload, reloadKey }: {
-  config: PaneConfig;
-  onSrc: (src: string) => void;
+function ComparePane({ opts, value, css, onPick, onReload, reloadKey }: {
+  opts: Opt[];
+  value: number;
+  css: string;
+  onPick: (idx: number) => void;
   onReload: () => void;
   reloadKey: number;
 }): ReactElement {
-  const src = parseSource(config.src);
+  const opt = opts[value] ?? opts[0];
+  const src = parseSource(opt.src);
   const stage = useRef<HTMLDivElement>(null);
   const iframe = useRef<HTMLIFrameElement>(null);
   const [imgAspect, setImgAspect] = useState(LIVE_H / LIVE_W);
@@ -94,22 +105,17 @@ function ComparePane({ config, onSrc, onReload, reloadKey }: {
   }, [aspect]);
 
   useEffect(() => {
-    if (src.kind === 'live') inject(iframe.current, config.css);
-  }, [config.css, liveRoute, reloadKey, src.kind]);
+    if (src.kind === 'live') inject(iframe.current, css);
+  }, [css, liveRoute, reloadKey, src.kind]);
 
   const art = src.kind === 'art' ? (ART.find((a) => a.id === src.id) ?? ART[0]) : null;
-  const isSpec = src.kind === 'live' && config.css.trim().length > 0;
+  const isSpec = src.kind === 'live' && css.trim().length > 0;
 
   return (
     <div className="ac-pane">
       <header className="ac-bar">
-        <select value={config.src} onChange={(e) => onSrc(e.target.value)} aria-label="Pane source">
-          <optgroup label="Accepted art">
-            {ART.map((a) => <option key={`art:${a.id}`} value={`art:${a.id}`}>ART · {a.label}</option>)}
-          </optgroup>
-          <optgroup label="Live route">
-            {ROUTES.map((r) => <option key={`live:${r}`} value={`live:${r}`}>LIVE · {r}</option>)}
-          </optgroup>
+        <select value={value} onChange={(e) => onPick(Number(e.target.value))} aria-label="Pane source">
+          {opts.map((o, i) => <option key={i} value={i}>{o.label}</option>)}
         </select>
         {src.kind === 'live' ? <button type="button" onClick={onReload} title="Reload live panes">↻</button> : null}
         {isSpec ? <span className="ac-tag ac-tag-spec">+ CSS</span> : null}
@@ -129,7 +135,7 @@ function ComparePane({ config, onSrc, onReload, reloadKey }: {
               ref={iframe}
               title="Live"
               src={src.route}
-              onLoad={() => inject(iframe.current, config.css)}
+              onLoad={() => inject(iframe.current, css)}
               style={{ width: LIVE_W, height: LIVE_H, transform: `scale(${box.scale})`, transformOrigin: 'top left', border: 0 }}
             />
           ) : null}
@@ -139,53 +145,84 @@ function ComparePane({ config, onSrc, onReload, reloadKey }: {
   );
 }
 
-function readParams(): { left: PaneConfig; right: PaneConfig } {
+type Pane = { idx: number; css: string };
+type Config = { opts: Opt[]; custom: boolean; left: Pane; right: Pane };
+
+function readConfig(): Config {
   const p = new URLSearchParams(window.location.search);
-  const dec = (v: string | null) => (v ? decodeURIComponent(v) : '');
+  let opts = defaultOpts();
+  let custom = false;
+  const raw = p.get('opts');
+  if (raw) {
+    try {
+      const parsed = JSON.parse(atob(decodeURIComponent(raw)));
+      if (Array.isArray(parsed) && parsed.length) {
+        opts = parsed.map((o) => ({ label: String(o.label ?? o.src ?? ''), src: String(o.src ?? ''), css: String(o.css ?? '') }));
+        custom = true;
+      }
+    } catch {
+      /* malformed opts — fall back to the full list */
+    }
+  }
+  const idx = (v: string | null, def: number) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 0 && n < opts.length ? n : def;
+  };
+  const li = idx(p.get('l'), 0);
+  const ri = idx(p.get('r'), Math.min(1, opts.length - 1));
+  const dec = (v: string | null) => (v == null ? null : decodeURIComponent(v));
+  const lcss = dec(p.get('lcss'));
+  const rcss = dec(p.get('rcss'));
   return {
-    left: { src: p.get('l') || 'art:settings-general', css: dec(p.get('lcss')) },
-    right: { src: p.get('r') || 'live:/settings/general', css: dec(p.get('rcss')) },
+    opts,
+    custom,
+    left: { idx: li, css: lcss ?? opts[li].css },
+    right: { idx: ri, css: rcss ?? opts[ri].css },
   };
 }
 
 export function ArtworkCompare(): ReactElement {
-  const [{ left, right }, setState] = useState(readParams);
+  const [cfg, setCfg] = useState(readConfig);
   const [reloadKey, setReloadKey] = useState(0);
+  const { opts, custom, left, right } = cfg;
 
   useEffect(() => {
     const p = new URLSearchParams();
-    p.set('l', left.src);
-    if (left.css.trim()) p.set('lcss', encodeURIComponent(left.css));
-    p.set('r', right.src);
-    if (right.css.trim()) p.set('rcss', encodeURIComponent(right.css));
+    if (custom) p.set('opts', encodeURIComponent(btoa(JSON.stringify(opts))));
+    p.set('l', String(left.idx));
+    p.set('r', String(right.idx));
+    if (left.css !== (opts[left.idx]?.css ?? '')) p.set('lcss', encodeURIComponent(left.css));
+    if (right.css !== (opts[right.idx]?.css ?? '')) p.set('rcss', encodeURIComponent(right.css));
     window.history.replaceState(window.history.state, '', `${window.location.pathname}?${p.toString()}`);
-  }, [left, right]);
+  }, [opts, custom, left, right]);
 
-  const setLeft = (patch: Partial<PaneConfig>) => setState((s) => ({ ...s, left: { ...s.left, ...patch } }));
-  const setRight = (patch: Partial<PaneConfig>) => setState((s) => ({ ...s, right: { ...s.right, ...patch } }));
+  const pickLeft = (idx: number) => setCfg((c) => ({ ...c, left: { idx, css: c.opts[idx]?.css ?? '' } }));
+  const pickRight = (idx: number) => setCfg((c) => ({ ...c, right: { idx, css: c.opts[idx]?.css ?? '' } }));
+  const setLeftCss = (css: string) => setCfg((c) => ({ ...c, left: { ...c.left, css } }));
+  const setRightCss = (css: string) => setCfg((c) => ({ ...c, right: { ...c.right, css } }));
   const reload = () => setReloadKey((k) => k + 1);
 
-  const leftLive = useMemo(() => parseSource(left.src).kind === 'live', [left.src]);
-  const rightLive = useMemo(() => parseSource(right.src).kind === 'live', [right.src]);
+  const leftLive = useMemo(() => parseSource(opts[left.idx]?.src ?? '').kind === 'live', [opts, left.idx]);
+  const rightLive = useMemo(() => parseSource(opts[right.idx]?.src ?? '').kind === 'live', [opts, right.idx]);
 
   return (
     <section className="ac">
       <style>{AC_CSS}</style>
 
       <div className="ac-panes">
-        <ComparePane config={left} onSrc={(src) => setLeft({ src })} onReload={reload} reloadKey={reloadKey} />
-        <ComparePane config={right} onSrc={(src) => setRight({ src })} onReload={reload} reloadKey={reloadKey} />
+        <ComparePane opts={opts} value={left.idx} css={left.css} onPick={pickLeft} onReload={reload} reloadKey={reloadKey} />
+        <ComparePane opts={opts} value={right.idx} css={right.css} onPick={pickRight} onReload={reload} reloadKey={reloadKey} />
       </div>
 
       <footer className="ac-editor">
         <div className="ac-edit-col">
-          <label className="ac-tag" htmlFor="ac-lcss">LEFT CSS {leftLive ? '' : '(left pane is art — switch it to a Live route to apply)'}</label>
-          <textarea id="ac-lcss" value={left.css} onChange={(e) => setLeft({ css: e.target.value })} spellCheck={false}
+          <label className="ac-tag" htmlFor="ac-lcss">LEFT CSS {leftLive ? '' : '(left pane is art — pick a Live option to apply)'}</label>
+          <textarea id="ac-lcss" value={left.css} onChange={(e) => setLeftCss(e.target.value)} spellCheck={false}
             placeholder=".brand-lockup-mark { height: 46px; width: 46px; }" />
         </div>
         <div className="ac-edit-col">
-          <label className="ac-tag" htmlFor="ac-rcss">RIGHT CSS {rightLive ? '' : '(right pane is art — switch it to a Live route to apply)'}</label>
-          <textarea id="ac-rcss" value={right.css} onChange={(e) => setRight({ css: e.target.value })} spellCheck={false}
+          <label className="ac-tag" htmlFor="ac-rcss">RIGHT CSS {rightLive ? '' : '(right pane is art — pick a Live option to apply)'}</label>
+          <textarea id="ac-rcss" value={right.css} onChange={(e) => setRightCss(e.target.value)} spellCheck={false}
             placeholder=".brand-lockup-mark { height: 50px; width: 50px; }" />
         </div>
       </footer>
