@@ -10206,16 +10206,35 @@ button.tileset-relationship-cell {
   gap: 14px;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
-  /* Reserve the scrollbar gutter permanently so the grid doesn't reflow when the scrollbar
-     toggles between scrolling/not (e.g. switching to a category with fewer items). This is
-     the "frame never moves" rule in docs/studio-control-architecture.md, at the scroll level. */
-  scrollbar-gutter: stable;
+  /* Keep the scrollbar track ALWAYS visible (greyed/inactive when nothing scrolls) instead of
+     reserving an empty gutter — a present-but-inactive affordance that never reflows the grid.
+     overflow-y: scroll always renders the track; the thumb appears only when scrollable. This
+     is the "frame never moves" rule (docs/studio-control-architecture.md), at the scroll level. */
+  overflow-y: scroll;
+  overflow-x: hidden;
+  /* Style the bar with ::-webkit only (below). Do NOT set scrollbar-color / scrollbar-width:
+     those standard props make Chrome use its OVERLAY scrollbar (no reserved space, vanishes when
+     idle) and ignore ::-webkit. The webkit rules force a classic, always-visible greyed track.
+     The app runs in Chrome; Firefox falls back to its default scrollbar. */
   padding: 12px;
   background: rgba(5, 16, 25, 0.92);
   border: 1px solid rgba(67, 127, 179, 0.28);
   border-radius: 6px;
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+/* The always-on track (the "greyed" groove) + a thumb that only shows when there's overflow. */
+.tileset-studio-tab-panel::-webkit-scrollbar {
+  width: 10px;
+}
+.tileset-studio-tab-panel::-webkit-scrollbar-track {
+  background: rgba(120, 170, 214, 0.2);
+  border-radius: 6px;
+}
+.tileset-studio-tab-panel::-webkit-scrollbar-thumb {
+  background: rgba(120, 170, 214, 0.55);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: padding-box;
 }
 
 .tileset-studio-tab-panel.is-board-mode {
