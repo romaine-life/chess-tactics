@@ -8,6 +8,7 @@ import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pi
 import type { TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
+import { DoodadSprite, type Doodad } from './BoardDoodad';
 import { ViewPane } from '../ui/shared/ViewPane';
 
 const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
@@ -171,6 +172,7 @@ function UnitPiece({ piece, selected = false, focused = false }: { piece: Piece;
   return (
     <div
       className={[
+        'board-unit-seat',
         'skirmish-board-unit',
         `is-${piece.side}`,
         `is-${piece.type}`,
@@ -188,32 +190,6 @@ function UnitPiece({ piece, selected = false, focused = false }: { piece: Piece;
         </i>
       ) : null}
     </div>
-  );
-}
-
-type Doodad = { x: number; y: number; type: 'grass-tuft' };
-
-// A doodad rendered as a back/front sprite pair, anchored at the tile contact point and
-// z-sorted to BRACKET any unit on its cell: the back half tucks behind the unit, the front
-// half falls over its shins — so the unit stands *in* the doodad, not on top of a flat billboard.
-function DoodadSprite({ doodad }: { doodad: Doodad }) {
-  const { left, top, zIndex } = boardLabCellPosition(doodad);
-  const base = zIndex + 20000; // share the unit depth band so cross-cell sorting still holds
-  const common = {
-    position: 'absolute' as const,
-    left,
-    top,
-    width: 96,
-    height: 180,
-    transform: 'translate(-50%, -38.333%)', // seat the (48,69) contact pixel on the cell centre
-    pointerEvents: 'none' as const,
-  };
-  const src = (half: 'back' | 'front') => `/assets/doodads/${doodad.type}/${half}.png`;
-  return (
-    <>
-      <img src={src('back')} alt="" data-doodad="back" draggable={false} style={{ ...common, zIndex: base - 1 }} />
-      <img src={src('front')} alt="" data-doodad="front" draggable={false} style={{ ...common, zIndex: base + 1 }} />
-    </>
   );
 }
 

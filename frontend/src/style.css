@@ -5909,21 +5909,35 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .82);
 }
 
-.skirmish-board-unit {
-  /* One knob for the whole move (travel + hop). Bump these to slow a move down;
-     the enemy override below makes its reply weightier. */
-  --move-duration: 360ms;
-  align-items: center;
-  display: grid;
-  height: 86px;
-  justify-items: center;
-  pointer-events: none;
+/* THE single source of truth for seating a unit sprite on a tile — shared by the game
+   board (.skirmish-board-unit) and the Studio editor so a unit sits identically in both.
+   Each board adds only its own chrome (move animation/HP, or selection/hit) around this;
+   the seat geometry lives nowhere else. Do not re-derive it per board. */
+.board-unit-seat {
   position: absolute;
+  width: 72px;
+  height: 86px;
+  display: grid;
+  align-items: center;
+  justify-items: center;
   transform: translate(-50%, -78%);
+  pointer-events: none;
+}
+.board-unit-seat img {
+  display: block;
+  max-height: 92px;
+  max-width: 78px;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+/* Game-only chrome layered on .board-unit-seat: the move glide. One knob for the whole
+   move (travel + hop); the enemy override below makes its reply weightier. */
+.skirmish-board-unit {
+  --move-duration: 360ms;
   transition:
     left var(--move-duration) cubic-bezier(.22, .61, .36, 1),
     top var(--move-duration) cubic-bezier(.22, .61, .36, 1);
-  width: 72px;
   will-change: left, top;
 }
 
@@ -5966,11 +5980,6 @@ h1 {
 }
 
 .skirmish-board-unit img {
-  display: block;
-  image-rendering: auto;
-  max-height: 92px;
-  max-width: 78px;
-  object-fit: contain;
   position: relative;
   z-index: 1;
 }
@@ -10801,21 +10810,9 @@ button.tileset-relationship-cell {
   -webkit-user-select: none;
 }
 
-.tileset-generated-board-tile .tileset-board-unit {
-  position: absolute;
-  left: 50%;
-  top: var(--iso-tile-height);
-  z-index: 5;
-  width: auto;
-  height: auto;
-  max-width: none;
-  object-fit: contain;
-  image-rendering: auto;
-  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.55));
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
+/* Units and doodads no longer render inside cells here — both boards seat them at grid
+   level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
+   The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */
 
 .tileset-generated-board-overlay-cell {
   position: absolute;

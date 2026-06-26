@@ -31,7 +31,8 @@ import {
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath } from '../core/pieces';
 import type { PieceType, Side } from '../core/types';
 import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
-import { BoardLabBoard } from '../render/BoardLabBoard';
+import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
+import { DoodadSprite } from '../render/BoardDoodad';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
 import { AssetLibraryStudio, AssetLab, type AssetFilter } from './design/AssetLibraryStudio';
@@ -49,7 +50,6 @@ import {
   activeUnitFamilies,
   familyLabels,
   hasDirectionSprite,
-  renderSizeForTileScale,
   unitAssets,
   type Direction,
   type Faction,
@@ -629,17 +629,7 @@ function StudioEditableBoard({
       const key = `${x},${y}`;
       const assetId = placed[key];
       const asset = assetId ? resolveAsset(assetId) : undefined;
-      const unitPlacement = placedUnits[key];
-      const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
-      const doodadPlacement = placedDoodads[key];
-      const doodadEntry = doodadPlacement ? resolveDoodad(doodadPlacement.doodadId) : undefined;
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
-      const unitSprite =
-        unitAsset && unitPlacement
-          ? hasDirectionSprite(unitAsset, unitPlacement.direction)
-            ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
-            : MISSING_DIRECTION_SPRITE
-          : undefined;
       cells.push({
         key,
         x,
@@ -648,23 +638,6 @@ function StudioEditableBoard({
         children: (
           <>
             {asset ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
-            {doodadEntry ? <img className="tileset-board-doodad is-back" src={doodadEntry.back} alt="" draggable={false} /> : null}
-            {unitAsset && unitSprite ? (
-              <img
-                className={`tileset-board-unit is-${unitAsset.family}`}
-                src={unitSprite}
-                alt=""
-                draggable={false}
-                style={
-                  {
-                    width: `${renderSizeForTileScale(unitAsset, unitAsset.defaultScale, 1)}px`,
-                    height: `${renderSizeForTileScale(unitAsset, unitAsset.defaultScale, 1)}px`,
-                    transform: `translate(-${unitAsset.unitAnchorX ?? '50%'}, -${unitAsset.unitAnchorY ?? '92%'})`,
-                  } as CSSProperties
-                }
-              />
-            ) : null}
-            {doodadEntry ? <img className="tileset-board-doodad is-front" src={doodadEntry.front} alt="" draggable={false} /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
@@ -683,6 +656,29 @@ function StudioEditableBoard({
     }
   }
 
+  // Units + doodads render at GRID level via the SHARED seat (.board-unit-seat) and the
+  // shared <DoodadSprite> — exactly like the game board (SkirmishBoard) — instead of inside
+  // cells. One seating, both boards; it can't drift. Doodad back/front bracket the unit by z.
+  const overlaySprites: ReactNode[] = [];
+  for (const key of new Set([...Object.keys(placedUnits), ...Object.keys(placedDoodads)])) {
+    const [cx, cy] = key.split(',').map(Number);
+    const { left, top, zIndex } = boardLabCellPosition({ x: cx, y: cy });
+    const doodadEntry = placedDoodads[key] ? resolveDoodad(placedDoodads[key].doodadId) : undefined;
+    if (doodadEntry) overlaySprites.push(<DoodadSprite key={`dd-${key}`} doodad={{ x: cx, y: cy, type: doodadEntry.id }} />);
+    const unitPlacement = placedUnits[key];
+    const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
+    if (unitAsset && unitPlacement) {
+      const sprite = hasDirectionSprite(unitAsset, unitPlacement.direction)
+        ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
+        : MISSING_DIRECTION_SPRITE;
+      overlaySprites.push(
+        <div key={`u-${key}`} className={`board-unit-seat is-${unitAsset.family}`} style={{ left, top, zIndex: zIndex + 20000 }}>
+          <img src={sprite} alt="" draggable={false} />
+        </div>,
+      );
+    }
+  }
+
   return (
     <TileGrid
       cells={cells}
@@ -695,6 +691,7 @@ function StudioEditableBoard({
       onPointerLeave={stopPainting}
     >
       {overlay}
+      {overlaySprites}
     </TileGrid>
   );
 }
