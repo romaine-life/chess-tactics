@@ -73,6 +73,7 @@ function tabFromPath(pathname: string): SettingsTab {
 // Index still lives at /design directly.)
 const creatorTools: CreatorTool[] = [
   { label: 'Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
+  { label: 'Artwork Compare', href: '/artwork-compare', icon: 'icon-design-index.png', description: 'Two-panel view — the accepted concept art beside the live screen, for matching the art direction.' },
 ];
 
 function asset(file: string): string {
