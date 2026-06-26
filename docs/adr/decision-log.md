@@ -10,3 +10,4 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0004](0004-standard-app-title-bar.md) | One shared, full-bleed app title bar at a standard height token | accepted | 2026-06-25 |
 | [0005](0005-artwork-compare-fidelity-surface.md) | A permanent in-app art-vs-live compare surface for checking art fidelity | accepted | 2026-06-25 |
 | [0006](0006-ui-decision-criteria.md) | Criteria + surface-based tie-break for weighing game-UI vs product-UI | accepted | 2026-06-25 |
+| [0007](0007-brand-shield-baseline-size-and-placement.md) | Keep the brand shield at baseline size; heraldic rook placement is intentional | accepted | 2026-06-25 |
