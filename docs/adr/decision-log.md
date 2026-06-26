@@ -12,3 +12,4 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0006](0006-ui-decision-criteria.md) | Criteria + surface-based tie-break for weighing game-UI vs product-UI | accepted | 2026-06-25 |
 | [0007](0007-brand-shield-baseline-size-and-placement.md) | Keep the brand shield at baseline size; heraldic rook placement is intentional | accepted | 2026-06-25 |
 | [0008](0008-brand-lockup-typography.md) | Brand lockup typography: app-header framing (screen name leads, real descriptor) | accepted | 2026-06-25 |
+| [0009](0009-mode-button-from-atoms.md) | Settings mode buttons assembled from atoms (symmetric); retire extracted tab crops | accepted | 2026-06-26 |
