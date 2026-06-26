@@ -37,8 +37,18 @@ const ROUTES = Array.from(new Set(ART.map((a) => a.route)));
 const LIVE_W = 1440; // render live routes at desktop width, scaled to fit the pane
 const LIVE_H = 900;
 
-type Opt = { label: string; src: string; css: string };
+type Opt = { label: string; src: string; css: string; link?: string };
 type Source = { kind: 'art'; id: string } | { kind: 'live'; route: string };
+
+// UTF-8-safe base64 (plain btoa/atob mangle non-ASCII like em dashes in labels).
+function b64encode(s: string): string {
+  let bin = '';
+  for (const b of new TextEncoder().encode(s)) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+function b64decode(b: string): string {
+  return new TextDecoder().decode(Uint8Array.from(atob(b), (c) => c.charCodeAt(0)));
+}
 
 function parseSource(s: string): Source {
   if (s.startsWith('live:')) return { kind: 'live', route: s.slice(5) };
@@ -110,6 +120,7 @@ function ComparePane({ opts, value, css, onPick, onReload, reloadKey }: {
 
   const art = src.kind === 'art' ? (ART.find((a) => a.id === src.id) ?? ART[0]) : null;
   const isSpec = src.kind === 'live' && css.trim().length > 0;
+  const dedicated = opt.link ?? (src.kind === 'live' ? src.route : art ? art.src : '#');
 
   return (
     <div className="ac-pane">
@@ -117,6 +128,8 @@ function ComparePane({ opts, value, css, onPick, onReload, reloadKey }: {
         <select value={value} onChange={(e) => onPick(Number(e.target.value))} aria-label="Pane source">
           {opts.map((o, i) => <option key={i} value={i}>{o.label}</option>)}
         </select>
+        <a className="ac-open" href={dedicated} target="_blank" rel="noopener noreferrer"
+          title={src.kind === 'live' ? 'Open this page in a new tab' : 'Open this artwork in a new tab'}>↗</a>
         {src.kind === 'live' ? <button type="button" onClick={onReload} title="Reload live panes">↻</button> : null}
         {isSpec ? <span className="ac-tag ac-tag-spec">+ CSS</span> : null}
       </header>
@@ -155,9 +168,9 @@ function readConfig(): Config {
   const raw = p.get('opts');
   if (raw) {
     try {
-      const parsed = JSON.parse(atob(decodeURIComponent(raw)));
+      const parsed = JSON.parse(b64decode(decodeURIComponent(raw)));
       if (Array.isArray(parsed) && parsed.length) {
-        opts = parsed.map((o) => ({ label: String(o.label ?? o.src ?? ''), src: String(o.src ?? ''), css: String(o.css ?? '') }));
+        opts = parsed.map((o) => ({ label: String(o.label ?? o.src ?? ''), src: String(o.src ?? ''), css: String(o.css ?? ''), link: o.link ? String(o.link) : undefined }));
         custom = true;
       }
     } catch {
@@ -188,7 +201,7 @@ export function ArtworkCompare(): ReactElement {
 
   useEffect(() => {
     const p = new URLSearchParams();
-    if (custom) p.set('opts', encodeURIComponent(btoa(JSON.stringify(opts))));
+    if (custom) p.set('opts', encodeURIComponent(b64encode(JSON.stringify(opts))));
     p.set('l', String(left.idx));
     p.set('r', String(right.idx));
     if (left.css !== (opts[left.idx]?.css ?? '')) p.set('lcss', encodeURIComponent(left.css));
@@ -247,6 +260,10 @@ const AC_CSS = `
 .ac-bar select { flex: 1 1 auto; min-width: 0; }
 .ac-bar button { width: 34px; padding: 0; flex: 0 0 auto; }
 .ac-bar button:hover { background: #17223a; }
+.ac-open { display: inline-flex; align-items: center; justify-content: center; height: 30px; width: 34px;
+  flex: 0 0 auto; text-decoration: none; color: #9fd8ff; background: #111a2c;
+  border: 1px solid #2a3c5e; border-radius: 4px; font-size: 13px; }
+.ac-open:hover { background: #17223a; color: #cfeaff; }
 .ac-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; background: #06080d;
   display: flex; justify-content: center; align-items: center; padding: 12px; }
 .ac-frame { box-sizing: border-box; overflow: hidden; position: relative; flex: 0 0 auto;
