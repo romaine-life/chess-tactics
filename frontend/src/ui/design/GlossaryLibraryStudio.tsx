@@ -54,6 +54,24 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
         the same ground point, so they recombine pixel-perfectly when stacked back on the tile.
       </p>
 
+      <figure className="doodad-layer-figure" aria-label="The grass tuft's two halves and their recombination">
+        <span className="doodad-layer-cell">
+          <span className="doodad-layer-art"><img src="/assets/doodads/grass-tuft/back.png" alt="Back half of the grass tuft" /></span>
+          <figcaption className="doodad-layer-cap">Back · z base−1</figcaption>
+        </span>
+        <span className="doodad-layer-cell">
+          <span className="doodad-layer-art"><img src="/assets/doodads/grass-tuft/front.png" alt="Front half of the grass tuft" /></span>
+          <figcaption className="doodad-layer-cap">Front · z base+1</figcaption>
+        </span>
+        <span className="doodad-layer-cell">
+          <span className="doodad-layer-art">
+            <img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" />
+            <img src="/assets/doodads/grass-tuft/front.png" alt="" aria-hidden="true" />
+          </span>
+          <figcaption className="doodad-layer-cap">Recombined (unit sits between)</figcaption>
+        </span>
+      </figure>
+
       <h4>The unit sorts between them (z-bracketing)</h4>
       <p>
         On the board the unit renders at <code>z = base</code>; the doodad brackets it —

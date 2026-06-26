@@ -12990,6 +12990,25 @@ button.tileset-relationship-cell {
 .glossary-detail code { background: rgba(95, 184, 255, .1); border-radius: 4px; color: #9fd0ff; font-size: .82em; padding: 1px 5px; }
 .glossary-detail-src { color: #5d7a8c; font-size: .72rem; margin-top: 14px; }
 .glossary-detail-none { color: #5d7a8c; font-style: italic; }
+/* Figure showing a split-layer doodad's real halves (back/front) and their recombination. */
+.doodad-layer-figure { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 14px; }
+.doodad-layer-cell { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.doodad-layer-art {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  border: 1px solid rgba(67, 127, 179, .3);
+  border-radius: 8px;
+  background-color: rgba(5, 16, 25, .9);
+  background-image:
+    linear-gradient(45deg, rgba(120, 170, 214, .12) 25%, transparent 25%, transparent 75%, rgba(120, 170, 214, .12) 75%),
+    linear-gradient(45deg, rgba(120, 170, 214, .12) 25%, transparent 25%, transparent 75%, rgba(120, 170, 214, .12) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+.doodad-layer-art img { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); object-fit: contain; image-rendering: auto; }
+.doodad-layer-cap { color: #a9bdd2; font-size: .76rem; }
+.doodad-layer-cap code { font-size: .82em; }
 /* Per-asset property chips (gate + provenance) stacked at the card's trailing edge. */
 .asset-card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 .asset-prov,
