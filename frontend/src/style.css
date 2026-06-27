@@ -6135,51 +6135,26 @@ h1 {
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 
-/* topbar: brand | tabs | undo/redo | spacer | test/save. Frame + height come from
-   .app-titlebar (gold panel.png 9-slice, --app-header-h; ADR-0004). Buttons are the
-   shared kit bracket frames (ADR-0009/0010) — gold by default, cyan for the
-   primary/active — never filled-colour one-offs. align-content centres the row so the
-   54px brand shield seats on the bar (ADR-0010). */
-.le-topbar {
+/* Title bar = the app's editor pattern (ADR-0023; mirrors the campaign editor's
+   .ce-topbar): three sections — brand · save-state · labeled header buttons
+   (.app-header-button on the kit gold frame). Scoped under .level-editor-screen so it
+   overrides the LEGACY bare .le-topbar still in this file (the old /edit chrome) and
+   neutralizes its leaked background/shadow. */
+.level-editor-screen .le-topbar {
   align-content: center;
   align-items: center;
+  background: none;
+  box-shadow: none;
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 0 clamp(10px, 1.1vw, 16px);
+  gap: clamp(10px, 1.4vw, 20px);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0 clamp(10px, 1.2vw, 18px);
 }
-.le-topbar .skirmish-window-actions { justify-self: end; }
-
-/* document-actions section pinned at the top of the rail (ADR-0023): the editor's
-   Save/Test/Undo/Redo live in the side control panel, not the title bar/a toolbar. */
-.le-doc-head { align-items: center; display: flex; gap: 8px; margin-bottom: 8px; }
-.le-doc-head strong { color: #f0e7d3; font-family: inherit; font-size: 1rem; letter-spacing: .02em; text-transform: uppercase; }
-.le-doc-dot { background: #f1cf86; border-radius: 50%; box-shadow: 0 0 6px rgba(241, 207, 134, .6); flex: none; height: 8px; width: 8px; }
-.le-doc-spacer { flex: 1; }
-.le-doc-actions { display: flex; gap: 6px; }
-.le-doc-actions .le-titlebtn { flex: 1; min-inline-size: 0; }
-
-/* one shared title-bar button family: the kit mode-button bracket frame (ADR-0009/0010) */
-.le-titlebtn {
-  align-items: center;
-  block-size: 40px;
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
-  color: #f0eadb;
-  cursor: pointer;
-  display: inline-flex;
-  font: inherit;
-  gap: 7px;
-  image-rendering: pixelated;
-  justify-content: center;
-  min-inline-size: 86px;
-  padding: 0 14px;
-  text-transform: uppercase;
-}
-.le-titlebtn.is-active { border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round; color: #eafaff; }
-.le-titlebtn.icon-only { gap: 0; min-inline-size: 0; padding: 0 12px; }
-.le-titlebtn:disabled { cursor: default; opacity: .5; }
-.le-titlebtn .le-ico { height: 18px; width: 18px; }
+.level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
+.level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm, .82rem); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm, .82rem); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
+.level-editor-screen .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+.level-editor-screen .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
 
 /* rail zoom icon button (NOT a title-bar button — stays a small chrome control) */
 .le-iconbtn {

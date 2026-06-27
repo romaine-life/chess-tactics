@@ -2774,13 +2774,14 @@ export function LevelEditor(): ReactElement {
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
         <header className="app-titlebar le-topbar" aria-label="Level editor">
           <BrandLockup screenName="Level Editor" />
-          <nav className="skirmish-window-actions" aria-label="Level editor navigation">
-            <a className="skirmish-square-action" href="/" aria-label="Main menu">
-              <span className="skirmish-icon skirmish-icon-menu" aria-hidden="true" />
-            </a>
-            <a className="skirmish-square-action" href="/settings" aria-label="Settings">
-              <span className="skirmish-icon skirmish-icon-gear" aria-hidden="true" />
-            </a>
+          <div className="le-topbar-stats" aria-label="Level status">
+            <span className="le-level-name">Untitled level</span>
+            <span className="le-save-state is-dirty">Unsaved</span>
+          </div>
+          <nav className="le-topbar-actions" aria-label="Editor actions">
+            <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
+            <button type="button" className="app-header-button app-header-button-active" disabled title="Saving unlocks once the editor is hosted.">Save</button>
+            <a className="app-header-button" href="/settings">Settings</a>
           </nav>
         </header>
 
@@ -2813,19 +2814,6 @@ export function LevelEditor(): ReactElement {
         </div>
 
       <aside className="skirmish-hud" aria-label="Editor controls">
-        <section className="skirmish-card le-doc-card">
-          <div className="le-doc-head">
-            <strong>Untitled level</strong>
-            <span className="le-doc-dot" title="Unsaved changes" aria-hidden="true" />
-            <span className="le-doc-spacer" />
-            <button type="button" className="le-titlebtn icon-only" title="Undo (coming soon)" disabled><span className="le-ico ic-undo" aria-hidden="true" /></button>
-            <button type="button" className="le-titlebtn icon-only" title="Redo (coming soon)" disabled><span className="le-ico ic-redo" aria-hidden="true" /></button>
-          </div>
-          <div className="le-doc-actions">
-            <button type="button" className="le-titlebtn" disabled title="Validation arrives with persistence."><span className="le-ico ic-play" aria-hidden="true" />Test</button>
-            <button type="button" className="le-titlebtn is-active" disabled title="Saving unlocks with the level API."><span className="le-ico ic-save" aria-hidden="true" />Save</button>
-          </div>
-        </section>
         <section className="skirmish-card">
           <h2>Layer</h2>
           <div className="le-seg">
