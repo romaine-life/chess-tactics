@@ -6490,9 +6490,12 @@ h1 {
 }
 
 .skirmish-service-record {
-  border-top: 1px solid rgba(76, 140, 171, .28);
-  margin-top: 12px;
-  padding-top: 10px;
+  /* In-theme kit sub-panel so the stats aren't bare/"headless" on the control panel
+     (ADR-0027). One frame for the whole block — not five sets of brackets. */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 12px round;
+  box-sizing: border-box;
+  margin-top: var(--ds-stack);
 }
 
 .skirmish-service-record h3 {
