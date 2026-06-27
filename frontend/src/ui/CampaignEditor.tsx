@@ -410,10 +410,10 @@ export function CampaignEditor() {
                     onChange={(e) => useCampaigns.getState().renameCampaign(camp.id, e.target.value)}
                   />
                 </label>
-                <dl>
-                  <div><dt>Chapters</dt><dd>{camp.chapters}</dd></div>
-                  <div><dt>Levels</dt><dd>{completedLevels} / {camp.levels.length}</dd></div>
-                  <div><dt>Difficulty</dt><dd>{camp.difficulty}</dd></div>
+                <dl className="ce-stat-rows">
+                  <div className="ce-stat-row"><dt>Chapters</dt><dd>{camp.chapters}</dd></div>
+                  <div className="ce-stat-row"><dt>Levels</dt><dd>{completedLevels} / {camp.levels.length}</dd></div>
+                  <div className="ce-stat-row"><dt>Difficulty</dt><dd>{camp.difficulty}</dd></div>
                 </dl>
               </div>
 
