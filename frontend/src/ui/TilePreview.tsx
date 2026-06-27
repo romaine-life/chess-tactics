@@ -35,6 +35,8 @@ import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
+import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
+import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { PortraitLab } from './PortraitEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
@@ -68,16 +70,16 @@ type StudioAssetKind = TileAssetKind;
 // is the read-only stage for one finished, non-manipulable thing (an asset or an
 // artwork). Each remembers its own last state, so switching between them is free.
 // See docs/studio-control-architecture.md.
-type StudioMode = 'catalog' | 'lab' | 'viewer';
+type StudioMode = 'catalog' | 'lab' | 'viewer' | 'dressing';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary';
+type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary' | 'surfaces';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor; 'glossary' reads one term in
 // full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary' | 'surface';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -241,8 +243,8 @@ const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
 
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
-const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary';
+const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer' || value === 'dressing';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary' || value === 'surfaces';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -290,7 +292,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedAssetName: kit || undefined,
     selectedArtworkName: art || undefined,
     selectedGlossaryName: gloss || undefined,
-    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' ? vk : undefined,
+    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' || vk === 'surface' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -747,6 +749,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [assetFilters, setAssetFilters] = useState<AssetFilters>({ type: 'all', prov: 'all', gate: 'all' });
   const [assetSearch, setAssetSearch] = useState('');
   const [artworkSearch, setArtworkSearch] = useState('');
+  const [surfaceSearch, setSurfaceSearch] = useState('');
+  const [selectedSurfaceName, setSelectedSurfaceName] = useState<string | undefined>(undefined);
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
@@ -1331,14 +1335,16 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
   // the header height constant (the Lab already shares this header — no second
   // row inside the board surface, which is what made the controls rail jump).
-  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'glossary' ? selectedGlossaryName : '';
-  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : 'Asset';
+  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'glossary' ? selectedGlossaryName : viewerKind === 'surface' ? (selectedSurfaceName ?? '') : '';
+  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : viewerKind === 'surface' ? 'Surface' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
-      ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : 'Tiles']
+      ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : category === 'surfaces' ? 'Surfaces' : 'Tiles']
       : studioMode === 'viewer'
         ? (viewerKind === 'portrait' ? ['Viewer', 'Portrait'] : ['Viewer', viewerKindLabel, viewerName || '—'])
-        : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
+        : studioMode === 'dressing'
+          ? ['Dressing room', 'Settings']
+          : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
   const visibleDoodads = normalizedCatalogQuery
     ? DOODAD_ASSETS.filter((d) => [d.label, d.status, ...d.terrains].join(' ').toLowerCase().includes(normalizedCatalogQuery))
     : DOODAD_ASSETS;
@@ -1357,7 +1363,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
       : studioMode === 'viewer'
         ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'glossary' ? 'definition + process doc' : 'preview on backdrops')
-        : viewSubtitle;
+        : studioMode === 'dressing'
+          ? 'live settings preview'
+          : viewSubtitle;
   const openCatalogMode = (): void => {
     if (tileFilter === 'board') setTileFilter('base');
     setStudioMode('catalog');
@@ -1365,6 +1373,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const openViewer = (kind: ViewerKind): void => {
     setViewerKind(kind);
     setStudioMode('viewer');
+  };
+  const openDressingRoom = (): void => {
+    setStudioMode('dressing');
   };
   const selectUnitInCatalog = (unitId: string): void => {
     setUnitBrushId(unitId);
@@ -1660,6 +1671,24 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
       ),
     },
+    {
+      id: 'surfaces', label: 'Surfaces', hint: 'Browse accepted background surfaces — seamless, tileable pixel-art tiles.',
+      main: <SurfaceLibraryStudio search={surfaceSearch} zoom={zoom} selected={selectedSurfaceName} onSelect={setSelectedSurfaceName} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={surfaceSearch} onChange={(event) => setSurfaceSearch(event.target.value)} placeholder="surface, material…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('surface')}>View Selected</button>
+          <button type="button" className="tileset-view-action" onClick={openDressingRoom}>Open in Settings →</button>
+        </>
+      ),
+    },
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
 
@@ -1672,6 +1701,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <button type="button" className={viewerKind === 'artwork' ? 'is-active' : ''} onClick={() => setViewerKind('artwork')} title="View the selected artwork.">Artwork</button>
       <button type="button" className={viewerKind === 'portrait' ? 'is-active' : ''} onClick={() => setViewerKind('portrait')} title="Edit unit portrait headshot crops.">Portrait</button>
       <button type="button" className={viewerKind === 'glossary' ? 'is-active' : ''} onClick={() => setViewerKind('glossary')} title="Read a glossary term in full.">Glossary</button>
+      <button type="button" className={viewerKind === 'surface' ? 'is-active' : ''} onClick={() => setViewerKind('surface')} title="View the selected background surface.">Surface</button>
     </div>
   );
 
@@ -1698,6 +1728,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <button type="button" className={studioMode === 'viewer' ? 'is-active' : ''} onClick={() => setStudioMode('viewer')} title="View one finished asset or artwork.">
               Viewer
             </button>
+            <button type="button" className={studioMode === 'dressing' ? 'is-active' : ''} onClick={openDressingRoom} title="Dress the live Settings page with surfaces — pick what fills each region.">
+              Dressing
+            </button>
           </span>
           <a href="/settings">Settings</a>
         </nav>
@@ -1711,19 +1744,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
-              <div className="tileset-tier-seg" aria-label="Catalog asset type">
-                {catalogCategories.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    className={category === entry.id ? 'is-active' : ''}
-                    onClick={() => setCategory(entry.id)}
-                    title={entry.hint}
-                  >
-                    {entry.label}
-                  </button>
-                ))}
-              </div>
+              <label className="tileset-category-select" title={activeCatalog.hint}>
+                <span>Category</span>
+                <select value={category} onChange={(event) => setCategory(event.target.value as StudioCategory)} aria-label="Catalog category">
+                  {catalogCategories.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.label}</option>
+                  ))}
+                </select>
+              </label>
               {activeCatalog.controls}
             </div>
           </section>
@@ -1736,7 +1764,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               ? <ArtworkLab name={selectedArtworkName} header={viewerKindTabs} />
               : viewerKind === 'glossary'
                 ? <GlossaryLab name={selectedGlossaryName} header={viewerKindTabs} />
-                : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
+                : viewerKind === 'surface'
+                  ? <SurfaceViewer name={selectedSurfaceName} header={viewerKindTabs} />
+                  : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
+        ) : studioMode === 'dressing' ? (
+          <SurfaceDressingRoom seed={selectedSurfaceName} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
