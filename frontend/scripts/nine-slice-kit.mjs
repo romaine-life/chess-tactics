@@ -13,7 +13,7 @@
 //   - content         -> consumption-side (element padding / where text+icons
 //                        start). NOT baked into the PNG; recorded in the config.
 import { PNG } from 'pngjs';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { buildFrameFrom } from './assemble-frame.mjs';
 
@@ -118,6 +118,17 @@ export function swapPalette(src, map) {
     if (t) { o.data[i] = parseInt(t.slice(0, 2), 16); o.data[i + 1] = parseInt(t.slice(2, 4), 16); o.data[i + 2] = parseInt(t.slice(4, 6), 16); }
   }
   return o;
+}
+
+export const SAVE_LOG = `${CONFIG_DIR}save-log.jsonl`;
+
+// Append-only audit trail of every bake, so a save is detectable on the filesystem
+// (not just in the browser). Each line: when, where it came from, the asset, the
+// exact config written, and the output files. Read SAVE_LOG to see what changed.
+export function logSave(source, asset, cfg, written) {
+  const entry = { ts: new Date().toISOString(), source, asset, config: cfg, written };
+  try { mkdirSync(CONFIG_DIR, { recursive: true }); appendFileSync(SAVE_LOG, `${JSON.stringify(entry)}\n`); } catch { /* logging must never break a bake */ }
+  return entry;
 }
 
 export function normalizeConfig(c) {

@@ -175,6 +175,24 @@ export function NineSliceEditor(): ReactElement {
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
 
+  // Hydrate from the on-disk config (dev) the first time each asset is opened, so the
+  // editor reflects what's actually baked — not stale localStorage or defaults. This
+  // is what stops a fresh editor from saving default values over your real config.
+  const hydrated = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!((import.meta as { env?: { DEV?: boolean } }).env?.DEV) || hydrated.current.has(assetId)) return;
+    let live = true;
+    fetch(`/__nine-slice/config?asset=${assetId}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (!live || !j.ok || !j.config) return;
+        hydrated.current.add(assetId);
+        setEdits((prev) => ({ ...prev, [assetId]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content } }));
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [assetId]);
+
   // Asset selection lives in the URL so the editor is deep-linkable (?asset=panel).
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);

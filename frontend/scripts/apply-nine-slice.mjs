@@ -7,7 +7,7 @@
 //   node scripts/apply-nine-slice.mjs mode-button    # apply one asset's committed config
 //   node scripts/apply-nine-slice.mjs path/to.json   # apply a config file directly
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { buildAsset, loadConfig, normalizeConfig, writeGeneratedCss, CONFIG_DIR, REGISTRY } from './nine-slice-kit.mjs';
+import { buildAsset, loadConfig, normalizeConfig, writeGeneratedCss, logSave, CONFIG_DIR, REGISTRY } from './nine-slice-kit.mjs';
 
 console.log(`
 ┌─ apply-nine-slice · bake editor offsets into committed assets (single bake impl: nine-slice-kit) ─
@@ -32,6 +32,7 @@ if (!arg) {
 if (!configs.length) { console.log('no configs found in', CONFIG_DIR); process.exit(0); }
 for (const cfg of configs) {
   const res = buildAsset(cfg.asset, cfg);
+  logSave('cli', cfg.asset, normalizeConfig(cfg), res.written);
   console.log(`✓ ${cfg.asset}  →  ${res.written.join(', ')}`);
   if (res.note) console.log(`  note: ${res.note}`);
   for (const w of res.warns) console.log(`  warn: ${w}`);
