@@ -12366,8 +12366,8 @@ button.tileset-relationship-cell {
    subtle fill + accent bar, the rest stay plain. No per-item frame (the rail panel
    already carries the gold-bracket chrome). Mirrors the grouped-list content. */
 .settings-tab {
-  --settings-tab-icon-slot: 36px;
-  --settings-tab-icon-size: 28px;
+  --settings-tab-icon-slot: 40px;
+  --settings-tab-icon-size: 34px;
   align-items: center;
   appearance: none;
   background: transparent;
@@ -12425,7 +12425,8 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab strong {
-  font-size: var(--ds-text-sm);
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
