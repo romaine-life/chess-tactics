@@ -5540,17 +5540,24 @@ h1 {
   z-index: 5;
 }
 
-.shell.skirmish-active {
+/* Immersive / full-bleed screens hide the static global .topbar (index.html) and let
+   .app-root own the whole viewport, so the screen shows only its OWN title bar instead
+   of stacking under the global one. Skirmish uses `.skirmish-active`; screen-agnostic
+   surfaces (the level editor) use `.is-immersive` — same behaviour, neutral name. */
+.shell.skirmish-active,
+.shell.is-immersive {
   gap: 0;
   grid-template-rows: minmax(0, 1fr);
   padding: 0;
 }
 
-.shell.skirmish-active .topbar {
+.shell.skirmish-active .topbar,
+.shell.is-immersive .topbar {
   display: none;
 }
 
-.shell.skirmish-active .app-root {
+.shell.skirmish-active .app-root,
+.shell.is-immersive .app-root {
   grid-row: 1;
   height: 100%;
   min-height: 0;
@@ -5558,7 +5565,9 @@ h1 {
 }
 
 .shell.skirmish-active + .bgm-control,
-.shell.skirmish-active ~ .bgm-control { display: none; }
+.shell.skirmish-active ~ .bgm-control,
+.shell.is-immersive + .bgm-control,
+.shell.is-immersive ~ .bgm-control { display: none; }
 
 .skirmish-screen::before {
   background:
@@ -6225,6 +6234,186 @@ h1 {
   gap: 4px;
   min-width: 56px;
 }
+
+/* ============================================================
+   LEVEL EDITOR — Skirmish-sibling rail helpers.
+   The /edit shell reuses the real .skirmish-screen / .skirmish-war-room /
+   .skirmish-field / .skirmish-board-frame / .skirmish-hud / .skirmish-card
+   chrome (so it IS the same game). These .le-* classes only add the
+   editor-specific controls; nothing here restyles the Skirmish page itself.
+   ============================================================ */
+/* Full-bleed title row across the top (ADR-0004), board + rail below it. The editor is
+   NOT the battle HUD, so it takes the standard full-width title bar rather than Skirmish's
+   board-column placement. Columns, CSS vars, and the night-sky ::before still come from
+   .skirmish-screen; we only re-grid into a title row + a board|rail row. */
+.level-editor-screen {
+  grid-template-areas:
+    "titlebar titlebar"
+    "board    rail";
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.level-editor-screen .le-topbar { grid-area: titlebar; }
+.level-editor-screen .skirmish-field { grid-area: board; }
+.level-editor-screen .skirmish-hud { grid-area: rail; }
+
+.level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
+
+/* topbar: brand | tabs | undo/redo | spacer | test/save. Frame + height come from
+   .app-titlebar (gold panel.png 9-slice, --app-header-h; ADR-0004). Buttons are the
+   shared kit bracket frames (ADR-0009/0010) — gold by default, cyan for the
+   primary/active — never filled-colour one-offs. align-content centres the row so the
+   54px brand shield seats on the bar (ADR-0010). */
+.le-topbar {
+  align-content: center;
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0 clamp(10px, 1.1vw, 16px);
+}
+.le-topbar .skirmish-window-actions { justify-self: end; }
+
+/* document-actions section pinned at the top of the rail (ADR-0023): the editor's
+   Save/Test/Undo/Redo live in the side control panel, not the title bar/a toolbar. */
+.le-doc-head { align-items: center; display: flex; gap: 8px; margin-bottom: 8px; }
+.le-doc-head strong { color: #f0e7d3; font-family: inherit; font-size: 1rem; letter-spacing: .02em; text-transform: uppercase; }
+.le-doc-dot { background: #f1cf86; border-radius: 50%; box-shadow: 0 0 6px rgba(241, 207, 134, .6); flex: none; height: 8px; width: 8px; }
+.le-doc-spacer { flex: 1; }
+.le-doc-actions { display: flex; gap: 6px; }
+.le-doc-actions .le-titlebtn { flex: 1; min-inline-size: 0; }
+
+/* one shared title-bar button family: the kit mode-button bracket frame (ADR-0009/0010) */
+.le-titlebtn {
+  align-items: center;
+  block-size: 40px;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  color: #f0eadb;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 7px;
+  image-rendering: pixelated;
+  justify-content: center;
+  min-inline-size: 86px;
+  padding: 0 14px;
+  text-transform: uppercase;
+}
+.le-titlebtn.is-active { border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round; color: #eafaff; }
+.le-titlebtn.icon-only { gap: 0; min-inline-size: 0; padding: 0 12px; }
+.le-titlebtn:disabled { cursor: default; opacity: .5; }
+.le-titlebtn .le-ico { height: 18px; width: 18px; }
+
+/* rail zoom icon button (NOT a title-bar button — stays a small chrome control) */
+.le-iconbtn {
+  background: url("/assets/ui/level-editor/icon-button-normal.png") center/100% 100% no-repeat;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  height: 44px;
+  place-items: center;
+  width: 44px;
+}
+.le-iconbtn:disabled { cursor: default; opacity: .4; }
+
+/* segmented switch (layer / tool / fill) */
+.le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
+.le-seg-btn {
+  background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94));
+  border: 1px solid rgba(82, 142, 170, .34);
+  border-radius: 5px;
+  color: #cfe6f1;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 5px;
+  grid-auto-flow: column;
+  line-height: 1;
+  min-height: 40px;
+  padding: 5px 4px;
+  place-items: center;
+  text-transform: uppercase;
+}
+.le-seg-btn:disabled { cursor: default; opacity: .4; }
+.le-seg-btn.active {
+  background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
+  border-color: var(--skirmish-cyan);
+  box-shadow: 0 0 0 1px rgba(56, 215, 255, .3);
+  color: #eafaff;
+}
+
+/* active brush picker */
+.le-brush-pick { align-items: center; display: grid; gap: 10px; grid-template-columns: 60px minmax(0, 1fr); margin-top: 10px; }
+.le-brush-thumb {
+  background: radial-gradient(circle at 50% 40%, rgba(63, 148, 190, .18), transparent 64%), rgba(3, 12, 19, .74);
+  border: 1px solid rgba(87, 153, 184, .4);
+  border-radius: 5px;
+  display: grid;
+  height: 60px;
+  overflow: hidden;
+  place-items: center;
+  width: 60px;
+}
+.le-brush-thumb img { height: 90%; image-rendering: pixelated; object-fit: contain; width: 90%; }
+.le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
+.le-brush-meta span { color: var(--skirmish-muted); font-size: .82rem; }
+
+/* palette (folded into the rail — variant B) */
+.le-palette-scroll { max-height: 300px; overflow-y: auto; padding-right: 4px; scrollbar-color: #315160 #071017; scrollbar-width: thin; }
+.le-palette-scroll::-webkit-scrollbar { width: 7px; }
+.le-palette-scroll::-webkit-scrollbar-thumb { background: #315160; border-radius: 4px; }
+.le-pal-group { margin: 0 0 4px; }
+.le-pal-grouplabel { color: #8fb6c6; display: block; font-size: .76rem; letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
+.le-pal-grouplabel:first-child { margin-top: 0; }
+.le-swatches { display: grid; gap: 6px; grid-template-columns: repeat(4, 1fr); }
+.le-swatch {
+  background: radial-gradient(circle at 50% 36%, rgba(63, 148, 190, .13), transparent 66%), rgba(4, 13, 20, .7);
+  border: 1px solid rgba(82, 142, 170, .3);
+  border-radius: 5px;
+  color: var(--skirmish-muted);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  padding: 5px 2px;
+}
+.le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
+.le-swatch small { font-size: .68rem; line-height: 1; text-align: center; }
+.le-swatch.active { border-color: var(--skirmish-cyan); box-shadow: 0 0 0 1px rgba(56, 215, 255, .35); color: #eafaff; }
+
+/* details inspector */
+.le-details dl { display: grid; gap: 6px; margin: 0; }
+.le-details div { align-items: center; display: grid; gap: 8px; grid-template-columns: 72px minmax(0, 1fr); }
+.le-details dt { color: #6edcff; font-size: .76rem; margin: 0; text-transform: uppercase; }
+.le-details dd { color: #f3ead8; font-size: .82rem; margin: 0; word-break: break-word; }
+
+/* view / zoom / footprint toggle */
+.le-zoom { align-items: center; display: grid; gap: 8px; grid-template-columns: auto 1fr auto; margin-top: 8px; }
+.le-zoom .le-iconbtn { background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94)); border: 1px solid rgba(82, 142, 170, .34); border-radius: 5px; height: 36px; width: 36px; }
+.le-zoom-read { background: rgba(8, 23, 35, .6); border: 1px solid rgba(64, 115, 147, .45); border-radius: 4px; color: #f3ead8; font-size: .82rem; padding: 7px 0; text-align: center; }
+.le-toggle { align-items: center; background: none; border: 0; color: #d6ecf5; cursor: pointer; display: flex; font: inherit; font-size: .82rem; gap: 8px; padding: 2px 0; text-transform: uppercase; }
+.le-toggle .pip { background: rgba(8, 23, 35, .8); border: 1px solid rgba(82, 142, 170, .5); border-radius: 9px; flex: none; height: 18px; position: relative; width: 34px; }
+.le-toggle.on .pip { background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95)); border-color: var(--skirmish-cyan); }
+.le-toggle .pip::after { background: #bfe6f4; border-radius: 50%; content: ""; height: 12px; left: 2px; position: absolute; top: 2px; transition: .1s; width: 12px; }
+.le-toggle.on .pip::after { background: #eafaff; left: 18px; }
+
+/* status line */
+.le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: .82rem; gap: 8px; padding: 2px 2px 6px; }
+.le-statusline b { color: #9fe0ff; }
+
+/* editor rail icons */
+.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 24px; image-rendering: pixelated; width: 24px; }
+.ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
+.ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
+.ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
+.ic-grid { background-image: url("/assets/ui/level-editor/icons/grid.png"); }
+.ic-zone { background-image: url("/assets/ui/level-editor/icons/zone.png"); }
+.ic-undo { background-image: url("/assets/ui/level-editor/icons/undo.png"); }
+.ic-redo { background-image: url("/assets/ui/level-editor/icons/redo.png"); }
+.ic-save { background-image: url("/assets/ui/level-editor/icons/save.png"); }
+.ic-play { background-image: url("/assets/ui/level-editor/icons/play.png"); }
+.ic-up { background-image: url("/assets/ui/level-editor/icons/height-up.png"); }
+.ic-down { background-image: url("/assets/ui/level-editor/icons/height-down.png"); }
 
 .skirmish-count-pip strong {
   font-size: .72rem;

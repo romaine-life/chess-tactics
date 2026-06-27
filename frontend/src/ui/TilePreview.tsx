@@ -46,6 +46,8 @@ import { useCampaigns } from '../campaign/store';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
+import { BrandLockup } from './shared/BrandLockup';
+import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
   activeUnitFamilies,
@@ -2694,5 +2696,226 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         )}
       </section>
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Level Editor (front-of-house). The functional Studio Lab board, re-dressed as
+// a literal sibling of the Skirmish page: it reuses the real .skirmish-screen /
+// .skirmish-war-room / .skirmish-field / .skirmish-board-frame / .skirmish-hud /
+// .skirmish-card chrome (so it IS the same game), with the proven
+// StudioEditableBoard inside, and the editor controls in .skirmish-card rail
+// sections. M1 = the shell + tile painting; units/doodads/persistence land in
+// later milestones. The Studio Lab (TilesetStudio) is untouched — this duplicates
+// its board logic for now; a shared hook will dedupe them once it has settled.
+// ---------------------------------------------------------------------------
+const LE_COLS = 10;
+const LE_ROWS = 10;
+const leGrassFamily = studioFamilies.find((family) => family.id === 'grass') ?? studioFamilies[0];
+const leDefaultTile = leGrassFamily.assets.find((asset) => asset.kind === 'tile') ?? leGrassFamily.assets[0];
+const leTileGroups = studioFamilies.map((family) => ({ family, tiles: family.assets.filter((asset) => asset.kind === 'tile') }));
+const leAllTiles = studioFamilies.flatMap((family) => family.assets);
+const leFamilyOfTile = (id: string): StudioFamily | undefined => studioFamilies.find((family) => family.assets.some((asset) => asset.id === id));
+const leSeedBoard = (): Record<string, string> => {
+  const cells: Record<string, string> = {};
+  for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
+  return cells;
+};
+
+export function LevelEditor(): ReactElement {
+  const animationFrame = useAnimationClock(true, 8, 150);
+  const [boardCells, setBoardCells] = useState<Record<string, string>>(leSeedBoard);
+  const [tool, setTool] = useState<'select' | 'brush' | 'erase'>('brush');
+  const [brushId, setBrushId] = useState<string>(leDefaultTile.id);
+  const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [showFootprint, setShowFootprint] = useState(true);
+  const [viewZoom, setViewZoom] = useState(1);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+
+  // Go full-bleed like Skirmish: hide the static global .topbar (index.html) so the
+  // editor shows only its OWN title bar, not stacked under the app's global header.
+  useEffect(() => {
+    const shell = document.querySelector('.shell');
+    shell?.classList.add('is-immersive');
+    return () => shell?.classList.remove('is-immersive');
+  }, []);
+
+  const resolveAsset = (id: string): StudioAsset | undefined => leAllTiles.find((asset) => asset.id === id);
+  const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
+
+  const paintCell = (x: number, y: number): void => setBoardCells((prev) => ({ ...prev, [`${x},${y}`]: brushAsset.id }));
+  const eraseCell = (x: number, y: number): void =>
+    setBoardCells((prev) => {
+      const key = `${x},${y}`;
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  const clearBoard = (): void => { setBoardCells({}); setSelectedCell(null); };
+  const fillBoard = (mode: 'empty' | 'all'): void =>
+    setBoardCells((prev) => {
+      const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
+      for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) {
+        const key = `${x},${y}`;
+        if (mode === 'all' || !(key in next)) next[key] = brushAsset.id;
+      }
+      return next;
+    });
+  const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
+  const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+
+  const paintedCount = Object.keys(boardCells).length;
+  const selectedTileId = selectedCell ? boardCells[`${selectedCell.x},${selectedCell.y}`] : undefined;
+  const selectedAsset = selectedTileId ? resolveAsset(selectedTileId) : undefined;
+  const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
+
+  return (
+    <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
+        <header className="app-titlebar le-topbar" aria-label="Level editor">
+          <BrandLockup screenName="Level Editor" />
+          <nav className="skirmish-window-actions" aria-label="Level editor navigation">
+            <a className="skirmish-square-action" href="/" aria-label="Main menu">
+              <span className="skirmish-icon skirmish-icon-menu" aria-hidden="true" />
+            </a>
+            <a className="skirmish-square-action" href="/settings" aria-label="Settings">
+              <span className="skirmish-icon skirmish-icon-gear" aria-hidden="true" />
+            </a>
+          </nav>
+        </header>
+
+        <div className="skirmish-field">
+          <div className="skirmish-board-frame">
+            <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
+              <div className="tileset-view-board-content is-board">
+                <StudioEditableBoard
+                  cols={LE_COLS}
+                  rows={LE_ROWS}
+                  cells={boardCells}
+                  units={{}}
+                  doodads={{}}
+                  resolveAsset={resolveAsset}
+                  resolveUnit={() => undefined}
+                  resolveDoodad={() => undefined}
+                  tool={tool}
+                  selectedCell={selectedCell}
+                  showFootprint={showFootprint}
+                  boardZoom={viewZoom}
+                  boardPan={viewPan}
+                  animationFrame={animationFrame}
+                  onPaint={paintCell}
+                  onErase={eraseCell}
+                  onSelect={selectCell}
+                />
+              </div>
+            </ViewPane>
+          </div>
+        </div>
+
+      <aside className="skirmish-hud" aria-label="Editor controls">
+        <section className="skirmish-card le-doc-card">
+          <div className="le-doc-head">
+            <strong>Untitled level</strong>
+            <span className="le-doc-dot" title="Unsaved changes" aria-hidden="true" />
+            <span className="le-doc-spacer" />
+            <button type="button" className="le-titlebtn icon-only" title="Undo (coming soon)" disabled><span className="le-ico ic-undo" aria-hidden="true" /></button>
+            <button type="button" className="le-titlebtn icon-only" title="Redo (coming soon)" disabled><span className="le-ico ic-redo" aria-hidden="true" /></button>
+          </div>
+          <div className="le-doc-actions">
+            <button type="button" className="le-titlebtn" disabled title="Validation arrives with persistence."><span className="le-ico ic-play" aria-hidden="true" />Test</button>
+            <button type="button" className="le-titlebtn is-active" disabled title="Saving unlocks with the level API."><span className="le-ico ic-save" aria-hidden="true" />Save</button>
+          </div>
+        </section>
+        <section className="skirmish-card">
+          <h2>Layer</h2>
+          <div className="le-seg">
+            <button type="button" className="le-seg-btn" disabled>Board</button>
+            <button type="button" className="le-seg-btn active">Tile</button>
+            <button type="button" className="le-seg-btn" disabled>Unit</button>
+            <button type="button" className="le-seg-btn" disabled>Doodad</button>
+          </div>
+        </section>
+
+        <section className="skirmish-card">
+          <h2>Tool</h2>
+          <div className="le-seg">
+            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')}><span className="le-ico ic-eyedropper" aria-hidden="true" />Select</button>
+            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')}><span className="le-ico ic-brush" aria-hidden="true" />Brush</button>
+            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')}><span className="le-ico ic-eraser" aria-hidden="true" />Erase</button>
+          </div>
+          <div className="le-brush-pick">
+            <span className="le-brush-thumb"><img src={brushAsset.src} alt="" draggable={false} /></span>
+            <span className="le-brush-meta">
+              <strong>{brushAsset.label}</strong>
+              <span>Active brush · tile</span>
+            </span>
+          </div>
+        </section>
+
+        <section className="skirmish-card">
+          <h2>Palette</h2>
+          <div className="le-palette-scroll">
+            {leTileGroups.map(({ family, tiles }) => (
+              <div className="le-pal-group" key={family.id}>
+                <span className="le-pal-grouplabel">{family.label}</span>
+                <div className="le-swatches">
+                  {tiles.map((tile) => (
+                    <button
+                      type="button"
+                      key={tile.id}
+                      className={`le-swatch ${brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                      title={tile.label}
+                      onClick={() => { setBrushId(tile.id); setTool('brush'); }}
+                    >
+                      <img src={tile.src} alt="" draggable={false} />
+                      <small>{tile.label}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="skirmish-card">
+          <h2>Fill</h2>
+          <div className="le-seg">
+            <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank cells with the current brush.">Empty</button>
+            <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole board with the current brush.">Whole</button>
+            <button type="button" className="le-seg-btn" onClick={clearBoard} title="Remove every tile from the board.">Clear</button>
+          </div>
+        </section>
+
+        <section className="skirmish-card">
+          <h2>View</h2>
+          <button type="button" className={`le-toggle ${showFootprint ? 'on' : ''}`.trim()} onClick={() => setShowFootprint((value) => !value)}><span className="pip" aria-hidden="true" />Footprint</button>
+          <div className="le-zoom">
+            <button type="button" className="le-iconbtn" title="Zoom out" onClick={() => adjustZoom(-0.2)}><span className="le-ico ic-down" aria-hidden="true" /></button>
+            <span className="le-zoom-read">Zoom {Math.round(viewZoom * 100)}%</span>
+            <button type="button" className="le-iconbtn" title="Zoom in" onClick={() => adjustZoom(0.2)}><span className="le-ico ic-up" aria-hidden="true" /></button>
+          </div>
+        </section>
+
+        <section className="skirmish-card le-details">
+          <h2>Details · {selectedAsset ? 'Tile' : selectedCell ? 'Cell' : 'Board'}</h2>
+          {selectedAsset ? (
+            <dl>
+              <div><dt>Type</dt><dd>{leFamilyOfTile(selectedAsset.id)?.label ?? '—'}</dd></div>
+              <div><dt>Source</dt><dd>{selectedAsset.id}</dd></div>
+              <div><dt>Cell</dt><dd>{selectedCell?.x}, {selectedCell?.y}</dd></div>
+            </dl>
+          ) : (
+            <dl>
+              <div><dt>Tiles</dt><dd>{paintedCount}</dd></div>
+              <div><dt>Board</dt><dd>{LE_COLS} × {LE_ROWS}</dd></div>
+            </dl>
+          )}
+        </section>
+
+        <div className="le-statusline">
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · {LE_COLS}×{LE_ROWS} board
+        </div>
+      </aside>
+    </div>
   );
 }
