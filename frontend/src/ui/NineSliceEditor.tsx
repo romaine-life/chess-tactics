@@ -276,6 +276,20 @@ export function NineSliceEditor(): ReactElement {
   const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, margin: edit.margin, content: edit.content }, null, 2);
   const pieces: PieceKey[] = loaded?.hasAccent ? ['keyline', 'bracket'] : ['keyline'];
 
+  // Save straight to the on-disk config + regenerate the asset, via the dev-only
+  // Vite endpoint. import.meta.env.DEV gates the button; the endpoint only exists
+  // while `vite` is serving — so this whole path is dev-only by construction.
+  const isDev = Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV);
+  const [saveMsg, setSaveMsg] = useState('');
+  const saveToDisk = async () => {
+    setSaveMsg('saving…');
+    try {
+      const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
+      const j = await r.json();
+      setSaveMsg(j.ok ? `saved ${j.config} → ${j.written.join(', ')} · hard-refresh the app to see it${j.note ? ` (${j.note})` : ''}` : `error: ${j.error}`);
+    } catch (e) { setSaveMsg(`error: ${String(e)}`); }
+  };
+
   return (
     <section style={ST.page}>
       <header style={ST.bar}>
@@ -349,6 +363,12 @@ export function NineSliceEditor(): ReactElement {
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
             <div>margin: {edit.margin} px · content inset: {edit.content} px</div>
           </div>
+          {isDev && (
+            <>
+              <button type="button" style={ST.save} onClick={saveToDisk}>💾 Save to disk + regenerate (dev)</button>
+              {saveMsg && <div style={{ ...ST.hint, color: saveMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{saveMsg}</div>}
+            </>
+          )}
           <label style={ST.hint}>Export — paste this back:</label>
           <textarea readOnly value={exportJson} style={ST.export} onFocus={(e) => e.currentTarget.select()} />
           <button type="button" style={ST.copy} onClick={() => navigator.clipboard?.writeText(exportJson)}>Copy JSON</button>
@@ -387,5 +407,6 @@ const ST: Record<string, CSSProperties> = {
   statusGrid: { display: 'flex', gap: 14, fontFamily: 'ui-monospace, monospace', fontSize: 13 },
   offsets: { fontSize: 13, fontFamily: 'ui-monospace, monospace', color: '#dbe9ff', display: 'grid', gap: 2 },
   export: { width: '100%', height: 110, background: '#0a0f1c', color: '#dbe9ff', border: '1px solid #2a3c5e', borderRadius: 4, fontFamily: 'ui-monospace, monospace', fontSize: 12, padding: 8, boxSizing: 'border-box' },
+  save: { padding: '10px 0', background: '#15532f', color: '#dffbe8', border: '1px solid #43b06a', borderRadius: 4, cursor: 'pointer', fontWeight: 700 },
   copy: { padding: '8px 0', background: '#1d5f9e', color: '#fff', border: '1px solid #4fbdf0', borderRadius: 4, cursor: 'pointer' },
 };
