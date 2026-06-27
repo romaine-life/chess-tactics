@@ -5815,7 +5815,7 @@ h1 {
 
 .skirmish-board-frame [data-testid="skirmish-board"] {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   max-width: 100%;
   overflow: hidden;
@@ -6285,6 +6285,38 @@ h1 {
   overflow-y: auto;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
+}
+
+/* View tab: layout only — the buttons themselves wear the kit mode-button frame
+   (.app-header-button), so no raw-CSS chrome here. */
+.skirmish-view-group {
+  display: grid;
+  gap: 8px;
+}
+
+.skirmish-view-group + .skirmish-view-group {
+  margin-top: 12px;
+}
+
+.skirmish-view-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skirmish-view-row .app-header-button {
+  font-size: var(--ds-text-xs);
+  min-block-size: 40px;
+  padding: 0 12px;
+}
+
+.skirmish-zoom-readout {
+  color: var(--skirmish-ink);
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  min-width: 44px;
+  text-align: center;
 }
 
 .skirmish-score-panel,

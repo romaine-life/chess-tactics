@@ -7,6 +7,7 @@ import { canTraverse, elevationAt } from '../core/terrain';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import type { TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
+import { useSkirmishView } from '../game/skirmishView';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
 import { DoodadSprite, type Doodad } from './BoardDoodad';
 import { ViewPane } from '../ui/shared/ViewPane';
@@ -59,10 +60,6 @@ function pieceImageSrc(piece: Piece): string | null {
   if (piece.type === 'rock' || piece.type === 'random-rock') return rockSpritePath(piece);
   if (piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
   return pieceSpritePath(piece.type, SIDE_PALETTE[piece.side], piece.facing ?? defaultFacingForSide(piece.side));
-}
-
-function pieceName(piece: Piece): string {
-  return `${piece.side === 'player' ? 'Blue' : piece.side === 'enemy' ? 'Red' : 'Neutral'} ${PIECE_LABEL[piece.type]}`;
 }
 
 function terrainMapForGame(game: ReturnType<typeof useSkirmish.getState>['game']): TileFamilyId[] {
@@ -194,11 +191,15 @@ function UnitPiece({ piece, selected = false, focused = false }: { piece: Piece;
 }
 
 export function SkirmishBoard() {
-  const [boardZoom, setBoardZoom] = useState(0.9);
-  const [boardPan, setBoardPan] = useState({ x: 0, y: -12 });
-  const [showMoves, setShowMoves] = useState(true);
-  const [showEnemyAttacks, setShowEnemyAttacks] = useState(true);
-  const [showBlocked, setShowBlocked] = useState(true);
+  // Board-view state lives in the shared view store so the HUD's "View" tab owns
+  // the controls and the playfield stays clean of floating buttons.
+  const showMoves = useSkirmishView((s) => s.showMoves);
+  const showEnemyAttacks = useSkirmishView((s) => s.showEnemyAttacks);
+  const showBlocked = useSkirmishView((s) => s.showBlocked);
+  const boardZoom = useSkirmishView((s) => s.zoom);
+  const boardPan = useSkirmishView((s) => s.pan);
+  const setZoom = useSkirmishView((s) => s.setZoom);
+  const setBoardPan = useSkirmishView((s) => s.setPan);
   const game = useSkirmish((s) => s.game);
   const env = useSkirmish((s) => s.env);
   const selectedId = useSkirmish((s) => s.selectedId);
@@ -251,8 +252,6 @@ export function SkirmishBoard() {
     }
   };
 
-  const setZoom = (zoom: number) => setBoardZoom(Math.min(1.45, Math.max(0.55, Number(zoom.toFixed(2)))));
-
   // STEP 1 demo: a single real grass-tuft doodad seeded under the most central player unit
   // (so it's clearly visible), to prove back/front embedding on the live board. Real
   // placements move to the decals layer next.
@@ -265,21 +264,6 @@ export function SkirmishBoard() {
 
   return (
     <div data-testid="skirmish-board" className="skirmish-board-lab">
-      <div className="skirmish-board-tools" aria-label="Board view controls">
-        <button type="button" onClick={() => setZoom(boardZoom - 0.1)} aria-label="Zoom out">-</button>
-        <span>{Math.round(boardZoom * 100)}%</span>
-        <button type="button" onClick={() => setZoom(boardZoom + 0.1)} aria-label="Zoom in">+</button>
-        <button type="button" onClick={() => { setBoardZoom(0.9); setBoardPan({ x: 0, y: -12 }); }}>Reset</button>
-        <button type="button" className={showMoves ? 'active' : ''} onClick={() => setShowMoves((value) => !value)} aria-pressed={showMoves}>Moves</button>
-        <button type="button" className={showEnemyAttacks ? 'active' : ''} onClick={() => setShowEnemyAttacks((value) => !value)} aria-pressed={showEnemyAttacks}>Attacks</button>
-        <button type="button" className={showBlocked ? 'active' : ''} onClick={() => setShowBlocked((value) => !value)} aria-pressed={showBlocked}>Blocks</button>
-        <select value={focusPiece?.id ?? ''} onChange={(event) => focus(event.target.value || null)} aria-label="Focused overlay piece">
-          <option value="">Selected piece</option>
-          {livePieces.filter((piece) => piece.side !== 'neutral').map((piece) => (
-            <option key={piece.id} value={piece.id}>{pieceName(piece)}</option>
-          ))}
-        </select>
-      </div>
       <ViewPane
         kind="board"
         ariaLabel="Skirmish board viewport"

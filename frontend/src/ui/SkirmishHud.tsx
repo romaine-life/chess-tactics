@@ -1,5 +1,6 @@
 import { type CSSProperties, useState } from 'react';
 import { useSkirmish } from '../game/store';
+import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, pieceSpritePath, portraitPath } from '../core/pieces';
 import type { Piece, PieceType, Side } from '../core/types';
@@ -20,12 +21,13 @@ const ROLE: Record<PieceType, string> = {
 
 const MARK = PIECE_MARK;
 
-type HudTab = 'unit' | 'roster' | 'log';
+type HudTab = 'unit' | 'roster' | 'log' | 'view';
 
 const HUD_TABS: { id: HudTab; label: string }[] = [
   { id: 'unit', label: 'Unit' },
   { id: 'roster', label: 'Roster' },
   { id: 'log', label: 'Log' },
+  { id: 'view', label: 'View' },
 ];
 
 function unitSprite(piece: Piece | null): string | null {
@@ -94,6 +96,14 @@ export function SkirmishHud() {
   const endTurn = useSkirmish((s) => s.endTurn);
 
   const [tab, setTab] = useState<HudTab>('unit');
+
+  const showMoves = useSkirmishView((s) => s.showMoves);
+  const showEnemyAttacks = useSkirmishView((s) => s.showEnemyAttacks);
+  const showBlocked = useSkirmishView((s) => s.showBlocked);
+  const zoom = useSkirmishView((s) => s.zoom);
+  const toggleOverlay = useSkirmishView((s) => s.toggle);
+  const setZoom = useSkirmishView((s) => s.setZoom);
+  const resetView = useSkirmishView((s) => s.resetView);
 
   const selected = game.pieces.find((p) => p.id === selectedId && p.alive) ?? null;
   const focused = game.pieces.find((p) => p.id === focusedId && p.alive) ?? selected;
@@ -231,6 +241,29 @@ export function SkirmishHud() {
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {tab === 'view' && (
+          <section className="skirmish-card skirmish-view-card" aria-label="Board view">
+            <h2>Board View</h2>
+            <div className="skirmish-view-group">
+              <span className="skirmish-eyebrow">Zoom</span>
+              <div className="skirmish-view-row">
+                <button type="button" className="app-header-button" onClick={() => setZoom(zoom - 0.1)} aria-label="Zoom out">−</button>
+                <span className="skirmish-zoom-readout">{Math.round(zoom * 100)}%</span>
+                <button type="button" className="app-header-button" onClick={() => setZoom(zoom + 0.1)} aria-label="Zoom in">+</button>
+                <button type="button" className="app-header-button" onClick={resetView}>Reset</button>
+              </div>
+            </div>
+            <div className="skirmish-view-group">
+              <span className="skirmish-eyebrow">Overlays</span>
+              <div className="skirmish-view-row">
+                <button type="button" className={`app-header-button ${showMoves ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</button>
+                <button type="button" className={`app-header-button ${showEnemyAttacks ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Attacks</button>
+                <button type="button" className={`app-header-button ${showBlocked ? 'app-header-button-active' : ''}`.trim()} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</button>
+              </div>
+            </div>
           </section>
         )}
       </div>
