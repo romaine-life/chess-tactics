@@ -1038,26 +1038,34 @@ h1 {
   gap: clamp(8px, 1.1vh, 11px);
   width: min(100%, 370px);
   max-width: 100%;
-  /* ADR-0027: one role token governs icon display size; never re-sized per icon. */
-  --menu-icon-size: 30px;
+  /* ADR-0027: one role token governs icon display size; never re-sized per icon.
+     --menu-btn-h is the primary-nav button height — ADR-0021 fixes settings pills at
+     40px on the mouse register; primary nav clears that step (Fitts + hierarchy). */
+  --menu-icon-size: 64px;
+  --menu-btn-h: 80px;
 }
 
 /* ── Main-menu mode buttons — "Wet Stone & Cold Iron" (ADR-0025 register) ───────────
    A matte wet-stone slab with a thin forged-iron lip, carrying the forged carved-stone
    icon (icons-carved/<slug>.png, canonical 64×64 per ADR-0026, optical keylines ADR-0027) at --menu-icon-size.
    Hover lifts the iron lip (no glow); active = a contained cobalt hairline (the board's
-   move-overlay tongue). NOTE: the slab surface is still CSS — forging its 9-slice frame
-   is the remaining chrome step (ADR-0002/0012); the icons are forged. */
+   move-overlay tongue). Slab = the forged stone-slate-blue tile (#162 surface set); the
+   iron lip is still a CSS border — baking it into a 9-slice frame (ADR-0002/0012) is next. */
 .mode-button-stone {
   display: flex;
   align-items: center;
   gap: 13px;
-  height: 50px;
-  padding: 0 16px;
+  min-height: var(--menu-btn-h, 60px);
+  padding: 8px 16px;
   text-decoration: none;
   color: #cdd6e2;
   background-color: #0f1b2b;
-  background-image: linear-gradient(180deg, rgba(40, 56, 74, .35) 0%, rgba(8, 16, 28, 0) 38%, rgba(0, 0, 0, .30) 100%);
+  background-image:
+    linear-gradient(180deg, rgba(54, 72, 94, .24) 0%, rgba(8, 16, 28, 0) 46%, rgba(0, 0, 0, .42) 100%),
+    url("/assets/ui/surfaces/stone-slate-blue.png");
+  background-size: auto, 48px 48px;
+  background-repeat: no-repeat, repeat;
+  image-rendering: pixelated;
   border: 2px solid #1c2836;
   border-top-color: #2a3a4c;
   border-radius: 3px;
