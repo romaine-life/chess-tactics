@@ -12619,14 +12619,6 @@ button.tileset-relationship-cell {
   min-height: 80px;
 }
 
-.settings-row-icon {
-  display: block;
-  height: 36px;
-  image-rendering: pixelated;
-  object-fit: contain;
-  width: 36px;
-}
-
 .settings-row h4 {
   font-size: var(--ds-text-md);
   text-transform: uppercase;
@@ -12950,10 +12942,6 @@ button.tileset-relationship-cell {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .settings-row-icon {
-    display: none;
-  }
-
   .settings-row-value,
   .settings-row-control {
     grid-column: auto;
@@ -13167,7 +13155,9 @@ button.tileset-relationship-cell {
 /* Per-asset property chips (gate + provenance) stacked at the card's trailing edge. */
 .asset-card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 .asset-prov,
+.asset-orphan,
 .asset-gate { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; text-transform: uppercase; }
+.asset-orphan { background: rgba(214, 138, 90, .16); border: 1px solid rgba(214, 138, 90, .5); color: #f0a06a; }
 .asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
 .asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
 .asset-prov.is-original { background: rgba(158, 177, 197, .12); border: 1px solid rgba(158, 177, 197, .34); color: #9eb1c5; }

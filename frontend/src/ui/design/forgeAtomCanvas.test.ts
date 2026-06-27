@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+// @ts-nocheck — node built-ins + pngjs are untyped in the app tsconfig, and the
+// forge is an untyped .mjs; vitest runs this via esbuild (no typecheck). The pad
+// logic it exercises is plain JS.
+import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
