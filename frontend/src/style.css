@@ -12391,9 +12391,7 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
   image-rendering: pixelated;
   min-height: 56px;
-  /* content inset from the 9-slice editor (--settings-tab-content, generated). */
-  padding: var(--settings-tab-content, 7px);
-  padding: 7px 12px;
+  padding: 7px 12px; /* tuned tab inset; the content-var automation was retired — content stays a saved editor guide */
   text-align: left;
   text-decoration: none;
   transition: color .14s ease;
