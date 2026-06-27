@@ -1156,14 +1156,34 @@ h1 {
   opacity: 0;
 }
 
+/* buttons-v2 rendered as a HORIZONTAL 3-slice: fixed left (icon) + right (arrow)
+   caps, a stretchable middle, height LOCKED to a fixed value so the art flexes
+   horizontally and never distorts vertically. Source = the per-mode normal/active
+   sprites (var(--btn-normal/active)); slice 0 95 0 165 for the 636x164 art. */
+.mode-button.uses-row-art {
+  /* Fixed height so the border-width caps (below) stay uniformly scaled with the
+     source — a flexible height would desync the caps from the art and stretch the
+     icon. The art (636x164) renders at 88px tall: scale 0.537 → caps 88/51px. */
+  aspect-ratio: auto;
+  height: 88px;
+}
+
+.mode-button.uses-row-art .mode-button-art-normal {
+  background: none;
+  border-style: solid;
+  border-width: 0 51px 0 88px;
+  border-image: var(--btn-normal) 0 95 0 165 fill / 0 51px 0 88px stretch;
+  image-rendering: auto;
+}
+
 .mode-button.uses-row-art:hover .mode-button-art-normal,
 .mode-button.uses-row-art:focus-visible .mode-button-art-normal,
 .mode-button.uses-row-art.is-active .mode-button-art-normal {
-  filter: brightness(1.14) saturate(1.08);
+  border-image-source: var(--btn-active);
 }
 
 .mode-button.uses-row-art:active .mode-button-art-normal {
-  filter: brightness(.96) saturate(1.08);
+  filter: brightness(.96);
 }
 
 /* .mode-button-icon is positioned by inline left/top/width/height (icon slot). */
