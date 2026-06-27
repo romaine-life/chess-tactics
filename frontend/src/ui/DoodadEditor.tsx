@@ -11,7 +11,7 @@ const FRAME_H = 180;
 const ANCHOR_X = 48;
 const ANCHOR_Y = 69;
 const ZOOM = 4; // canvas px per frame px
-const DEFAULT_SCALE = 0.35; // drop small (≈ shin height, ADR-0011), scale up by eye
+const DEFAULT_SCALE = 0.35; // drop small (≈ shin height, ADR-0015), scale up by eye
 
 const TILE_OPTIONS = ['grass-a', 'grass-c', 'dirt-a', 'stone-a', 'water-a', 'pebble-a', 'sand-a'];
 const UNIT_OPTIONS = [
@@ -147,7 +147,7 @@ export function DoodadEditor(): ReactElement {
 
   const back = els.filter((e) => e.layer === 'back');
   const front = els.filter((e) => e.layer === 'front');
-  // Shin line: ~22% of unit height above the foot (ADR-0011 "cover feet, not above the shins").
+  // Shin line: ~22% of unit height above the foot (ADR-0015 "cover feet, not above the shins").
   const shinY = (ANCHOR_Y - 86 * 0.22) * ZOOM;
 
   return (

@@ -539,10 +539,10 @@ export function Settings(): ReactElement {
           </aside>
 
           <main className="settings-frame settings-main-frame">
-            <div className="settings-panel-heading">
-              <p>Settings</p>
-              <h2>{active.label}</h2>
-            </div>
+            {/* Screen + section are already shown by the brand lockup and the active
+                nav button; a visible panel heading just duplicated them. Keep an
+                accessible heading for screen-reader structure. */}
+            <h2 className="sr-only">{active.label}</h2>
             <div className="settings-panel-content">
               {activeTab === 'general' ? renderGeneral() : null}
               {activeTab === 'audio' ? renderAudio() : null}

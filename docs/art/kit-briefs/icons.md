@@ -1,3 +1,8 @@
+> ⚠ **SUPERSEDED — do not follow the extraction method below.** Kit icons are
+> **generated** by the forge (codex img2img, method-verified — see kit-forge.md),
+> not extracted from concept crops. See [ADR-0011](../../adr/0011-chrome-art-generated-not-extracted.md).
+> Kept for history.
+
 # Kit Art Brief — Icon set (extract from the concept, clean to transparent)
 
 Produce a uniform, transparent-background icon set into

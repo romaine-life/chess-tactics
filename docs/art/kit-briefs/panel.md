@@ -1,3 +1,8 @@
+> ⚠ **SUPERSEDED — do not follow the extraction method below.** Chrome art is now
+> **generated** (codex img2img, method-verified) or assembled from generated atoms,
+> not extracted from concept crops. See [ADR-0011](../../adr/0011-chrome-art-generated-not-extracted.md).
+> Kept for history.
+
 # Kit Art Brief — Panel (9-slice, EXTRACTED from the original)
 
 Produce ONE reusable, transparent, 9-slice panel frame. **Do NOT procedurally

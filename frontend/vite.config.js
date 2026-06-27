@@ -2,9 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
+import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
 
 // The legacy vanilla entry (index.html -> /src/app.js) is unchanged; the React
 // plugin only adds JSX/TSX handling for the new surfaces we migrate onto.
+// nineSliceDevSave is a dev-serve-only endpoint for the 9-slice editor's Save.
 
 // Dev-only endpoint: the doodad editor POSTs a composition here and it lands on disk
 // under public/assets/doodads/compositions/<name>.json (served + in the repo), so
@@ -41,5 +43,5 @@ function doodadCompositionSave() {
 }
 
 export default defineConfig({
-  plugins: [react(), doodadCompositionSave()],
+  plugins: [react(), doodadCompositionSave(), nineSliceDevSave()],
 });
