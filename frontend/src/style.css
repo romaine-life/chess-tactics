@@ -12322,6 +12322,7 @@ button.tileset-relationship-cell {
 .settings-tab span,
 .settings-row-copy {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -12572,9 +12573,12 @@ button.tileset-relationship-cell {
   border: 14px solid transparent;
   border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
   image-rendering: pixelated;
-  display: grid;
+  /* Flex, not grid: a row carries an OPTIONAL value and/or control, so a fixed
+     column count strands an empty track + gap when one is absent — the lopsiding
+     ADR-0028 fixes. copy fills; value/control hug the end; side inset stays the
+     symmetric 16px (--ds-space-4) padding both sides. */
+  display: flex;
   gap: 16px;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
   min-height: 60px;
   padding: 6px 16px;
 }
@@ -12601,6 +12605,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-row-value {
+  flex: none;
   color: #eaf7ff;
   font-size: var(--ds-text-sm);
   min-width: 74px;
@@ -12610,6 +12615,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-row-control {
+  flex: none;
   align-items: center;
   display: flex;
   gap: clamp(10px, 1vw, 16px);
@@ -12909,12 +12915,13 @@ button.tileset-relationship-cell {
   }
 
   .settings-row {
-    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .settings-row-value,
   .settings-row-control {
-    grid-column: auto;
+    text-align: left;
   }
 
   .settings-stepper {
