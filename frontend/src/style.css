@@ -1620,7 +1620,7 @@ h1 {
   --ds-text-md:  clamp(.95rem, 1.1vw, 1.1rem);
   --ds-text-lg:  clamp(1.18rem, 1.55vw, 1.6rem);
   --ds-text-xl:  clamp(1.5rem, 2.1vw, 2.3rem);
-  /* space — the 8px base + 4px half-step scale (ADR-0025). Map spatial ROLES onto
+  /* space — the 8px base + 4px half-step scale (ADR-0026). Map spatial ROLES onto
      these steps; don't hand-pick px per element. */
   --ds-space-1: 4px;
   --ds-space-2: 8px;
@@ -1630,7 +1630,7 @@ h1 {
   --ds-space-6: 32px;
   --ds-space-7: 48px;
   --ds-space-8: 64px;
-  /* Spatial-role tokens (ADR-0025) — COMFORTABLE density is the default; in-game
+  /* Spatial-role tokens (ADR-0026) — COMFORTABLE density is the default; in-game
      surfaces override these to the tight end (see .skirmish-screen). inset = padding
      on all sides; stack = vertical gap; inline = horizontal gap; gutter = section gaps. */
   --ds-inset: var(--ds-space-4);
@@ -5537,7 +5537,7 @@ h1 {
   --skirmish-muted: #a7c1ce;
   --skirmish-panel: rgba(7, 19, 29, .86);
   --skirmish-panel-strong: rgba(10, 29, 42, .94);
-  /* COMPACT density — this is an in-game surface (ADR-0006 lean + ADR-0025). The
+  /* COMPACT density — this is an in-game surface (ADR-0006 lean + ADR-0026). The
      spatial-role tokens resolve to the tight end of the scale here. */
   --ds-inset: var(--ds-space-2);
   --ds-stack: var(--ds-space-2);
@@ -6407,15 +6407,14 @@ h1 {
 
 .skirmish-portrait-frame {
   align-items: center;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(65, 151, 190, .18), transparent 62%),
-    rgba(3, 12, 19, .74);
-  border: 1px solid rgba(87, 153, 184, .35);
-  border-radius: 5px;
+  /* Kit panel frame (ADR-0027) — no `fill`, so the portrait backdrop shows through the
+     center; the bust crop fills the content box edge-to-edge. Not a raw-CSS box. */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 / 12px round;
+  box-sizing: border-box;
   display: grid;
+  image-rendering: pixelated;
   min-height: 86px;
-  /* no padding: the portrait crop fills the frame edge-to-edge (the crop is the
-     framing; its transparent margins let the backdrop show through). */
   padding: 0;
   place-items: center;
   overflow: hidden;
@@ -6428,10 +6427,8 @@ h1 {
     rgba(3, 12, 19, .74);
   background-position: center;
   background-size: cover;
-  box-shadow:
-    inset 0 0 0 1px rgba(2, 8, 13, .58),
-    inset 0 -22px 26px rgba(0, 0, 0, .42);
-  overflow: hidden;
+  /* Bottom vignette grounds the bust (image treatment, not a fabricated frame edge). */
+  box-shadow: inset 0 -22px 26px rgba(0, 0, 0, .42);
 }
 
 /* Eye-level portrait bust (separate render contract from the iso board sprite). Smooth

@@ -4,7 +4,7 @@ date: 2026-06-27
 deciders: Nelson, Claude
 ---
 
-# ADR-0025: UI spacing is one tokenized system — a scale, spatial roles, and density modes
+# ADR-0026: UI spacing is one tokenized system — a scale, spatial roles, and density modes
 
 The spacing counterpart to [ADR-0024](0024-ui-typography-system.md) (typography is
 one tokenized system). Where 0024 makes the `--ds-text-*` layer the law for live

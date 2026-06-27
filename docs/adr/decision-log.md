@@ -27,7 +27,8 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0021](0021-settings-button-label-sizing.md) | Settings ACTION buttons (header + panel pills) share ONE body-tier (sm) label, grouped by role not frame; kept below titles; box hugs the label at a 40px desktop height (not the 44-48px touch floor — mouse game); emphasis via color/fill | accepted | 2026-06-27 |
 | [0022](0022-settings-nav-tabs-typography.md) | Settings rail tabs are a NAVIGATION component (governed apart from action buttons); sized at the content row-title tier (md), never above the rows they lead to; SETTINGS stays lg as the hierarchy top; supersedes the undocumented 1.25rem tab size from #148 | accepted | 2026-06-27 |
 | [0023](0023-app-title-bar-layout-and-controls.md) | App title bars: centered three-section layout + labeled controls on the kit frame (never bare icons; icon+label in-game, text in menus); generalizes ADR-0010 | accepted | 2026-06-27 |
-| [0025](0025-ui-spacing-system.md) | UI spacing is one tokenized system: ratify `--ds-space-*` (extend 48/64), spatial roles (inset/stack/inline/gutter), compact/comfortable density per ADR-0006, raw px on spacing banned; spacing sibling of ADR-0024 | accepted | 2026-06-27 |
+| [0026](0026-ui-spacing-system.md) | UI spacing is one tokenized system: ratify `--ds-space-*` (extend 48/64), spatial roles (inset/stack/inline/gutter), compact/comfortable density per ADR-0006, raw px on spacing banned; spacing sibling of ADR-0024 | accepted | 2026-06-27 |
+| [0027](0027-no-bland-html-css-every-surface-is-kit.md) | No bland HTML/CSS: every VISIBLE surface (panel/box/button/chip/frame) is a kit 9-slice or generated sprite; raw-CSS surfaces banned app-wide; layout containers + text exempt; generalizes ADR-0002/0011/0012/0014 | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 
