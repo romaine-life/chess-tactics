@@ -12731,6 +12731,33 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
+/* +/- drawn as bold geometric marks: simple utilitarian chrome -> DOM/CSS
+   (ui-art-direction render-accuracy rule). Crisp, icon-weight, inherits the button
+   color. The pixel font is weight-400 only, so a CSS mark reads far stronger than a
+   thin text "-"/"+". minus = the horizontal bar; plus = bar + vertical cross. */
+.stepper-glyph {
+  display: inline-block;
+  position: relative;
+  block-size: 14px;
+  inline-size: 14px;
+}
+.stepper-glyph::before {
+  background: currentColor;
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: calc(50% - 1.5px);
+  block-size: 3px;
+}
+.stepper-plus::after {
+  background: currentColor;
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(50% - 1.5px);
+  inline-size: 3px;
+}
+
 .settings-stepper output {
   color: #f8fcff;
   /* "value" role — same step as the slider readout, per the scale (style.css:1612).

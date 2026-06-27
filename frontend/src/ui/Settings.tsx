@@ -244,9 +244,9 @@ function Stepper({
 }): ReactElement {
   return (
     <div className="settings-stepper">
-      <SettingsButton ariaLabel={decreaseLabel} onClick={onDecrease}>-</SettingsButton>
+      <SettingsButton ariaLabel={decreaseLabel} onClick={onDecrease}><span className="stepper-glyph stepper-minus" aria-hidden="true" /></SettingsButton>
       <output>{value}{suffix}</output>
-      <SettingsButton ariaLabel={increaseLabel} onClick={onIncrease}>+</SettingsButton>
+      <SettingsButton ariaLabel={increaseLabel} onClick={onIncrease}><span className="stepper-glyph stepper-plus" aria-hidden="true" /></SettingsButton>
     </div>
   );
 }
