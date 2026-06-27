@@ -12226,15 +12226,38 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
+  /* Same art-directed backdrop as the main menu (.main-menu-layer, ~line 712) so the
+     settings frames sit over the menu scene + the synced rain. Keep the two in sync.
+     First declaration = PNG fallback for engines without image-set()/type(). */
   background:
-    radial-gradient(920px 620px at 52% 16%, rgba(49, 81, 91, .22), transparent 64%),
-    #02070b;
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat #02070b;
   display: grid;
   height: 100%;
   justify-items: center;
   min-height: 0;
   overflow: hidden;
+  position: relative;
   width: 100%;
+}
+
+/* The "drops cross in front" overlay reads far heavier on settings than on the
+   menu: the dense frames give those front-drops a large surface to cross, while
+   the menu's sparse UI is crossed by only a few. Dim the FRONT layer on settings
+   so the in-front rain matches the menu's restraint. The field rain behind the
+   frames is untouched, and the menu overlay is unaffected (scoped via the
+   re-parented overlay living under .settings-art-route only while on settings). */
+.settings-art-route .ambience-overlay {
+  opacity: 0.3;
 }
 
 .settings-screen {
@@ -12253,6 +12276,10 @@ button.tileset-relationship-cell {
   inline-size: 100%;
   max-inline-size: none;
   min-block-size: 0;
+  /* Above the rain field (z-index 2), below the overlay drops (z-index 5) — mirrors
+     .main-menu-screen so the frames sit over the scene + rain, a few drops in front. */
+  position: relative;
+  z-index: 3;
   /* Flush to the app edges — full-bleed, like the Skirmish bar. Top app bars are
      conventionally edge-to-edge, not inset cards. */
   padding: 0;
@@ -12609,16 +12636,12 @@ button.tileset-relationship-cell {
 }
 
 /* Layout container only. Each row carries its own atom-assembled frame
-   (ADR-0012/0014), so there is no CSS border/radius/background wrapping the rows. */
-/* Grouped list: one subtle container per section, rows separated by hairline
-   dividers — not an ornate frame around every row. The gold-bracket chrome stays
-   on the outer panels; the content list reads clean and scannable. */
+   (ADR-0012/0014), so there is NO CSS border/radius/background wrapping the rows.
+   (A merge re-introduced the old grouped-list "bubble" here — a navy fill + an
+   8px-radius border around each section's rows; removed so only the per-row atom
+   frame shows.) */
 .settings-section-rows {
-  background: rgba(8, 22, 34, 0.55);
-  border: 1px solid rgba(67, 127, 179, 0.26);
-  border-radius: 8px;
   display: grid;
-  overflow: hidden;
 }
 
 .settings-row {
@@ -12644,9 +12667,6 @@ button.tileset-relationship-cell {
   padding: 12px 16px;
 }
 
-.settings-row + .settings-row {
-  border-top: 1px solid rgba(67, 127, 179, 0.16);
-}
 
 .settings-row-tall {
   min-height: 80px;
