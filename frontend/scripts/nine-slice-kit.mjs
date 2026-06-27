@@ -161,6 +161,31 @@ export function buildAsset(assetId, cfgRaw) {
   return { written, warns, note };
 }
 
+// Bake an ornament-only (transparent-interior) variant of an asset's frame: the SAME
+// tuned corner + edge atoms, but a fully transparent fill, and every remaining dark
+// (navy) pixel masked back to transparent so only the bright rail/ornament survives.
+// A surface painted behind the element then shows straight through the 9-slice instead
+// of the baked navy fill. This is the GENERAL fix for the "navy ring" 9-slice fill
+// problem (cf. the hand-made panel-line.png): dropping border-image `fill` alone is not
+// enough because the 8 edge slices still carry the fill colour inward.
+const RAIL_MIN_LINE = 45; // max-channel >= this is rail/ornament; below is navy fill (drop)
+export function bakeLine(assetId) {
+  const rec = REGISTRY[assetId];
+  if (!rec) throw new Error(`nine-slice-kit: unknown asset "${assetId}" (known: ${Object.keys(REGISTRY).join(', ')})`);
+  let cfg; try { cfg = loadConfig(assetId); } catch { cfg = normalizeConfig({ asset: assetId }); }
+  const corner = tuneCorner(loadAtom(rec.atoms.corner), cfg);
+  const edge = loadAtom(rec.atoms.edge);
+  const fillAtom = loadAtom(rec.atoms.fill);
+  const clearFill = new PNG({ width: fillAtom.width, height: fillAtom.height }); clearFill.data.fill(0);
+  const { w, h } = rec.frame;
+  const frame = buildFrameFrom(corner, edge, clearFill, w, h, !!rec.flipSides);
+  for (let i = 0; i < frame.data.length; i += 4) {
+    if (frame.data[i + 3] === 0) continue;
+    if (Math.max(frame.data[i], frame.data[i + 1], frame.data[i + 2]) < RAIL_MIN_LINE) frame.data[i + 3] = 0;
+  }
+  return frame;
+}
+
 // Compare a freshly baked variant PNG to its committed file on disk, returning a
 // plain serializable result so a (type-checked) test can assert bake parity without
 // importing pngjs/fs/Buffer itself. Used by the nine-slice bake regression test.
