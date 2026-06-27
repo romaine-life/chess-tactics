@@ -12714,13 +12714,13 @@ button.tileset-relationship-cell {
 }
 
 .settings-stepper .settings-chrome-button {
-  background: rgba(12, 31, 48, 0.92);
-  border: 1px solid rgba(91, 157, 216, 0.5);
-  border-image: none;
-  border-radius: 6px;
+  /* Use the forged button frame (inherited from .settings-chrome-button), shrunk
+     to a 32px square stepper key — NOT a raw CSS border/fill (ADR-0011/0014). */
   block-size: 32px;
   inline-size: 32px;
   min-width: 32px;
+  border-width: 8px;
+  border-image-width: 8px;
   padding: 0;
 }
 
