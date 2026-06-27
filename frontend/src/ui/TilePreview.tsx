@@ -2354,7 +2354,7 @@ export function LevelEditor(): ReactElement {
         ) : (
           <section className="skirmish-card le-brush-panel">
             <h2>Palette</h2>
-            <div className="le-palette-scroll">
+            <div className="le-palette-scroll kit-scroll">
               {leTileGroups.map(({ family, tiles }) => (
                 <div className="le-pal-group" key={family.id}>
                   <span className="le-pal-grouplabel">{family.label}</span>
