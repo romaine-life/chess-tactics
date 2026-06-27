@@ -6,47 +6,30 @@
 // codex cannot be trusted to have GENERATED the image. Its imagegen skill tells
 // it to hand-draw "code-native" icons, so for a 64px hard-alpha request it writes
 // a PIL/SVG script and the pixel gate can't tell. So we VERIFY THE METHOD first
-// (an `image_generation_call` event must be present, via --json) and only then
-// the pixels. Provenance records the verified method — it is NOT "safe" just
-// because it passed the gate; the gate certifies clean transparency, not a good
-// drawing. The human eyeball is still the required backstop before onboarding.
+// (an `image_generation_call` event must be present) and only then the pixels.
+// GOTCHA: that event is NOT in `exec --json` stdout (an abridged thread/turn stream) —
+// it lives in the session ROLLOUT log; the shared codex-imagegen helper reads it and ships
+// the asset from the session's own generated_images/<thread_id>/ dir (race-free).
+// Provenance records the verified method — it is NOT "safe" just because it passed the
+// gate; the gate certifies clean transparency, not a good drawing. The human eyeball is
+// still the required backstop before onboarding.
 //
 //   node frontend/scripts/kit-forge.mjs <name...> | --group <id> | --all  [--n 8] [--tries 3]
 //
 // Each asset is forged in its OWN throwaway temp dir with --skip-git-repo-check,
 // so N codex sessions run concurrently with zero git checkpoint/restore — that
 // checkpointing (in the worktree) is what clobbered the parallel batch earlier.
-import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyGlyph } from './verify-kit-asset.mjs';
+import { runCodex, imageGenVerdict, sessionImage, removeChromaKey } from './codex-imagegen.mjs';
 
 const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
 const REPO = resolve(FRONTEND, '..');
 const KIT = join(FRONTEND, 'public/assets/ui/kit');
 const PROV = join(FRONTEND, 'src/ui/design/kitProvenance.json');
-// Resolve the codex binary without hardcoding a machine-specific, hash-named path:
-// the bin/<hash>/ folder changes on every codex update and is unique per machine.
-// Prefer an explicit CODEX_BIN override, else the newest installed build under the
-// default OpenAI/Codex layout, else trust PATH.
-function resolveCodex() {
-  if (process.env.CODEX_BIN && existsSync(process.env.CODEX_BIN)) return process.env.CODEX_BIN;
-  const exe = process.platform === 'win32' ? 'codex.exe' : 'codex';
-  const local = process.env.LOCALAPPDATA || join(process.env.USERPROFILE || process.env.HOME || '', 'AppData', 'Local');
-  const binDir = join(local, 'OpenAI', 'Codex', 'bin');
-  try {
-    const builds = readdirSync(binDir)
-      .map((hash) => join(binDir, hash, exe))
-      .filter(existsSync)
-      .map((p) => ({ p, mtime: statSync(p).mtimeMs }))
-      .sort((a, b) => b.mtime - a.mtime);
-    if (builds.length) return builds[0].p;
-  } catch { /* not the default install layout — fall through to PATH */ }
-  return exe; // trust PATH
-}
-const CODEX = resolveCodex();
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const GEN = 'docs/art/ui-screen-concepts/generated';
@@ -99,42 +82,11 @@ const SPECS = [
 });
 
 function prompt(spec, prior) {
-  return `IMAGE-GENERATION task: create ONE PNG by GENERATING it with the built-in image generation tool. Do NOT hand-draw it with code (PIL/Pillow, cairo, matplotlib, SVG, HTML/CSS, canvas), do NOT write a script, and do NOT crop or extract from any file — programmatic output is automatically rejected and you will be asked again.
-Using the attached concept art as the exact style/palette reference, generate a single clean standalone icon of: ${spec.desc}. Size ${spec.w}x${spec.h}, centered, on a FULLY TRANSPARENT background. Save it as ./${spec.name}.png in the current working directory.
-CRISP HARD-ALPHA IS THE #1 REQUIREMENT: every pixel must be either fully opaque OR fully transparent (alpha exactly 0 or 255). Hard 1px edges, fully-opaque interior, fully-transparent exterior. Do NOT anti-alias the edges. Do NOT key out or erase a filled background — paint directly onto transparency. NO semi-transparent halo or fringe. Use only the colors the subject calls for; NO stray magenta / purple / pink keying fringe anywhere.${prior ? `\nIMPORTANT: your previous attempt FAILED the pixel audit with: ${prior}. Fix exactly that this time.` : ''}
-Write only ./${spec.name}.png, then stop.`;
-}
-
-function runCodex(refAbs, cwd, text) {
-  return new Promise((res) => {
-    // --json streams every codex event as JSONL so we can VERIFY THE METHOD,
-    // not just inspect the resulting pixels. This is non-negotiable: codex
-    // cannot be trusted to have generated an image — its imagegen skill tells
-    // it to hand-draw "code-native" icons, so for hard-alpha/64px requests it
-    // writes a PIL/SVG script and our pixel gate can't tell the difference.
-    const p = spawn(CODEX, ['exec', '--json', '--sandbox', 'workspace-write', '--skip-git-repo-check', '-C', cwd, '-i', refAbs], { stdio: ['pipe', 'pipe', 'pipe'] });
-    let out = '';
-    p.stdout.on('data', (d) => { out += d; });
-    p.stderr.on('data', (d) => { out += d; });
-    p.on('close', (code) => res({ code, out }));
-    p.on('error', (e) => res({ code: -1, out: String(e) }));
-    p.stdin.write(text); p.stdin.end();
-  });
-}
-
-// DEFINITIVE method check. A genuine generation emits an `image_generation_call`
-// event (id `ig_…`); a programmatic drawing (PIL/Pillow/cairo/SVG/canvas) emits
-// only `shell_command`. We require proof of real generation EVERY time before we
-// will even look at the pixels. No image_generation_call -> codex coded it ->
-// reject, regardless of how clean the bitmap looks.
-function usedImageGenerator(codexJsonl) {
-  for (const line of codexJsonl.split('\n')) {
-    let j;
-    try { j = JSON.parse(line); } catch { continue; }
-    const t = (j.payload && j.payload.type) || j.type;
-    if (t === 'image_generation_call') return true;
-  }
-  return false;
+  return `IMAGE-GENERATION task: create ONE PNG by GENERATING it with the built-in image_gen tool (the imagegen skill). Do NOT hand-draw it with code (PIL/Pillow, cairo, matplotlib, SVG, HTML/CSS, canvas), do NOT write a script, and do NOT crop or extract from any file — programmatic output is automatically rejected and you will be asked again.
+Using the attached concept art as the exact style/palette reference, generate a single clean standalone icon of: ${spec.desc}. Size ${spec.w}x${spec.h}, the icon centered and compact with a clear margin of background all around it — the icon must NOT touch the canvas edges.
+BACKGROUND: place the icon on a FLAT, SOLID, PURE-GREEN #00ff00 chroma-key background that fills the entire canvas edge to edge. This green is keyed out to transparency afterward, so the icon itself must contain NO green at all, and there must be no frame, panel, gradient, or drop shadow on the background.
+FIDELITY: low-fi, pixellated, indie game art — a limited per-element palette (a few hundred colors), chunky stepped detail, like clean upscaled pixel art. NOT a smooth, high-fidelity, painterly render.${prior ? `\nIMPORTANT: your previous attempt FAILED with: ${prior}. Fix exactly that this time.` : ''}
+Save it as ./${spec.name}.png in the current working directory, then stop.`;
 }
 
 async function forgeOne(spec, maxTries) {
@@ -142,28 +94,38 @@ async function forgeOne(spec, maxTries) {
   for (let attempt = 1; attempt <= maxTries; attempt += 1) {
     const work = mkdtempSync(join(tmpdir(), `forge-${spec.name}-`));
     try {
-      const { code, out: codexJsonl } = await runCodex(spec.refAbs, work, prompt(spec, prior));
-      // Persist codex's full event stream so the method check is AUDITABLE (not a
-      // black box): afterward we can prove it GENERATED the image from the style
-      // ref (image_generation_call) rather than hand-drawing it in PIL/SVG/canvas.
+      const { out: codexJsonl } = await runCodex(work, prompt(spec, prior), spec.refAbs);
+      // Persist codex's stdout stream for auditing. NOTE: the method PROOF is the
+      // image_generation_call event in the ROLLOUT, not this abridged stdout (see
+      // codex-imagegen.mjs) — imageGenVerdict() reads the rollout for us.
       const evidDir = join(FRONTEND, 'tmp-forge-evidence');
       mkdirSync(evidDir, { recursive: true });
       const evidPath = join(evidDir, `${spec.name}-try${attempt}.jsonl`);
       writeFileSync(evidPath, codexJsonl);
-      const eventTypes = [...new Set(codexJsonl.split('\n').map((l) => { try { const j = JSON.parse(l); return (j.payload && j.payload.type) || j.type; } catch { return null; } }).filter(Boolean))];
-      console.log(`        try ${attempt} METHOD: ${usedImageGenerator(codexJsonl) ? 'image_generation_call ✓ (GENERATED)' : 'no image-gen — CODE-DRAWN ✗'} | events: ${eventTypes.join(', ')}`);
+      // GATE 1 (method, definitive): image_generation_call present in the session rollout.
+      const verdict = imageGenVerdict(codexJsonl);
+      console.log(`        try ${attempt} METHOD: ${verdict.ok ? 'image_generation_call ✓ (GENERATED)' : `CODE-DRAWN ✗ — ${verdict.reason}`}`);
       console.log(`        evidence: ${evidPath}`);
-      const outPng = join(work, `${spec.name}.png`);
-      if (!existsSync(outPng)) { prior = code === 0 ? 'codex wrote no PNG file' : `codex exited ${code} with no file`; continue; }
-      // GATE 1 (method, definitive): prove codex actually generated the image.
-      if (!usedImageGenerator(codexJsonl)) {
-        prior = 'you produced the PNG WITHOUT the image generation tool — you drew it programmatically (PIL/Pillow/cairo/SVG/canvas). That is auto-rejected. You MUST create the image with the built-in image generation tool.';
+      if (!verdict.ok) {
+        prior = 'the rollout shows NO image_generation_call — you produced the PNG WITHOUT the built-in image_gen tool (you drew it programmatically in PIL/Pillow/cairo/SVG/canvas). That is auto-rejected. You MUST create the image with the built-in image_gen tool.';
+        continue;
+      }
+      // The session's OWN model output (race-free), not codex's racy workspace copy. This is
+      // the flat green-background render; gpt-image-2 can't paint native transparency.
+      const shipped = sessionImage(verdict.tid);
+      if (!shipped) { prior = 'the image generated but was not found in the default output folder; generate again and leave it there.'; continue; }
+      // ADR-0013: key the flat chroma background out to alpha locally → the real deliverable.
+      const keyed = join(work, `${spec.name}-keyed.png`);
+      const key = removeChromaKey(shipped, keyed);
+      if (!key.ok || !existsSync(keyed)) {
+        console.log(`        chroma-key FAILED — ${key.reason || 'no output'}`);
+        prior = `the chroma-key removal of your image failed (${key.reason || 'no output'}). Regenerate the icon on a clean FLAT SOLID green background with the icon not touching any edge.`;
         continue;
       }
       try {
-        // GATE 2 (pixels): magenta / hard-alpha / edge bleed.
-        verifyGlyph(outPng, { label: spec.name });
-        copyFileSync(outPng, join(spec.outDir, `${spec.name}.png`));
+        // GATE 2 (pixels): magenta / edge bleed on the keyed result.
+        verifyGlyph(keyed, { label: spec.name });
+        copyFileSync(keyed, join(spec.outDir, `${spec.name}.png`));
         return { name: spec.name, group: spec.group, pass: true, tries: attempt };
       } catch (e) {
         prior = String(e.message).split('\n').slice(1).join(' ').replace(/\s+/g, ' ').trim();

@@ -29,23 +29,39 @@ was drawn in code, not generated, and the detailed ones came out broken.
 
 ### How to verify (the definitive signal)
 
-Run codex with `codex exec --json`. A genuine generation emits an
-**`image_generation_call`** event (id `ig_…`) plus an `image_generation_end`
-event, and leaves an artifact under `~/.codex/generated_images/<session>/`. A
-programmatic drawing emits only `shell_command` / `view_image`. So:
+A genuine generation emits an **`image_generation_call`** event (plus an
+`image_generation_end`) and leaves an artifact under
+`~/.codex/generated_images/<thread_id>/ig_*.png`. A programmatic drawing emits
+only `shell_command`-class events.
 
-- **Method gate (first, definitive):** require an `image_generation_call` event
-  in the run. No event → codex coded it → reject, no matter how clean the pixels.
+**GOTCHA — look in the right stream (this cost an agent a whole debugging detour).**
+`codex exec --json` *stdout* is an **abridged** thread/turn/item stream
+(`thread.started`, `turn.started`, `item.started/completed`, `turn.completed`); it
+does **not** carry response items, so `image_generation_call` is **never present on
+stdout**. Greping stdout for it makes every real generation look "code-drawn" — the
+"0/N forged" trap. The event lives in the full session **rollout log**:
+`~/.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread_id>.jsonl`. Correlate via the
+`thread_id` that the `thread.started` event prints to stdout, then read that rollout.
+
+- **Method gate (first, definitive):** require an `image_generation_call` event in
+  the run's **rollout**. No event → codex coded it → reject, no matter how clean
+  the pixels.
+- **Race-free shipping:** ship the asset from the session's own
+  `generated_images/<thread_id>/` dir — NOT codex's "copy the latest image to the
+  workspace" step, which under concurrency cross-grabs a sibling session's image
+  (observed: two distinct requests yielding byte-identical output).
 - **Pixel gate (second):** transparency hygiene only — a gross magenta keying
   fringe or background bleeding to the canvas edge (`verifyGlyph`). It does **not**
   require binary alpha; **anti-aliasing is allowed and expected**. It does not
   judge whether the drawing is any good — that's the method gate's and the
   eyeball's job.
 
-The forge enforces method-then-pixels in `forgeOne` via `usedImageGenerator()`,
-and records `method: "image-generator (verified)"` in
-`src/ui/design/kitProvenance.json`. If you build any other codex-image pipeline,
-do the same — gate the method first.
+These live in the shared helper `frontend/scripts/codex-imagegen.mjs`
+(`imageGenVerdict()` reads the rollout; `sessionImage()` resolves the session's own
+output), imported by both `kit-forge.mjs` and `forge-surface-texture.mjs`. The forge
+records `method: "image-generator (verified)"` in
+`src/ui/design/kitProvenance.json`. Any new codex-image pipeline should import the
+helper rather than re-deriving the gate.
 
 ## "Gate PASS" never means "ship"
 
