@@ -1269,8 +1269,11 @@ h1 {
 
 .menu-panel::before,
 .profile-bar::before {
+  /* Shared kit panel frame — the same atom-assembled gold-bracket frame the
+     settings panels use (.settings-frame), converging the profile bar off its
+     one-off stretched profile-panel.png crop. */
   border: 16px solid transparent;
-  border-image: url("/assets/ui/main-menu/panel-9slice.png") 16 fill / 16px stretch;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   content: "";
   image-rendering: pixelated;
   inset: 0;
@@ -1305,12 +1308,6 @@ h1 {
   box-shadow: none;
   min-height: 112px;
   position: relative;
-}
-
-.profile-bar::before {
-  background: url("/assets/ui/main-menu/secondary/profile-panel.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-image: none;
 }
 
 /* Crest: transparent PNG cropped from the approved render by normalize-main-menu-profile.mjs. */
