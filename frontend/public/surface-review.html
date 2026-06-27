@@ -21,7 +21,6 @@
 
 <div class="controls">
   <div class="grp"><span class="lbl">approach</span>
-    <button data-app="A">A · procedural</button>
     <button data-app="B">B · hybrid</button>
     <button data-app="C">C · pixel-model</button>
     <button data-app="baseline">baseline</button>
@@ -38,6 +37,11 @@
     <button data-zoom="150%">1.5×</button>
     <button data-zoom="220%">2.2×</button>
   </div>
+  <div class="grp"><span class="lbl">frame</span>
+    <button data-frame="line">corners + line</button>
+    <button data-frame="corners">corners only</button>
+    <button data-frame="original">original (broken)</button>
+  </div>
   <span class="note" id="status"></span>
 </div>
 
@@ -45,26 +49,30 @@
 
 <script>
   const AVAIL = {
-    A: ['stone-blue','stone-grey','wood-oak','wood-walnut'],
     B: ['stone-blue','wood-oak'],
     C: ['stone-blue'],
     baseline: ['stone-blue','wood-oak'],
     D: ['stone-blue'],
   };
-  const state = { app:'A', mat:'stone-blue', zoom:'cover' };
+  const state = { app:'B', mat:'stone-blue', zoom:'cover', frame:'line' };
   const frame = document.getElementById('app');
   const $ = (s)=>document.querySelectorAll(s);
 
   function css() {
     const tex = `/assets/ui/explore/review/${state.app}-${state.mat}.png`;
-    const fill = `background:url("${tex}") center/${state.zoom} no-repeat !important; image-rendering:pixelated !important;`;
-    // Drop the `fill` from the kit panel 9-slice (border-image-slice without `fill` keeps the ring
-    // + width but makes the center transparent) and put the texture behind it.
+    // Frame layer: a transparent-INTERIOR 9-slice (gold ornament only) so the texture behind shows
+    // to the edge. `original` keeps the real panel.png with fill dropped — i.e. the broken navy-ring,
+    // for comparison. The texture is a separate background layer, border-box so it fills under the ring.
+    const frameRule = state.frame === 'original'
+      ? `border-image-slice: 24 !important;`
+      : `border-image: url("/assets/ui/explore/frames/panel-${state.frame}.png") 24 / 16px round !important;`;
+    const fill = `background:url("${tex}") center/${state.zoom} no-repeat !important;`
+      + `background-origin:border-box !important; background-clip:border-box !important; image-rendering:pixelated !important;`;
     return `
       [data-testid="settings"] .settings-frame,
       [data-testid="settings"] .settings-rail-frame,
       [data-testid="settings"] .app-titlebar.settings-header-frame {
-        border-image-slice: 24 !important; ${fill} }
+        ${frameRule} ${fill} }
     `;
   }
   function inject() {
@@ -82,12 +90,14 @@
     $('[data-app]').forEach(b=>b.classList.toggle('on', b.dataset.app===state.app));
     $('[data-mat]').forEach(b=>{ const ok=mats.includes(b.dataset.mat); b.disabled=!ok; b.classList.toggle('on', b.dataset.mat===state.mat); });
     $('[data-zoom]').forEach(b=>b.classList.toggle('on', b.dataset.zoom===state.zoom));
-    document.getElementById('status').textContent = `${state.app}-${state.mat} · real /settings page`;
+    $('[data-frame]').forEach(b=>b.classList.toggle('on', b.dataset.frame===state.frame));
+    document.getElementById('status').textContent = `${state.app}-${state.mat} · frame:${state.frame} · real /settings page`;
     inject();
   }
   $('[data-app]').forEach(b=>b.onclick=()=>{ state.app=b.dataset.app; apply(); });
   $('[data-mat]').forEach(b=>b.onclick=()=>{ if(!b.disabled){ state.mat=b.dataset.mat; apply(); } });
   $('[data-zoom]').forEach(b=>b.onclick=()=>{ state.zoom=b.dataset.zoom; apply(); });
+  $('[data-frame]').forEach(b=>b.onclick=()=>{ state.frame=b.dataset.frame; apply(); });
   frame.addEventListener('load', apply);
   // keep re-applying briefly in case the SPA mounts Settings after load
   let n=0; const t=setInterval(()=>{ inject(); if(++n>20) clearInterval(t); }, 250);
