@@ -23,21 +23,24 @@ function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boole
   const href = MODE_HREFS[mode.slug] || '/';
   if (rowAsset?.states?.normal) {
     const normalState = rowAsset.states.normal;
-    const pressedState = rowAsset.states.pressed || rowAsset.states.active || normalState;
-    const normalStyle = frameStyleForAsset(rowAsset, normalState.rect);
-    const pressedStyle = frameStyleForAsset(rowAsset, pressedState.rect);
     const labelStyle = insetStyle(rowAsset.rules?.textInset, normalState.rect);
-    const linkStyle = { '--asset-aspect': `${normalState.rect.w} / ${normalState.rect.h}` } as CSSProperties;
+    // buttons-v2 rendered as a HORIZONTAL 3-slice (fixed icon/arrow caps + a
+    // stretchable middle, vertical locked) — not a stretched sheet-crop. The CSS
+    // does the border-image slicing; we just hand it the per-mode frame art. Hover
+    // is a CSS blue glow on this frame (the -active glow sprite is authored inset,
+    // so swapping to it made the button visibly shrink — see style.css).
+    const frameStyle = {
+      '--btn-normal': `url("/assets/ui/main-menu/buttons-v2/${mode.slug}-normal.png")`,
+    } as CSSProperties;
 
     return (
       <a
         className={`mode-button uses-row-art ${active ? 'is-active' : ''}`.trim()}
         href={href}
         aria-current={active ? 'page' : undefined}
-        style={linkStyle}
+        style={frameStyle}
       >
-        <span className="mode-button-art mode-button-art-normal" style={normalStyle} aria-hidden="true" />
-        <span className="mode-button-art mode-button-art-pressed" style={pressedStyle} aria-hidden="true" />
+        <span className="mode-button-art mode-button-art-normal" aria-hidden="true" />
         <span className="mode-button-label" style={labelStyle}>{mode.label}</span>
       </a>
     );
