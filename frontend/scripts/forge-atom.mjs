@@ -128,7 +128,7 @@ function trimToEdge(file) {
   return { margins, w: cw, h: ch };
 }
 
-export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 48, colors = 64 }) {
+export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 48, colors = 64, noTrim = false }) {
   if (!existsSync(ref)) throw new Error(`forge-atom: ref not found: ${ref}`);
   banner(key);
   const started = Date.now();
@@ -146,13 +146,21 @@ export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 4
   if (cr.status !== 0) throw new Error(`forge-atom: despill failed: ${cr.stderr || cr.error}`);
   const lr = lofi(smooth, out, footprint, colors);       // ADR-0014: native footprint + limited palette
   if (lr.status !== 0) throw new Error(`forge-atom: low-fi step failed: ${lr.stderr || lr.error}`);
-  const trim = trimToEdge(out);                          // edge-flush: frame reaches the edge, no exterior margin to bleed into
+  // trimToEdge is a 9-slice invariant (frame flush to the edge so border-image tiles
+  // seamlessly). A self-contained BADGE sprite is placed whole, not tiled, so its
+  // transparent margin is intentional — skip the trim for --no-trim. Transparency is
+  // unaffected either way: it comes from despill() above, not from trimming.
+  const trim = noTrim ? null : trimToEdge(out);
   const t = transparencyOk(out);
   if (!t.ok) {
     throw new Error(`forge-atom: transparency gate failed — ${(t.frac * 100).toFixed(0)}% transparent (expected 5–97%). ~0% = opaque plate (key not removed); ~100% = empty. A mid-range miss can mean the art used the ${key} key color (holes) — re-run with a different --key (e.g. #ff00ff). Output: ${out}`);
   }
-  const m = trim.margins;
-  console.log(`forge-atom OK -> ${out}  (${trim.w}x${trim.h} edge-flush, ${colors}-color low-fi; trimmed margin t${m.top}/l${m.left}/b${m.bottom}/r${m.right}; ${(t.frac * 100).toFixed(0)}% transparent)`);
+  if (trim) {
+    const m = trim.margins;
+    console.log(`forge-atom OK -> ${out}  (${trim.w}x${trim.h} edge-flush, ${colors}-color low-fi; trimmed margin t${m.top}/l${m.left}/b${m.bottom}/r${m.right}; ${(t.frac * 100).toFixed(0)}% transparent)`);
+  } else {
+    console.log(`forge-atom OK -> ${out}  (no-trim sprite, ${colors}-color low-fi; ${(t.frac * 100).toFixed(0)}% transparent)`);
+  }
   return out;
 }
 
@@ -164,10 +172,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const colors = Number(get('--colors')) || 64;
   let desc = get('--desc');
   if (get('--desc-file')) desc = readFileSync(get('--desc-file'), 'utf8');
+  const noTrim = args.includes('--no-trim');
   if (!ref || !out || !desc) {
-    console.error('usage: forge-atom.mjs --ref <png> --out <atoms/x.png> --desc "..." [--key #00ff00] [--footprint 48] [--colors 64]');
+    console.error('usage: forge-atom.mjs --ref <png> --out <atoms/x.png> --desc "..." [--key #00ff00] [--footprint 48] [--colors 64] [--no-trim]');
     process.exit(2);
   }
-  try { await forgeAtom({ ref, out, desc, key, footprint, colors }); }
+  try { await forgeAtom({ ref, out, desc, key, footprint, colors, noTrim }); }
   catch (e) { console.error(String(e.message || e)); process.exit(1); }
 }
