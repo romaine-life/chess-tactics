@@ -1,9 +1,15 @@
 # Kit forge — generating UI-kit icons with codex
 
-`frontend/scripts/kit-forge.mjs` drives codex to produce the UI-kit glyphs
-(`frontend/public/assets/ui/kit/icons/…`). This doc exists because the forge
-shipped a batch of broken icons once, and the reason is non-obvious and easy to
-repeat. Read this before re-running or "improving" the forge.
+The verified forge is `frontend/scripts/forge-atom.mjs` — it generates one
+transparent UI element via codex img2img, **verifies the method against the
+rollout** (see below), then keys + low-fis it (ADR-0013 / ADR-0014).
+
+The old single-shot `kit-forge.mjs` was **retired (deleted)**: it gated on `codex
+exec --json` **stdout**, which never carries the generation event (see below), so
+it rejected every real generation and either shipped code-drawn icons or threw
+real ones away. This doc exists because that forge shipped a batch of broken icons
+once, and the reason is non-obvious and easy to repeat. Read this before building
+or "improving" any codex-image forge.
 
 ## The hard rule: verify the METHOD, never trust the bitmap
 
@@ -27,25 +33,34 @@ transparency. So the gate passes, provenance records "forged," and the lie ships
 That is what happened in commit `a6eddd8` ("Forge entire kit 30/30"): every icon
 was drawn in code, not generated, and the detailed ones came out broken.
 
-### How to verify (the definitive signal)
+### How to verify (the definitive signal — read the ROLLOUT, not stdout)
 
-Run codex with `codex exec --json`. A genuine generation emits an
-**`image_generation_call`** event (id `ig_…`) plus an `image_generation_end`
-event, and leaves an artifact under `~/.codex/generated_images/<session>/`. A
-programmatic drawing emits only `shell_command` / `view_image`. So:
+A genuine generation emits an **`image_generation_call`** event (id `ig_…`) plus
+an `image_generation_end`, and leaves the PNG under
+`~/.codex/generated_images/<thread_id>/ig_*.png`. A programmatic drawing emits
+only `shell_command` / code tool calls.
 
-- **Method gate (first, definitive):** require an `image_generation_call` event
-  in the run. No event → codex coded it → reject, no matter how clean the pixels.
-- **Pixel gate (second):** transparency hygiene only — a gross magenta keying
-  fringe or background bleeding to the canvas edge (`verifyGlyph`). It does **not**
-  require binary alpha; **anti-aliasing is allowed and expected**. It does not
-  judge whether the drawing is any good — that's the method gate's and the
-  eyeball's job.
+**The catch that has cost real time, more than once:** `codex exec --json`
+**stdout is abridged** — it is a `thread/turn/item` stream (`thread.started`,
+`item.completed` with `command_execution` / `mcp_tool_call`, `turn.completed`) and
+**never contains `image_generation_call`.** Grepping stdout for it (what the old
+kit-forge did) marks EVERY real generation "code-drawn." The event lives only in
+the full **rollout session log**:
+`~/.codex/sessions/<Y>/<M>/<D>/rollout-*-<thread_id>.jsonl` — correlate by the
+`thread_id` that `thread.started` prints to stdout, then grep that rollout.
 
-The forge enforces method-then-pixels in `forgeOne` via `usedImageGenerator()`,
-and records `method: "image-generator (verified)"` in
-`src/ui/design/kitProvenance.json`. If you build any other codex-image pipeline,
-do the same — gate the method first.
+- **Method gate (first, definitive):** an `image_generation_call` in the
+  **rollout**. None → codex coded it → reject, no matter how clean the pixels.
+- **Pixel/transparency gate (second):** hygiene only — corners actually
+  transparent after despill, no gross key fringe. **Anti-aliasing is allowed and
+  expected**; never demand binary alpha. It does not judge whether the drawing is
+  good — that is the method gate plus a human eyeball.
+
+`forge-atom.mjs` implements this: `methodVerified()` reads the latest rollout for
+`image_generation_call`, and it ships the PNG from
+`~/.codex/generated_images/<thread_id>/` (the workspace copy is racy under
+concurrency). Build every codex-image pipeline the same way — gate the method via
+the **rollout** first.
 
 ## "Gate PASS" never means "ship"
 
