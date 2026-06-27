@@ -2,5 +2,8 @@
 # Local headless-screenshot output (frontend/scripts/shot.mjs)
 tmp-shots/
 
+# Local codex event-stream dumps from the image forges (regenerable)
+tmp-forge-evidence/
+
 # Local append-only audit trail of nine-slice bakes (scripts/nine-slice-kit.mjs)
 config/nine-slice/save-log.jsonl
