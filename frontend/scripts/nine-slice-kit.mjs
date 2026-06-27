@@ -10,8 +10,8 @@
 //   - bracket offset  -> shifts the warm gold pixels in the corner atom (baked)
 //   - keyline offset  -> shifts the cool keyline/navy pixels in the corner atom
 //                        (baked into the corner; edge keyline not shifted — see warn)
-//   - margin/content  -> consumption-side (CSS border-image slice / element
-//                        padding). NOT baked; recorded in the config for provenance.
+//   - content         -> consumption-side (element padding / where text+icons
+//                        start). NOT baked into the PNG; recorded in the config.
 import { PNG } from 'pngjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -115,7 +115,6 @@ export function normalizeConfig(c) {
     asset: c.asset,
     keyline: { dx: c.keyline?.dx ?? 0, dy: c.keyline?.dy ?? 0 },
     bracket: { dx: c.bracket?.dx ?? 0, dy: c.bracket?.dy ?? 0 },
-    margin: c.margin ?? 0,
     content: c.content ?? 0,
   };
 }
@@ -142,6 +141,6 @@ export function buildAsset(assetId, cfgRaw) {
     written.push(v.out);
     if (v.inspect) writeFileSync(`${ATOMS}${v.inspect}.png`, PNG.sync.write(c));
   }
-  const note = (cfg.margin || cfg.content) ? `margin ${cfg.margin}px / content ${cfg.content}px are consumption-side (CSS) — not baked into the PNG` : null;
+  const note = cfg.content ? `content ${cfg.content}px is consumption-side (CSS padding) — not baked into the PNG` : null;
   return { written, warns, note };
 }

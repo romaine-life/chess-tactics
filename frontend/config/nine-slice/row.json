@@ -1,7 +1,12 @@
 {
   "asset": "row",
-  "keyline": { "dx": 0, "dy": 0 },
-  "bracket": { "dx": 0, "dy": 0 },
-  "margin": 0,
+  "keyline": {
+    "dx": 0,
+    "dy": 0
+  },
+  "bracket": {
+    "dx": 0,
+    "dy": 0
+  },
   "content": 0
 }

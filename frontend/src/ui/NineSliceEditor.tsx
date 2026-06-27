@@ -7,21 +7,20 @@
 //     with the edge keyline — a seam. Locked, that seam can't exist; nudging the
 //     keyline moves corner + all four edges as a rigid border.
 //   - BRACKET: the gold corner decoration, FREE to nudge against that border.
-// Plus: nudge the viewing PANE size to sit tight against the art (1-2px of
-// transparent margin is fine), and toggle an overlay of the ACTUAL shipped frame
-// to fit against.
+//   - CONTENT: an inset guide marking where text/icons start (consumption-side).
+// Toggle the outer/content guide boxes (fixed at the footprint) to align against.
 //
 // Edge handedness is copied verbatim from scripts/assemble-frame.mjs (the proven
 // assembler): right = rot90(edge), left = flipH(right), top = edge, bottom =
 // flipV(edge). Same rot90 pixel transform, so left/right can't reverse.
 //
-// Export the JSON of per-piece offsets + pane size and hand it back; an apply step
-// writes the nudged atoms. Routing follows repo convention (lazy route in App.tsx).
+// In dev, Save writes config/nine-slice/<asset>.json and regenerates the asset
+// (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
-type EditState = { keyline: Off; bracket: Off; margin: number; content: number };
+type EditState = { keyline: Off; bracket: Off; content: number };
 type PieceKey = 'keyline' | 'bracket';
 
 type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame };
@@ -31,7 +30,6 @@ const ASSETS: Asset[] = [
   { id: 'row', label: 'Settings row', corner: '/assets/ui/kit/atoms/row-corner.png', edge: '/assets/ui/kit/atoms/row-edge.png', fill: '/assets/ui/kit/atoms/row-fill.png', target: '/assets/ui/kit/row.png', frame: { w: 160, h: 112 } },
 ];
 
-const DEFAULT_MARGIN = 2;
 const DEFAULT_CONTENT = 12;
 const STORAGE_KEY = 'nine-slice-editor-v4';
 const Z = 6;
@@ -143,7 +141,7 @@ export function NineSliceEditor(): ReactElement {
       const clean: Record<string, EditState> = {};
       for (const k of Object.keys(raw)) {
         const e = raw[k];
-        if (e && e.keyline && typeof e.keyline.dx === 'number' && e.bracket && typeof e.bracket.dx === 'number' && typeof e.margin === 'number') clean[k] = e;
+        if (e && e.keyline && typeof e.keyline.dx === 'number' && e.bracket && typeof e.bracket.dx === 'number') clean[k] = e;
       }
       return clean;
     } catch { return {}; }
@@ -152,12 +150,11 @@ export function NineSliceEditor(): ReactElement {
   const pvActualRef = useRef<HTMLCanvasElement>(null);
   const pvUseRef = useRef<HTMLCanvasElement>(null);
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
-  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, margin: DEFAULT_MARGIN, content: DEFAULT_CONTENT };
+  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, content: DEFAULT_CONTENT };
   const stored = edits[assetId];
   const edit: EditState = {
     keyline: stored?.keyline ?? { dx: 0, dy: 0 },
     bracket: stored?.bracket ?? { dx: 0, dy: 0 },
-    margin: stored?.margin ?? DEFAULT_MARGIN,
     content: stored?.content ?? DEFAULT_CONTENT,
   };
 
@@ -186,7 +183,6 @@ export function NineSliceEditor(): ReactElement {
     const p = active === 'keyline' ? loaded.baseMin : loaded.accentMin;
     update((cur) => ({ ...cur, [active]: { dx: -p.x, dy: -p.y } }));
   };
-  const setMargin = (dm: number) => update((cur) => ({ ...cur, margin: Math.max(0, cur.margin + dm) }));
   const setContent = (dc: number) => update((cur) => ({ ...cur, content: Math.max(0, (cur.content ?? DEFAULT_CONTENT) + dc) }));
   const reset = () => update(() => DEFAULT_EDIT);
 
@@ -206,15 +202,11 @@ export function NineSliceEditor(): ReactElement {
 
   useEffect(() => {
     if (!loaded) return;
-    const fw = asset.frame.w, fh = asset.frame.h;     // the asset (9-slice) size
-    const m = edit.margin;                             // transparent space around it
-    const W = fw + 2 * m, H = fh + 2 * m;              // output canvas = asset + margin
+    const W = asset.frame.w, H = asset.frame.h;        // canvas = the asset footprint
     const kx = edit.keyline.dx, ky = edit.keyline.dy;
 
-    const off = document.createElement('canvas'); off.width = W; off.height = H;
-    const g = off.getContext('2d')!; g.imageSmoothingEnabled = false;
-    // The frame, assembled at the footprint and placed inside the transparent margin.
-    g.drawImage(buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, fw, fh), m, m);
+    const off = buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, W, H);
+    const g = off.getContext('2d')!;
 
     const view = canvasRef.current; if (!view) return;
     view.width = W * Z; view.height = H * Z;
@@ -224,31 +216,25 @@ export function NineSliceEditor(): ReactElement {
 
     // Guides are FIXED references at the asset footprint — you position the
     // keyline/bracket RELATIVE to them; they do NOT follow the art.
-    // OUTER box = the footprint (the target outer edge). CONTENT box = outer
-    // inset by `content` px — where text/icons should start.
-    const boxX = m, boxY = m, boxW = fw, boxH = fh;
+    // OUTER box = the footprint edge. CONTENT box = inset by `content` px.
     if (showOuter) {
       vg.strokeStyle = '#ff5cf0'; vg.lineWidth = 2;
-      vg.strokeRect(boxX * Z, boxY * Z, boxW * Z, boxH * Z);
+      vg.strokeRect(0, 0, W * Z, H * Z);
     }
     if (showContent) {
       const c = edit.content;
       vg.strokeStyle = '#5cff9e'; vg.lineWidth = 2;
-      vg.strokeRect((boxX + c) * Z, (boxY + c) * Z, (boxW - 2 * c) * Z, (boxH - 2 * c) * Z);
+      vg.strokeRect(c * Z, c * Z, (W - 2 * c) * Z, (H - 2 * c) * Z);
     }
 
-    // pane boundary — shows where the output canvas ends, i.e. the empty space you control
-    vg.strokeStyle = '#5aa9ff'; vg.lineWidth = 2;
-    vg.strokeRect(1, 1, W * Z - 2, H * Z - 2);
-
-    // STATUS: where the art's outermost opaque pixels sit vs the outer box.
-    // + = gap inside the box (not flush yet); − = pixels BEYOND the box (overflow).
+    // STATUS: where the art's outermost opaque pixels sit vs the footprint edge.
+    // Only surfaces on overflow (pixels beyond the box).
     const od = g.getImageData(0, 0, W, H).data;
     let minX = W, minY = H, maxX = -1, maxY = -1;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
     }
-    setStatus(maxX < 0 ? null : { top: minY - boxY, left: minX - boxX, right: (boxX + boxW - 1) - maxX, bottom: (boxY + boxH - 1) - maxY });
+    setStatus(maxX < 0 ? null : { top: minY, left: minX, right: (W - 1) - maxX, bottom: (H - 1) - maxY });
   }, [loaded, edit, showOuter, showContent, asset]);
 
   // LIVE previews — the same builder rendered at actual size and stretched in-use,
@@ -273,7 +259,7 @@ export function NineSliceEditor(): ReactElement {
     draw(pvUseRef, 150, 44, 2, 'Settings');
   }, [loaded, edit.keyline, edit.bracket, asset]);
 
-  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, margin: edit.margin, content: edit.content }, null, 2);
+  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content }, null, 2);
   const pieces: PieceKey[] = loaded?.hasAccent ? ['keyline', 'bracket'] : ['keyline'];
 
   // Save straight to the on-disk config + regenerate the asset, via the dev-only
@@ -323,15 +309,6 @@ export function NineSliceEditor(): ReactElement {
           </div>
           <button type="button" style={ST.maxBtn} onClick={maxOut}>⤢ Send {active} to max (flush to box corner)</button>
           <div style={ST.sizeBox}>
-            <span style={ST.sizeLabel}>Margin — empty space around the asset (blue pane outline = boundary)</span>
-            <div style={ST.sizeRow}>
-              <span style={ST.sizeW}>{edit.margin} px</span>
-              <button type="button" style={ST.sb} onClick={() => setMargin(-1)}>−</button>
-              <button type="button" style={ST.sb} onClick={() => setMargin(1)}>＋</button>
-              <span style={ST.sizeLabel}>asset {asset.frame.w} × {asset.frame.h} · pane {asset.frame.w + 2 * edit.margin} × {asset.frame.h + 2 * edit.margin}</span>
-            </div>
-          </div>
-          <div style={ST.sizeBox}>
             <label style={ST.toggle}>
               <input type="checkbox" checked={showOuter} onChange={(e) => setShowOuter(e.target.checked)} />
               <span style={{ color: '#ff5cf0' }}>■</span> Outer box — outermost pixels of the 9-slice (centering guide)
@@ -361,7 +338,7 @@ export function NineSliceEditor(): ReactElement {
           <div style={ST.offsets}>
             <div>keyline: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
-            <div>margin: {edit.margin} px · content inset: {edit.content} px</div>
+            <div>content inset: {edit.content} px</div>
           </div>
           {isDev && (
             <>
