@@ -100,6 +100,34 @@ const tileRect = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number,
 
 type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: boolean; edge: HTMLImageElement; fill: HTMLImageElement; target: HTMLImageElement | null; cw: number; ch: number; ew: number; eh: number; baseMin: { x: number; y: number }; accentMin: { x: number; y: number } };
 
+// Assemble the 9-slice at an arbitrary W×H (no margin) with the keyline/bracket
+// offsets baked in. This is the single source of truth for both the editor canvas
+// and the live previews, so a preview can never diverge from what you're editing.
+function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number): HTMLCanvasElement {
+  const { cw, ch, ew, eh } = L;
+  const W = Math.max(2 * cw, w), H = Math.max(2 * ch, h);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d')!; g.imageSmoothingEnabled = false;
+  tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
+  const topS = toCanvas(L.edge, ew, eh);
+  const botS = flip(topS, ew, eh, false, true);
+  const rightS = rot90(L.edge, ew, eh);
+  const leftS = flip(rightS, rightS.width, rightS.height, true, false);
+  tileH(g, topS, cw, W - cw, ky);
+  tileH(g, botS, cw, W - cw, H - botS.height - ky);
+  tileV(g, leftS, ch, H - ch, kx);
+  tileV(g, rightS, ch, H - ch, W - rightS.width - kx);
+  const corner = (art: HTMLCanvasElement, ox: number, oy: number) => {
+    g.drawImage(art, ox, oy);
+    g.drawImage(flip(art, cw, ch, true, false), W - cw - ox, oy);
+    g.drawImage(flip(art, cw, ch, false, true), ox, H - ch - oy);
+    g.drawImage(flip(art, cw, ch, true, true), W - cw - ox, H - ch - oy);
+  };
+  corner(L.base, kx, ky);
+  if (L.hasAccent) corner(L.accent, bdx, bdy);
+  return c;
+}
+
 export function NineSliceEditor(): ReactElement {
   const [assetId, setAssetId] = useState(ASSETS[0].id);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -121,6 +149,8 @@ export function NineSliceEditor(): ReactElement {
     } catch { return {}; }
   });
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pvActualRef = useRef<HTMLCanvasElement>(null);
+  const pvUseRef = useRef<HTMLCanvasElement>(null);
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
   const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, margin: DEFAULT_MARGIN, content: DEFAULT_CONTENT };
   const stored = edits[assetId];
@@ -176,7 +206,6 @@ export function NineSliceEditor(): ReactElement {
 
   useEffect(() => {
     if (!loaded) return;
-    const { cw, ch, ew, eh } = loaded;
     const fw = asset.frame.w, fh = asset.frame.h;     // the asset (9-slice) size
     const m = edit.margin;                             // transparent space around it
     const W = fw + 2 * m, H = fh + 2 * m;              // output canvas = asset + margin
@@ -184,31 +213,8 @@ export function NineSliceEditor(): ReactElement {
 
     const off = document.createElement('canvas'); off.width = W; off.height = H;
     const g = off.getContext('2d')!; g.imageSmoothingEnabled = false;
-
-    // FILL the whole frame area (matches assemble-frame.mjs filling the whole canvas,
-    // then drawing the border on top) — no transparent interior gap, no stray line.
-    tileRect(g, toCanvas(loaded.fill, loaded.fill.width, loaded.fill.height), m, m, m + fw, m + fh);
-
-    // edges — handedness verbatim from assemble-frame.mjs, keyline offset applied as draw position
-    const topS = toCanvas(loaded.edge, ew, eh);
-    const botS = flip(topS, ew, eh, false, true);
-    const rightS = rot90(loaded.edge, ew, eh);
-    const leftS = flip(rightS, rightS.width, rightS.height, true, false);
-    tileH(g, topS, m + cw, m + fw - cw, m + ky);
-    tileH(g, botS, m + cw, m + fw - cw, m + fh - botS.height - ky);
-    tileV(g, leftS, m + ch, m + fh - ch, m + kx);
-    tileV(g, rightS, m + ch, m + fh - ch, m + fw - rightS.width - kx);
-
-    // corners (base then bracket), each mirrored into the 4 frame corners
-    const corner = (art: HTMLCanvasElement, ox: number, oy: number) => {
-      g.drawImage(art, m + ox, m + oy);
-      g.drawImage(flip(art, cw, ch, true, false), m + fw - cw - ox, m + oy);
-      g.drawImage(flip(art, cw, ch, false, true), m + ox, m + fh - ch - oy);
-      g.drawImage(flip(art, cw, ch, true, true), m + fw - cw - ox, m + fh - ch - oy);
-    };
-    corner(loaded.base, kx, ky);
-    // Bracket is FULLY independent of the keyline — its own offset only, never kx/ky.
-    if (loaded.hasAccent) corner(loaded.accent, edit.bracket.dx, edit.bracket.dy);
+    // The frame, assembled at the footprint and placed inside the transparent margin.
+    g.drawImage(buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, fw, fh), m, m);
 
     const view = canvasRef.current; if (!view) return;
     view.width = W * Z; view.height = H * Z;
@@ -245,6 +251,28 @@ export function NineSliceEditor(): ReactElement {
     setStatus(maxX < 0 ? null : { top: minY - boxY, left: minX - boxX, right: (boxX + boxW - 1) - maxX, bottom: (boxY + boxH - 1) - maxY });
   }, [loaded, edit, showOuter, showContent, asset]);
 
+  // LIVE previews — the same builder rendered at actual size and stretched in-use,
+  // so you can judge the real result here without an apply-and-screenshot round trip.
+  useEffect(() => {
+    if (!loaded) return;
+    const fw = asset.frame.w, fh = asset.frame.h;
+    const draw = (ref: React.RefObject<HTMLCanvasElement | null>, w: number, h: number, scale: number, label: string | null) => {
+      const cvs = ref.current; if (!cvs) return;
+      cvs.width = w * scale; cvs.height = h * scale;
+      const g = cvs.getContext('2d')!; g.imageSmoothingEnabled = false;
+      g.clearRect(0, 0, cvs.width, cvs.height);
+      const f = buildFrameCanvas(loaded, edit.keyline.dx, edit.keyline.dy, edit.bracket.dx, edit.bracket.dy, w, h);
+      g.drawImage(f, 0, 0, w, h, 0, 0, w * scale, h * scale);
+      if (label) {
+        g.fillStyle = '#e8f0ff'; g.font = `${13 * scale}px system-ui, sans-serif`;
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(label, cvs.width / 2, cvs.height / 2);
+      }
+    };
+    draw(pvActualRef, fw, fh, 1, null);
+    draw(pvUseRef, 150, 44, 2, 'Settings');
+  }, [loaded, edit.keyline, edit.bracket, asset]);
+
   const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, margin: edit.margin, content: edit.content }, null, 2);
   const pieces: PieceKey[] = loaded?.hasAccent ? ['keyline', 'bracket'] : ['keyline'];
 
@@ -258,7 +286,13 @@ export function NineSliceEditor(): ReactElement {
         <a href="/tileset-studio" style={ST.link}>← Studio</a>
       </header>
       <div style={ST.body}>
-        <div style={ST.stage}><canvas ref={canvasRef} style={{ imageRendering: 'pixelated', maxWidth: '100%' }} /></div>
+        <div style={ST.stage}>
+          <canvas ref={canvasRef} style={{ imageRendering: 'pixelated', maxWidth: '100%' }} />
+          <div style={ST.previewStrip}>
+            <div style={ST.previewItem}><span style={ST.previewLabel}>actual size · 1×</span><canvas ref={pvActualRef} style={{ imageRendering: 'pixelated' }} /></div>
+            <div style={ST.previewItem}><span style={ST.previewLabel}>stretched in-use · 2×</span><canvas ref={pvUseRef} style={{ imageRendering: 'pixelated' }} /></div>
+          </div>
+        </div>
         <aside style={ST.panel}>
           <div style={ST.pieceRow}>
             {pieces.map((k) => (
@@ -330,7 +364,10 @@ const ST: Record<string, CSSProperties> = {
   select: { fontSize: 15, padding: '4px 8px', background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 4 },
   link: { marginLeft: 'auto', color: '#9fd8ff', textDecoration: 'none' },
   body: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 320px', minHeight: 0 },
-  stage: { display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: 20 },
+  stage: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 26, overflow: 'auto', padding: 20 },
+  previewStrip: { display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'center' },
+  previewItem: { display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 16, background: '#0e1626', border: '1px solid #1b2740', borderRadius: 8 },
+  previewLabel: { fontSize: 11, color: '#9fc4d5', letterSpacing: 0.3 },
   panel: { borderLeft: '1px solid #1b2740', background: '#0b1220', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto' },
   pieceRow: { display: 'flex', gap: 6 },
   pieceBtn: { flex: 1, padding: '8px 0', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', textTransform: 'capitalize' },
