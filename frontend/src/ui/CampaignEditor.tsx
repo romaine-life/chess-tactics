@@ -8,7 +8,6 @@ import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { BrandLockup } from './shared/BrandLockup';
 
-const SHIELDS = ['crown', 'rook', 'crescent', 'snow', 'flame', 'lion'] as const;
 const CE_ICONS = {
   lock: '/assets/ui/level-editor/icons/lock.png',
 } as const;
@@ -80,11 +79,6 @@ function IconButton({
   );
 }
 
-function ShieldBadge({ index, active = false }: { index: number; active?: boolean }): ReactElement {
-  const shield = SHIELDS[index % SHIELDS.length];
-  return <span className={`ce-shield ce-shield-${shield} ${active ? 'is-active' : ''}`.trim()} aria-hidden="true" />;
-}
-
 function Stars({ count = 0 }: { count?: number }): ReactElement {
   return (
     <span className="ce-stars" aria-label={`${count} stars`}>
@@ -124,7 +118,6 @@ function CampaignRow({
         }
       }}
     >
-      <ShieldBadge index={index} active={active} />
       <span className="ce-row-copy">
         <strong>{campaign.name}</strong>
         <small>{campaign.levels.length} levels</small>
@@ -399,7 +392,6 @@ export function CampaignEditor() {
                 <h2>Campaign Details</h2>
               </div>
               <div className="ce-campaign-summary">
-                <ShieldBadge index={campaigns.findIndex((c) => c.id === camp.id)} active />
                 <label className="ce-name-field">
                   <span>Campaign Name</span>
                   <input
@@ -449,9 +441,7 @@ export function CampaignEditor() {
                 <span className="ce-force ce-force-ally"><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
                 <span className="ce-force ce-force-enemy"><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
               </div>
-            ) : (
-              <span aria-hidden="true">✎</span>
-            )}
+            ) : null}
           </div>
           <div className="ce-preview-frame">
             {levelDoc ? (
