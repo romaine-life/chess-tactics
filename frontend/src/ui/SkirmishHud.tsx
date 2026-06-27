@@ -65,17 +65,6 @@ function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: bool
   );
 }
 
-function StatBar({ value, max }: { value: number; max: number }) {
-  const safeMax = Math.max(1, max);
-  return (
-    <span className="skirmish-stat-bar" aria-hidden="true">
-      {Array.from({ length: safeMax }).map((_, i) => (
-        <span key={i} className={i < value ? 'filled' : ''} />
-      ))}
-    </span>
-  );
-}
-
 function CountPip({ side, count }: { side: Side; count: number }) {
   return (
     <span className={`skirmish-count-pip ${side}`}>
@@ -176,17 +165,11 @@ export function SkirmishHud() {
                 <dl>
                   <div>
                     <dt>HP</dt>
-                    <dd>
-                      <span>{hpText(focused)}</span>
-                      <StatBar value={focused?.hp ?? 1} max={focused?.maxHp ?? focused?.hp ?? 1} />
-                    </dd>
+                    <dd><span>{hpText(focused)}</span></dd>
                   </div>
                   <div>
                     <dt>AP</dt>
-                    <dd>
-                      <span>{apText(focused)}</span>
-                      <StatBar value={focused?.ap ?? 1} max={focused?.maxAp ?? focused?.ap ?? 1} />
-                    </dd>
+                    <dd><span>{apText(focused)}</span></dd>
                   </div>
                 </dl>
               </div>
