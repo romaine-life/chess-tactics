@@ -186,15 +186,15 @@ export function bakeLine(assetId) {
   const edge = loadAtom(rec.atoms.edge);
   const fillAtom = loadAtom(rec.atoms.fill);
   // Assemble from the corner + edge atoms with a TRANSPARENT fill. The navy interior lives
-  // ENTIRELY in the fill atom, so the result is the full ornament/rail (the corner's gold
-  // brackets, the row's steel rail — dark bevel included) over a see-through center. There is
-  // no fill to ring it, so nothing is masked; carve just trims exterior navy bleed exactly as
-  // bakeAsset does (a global dark-pixel mask would wrongly eat a dark rail down to a keyline).
+  // ENTIRELY in the fill atom, so this alone is the full ornament over a see-through center —
+  // nothing to mask, nothing to carve. (Two cleanup passes were tried and rejected: a dark-pixel
+  // MASK ate dark ornament down to a keyline; carveExterior ate a dark rail's outer bevel,
+  // pulling the frame off the element edge so surface spilled outside it. A line frame must be
+  // an ornament that reaches the element EDGE — corner brackets do; a continuous inset rail does
+  // not, so a surfaced row uses the bracket frame, not its own rail. See ADR-0029 §D.)
   const clearFill = new PNG({ width: fillAtom.width, height: fillAtom.height }); clearFill.data.fill(0);
   const { w, h } = rec.frame;
-  const frame = buildFrameFrom(corner, edge, clearFill, w, h, !!rec.flipSides);
-  if (rec.carve) carveExterior(frame);
-  return frame;
+  return buildFrameFrom(corner, edge, clearFill, w, h, !!rec.flipSides);
 }
 
 // Compare a freshly baked variant PNG to its committed file on disk, returning a

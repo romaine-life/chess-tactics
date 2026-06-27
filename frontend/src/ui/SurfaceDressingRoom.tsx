@@ -35,7 +35,7 @@ const REGIONS: RegionDef[] = [
   { id: 'tabsBox', label: 'Tabs box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', isBox: true },
   { id: 'buttons', label: 'Buttons · tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round', isBox: false },
   { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', isBox: true },
-  { id: 'rows', label: 'Rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/row-line.png") 20 / 14px stretch', isBox: false },
+  { id: 'rows', label: 'Rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round', isBox: false },
 ];
 
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];

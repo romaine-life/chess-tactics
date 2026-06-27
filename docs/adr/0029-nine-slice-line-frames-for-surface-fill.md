@@ -40,7 +40,7 @@ surface-as-a-separate-layer model.
   frame is just ornament over it. Never bake the surface into the frame.
 - **Reproducible, not hand-carved** — the transparent-interior frame must regenerate
   from the same atoms as its filled twin, so the two can't drift (ADR-0012).
-- **Low-fi, native pixels** — masking is whole-pixel, `image-rendering: pixelated`
+- **Low-fi, native pixels** — the line twin is whole-pixel, `image-rendering: pixelated`
   (ADR-0014).
 - **Cover the 9-slice, not just the center** — the fix must remove the *edge*-slice
   bleed, which is the actual cause.
@@ -53,12 +53,13 @@ surface as a separate `background` layer**. Never a per-material baked frame.
 ### A. The "line" frame — ornament only
 
 For any frame that needs to sit over a surface, bake a **line** twin by assembling the
-*same* corner + edge atoms with a **transparent fill**. The navy interior lives entirely
-in the fill atom, so this yields the **full** ornament/rail (the gold brackets, or the
-steel rail with its dark bevel) over a see-through center — there is no fill to ring it,
-and nothing is masked. `carveExterior` trims exterior navy bleed exactly as the filled
-bake does. (An earlier global dark-pixel mask was wrong: it ate a *dark* rail down to a
-bright keyline, so a surfaced row looked frameless — see §D.) `bakeLine(assetId)` in
+*same* corner + edge atoms with a **transparent fill** — nothing else. The navy interior
+lives entirely in the fill atom, so this alone is the full ornament over a see-through
+center; there is no fill to ring it. Two cleanup passes were tried and rejected: a global
+dark-pixel **mask** ate dark ornament down to a bright keyline; **carveExterior** ate a
+dark rail's outer bevel, pulling the frame *off* the element edge. So neither — just
+assemble. The decisive constraint (see §D): a line frame's ornament must reach the element
+**edge**, so the surface fills *up to* it and never spills past it. `bakeLine(assetId)` in
 `frontend/scripts/nine-slice-kit.mjs` is the single implementation; it reuses the asset's
 committed corner tune, so the line twin can never diverge from the filled frame's geometry.
 
@@ -70,9 +71,10 @@ focused `bake-line-frames.mjs` both write it to
 `public/assets/ui/explore/frames/`, and the bake-parity test
 (`src/ui/design/nineSliceBake.test.ts`) re-bakes it and asserts it equals the
 committed PNG — exactly as for the filled variants. So a line frame is a normal,
-regenerable kit output, not a one-off. Today `panel` and `row` carry the flag;
-`panel.png === mode-button.png` (identical atoms), so **`panel-line.png` serves both
-the panels and the tab buttons**, and `row-line.png` serves the rows.
+regenerable kit output, not a one-off. Today only `panel` carries the flag, and because
+`panel.png === mode-button.png` (identical atoms) the one **`panel-line.png` serves the
+panels, the tab buttons, *and* the rows** (per §D the row borrows it). The steel `row`
+frame gets no line twin — its rail is inset (§D), so it can't be surfaced cleanly.
 
 ### C. The surface is a separate background layer
 
@@ -82,14 +84,19 @@ The element keeps the line frame as `border-image` and paints the surface as its
 (the texture flows unbroken across panel / button / row seams rather than restarting
 per element).
 
-### D. Every framed element keeps its frame over a surface
+### D. A surfaced element keeps a frame — but the ornament must reach the edge
 
-A surfaced element keeps its frame just like a filled one — panels and tab buttons show
-their gold brackets, rows show their full steel rail — each over the continuous surface,
-with the texture filling the see-through interior. Frames are **not** dropped. (An earlier
-iteration dropped the row's frame to hide what looked like a thin "phantom" keyline; that
-keyline was the over-masked bake of §A, not the real rail. With the faithful line twin the
-row shows its proper rail, so the frame stays.)
+A surfaced element keeps a frame just like a filled one (never dropped); the texture fills
+the see-through interior **up to** the frame. For that to read cleanly the frame's ornament
+must reach the element **edge**, so the surface stops at it. **Corner brackets** (panel /
+mode-button) do. The settings **row's** native frame is a steel rail **inset** from the edge
+(a transparent margin is baked into its edge atom); surface-filled, that margin sits *outside*
+the rail and the rail floats with surface spilling around it — no `background-clip` value
+lands on the rail's edge to stop it. So a surfaced row borrows the **bracket** frame
+(`panel-line`, the same one the tabs use), not its own rail. Rule: surface a frame only if its
+ornament reaches the edge; an inset rail must be re-tooled (rail flush in its atom) or
+substituted. (Missteps this session, all wrong: the row was over-masked to a keyline, then
+dropped to frameless, then shown with the inset rail that spilled.)
 
 ### Consequences
 
@@ -110,6 +117,7 @@ row shows its proper rail, so the frame stays.)
 - **Implementation:** `bakeLine` + `LINE_DIR` + the `line` registry field in
   `frontend/scripts/nine-slice-kit.mjs`; `frontend/scripts/bake-line-frames.mjs`;
   parity in `frontend/src/ui/design/nineSliceBake.test.ts`.
-- **Assets:** `frontend/public/assets/ui/explore/frames/{panel-line,row-line}.png`.
+- **Assets:** `frontend/public/assets/ui/explore/frames/panel-line.png` (serves panels,
+  tab buttons, and rows).
 - **Related:** ADR-0012 (atom-assembled 9-slice frames — the line twin reuses the
   atoms), ADR-0014 (low-fi / native pixels / pixelated render).
