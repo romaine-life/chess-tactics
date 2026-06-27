@@ -128,7 +128,10 @@ function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: n
 }
 
 export function NineSliceEditor(): ReactElement {
-  const [assetId, setAssetId] = useState(ASSETS[0].id);
+  const [assetId, setAssetId] = useState(() => {
+    const a = new URLSearchParams(window.location.search).get('asset');
+    return ASSETS.some((x) => x.id === a) ? a! : ASSETS[0].id;
+  });
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [active, setActive] = useState<PieceKey>('bracket');
   const [showOuter, setShowOuter] = useState(true);
@@ -171,6 +174,13 @@ export function NineSliceEditor(): ReactElement {
   }, [asset]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
+
+  // Asset selection lives in the URL so the editor is deep-linkable (?asset=panel).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    p.set('asset', assetId);
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}?${p.toString()}`);
+  }, [assetId]);
 
   const update = (mut: (cur: EditState) => EditState) => setEdits((prev) => {
     const cur = prev[assetId] ?? DEFAULT_EDIT;
