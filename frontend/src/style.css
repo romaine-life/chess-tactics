@@ -868,10 +868,6 @@ h1 {
   min-width: 0;
 }
 
-.main-menu-brand-live::after {
-  content: none;
-}
-
 .main-menu-brand-mark {
   display: block;
   width: 86px;
@@ -934,18 +930,6 @@ h1 {
   font-size: var(--menu-type-panel-secondary);
   line-height: 1.6;
   text-transform: uppercase;
-}
-
-.main-menu-brand::after {
-  content: "";
-  display: block;
-  width: min(92%, 560px);
-  height: 10px;
-  background:
-    linear-gradient(90deg, rgba(85, 114, 130, .66), rgba(85, 114, 130, .2)),
-    linear-gradient(#172832, #172832) 50% 50% / 8px 8px no-repeat;
-  clip-path: polygon(0 45%, 49% 45%, 50% 0, 51% 45%, 100% 45%, 100% 60%, 51% 60%, 50% 100%, 49% 60%, 0 60%);
-  opacity: .72;
 }
 
 .main-menu-actions {
