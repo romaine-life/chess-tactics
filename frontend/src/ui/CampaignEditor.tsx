@@ -106,7 +106,6 @@ function CampaignRow({
   onSelect: () => void;
   onFavorite: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
-  const completed = campaign.levels.filter((level) => level.completed).length;
   const locked = Boolean(campaign.locked);
   const selectCampaign = () => {
     if (!locked) onSelect();
@@ -128,7 +127,7 @@ function CampaignRow({
       <ShieldBadge index={index} active={active} />
       <span className="ce-row-copy">
         <strong>{campaign.name}</strong>
-        <small>{completed} / {campaign.levels.length} levels</small>
+        <small>{campaign.levels.length} levels</small>
       </span>
       {locked ? (
         <span className="ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
@@ -331,7 +330,6 @@ export function CampaignEditor() {
   const levelRef = camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
   const selectedLevelIndex = orderedLevels.findIndex((r) => r.levelId === selectedLevelId);
   const totalLevels = orderedLevels.length;
-  const completedLevels = orderedLevels.filter((level) => level.completed).length;
   const enemyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'enemy').length ?? 0;
   const allyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'player').length ?? 0;
   const editHref = camp && levelDoc ? `/edit?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent('/campaigns-next')}` : '/edit';
@@ -412,7 +410,7 @@ export function CampaignEditor() {
                 </label>
                 <dl className="ce-stat-rows">
                   <div className="ce-stat-row"><dt>Chapters</dt><dd>{camp.chapters}</dd></div>
-                  <div className="ce-stat-row"><dt>Levels</dt><dd>{completedLevels} / {camp.levels.length}</dd></div>
+                  <div className="ce-stat-row"><dt>Levels</dt><dd>{camp.levels.length}</dd></div>
                   <div className="ce-stat-row"><dt>Difficulty</dt><dd>{camp.difficulty}</dd></div>
                 </dl>
               </div>
