@@ -35,7 +35,6 @@ interface CreatorTool {
   label: string;
   href: string;
   description: string;
-  icon: string;
 }
 
 const DEFAULT_SETTINGS: LocalSettings = {
@@ -73,8 +72,8 @@ function tabFromPath(pathname: string): SettingsTab {
 // and the UI-kit asset library are all categories within it. (The broader Design
 // Index still lives at /design directly.)
 const creatorTools: CreatorTool[] = [
-  { label: 'Studio', href: '/tileset-studio', icon: 'icon-tileset-studio.png', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
-  { label: 'Artwork Compare', href: '/artwork-compare', icon: 'icon-design-index.png', description: 'Two-panel view — the accepted concept art beside the live screen, for matching the art direction.' },
+  { label: 'Studio', href: '/tileset-studio', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
+  { label: 'Artwork Compare', href: '/artwork-compare', description: 'Two-panel view — the accepted concept art beside the live screen, for matching the art direction.' },
 ];
 
 function asset(file: string): string {
@@ -184,14 +183,12 @@ function SettingsToggle({
 }
 
 function SettingsRow({
-  icon,
   title,
   description,
   value,
   tall = false,
   children,
 }: {
-  icon?: string;
   title: string;
   description?: string;
   value?: ReactNode;
@@ -200,7 +197,6 @@ function SettingsRow({
 }): ReactElement {
   return (
     <section className={`settings-row ${tall ? 'settings-row-tall' : ''}`}>
-      {icon ? <img className="settings-row-icon" src={asset(icon)} alt="" aria-hidden="true" /> : null}
       <div className="settings-row-copy">
         <h4>{title}</h4>
         {description ? <p>{description}</p> : null}
@@ -398,7 +394,6 @@ export function Settings(): ReactElement {
     <>
       <SettingsSection title="Account">
         <SettingsRow
-          icon="icon-info.png"
           title="Account"
           description={signedIn ? 'Signed in profile for this browser.' : 'Guest profile for this browser.'}
           value={<span>{signedIn ? 'Ready' : 'Guest'}</span>}
@@ -406,7 +401,6 @@ export function Settings(): ReactElement {
       </SettingsSection>
       <SettingsSection title="Interface">
         <SettingsRow
-          icon="icon-monitor.png"
           title="UI Scale"
           description="Interface scale for this browser."
         >
@@ -422,7 +416,6 @@ export function Settings(): ReactElement {
       </SettingsSection>
       <SettingsSection title="Defaults">
         <SettingsRow
-          icon="icon-reset.png"
           title="Reset to Defaults"
           description={confirmingReset ? 'Press reset again to confirm.' : 'Restore General and Audio settings for this browser.'}
           value={<span>{confirmingReset ? 'Confirm' : 'Ready'}</span>}
@@ -444,7 +437,7 @@ export function Settings(): ReactElement {
         <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
           <SettingsToggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
         </SettingsRow>
-        <SettingsRow icon="icon-music.png" title="Music Volume" description="Set the target music mix for this browser.">
+        <SettingsRow title="Music Volume" description="Set the target music mix for this browser.">
           <Slider
             value={settings.musicVolume}
             suffix="%"
@@ -455,7 +448,7 @@ export function Settings(): ReactElement {
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Effects">
-        <SettingsRow icon="icon-effects.png" title="Effects Volume" description="Set the target effects mix for this browser.">
+        <SettingsRow title="Effects Volume" description="Set the target effects mix for this browser.">
           <Slider
             value={settings.effectsVolume}
             suffix="%"
@@ -463,13 +456,12 @@ export function Settings(): ReactElement {
             onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
           />
         </SettingsRow>
-        <SettingsRow icon="icon-interface-sounds.png" title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
+        <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
           <SettingsToggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Notes">
         <SettingsRow
-          icon="icon-info.png"
           title="Local Settings"
           description={tracksStatus || 'Audio settings are saved on this device.'}
         />
@@ -480,7 +472,6 @@ export function Settings(): ReactElement {
   const renderGameplay = () => (
     <SettingsSection title="Gameplay">
       <SettingsRow
-        icon="icon-knight.png"
         title="Coming Soon"
         description="Gameplay settings are not available yet."
         value={<span>Locked</span>}
@@ -492,7 +483,7 @@ export function Settings(): ReactElement {
   const renderCreatorTools = () => (
     <SettingsSection title="Workspaces">
       {creatorTools.map((tool) => (
-        <SettingsRow key={tool.href} icon={tool.icon} title={tool.label} description={tool.description}>
+        <SettingsRow key={tool.href} title={tool.label} description={tool.description}>
           <SettingsButton tone="primary" href={tool.href} ariaLabel={`Open ${tool.label}`}>Open</SettingsButton>
         </SettingsRow>
       ))}
