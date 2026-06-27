@@ -25,6 +25,7 @@
       "atoms": { "corner": "row-corner", "edge": "row-edge", "fill": "row-fill" },
       "frame": { "w": 160, "h": 112 },
       "carve": true,
+      "flipSides": true,
       "variants": [{ "out": "row.png" }]
     }
   }

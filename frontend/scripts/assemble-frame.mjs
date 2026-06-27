@@ -23,14 +23,17 @@ function tile(o, t, x0, y0, x1, y1) { for (let y = y0; y < y1; y += t.height) fo
 // Assemble a symmetric 9-slice frame from a given corner/edge/fill set. Symmetric
 // by construction (one corner mirrored into four). Used by buildFrame (gold atoms)
 // and by other generators that supply recoloured atoms (e.g. the cyan mode button).
-export function buildFrameFrom(corner, edge, fill, W, H) {
+export function buildFrameFrom(corner, edge, fill, W, H, flipSides = false) {
   const cw = corner.width, ch = corner.height;
   const o = np(W, H);
   tile(o, fill, 0, 0, W, H);                                   // fill base
-  // Side edges from the one horizontal edge. rot90 sends the edge's OUTER side to
-  // the RIGHT; mirror that for the LEFT so each side keeps outer-stays-outer (a
-  // directional bevel was landing reversed on left/right vs top/bottom).
-  const eR = rot90(edge), eL = flipH(eR), eB = flipV(edge);
+  // Side edges from the one horizontal edge via rot90. Whether rot90 lands the
+  // rail's directional bevel correctly depends on the atom — keyline atoms read
+  // either way, but a beveled rail (row) needs the opposite handedness or the
+  // bevel reverses against the corner at the join. flipSides swaps L/R for those.
+  const r = rot90(edge), eB = flipV(edge);
+  const eR = flipSides ? flipH(r) : r;
+  const eL = flipSides ? r : flipH(r);
   tile(o, edge, cw, 0, W - cw, edge.height);                   // top
   tile(o, eB, cw, H - edge.height, W - cw, H);                 // bottom
   tile(o, eL, 0, ch, eL.width, H - ch);                        // left
