@@ -16,8 +16,9 @@ const MODE_HREFS: Record<string, string> = {
 function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boolean }): ReactElement {
   const href = MODE_HREFS[mode.slug] || '/';
   // "Wet Stone & Cold Iron" mode button (ADR-0025 register): a matte stone slab with
-  // a thin forged-iron lip carrying the forged carved-stone icon (canonical 72×72,
-  // ADR-0026) at --menu-icon-size. Hover lifts the lip; active = a contained cobalt
+  // a thin forged-iron lip carrying the forged carved-stone icon (canonical 64×64
+  // canvas per ADR-0026, optical keylines per ADR-0027) at --menu-icon-size. Hover
+  // lifts the lip; active = a contained cobalt
   // hairline. NOTE: the slab surface is still CSS — forging its 9-slice frame is the
   // remaining chrome step; the icons themselves are forged.
   return (

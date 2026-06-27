@@ -1,7 +1,9 @@
 > ⚠ **SUPERSEDED — do not follow the extraction method below.** Kit icons are
 > **generated** by the forge (codex img2img, method-verified — see kit-forge.md),
 > not extracted from concept crops. See [ADR-0011](../../adr/0011-chrome-art-generated-not-extracted.md).
-> Kept for history.
+> The canvas geometry once specified here (the "uniform 64×64, centered" rule) is
+> now governed by [ADR-0026](../../adr/0026-ui-kit-icon-canvas.md) — a 64×64 canvas
+> with a normalized ~40×40 safe area, forge-enforced. Kept for history.
 
 # Kit Art Brief — Icon set (extract from the concept, clean to transparent)
 

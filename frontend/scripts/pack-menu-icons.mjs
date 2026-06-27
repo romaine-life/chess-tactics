@@ -1,7 +1,7 @@
 // pack-menu-icons.mjs — RE-PACK the forged carved-stone menu icons onto the
-// CANONICAL ICON BOX (ADR-0026): one fixed 72x72 transparent canvas, a 60x60 live
-// area / 6px trim ring, and PER-SHAPE-CLASS optical keylines so all five carry
-// EQUAL OPTICAL MASS (not equal box-fill). Optical centering is frozen as the
+// canonical icon canvas (ADR-0026: one fixed 64x64 transparent canvas, ~40x40
+// centered safe area) using PER-SHAPE-CLASS optical keylines (ADR-0027) so all five
+// carry EQUAL OPTICAL MASS, not equal margins. Optical centering is frozen as the
 // asset's own transparent padding, so downstream centers naively and gets it free.
 //
 // Mechanical compositor — NO regeneration (the forged art is good low-fi pixel art;
@@ -17,17 +17,17 @@ import { join } from 'node:path';
 
 const PY = 'D:/automation/python312/python.exe';
 const DIR = 'public/assets/ui/main-menu/icons-carved';
-const CANVAS = 72, LIVE = 60, COLORS = 48;
+const CANVAS = 64, LIVE = 40, COLORS = 48;
 
-// Per-shape-class keylines (ADR-0026 §3), in px on the 72 canvas. axis = which axis
-// the target governs; the other axis follows from the art's aspect. nudgeY = the
-// documented optical-centering offset (down = +), baked into padding.
+// Per-shape-class keylines (ADR-0027), in px on the 64 canvas (~40 safe area). axis =
+// which axis the target governs; the other follows from the art's aspect. nudgeY =
+// the documented optical-centering offset (down = +), baked into padding.
 const ICONS = [
-  { slug: 'solo-skirmish',   cls: 'tall-pointed', axis: 'h',    target: 58, nudgeY: 1 }, // blade: pointed, grows tallest
-  { slug: 'campaign-editor', cls: 'full',         axis: 'long', target: 60, nudgeY: 0 }, // route-map: full/square, largest live fill
-  { slug: 'level-editor',    cls: 'upright',      axis: 'h',    target: 54, nudgeY: 0 }, // scroll: blocky, held back
-  { slug: 'lobbies',         cls: 'wide',         axis: 'w',    target: 54, nudgeY: 0 }, // pawns: wide cluster, held back on width
-  { slug: 'settings',        cls: 'tall',         axis: 'h',    target: 56, nudgeY: 0 }, // keys: tall-thin, gains height
+  { slug: 'solo-skirmish',   cls: 'tall-pointed', axis: 'h',    target: 44, nudgeY: 1 }, // blade: pointed, reaches into margin
+  { slug: 'campaign-editor', cls: 'full',         axis: 'long', target: 40, nudgeY: 0 }, // route-map: full/square, fills safe area
+  { slug: 'level-editor',    cls: 'upright',      axis: 'h',    target: 38, nudgeY: 0 }, // scroll: blocky, held back
+  { slug: 'lobbies',         cls: 'wide',         axis: 'w',    target: 38, nudgeY: 0 }, // pawns: wide cluster, held back on width
+  { slug: 'settings',        cls: 'tall',         axis: 'h',    target: 42, nudgeY: 0 }, // keys: tall-thin, gains height
 ];
 
 const PYSRC = `
