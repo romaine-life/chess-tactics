@@ -1,14 +1,9 @@
-import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { AmbienceBackground } from './AmbienceBackground';
-import {
-  MENU_MODES,
-  assetById,
-  bestImageUrl,
-  frameStyleForAsset,
-  insetStyle,
-  type MenuMode,
-} from './design/catalogData';
+import { MENU_MODES, bestImageUrl, type MenuMode } from './design/catalogData';
+
+const ICONS = '/assets/ui/main-menu/icons-carved';
 
 const MODE_HREFS: Record<string, string> = {
   'solo-skirmish': '/play',
@@ -19,60 +14,21 @@ const MODE_HREFS: Record<string, string> = {
 };
 
 function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boolean }): ReactElement {
-  const rowAsset = assetById(mode.row);
   const href = MODE_HREFS[mode.slug] || '/';
-  if (rowAsset?.states?.normal) {
-    const normalState = rowAsset.states.normal;
-    const pressedState = rowAsset.states.pressed || rowAsset.states.active || normalState;
-    const normalStyle = frameStyleForAsset(rowAsset, normalState.rect);
-    const pressedStyle = frameStyleForAsset(rowAsset, pressedState.rect);
-    const labelStyle = insetStyle(rowAsset.rules?.textInset, normalState.rect);
-    const linkStyle = { '--asset-aspect': `${normalState.rect.w} / ${normalState.rect.h}` } as CSSProperties;
-
-    return (
-      <a
-        className={`mode-button uses-row-art ${active ? 'is-active' : ''}`.trim()}
-        href={href}
-        aria-current={active ? 'page' : undefined}
-        style={linkStyle}
-      >
-        <span className="mode-button-art mode-button-art-normal" style={normalStyle} aria-hidden="true" />
-        <span className="mode-button-art mode-button-art-pressed" style={pressedStyle} aria-hidden="true" />
-        <span className="mode-button-label" style={labelStyle}>{mode.label}</span>
-      </a>
-    );
-  }
-
-  const nineSlice = assetById('button-9slice.main-menu');
-  if (!nineSlice || !nineSlice.states) {
-    return (
-      <a className="main-menu-action" href={href}>
-        <span>{mode.label}</span>
-        <i aria-hidden="true">&gt;</i>
-      </a>
-    );
-  }
-
-  const rules = nineSlice.rules || {};
-  const stateDef = nineSlice.states[active ? 'pressed' : 'normal'] || nineSlice.states.normal;
-  const icon = assetById(mode.icon);
-  const frameStyle = frameStyleForAsset(nineSlice, stateDef.rect);
-  const iconStyle: CSSProperties = icon && icon.rect
-    ? { ...insetStyle(rules.iconSlot, stateDef.rect), ...frameStyleForAsset(icon, icon.rect) }
-    : {};
-  const labelStyle = insetStyle(rules.textInset, stateDef.rect);
-  const linkStyle = { '--asset-aspect': `${stateDef.rect.w} / ${stateDef.rect.h}` } as CSSProperties;
-
+  // "Wet Stone & Cold Iron" mode button (ADR-0025 register): a matte stone slab with
+  // a thin forged-iron lip carrying the forged carved-stone icon (canonical 64×64
+  // canvas per ADR-0026, optical keylines per ADR-0027) at --menu-icon-size. Hover
+  // lifts the lip; active = a contained cobalt
+  // hairline. NOTE: the slab surface is still CSS — forging its 9-slice frame is the
+  // remaining chrome step; the icons themselves are forged.
   return (
     <a
-      className={`mode-button ${active ? 'is-active' : ''}`.trim()}
+      className={`mode-button-stone ${active ? 'is-active' : ''}`.trim()}
       href={href}
       aria-current={active ? 'page' : undefined}
-      style={linkStyle}
     >
-      <span className="mode-button-9slice" style={frameStyle} aria-hidden="true" />
-      {icon ? <span className="mode-button-icon" style={iconStyle} aria-hidden="true" /> : null}
-      <span className="mode-button-label" style={labelStyle}>{mode.label}</span>
+      <img className="mode-button-stone-icon" src={`${ICONS}/${mode.slug}.png`} alt="" aria-hidden="true" />
+      <span className="mode-button-stone-label">{mode.label}</span>
     </a>
   );
 }
@@ -128,10 +84,8 @@ export function MainMenu(): ReactElement {
   useEffect(() => {
     const urls = new Set<string>();
     const want = (image?: string) => { if (image) urls.add(bestImageUrl(image)); };
-    want(assetById('button-9slice.main-menu')?.sheet?.image);
     for (const mode of MENU_MODES) {
-      want(assetById(mode.row)?.sheet?.image);
-      want(assetById(mode.icon)?.sheet?.image);
+      urls.add(`${ICONS}/${mode.slug}.png`);
     }
     want('/assets/ui/main-menu-brand-rook-mark-v1.png');
     want('/assets/ui/main-menu/profile-cog.png');

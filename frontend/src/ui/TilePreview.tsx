@@ -2181,8 +2181,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
           <div className="tileset-filter-field">
-            <span>Type</span>
-            <div className="tileset-tier-seg" aria-label="Filter by type">
+            <span>Screen</span>
+            <div className="tileset-tier-seg" aria-label="Filter by screen">
               {ASSET_TYPE_FACETS.map((opt) => (
                 <button key={opt.value} type="button" className={assetFilters.type === opt.value ? 'is-active' : ''} onClick={() => setAssetFilters((s) => ({ ...s, type: opt.value }))}>{opt.label}</button>
               ))}

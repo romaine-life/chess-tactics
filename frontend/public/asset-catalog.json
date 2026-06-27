@@ -232,6 +232,351 @@
       }
     },
     {
+      "id": "button-row.main-menu.solo-skirmish",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Solo Skirmish Button Row",
+      "summary": "Sword/combat row art for the main-menu skirmish action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/solo-skirmish-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/solo-skirmish-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "pressed": {
+          "label": "Pressed",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 360,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "pressed"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.campaign-editor",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Campaign Editor Button Row",
+      "summary": "Crown/campaign row art for the main-menu campaign editor action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/campaign-editor-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/campaign-editor-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "pressed": {
+          "label": "Pressed",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 360,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "pressed"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.level-editor",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Level Editor Button Row",
+      "summary": "Scroll/editor row art for the main-menu level editor action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/level-editor-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/level-editor-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "pressed": {
+          "label": "Pressed",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 360,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "pressed"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.lobbies",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Lobbies Button Row",
+      "summary": "Players/lobbies row art for the main-menu multiplayer action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/lobbies-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/lobbies-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "pressed": {
+          "label": "Pressed",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 360,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "pressed"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
+      "id": "button-row.main-menu.settings",
+      "type": "button-row.main-menu",
+      "status": "promoted",
+      "title": "Settings Button Row",
+      "summary": "Gear/settings row art for the main-menu settings action.",
+      "source": {
+        "kind": "generated-approved-kit",
+        "image": "/assets/ui/main-menu/buttons-v2/settings-sheet.png",
+        "reference": "/assets/ui/proofs/main-menu-button-asset-kit-proof-02.png",
+        "note": "Approved main-menu button kit proof: authored full row art with natural badge/cap boundaries, sliced by frontend/scripts/extract-main-menu-button-kit.mjs. Runtime labels stay live."
+      },
+      "sheet": {
+        "image": "/assets/ui/main-menu/buttons-v2/settings-sheet.png",
+        "width": 636,
+        "height": 328
+      },
+      "states": {
+        "normal": {
+          "label": "Normal",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 636,
+            "h": 164
+          }
+        },
+        "pressed": {
+          "label": "Pressed",
+          "rect": {
+            "x": 0,
+            "y": 164,
+            "w": 636,
+            "h": 164
+          }
+        }
+      },
+      "rules": {
+        "textInset": {
+          "x": 190,
+          "y": 34,
+          "w": 360,
+          "h": 96
+        },
+        "arrowSlot": {
+          "x": 532,
+          "y": 48,
+          "w": 76,
+          "h": 68
+        },
+        "hitbox": {
+          "x": 0,
+          "y": 0,
+          "w": 636,
+          "h": 164
+        },
+        "states": [
+          "normal",
+          "pressed"
+        ],
+        "text": "live",
+        "sizing": "fixed-row-art",
+        "notes": [
+          "Mode-specific row art used by the live main-menu button widget; pressed art is interaction-only, not the default menu state.",
+          "Badge/cap, frame, and arrow are authored together to avoid rectangular icon clipping.",
+          "The centered label is live DOM text in textInset; no copy is baked into the bitmap."
+        ]
+      }
+    },
+    {
       "id": "panel-9slice.main-menu.profile",
       "type": "panel-9slice.main-menu",
       "status": "promoted",

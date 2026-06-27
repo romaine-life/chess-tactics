@@ -1,0 +1,47 @@
+{
+  "source": "pixellab create_tiles_pro",
+  "tileset_id": "8c9ba6b5-32f0-4b3b-b459-b0c54be4618b",
+  "tile_px": 48,
+  "assets": {
+    "stone-slate-blue": {
+      "tile_index": 0,
+      "seam_lr": 2.6,
+      "seam_tb": 2.6
+    },
+    "stone-cobble-blue": {
+      "tile_index": 1,
+      "seam_lr": 5.4,
+      "seam_tb": 7.4
+    },
+    "stone-blue-ornate": {
+      "tile_index": 2,
+      "seam_lr": 18.2,
+      "seam_tb": 12.8
+    },
+    "stone-grey": {
+      "tile_index": 5,
+      "seam_lr": 11.1,
+      "seam_tb": 9.9
+    },
+    "stone-sandstone": {
+      "tile_index": 6,
+      "seam_lr": 12.4,
+      "seam_tb": 11.5
+    },
+    "wood-oak": {
+      "tile_index": 10,
+      "seam_lr": 14.3,
+      "seam_tb": 4.9
+    },
+    "wood-oak-worn": {
+      "tile_index": 11,
+      "seam_lr": 11.7,
+      "seam_tb": 33.1
+    },
+    "wood-walnut": {
+      "tile_index": 15,
+      "seam_lr": 6.9,
+      "seam_tb": 4.8
+    }
+  }
+}
