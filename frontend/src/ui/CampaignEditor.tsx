@@ -5,10 +5,8 @@ import { validateLevel, type Campaign, type CampaignLevelRef, type Level, type O
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
-import { campaignEditorAssetVars } from './campaignEditorAssets';
+import { LevelInfoCompact } from './LevelInfoCompact';
 
-const OBJECTIVES: ObjectiveType[] = ['capture-all', 'capture-king', 'survive', 'reach'];
-const DIFFICULTIES = ['easy', 'normal', 'hard'];
 const SHIELDS = ['crown', 'rook', 'crescent', 'snow', 'flame', 'lion'] as const;
 const CE_ICONS = {
   menu: '/assets/ui/level-editor/icons/menu.png',
@@ -219,6 +217,7 @@ export function CampaignEditor() {
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+  const [levelView, setLevelView] = useState<'board' | 'info'>('board');
   const currentWorkspace = useMemo(() => ({ campaigns, levels }), [campaigns, levels]);
   const currentSignature = useMemo(() => workspaceSignature(currentWorkspace), [currentWorkspace]);
   const [savedSignature, setSavedSignature] = useState(() => currentSignature);
@@ -342,12 +341,12 @@ export function CampaignEditor() {
   const totalLevels = orderedLevels.length;
   const completedLevels = orderedLevels.filter((level) => level.completed).length;
   const enemyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'enemy').length ?? 0;
-  const allyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'player').length ?? totalLevels;
+  const allyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'player').length ?? 0;
   const editHref = camp && levelDoc ? `/edit?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent('/campaigns-next')}` : '/edit';
   const playHref = camp && levelDoc ? `/play?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent('/campaigns-next')}` : '/play';
 
   return (
-    <div className="ce-screen" data-testid="campaign-editor" style={campaignEditorAssetVars()}>
+    <div className="ce-screen" data-testid="campaign-editor">
       <header className="ce-topbar">
         <a className="ce-brand" href="/" aria-label="Back to main menu">
           <img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />
@@ -358,8 +357,6 @@ export function CampaignEditor() {
         </a>
         <div className="ce-topbar-stats" aria-label="Campaign workspace stats">
           <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
-          <span><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
-          <span><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
         </div>
         <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
           <a href="/" aria-label="Main menu"><CeIcon icon="menu" /></a>
@@ -469,72 +466,31 @@ export function CampaignEditor() {
         <section className="ce-panel ce-level-panel" aria-label="Selected level">
           <div className="ce-selected-head">
             <h2>{levelDoc ? `Level ${selectedLevelIndex + 1}: ${levelDoc.name}` : 'Selected Level'}</h2>
-            <span aria-hidden="true">✎</span>
+            {levelDoc ? (
+              <div className="ce-force-readout" aria-label="Level forces">
+                <span className="ce-force ce-force-ally"><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
+                <span className="ce-force ce-force-enemy"><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
+              </div>
+            ) : (
+              <span aria-hidden="true">✎</span>
+            )}
           </div>
           <div className="ce-preview-frame">
-            <LevelPreviewBoard level={levelDoc} />
+            {levelDoc ? (
+              <div className="ce-level-view-toggle" role="tablist" aria-label="Preview mode">
+                <button type="button" role="tab" aria-selected={levelView === 'board'} className={levelView === 'board' ? 'is-active' : ''} onClick={() => setLevelView('board')}>Board</button>
+                <button type="button" role="tab" aria-selected={levelView === 'info'} className={levelView === 'info' ? 'is-active' : ''} onClick={() => setLevelView('info')}>Info</button>
+              </div>
+            ) : null}
+            {levelDoc && levelView === 'info'
+              ? <LevelInfoCompact level={levelDoc} />
+              : <LevelPreviewBoard level={levelDoc} />}
           </div>
           {levelDoc && levelRef ? (
-            <>
-              <label className="ce-name-field ce-level-name-field">
-                <span>Level Name</span>
-                <input
-                  data-testid="level-name"
-                  value={levelDoc.name}
-                  onChange={(e) => useCampaigns.getState().renameLevel(levelDoc.id, e.target.value)}
-                />
-              </label>
-              <div className="ce-preview-actions">
-                <a className="ce-link-button" href={editHref}><span>Edit Board</span></a>
-                <a className="ce-link-button ce-link-button-ghost" href={playHref}><span>Test Play</span></a>
-                <IconButton selected aria-label="Level settings"><CeIcon icon="settings" /></IconButton>
-              </div>
-
-              <div className="ce-settings-grid">
-                <label className="ce-setting-card">
-                  <span>Objective</span>
-                  <select
-                    data-testid="level-objective"
-                    value={levelRef.objective ?? levelDoc.objective}
-                    onChange={(e) => useCampaigns.getState().setLevelObjective(levelDoc.id, e.target.value as ObjectiveType)}
-                  >
-                    {OBJECTIVES.map((objective) => <option key={objective} value={objective}>{objectiveLabel[objective]}</option>)}
-                  </select>
-                </label>
-                <label className="ce-setting-card">
-                  <span>Difficulty</span>
-                  <select value={levelDoc.difficulty} onChange={(e) => useCampaigns.getState().setLevelDifficulty(levelDoc.id, e.target.value)}>
-                    {DIFFICULTIES.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
-                  </select>
-                </label>
-                <label className="ce-setting-card">
-                  <span>Starting Funds</span>
-                  <input
-                    type="number"
-                    value={levelDoc.economy.startingFunds}
-                    onChange={(e) => useCampaigns.getState().setLevelEconomy(levelDoc.id, Number(e.target.value), levelDoc.economy.incomePerTurn)}
-                  />
-                </label>
-                <label className="ce-setting-card">
-                  <span>Income Per Turn</span>
-                  <input
-                    type="number"
-                    value={levelDoc.economy.incomePerTurn}
-                    onChange={(e) => useCampaigns.getState().setLevelEconomy(levelDoc.id, levelDoc.economy.startingFunds, Number(e.target.value))}
-                  />
-                </label>
-              </div>
-
-              <div className="ce-notes-card">
-                <span>Notes</span>
-                <textarea
-                  data-testid="level-notes"
-                  value={levelDoc.notes}
-                  placeholder={`${objectiveLabel[levelRef.objective ?? levelDoc.objective]}. Board size ${levelDoc.board.cols} x ${levelDoc.board.rows}. Theme: ${levelDoc.theme}.`}
-                  onChange={(event) => useCampaigns.getState().setLevelNotes(levelDoc.id, event.target.value)}
-                />
-              </div>
-            </>
+            <div className="ce-preview-actions">
+              <a className="ce-link-button" href={editHref}><span>Edit Board</span></a>
+              <a className="ce-link-button ce-link-button-ghost" href={playHref}><span>Test Play</span></a>
+            </div>
           ) : (
             <p className="ce-empty ce-empty-large">Select a level.</p>
           )}
