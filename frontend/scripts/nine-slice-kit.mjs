@@ -178,7 +178,6 @@ export function buildAsset(assetId, cfgRaw) {
 // of the baked navy fill. This is the GENERAL fix for the "navy ring" 9-slice fill
 // problem (cf. the hand-made panel-line.png): dropping border-image `fill` alone is not
 // enough because the 8 edge slices still carry the fill colour inward.
-const RAIL_MIN_LINE = 45; // max-channel >= this is rail/ornament; below is navy fill (drop)
 export function bakeLine(assetId) {
   const rec = REGISTRY[assetId];
   if (!rec) throw new Error(`nine-slice-kit: unknown asset "${assetId}" (known: ${Object.keys(REGISTRY).join(', ')})`);
@@ -186,13 +185,15 @@ export function bakeLine(assetId) {
   const corner = tuneCorner(loadAtom(rec.atoms.corner), cfg);
   const edge = loadAtom(rec.atoms.edge);
   const fillAtom = loadAtom(rec.atoms.fill);
+  // Assemble from the corner + edge atoms with a TRANSPARENT fill. The navy interior lives
+  // ENTIRELY in the fill atom, so the result is the full ornament/rail (the corner's gold
+  // brackets, the row's steel rail — dark bevel included) over a see-through center. There is
+  // no fill to ring it, so nothing is masked; carve just trims exterior navy bleed exactly as
+  // bakeAsset does (a global dark-pixel mask would wrongly eat a dark rail down to a keyline).
   const clearFill = new PNG({ width: fillAtom.width, height: fillAtom.height }); clearFill.data.fill(0);
   const { w, h } = rec.frame;
   const frame = buildFrameFrom(corner, edge, clearFill, w, h, !!rec.flipSides);
-  for (let i = 0; i < frame.data.length; i += 4) {
-    if (frame.data[i + 3] === 0) continue;
-    if (Math.max(frame.data[i], frame.data[i + 1], frame.data[i + 2]) < RAIL_MIN_LINE) frame.data[i + 3] = 0;
-  }
+  if (rec.carve) carveExterior(frame);
   return frame;
 }
 
