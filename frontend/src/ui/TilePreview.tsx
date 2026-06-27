@@ -2121,6 +2121,8 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
   return cells;
 };
+const LE_FACING: Direction[] = ['south', 'east', 'north', 'west'];
+const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
@@ -2131,6 +2133,11 @@ export function LevelEditor(): ReactElement {
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit'>('tile');
+  const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
+  const [unitBrushId, setUnitBrushId] = useState<string>(unitAssets[0].id);
+  const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
+  const [unitSide, setUnitSide] = useState<'player' | 'enemy'>('player');
 
   // Go full-bleed like Skirmish: hide the static global .topbar (index.html) so the
   // editor shows only its OWN title bar, not stacked under the app's global header.
@@ -2142,17 +2149,26 @@ export function LevelEditor(): ReactElement {
 
   const resolveAsset = (id: string): StudioAsset | undefined => leAllTiles.find((asset) => asset.id === id);
   const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
+  const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
+  const unitFaction: Faction = LE_SIDE_FACTION[unitSide];
 
-  const paintCell = (x: number, y: number): void => setBoardCells((prev) => ({ ...prev, [`${x},${y}`]: brushAsset.id }));
-  const eraseCell = (x: number, y: number): void =>
-    setBoardCells((prev) => {
-      const key = `${x},${y}`;
-      if (!(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  const clearBoard = (): void => { setBoardCells({}); setSelectedCell(null); };
+  const eraseKey = <T,>(setter: (updater: (prev: Record<string, T>) => Record<string, T>) => void, key: string): void =>
+    setter((prev) => { if (!(key in prev)) return prev; const next = { ...prev }; delete next[key]; return next; });
+  const paintCell = (x: number, y: number): void => {
+    const key = `${x},${y}`;
+    if (brushKind === 'unit') {
+      setBoardUnits((prev) => ({ ...prev, [key]: { unitId: unitBrushAsset.id, direction: unitBrushDirection, faction: unitFaction } }));
+      return;
+    }
+    setBoardCells((prev) => ({ ...prev, [key]: brushAsset.id }));
+  };
+  const eraseCell = (x: number, y: number): void => {
+    const key = `${x},${y}`;
+    if (brushKind === 'unit') return eraseKey(setBoardUnits, key);
+    eraseKey(setBoardCells, key);
+  };
+  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setSelectedCell(null); };
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
@@ -2166,8 +2182,11 @@ export function LevelEditor(): ReactElement {
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
 
   const paintedCount = Object.keys(boardCells).length;
+  const unitCount = Object.keys(boardUnits).length;
   const selectedTileId = selectedCell ? boardCells[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedAsset = selectedTileId ? resolveAsset(selectedTileId) : undefined;
+  const selectedUnit = selectedCell ? boardUnits[`${selectedCell.x},${selectedCell.y}`] : undefined;
+  const selectedUnitAsset = selectedUnit ? resolveUnitAsset(selectedUnit.unitId) : undefined;
   const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
 
   return (
@@ -2193,10 +2212,10 @@ export function LevelEditor(): ReactElement {
                   cols={LE_COLS}
                   rows={LE_ROWS}
                   cells={boardCells}
-                  units={{}}
+                  units={boardUnits}
                   doodads={{}}
                   resolveAsset={resolveAsset}
-                  resolveUnit={() => undefined}
+                  resolveUnit={resolveUnitAsset}
                   resolveDoodad={() => undefined}
                   tool={tool}
                   selectedCell={selectedCell}
@@ -2218,8 +2237,8 @@ export function LevelEditor(): ReactElement {
           <h2>Layer</h2>
           <div className="le-seg">
             <button type="button" className="le-seg-btn" disabled>Board</button>
-            <button type="button" className="le-seg-btn active">Tile</button>
-            <button type="button" className="le-seg-btn" disabled>Unit</button>
+            <button type="button" className={`le-seg-btn ${brushKind === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('tile'); setTool('brush'); }}>Tile</button>
+            <button type="button" className={`le-seg-btn ${brushKind === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('unit'); setTool('brush'); }}>Unit</button>
             <button type="button" className="le-seg-btn" disabled>Doodad</button>
           </div>
         </section>
@@ -2232,38 +2251,73 @@ export function LevelEditor(): ReactElement {
             <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')}><span className="le-ico ic-eraser" aria-hidden="true" />Erase</button>
           </div>
           <div className="le-brush-pick">
-            <span className="le-brush-thumb"><img src={brushAsset.src} alt="" draggable={false} /></span>
+            <span className="le-brush-thumb">
+              {brushKind === 'unit'
+                ? <img src={unitBrushAsset.sprite(unitFaction, 'south')} alt="" draggable={false} />
+                : <img src={brushAsset.src} alt="" draggable={false} />}
+            </span>
             <span className="le-brush-meta">
-              <strong>{brushAsset.label}</strong>
-              <span>Active brush · tile</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : 'tile'}</span>
             </span>
           </div>
         </section>
 
-        <section className="skirmish-card">
-          <h2>Palette</h2>
-          <div className="le-palette-scroll">
-            {leTileGroups.map(({ family, tiles }) => (
-              <div className="le-pal-group" key={family.id}>
-                <span className="le-pal-grouplabel">{family.label}</span>
-                <div className="le-swatches">
-                  {tiles.map((tile) => (
-                    <button
-                      type="button"
-                      key={tile.id}
-                      className={`le-swatch ${brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
-                      title={tile.label}
-                      onClick={() => { setBrushId(tile.id); setTool('brush'); }}
-                    >
-                      <img src={tile.src} alt="" draggable={false} />
-                      <small>{tile.label}</small>
-                    </button>
-                  ))}
+        {brushKind === 'unit' ? (
+          <section className="skirmish-card">
+            <h2>Side</h2>
+            <div className="le-seg">
+              <button type="button" className={`le-seg-btn ${unitSide === 'player' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('player')}>Player</button>
+              <button type="button" className={`le-seg-btn ${unitSide === 'enemy' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('enemy')}>Enemy</button>
+            </div>
+            <h2 className="le-card-subhead">Facing</h2>
+            <div className="le-seg">
+              {LE_FACING.map((dir) => (
+                <button type="button" key={dir} className={`le-seg-btn ${unitBrushDirection === dir ? 'active' : ''}`.trim()} onClick={() => setUnitBrushDirection(dir)} title={dir}>{dir.charAt(0).toUpperCase()}</button>
+              ))}
+            </div>
+            <h2 className="le-card-subhead">Units</h2>
+            <div className="le-swatches">
+              {unitAssets.map((unit) => (
+                <button
+                  type="button"
+                  key={unit.id}
+                  className={`le-swatch ${unitBrushId === unit.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  title={unit.label}
+                  onClick={() => { setUnitBrushId(unit.id); setBrushKind('unit'); setTool('brush'); }}
+                >
+                  <img src={unit.sprite(unitFaction, 'south')} alt="" draggable={false} />
+                  <small>{unit.label}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className="skirmish-card">
+            <h2>Palette</h2>
+            <div className="le-palette-scroll">
+              {leTileGroups.map(({ family, tiles }) => (
+                <div className="le-pal-group" key={family.id}>
+                  <span className="le-pal-grouplabel">{family.label}</span>
+                  <div className="le-swatches">
+                    {tiles.map((tile) => (
+                      <button
+                        type="button"
+                        key={tile.id}
+                        className={`le-swatch ${brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        title={tile.label}
+                        onClick={() => { setBrushId(tile.id); setTool('brush'); }}
+                      >
+                        <img src={tile.src} alt="" draggable={false} />
+                        <small>{tile.label}</small>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="skirmish-card">
           <h2>Fill</h2>
@@ -2285,8 +2339,14 @@ export function LevelEditor(): ReactElement {
         </section>
 
         <section className="skirmish-card le-details">
-          <h2>Details · {selectedAsset ? 'Tile' : selectedCell ? 'Cell' : 'Board'}</h2>
-          {selectedAsset ? (
+          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedAsset ? 'Tile' : selectedCell ? 'Cell' : 'Board'}</h2>
+          {selectedUnitAsset && selectedUnit ? (
+            <dl>
+              <div><dt>Piece</dt><dd>{selectedUnitAsset.label}</dd></div>
+              <div><dt>Side</dt><dd>{selectedUnit.faction === 'crimson' ? 'Enemy' : 'Player'}</dd></div>
+              <div><dt>Facing</dt><dd>{selectedUnit.direction}</dd></div>
+            </dl>
+          ) : selectedAsset ? (
             <dl>
               <div><dt>Type</dt><dd>{leFamilyOfTile(selectedAsset.id)?.label ?? '—'}</dd></div>
               <div><dt>Source</dt><dd>{selectedAsset.id}</dd></div>
@@ -2295,13 +2355,13 @@ export function LevelEditor(): ReactElement {
           ) : (
             <dl>
               <div><dt>Tiles</dt><dd>{paintedCount}</dd></div>
-              <div><dt>Board</dt><dd>{LE_COLS} × {LE_ROWS}</dd></div>
+              <div><dt>Units</dt><dd>{unitCount}</dd></div>
             </dl>
           )}
         </section>
 
         <div className="le-statusline">
-          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · {LE_COLS}×{LE_ROWS} board
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · {LE_COLS}×{LE_ROWS}
         </div>
       </aside>
     </div>

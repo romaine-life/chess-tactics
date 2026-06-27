@@ -5067,6 +5067,7 @@ h1 {
 .level-editor-screen .skirmish-hud { grid-area: rail; }
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
+.level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
 
 /* Title bar = the app's editor pattern (ADR-0023; mirrors the campaign editor's
    .ce-topbar): three sections — brand · save-state · labeled header buttons
