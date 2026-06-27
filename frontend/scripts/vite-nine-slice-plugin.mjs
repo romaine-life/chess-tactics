@@ -5,7 +5,7 @@
 // mode). It is never part of a production build, so the write endpoint can't ship.
 // The editor pairs this with import.meta.env.DEV to only show the button in dev.
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { buildAsset, normalizeConfig, CONFIG_DIR, REGISTRY } from './nine-slice-kit.mjs';
+import { buildAsset, normalizeConfig, writeGeneratedCss, CONFIG_DIR, REGISTRY } from './nine-slice-kit.mjs';
 
 export function nineSliceDevSave() {
   return {
@@ -25,7 +25,8 @@ export function nineSliceDevSave() {
             mkdirSync(CONFIG_DIR, { recursive: true });
             writeFileSync(`${CONFIG_DIR}${raw.asset}.json`, `${JSON.stringify({ asset: raw.asset, ...cfg }, null, 2)}\n`);
             const out = buildAsset(raw.asset, cfg);
-            send(200, { ok: true, asset: raw.asset, config: `config/nine-slice/${raw.asset}.json`, written: out.written, warns: out.warns, note: out.note });
+            const css = writeGeneratedCss();
+            send(200, { ok: true, asset: raw.asset, config: `config/nine-slice/${raw.asset}.json`, written: out.written, css, warns: out.warns, note: out.note });
           } catch (e) {
             send(500, { ok: false, error: String(e?.message || e) });
           }

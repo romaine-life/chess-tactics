@@ -12310,7 +12310,8 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
   image-rendering: pixelated;
   min-height: 56px;
-  padding: 7px 12px;
+  /* content inset from the 9-slice editor (--settings-tab-content, generated). */
+  padding: var(--settings-tab-content, 7px);
   text-align: left;
   text-decoration: none;
   transition: color .14s ease;

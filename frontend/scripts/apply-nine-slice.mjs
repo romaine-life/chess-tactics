@@ -7,12 +7,12 @@
 //   node scripts/apply-nine-slice.mjs mode-button    # apply one asset's committed config
 //   node scripts/apply-nine-slice.mjs path/to.json   # apply a config file directly
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { buildAsset, loadConfig, normalizeConfig, CONFIG_DIR, REGISTRY } from './nine-slice-kit.mjs';
+import { buildAsset, loadConfig, normalizeConfig, writeGeneratedCss, CONFIG_DIR, REGISTRY } from './nine-slice-kit.mjs';
 
 console.log(`
 ┌─ apply-nine-slice · bake editor offsets into committed assets (single bake impl: nine-slice-kit) ─
 │ Source of truth = config/nine-slice/<asset>.json (the editor's exported JSON, in git).
-│ bracket/keyline bake into the corner atom -> assembled PNG. margin/content are CSS-side (noted).
+│ bracket/keyline bake into the corner atom -> assembled PNG. content -> generated CSS var.
 └────────────────────────────────────────────────────────────────────────────────────────────────
 `);
 
@@ -36,3 +36,4 @@ for (const cfg of configs) {
   if (res.note) console.log(`  note: ${res.note}`);
   for (const w of res.warns) console.log(`  warn: ${w}`);
 }
+console.log(`✓ css   →  ${writeGeneratedCss()}`);
