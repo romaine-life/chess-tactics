@@ -17,6 +17,7 @@
 // In dev, Save writes config/nine-slice/<asset>.json and regenerates the asset
 // (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import nineSliceRegistry from '../../config/nine-slice-registry.json';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
@@ -25,11 +26,21 @@ type PieceKey = 'keyline' | 'bracket';
 
 type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean };
 
-const ASSETS: Asset[] = [
-  { id: 'mode-button', label: 'Mode button (tabs / header)', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/mode-button.png', frame: { w: 72, h: 72 } },
-  { id: 'row', label: 'Settings row', corner: '/assets/ui/kit/atoms/row-corner.png', edge: '/assets/ui/kit/atoms/row-edge.png', fill: '/assets/ui/kit/atoms/row-fill.png', target: '/assets/ui/kit/row.png', frame: { w: 160, h: 112 }, carve: true },
-  { id: 'panel', label: 'Settings panel / frame', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/panel.png', frame: { w: 72, h: 72 } },
-];
+// Derived from the SINGLE registry (shared with the Node bake + the catalog). Every
+// atom-built frame appears here automatically — adding one is a registry edit, not a
+// code change in three files.
+type RegAsset = { label: string; atoms: { corner: string; edge: string; fill: string }; frame: Frame; carve?: boolean; variants: { out: string }[] };
+const REGISTRY = (nineSliceRegistry as { assets: Record<string, RegAsset> }).assets;
+const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
+  id,
+  label: a.label,
+  corner: `/assets/ui/kit/atoms/${a.atoms.corner}.png`,
+  edge: `/assets/ui/kit/atoms/${a.atoms.edge}.png`,
+  fill: `/assets/ui/kit/atoms/${a.atoms.fill}.png`,
+  target: `/assets/ui/kit/${a.variants[0].out}`,
+  frame: a.frame,
+  carve: !!a.carve,
+}));
 
 const DEFAULT_CONTENT = 12;
 const STORAGE_KEY = 'nine-slice-editor-v4';

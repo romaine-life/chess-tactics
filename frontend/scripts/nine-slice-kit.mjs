@@ -22,44 +22,16 @@ const ATOMS = `${root}public/assets/ui/kit/atoms/`;
 const KIT = `${root}public/assets/ui/kit/`;
 export const CONFIG_DIR = `${root}config/nine-slice/`;
 
-// gold ramp -> cyan ramp (luminance-matched). Navy structure is left alone.
-export const GOLD2CYAN = {
-  faefbb: 'd6f4ff', // highlight  lum 236 -> 236
-  c79b55: '4fbdf0', // mid        lum 160 -> 162
-  a7793d: '2f93dd', // shadow     lum 128 -> 126
-  '5b4124': '14507f', // deep     lum  69 ->  68
-};
-
-// Per-asset recipe. `atoms` are names in kit/atoms; `out`/`inspect` are written to
-// kit/ and kit/atoms respectively. Add an entry here to make a new asset bakeable.
-export const REGISTRY = {
-  'mode-button': {
-    atoms: { corner: 'corner', edge: 'edge', fill: 'fill' },
-    frame: { w: 72, h: 72 },
-    // content -> the consuming element's inner padding, via a CSS var the bake writes.
-    consume: { selector: '.settings-tab', cssVar: '--settings-tab-content' },
-    variants: [
-      { out: 'mode-button.png' },
-      { out: 'mode-button-active.png', swap: GOLD2CYAN, inspect: 'corner-cyan' },
-    ],
-  },
-  'panel': {
-    // Settings frames (.settings-frame / .app-titlebar) — same gold-keyline kit
-    // family as the tabs, assembled from the shared atoms; a per-asset config tunes
-    // it independently of mode-button. Consumed at a 24px slice (24px corner atom).
-    atoms: { corner: 'corner', edge: 'edge', fill: 'fill' },
-    frame: { w: 72, h: 72 },
-    variants: [{ out: 'panel.png' }],
-  },
-  'row': {
-    atoms: { corner: 'row-corner', edge: 'row-edge', fill: 'row-fill' },
-    frame: { w: 160, h: 112 },
-    // assemble-frame fills the whole canvas navy then lays the frame on top, which
-    // bleeds navy past the rail into the transparent exterior — carve it back.
-    carve: true,
-    variants: [{ out: 'row.png' }],
-  },
-};
+// Single source of truth — the SAME registry the in-app editor and the catalog
+// edit-link read (config/nine-slice/registry.json). Add a frame there and it
+// becomes bakeable, editable, and catalog-linked with no code change here.
+const REG = JSON.parse(readFileSync(`${root}config/nine-slice-registry.json`, 'utf8'));
+const PALETTES = REG.palettes ?? {};
+// Resolve each variant's palette name (e.g. "gold2cyan") to its actual swap map.
+export const REGISTRY = Object.fromEntries(Object.entries(REG.assets).map(([id, a]) => [id, {
+  ...a,
+  variants: a.variants.map((v) => ({ ...v, swap: v.swap ? PALETTES[v.swap] : undefined })),
+}]));
 
 const hex = (r, g, b) => `${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 const isWarm = (r, g, b, a) => a > 40 && r > b + 15; // gold ramp is warm; keyline/navy are cool
