@@ -21,7 +21,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactEle
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
-type EditState = { keyline: Off; bracket: Off; margin: number };
+type EditState = { keyline: Off; bracket: Off; margin: number; content: number };
 type PieceKey = 'keyline' | 'bracket';
 
 type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame };
@@ -32,6 +32,7 @@ const ASSETS: Asset[] = [
 ];
 
 const DEFAULT_MARGIN = 2;
+const DEFAULT_CONTENT = 12;
 const STORAGE_KEY = 'nine-slice-editor-v4';
 const Z = 6;
 
@@ -94,7 +95,8 @@ export function NineSliceEditor(): ReactElement {
   const [assetId, setAssetId] = useState(ASSETS[0].id);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [active, setActive] = useState<PieceKey>('bracket');
-  const [showTarget, setShowTarget] = useState(false);
+  const [showOuter, setShowOuter] = useState(false);
+  const [showContent, setShowContent] = useState(false);
   const [edits, setEdits] = useState<Record<string, EditState>>(() => {
     // Only keep well-formed entries — a malformed/old saved shape must never blank the editor.
     try {
@@ -109,8 +111,14 @@ export function NineSliceEditor(): ReactElement {
   });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
-  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, margin: DEFAULT_MARGIN };
-  const edit: EditState = edits[assetId] ?? DEFAULT_EDIT;
+  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, margin: DEFAULT_MARGIN, content: DEFAULT_CONTENT };
+  const stored = edits[assetId];
+  const edit: EditState = {
+    keyline: stored?.keyline ?? { dx: 0, dy: 0 },
+    bracket: stored?.bracket ?? { dx: 0, dy: 0 },
+    margin: stored?.margin ?? DEFAULT_MARGIN,
+    content: stored?.content ?? DEFAULT_CONTENT,
+  };
 
   useEffect(() => {
     let live = true; setLoaded(null);
@@ -131,6 +139,7 @@ export function NineSliceEditor(): ReactElement {
   });
   const nudge = (dx: number, dy: number) => update((cur) => ({ ...cur, [active]: { dx: cur[active].dx + dx, dy: cur[active].dy + dy } }));
   const setMargin = (dm: number) => update((cur) => ({ ...cur, margin: Math.max(0, cur.margin + dm) }));
+  const setContent = (dc: number) => update((cur) => ({ ...cur, content: Math.max(0, (cur.content ?? DEFAULT_CONTENT) + dc) }));
   const reset = () => update(() => DEFAULT_EDIT);
 
   useEffect(() => {
@@ -188,19 +197,36 @@ export function NineSliceEditor(): ReactElement {
     const vg = view.getContext('2d')!; vg.imageSmoothingEnabled = false;
     for (let y = 0; y < view.height; y += 8) for (let x = 0; x < view.width; x += 8) { vg.fillStyle = ((x / 8 + y / 8) & 1) ? '#3a3f48' : '#2b2f37'; vg.fillRect(x, y, 8, 8); }
     vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);
-    if (showTarget && loaded.target) {
-      vg.globalAlpha = 0.55;
-      vg.drawImage(loaded.target, 0, 0, loaded.target.width, loaded.target.height, m * Z, m * Z, loaded.target.width * Z, loaded.target.height * Z);
-      vg.globalAlpha = 1;
-      vg.strokeStyle = '#ff5cf0'; vg.lineWidth = 2;
-      vg.strokeRect(m * Z, m * Z, loaded.target.width * Z, loaded.target.height * Z);
+
+    // Guides: OUTER box = the actual outermost opaque pixels of the assembled
+    // 9-slice (computed from pixels, so it IS the true extent). CONTENT box =
+    // outer inset by `content` px on each side — where text/icons should start.
+    if (showOuter || showContent) {
+      const od = g.getImageData(0, 0, W, H).data;
+      let minX = W, minY = H, maxX = -1, maxY = -1;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+      }
+      if (maxX >= 0) {
+        const bw = maxX - minX + 1, bh = maxY - minY + 1;
+        if (showOuter) {
+          vg.strokeStyle = '#ff5cf0'; vg.lineWidth = 2;
+          vg.strokeRect(minX * Z, minY * Z, bw * Z, bh * Z);
+        }
+        if (showContent) {
+          const c = edit.content;
+          vg.strokeStyle = '#5cff9e'; vg.lineWidth = 2;
+          vg.strokeRect((minX + c) * Z, (minY + c) * Z, (bw - 2 * c) * Z, (bh - 2 * c) * Z);
+        }
+      }
     }
+
     // pane boundary — shows where the output canvas ends, i.e. the empty space you control
     vg.strokeStyle = '#5aa9ff'; vg.lineWidth = 2;
     vg.strokeRect(1, 1, W * Z - 2, H * Z - 2);
-  }, [loaded, edit, showTarget, asset]);
+  }, [loaded, edit, showOuter, showContent, asset]);
 
-  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, margin: edit.margin }, null, 2);
+  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, margin: edit.margin, content: edit.content }, null, 2);
   const pieces: PieceKey[] = loaded?.hasAccent ? ['keyline', 'bracket'] : ['keyline'];
 
   return (
@@ -237,14 +263,26 @@ export function NineSliceEditor(): ReactElement {
               <span style={ST.sizeLabel}>asset {asset.frame.w} × {asset.frame.h} · pane {asset.frame.w + 2 * edit.margin} × {asset.frame.h + 2 * edit.margin}</span>
             </div>
           </div>
-          <label style={ST.toggle}>
-            <input type="checkbox" checked={showTarget} onChange={(e) => setShowTarget(e.target.checked)} />
-            Show target frame (the actual shipped {asset.id}, magenta outline)
-          </label>
+          <div style={ST.sizeBox}>
+            <label style={ST.toggle}>
+              <input type="checkbox" checked={showOuter} onChange={(e) => setShowOuter(e.target.checked)} />
+              <span style={{ color: '#ff5cf0' }}>■</span> Outer box — outermost pixels of the 9-slice (centering guide)
+            </label>
+            <label style={ST.toggle}>
+              <input type="checkbox" checked={showContent} onChange={(e) => setShowContent(e.target.checked)} />
+              <span style={{ color: '#5cff9e' }}>■</span> Content box — where text / icons start
+            </label>
+            <div style={ST.sizeRow}>
+              <span style={ST.sizeW}>inset {edit.content} px</span>
+              <button type="button" style={ST.sb} onClick={() => setContent(-1)}>−</button>
+              <button type="button" style={ST.sb} onClick={() => setContent(1)}>＋</button>
+              <span style={ST.sizeLabel}>uniform on all sides</span>
+            </div>
+          </div>
           <div style={ST.offsets}>
             <div>keyline: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
-            <div>margin: {edit.margin} px</div>
+            <div>margin: {edit.margin} px · content inset: {edit.content} px</div>
           </div>
           <label style={ST.hint}>Export — paste this back:</label>
           <textarea readOnly value={exportJson} style={ST.export} onFocus={(e) => e.currentTarget.select()} />
