@@ -12812,11 +12812,17 @@ button.tileset-relationship-cell {
   align-items: center;
   appearance: none;
   background: transparent;
-  border: 0;
+  /* The forged button frame (shared button-neutral 9-slice) — when the stone/wood
+     chrome re-skins that frame, this toggle inherits it for free. */
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
   cursor: pointer;
   display: inline-flex;
   gap: 12px;
-  padding: 4px 2px;
+  image-rendering: pixelated;
+  block-size: 40px;
+  padding: 0 10px;
 }
 
 .settings-toggle-opt {
