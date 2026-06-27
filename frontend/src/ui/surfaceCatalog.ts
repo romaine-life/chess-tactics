@@ -6,12 +6,10 @@
 export interface SurfaceAsset {
   name: string;
   label: string;
-  approach: 'hybrid' | 'pixel-model' | 'baseline' | 'pixellab' | 'raw' | 'pixelated' | 'forge';
+  approach: 'hybrid' | 'pixel-model' | 'baseline' | 'pixellab';
   material: string;
   file: string; // served path under public/
   tilePx: number; // intended on-screen tile size for repeat-tiling
-  kind?: 'tile' | 'sprite'; // 'tile' (default) repeat-tiles as a surface; 'sprite' is a single element asset (e.g. a scrollbar thumb) shown centered, not tiled
-  preferred?: boolean; // the chosen default among a group of options
 }
 
 export const SURFACE_TILE_PX = 1024;
@@ -23,9 +21,4 @@ export const SURFACE_ASSETS: SurfaceAsset[] = [
   { name: 'baseline-stone-blue', label: 'Baseline · Stone Blue', approach: 'baseline', material: 'stone-blue', file: '/assets/ui/surfaces/baseline-stone-blue.png', tilePx: SURFACE_TILE_PX },
   { name: 'baseline-wood-oak', label: 'Baseline · Oak', approach: 'baseline', material: 'wood-oak', file: '/assets/ui/surfaces/baseline-wood-oak.png', tilePx: SURFACE_TILE_PX },
   { name: 'pixellab-stone-blue', label: 'PixelLab · Stone Blue', approach: 'pixellab', material: 'stone-blue', file: '/assets/ui/surfaces/pixellab-stone-blue.png', tilePx: SURFACE_TILE_PX },
-  // Scrollbar grip — a carved oak element generated four ways; PixelLab is the chosen default.
-  { name: 'scrollbar-oak-pixellab', label: 'Scrollbar · Oak (PixelLab)', approach: 'pixellab', material: 'wood-oak', file: '/assets/ui/surfaces/scrollbar/scrollbar-oak-pixellab.png', tilePx: SURFACE_TILE_PX, kind: 'sprite', preferred: true },
-  { name: 'scrollbar-oak-forge', label: 'Scrollbar · Oak (Forge)', approach: 'forge', material: 'wood-oak', file: '/assets/ui/surfaces/scrollbar/scrollbar-oak-forged.png', tilePx: SURFACE_TILE_PX, kind: 'sprite' },
-  { name: 'scrollbar-oak-pixelated', label: 'Scrollbar · Oak (Pixelated)', approach: 'pixelated', material: 'wood-oak', file: '/assets/ui/surfaces/scrollbar/scrollbar-oak-pixelated.png', tilePx: SURFACE_TILE_PX, kind: 'sprite' },
-  { name: 'scrollbar-oak-raw', label: 'Scrollbar · Oak (Raw)', approach: 'raw', material: 'wood-oak', file: '/assets/ui/surfaces/scrollbar/scrollbar-oak-raw.png', tilePx: SURFACE_TILE_PX, kind: 'sprite' },
 ];

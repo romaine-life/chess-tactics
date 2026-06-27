@@ -31,15 +31,13 @@ export function SurfaceLibraryStudio({
           <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
             <span
               className="surface-swatch"
-              style={(s.kind === 'sprite'
-                ? { backgroundImage: `url("${s.file}")`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', imageRendering: 'pixelated' }
-                : { backgroundImage: `url("${s.file}")`, backgroundSize: `${Math.round(110 * zoom)}px` }) as CSSProperties}
+              style={{ backgroundImage: `url("${s.file}")`, backgroundSize: `${Math.round(110 * zoom)}px` } as CSSProperties}
             />
           </span>
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">
               <strong>{s.label}</strong>
-              <em>{s.preferred ? `${s.material} · preferred` : s.material}</em>
+              <em>{s.material}</em>
             </span>
           </span>
         </button>
@@ -58,21 +56,13 @@ export function SurfaceViewer({ name, header }: { name?: string; header?: ReactN
   // (read it as a surface), high zoom = big pixels (inspect the pixel art / seams).
   const [zoom, setZoom] = useState(1);
   const [view, setView] = useState<'panel' | 'bare'>('panel');
-  const bg: CSSProperties = s.kind === 'sprite'
-    ? {
-        backgroundImage: `url("${s.file}")`,
-        backgroundSize: `${Math.round(80 * zoom)}px`,
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'center',
-        imageRendering: 'pixelated',
-      }
-    : {
-        backgroundImage: `url("${s.file}")`,
-        backgroundSize: `${Math.round((s.tilePx / 4) * zoom)}px`,
-        backgroundRepeat: 'repeat',
-        backgroundPosition: 'center',
-        imageRendering: 'pixelated',
-      };
+  const bg: CSSProperties = {
+    backgroundImage: `url("${s.file}")`,
+    backgroundSize: `${Math.round((s.tilePx / 4) * zoom)}px`,
+    backgroundRepeat: 'repeat',
+    backgroundPosition: 'center',
+    imageRendering: 'pixelated',
+  };
   return (
     <>
       <section className="al-lab-main surface-view-main" aria-label="Surface preview">
