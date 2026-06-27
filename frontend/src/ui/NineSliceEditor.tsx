@@ -23,11 +23,11 @@ type Frame = { w: number; h: number };
 type EditState = { keyline: Off; bracket: Off; content: number };
 type PieceKey = 'keyline' | 'bracket';
 
-type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame };
+type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean };
 
 const ASSETS: Asset[] = [
   { id: 'mode-button', label: 'Mode button (tabs / header)', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/mode-button.png', frame: { w: 72, h: 72 } },
-  { id: 'row', label: 'Settings row', corner: '/assets/ui/kit/atoms/row-corner.png', edge: '/assets/ui/kit/atoms/row-edge.png', fill: '/assets/ui/kit/atoms/row-fill.png', target: '/assets/ui/kit/row.png', frame: { w: 160, h: 112 } },
+  { id: 'row', label: 'Settings row', corner: '/assets/ui/kit/atoms/row-corner.png', edge: '/assets/ui/kit/atoms/row-edge.png', fill: '/assets/ui/kit/atoms/row-fill.png', target: '/assets/ui/kit/row.png', frame: { w: 160, h: 112 }, carve: true },
   { id: 'panel', label: 'Settings panel / frame', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/panel.png', frame: { w: 72, h: 72 } },
 ];
 
@@ -62,6 +62,22 @@ function rot90(src: CanvasImageSource, w: number, h: number): HTMLCanvasElement 
     for (let k = 0; k < 4; k++) dd.data[di + k] = sd.data[si + k];
   }
   dctx.putImageData(dd, 0, 0); return c;
+}
+
+// Carve navy bleed outside the rail back to transparent (ports generate-row's
+// carveExterior to canvas): flood from the edges across dark navy, stop at the
+// brighter rail. Mirrors what the shipped row.png does, so the preview matches.
+function carveExterior(canvas: HTMLCanvasElement): void {
+  const { width: w, height: h } = canvas; const g = canvas.getContext('2d')!;
+  const img = g.getImageData(0, 0, w, h); const d = img.data;
+  const i4 = (x: number, y: number) => (y * w + x) * 4;
+  const isNavy = (x: number, y: number) => { const i = i4(x, y); return d[i + 3] > 20 && Math.max(d[i], d[i + 1], d[i + 2]) < 45; };
+  const seen = new Uint8Array(w * h); const stack: number[] = [];
+  const push = (x: number, y: number) => { if (x < 0 || y < 0 || x >= w || y >= h) return; const p = y * w + x; if (seen[p]) return; seen[p] = 1; stack.push(x, y); };
+  for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
+  for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+  while (stack.length) { const y = stack.pop()!, x = stack.pop()!; if (!isNavy(x, y)) continue; d[i4(x, y) + 3] = 0; push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1); }
+  g.putImageData(img, 0, 0);
 }
 
 // Split a corner atom into base (cool keyline) and accent (warm gold bracket).
@@ -102,7 +118,7 @@ type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: b
 // Assemble the 9-slice at an arbitrary W×H (no margin) with the keyline/bracket
 // offsets baked in. This is the single source of truth for both the editor canvas
 // and the live previews, so a preview can never diverge from what you're editing.
-function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number): HTMLCanvasElement {
+function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false): HTMLCanvasElement {
   const { cw, ch, ew, eh } = L;
   const W = Math.max(2 * cw, w), H = Math.max(2 * ch, h);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -124,6 +140,7 @@ function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: n
   };
   corner(L.base, kx, ky);
   if (L.hasAccent) corner(L.accent, bdx, bdy);
+  if (carve) carveExterior(c);
   return c;
 }
 
@@ -245,7 +262,7 @@ export function NineSliceEditor(): ReactElement {
     const W = asset.frame.w, H = asset.frame.h;        // canvas = the asset footprint
     const kx = edit.keyline.dx, ky = edit.keyline.dy;
 
-    const off = buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, W, H);
+    const off = buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve);
     const g = off.getContext('2d')!;
 
     const view = canvasRef.current; if (!view) return;
@@ -287,7 +304,7 @@ export function NineSliceEditor(): ReactElement {
       cvs.width = w * scale; cvs.height = h * scale;
       const g = cvs.getContext('2d')!; g.imageSmoothingEnabled = false;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      const f = buildFrameCanvas(loaded, edit.keyline.dx, edit.keyline.dy, edit.bracket.dx, edit.bracket.dy, w, h);
+      const f = buildFrameCanvas(loaded, edit.keyline.dx, edit.keyline.dy, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve);
       g.drawImage(f, 0, 0, w, h, 0, 0, w * scale, h * scale);
       if (label) {
         g.fillStyle = '#e8f0ff'; g.font = `${13 * scale}px system-ui, sans-serif`;
