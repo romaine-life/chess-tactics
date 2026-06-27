@@ -180,7 +180,8 @@ export function NineSliceEditor(): ReactElement {
       g.drawImage(flip(art, cw, ch, true, true), m + fw - cw - ox, m + fh - ch - oy);
     };
     corner(loaded.base, kx, ky);
-    if (loaded.hasAccent) corner(loaded.accent, kx + edit.bracket.dx, ky + edit.bracket.dy);
+    // Bracket is FULLY independent of the keyline — its own offset only, never kx/ky.
+    if (loaded.hasAccent) corner(loaded.accent, edit.bracket.dx, edit.bracket.dy);
 
     const view = canvasRef.current; if (!view) return;
     view.width = W * Z; view.height = H * Z;
