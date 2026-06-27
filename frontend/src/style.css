@@ -6218,34 +6218,86 @@ h1 {
 }
 
 .skirmish-hud {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   grid-column: 2;
   grid-row: 2;
-  align-content: start;
   gap: 8px;
-  grid-auto-rows: max-content;
   height: 100%;
   max-height: none;
   min-height: 0;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 10px 12px 12px 0;
+  scrollbar-color: #315160 #071017;
+  scrollbar-width: thin;
+}
+
+/* Tabbed HUD (ADR-0006 in-game density): one section visible at a time so the
+   growing command surface stays scannable. Tabs + bottom actions are pinned; the
+   active panel takes the remaining height and scrolls on its own. */
+.skirmish-hud-tabs {
+  display: grid;
+  flex: none;
+  gap: 4px;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+}
+
+.skirmish-hud-tab {
+  appearance: none;
+  background: transparent;
+  /* Kit mode-button frame — atom-assembled (ADR-0012/0016), the SAME tab/header
+     frame the settings nav uses; gold brackets, cyan when active. Chrome must be
+     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014). */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border-radius: 0;
+  color: var(--skirmish-muted);
+  cursor: pointer;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  image-rendering: pixelated;
+  letter-spacing: .04em;
+  line-height: 1;
+  min-block-size: 44px;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.skirmish-hud-tab:hover,
+.skirmish-hud-tab:focus-visible {
+  color: var(--skirmish-ink);
+  outline: none;
+}
+
+.skirmish-hud-tab.active {
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  color: #f3fbff;
+}
+
+.skirmish-hud-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
 }
 
 .skirmish-score-panel,
 .skirmish-card {
-  background:
-    linear-gradient(180deg, rgba(13, 34, 48, .92), rgba(5, 15, 24, .92));
-  border: 1px solid rgba(76, 140, 171, .36);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 1px 0 rgba(221, 244, 255, .05),
-    0 10px 22px rgba(0, 0, 0, .18);
+  /* Kit panel frame (atom-assembled panel.png, ADR-0002/0012) — the same 9-slice
+     frame the title bar uses; the frame IS the chrome, not raw CSS bg/border. */
+  background: transparent;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
+  box-sizing: border-box;
+  image-rendering: pixelated;
   min-width: 0;
-  padding: 12px;
+  padding: 6px 8px;
   position: relative;
 }
 
@@ -6646,19 +6698,27 @@ h1 {
 
 .skirmish-end-turn,
 .skirmish-new-run {
-  background:
-    linear-gradient(180deg, rgba(27, 101, 145, .96), rgba(13, 51, 83, .96));
-  border: 1px solid rgba(104, 198, 255, .42);
-  border-radius: 5px;
+  /* Kit mode-button frame (atom-assembled) — not raw CSS. End Turn is the primary
+     action (cyan -active variant); New stays gold. */
+  background: transparent;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border-radius: 0;
+  box-sizing: border-box;
   color: #f5eee3;
+  cursor: pointer;
   font-size: 1rem;
-  min-height: 44px;
+  image-rendering: pixelated;
+  min-height: 46px;
   text-shadow: 0 2px 0 #02070b;
 }
 
+.skirmish-end-turn {
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  color: #f3fbff;
+}
+
 .skirmish-new-run {
-  background:
-    linear-gradient(180deg, rgba(22, 45, 58, .96), rgba(8, 20, 30, .96));
   font-size: .9rem;
 }
 
@@ -6770,11 +6830,15 @@ h1 {
   .skirmish-hud {
     grid-column: 1;
     grid-row: 3;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     height: auto;
     max-height: none;
     overflow: visible;
     padding: 0 8px 12px;
+  }
+
+  /* Page scrolls on mobile — don't nest a panel scroll inside it. */
+  .skirmish-hud-panel {
+    overflow: visible;
   }
 
   .skirmish-score-panel {
