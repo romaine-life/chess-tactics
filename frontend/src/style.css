@@ -12177,6 +12177,14 @@ button.tileset-relationship-cell {
 }
 
 .settings-screen {
+  /* ONE label-size token shared by every ACTION button (header buttons + panel
+     pills), regardless of frame skin OR location. Action buttons sit at the
+     body/label tier (sm) everywhere — a title bar is not a license to enlarge an
+     action: Apple/M3/Carbon all size bar buttons the same as content buttons, and
+     emphasis comes from color/fill/weight, never size (ADR-0021). The only larger
+     bar element is the "SETTINGS" title. Nav rail tabs are a DIFFERENT component
+     and set their own size (ADR-0022). */
+  --settings-action-label: var(--ds-text-sm);
   block-size: 100%;
   display: grid;
   gap: clamp(6px, .72vw, 12px);
@@ -12425,7 +12433,13 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab strong {
-  font-size: 1.25rem;
+  /* Nav rail is subordinate chrome: its tab label sits at the content row-title
+     tier (md), never above it. Nav/tab labels are body-sized across M3/Carbon/
+     Polaris/Apple; lg would tie the "SETTINGS" brand title and overshoot the md
+     rows the tab navigates to (inversion). Active tab is marked by the frame fill
+     swap + color, not size. Governed separately from action buttons (ADR-0022).
+     Supersedes the undocumented 1.25rem from PR #148; its letter-spacing is kept. */
+  font-size: var(--ds-text-md);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -12590,7 +12604,10 @@ button.tileset-relationship-cell {
   color: #eff9ff;
   display: inline-flex;
   justify-content: center;
-  block-size: 45px;
+  /* 40px desktop default. NOT the 44-48px touch floor — that's a fingertip
+     ergonomic; this game is mouse-driven, where the pointer floor is ~24px
+     (WCAG 2.5.8). Default buttons run 32-40px (Carbon/M3/Bootstrap/Ant). */
+  block-size: 40px;
   inline-size: 176px;
   min-height: 0;
   min-width: 0;
@@ -12616,11 +12633,33 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* Panel action pills (Reset / Open / View Tracks) are ACTION buttons — same
+   action-button label token as the header buttons (shared, by role, not frame).
+   Scoped to a direct child of the row control so the small stepper +/- buttons
+   (nested in .settings-stepper) keep their xs glyph. */
+.settings-row-control > .settings-chrome-button span {
+  /* Body/label tier — below the md row title, never above it (a button label
+     louder than its own row title is a hierarchy inversion). Shares the one
+     action-button token with the header buttons (same role, one size). */
+  font-size: var(--settings-action-label);
+  white-space: nowrap;
+}
+
+/* Size the pill to its label instead of a fixed 176px, so a two-word label
+   ("View Tracks") stays on one line at lg. Single-word pills keep the 176px
+   minimum, so widths only grow for longer labels. */
+.settings-row-control > .settings-chrome-button {
+  /* Box HUGS its label + padding (Carbon/M2: button width = label + padding), not a
+     decreed 176px the label floats in. Touch-min floors short words; longer grow. */
+  inline-size: auto;
+  min-inline-size: 72px;
+}
+
 /* Header buttons wear the SYMMETRIC panel.png frame (square source → equal corners
    on all four sides), matching the design's gold corner-bracket language. The tall
    tab art was the wrong source for a short button (it rendered lopsided). */
 .settings-header-button {
-  block-size: 46px;
+  block-size: 40px; /* desktop default, matches the chrome buttons (not a touch floor) */
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
   flex: none;
@@ -12636,6 +12675,13 @@ button.tileset-relationship-cell {
 .settings-header-button-active {
   border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
   border-width: 12px;
+}
+
+/* Header buttons (Back / Menu / Sign In) are ACTION buttons — they share the one
+   action-button label token with the panel pills below, even though they wear a
+   different frame (bracket vs flat fill). Skin doesn't drive label size (ADR-0021). */
+.settings-header-button span {
+  font-size: var(--settings-action-label);
 }
 
 .settings-stepper {
@@ -12658,6 +12704,9 @@ button.tileset-relationship-cell {
 
 .settings-stepper output {
   color: #f8fcff;
+  /* "value" role — same step as the slider readout, per the scale (style.css:1612).
+     Without this it fell through to the body's 19px base, off the type scale. */
+  font-size: var(--ds-text-sm);
   min-width: 68px;
   text-align: center;
   text-shadow: 0 2px 0 #02070b;
