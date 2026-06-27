@@ -39,6 +39,7 @@ Use it in two situations:
      `tile-ruleset.md`, the portrait/background contracts
    - direction & intent: `game-concept.md`, `ui-art-direction.md`
    - verification: `local-dev-verification.md`
+   - migrations & retiring systems: `migration-policy.md`
 
    This list is illustrative, not exhaustive — read whatever in-scope contract
    exists, and treat a contract as binding even if it isn't named here. If a
@@ -54,9 +55,13 @@ Use it in two situations:
 - **Honor the stated contracts.** Projection, footprint, facing, tile
   alignment, and asset-pipeline rules are invariants the repo paid for in past
   bugs. Match them exactly; do not re-litigate or quietly deviate.
-- **Settled decisions stay settled.** Do not reintroduce a route, flag, type,
-  asset path, or UI path that a prior change removed. Treat `legacy`,
-  `archived`, `fallback`, and `temporary` as deletion targets, not options.
+- **Settled decisions stay settled, and retiring means deleting.** Do not
+  reintroduce a route, flag, type, asset path, or UI path that a prior change
+  removed. Per `docs/migration-policy.md`, migrating off an old system means
+  deleting it end to end — no compatibility, no fallback, no "kept for
+  reference." A method an ADR retires is an instruction to delete it, not to
+  leave it runnable. Treat `legacy`, `archived`, `fallback`, `temporary`, and
+  `retired` as deletion targets, not options.
 - **Verify in the real running app.** A change is not done because it compiles.
   Run it, follow `local-dev-verification.md`, and hand the user a clickable link
   to the exact running route showing the result.

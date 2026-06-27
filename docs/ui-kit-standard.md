@@ -49,15 +49,16 @@ existing one. That is the disease this standard ends.
 4. **One icon mechanism + one icon set.** `gear`, `rook-blue`, `rook-red`, and
    the chess pieces are currently redrawn 3–4× across `main-menu/`, `skirmish/`,
    `utility/`, and `settings/`. Consolidate to one set referenced everywhere.
-5. **Extract the original; generate only the gaps.** The accepted concept art is
-   the source of truth and its crafted detail beats any redraw. A 9-slice is
-   fixed corners + tiling edges + tiling center; the corners/hardware are never
-   stretched, so **lift the real pixels** from the concept rather than
-   procedurally redrawing them (proven: codex's redrawn panel corners were
-   visibly worse than the extracted ones). Reserve pure generation for regions
-   that must tile cleanly or for states the concept doesn't contain (e.g. a clean
-   off-toggle). This is NOT the old botched extraction (crop a whole component,
-   erase its middle) — it is proper per-slice extraction.
+5. **Generate the art (method-verified); the concept is the style reference.**
+   (Updated by [ADR-0011](adr/0011-chrome-art-generated-not-extracted.md) — this
+   point used to say "extract the original," an early stopgap that beat codex's
+   *code-drawn* redraws but produced dirty, asymmetric crops.) Chrome art is now
+   produced by **codex img2img generation, verified via an `image_generation_call`
+   event** (see [kit-forge.md](kit-forge.md)), or **assembled from codex-generated
+   atoms** (`assemble-frame.mjs`). The accepted concept art is the style/palette
+   reference fed into generation and the review target — **not** a crop source.
+   Do not procedurally redraw chrome in code/CSS, and do not extract whole- or
+   per-slice crops from the concept.
 6. **Never patch with bespoke CSS.** CSS composes, positions, and state-switches
    art; it never recreates bevels, frames, glows, or corners with gradients.
 7. **Every generator self-gates with `verifyAsset` — no asset is "good" by

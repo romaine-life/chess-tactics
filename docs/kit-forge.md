@@ -65,11 +65,20 @@ pushed codex to hand-draw jagged icons in code to satisfy it. Don't reintroduce
 a binary-alpha fail. Whether the art is *good* is decided by the method gate
 (was it really generated) plus a human eyeball — never by this pixel check.
 
-## Still open: the transparency path for a real re-forge
+## The transparency path (decided — ADR-0013)
 
-When you do regenerate via the image model, decide deliberately how the
-transparent background is produced: native transparency, or generate on a flat
-chroma-key background and despill locally
-(`$CODEX_HOME/skills/.system/imagegen/scripts/remove_chroma_key.py`). The gate
-now tolerates the anti-aliased, despilled edges either path produces — but a
-sloppy chroma removal that leaves a magenta fringe will (correctly) be caught.
+Transparency for generated chrome is produced by generating on a flat `#00ff00`
+chroma-key background (built-in / subscription codex, method-verified) and keying
+to alpha locally with `$CODEX_HOME/skills/.system/imagegen/scripts/remove_chroma_key.py`.
+
+The native paid-API path (gpt-image-1.5 `background=transparent`) is **rejected on
+cost** — the subscription's flagship model (gpt-image-2) deliberately dropped
+native transparency, and pinning the older model requires the paid API. Chroma-key
++ despill is the community-standard way to get transparency from a gpt-image-2-class
+model; it is the method here, not a placeholder.
+
+Key color: `#00ff00` for steel/blue/gold chrome (no pure green in the palette);
+`#ff00ff` if an asset's art uses green. **Always verify alpha** (corners
+transparent, no holes/fringe) — a key-color collision must fail loudly, not ship.
+The despilled, anti-aliased edge is fine; a sloppy removal that leaves a key
+fringe is (correctly) caught. Full rationale and sources: ADR-0013.

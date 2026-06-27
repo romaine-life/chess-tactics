@@ -38,7 +38,7 @@ const LIVE_W = 1440; // render live routes at desktop width, scaled to fit the p
 const LIVE_H = 900;
 
 type Opt = { label: string; src: string; css: string; link?: string };
-type Source = { kind: 'art'; id: string } | { kind: 'live'; route: string };
+type Source = { kind: 'art'; id: string } | { kind: 'live'; route: string } | { kind: 'img'; src: string };
 
 // UTF-8-safe base64 (plain btoa/atob mangle non-ASCII like em dashes in labels).
 function b64encode(s: string): string {
@@ -52,6 +52,9 @@ function b64decode(b: string): string {
 
 function parseSource(s: string): Source {
   if (s.startsWith('live:')) return { kind: 'live', route: s.slice(5) };
+  // `img:<url>` — compare an arbitrary asset (e.g. a forged kit atom) against the
+  // concept, not just a whole route. The url is served from /public.
+  if (s.startsWith('img:')) return { kind: 'img', src: s.slice(4) };
   return { kind: 'art', id: s.startsWith('art:') ? s.slice(4) : s };
 }
 
@@ -120,7 +123,7 @@ function ComparePane({ opts, value, css, onPick, onReload, reloadKey }: {
 
   const art = src.kind === 'art' ? (ART.find((a) => a.id === src.id) ?? ART[0]) : null;
   const isSpec = src.kind === 'live' && css.trim().length > 0;
-  const dedicated = opt.link ?? (src.kind === 'live' ? src.route : art ? art.src : '#');
+  const dedicated = opt.link ?? (src.kind === 'live' ? src.route : src.kind === 'img' ? src.src : art ? art.src : '#');
 
   return (
     <div className="ac-pane">
@@ -150,6 +153,13 @@ function ComparePane({ opts, value, css, onPick, onReload, reloadKey }: {
               src={src.route}
               onLoad={() => inject(iframe.current, css)}
               style={{ width: LIVE_W, height: LIVE_H, transform: `scale(${box.scale})`, transformOrigin: 'top left', border: 0 }}
+            />
+          ) : src.kind === 'img' ? (
+            <img
+              className="ac-art-img"
+              src={src.src}
+              alt={opt.label}
+              onLoad={(e) => setImgAspect(e.currentTarget.naturalHeight / e.currentTarget.naturalWidth)}
             />
           ) : null}
         </div>
@@ -270,7 +280,7 @@ const AC_CSS = `
   padding: 6px; background: #06080d; border: 2px solid #79c4ff; border-radius: 5px;
   box-shadow: 0 0 0 1px rgba(2, 7, 11, .9), 0 8px 22px rgba(0, 0, 0, .5); }
 .ac-frame-spec { border-color: #ffd479; }
-.ac-art-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ac-art-img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: pixelated; }
 .ac-editor { flex: 0 0 auto; display: flex; gap: 12px; padding: 10px 12px; background: #0b1220; border-top: 1px solid #1b2740; }
 .ac-edit-col { flex: 1 1 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ac-editor textarea { width: 100%; height: 60px; resize: vertical; box-sizing: border-box;

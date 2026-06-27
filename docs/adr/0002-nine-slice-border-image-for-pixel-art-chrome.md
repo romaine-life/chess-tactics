@@ -52,6 +52,7 @@ full-frame stretch is rejected outright — it distorts detail.
 
 ## More Information
 
+- **Refined by [ADR-0011](0011-chrome-art-generated-not-extracted.md):** the 9-slice *source* is **generated** (codex, method-verified) or atom-assembled — **not** "extracted from the concept art" as this record's outcome loosely allowed.
 - Consolidated current-state: [`../ui-kit-standard.md`](../ui-kit-standard.md) ("The decision").
 - 9-slice scaling: https://en.wikipedia.org/wiki/9-slice_scaling
 - CSS `border-image` (W3C CSS Backgrounds and Borders Module Level 3).
