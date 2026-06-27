@@ -9417,6 +9417,21 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+/* An inspector property whose value is a link into the Glossary (e.g. Layering). */
+.tileset-inline-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #72bde8;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tileset-inline-link:hover {
+  color: #a6d8f5;
+}
+
 .tileset-view-controls p {
   margin: 0;
   color: #a9bdd2;
@@ -10356,6 +10371,28 @@ button.tileset-relationship-cell {
   overflow-wrap: anywhere;
 }
 
+/* Per-focus layer-visibility toggle (the "vision" eye). Amber when the layer is hidden,
+   so it's obvious the board is concealing something rather than empty. */
+.tileset-vision-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 10px;
+  color: #cfe3ef;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.34);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 700 12px/1.1 var(--ds-font-sans, system-ui, sans-serif);
+}
+.tileset-vision-toggle svg { flex: none; }
+.tileset-vision-toggle.is-hidden {
+  color: #f0c98a;
+  background: rgba(58, 40, 16, 0.5);
+  border-color: rgba(216, 162, 92, 0.6);
+}
+
 .tileset-inspector-tabs button {
   border-color: transparent;
 }
@@ -11062,12 +11099,18 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-/* Cursor hints per tool (on the diamond hit overlay). */
+/* Cursor hints per tool (on the diamond hit overlay + the standing-doodad hit target). */
 .tileset-placement-board.is-tool-brush .tileset-cell-hit {
   cursor: crosshair;
 }
-.tileset-placement-board.is-tool-erase .tileset-cell-hit {
-  cursor: not-allowed;
+.tileset-placement-board.is-tool-select .tileset-doodad-hit {
+  cursor: pointer;
+}
+/* An eraser-shaped cursor (mirrors the Erase toolbar icon). NOT `not-allowed` — the
+   circle-slash reads as "you can't do this" even though erasing is the active action. */
+.tileset-placement-board.is-tool-erase .tileset-cell-hit,
+.tileset-placement-board.is-tool-erase .tileset-doodad-hit {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 16 16'%3E%3Crect x='2.6' y='7.6' width='9.4' height='5' rx='1.2' transform='rotate(-40 7.3 10.1)' fill='%231a3550' stroke='%23eaf2fb' stroke-width='1.4'/%3E%3Cline x1='6' y1='13.6' x2='13.6' y2='13.6' stroke='%23eaf2fb' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 6 18, cell;
 }
 .tileset-placement-board.is-tool-select .tileset-cell-hit {
   cursor: pointer;
@@ -12975,6 +13018,33 @@ button.tileset-relationship-cell {
 .glossary-detail code { background: rgba(95, 184, 255, .1); border-radius: 4px; color: #9fd0ff; font-size: .82em; padding: 1px 5px; }
 .glossary-detail-src { color: #5d7a8c; font-size: .72rem; margin-top: 14px; }
 .glossary-detail-none { color: #5d7a8c; font-style: italic; }
+/* Figure showing a split-layer doodad IN CONTEXT: a unit nested in the tuft, back-only
+   vs back+front, so the front layer's job (falling over the unit's shins) is visible.
+   Reuses the real .board-unit-seat geometry; the doodad halves use the same (48,69)
+   contact anchor as BoardDoodad, so the composite matches the board pixel-for-pixel.
+   The whole scene is integer-scaled 2x (crisp pixel art) so the split reads at doc size. */
+.doodad-layer-figure { display: flex; flex-wrap: wrap; gap: 18px; margin: 4px 0 16px; }
+.doodad-layer-cell { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.doodad-layer-scene {
+  position: relative;
+  width: 168px;
+  height: 232px;
+  overflow: hidden;
+  border: 1px solid rgba(67, 127, 179, .3);
+  border-radius: 8px;
+  background-color: rgba(5, 16, 25, .9);
+  background-image:
+    linear-gradient(45deg, rgba(120, 170, 214, .1) 25%, transparent 25%, transparent 75%, rgba(120, 170, 214, .1) 75%),
+    linear-gradient(45deg, rgba(120, 170, 214, .1) 25%, transparent 25%, transparent 75%, rgba(120, 170, 214, .1) 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 7px 7px;
+}
+/* One ground point (75,150 in scene px) carries both layers and the unit, 2x-zoomed. */
+.doodad-layer-stage { position: absolute; left: 84px; top: 150px; transform: scale(2); transform-origin: center; }
+.doodad-layer-half { position: absolute; left: 0; top: 0; width: 96px; height: 180px; transform: translate(-50%, -38.333%); }
+.doodad-layer-half img { width: 96px; height: 180px; image-rendering: auto; }
+.doodad-layer-cap { color: #a9bdd2; font-size: .78rem; }
+.doodad-layer-cap strong { color: #cfe3ef; font-weight: 400; }
 /* Per-asset property chips (gate + provenance) stacked at the card's trailing edge. */
 .asset-card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 .asset-prov,

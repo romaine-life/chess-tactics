@@ -238,6 +238,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   { term: 'button', tag: 'not an asset', def: 'A kind of widget: a clickable control. Widget is the general term; button is the specific kind. The Main Menu Button is the button this catalog builds from its 9-slice and icons.', src: 'Unity / Unreal / Godot Button' },
   { term: 'template', tag: 'not an asset', def: 'The reusable definition a widget instance is built from.', src: 'Unreal UI Template · Unity Prefab' },
   { term: 'instance', tag: 'not an asset', def: 'A specific live widget produced from a template.', src: 'all engines' },
+  { term: 'split-layer doodad', tag: '', def: 'A terrain prop rendered as a back/front sprite pair split at the ground-contact plane, so a unit sorts between the halves and stands inside it.', src: 'project' },
 ];
 
 // ---------------------------------------------------------------------------
