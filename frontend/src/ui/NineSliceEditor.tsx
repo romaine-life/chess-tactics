@@ -90,6 +90,27 @@ export function NineSliceEditor(): ReactElement {
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
 
+  // Keyboard: arrow keys nudge the active piece 1px; c/t/l switch the piece.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
+      if (e.key === 'c') { setActive('corner'); return; }
+      if (e.key === 't') { setActive('top'); return; }
+      if (e.key === 'l') { setActive('left'); return; }
+      const moves: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+      const m = moves[e.key];
+      if (!m) return;
+      e.preventDefault();
+      setEdits((prev) => {
+        const cur = prev[assetId] ?? ZERO; const p = cur[active];
+        return { ...prev, [assetId]: { ...cur, [active]: { dx: p.dx + m[0], dy: p.dy + m[1] } } };
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, assetId]);
+
   // Assemble the frame from the three edited pieces, mirrored to fill the rest.
   useEffect(() => {
     if (!imgs) return;
@@ -159,7 +180,7 @@ export function NineSliceEditor(): ReactElement {
                 style={{ ...S.pieceBtn, ...(active === k ? S.pieceBtnOn : {}) }}>{k}</button>
             ))}
           </div>
-          <p style={S.hint}>Editing: <b>{active}</b> — nudge 1px. Corner mirrors to 4; top→bottom; left→right.</p>
+          <p style={S.hint}>Editing: <b>{active}</b> — nudge 1px (arrow keys, or buttons). Keys: c/t/l switch piece. Corner mirrors to 4; top→bottom; left→right.</p>
           <div style={S.dpad}>
             <div />
             <button type="button" style={S.nb} onClick={() => nudge(0, -1)}>↑</button>
