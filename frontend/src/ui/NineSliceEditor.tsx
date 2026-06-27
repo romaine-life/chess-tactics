@@ -263,8 +263,6 @@ export function NineSliceEditor(): ReactElement {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
-      if (e.key === 'k') { setActive('keyline'); return; }
-      if (e.key === 'b') { setActive('bracket'); return; }
       const moves: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
       const m = moves[e.key]; if (!m) return;
       e.preventDefault(); nudge(m[0], m[1]);
@@ -276,9 +274,8 @@ export function NineSliceEditor(): ReactElement {
   useEffect(() => {
     if (!loaded) return;
     const W = asset.frame.w, H = asset.frame.h;        // canvas = the asset footprint
-    const kx = edit.keyline.dx, ky = edit.keyline.dy;
-
-    const off = buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides);
+    // keyline is inert (the border is continuous by construction) — always 0, matching the bake.
+    const off = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides);
     const g = off.getContext('2d')!;
 
     const view = canvasRef.current; if (!view) return;
@@ -320,7 +317,7 @@ export function NineSliceEditor(): ReactElement {
       cvs.width = w * scale; cvs.height = h * scale;
       const g = cvs.getContext('2d')!; g.imageSmoothingEnabled = false;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      const f = buildFrameCanvas(loaded, edit.keyline.dx, edit.keyline.dy, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve, asset.flipSides);
+      const f = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve, asset.flipSides);
       g.drawImage(f, 0, 0, w, h, 0, 0, w * scale, h * scale);
       if (label) {
         g.fillStyle = '#e8f0ff'; g.font = `${13 * scale}px system-ui, sans-serif`;
@@ -333,7 +330,9 @@ export function NineSliceEditor(): ReactElement {
   }, [loaded, edit.keyline, edit.bracket, asset]);
 
   const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content }, null, 2);
-  const pieces: PieceKey[] = loaded?.hasAccent ? ['keyline', 'bracket'] : ['keyline'];
+  // Only the bracket is nudgeable. Keyline is inert (continuous border by construction);
+  // exposing a keyline nudge would let the preview show a state the bake can't reproduce.
+  const pieces: PieceKey[] = loaded?.hasAccent ? ['bracket'] : [];
 
   // Save straight to the on-disk config + regenerate the asset, via the dev-only
   // Vite endpoint. import.meta.env.DEV gates the button; the endpoint only exists
@@ -345,7 +344,8 @@ export function NineSliceEditor(): ReactElement {
     try {
       const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
       const j = await r.json();
-      setSaveMsg(j.ok ? `saved ${j.config} → ${j.written.join(', ')} · hard-refresh the app to see it${j.note ? ` (${j.note})` : ''}` : `error: ${j.error}`);
+      const warn = (j.warns && j.warns.length) ? ` · ⚠ ${j.warns.join('; ')}` : '';
+      setSaveMsg(j.ok ? `saved ${j.config} → ${j.written.join(', ')}${warn} · hard-refresh to see it${j.note ? ` (${j.note})` : ''}` : `error: ${j.error}`);
     } catch (e) { setSaveMsg(`error: ${String(e)}`); }
   };
 
@@ -372,7 +372,7 @@ export function NineSliceEditor(): ReactElement {
               <button key={k} type="button" onClick={() => setActive(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{k}</button>
             ))}
           </div>
-          <p style={ST.hint}>Editing <b>{active}</b> — arrow keys nudge 1px (k / b switch). Keyline = corner+edges locked as one border; bracket = the gold, free.</p>
+          <p style={ST.hint}>Editing the <b>bracket</b> (the gold corner accent) — arrow keys nudge 1px. The keyline border is fixed/continuous by construction.</p>
           <div style={ST.dpad}>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, -1)}>↑</button><div />
             <button type="button" style={ST.nb} onClick={() => nudge(-1, 0)}>←</button>
@@ -409,7 +409,6 @@ export function NineSliceEditor(): ReactElement {
             </div>
           )}
           <div style={ST.offsets}>
-            <div>keyline: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
             <div>content inset: {edit.content} px</div>
           </div>

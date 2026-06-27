@@ -8,8 +8,9 @@
 //
 // What bakes into the PNG vs not:
 //   - bracket offset  -> shifts the warm gold pixels in the corner atom (baked)
-//   - keyline offset  -> shifts the cool keyline/navy pixels in the corner atom
-//                        (baked into the corner; edge keyline not shifted — see warn)
+//   - keyline offset  -> INERT (ignored). The border is continuous by construction
+//                        (atoms + flipSides); a keyline nudge is not bakeable, so the
+//                        editor doesn't expose it and the bake ignores it (warns if set).
 //   - content         -> consumption-side (element padding / where text+icons
 //                        start). NOT baked into the PNG; recorded in the config.
 import { PNG } from 'pngjs';
@@ -53,11 +54,14 @@ function over(base, top) {
   for (let i = 0; i < top.data.length; i += 4) if (top.data[i + 3] > 0) { o.data[i] = top.data[i]; o.data[i + 1] = top.data[i + 1]; o.data[i + 2] = top.data[i + 2]; o.data[i + 3] = top.data[i + 3]; }
   return o;
 }
-// Tune a corner: cool base shifted by keyline, warm gold shifted by bracket. The
-// gold's vacated cells become transparent so the frame fill shows through — exactly
-// what the editor preview does.
+// Tune a corner: the warm gold bracket is shifted by `bracket`; the cool keyline
+// base is NOT moved. keyline is inert by design — the border is continuous by
+// construction (atoms + flipSides), and moving only the corner keyline (while the
+// edges stay fixed) would diverge from the editor preview. The editor matches this
+// (it renders the corner/edges at keyline 0). gold's vacated cells go transparent
+// so the fill shows through.
 function tuneCorner(corner, cfg) {
-  const base = layer(corner, cfg.keyline.dx, cfg.keyline.dy, (r, g, b, a) => a > 40 && !isWarm(r, g, b, a));
+  const base = layer(corner, 0, 0, (r, g, b, a) => a > 40 && !isWarm(r, g, b, a));
   const gold = layer(corner, cfg.bracket.dx, cfg.bracket.dy, isWarm);
   return over(base, gold);
 }
@@ -125,7 +129,7 @@ export function buildAsset(assetId, cfgRaw) {
   const edge = loadAtom(rec.atoms.edge), fill = loadAtom(rec.atoms.fill);
   const { w, h } = rec.frame;
   const written = [], warns = [];
-  if (cfg.keyline.dx || cfg.keyline.dy) warns.push('keyline baked into the corner only — edge keyline not shifted; keep keyline at 0 or regenerate the edge atom');
+  if (cfg.keyline.dx || cfg.keyline.dy) warns.push('keyline offset is IGNORED — the border is fixed/continuous by construction; set keyline to 0,0');
   for (const v of rec.variants) {
     const c = v.swap ? swapPalette(corner, v.swap) : corner;
     const frame = buildFrameFrom(c, edge, fill, w, h, !!rec.flipSides);
