@@ -55,7 +55,12 @@ A catalog category MUST provide:
 4. For a **read-only** category: a **Viewer** that shows one item big with a
    **Details** readout, reached via its own **`viewerKind`** in the Viewer's kind
    selector, backed by its **own** selection state (`selected<Thing>Name`) — never
-   a shared field.
+   a shared field. The Viewer stage presents the asset at **optimal
+   interactivity**: it *exercises the live, real component* — a scrollbar you can
+   actually scroll and drag, a surface tiled in context — **never a dead still
+   image** of an interactive thing. "Read-only" constrains *editability* (you
+   cannot change the asset here), not *liveness*; the stage exists precisely so you
+   can test the thing as it truly behaves.
 5. Registration as **one** `catalogCategories` entry — no `category === …`
    branches anywhere in the catalog (that branch is the regression the registry
    exists to prevent).

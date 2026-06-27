@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
+import { type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { SCROLLBAR_ASSETS } from './scrollbarCatalog';
 
 // Read-only catalog grid for scrollbar-grip candidates. Each card shows the sprite centered
@@ -47,33 +47,40 @@ export function ScrollbarLibraryStudio({
   );
 }
 
-// The read-only Viewer for a single scrollbar grip — shown big and centered, with a Details
-// readout. Mirrors SurfaceViewer: the shared read-only Viewer contract (ADR-0029).
+// The Viewer for a scrollbar grip EXERCISES it: a real, live scrollable panel skinned with the
+// grip, so you scroll and drag-test how it actually behaves — never a dead still image
+// (ADR-0029: viewing surfaces present the asset at optimal interactivity; read-only = not
+// editable, not lifeless). Custom ::-webkit-scrollbar skins render in Chrome (the app's target).
 export function ScrollbarViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
   const s = SCROLLBAR_ASSETS.find((x) => x.name === name) ?? SCROLLBAR_ASSETS[0];
-  const [zoom, setZoom] = useState(3);
-  const bg: CSSProperties = {
-    backgroundImage: `url("${s.file}")`,
-    backgroundSize: `${Math.round(48 * zoom)}px`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'center',
-    imageRendering: 'pixelated',
-  };
+  const skin =
+    `.scrollbar-demo::-webkit-scrollbar { width: 18px; }\n` +
+    `.scrollbar-demo::-webkit-scrollbar-track { background: #06121f; border-radius: 2px; margin: 3px; }\n` +
+    `.scrollbar-demo::-webkit-scrollbar-thumb { background: url("${s.file}") center / 100% 100% no-repeat; image-rendering: pixelated; }`;
+  const lines = Array.from({ length: 24 }, (_, i) => 40 + ((i * 13) % 46));
   return (
     <>
-      <section className="al-lab-main surface-view-main" aria-label="Scrollbar preview">
-        <div className="surface-view-stage is-bare" style={bg} />
+      <section className="al-lab-main surface-view-main" aria-label="Scrollbar test">
+        <style>{skin}</style>
+        <div className="surface-view-stage is-bare" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div
+            className="scrollbar-demo"
+            style={{ width: '280px', height: '330px', overflowY: 'scroll', overflowX: 'hidden', background: '#0c1a2b', border: '1px solid #28415e', borderRadius: '7px', padding: '14px' }}
+          >
+            <div style={{ minHeight: '1100px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {lines.map((w, i) => (
+                <span key={i} style={{ height: '9px', width: `${w}%`, background: 'rgba(150,180,210,0.14)', borderRadius: '3px', flex: '0 0 auto' }} />
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
       <aside className="tileset-view-controls" aria-label="Scrollbar details">
         <section className="tileset-inspector-section">
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            <label className="tileset-catalog-zoom">
-              <span>Zoom · {zoom.toFixed(1)}×</span>
-              <input type="range" min="0.5" max="8" step="0.1" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
-            </label>
-            <p className="tileset-catalog-note">Drag the preview's bottom-right corner to resize it.</p>
+            <p className="tileset-catalog-note">Scroll the panel — drag the grip or wheel over it — to test how it behaves.</p>
             <dl className="al-meta">
               <div><dt>Scrollbar</dt><dd>{s.label}</dd></div>
               <div><dt>Approach</dt><dd>{s.approach}</dd></div>
