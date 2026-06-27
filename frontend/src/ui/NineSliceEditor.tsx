@@ -20,18 +20,19 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 
 type Off = { dx: number; dy: number };
-type Pane = { w: number; h: number };
-type EditState = { keyline: Off; bracket: Off; pane: Pane };
+type Frame = { w: number; h: number };
+type EditState = { keyline: Off; bracket: Off; margin: number };
 type PieceKey = 'keyline' | 'bracket';
 
-type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; pane: Pane };
+type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame };
 
 const ASSETS: Asset[] = [
-  { id: 'mode-button', label: 'Mode button (tabs / header)', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/mode-button.png', pane: { w: 72, h: 72 } },
-  { id: 'row', label: 'Settings row', corner: '/assets/ui/kit/atoms/row-corner.png', edge: '/assets/ui/kit/atoms/row-edge.png', fill: '/assets/ui/kit/atoms/row-fill.png', target: '/assets/ui/kit/row.png', pane: { w: 160, h: 112 } },
+  { id: 'mode-button', label: 'Mode button (tabs / header)', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/mode-button.png', frame: { w: 72, h: 72 } },
+  { id: 'row', label: 'Settings row', corner: '/assets/ui/kit/atoms/row-corner.png', edge: '/assets/ui/kit/atoms/row-edge.png', fill: '/assets/ui/kit/atoms/row-fill.png', target: '/assets/ui/kit/row.png', frame: { w: 160, h: 112 } },
 ];
 
-const STORAGE_KEY = 'nine-slice-editor-v3';
+const DEFAULT_MARGIN = 2;
+const STORAGE_KEY = 'nine-slice-editor-v4';
 const Z = 6;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -99,7 +100,8 @@ export function NineSliceEditor(): ReactElement {
   });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
-  const edit: EditState = edits[assetId] ?? { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, pane: { ...asset.pane } };
+  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, margin: DEFAULT_MARGIN };
+  const edit: EditState = edits[assetId] ?? DEFAULT_EDIT;
 
   useEffect(() => {
     let live = true; setLoaded(null);
@@ -115,12 +117,12 @@ export function NineSliceEditor(): ReactElement {
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
 
   const update = (mut: (cur: EditState) => EditState) => setEdits((prev) => {
-    const cur = prev[assetId] ?? { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, pane: { ...asset.pane } };
+    const cur = prev[assetId] ?? DEFAULT_EDIT;
     return { ...prev, [assetId]: mut(cur) };
   });
   const nudge = (dx: number, dy: number) => update((cur) => ({ ...cur, [active]: { dx: cur[active].dx + dx, dy: cur[active].dy + dy } }));
-  const resize = (dw: number, dh: number) => update((cur) => ({ ...cur, pane: { w: Math.max(2 * (loaded?.cw ?? 8), cur.pane.w + dw), h: Math.max(2 * (loaded?.ch ?? 8), cur.pane.h + dh) } }));
-  const reset = () => update(() => ({ keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, pane: { ...asset.pane } }));
+  const setMargin = (dm: number) => update((cur) => ({ ...cur, margin: Math.max(0, cur.margin + dm) }));
+  const reset = () => update(() => DEFAULT_EDIT);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -139,31 +141,34 @@ export function NineSliceEditor(): ReactElement {
   useEffect(() => {
     if (!loaded) return;
     const { cw, ch, ew, eh } = loaded;
-    const W = Math.max(2 * cw, edit.pane.w), H = Math.max(2 * ch, edit.pane.h);
+    const fw = asset.frame.w, fh = asset.frame.h;     // the asset (9-slice) size
+    const m = edit.margin;                             // transparent space around it
+    const W = fw + 2 * m, H = fh + 2 * m;              // output canvas = asset + margin
     const kx = edit.keyline.dx, ky = edit.keyline.dy;
 
     const off = document.createElement('canvas'); off.width = W; off.height = H;
     const g = off.getContext('2d')!; g.imageSmoothingEnabled = false;
 
-    // fill interior
-    tileRect(g, toCanvas(loaded.fill, loaded.fill.width, loaded.fill.height), cw, ch, W - cw, H - ch);
+    // FILL the whole frame area (matches assemble-frame.mjs filling the whole canvas,
+    // then drawing the border on top) — no transparent interior gap, no stray line.
+    tileRect(g, toCanvas(loaded.fill, loaded.fill.width, loaded.fill.height), m, m, m + fw, m + fh);
 
     // edges — handedness verbatim from assemble-frame.mjs, keyline offset applied as draw position
     const topS = toCanvas(loaded.edge, ew, eh);
     const botS = flip(topS, ew, eh, false, true);
     const rightS = rot90(loaded.edge, ew, eh);
     const leftS = flip(rightS, rightS.width, rightS.height, true, false);
-    tileH(g, topS, cw, W - cw, ky);
-    tileH(g, botS, cw, W - cw, H - botS.height - ky);
-    tileV(g, leftS, ch, H - ch, kx);
-    tileV(g, rightS, ch, H - ch, W - rightS.width - kx);
+    tileH(g, topS, m + cw, m + fw - cw, m + ky);
+    tileH(g, botS, m + cw, m + fw - cw, m + fh - botS.height - ky);
+    tileV(g, leftS, m + ch, m + fh - ch, m + kx);
+    tileV(g, rightS, m + ch, m + fh - ch, m + fw - rightS.width - kx);
 
-    // corners (base then bracket), each mirrored into 4 corners
+    // corners (base then bracket), each mirrored into the 4 frame corners
     const corner = (art: HTMLCanvasElement, ox: number, oy: number) => {
-      g.drawImage(art, ox, oy);
-      g.drawImage(flip(art, cw, ch, true, false), W - cw - ox, oy);
-      g.drawImage(flip(art, cw, ch, false, true), ox, H - ch - oy);
-      g.drawImage(flip(art, cw, ch, true, true), W - cw - ox, H - ch - oy);
+      g.drawImage(art, m + ox, m + oy);
+      g.drawImage(flip(art, cw, ch, true, false), m + fw - cw - ox, m + oy);
+      g.drawImage(flip(art, cw, ch, false, true), m + ox, m + fh - ch - oy);
+      g.drawImage(flip(art, cw, ch, true, true), m + fw - cw - ox, m + fh - ch - oy);
     };
     corner(loaded.base, kx, ky);
     if (loaded.hasAccent) corner(loaded.accent, kx + edit.bracket.dx, ky + edit.bracket.dy);
@@ -175,14 +180,17 @@ export function NineSliceEditor(): ReactElement {
     vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);
     if (showTarget && loaded.target) {
       vg.globalAlpha = 0.55;
-      vg.drawImage(loaded.target, 0, 0, loaded.target.width, loaded.target.height, 0, 0, loaded.target.width * Z, loaded.target.height * Z);
+      vg.drawImage(loaded.target, 0, 0, loaded.target.width, loaded.target.height, m * Z, m * Z, loaded.target.width * Z, loaded.target.height * Z);
       vg.globalAlpha = 1;
       vg.strokeStyle = '#ff5cf0'; vg.lineWidth = 2;
-      vg.strokeRect(0, 0, loaded.target.width * Z, loaded.target.height * Z);
+      vg.strokeRect(m * Z, m * Z, loaded.target.width * Z, loaded.target.height * Z);
     }
-  }, [loaded, edit, showTarget]);
+    // pane boundary — shows where the output canvas ends, i.e. the empty space you control
+    vg.strokeStyle = '#5aa9ff'; vg.lineWidth = 2;
+    vg.strokeRect(1, 1, W * Z - 2, H * Z - 2);
+  }, [loaded, edit, showTarget, asset]);
 
-  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, pane: edit.pane }, null, 2);
+  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, margin: edit.margin }, null, 2);
   const pieces: PieceKey[] = loaded?.hasAccent ? ['keyline', 'bracket'] : ['keyline'];
 
   return (
@@ -211,14 +219,12 @@ export function NineSliceEditor(): ReactElement {
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, 1)}>↓</button><div />
           </div>
           <div style={ST.sizeBox}>
-            <span style={ST.sizeLabel}>Pane size — tight to the art (1-2px margin ok)</span>
+            <span style={ST.sizeLabel}>Margin — empty space around the asset (blue pane outline = boundary)</span>
             <div style={ST.sizeRow}>
-              <span style={ST.sizeW}>W {edit.pane.w}</span>
-              <button type="button" style={ST.sb} onClick={() => resize(-1, 0)}>−</button>
-              <button type="button" style={ST.sb} onClick={() => resize(1, 0)}>＋</button>
-              <span style={ST.sizeW}>H {edit.pane.h}</span>
-              <button type="button" style={ST.sb} onClick={() => resize(0, -1)}>−</button>
-              <button type="button" style={ST.sb} onClick={() => resize(0, 1)}>＋</button>
+              <span style={ST.sizeW}>{edit.margin} px</span>
+              <button type="button" style={ST.sb} onClick={() => setMargin(-1)}>−</button>
+              <button type="button" style={ST.sb} onClick={() => setMargin(1)}>＋</button>
+              <span style={ST.sizeLabel}>asset {asset.frame.w} × {asset.frame.h} · pane {asset.frame.w + 2 * edit.margin} × {asset.frame.h + 2 * edit.margin}</span>
             </div>
           </div>
           <label style={ST.toggle}>
@@ -228,7 +234,7 @@ export function NineSliceEditor(): ReactElement {
           <div style={ST.offsets}>
             <div>keyline: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
-            <div>pane: {edit.pane.w} × {edit.pane.h}</div>
+            <div>margin: {edit.margin} px</div>
           </div>
           <label style={ST.hint}>Export — paste this back:</label>
           <textarea readOnly value={exportJson} style={ST.export} onFocus={(e) => e.currentTarget.select()} />
