@@ -85,11 +85,20 @@ function splitWarm(img: HTMLImageElement): { base: HTMLCanvasElement; accent: HT
   return { base, accent, hasAccent };
 }
 
+// Top-left of a piece's opaque pixels — used to compute the "max out" offset that
+// makes the piece flush with the footprint corner ((-x,-y) lands its corner on the box).
+function opaqueMin(c: HTMLCanvasElement): { x: number; y: number } {
+  const { width: w, height: h } = c; const d = c.getContext('2d')!.getImageData(0, 0, w, h).data;
+  let mx = w, my = h;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 20) { if (x < mx) mx = x; if (y < my) my = y; }
+  return { x: mx === w ? 0 : mx, y: my === h ? 0 : my };
+}
+
 const tileH = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number, x1: number, y: number) => { for (let x = x0; x < x1; x += t.width) g.drawImage(t, x, y); };
 const tileV = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, y0: number, y1: number, x: number) => { for (let y = y0; y < y1; y += t.height) g.drawImage(t, x, y); };
 const tileRect = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number, y0: number, x1: number, y1: number) => { for (let y = y0; y < y1; y += t.height) for (let x = x0; x < x1; x += t.width) g.drawImage(t, x, y); };
 
-type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: boolean; edge: HTMLImageElement; fill: HTMLImageElement; target: HTMLImageElement | null; cw: number; ch: number; ew: number; eh: number };
+type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: boolean; edge: HTMLImageElement; fill: HTMLImageElement; target: HTMLImageElement | null; cw: number; ch: number; ew: number; eh: number; baseMin: { x: number; y: number }; accentMin: { x: number; y: number } };
 
 export function NineSliceEditor(): ReactElement {
   const [assetId, setAssetId] = useState(ASSETS[0].id);
@@ -128,7 +137,7 @@ export function NineSliceEditor(): ReactElement {
       .then(([corner, edge, fill, target]) => {
         if (!live) return;
         const { base, accent, hasAccent } = splitWarm(corner);
-        setLoaded({ base, accent, hasAccent, edge, fill, target, cw: corner.width, ch: corner.height, ew: edge.width, eh: edge.height });
+        setLoaded({ base, accent, hasAccent, edge, fill, target, cw: corner.width, ch: corner.height, ew: edge.width, eh: edge.height, baseMin: opaqueMin(base), accentMin: hasAccent ? opaqueMin(accent) : { x: 0, y: 0 } });
       }).catch(() => { if (live) setLoaded(null); });
     return () => { live = false; };
   }, [asset]);
@@ -140,6 +149,13 @@ export function NineSliceEditor(): ReactElement {
     return { ...prev, [assetId]: mut(cur) };
   });
   const nudge = (dx: number, dy: number) => update((cur) => ({ ...cur, [active]: { dx: cur[active].dx + dx, dy: cur[active].dy + dy } }));
+  // Send the active piece to its max outward position — opaque pixels flush with the
+  // footprint corner (no overflow). For the bracket this lands on (-x,-y) of its gold.
+  const maxOut = () => {
+    if (!loaded) return;
+    const p = active === 'keyline' ? loaded.baseMin : loaded.accentMin;
+    update((cur) => ({ ...cur, [active]: { dx: -p.x, dy: -p.y } }));
+  };
   const setMargin = (dm: number) => update((cur) => ({ ...cur, margin: Math.max(0, cur.margin + dm) }));
   const setContent = (dc: number) => update((cur) => ({ ...cur, content: Math.max(0, (cur.content ?? DEFAULT_CONTENT) + dc) }));
   const reset = () => update(() => DEFAULT_EDIT);
@@ -257,6 +273,7 @@ export function NineSliceEditor(): ReactElement {
             <button type="button" style={ST.nb} onClick={() => nudge(1, 0)}>→</button>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, 1)}>↓</button><div />
           </div>
+          <button type="button" style={ST.maxBtn} onClick={maxOut}>⤢ Send {active} to max (flush to box corner)</button>
           <div style={ST.sizeBox}>
             <span style={ST.sizeLabel}>Margin — empty space around the asset (blue pane outline = boundary)</span>
             <div style={ST.sizeRow}>
@@ -282,19 +299,17 @@ export function NineSliceEditor(): ReactElement {
               <span style={ST.sizeLabel}>uniform on all sides</span>
             </div>
           </div>
-          {status && (() => {
-            const over = status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0;
-            const px = (n: number) => (n < 0 ? `${-n} over` : `${n}`);
-            return (
-              <div style={{ ...ST.statusBox, borderColor: over ? '#e0556a' : '#5cff9e', color: over ? '#ff9aa8' : '#9affc4' }}>
-                <div style={{ fontWeight: 700 }}>{over ? '✗ overflow — pixels extend beyond the box' : '✓ contained — nothing beyond the box'}</div>
-                <div style={ST.statusGrid}>
-                  <span>T {px(status.top)}</span><span>R {px(status.right)}</span><span>B {px(status.bottom)}</span><span>L {px(status.left)}</span>
-                </div>
-                <div style={{ fontSize: 11, opacity: 0.8 }}>distance from box edge to outermost pixel · "over" = beyond</div>
+          {status && (status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0) && (
+            <div style={{ ...ST.statusBox, borderColor: '#e0556a', color: '#ff9aa8' }}>
+              <div style={{ fontWeight: 700 }}>✗ overflow — pixels extend beyond the box</div>
+              <div style={ST.statusGrid}>
+                {status.top < 0 && <span>T {-status.top} over</span>}
+                {status.right < 0 && <span>R {-status.right} over</span>}
+                {status.bottom < 0 && <span>B {-status.bottom} over</span>}
+                {status.left < 0 && <span>L {-status.left} over</span>}
               </div>
-            );
-          })()}
+            </div>
+          )}
           <div style={ST.offsets}>
             <div>keyline: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
@@ -324,6 +339,7 @@ const ST: Record<string, CSSProperties> = {
   dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 56px)', gridAutoRows: '56px', gap: 6, justifyContent: 'center' },
   nb: { fontSize: 22, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
   nbReset: { fontSize: 14, background: '#17223a', color: '#9fc4d5', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
+  maxBtn: { padding: '9px 0', background: '#15324a', color: '#bfe3ff', border: '1px solid #3a7fb0', borderRadius: 6, cursor: 'pointer', fontSize: 13, textTransform: 'capitalize' },
   sizeBox: { display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0', borderTop: '1px solid #1b2740' },
   sizeLabel: { fontSize: 12, color: '#9fc4d5' },
   sizeRow: { display: 'flex', alignItems: 'center', gap: 6 },
