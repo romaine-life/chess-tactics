@@ -19,6 +19,10 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0013](0013-transparency-chroma-key-via-subscription.md) | Generated-chrome transparency = chroma-key + despill via the subscription codex; native paid-API path rejected on cost | accepted | 2026-06-26 |
 | [0014](0014-ui-chrome-low-fidelity-aesthetic.md) | UI chrome targets the concept's low-fidelity element aesthetic (~few-hundred colors, chunky); forges specify shape + fidelity per ui-chrome-vocabulary.md; never "soft anti-aliased" | accepted | 2026-06-26 |
 | [0015](0015-doodads-frame-units-not-bury-them.md) | Doodads frame the unit, not bury it: shin-height foliage that covers feet only; solids aren't stand-inside props; terrain-gated | accepted | 2026-06-27 |
+| [0016](0016-single-source-nine-slice-registry.md) | Single-source nine-slice registry: one JSON declares each frame; bake, editor, and catalog all read it | accepted | 2026-06-27 |
+| [0017](0017-per-asset-flipsides-handedness.md) | Per-asset `flipSides` handedness so one assembler serves both flat keylines and beveled rails | accepted | 2026-06-27 |
+| [0018](0018-variant-states-are-whole-frame-palette-swaps.md) | Active/selected frame states are whole-frame palette swaps (body + border, not just the accent) | accepted | 2026-06-27 |
+| [0019](0019-dev-only-nine-slice-editor-save.md) | Dev-only in-app 9-slice editor that saves to disk through the shared bake (serve-only endpoint) | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 
