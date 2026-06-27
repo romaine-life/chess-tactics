@@ -24,12 +24,12 @@ type Frame = { w: number; h: number };
 type EditState = { keyline: Off; bracket: Off; content: number };
 type PieceKey = 'keyline' | 'bracket';
 
-type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean };
+type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean };
 
 // Derived from the SINGLE registry (shared with the Node bake + the catalog). Every
 // atom-built frame appears here automatically — adding one is a registry edit, not a
 // code change in three files.
-type RegAsset = { label: string; atoms: { corner: string; edge: string; fill: string }; frame: Frame; carve?: boolean; variants: { out: string }[] };
+type RegAsset = { label: string; atoms: { corner: string; edge: string; fill: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
 const REGISTRY = (nineSliceRegistry as { assets: Record<string, RegAsset> }).assets;
 const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
   id,
@@ -40,6 +40,7 @@ const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
   target: `/assets/ui/kit/${a.variants[0].out}`,
   frame: a.frame,
   carve: !!a.carve,
+  flipSides: !!a.flipSides,
 }));
 
 const DEFAULT_CONTENT = 12;
@@ -129,7 +130,7 @@ type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: b
 // Assemble the 9-slice at an arbitrary W×H (no margin) with the keyline/bracket
 // offsets baked in. This is the single source of truth for both the editor canvas
 // and the live previews, so a preview can never diverge from what you're editing.
-function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false): HTMLCanvasElement {
+function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false, flipSides = false): HTMLCanvasElement {
   const { cw, ch, ew, eh } = L;
   const W = Math.max(2 * cw, w), H = Math.max(2 * ch, h);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -137,8 +138,12 @@ function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: n
   tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
   const topS = toCanvas(L.edge, ew, eh);
   const botS = flip(topS, ew, eh, false, true);
-  const rightS = rot90(L.edge, ew, eh);
-  const leftS = flip(rightS, rightS.width, rightS.height, true, false);
+  // Side edges via rot90; flipSides swaps L/R for beveled rails (row) so the bevel
+  // matches the corner at the join instead of reversing — mirrors assemble-frame.
+  const r = rot90(L.edge, ew, eh);
+  const fr = flip(r, r.width, r.height, true, false);
+  const rightS = flipSides ? fr : r;
+  const leftS = flipSides ? r : fr;
   tileH(g, topS, cw, W - cw, ky);
   tileH(g, botS, cw, W - cw, H - botS.height - ky);
   tileV(g, leftS, ch, H - ch, kx);
@@ -273,7 +278,7 @@ export function NineSliceEditor(): ReactElement {
     const W = asset.frame.w, H = asset.frame.h;        // canvas = the asset footprint
     const kx = edit.keyline.dx, ky = edit.keyline.dy;
 
-    const off = buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve);
+    const off = buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides);
     const g = off.getContext('2d')!;
 
     const view = canvasRef.current; if (!view) return;
@@ -315,7 +320,7 @@ export function NineSliceEditor(): ReactElement {
       cvs.width = w * scale; cvs.height = h * scale;
       const g = cvs.getContext('2d')!; g.imageSmoothingEnabled = false;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      const f = buildFrameCanvas(loaded, edit.keyline.dx, edit.keyline.dy, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve);
+      const f = buildFrameCanvas(loaded, edit.keyline.dx, edit.keyline.dy, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve, asset.flipSides);
       g.drawImage(f, 0, 0, w, h, 0, 0, w * scale, h * scale);
       if (label) {
         g.fillStyle = '#e8f0ff'; g.font = `${13 * scale}px system-ui, sans-serif`;

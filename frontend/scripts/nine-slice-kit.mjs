@@ -128,7 +128,7 @@ export function buildAsset(assetId, cfgRaw) {
   if (cfg.keyline.dx || cfg.keyline.dy) warns.push('keyline baked into the corner only — edge keyline not shifted; keep keyline at 0 or regenerate the edge atom');
   for (const v of rec.variants) {
     const c = v.swap ? swapPalette(corner, v.swap) : corner;
-    const frame = buildFrameFrom(c, edge, fill, w, h);
+    const frame = buildFrameFrom(c, edge, fill, w, h, !!rec.flipSides);
     if (rec.carve) carveExterior(frame);
     writeFileSync(`${KIT}${v.out}`, PNG.sync.write(frame));
     written.push(v.out);
