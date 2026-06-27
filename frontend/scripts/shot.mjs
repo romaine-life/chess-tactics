@@ -50,7 +50,12 @@ const browser = await puppeteer.launch({
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
-  await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+  // Prefer a fully-idle network, but live routes with persistent connections
+  // (e.g. the main menu's rain ambience) never reach networkidle0 — fall back to
+  // domcontentloaded so those pages still capture. The --ready gate below ensures
+  // content is actually present before the grab.
+  await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 })
+    .catch(() => page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }));
 
   // Determinism: kill animations/transitions so a live screen captures identically every run.
   await page.addStyleTag({ content: `*,*::before,*::after{animation:none!important;transition:none!important;animation-duration:0s!important;caret-color:transparent!important;scroll-behavior:auto!important}` });

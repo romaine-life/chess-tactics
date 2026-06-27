@@ -13,36 +13,6 @@
       "note": "Accepted title art; has alpha.",
       "avif": { "quality": 60, "effort": 6 },
       "webp": { "quality": 88, "effort": 6 }
-    },
-    {
-      "path": "/assets/ui/main-menu/buttons-v2/solo-skirmish-sheet.png",
-      "note": "Button row sheet (normal+pressed states); has alpha.",
-      "avif": { "quality": 58, "effort": 6 },
-      "webp": { "quality": 86, "effort": 6 }
-    },
-    {
-      "path": "/assets/ui/main-menu/buttons-v2/campaign-editor-sheet.png",
-      "note": "Button row sheet (normal+pressed states); has alpha.",
-      "avif": { "quality": 58, "effort": 6 },
-      "webp": { "quality": 86, "effort": 6 }
-    },
-    {
-      "path": "/assets/ui/main-menu/buttons-v2/level-editor-sheet.png",
-      "note": "Button row sheet (normal+pressed states); has alpha.",
-      "avif": { "quality": 58, "effort": 6 },
-      "webp": { "quality": 86, "effort": 6 }
-    },
-    {
-      "path": "/assets/ui/main-menu/buttons-v2/lobbies-sheet.png",
-      "note": "Button row sheet (normal+pressed states); has alpha.",
-      "avif": { "quality": 58, "effort": 6 },
-      "webp": { "quality": 86, "effort": 6 }
-    },
-    {
-      "path": "/assets/ui/main-menu/buttons-v2/settings-sheet.png",
-      "note": "Button row sheet (normal+pressed states); has alpha.",
-      "avif": { "quality": 58, "effort": 6 },
-      "webp": { "quality": 86, "effort": 6 }
     }
   ]
 }

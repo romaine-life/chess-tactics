@@ -1,9 +1,17 @@
 # Kit forge — generating UI-kit icons with codex
 
-`frontend/scripts/kit-forge.mjs` drives codex to produce the UI-kit glyphs
-(`frontend/public/assets/ui/kit/icons/…`). This doc exists because the forge
-shipped a batch of broken icons once, and the reason is non-obvious and easy to
-repeat. Read this before re-running or "improving" the forge.
+Two codex forges, both **method-verified against the rollout** (see below):
+`frontend/scripts/kit-forge.mjs` produces the UI-kit **icon glyphs** (it owns the
+`SPECS` list, one per icon), and `frontend/scripts/forge-atom.mjs` produces the
+**9-slice atoms** for frames (chroma-key despill + low-fi, ADR-0013 / ADR-0014).
+
+This doc exists because the forge once shipped a batch of broken icons, and the
+reason is non-obvious and easy to repeat: kit-forge originally gated on `codex exec
+--json` **stdout**, which never carries the generation event, so it rejected every
+real generation (and the un-gated runs before it shipped code-drawn icons). That
+gate was **fixed (#155) to read the rollout** (see below), and a CI check
+(`scripts/check-imagegen-gate.mjs`) now fails the build if any forge regresses to a
+stdout gate. Read this before building or "improving" any codex-image forge.
 
 ## The hard rule: verify the METHOD, never trust the bitmap
 
@@ -27,41 +35,34 @@ transparency. So the gate passes, provenance records "forged," and the lie ships
 That is what happened in commit `a6eddd8` ("Forge entire kit 30/30"): every icon
 was drawn in code, not generated, and the detailed ones came out broken.
 
-### How to verify (the definitive signal)
+### How to verify (the definitive signal — read the ROLLOUT, not stdout)
 
-A genuine generation emits an **`image_generation_call`** event (plus an
-`image_generation_end`) and leaves an artifact under
+A genuine generation emits an **`image_generation_call`** event (id `ig_…`) plus
+an `image_generation_end`, and leaves the PNG under
 `~/.codex/generated_images/<thread_id>/ig_*.png`. A programmatic drawing emits
-only `shell_command`-class events.
+only `shell_command` / code tool calls.
 
-**GOTCHA — look in the right stream (this cost an agent a whole debugging detour).**
-`codex exec --json` *stdout* is an **abridged** thread/turn/item stream
-(`thread.started`, `turn.started`, `item.started/completed`, `turn.completed`); it
-does **not** carry response items, so `image_generation_call` is **never present on
-stdout**. Greping stdout for it makes every real generation look "code-drawn" — the
-"0/N forged" trap. The event lives in the full session **rollout log**:
-`~/.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread_id>.jsonl`. Correlate via the
-`thread_id` that the `thread.started` event prints to stdout, then read that rollout.
+**The catch that has cost real time, more than once:** `codex exec --json`
+**stdout is abridged** — it is a `thread/turn/item` stream (`thread.started`,
+`item.completed` with `command_execution` / `mcp_tool_call`, `turn.completed`) and
+**never contains `image_generation_call`.** Grepping stdout for it (what the old
+kit-forge did) marks EVERY real generation "code-drawn." The event lives only in
+the full **rollout session log**:
+`~/.codex/sessions/<Y>/<M>/<D>/rollout-*-<thread_id>.jsonl` — correlate by the
+`thread_id` that `thread.started` prints to stdout, then grep that rollout.
 
-- **Method gate (first, definitive):** require an `image_generation_call` event in
-  the run's **rollout**. No event → codex coded it → reject, no matter how clean
-  the pixels.
-- **Race-free shipping:** ship the asset from the session's own
-  `generated_images/<thread_id>/` dir — NOT codex's "copy the latest image to the
-  workspace" step, which under concurrency cross-grabs a sibling session's image
-  (observed: two distinct requests yielding byte-identical output).
-- **Pixel gate (second):** transparency hygiene only — a gross magenta keying
-  fringe or background bleeding to the canvas edge (`verifyGlyph`). It does **not**
-  require binary alpha; **anti-aliasing is allowed and expected**. It does not
-  judge whether the drawing is any good — that's the method gate's and the
-  eyeball's job.
+- **Method gate (first, definitive):** an `image_generation_call` in the
+  **rollout**. None → codex coded it → reject, no matter how clean the pixels.
+- **Pixel/transparency gate (second):** hygiene only — corners actually
+  transparent after despill, no gross key fringe. **Anti-aliasing is allowed and
+  expected**; never demand binary alpha. It does not judge whether the drawing is
+  good — that is the method gate plus a human eyeball.
 
-These live in the shared helper `frontend/scripts/codex-imagegen.mjs`
-(`imageGenVerdict()` reads the rollout; `sessionImage()` resolves the session's own
-output), imported by both `kit-forge.mjs` and `forge-surface-texture.mjs`. The forge
-records `method: "image-generator (verified)"` in
-`src/ui/design/kitProvenance.json`. Any new codex-image pipeline should import the
-helper rather than re-deriving the gate.
+`forge-atom.mjs` implements this: `methodVerified()` reads the latest rollout for
+`image_generation_call`, and it ships the PNG from
+`~/.codex/generated_images/<thread_id>/` (the workspace copy is racy under
+concurrency). Build every codex-image pipeline the same way — gate the method via
+the **rollout** first.
 
 ## "Gate PASS" never means "ship"
 

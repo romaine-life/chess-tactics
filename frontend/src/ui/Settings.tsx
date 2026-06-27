@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { BrandLockup } from './shared/BrandLockup';
+import { AmbienceBackground } from './AmbienceBackground';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -500,6 +501,8 @@ export function Settings(): ReactElement {
 
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
+      {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
+      <AmbienceBackground />
       <div className="settings-screen">
         <header className="app-titlebar settings-header-frame">
           <BrandLockup screenName="Settings" />
