@@ -28,6 +28,7 @@ type Asset = { id: string; label: string; corner: string; edge: string; fill: st
 const ASSETS: Asset[] = [
   { id: 'mode-button', label: 'Mode button (tabs / header)', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/mode-button.png', frame: { w: 72, h: 72 } },
   { id: 'row', label: 'Settings row', corner: '/assets/ui/kit/atoms/row-corner.png', edge: '/assets/ui/kit/atoms/row-edge.png', fill: '/assets/ui/kit/atoms/row-fill.png', target: '/assets/ui/kit/row.png', frame: { w: 160, h: 112 } },
+  { id: 'panel', label: 'Settings panel / frame', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/panel.png', frame: { w: 72, h: 72 } },
 ];
 
 const DEFAULT_CONTENT = 12;

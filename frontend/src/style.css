@@ -12127,7 +12127,7 @@ button.tileset-relationship-cell {
 .settings-frame {
   --settings-frame-corner: 16px;
   border: var(--settings-frame-corner) solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 36 fill / var(--settings-frame-corner) round;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / var(--settings-frame-corner) round;
   box-sizing: border-box;
 }
 
@@ -12137,7 +12137,7 @@ button.tileset-relationship-cell {
    the bars match by construction. The in-game HUD is the compact variant of it. */
 .app-titlebar {
   border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 36 fill / 14px round;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
   box-sizing: border-box;
   min-block-size: var(--app-header-h);
 }

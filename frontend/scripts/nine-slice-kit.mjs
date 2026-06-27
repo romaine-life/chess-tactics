@@ -43,6 +43,14 @@ export const REGISTRY = {
       { out: 'mode-button-active.png', swap: GOLD2CYAN, inspect: 'corner-cyan' },
     ],
   },
+  'panel': {
+    // Settings frames (.settings-frame / .app-titlebar) — same gold-keyline kit
+    // family as the tabs, assembled from the shared atoms; a per-asset config tunes
+    // it independently of mode-button. Consumed at a 24px slice (24px corner atom).
+    atoms: { corner: 'corner', edge: 'edge', fill: 'fill' },
+    frame: { w: 72, h: 72 },
+    variants: [{ out: 'panel.png' }],
+  },
   'row': {
     atoms: { corner: 'row-corner', edge: 'row-edge', fill: 'row-fill' },
     frame: { w: 160, h: 112 },
