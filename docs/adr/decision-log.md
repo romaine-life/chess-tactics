@@ -29,6 +29,7 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0023](0023-app-title-bar-layout-and-controls.md) | App title bars: centered three-section layout + labeled controls on the kit frame (never bare icons; icon+label in-game, text in menus); generalizes ADR-0010 | accepted | 2026-06-27 |
 | [0026](0026-ui-spacing-system.md) | UI spacing is one tokenized system: ratify `--ds-space-*` (extend 48/64), spatial roles (inset/stack/inline/gutter), compact/comfortable density per ADR-0006, raw px on spacing banned; spacing sibling of ADR-0024 | accepted | 2026-06-27 |
 | [0027](0027-no-bland-html-css-every-surface-is-kit.md) | No bland HTML/CSS: every VISIBLE surface (panel/box/button/chip/frame) is a kit 9-slice or generated sprite; raw-CSS surfaces banned app-wide; layout containers + text exempt; generalizes ADR-0002/0011/0012/0014 | accepted | 2026-06-27 |
+| [0028](0028-board-plus-control-panel-layout.md) | Board/canvas + controls views (skirmish, level editor): clean board floating on the scene (no CSS box), one right-side kit control panel (tabs + content + actions, panel.png matching the title bar); shared precedent | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 

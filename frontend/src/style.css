@@ -5806,17 +5806,8 @@ h1 {
   position: relative;
 }
 
-.skirmish-field::before {
-  background:
-    radial-gradient(640px 320px at 52% 38%, rgba(50, 159, 209, .16), transparent 70%),
-    linear-gradient(180deg, rgba(5, 20, 34, .28), rgba(1, 5, 9, .56));
-  border: 1px solid rgba(45, 105, 139, .58);
-  box-shadow: inset 0 0 72px rgba(0, 0, 0, .38);
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-}
+/* No board box: the board (game art) floats on the screen's night-sky background,
+   per the concept and ADR-0027 (a fabricated CSS box around the scene isn't allowed). */
 
 .skirmish-board-frame {
   display: grid;
@@ -6240,13 +6231,20 @@ h1 {
   flex-direction: column;
   grid-column: 2;
   grid-row: 2;
+  /* The right side is ONE control panel: a single kit panel frame (same panel.png +
+     14px corner as the title bar, so they read consistently) holding the tabs, the
+     active content, and the actions. Inner sections are frameless content, not nested
+     boxes. This is the precedent for the level editor's right side too (ADR-0028). */
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  box-sizing: border-box;
   gap: var(--ds-stack);
   height: 100%;
   max-height: none;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  padding: var(--ds-stack) var(--ds-stack) var(--ds-stack) 0;
+  padding: 0;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
 }
@@ -6339,15 +6337,13 @@ h1 {
 
 .skirmish-score-panel,
 .skirmish-card {
-  /* Kit panel frame (atom-assembled panel.png, ADR-0002/0012) — the same 9-slice
-     frame the title bar uses; the frame IS the chrome, not raw CSS bg/border. */
+  /* Frameless content INSIDE the control panel — the one panel frame is on
+     .skirmish-hud, so these are plain sections, not nested boxes (ADR-0027/0028). */
   background: transparent;
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
+  border: 0;
   box-sizing: border-box;
-  image-rendering: pixelated;
   min-width: 0;
-  padding: var(--ds-inline-tight) var(--ds-inset);
+  padding: 0;
   position: relative;
 }
 
