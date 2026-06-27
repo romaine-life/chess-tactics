@@ -1035,9 +1035,80 @@ h1 {
 .main-menu-actions-assets {
   display: flex;
   flex-direction: column;
-  gap: clamp(6px, .9vh, 8px);
+  gap: clamp(8px, 1.1vh, 11px);
   width: min(100%, 370px);
   max-width: 100%;
+  /* ADR-0027: one role token governs icon display size; never re-sized per icon. */
+  --menu-icon-size: 30px;
+}
+
+/* ── Main-menu mode buttons — "Wet Stone & Cold Iron" (ADR-0025 register) ───────────
+   A matte wet-stone slab with a thin forged-iron lip, carrying the forged carved-stone
+   icon (icons-carved/<slug>.png, canonical 64×64 per ADR-0026, optical keylines ADR-0027) at --menu-icon-size.
+   Hover lifts the iron lip (no glow); active = a contained cobalt hairline (the board's
+   move-overlay tongue). NOTE: the slab surface is still CSS — forging its 9-slice frame
+   is the remaining chrome step (ADR-0002/0012); the icons are forged. */
+.mode-button-stone {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  height: 50px;
+  padding: 0 16px;
+  text-decoration: none;
+  color: #cdd6e2;
+  background-color: #0f1b2b;
+  background-image: linear-gradient(180deg, rgba(40, 56, 74, .35) 0%, rgba(8, 16, 28, 0) 38%, rgba(0, 0, 0, .30) 100%);
+  border: 2px solid #1c2836;
+  border-top-color: #2a3a4c;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 1px 0 rgba(160, 191, 230, .07),
+    inset 0 0 0 1px rgba(0, 0, 0, .40),
+    0 1px 3px rgba(0, 0, 0, .55);
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .1s ease, box-shadow .1s ease;
+}
+
+.mode-button-stone-icon {
+  flex: none;
+  width: var(--menu-icon-size, 30px);
+  height: var(--menu-icon-size, 30px);
+  image-rendering: pixelated;
+}
+
+.mode-button-stone-label {
+  font-family: var(--ds-font-display);
+  font-weight: 400;
+  font-size: var(--ds-text-md);
+  letter-spacing: .02em;
+  line-height: 1;
+  color: #cdd6e2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+  white-space: nowrap;
+}
+
+.mode-button-stone:hover,
+.mode-button-stone:focus-visible {
+  border-color: #2c3c4e;
+  border-top-color: #4a607c;
+  box-shadow:
+    inset 0 1px 0 rgba(160, 191, 230, .26),
+    inset 0 0 0 1px rgba(0, 0, 0, .40),
+    0 1px 3px rgba(0, 0, 0, .55);
+}
+
+.mode-button-stone.is-active {
+  border-color: #2c3c4e;
+  border-top-color: #4a607c;
+  box-shadow:
+    inset 0 0 0 1.5px #3a6ea5,
+    inset 0 1px 0 rgba(160, 191, 230, .18),
+    0 1px 3px rgba(0, 0, 0, .55);
+}
+
+.mode-button-stone:focus-visible {
+  outline: 2px solid rgba(58, 110, 165, .85);
+  outline-offset: -3px;
 }
 
 .mode-button {

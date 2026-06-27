@@ -30,6 +30,7 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0024](0024-ui-typography-system.md) | UI typography is one tokenized system: --ds-font-* families (Jersey 10 dropped) + the --ds-text-* size scale + weight/tracking tokens, mandatory; raw font literals disallowed; migration is staged screen-by-screen | accepted | 2026-06-27 |
 | [0025](0025-world-scene-art-anti-story-lore.md) | World/scene/portrait art is governed by the anti-story lore (docs/lore-anti-story.md + lore/historical-anchors + background contracts): residue-not-spectacle, faceless pieces, ordinary life beside an unseen real-historical catastrophe; palette per-image (no forced grade) | accepted | 2026-06-27 |
 | [0026](0026-ui-kit-icon-canvas.md) | UI-kit content icons live on one canonical 64×64 centered canvas with a normalized ~40×40 safe area; the forge pads-to-canvas + asserts dimensions (never ships a bare bbox); ratifies the de-facto box 15 icons honor, supersedes the icons.md canvas geometry | accepted | 2026-06-27 |
+| [0027](0027-icon-optical-keylines.md) | Shape-varied icon sets (the carved main-menu icons) place each glyph by per-shape OPTICAL keyline within ADR-0026's canonical 64×64 canvas — equal optical mass, not equal margins; optical-centering baked into each PNG's padding; one `--menu-icon-size` token on consumption; re-pack not re-forge | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 
