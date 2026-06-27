@@ -36,6 +36,11 @@ interface Provenance { assets: Record<string, { forged: string; tries: number }>
 const KIT = manifest as Manifest;
 const PROV = provenance as Provenance;
 const forged = (name: string): boolean => Object.prototype.hasOwnProperty.call(PROV.assets, name);
+
+// Frames the /nine-slice-editor can open — those with atom sets registered in
+// scripts/nine-slice-kit.mjs. Variant names (e.g. -active) map to their base
+// editable asset. Other frames are whole-PNG and the atom editor can't edit them.
+const EDITOR_ASSET: Record<string, string> = { 'mode-button': 'mode-button', 'mode-button-active': 'mode-button', 'row': 'row', 'panel': 'panel' };
 const GROUP_LABEL: Record<string, string> = { settings: 'Icons', game: 'Game', shields: 'Shields' };
 
 function Card({ name, url, sub, gate, selected, onSelect }: { name: string; url: string; sub: string; gate?: 'pass' | 'fail'; selected: boolean; onSelect: (name: string) => void }): ReactElement {
@@ -158,6 +163,12 @@ export function AssetLab({ name, header }: { name: string; header?: ReactNode })
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
+            {item && EDITOR_ASSET[item.name] ? (
+              <a
+                href={`/nine-slice-editor?asset=${EDITOR_ASSET[item.name]}`}
+                style={{ display: 'block', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', borderRadius: 4, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}
+              >✎ Edit in 9-slice editor</a>
+            ) : null}
             {found && item ? (
               <dl className="al-meta">
                 <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h}</dd></div>
