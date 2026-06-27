@@ -5639,10 +5639,12 @@ h1 {
    family, all the same height and vertically centered (ADR-0010 rhythm). */
 .skirmish-status-chip {
   /* Kit panel frame so the status reads as a contained chip, not floating text —
-     in-theme (panel.png), never the bland CSS box it replaced (ADR-0027/0028). */
+     in-theme (panel.png), never the bland CSS box it replaced (ADR-0027/0028).
+     Fixed 46px height = the header buttons, so the bar's elements line up. */
   align-items: center;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / 10px round;
+  block-size: 46px;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 8px round;
   box-sizing: border-box;
   display: flex;
   gap: var(--ds-inline);
