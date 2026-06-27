@@ -36,7 +36,7 @@ import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } fr
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
-import { ScrollbarLibraryStudio } from './ScrollbarLibraryStudio';
+import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { PortraitLab } from './PortraitEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
@@ -80,7 +80,7 @@ type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'gl
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor; 'glossary' reads one term in
 // full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary' | 'surface';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary' | 'surface' | 'scrollbar';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -293,7 +293,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedAssetName: kit || undefined,
     selectedArtworkName: art || undefined,
     selectedGlossaryName: gloss || undefined,
-    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' || vk === 'surface' ? vk : undefined,
+    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -1694,13 +1694,18 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     {
       id: 'scrollbars', label: 'Scrollbars', hint: 'Scrollbar-grip candidates — carved wooden elements. PixelLab is the current preferred default.',
-      main: <ScrollbarLibraryStudio search={scrollbarSearch} selected={selectedScrollbarName} onSelect={setSelectedScrollbarName} />,
+      main: <ScrollbarLibraryStudio search={scrollbarSearch} zoom={zoom} selected={selectedScrollbarName} onSelect={setSelectedScrollbarName} />,
       controls: (
         <>
           <label className="tileset-catalog-search">
             <span>Search</span>
             <input type="search" value={scrollbarSearch} onChange={(event) => setScrollbarSearch(event.target.value)} placeholder="scrollbar, approach…" />
           </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('scrollbar')}>View Selected</button>
         </>
       ),
     },
@@ -1717,6 +1722,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <button type="button" className={viewerKind === 'portrait' ? 'is-active' : ''} onClick={() => setViewerKind('portrait')} title="Edit unit portrait headshot crops.">Portrait</button>
       <button type="button" className={viewerKind === 'glossary' ? 'is-active' : ''} onClick={() => setViewerKind('glossary')} title="Read a glossary term in full.">Glossary</button>
       <button type="button" className={viewerKind === 'surface' ? 'is-active' : ''} onClick={() => setViewerKind('surface')} title="View the selected background surface.">Surface</button>
+      <button type="button" className={viewerKind === 'scrollbar' ? 'is-active' : ''} onClick={() => setViewerKind('scrollbar')} title="View the selected scrollbar grip.">Scrollbar</button>
     </div>
   );
 
@@ -1781,7 +1787,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                 ? <GlossaryLab name={selectedGlossaryName} header={viewerKindTabs} />
                 : viewerKind === 'surface'
                   ? <SurfaceViewer name={selectedSurfaceName} header={viewerKindTabs} />
-                  : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
+                  : viewerKind === 'scrollbar'
+                    ? <ScrollbarViewer name={selectedScrollbarName} header={viewerKindTabs} />
+                    : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
         ) : studioMode === 'dressing' ? (
           <SurfaceDressingRoom seed={selectedSurfaceName} />
         ) : (
