@@ -26,6 +26,72 @@ const ViewIcon = (): ReactElement => (
 // deeper "why/how" lives here so the term row stays scannable but the Viewer can
 // hold the full agreed explanation.
 const GLOSSARY_DETAILS: Record<string, ReactNode> = {
+  'split-layer doodad': (
+    <>
+      <h3>How a split-layer doodad works (the agreed approach)</h3>
+      <p>
+        Flat props painted on the board read wrong the moment a unit shares the tile:
+        the sprite either sits entirely behind the unit (the unit covers it) or entirely
+        in front (it covers the unit). A grass tuft a knight is standing <em>in</em> can do
+        neither — part of it is behind the legs, part falls over the shins.
+      </p>
+
+      <h4>One clump, split into two halves</h4>
+      <p>
+        The doodad is modelled and rendered in Blender as a single clump, then{' '}
+        <strong>bisected into a back half and a front half</strong> along the
+        ground-contact plane. The split uses the world-plane normal{' '}
+        <code>(1, −1, 0)</code> — the toward-the-viewer direction in our isometric
+        projection — <strong>not</strong> a camera near-clip. A camera clip put the whole
+        above-ground clump in the front half and left <code>back.png</code> empty; the
+        world-plane bisect is what actually separates &ldquo;behind the unit&rdquo; from
+        &ldquo;over the unit.&rdquo;
+      </p>
+
+      <h4>Both halves share one anchor</h4>
+      <p>
+        Each half ships as a 96×180 sprite contact-anchored at pixel <code>(48, 69)</code>,
+        the same ground point, so they recombine pixel-perfectly when stacked back on the tile.
+      </p>
+
+      <figure className="doodad-layer-figure" aria-label="A unit on a grass tile, shown with the back layer only, then with the front layer added so it falls over the unit's shins">
+        <span className="doodad-layer-cell">
+          <span className="doodad-layer-scene">
+            <span className="doodad-layer-stage">
+              <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
+              <span className="board-unit-seat" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
+            </span>
+          </span>
+          <figcaption className="doodad-layer-cap"><strong>Back layer only.</strong> The whole tuft is behind the unit — it just stands in front of it.</figcaption>
+        </span>
+        <span className="doodad-layer-cell">
+          <span className="doodad-layer-scene">
+            <span className="doodad-layer-stage">
+              <span className="doodad-layer-half"><img src="/assets/tiles/textured/grass-a.png" alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/back.png" alt="" aria-hidden="true" /></span>
+              <span className="board-unit-seat" style={{ left: 0, top: 0 }}><img src="/assets/units/knight/navy-blue/south.png" alt="" aria-hidden="true" /></span>
+              <span className="doodad-layer-half"><img src="/assets/doodads/grass-tuft/front.png" alt="" aria-hidden="true" /></span>
+            </span>
+          </span>
+          <figcaption className="doodad-layer-cap"><strong>Back + front.</strong> The front blades cross over the shins — now the unit stands <em>inside</em> the tuft.</figcaption>
+        </span>
+      </figure>
+
+      <h4>The unit sorts between them (z-bracketing)</h4>
+      <p>
+        On the board the unit renders at <code>z = base</code>; the doodad brackets it —
+        back at <code>base − 1</code> (tucks behind), front at <code>base + 1</code> (falls
+        over the shins). The unit is sandwiched, so it appears to stand <em>inside</em> the prop.
+        One shared <code>&lt;DoodadSprite&gt;</code> draws this for the game board and the Studio
+        alike, so the seating can&rsquo;t drift between them.
+      </p>
+      <p className="glossary-detail-src">
+        Recipe of record: <code>docs/art/doodad-concepts/render_doodad.py</code> (the Blender bisect).
+        Renderer: <code>frontend/src/render/BoardDoodad.tsx</code>.
+      </p>
+    </>
+  ),
   '9-slice': (
     <>
       <h3>How a 9-slice actually renders (the agreed approach)</h3>

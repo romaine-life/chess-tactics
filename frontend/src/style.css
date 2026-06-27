@@ -5909,21 +5909,35 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .82);
 }
 
-.skirmish-board-unit {
-  /* One knob for the whole move (travel + hop). Bump these to slow a move down;
-     the enemy override below makes its reply weightier. */
-  --move-duration: 360ms;
-  align-items: center;
-  display: grid;
-  height: 86px;
-  justify-items: center;
-  pointer-events: none;
+/* THE single source of truth for seating a unit sprite on a tile — shared by the game
+   board (.skirmish-board-unit) and the Studio editor so a unit sits identically in both.
+   Each board adds only its own chrome (move animation/HP, or selection/hit) around this;
+   the seat geometry lives nowhere else. Do not re-derive it per board. */
+.board-unit-seat {
   position: absolute;
+  width: 72px;
+  height: 86px;
+  display: grid;
+  align-items: center;
+  justify-items: center;
   transform: translate(-50%, -78%);
+  pointer-events: none;
+}
+.board-unit-seat img {
+  display: block;
+  max-height: 92px;
+  max-width: 78px;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+/* Game-only chrome layered on .board-unit-seat: the move glide. One knob for the whole
+   move (travel + hop); the enemy override below makes its reply weightier. */
+.skirmish-board-unit {
+  --move-duration: 360ms;
   transition:
     left var(--move-duration) cubic-bezier(.22, .61, .36, 1),
     top var(--move-duration) cubic-bezier(.22, .61, .36, 1);
-  width: 72px;
   will-change: left, top;
 }
 
@@ -5966,11 +5980,6 @@ h1 {
 }
 
 .skirmish-board-unit img {
-  display: block;
-  image-rendering: auto;
-  max-height: 92px;
-  max-width: 78px;
-  object-fit: contain;
   position: relative;
   z-index: 1;
 }
@@ -8621,7 +8630,13 @@ h1 {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 8px;
-  height: 100%;
+  /* Anchor to the viewport, NOT height:100%. The global .shell grid places .app-root
+     in its `auto` (content-sized) track — verified: .shell resolves to rows "Npx 28px"
+     with app-root in the tall auto row — so a height:100% chain collapses to content.
+     That made the studio panes shrink to fit short catalogs (e.g. Units), riding the
+     bottom border up. 100dvh fills the surface regardless of content; the topbar renders
+     empty (h=0) on this route so there is no chrome to subtract. Panels scroll internally. */
+  height: 100dvh;
   min-height: 0;
   overflow: hidden;
   padding: 12px;
@@ -8838,7 +8853,11 @@ h1 {
   gap: 10px;
   width: 100%;
   height: 100%;
-  min-height: calc(100dvh - 96px);
+  /* The page (above) is now viewport-tall, so this 1fr-row shell fills it exactly.
+     No magic min-height floor: the old `calc(100dvh - 96px)` both approximated the
+     wrong chrome (96px vs the real 0) AND only held when content happened to be tall,
+     which is the content-driven shrink we just fixed. */
+  min-height: 0;
   margin: 0;
   overflow: hidden;
 }
@@ -9396,6 +9415,21 @@ h1 {
   color: #d9e7f7;
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+/* An inspector property whose value is a link into the Glossary (e.g. Layering). */
+.tileset-inline-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #72bde8;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tileset-inline-link:hover {
+  color: #a6d8f5;
 }
 
 .tileset-view-controls p {
@@ -10260,12 +10294,35 @@ button.tileset-relationship-cell {
   gap: 14px;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  /* Keep the scrollbar track ALWAYS visible (greyed/inactive when nothing scrolls) instead of
+     reserving an empty gutter — a present-but-inactive affordance that never reflows the grid.
+     overflow-y: scroll always renders the track; the thumb appears only when scrollable. This
+     is the "frame never moves" rule (docs/studio-control-architecture.md), at the scroll level. */
+  overflow-y: scroll;
+  overflow-x: hidden;
+  /* Style the bar with ::-webkit only (below). Do NOT set scrollbar-color / scrollbar-width:
+     those standard props make Chrome use its OVERLAY scrollbar (no reserved space, vanishes when
+     idle) and ignore ::-webkit. The webkit rules force a classic, always-visible greyed track.
+     The app runs in Chrome; Firefox falls back to its default scrollbar. */
   padding: 12px;
   background: rgba(5, 16, 25, 0.92);
   border: 1px solid rgba(67, 127, 179, 0.28);
   border-radius: 6px;
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+/* The always-on track (the "greyed" groove) + a thumb that only shows when there's overflow. */
+.tileset-studio-tab-panel::-webkit-scrollbar {
+  width: 10px;
+}
+.tileset-studio-tab-panel::-webkit-scrollbar-track {
+  background: rgba(120, 170, 214, 0.2);
+  border-radius: 6px;
+}
+.tileset-studio-tab-panel::-webkit-scrollbar-thumb {
+  background: rgba(120, 170, 214, 0.55);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: padding-box;
 }
 
 .tileset-studio-tab-panel.is-board-mode {
@@ -10312,6 +10369,28 @@ button.tileset-relationship-cell {
   cursor: pointer;
   font: 800 12px/1.15 var(--ds-font-sans, system-ui, sans-serif);
   overflow-wrap: anywhere;
+}
+
+/* Per-focus layer-visibility toggle (the "vision" eye). Amber when the layer is hidden,
+   so it's obvious the board is concealing something rather than empty. */
+.tileset-vision-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 6px 10px;
+  color: #cfe3ef;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.34);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 700 12px/1.1 var(--ds-font-sans, system-ui, sans-serif);
+}
+.tileset-vision-toggle svg { flex: none; }
+.tileset-vision-toggle.is-hidden {
+  color: #f0c98a;
+  background: rgba(58, 40, 16, 0.5);
+  border-color: rgba(216, 162, 92, 0.6);
 }
 
 .tileset-inspector-tabs button {
@@ -10864,21 +10943,9 @@ button.tileset-relationship-cell {
   -webkit-user-select: none;
 }
 
-.tileset-generated-board-tile .tileset-board-unit {
-  position: absolute;
-  left: 50%;
-  top: var(--iso-tile-height);
-  z-index: 5;
-  width: auto;
-  height: auto;
-  max-width: none;
-  object-fit: contain;
-  image-rendering: auto;
-  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.55));
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
+/* Units and doodads no longer render inside cells here — both boards seat them at grid
+   level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
+   The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */
 
 .tileset-generated-board-overlay-cell {
   position: absolute;
@@ -11032,12 +11099,18 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-/* Cursor hints per tool (on the diamond hit overlay). */
+/* Cursor hints per tool (on the diamond hit overlay + the standing-doodad hit target). */
 .tileset-placement-board.is-tool-brush .tileset-cell-hit {
   cursor: crosshair;
 }
-.tileset-placement-board.is-tool-erase .tileset-cell-hit {
-  cursor: not-allowed;
+.tileset-placement-board.is-tool-select .tileset-doodad-hit {
+  cursor: pointer;
+}
+/* An eraser-shaped cursor (mirrors the Erase toolbar icon). NOT `not-allowed` — the
+   circle-slash reads as "you can't do this" even though erasing is the active action. */
+.tileset-placement-board.is-tool-erase .tileset-cell-hit,
+.tileset-placement-board.is-tool-erase .tileset-doodad-hit {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 16 16'%3E%3Crect x='2.6' y='7.6' width='9.4' height='5' rx='1.2' transform='rotate(-40 7.3 10.1)' fill='%231a3550' stroke='%23eaf2fb' stroke-width='1.4'/%3E%3Cline x1='6' y1='13.6' x2='13.6' y2='13.6' stroke='%23eaf2fb' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 6 18, cell;
 }
 .tileset-placement-board.is-tool-select .tileset-cell-hit {
   cursor: pointer;
@@ -12312,6 +12385,7 @@ button.tileset-relationship-cell {
   min-height: 56px;
   /* content inset from the 9-slice editor (--settings-tab-content, generated). */
   padding: var(--settings-tab-content, 7px);
+  padding: 7px 12px;
   text-align: left;
   text-decoration: none;
   transition: color .14s ease;
@@ -12363,6 +12437,25 @@ button.tileset-relationship-cell {
   padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
 }
 
+.settings-panel-heading {
+  align-content: center;
+  block-size: clamp(64px, 6vw, 80px);
+  display: grid;
+  gap: 3px;
+  inline-size: min(100%, 880px);
+  justify-self: center;
+  min-block-size: 0;
+  padding: 0;
+}
+
+.settings-panel-heading h2 {
+  font-size: var(--ds-text-xl);
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-panel-content {
   align-content: start;
   display: grid;
@@ -12409,8 +12502,15 @@ button.tileset-relationship-cell {
 
 /* Layout container only. Each row carries its own atom-assembled frame
    (ADR-0012/0014), so there is no CSS border/radius/background wrapping the rows. */
+/* Grouped list: one subtle container per section, rows separated by hairline
+   dividers — not an ornate frame around every row. The gold-bracket chrome stays
+   on the outer panels; the content list reads clean and scannable. */
 .settings-section-rows {
+  background: rgba(8, 22, 34, 0.55);
+  border: 1px solid rgba(67, 127, 179, 0.26);
+  border-radius: 8px;
   display: grid;
+  overflow: hidden;
 }
 
 .settings-row {
@@ -12432,6 +12532,12 @@ button.tileset-relationship-cell {
 
 .settings-row + .settings-row {
   margin-top: 10px;
+  min-height: 56px;
+  padding: 12px 16px;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid rgba(67, 127, 179, 0.16);
 }
 
 .settings-row-tall {
@@ -12921,6 +13027,33 @@ button.tileset-relationship-cell {
 .glossary-detail code { background: rgba(95, 184, 255, .1); border-radius: 4px; color: #9fd0ff; font-size: .82em; padding: 1px 5px; }
 .glossary-detail-src { color: #5d7a8c; font-size: .72rem; margin-top: 14px; }
 .glossary-detail-none { color: #5d7a8c; font-style: italic; }
+/* Figure showing a split-layer doodad IN CONTEXT: a unit nested in the tuft, back-only
+   vs back+front, so the front layer's job (falling over the unit's shins) is visible.
+   Reuses the real .board-unit-seat geometry; the doodad halves use the same (48,69)
+   contact anchor as BoardDoodad, so the composite matches the board pixel-for-pixel.
+   The whole scene is integer-scaled 2x (crisp pixel art) so the split reads at doc size. */
+.doodad-layer-figure { display: flex; flex-wrap: wrap; gap: 18px; margin: 4px 0 16px; }
+.doodad-layer-cell { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.doodad-layer-scene {
+  position: relative;
+  width: 168px;
+  height: 232px;
+  overflow: hidden;
+  border: 1px solid rgba(67, 127, 179, .3);
+  border-radius: 8px;
+  background-color: rgba(5, 16, 25, .9);
+  background-image:
+    linear-gradient(45deg, rgba(120, 170, 214, .1) 25%, transparent 25%, transparent 75%, rgba(120, 170, 214, .1) 75%),
+    linear-gradient(45deg, rgba(120, 170, 214, .1) 25%, transparent 25%, transparent 75%, rgba(120, 170, 214, .1) 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 7px 7px;
+}
+/* One ground point (75,150 in scene px) carries both layers and the unit, 2x-zoomed. */
+.doodad-layer-stage { position: absolute; left: 84px; top: 150px; transform: scale(2); transform-origin: center; }
+.doodad-layer-half { position: absolute; left: 0; top: 0; width: 96px; height: 180px; transform: translate(-50%, -38.333%); }
+.doodad-layer-half img { width: 96px; height: 180px; image-rendering: auto; }
+.doodad-layer-cap { color: #a9bdd2; font-size: .78rem; }
+.doodad-layer-cap strong { color: #cfe3ef; font-weight: 400; }
 /* Per-asset property chips (gate + provenance) stacked at the card's trailing edge. */
 .asset-card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 .asset-prov,
