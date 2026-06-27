@@ -345,7 +345,7 @@ export function CampaignEditor() {
           <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
         </div>
         <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
-          <button type="button" className="app-header-button app-header-button-active" onClick={saveWorkspaceNow}>Save</button>
+          <button type="button" data-testid="save-workspace" className="app-header-button app-header-button-active" onClick={saveWorkspaceNow}>Save</button>
           <a className="app-header-button" href="/settings">Settings</a>
         </nav>
       </header>
@@ -437,11 +437,6 @@ export function CampaignEditor() {
                   />
                 ))}
               </div>
-              <div className="ce-mid-actions">
-                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, -1)} aria-label="Move selected level up">▲</IconButton>
-                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, 1)} aria-label="Move selected level down">▼</IconButton>
-                <AssetButton danger onClick={() => confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
-              </div>
             </>
           ) : (
             <p className="ce-empty ce-empty-large">Select or create a campaign.</p>
@@ -483,10 +478,9 @@ export function CampaignEditor() {
       </main>
 
       <footer className="ce-footer">
-        <AssetButton data-testid="save-workspace" onClick={saveWorkspaceNow}>Save Campaign</AssetButton>
         <AssetButton disabled={!camp} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
-        <AssetButton danger disabled={!levelDoc} onClick={() => levelDoc && confirmDeleteLevel(levelDoc)}>Delete Level</AssetButton>
+        <AssetButton danger disabled={!camp} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
       </footer>
     </div>
   );
