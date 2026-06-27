@@ -118,6 +118,11 @@ export function normalizeConfig(c) {
     // 0 = no content inset. MUST stay in sync with NineSliceEditor's DEFAULT_CONTENT
     // (src/ui/NineSliceEditor.tsx) so an unsaved asset previews what it would bake.
     content: c.content ?? 0,
+    // `fill` = uniform inset (px) from the footprint to the FILL boundary: where a surface
+    // painted behind this frame should stop. The frame's ornament can bleed OUTSIDE this box
+    // (corners extend out to feel alive), so the fill boundary is distinct from the footprint.
+    // Consumption-side like `content` (not baked into the PNG); 0 = fill to the footprint edge.
+    fill: c.fill ?? 0,
   };
 }
 export function loadConfig(assetId) {

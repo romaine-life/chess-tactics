@@ -21,7 +21,7 @@ import nineSliceRegistry from '../../config/nine-slice-registry.json';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
-type EditState = { keyline: Off; bracket: Off; content: number };
+type EditState = { keyline: Off; bracket: Off; content: number; fill: number };
 type PieceKey = 'keyline' | 'bracket';
 
 type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean };
@@ -46,6 +46,9 @@ const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
 // 0 = no content inset, matching the bake's fallback (normalizeConfig in
 // scripts/nine-slice-kit.mjs) so an unsaved asset previews exactly what it bakes.
 const DEFAULT_CONTENT = 0;
+// 0 = the fill boundary IS the footprint edge (no inset). The fill box marks where a surface
+// painted behind this frame should stop — the frame's corners can bleed outside it.
+const DEFAULT_FILL = 0;
 const STORAGE_KEY = 'nine-slice-editor-v4';
 const Z = 6;
 
@@ -171,6 +174,7 @@ export function NineSliceEditor(): ReactElement {
   const [active, setActive] = useState<PieceKey>('bracket');
   const [showOuter, setShowOuter] = useState(true);
   const [showContent, setShowContent] = useState(false);
+  const [showFill, setShowFill] = useState(false);
   // gap from each outer-box edge to the art's outermost opaque pixel. + = gap inside; − = beyond (overflow).
   const [status, setStatus] = useState<{ top: number; right: number; bottom: number; left: number } | null>(null);
   const [edits, setEdits] = useState<Record<string, EditState>>(() => {
@@ -189,12 +193,13 @@ export function NineSliceEditor(): ReactElement {
   const pvActualRef = useRef<HTMLCanvasElement>(null);
   const pvUseRef = useRef<HTMLCanvasElement>(null);
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
-  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, content: DEFAULT_CONTENT };
+  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, content: DEFAULT_CONTENT, fill: DEFAULT_FILL };
   const stored = edits[assetId];
   const edit: EditState = {
     keyline: stored?.keyline ?? { dx: 0, dy: 0 },
     bracket: stored?.bracket ?? { dx: 0, dy: 0 },
     content: stored?.content ?? DEFAULT_CONTENT,
+    fill: stored?.fill ?? DEFAULT_FILL,
   };
 
   useEffect(() => {
@@ -222,7 +227,7 @@ export function NineSliceEditor(): ReactElement {
       .then((j) => {
         if (!live || !j.ok || !j.config) return;
         hydrated.current.add(assetId);
-        setEdits((prev) => ({ ...prev, [assetId]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content } }));
+        setEdits((prev) => ({ ...prev, [assetId]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL } }));
       })
       .catch(() => {});
     return () => { live = false; };
@@ -259,6 +264,8 @@ export function NineSliceEditor(): ReactElement {
     update((cur) => ({ ...cur, [active]: { dx: -box.minX, dy: -box.minY } }));
   };
   const setContent = (dc: number) => update((cur) => ({ ...cur, content: Math.max(0, (cur.content ?? DEFAULT_CONTENT) + dc) }));
+  // Fill inset can't exceed half the smaller frame dim (box would invert); clamp to >= 0.
+  const setFill = (df: number) => update((cur) => ({ ...cur, fill: Math.max(0, Math.min(Math.floor(Math.min(asset.frame.w, asset.frame.h) / 2) - 1, (cur.fill ?? DEFAULT_FILL) + df)) }));
   const reset = () => update(() => DEFAULT_EDIT);
 
   useEffect(() => {
@@ -298,6 +305,12 @@ export function NineSliceEditor(): ReactElement {
       vg.strokeStyle = '#5cff9e'; vg.lineWidth = 2;
       vg.strokeRect(c * Z, c * Z, (W - 2 * c) * Z, (H - 2 * c) * Z);
     }
+    // FILL box = where a surface behind this frame stops (inset by `fill` from the footprint).
+    if (showFill) {
+      const f = edit.fill;
+      vg.strokeStyle = '#ffb454'; vg.lineWidth = 2;
+      vg.strokeRect(f * Z, f * Z, (W - 2 * f) * Z, (H - 2 * f) * Z);
+    }
 
     // STATUS: where the art's outermost opaque pixels sit vs the footprint edge.
     // Only surfaces on overflow (pixels beyond the box).
@@ -307,7 +320,7 @@ export function NineSliceEditor(): ReactElement {
       if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
     }
     setStatus(maxX < 0 ? null : { top: minY, left: minX, right: (W - 1) - maxX, bottom: (H - 1) - maxY });
-  }, [loaded, edit, showOuter, showContent, asset]);
+  }, [loaded, edit, showOuter, showContent, showFill, asset]);
 
   // LIVE previews — the same builder rendered at actual size and stretched in-use,
   // so you can judge the real result here without an apply-and-screenshot round trip.
@@ -331,7 +344,7 @@ export function NineSliceEditor(): ReactElement {
     draw(pvUseRef, 150, 44, 2, 'Settings');
   }, [loaded, edit.keyline, edit.bracket, asset]);
 
-  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content }, null, 2);
+  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content, fill: edit.fill }, null, 2);
   // Only the bracket is nudgeable. Keyline is inert (continuous border by construction);
   // exposing a keyline nudge would let the preview show a state the bake can't reproduce.
   const pieces: PieceKey[] = loaded?.hasAccent ? ['bracket'] : [];
@@ -398,6 +411,16 @@ export function NineSliceEditor(): ReactElement {
               <button type="button" style={ST.sb} onClick={() => setContent(1)}>＋</button>
               <span style={ST.sizeLabel}>uniform on all sides</span>
             </div>
+            <label style={ST.toggle}>
+              <input type="checkbox" checked={showFill} onChange={(e) => setShowFill(e.target.checked)} />
+              <span style={{ color: '#ffb454' }}>■</span> Fill box — where a surface fill stops (frame may bleed outside it)
+            </label>
+            <div style={ST.sizeRow}>
+              <span style={ST.sizeW}>inset {edit.fill} px</span>
+              <button type="button" style={ST.sb} onClick={() => setFill(-1)}>−</button>
+              <button type="button" style={ST.sb} onClick={() => setFill(1)}>＋</button>
+              <span style={ST.sizeLabel}>uniform on all sides</span>
+            </div>
           </div>
           {status && (status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0) && (
             <div style={{ ...ST.statusBox, borderColor: '#e0556a', color: '#ff9aa8' }}>
@@ -413,6 +436,7 @@ export function NineSliceEditor(): ReactElement {
           <div style={ST.offsets}>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
             <div>content inset: {edit.content} px</div>
+            <div>fill inset: {edit.fill} px</div>
           </div>
           {isDev && (
             <>
