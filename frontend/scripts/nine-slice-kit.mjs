@@ -21,6 +21,9 @@ import { buildFrameFrom } from './assemble-frame.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const ATOMS = `${root}public/assets/ui/kit/atoms/`;
 export const KIT = `${root}public/assets/ui/kit/`;
+// Transparent-interior "line" variants (ornament only) live here, beside panel-line.png.
+// They are the fix for the 9-slice fill problem (see bakeLine / ADR-0029).
+export const LINE_DIR = `${root}public/assets/ui/explore/frames/`;
 export const CONFIG_DIR = `${root}config/nine-slice/`;
 
 // Single source of truth — the SAME registry the in-app editor and the catalog
@@ -158,6 +161,13 @@ export function buildAsset(assetId, cfgRaw) {
     written.push(v.out);
     if (v.inspectPng) writeFileSync(`${ATOMS}${v.inspect}.png`, PNG.sync.write(v.inspectPng));
   }
+  // Frames flagged with a `line` output also get their transparent-interior twin baked, so the
+  // line variant can never drift from the filled frame (same atoms, same corner tune).
+  const rec = REGISTRY[assetId];
+  if (rec && rec.line) {
+    writeFileSync(`${LINE_DIR}${rec.line}`, PNG.sync.write(bakeLine(assetId)));
+    written.push(`explore/frames/${rec.line}`);
+  }
   return { written, warns, note };
 }
 
@@ -189,8 +199,8 @@ export function bakeLine(assetId) {
 // Compare a freshly baked variant PNG to its committed file on disk, returning a
 // plain serializable result so a (type-checked) test can assert bake parity without
 // importing pngjs/fs/Buffer itself. Used by the nine-slice bake regression test.
-export function diffCommitted(out, freshPng) {
-  const committed = PNG.sync.read(readFileSync(`${KIT}${out}`));
+export function diffCommitted(out, freshPng, dir = KIT) {
+  const committed = PNG.sync.read(readFileSync(`${dir}${out}`));
   const sameSize = committed.width === freshPng.width && committed.height === freshPng.height;
   return {
     out,

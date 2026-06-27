@@ -1,22 +1,21 @@
-// Bake ornament-only (transparent-interior) variants of the kit 9-slice frames, so a
-// surface painted behind an element shows through instead of the baked navy fill. These
-// solve the "navy ring" 9-slice fill problem for the settings dressing room (buttons /
-// rows / boxes). Output lands beside the hand-made panel-line.png.
+// Bake the ornament-only (transparent-interior) "line" variants of the kit 9-slice frames, so
+// a surface painted behind an element shows through instead of the baked navy fill — the fix
+// for the 9-slice fill problem (ADR-0028). Registry-driven: any asset with a `line` filename in
+// config/nine-slice-registry.json gets its twin baked here, beside panel-line.png. (apply-nine-
+// slice.mjs also writes these as part of a full bake; this is the focused, frames-only entry.)
 //
 //   node scripts/bake-line-frames.mjs
 import { PNG } from 'pngjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { bakeLine } from './nine-slice-kit.mjs';
+import { bakeLine, REGISTRY, LINE_DIR } from './nine-slice-kit.mjs';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
-const out = `${root}public/assets/ui/explore/frames/`;
-mkdirSync(out, { recursive: true });
+mkdirSync(LINE_DIR, { recursive: true });
 
-// `panel` and `mode-button` bake to byte-identical frames, and the committed (hand-made)
-// panel-line.png already covers BOTH the settings boxes and the tab buttons. The only
-// genuinely-distinct frame is the steel row, so that is the one line asset we ship here.
-for (const [asset, file] of [['row', 'row-line.png']]) {
-  writeFileSync(`${out}${file}`, PNG.sync.write(bakeLine(asset)));
-  console.log(`wrote explore/frames/${file}`);
+// `panel` and `mode-button` bake to byte-identical frames, so panel-line.png covers BOTH the
+// settings boxes and the tab buttons — only `panel` carries the `line` flag, not `mode-button`.
+const flagged = Object.entries(REGISTRY).filter(([, rec]) => rec.line);
+if (!flagged.length) console.log('no frames flagged with a `line` output in the registry');
+for (const [asset, rec] of flagged) {
+  writeFileSync(`${LINE_DIR}${rec.line}`, PNG.sync.write(bakeLine(asset)));
+  console.log(`wrote explore/frames/${rec.line} (from ${asset})`);
 }

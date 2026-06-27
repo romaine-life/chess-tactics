@@ -35,7 +35,10 @@ const REGIONS: RegionDef[] = [
   { id: 'tabsBox', label: 'Tabs box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', isBox: true },
   { id: 'buttons', label: 'Buttons · tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round', isBox: false },
   { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', isBox: true },
-  { id: 'rows', label: 'Rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/row-line.png") 20 / 14px stretch', isBox: false },
+  // Rows get NO frame when surfaced: the row frame's steel rail is a thin rectangle that hugs
+  // the row's outer edge and reads as a stray boundary on a surface. The surface fills the row
+  // box edge-to-edge instead; row spacing + content already separate them.
+  { id: 'rows', label: 'Rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows (fill, no frame).', frame: 'none', isBox: false },
 ];
 
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];

@@ -4,7 +4,7 @@
 // (buildAsset) and the dev-Save endpoint, so this also pins editor↔bake parity.
 import { describe, it, expect } from 'vitest';
 // @ts-ignore — nine-slice-kit is an untyped .mjs build script (cf. main.tsx/bgm.js)
-import { bakeAsset, REGISTRY, loadConfig, diffCommitted } from '../../../scripts/nine-slice-kit.mjs';
+import { bakeAsset, bakeLine, REGISTRY, LINE_DIR, loadConfig, diffCommitted } from '../../../scripts/nine-slice-kit.mjs';
 
 describe('nine-slice bake parity (committed PNG === fresh bake from config)', () => {
   const ids = Object.keys(REGISTRY);
@@ -22,6 +22,13 @@ describe('nine-slice bake parity (committed PNG === fresh bake from config)', ()
         const d = diffCommitted(v.out, v.png);
         expect(d.sameSize, `${v.out}: size ${JSON.stringify(d.fresh)} vs committed ${JSON.stringify(d.committed)}`).toBe(true);
         expect(d.samePixels, `${v.out}: pixels differ from the committed file — re-bake (apply-nine-slice / dev Save) or restore the artifact`).toBe(true);
+      }
+      // Transparent-interior "line" twin (ordinarily in explore/frames) must also match a fresh bake.
+      const rec = REGISTRY[id];
+      if (rec.line) {
+        const d = diffCommitted(rec.line, bakeLine(id), LINE_DIR);
+        expect(d.sameSize, `${rec.line}: size ${JSON.stringify(d.fresh)} vs committed ${JSON.stringify(d.committed)}`).toBe(true);
+        expect(d.samePixels, `${rec.line}: line frame drifted — re-bake (scripts/bake-line-frames.mjs)`).toBe(true);
       }
     });
   }

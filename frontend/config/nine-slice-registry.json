@@ -1,5 +1,5 @@
 {
-  "_doc": "Single source of truth for atom-built 9-slice frames. Read by the Node bake (scripts/nine-slice-kit.mjs), the in-app editor (NineSliceEditor), and the catalog edit-link (AssetLibraryStudio). Add a frame here and it becomes bakeable, editable, and catalog-linked with no other code change. atoms = names in public/assets/ui/kit/atoms; variants[].out = composed PNG in public/assets/ui/kit; swap = palette name; consume = the CSS var its content drives; carve = flood navy bleed outside the rail.",
+  "_doc": "Single source of truth for atom-built 9-slice frames. Read by the Node bake (scripts/nine-slice-kit.mjs), the in-app editor (NineSliceEditor), and the catalog edit-link (AssetLibraryStudio). Add a frame here and it becomes bakeable, editable, and catalog-linked with no other code change. atoms = names in public/assets/ui/kit/atoms; variants[].out = composed PNG in public/assets/ui/kit; swap = palette name; consume = the CSS var its content drives; carve = flood navy bleed outside the rail; line = filename of the transparent-interior 'line' twin baked into public/assets/ui/explore/frames (ornament only, navy masked out — the fix for the 9-slice fill problem so a surface can show behind the chrome; see ADR-0029).",
   "palettes": {
     "active": {
       "101921": "183452",
@@ -111,6 +111,7 @@
         "w": 72,
         "h": 72
       },
+      "line": "panel-line.png",
       "variants": [
         {
           "out": "panel.png"
@@ -130,6 +131,7 @@
       },
       "carve": true,
       "flipSides": true,
+      "line": "row-line.png",
       "variants": [
         {
           "out": "row.png"
