@@ -1620,13 +1620,24 @@ h1 {
   --ds-text-md:  clamp(.95rem, 1.1vw, 1.1rem);
   --ds-text-lg:  clamp(1.18rem, 1.55vw, 1.6rem);
   --ds-text-xl:  clamp(1.5rem, 2.1vw, 2.3rem);
-  /* space */
+  /* space — the 8px base + 4px half-step scale (ADR-0025). Map spatial ROLES onto
+     these steps; don't hand-pick px per element. */
   --ds-space-1: 4px;
   --ds-space-2: 8px;
   --ds-space-3: 12px;
   --ds-space-4: 16px;
   --ds-space-5: 24px;
   --ds-space-6: 32px;
+  --ds-space-7: 48px;
+  --ds-space-8: 64px;
+  /* Spatial-role tokens (ADR-0025) — COMFORTABLE density is the default; in-game
+     surfaces override these to the tight end (see .skirmish-screen). inset = padding
+     on all sides; stack = vertical gap; inline = horizontal gap; gutter = section gaps. */
+  --ds-inset: var(--ds-space-4);
+  --ds-stack: var(--ds-space-4);
+  --ds-inline: var(--ds-space-3);
+  --ds-inline-tight: var(--ds-space-2);
+  --ds-gutter: var(--ds-space-5);
   /* radius */
   --ds-radius-sm: 6px;
   --ds-radius-md: 8px;
@@ -5526,6 +5537,13 @@ h1 {
   --skirmish-muted: #a7c1ce;
   --skirmish-panel: rgba(7, 19, 29, .86);
   --skirmish-panel-strong: rgba(10, 29, 42, .94);
+  /* COMPACT density — this is an in-game surface (ADR-0006 lean + ADR-0025). The
+     spatial-role tokens resolve to the tight end of the scale here. */
+  --ds-inset: var(--ds-space-2);
+  --ds-stack: var(--ds-space-2);
+  --ds-inline: var(--ds-space-2);
+  --ds-inline-tight: var(--ds-space-1);
+  --ds-gutter: var(--ds-space-3);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
@@ -5626,8 +5644,8 @@ h1 {
   border: 1px solid rgba(96, 183, 221, .26);
   border-radius: 6px;
   display: flex;
-  gap: 10px;
-  padding: 0 14px;
+  gap: var(--ds-inline);
+  padding: 0 var(--ds-gutter);
 }
 
 /* Chip typography on the design-system scale (ADR-0008 family): a prominent
@@ -6222,13 +6240,13 @@ h1 {
   flex-direction: column;
   grid-column: 2;
   grid-row: 2;
-  gap: 8px;
+  gap: var(--ds-stack);
   height: 100%;
   max-height: none;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  padding: 10px 12px 12px 0;
+  padding: var(--ds-stack) var(--ds-stack) var(--ds-stack) 0;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
 }
@@ -6239,7 +6257,7 @@ h1 {
 .skirmish-hud-tabs {
   display: grid;
   flex: none;
-  gap: 4px;
+  gap: var(--ds-inline-tight);
   grid-auto-columns: 1fr;
   grid-auto-flow: column;
 }
@@ -6261,7 +6279,7 @@ h1 {
   letter-spacing: .04em;
   line-height: 1;
   min-block-size: 44px;
-  padding: 0 6px;
+  padding: 0 var(--ds-inline);
   text-transform: uppercase;
 }
 
@@ -6280,7 +6298,7 @@ h1 {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ds-stack);
   min-height: 0;
   overflow-y: auto;
   scrollbar-color: #315160 #071017;
@@ -6291,24 +6309,24 @@ h1 {
    (.app-header-button), so no raw-CSS chrome here. */
 .skirmish-view-group {
   display: grid;
-  gap: 8px;
+  gap: var(--ds-stack);
 }
 
 .skirmish-view-group + .skirmish-view-group {
-  margin-top: 12px;
+  margin-top: var(--ds-gutter);
 }
 
 .skirmish-view-row {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--ds-inline);
 }
 
 .skirmish-view-row .app-header-button {
   font-size: var(--ds-text-xs);
   min-block-size: 40px;
-  padding: 0 12px;
+  padding: 0 var(--ds-gutter);
 }
 
 .skirmish-zoom-readout {
@@ -6329,7 +6347,7 @@ h1 {
   box-sizing: border-box;
   image-rendering: pixelated;
   min-width: 0;
-  padding: 6px 8px;
+  padding: var(--ds-inline-tight) var(--ds-inset);
   position: relative;
 }
 
@@ -6724,7 +6742,7 @@ h1 {
 
 .skirmish-bottom-actions {
   display: grid;
-  gap: 6px;
+  gap: var(--ds-inline);
   grid-template-columns: minmax(0, 1fr) 72px;
 }
 
@@ -12395,10 +12413,10 @@ button.tileset-relationship-cell {
   display: inline-flex;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
-  gap: 8px;
+  gap: var(--ds-inline);
   image-rendering: pixelated;
   letter-spacing: .04em;
-  padding: 0 16px;
+  padding: 0 var(--ds-space-4);
   text-decoration: none;
   text-transform: uppercase;
   white-space: nowrap;
