@@ -4,12 +4,12 @@ date: 2026-06-26
 deciders: Nelson, Claude
 ---
 
-# ADR-0017: Settings action-button labels — one body-tier token, grouped by role, box hugs label
+# ADR-0021: Settings action-button labels — one body-tier token, grouped by role, box hugs label
 
 Sits in the settings-button family with [ADR-0009](0009-mode-button-from-atoms.md)
 (frame art) and [ADR-0010](0010-settings-header-buttons.md) (header geometry), and
-draws its size from the type scale ([ADR-0016](0016-settings-body-typography-role-scale.md)).
-The navigation tabs are a separate component — see [ADR-0018](0018-settings-nav-tabs-typography.md).
+draws its size from the type scale ([ADR-0020](0020-settings-body-typography-role-scale.md)).
+The navigation tabs are a separate component — see [ADR-0022](0022-settings-nav-tabs-typography.md).
 
 ## Context and Problem Statement
 
@@ -70,7 +70,7 @@ only larger element in the bar is the **title**, a different element class.
 
 This supersedes two earlier drafts of this ADR (first frame-driven `lg` "fills the
 frame"; then a context-split keeping the header at `lg`). The navigation tabs are
-governed separately in [ADR-0018](0018-settings-nav-tabs-typography.md) and keep
+governed separately in [ADR-0022](0022-settings-nav-tabs-typography.md) and keep
 `lg` as a navigation element, not an action.
 
 ### Consequences
@@ -80,7 +80,7 @@ governed separately in [ADR-0018](0018-settings-nav-tabs-typography.md) and keep
 - Note: header buttons and pills match in **size** while wearing different frames —
   correct by role; don't "fix" them apart on visual grounds. Two same-frame
   elements (a tab and a header button) may legitimately differ, because a tab is a
-  different component (ADR-0018).
+  different component (ADR-0022).
 - Cost: button widths vary by label length (a `min-inline-size` floor bounds it).
   If a frame looks under-filled at `sm`, tighten the box — do not raise the label.
 
@@ -111,4 +111,4 @@ governed separately in [ADR-0018](0018-settings-nav-tabs-typography.md) and keep
   [IBM Carbon — Button usage](https://carbondesignsystem.com/components/button/usage/) (box hugs label; don't mix sizes in a group),
   [Brad Frost — themeable design systems](https://bradfrost.com/blog/post/the-many-faces-of-themeable-design-systems/) (skin ≠ new component),
   [NN/g — Visual hierarchy](https://www.nngroup.com/articles/visual-hierarchy-ux-definition/) (size = importance).
-- Related: [ADR-0009](0009-mode-button-from-atoms.md), [ADR-0010](0010-settings-header-buttons.md), [ADR-0016](0016-settings-body-typography-role-scale.md), [ADR-0018](0018-settings-nav-tabs-typography.md).
+- Related: [ADR-0009](0009-mode-button-from-atoms.md), [ADR-0010](0010-settings-header-buttons.md), [ADR-0020](0020-settings-body-typography-role-scale.md), [ADR-0022](0022-settings-nav-tabs-typography.md).

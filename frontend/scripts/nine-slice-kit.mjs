@@ -20,7 +20,7 @@ import { buildFrameFrom } from './assemble-frame.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const ATOMS = `${root}public/assets/ui/kit/atoms/`;
-const KIT = `${root}public/assets/ui/kit/`;
+export const KIT = `${root}public/assets/ui/kit/`;
 export const CONFIG_DIR = `${root}config/nine-slice/`;
 
 // Single source of truth — the SAME registry the in-app editor and the catalog
@@ -112,6 +112,8 @@ export function normalizeConfig(c) {
     asset: c.asset,
     keyline: { dx: c.keyline?.dx ?? 0, dy: c.keyline?.dy ?? 0 },
     bracket: { dx: c.bracket?.dx ?? 0, dy: c.bracket?.dy ?? 0 },
+    // 0 = no content inset. MUST stay in sync with NineSliceEditor's DEFAULT_CONTENT
+    // (src/ui/NineSliceEditor.tsx) so an unsaved asset previews what it would bake.
     content: c.content ?? 0,
   };
 }
@@ -119,18 +121,20 @@ export function loadConfig(assetId) {
   return normalizeConfig(JSON.parse(readFileSync(`${CONFIG_DIR}${assetId}.json`, 'utf8')));
 }
 
-// Bake one asset from its config. Returns { written, warns, note } for the caller
-// to report. Writes the variant PNGs (and any inspection atom).
-export function buildAsset(assetId, cfgRaw) {
+// Bake an asset to in-memory PNGs WITHOUT writing — the pure core shared by
+// buildAsset (which writes) and the bake parity test (which compares the result
+// against the committed PNGs), so the writer and the test can never disagree about
+// what a config bakes to. Returns { variants:[{out, png, inspect, inspectPng}], warns, note }.
+export function bakeAsset(assetId, cfgRaw) {
   const rec = REGISTRY[assetId];
   if (!rec) throw new Error(`nine-slice-kit: unknown asset "${assetId}" (known: ${Object.keys(REGISTRY).join(', ')})`);
   const cfg = normalizeConfig({ ...cfgRaw, asset: assetId });
   const corner = tuneCorner(loadAtom(rec.atoms.corner), cfg);
   const edge = loadAtom(rec.atoms.edge), fill = loadAtom(rec.atoms.fill);
   const { w, h } = rec.frame;
-  const written = [], warns = [];
+  const warns = [];
   if (cfg.keyline.dx || cfg.keyline.dy) warns.push('keyline offset is IGNORED — the border is fixed/continuous by construction; set keyline to 0,0');
-  for (const v of rec.variants) {
+  const variants = rec.variants.map((v) => {
     // A variant's palette swap recolors the WHOLE frame (corner + edge + fill), so an
     // active/selected state can change the body + borders, not just the corner accent.
     const c = v.swap ? swapPalette(corner, v.swap) : corner;
@@ -138,12 +142,38 @@ export function buildAsset(assetId, cfgRaw) {
     const fl = v.swap ? swapPalette(fill, v.swap) : fill;
     const frame = buildFrameFrom(c, e, fl, w, h, !!rec.flipSides);
     if (rec.carve) carveExterior(frame);
-    writeFileSync(`${KIT}${v.out}`, PNG.sync.write(frame));
-    written.push(v.out);
-    if (v.inspect) writeFileSync(`${ATOMS}${v.inspect}.png`, PNG.sync.write(c));
-  }
+    return { out: v.out, png: frame, inspect: v.inspect ?? null, inspectPng: v.inspect ? c : null };
+  });
   const note = cfg.content ? `content ${cfg.content}px → ${rec.consume ? rec.consume.cssVar + ' (CSS)' : 'consumption-side'}` : null;
+  return { variants, warns, note };
+}
+
+// Bake one asset from its config and WRITE the variant PNGs (and any inspection
+// atom). Returns { written, warns, note } for the caller to report.
+export function buildAsset(assetId, cfgRaw) {
+  const { variants, warns, note } = bakeAsset(assetId, cfgRaw);
+  const written = [];
+  for (const v of variants) {
+    writeFileSync(`${KIT}${v.out}`, PNG.sync.write(v.png));
+    written.push(v.out);
+    if (v.inspectPng) writeFileSync(`${ATOMS}${v.inspect}.png`, PNG.sync.write(v.inspectPng));
+  }
   return { written, warns, note };
+}
+
+// Compare a freshly baked variant PNG to its committed file on disk, returning a
+// plain serializable result so a (type-checked) test can assert bake parity without
+// importing pngjs/fs/Buffer itself. Used by the nine-slice bake regression test.
+export function diffCommitted(out, freshPng) {
+  const committed = PNG.sync.read(readFileSync(`${KIT}${out}`));
+  const sameSize = committed.width === freshPng.width && committed.height === freshPng.height;
+  return {
+    out,
+    sameSize,
+    samePixels: sameSize && Buffer.compare(committed.data, freshPng.data) === 0,
+    committed: { w: committed.width, h: committed.height },
+    fresh: { w: freshPng.width, h: freshPng.height },
+  };
 }
 
 // Write the generated stylesheet that carries each asset's `content` into CSS as a

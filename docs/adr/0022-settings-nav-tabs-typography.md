@@ -4,10 +4,10 @@ date: 2026-06-26
 deciders: Nelson, Claude
 ---
 
-# ADR-0018: Settings rail tabs — a navigation component, sized at the content tier (md)
+# ADR-0022: Settings rail tabs — a navigation component, sized at the content tier (md)
 
 Splits the navigation tabs out of the action-button rule in
-[ADR-0017](0017-settings-button-label-sizing.md), and sets their label size.
+[ADR-0021](0021-settings-button-label-sizing.md), and sets their label size.
 
 ## Context and Problem Statement
 
@@ -22,7 +22,7 @@ the action-button rule or on its own, and **what size** is a nav-tab label?
 - Design systems catalog **tabs / navigation-rail items as a separate component
   from buttons**, with their own type role (M3, Carbon, Polaris, Apple HIG file
   tabs/rails under *Navigation*, not actions). Component identity follows **role**,
-  not frame art ([ADR-0017](0017-settings-button-label-sizing.md)).
+  not frame art ([ADR-0021](0021-settings-button-label-sizing.md)).
 - **Navigation is subordinate chrome.** Nav and tab labels are body-sized in every
   cited system (M3 14px, Carbon 14px, Polaris ~13px, Apple 13pt) and are **never
   larger than the content section/row titles they lead to** — users look at
@@ -56,7 +56,7 @@ larger labels & icons (concept polish)"), which had no backing ADR — per
 `letter-spacing: 0.02em` introduced alongside it is kept.
 Validated against the canon: a nav rail at `lg` tied the brand title and overshot
 the `md` rows — the inversion every cited system forbids. `sm` was rejected too:
-that is the action/body tier ([ADR-0017](0017-settings-button-label-sizing.md)), a
+that is the action/body tier ([ADR-0021](0021-settings-button-label-sizing.md)), a
 notch below the row titles, which would under-read in the ornate frame; `md` is the
 prescribed "equal to the content row title."
 
@@ -103,4 +103,4 @@ and a header button) legitimately differ in label size** — the tab is `md`
   [Apple HIG Typography](https://developer.apple.com/design/human-interface-guidelines/typography) (sidebar = 13pt Body),
   [NN/g — "You Are Here"](https://www.nngroup.com/articles/navigation-you-are-here/) (active = highlight, not enlargement),
   [W3C WAI / WCAG 1.4.1](https://www.w3.org/WAI/WCAG21/Understanding/use-of-color.html) (non-color cue for selected state).
-- Related: [ADR-0009](0009-mode-button-from-atoms.md), [ADR-0016](0016-settings-body-typography-role-scale.md), [ADR-0017](0017-settings-button-label-sizing.md).
+- Related: [ADR-0009](0009-mode-button-from-atoms.md), [ADR-0020](0020-settings-body-typography-role-scale.md), [ADR-0021](0021-settings-button-label-sizing.md).

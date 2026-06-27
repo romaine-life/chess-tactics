@@ -12181,9 +12181,9 @@ button.tileset-relationship-cell {
      pills), regardless of frame skin OR location. Action buttons sit at the
      body/label tier (sm) everywhere — a title bar is not a license to enlarge an
      action: Apple/M3/Carbon all size bar buttons the same as content buttons, and
-     emphasis comes from color/fill/weight, never size (ADR-0017). The only larger
+     emphasis comes from color/fill/weight, never size (ADR-0021). The only larger
      bar element is the "SETTINGS" title. Nav rail tabs are a DIFFERENT component
-     and set their own size (ADR-0018). */
+     and set their own size (ADR-0022). */
   --settings-action-label: var(--ds-text-sm);
   block-size: 100%;
   display: grid;
@@ -12437,7 +12437,7 @@ button.tileset-relationship-cell {
      tier (md), never above it. Nav/tab labels are body-sized across M3/Carbon/
      Polaris/Apple; lg would tie the "SETTINGS" brand title and overshoot the md
      rows the tab navigates to (inversion). Active tab is marked by the frame fill
-     swap + color, not size. Governed separately from action buttons (ADR-0018).
+     swap + color, not size. Governed separately from action buttons (ADR-0022).
      Supersedes the undocumented 1.25rem from PR #148; its letter-spacing is kept. */
   font-size: var(--ds-text-md);
   letter-spacing: 0.02em;
@@ -12679,7 +12679,7 @@ button.tileset-relationship-cell {
 
 /* Header buttons (Back / Menu / Sign In) are ACTION buttons — they share the one
    action-button label token with the panel pills below, even though they wear a
-   different frame (bracket vs flat fill). Skin doesn't drive label size (ADR-0017). */
+   different frame (bracket vs flat fill). Skin doesn't drive label size (ADR-0021). */
 .settings-header-button span {
   font-size: var(--settings-action-label);
 }

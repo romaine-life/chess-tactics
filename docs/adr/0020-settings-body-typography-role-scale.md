@@ -4,7 +4,7 @@ date: 2026-06-26
 deciders: Nelson, Claude
 ---
 
-# ADR-0016: Settings body text follows the role→token type scale
+# ADR-0020: Settings body text follows the role→token type scale
 
 ## Context and Problem Statement
 
@@ -83,7 +83,7 @@ The brand-lockup lines are out of scope here — their sizing is fixed by
 
 This ADR governs settings **text**. How a **button's frame relates to its
 label** (label size, box-to-label sizing) is a separate decision — see
-[ADR-0017](0017-settings-button-label-sizing.md). Buttons draw their size value
+[ADR-0021](0021-settings-button-label-sizing.md). Buttons draw their size value
 *from* this scale but are governed there.
 
 ## More Information
