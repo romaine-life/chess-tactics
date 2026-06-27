@@ -6746,15 +6746,17 @@ h1 {
 
 .skirmish-icon-rook-blue { background-image: url("/assets/ui/skirmish/icon-rook-blue.png"); }
 .skirmish-icon-rook-red { background-image: url("/assets/ui/skirmish/icon-rook-red.png"); }
-.skirmish-icon-flag { background-image: url("/assets/ui/skirmish/icon-flag.png"); }
-.skirmish-icon-hourglass { background-image: url("/assets/ui/skirmish/icon-hourglass.png"); }
-.skirmish-icon-gear { background-image: url("/assets/ui/skirmish/icon-gear.png"); }
+/* Point at the clean, method-forged kit glyphs (transparent, no baked box) instead of
+   the contact-sheet slices (ADR-0011/0027). menu + rook have no forged twin yet. */
+.skirmish-icon-flag { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
+.skirmish-icon-hourglass { background-image: url("/assets/ui/kit/icons/game/wait.png"); }
+.skirmish-icon-gear { background-image: url("/assets/ui/kit/icons/gear.png"); }
 .skirmish-icon-menu { background-image: url("/assets/ui/skirmish/icon-menu.png"); }
-.skirmish-icon-move { background-image: url("/assets/ui/skirmish/icon-move.png"); }
-.skirmish-icon-power { background-image: url("/assets/ui/skirmish/icon-power.png"); }
-.skirmish-icon-shield { background-image: url("/assets/ui/skirmish/icon-shield.png"); }
-.skirmish-icon-sword { background-image: url("/assets/ui/skirmish/icon-sword.png"); }
-.skirmish-icon-crossed-swords { background-image: url("/assets/ui/skirmish/icon-crossed-swords.png"); }
+.skirmish-icon-move { background-image: url("/assets/ui/kit/icons/game/move.png"); }
+.skirmish-icon-power { background-image: url("/assets/ui/kit/icons/game/power.png"); }
+.skirmish-icon-shield { background-image: url("/assets/ui/kit/icons/game/defend.png"); }
+.skirmish-icon-sword { background-image: url("/assets/ui/kit/icons/game/attack.png"); }
+.skirmish-icon-crossed-swords { background-image: url("/assets/ui/kit/icons/game/capture.png"); }
 
 
 .skirmish-unit-badge {
