@@ -1,14 +1,21 @@
 ---
-status: "proposed"
+status: "accepted"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---
 
-# ADR-0016: UI typography is one tokenized system — families, a size scale, weights, and tracking
+# ADR-0024: UI typography is one tokenized system — families, a size scale, weights, and tracking
 
-Generalizes the single typographic decision we already have
-([ADR-0008](0008-brand-lockup-typography.md), the brand lockup) into a system for
-all **living DOM text**. Sits alongside
+Generalizes the per-component typographic decisions we already have —
+[ADR-0008](0008-brand-lockup-typography.md) (brand lockup),
+[ADR-0020](0020-settings-body-typography-role-scale.md),
+[ADR-0021](0021-settings-button-label-sizing.md), and
+[ADR-0022](0022-settings-nav-tabs-typography.md) (settings body / buttons / nav
+tabs) — into one system for all **living DOM text**. Each of those maps a
+component onto the `--ds-text-*` scale and the "map roles, don't hand-pick" rule,
+but assumes a token spine (families, the full scale, weights, tracking,
+enforcement) that no document on main actually defines; this ADR is that spine and
+makes it mandatory. Sits alongside
 [ADR-0014](0014-ui-chrome-low-fidelity-aesthetic.md), which governs text **baked
 into chrome art** (a color-budget constraint) — this ADR governs the live text on
 top of that chrome.
@@ -113,5 +120,8 @@ mandatory.
 ## More Information
 
 - Tokens: `frontend/src/style.css` `:root` (~1585–1649).
-- First consumer / related decision: [ADR-0008](0008-brand-lockup-typography.md)
-  (brand lockup). Baked-text constraint: [ADR-0014](0014-ui-chrome-low-fidelity-aesthetic.md).
+- Instances that consume this system: [ADR-0008](0008-brand-lockup-typography.md)
+  (brand lockup), [ADR-0020](0020-settings-body-typography-role-scale.md),
+  [ADR-0021](0021-settings-button-label-sizing.md), and
+  [ADR-0022](0022-settings-nav-tabs-typography.md) (settings text). Baked-text
+  constraint: [ADR-0014](0014-ui-chrome-low-fidelity-aesthetic.md).
