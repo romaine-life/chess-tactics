@@ -27,7 +27,8 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0021](0021-settings-button-label-sizing.md) | Settings ACTION buttons (header + panel pills) share ONE body-tier (sm) label, grouped by role not frame; kept below titles; box hugs the label at a 40px desktop height (not the 44-48px touch floor — mouse game); emphasis via color/fill | accepted | 2026-06-27 |
 | [0022](0022-settings-nav-tabs-typography.md) | Settings rail tabs are a NAVIGATION component (governed apart from action buttons); sized at the content row-title tier (md), never above the rows they lead to; SETTINGS stays lg as the hierarchy top; supersedes the undocumented 1.25rem tab size from #148 | accepted | 2026-06-27 |
 | [0023](0023-app-title-bar-layout-and-controls.md) | App title bars: centered three-section layout + labeled controls on the kit frame (never bare icons; icon+label in-game, text in menus); generalizes ADR-0010 | accepted | 2026-06-27 |
-| [0024](0024-ui-typography-system.md) | UI typography is one tokenized system: --ds-font-* families (Jersey 10 dropped) + the --ds-text-* size scale + weight/tracking tokens, mandatory; raw font literals disallowed; migration is staged screen-by-screen | proposed | 2026-06-27 |
+| [0024](0024-ui-typography-system.md) | UI typography is one tokenized system: --ds-font-* families (Jersey 10 dropped) + the --ds-text-* size scale + weight/tracking tokens, mandatory; raw font literals disallowed; migration is staged screen-by-screen | accepted | 2026-06-27 |
+| [0025](0025-world-scene-art-anti-story-lore.md) | World/scene/portrait art is governed by the anti-story lore (docs/lore-anti-story.md + lore/historical-anchors + background contracts): residue-not-spectacle, faceless pieces, ordinary life beside an unseen real-historical catastrophe; palette per-image (no forced grade) | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 

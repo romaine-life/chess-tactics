@@ -7073,8 +7073,6 @@ h1 {
 .ce-brand strong,
 .ce-panel h2,
 .ce-selected-head h2,
-.ce-setting-card > span,
-.ce-notes-card > span,
 .ce-section-title h2,
 .ce-levels-head h2 {
   color: var(--ce-ink);
@@ -7144,9 +7142,10 @@ h1 {
 .ce-icon-button {
   align-items: center;
   aspect-ratio: 1;
-  background: var(--ce-asset-button-icon) center / 100% 100% no-repeat;
+  background: url("/assets/ui/kit/icon-button.png") center / 100% 100% no-repeat;
   border: 0;
   color: #f2e5c8;
+  image-rendering: pixelated;
   display: grid;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
   font-size: .9rem;
@@ -7175,13 +7174,9 @@ h1 {
 }
 
 .ce-icon-button.is-selected,
-.ce-topbar-actions a:hover,
-.ce-topbar-actions a:focus-visible,
-.ce-topbar-actions button:hover,
-.ce-topbar-actions button:focus-visible,
 .ce-icon-button:hover,
 .ce-icon-button:focus-visible {
-  background-image: var(--ce-asset-button-icon-selected);
+  background-image: url("/assets/ui/kit/icon-button-active.png");
   color: #dff8ff;
   outline: none;
 }
@@ -7189,7 +7184,7 @@ h1 {
 .ce-icon-button.is-danger,
 .ce-icon-button.is-danger:hover,
 .ce-icon-button.is-danger:focus-visible {
-  background-image: var(--ce-asset-button-icon-danger);
+  background-image: url("/assets/ui/kit/icon-button.png");
   color: #ffe2d8;
 }
 
@@ -7214,29 +7209,14 @@ h1 {
 }
 
 .ce-panel::before {
-  background: var(--ce-asset-panel-large) center / 100% 100% no-repeat;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 18 fill / 16px stretch;
   content: "";
   image-rendering: pixelated;
   inset: 0;
-  opacity: .72;
   pointer-events: none;
   position: absolute;
   z-index: 0;
-}
-
-.ce-panel::after {
-  background: var(--ce-asset-panel-crest) center / contain no-repeat;
-  content: "";
-  height: 54px;
-  image-rendering: pixelated;
-  left: 50%;
-  opacity: .78;
-  pointer-events: none;
-  position: absolute;
-  top: 7px;
-  transform: translateX(-50%);
-  width: 50px;
-  z-index: 1;
 }
 
 .ce-panel > * {
@@ -7253,7 +7233,7 @@ h1 {
 }
 
 .ce-level-panel {
-  grid-template-rows: auto minmax(190px, .62fr) auto auto auto minmax(118px, .22fr);
+  grid-template-rows: auto minmax(220px, 1fr) auto;
 }
 
 .ce-panel-head,
@@ -7281,7 +7261,7 @@ h1 {
   align-items: center;
   background: transparent;
   border: 12px solid transparent;
-  border-image: var(--ce-slice-button-primary) 18 fill / 12px stretch;
+  border-image: url("/assets/ui/kit/button-primary.png") 18 fill / 12px stretch;
   box-sizing: border-box;
   color: #f6ead2;
   display: inline-grid;
@@ -7308,7 +7288,7 @@ h1 {
 }
 
 .ce-asset-button.is-danger {
-  border-image-source: var(--ce-slice-button-danger);
+  border-image-source: url("/assets/ui/kit/button-danger.png");
   color: #ffe1d8;
 }
 
@@ -7377,7 +7357,7 @@ h1 {
   align-items: center;
   background: transparent;
   border: 14px solid transparent;
-  border-image: var(--ce-slice-row-panel) 18 fill / 14px stretch;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   box-sizing: border-box;
   color: var(--ce-ink);
   cursor: pointer;
@@ -7394,7 +7374,8 @@ h1 {
 .ce-campaign-row.is-selected,
 .ce-campaign-row:hover,
 .ce-campaign-row:focus-visible {
-  border-image-source: var(--ce-slice-row-panel-selected);
+  border-image-source: url("/assets/ui/kit/row.png");
+  box-shadow: inset 0 0 0 2px rgba(48, 214, 255, .55), 0 0 14px rgba(48, 214, 255, .16);
   outline: none;
 }
 
@@ -7406,7 +7387,8 @@ h1 {
 
 .ce-campaign-row.is-locked:hover,
 .ce-campaign-row.is-locked:focus-visible {
-  border-image-source: var(--ce-slice-row-panel);
+  border-image-source: url("/assets/ui/kit/row.png");
+  box-shadow: none;
 }
 
 .ce-level-row {
@@ -7419,7 +7401,8 @@ h1 {
 .ce-level-row.is-selected,
 .ce-level-row:hover,
 .ce-level-row:focus-visible {
-  border-image-source: var(--ce-slice-row-panel-selected);
+  border-image-source: url("/assets/ui/kit/row.png");
+  box-shadow: inset 0 0 0 2px rgba(48, 214, 255, .55), 0 0 14px rgba(48, 214, 255, .16);
   outline: none;
 }
 
@@ -7439,12 +7422,12 @@ h1 {
   filter: drop-shadow(0 0 9px rgba(48, 214, 255, .42)) drop-shadow(0 3px 0 rgba(0, 0, 0, .45));
 }
 
-.ce-shield-lion { background-image: var(--ce-asset-shield-lion); }
-.ce-shield-rook { background-image: var(--ce-asset-shield-rook); }
-.ce-shield-crescent { background-image: var(--ce-asset-shield-crescent); }
-.ce-shield-snow { background-image: var(--ce-asset-shield-snow); }
-.ce-shield-flame { background-image: var(--ce-asset-shield-flame); }
-.ce-shield-crown { background-image: var(--ce-asset-shield-crown); }
+.ce-shield-lion { background-image: url("/assets/ui/kit/icons/shields/lion.png"); }
+.ce-shield-rook { background-image: url("/assets/ui/kit/icons/shields/rook.png"); }
+.ce-shield-crescent { background-image: url("/assets/ui/kit/icons/shields/crescent.png"); }
+.ce-shield-snow { background-image: url("/assets/ui/kit/icons/shields/snow.png"); }
+.ce-shield-flame { background-image: url("/assets/ui/kit/icons/shields/flame.png"); }
+.ce-shield-crown { background-image: url("/assets/ui/kit/icons/shields/crown.png"); }
 
 .ce-row-copy {
   display: grid;
@@ -7564,19 +7547,16 @@ h1 {
   min-width: 0;
 }
 
-.ce-name-field span,
-.ce-setting-card > span,
-.ce-notes-card > span {
+.ce-name-field span {
   color: #73d7ff;
   font-size: .54rem;
 }
 
-.ce-name-field input,
-.ce-setting-card input,
-.ce-setting-card select {
-  background: var(--ce-asset-field-input) center / 100% 100% no-repeat;
+.ce-name-field input {
+  background: url("/assets/ui/kit/field-input.png") center / 100% 100% no-repeat;
   border: 0;
   color: var(--ce-ink);
+  image-rendering: pixelated;
   font: 1.15rem "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;
   min-height: 42px;
   min-width: 0;
@@ -7585,22 +7565,7 @@ h1 {
   width: 100%;
 }
 
-.ce-setting-card input,
-.ce-setting-card select {
-  font-size: 1.02rem;
-  min-height: 38px;
-  padding: 6px 10px;
-}
-
-.ce-setting-card select {
-  appearance: none;
-  background-image: var(--ce-asset-field-select);
-  min-height: 40px;
-}
-
-.ce-name-field input:focus,
-.ce-setting-card input:focus,
-.ce-setting-card select:focus {
+.ce-name-field input:focus {
   filter: brightness(1.2) drop-shadow(0 0 7px rgba(48, 214, 255, .2));
 }
 
@@ -7665,11 +7630,199 @@ h1 {
   white-space: nowrap;
 }
 
+/* Force composition for the selected level — the allies/enemies counts read off
+   the level's board, so they live with the level, not the global title bar. */
+.ce-force-readout {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 14px;
+}
+
+.ce-force {
+  align-items: center;
+  display: flex;
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
+  font-size: .5rem;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.ce-force img {
+  height: 22px;
+  image-rendering: pixelated;
+  width: 22px;
+}
+
+.ce-force strong {
+  color: var(--ce-ink);
+  font-size: .72rem;
+  font-weight: 400;
+}
+
+.ce-force-ally { color: #6fc0f4; }
+.ce-force-enemy { color: #ef8a6c; }
+
+/* ===== Compact Level Info — toggles into the level preview slot ===== */
+.ce-level-view-toggle {
+  background: rgba(4, 11, 17, .85);
+  border: 1px solid rgba(83, 136, 160, .5);
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 3;
+}
+
+.ce-level-view-toggle button {
+  background: transparent;
+  border: 0;
+  color: #9eb8c5;
+  cursor: pointer;
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  padding: 4px 11px;
+  text-transform: uppercase;
+}
+
+.ce-level-view-toggle button.is-active {
+  background: #1c4e74;
+  color: #dff4ff;
+}
+
+.ce-level-info {
+  align-content: start;
+  column-gap: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 8px 6px;
+  row-gap: 12px;
+}
+
+.ce-level-info section {
+  align-content: start;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ce-li-zones-row {
+  align-items: baseline;
+  gap: 10px;
+  grid-column: 1 / -1;
+  grid-template-columns: auto 1fr;
+}
+
+.ce-li-title {
+  color: #73d7ff;
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.ce-li-stat {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.ce-li-stat span {
+  color: #9eb8c5;
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
+  font-size: .44rem;
+  text-transform: uppercase;
+}
+
+.ce-li-stat strong {
+  color: var(--ce-ink);
+  font-size: .95rem;
+  font-weight: 400;
+}
+
+.ce-li-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.ce-li-chip {
+  align-items: center;
+  background: rgba(8, 22, 32, .7);
+  border: 1px solid rgba(83, 136, 160, .38);
+  color: #c6d6de;
+  display: inline-flex;
+  font-size: .82rem;
+  gap: 5px;
+  padding: 2px 6px;
+}
+
+.ce-li-chip b { color: var(--ce-ink); font-weight: 400; }
+
+.ce-li-swatch {
+  display: inline-block;
+  height: 9px;
+  outline: 1px solid rgba(0, 0, 0, .5);
+  width: 9px;
+}
+
+.ce-li-rosters {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.ce-li-roster-head {
+  align-items: center;
+  border-bottom: 1px solid rgba(83, 136, 160, .28);
+  display: flex;
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
+  font-size: .46rem;
+  gap: 6px;
+  margin-bottom: 5px;
+  padding-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.ce-li-roster-head.is-ally { color: #6fc0f4; }
+.ce-li-roster-head.is-enemy { color: #ef8a6c; }
+.ce-li-roster-head strong { color: var(--ce-ink); font-size: .85rem; font-weight: 400; margin-left: auto; }
+
+.ce-li-roster ul { display: grid; gap: 3px; list-style: none; margin: 0; padding: 0; }
+.ce-li-roster li { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.ce-li-roster li span { color: #b7cad4; font-size: .9rem; }
+.ce-li-roster li b { color: var(--ce-ink); font-size: .9rem; font-weight: 400; }
+.ce-li-none { color: #7e94a0; font-size: .85rem; }
+
+.ce-li-zones { color: #c6d6de; font-size: .92rem; }
+
+.terrain-grass { background: #6a9b3f; }
+.terrain-water { background: #3a78c8; }
+.terrain-bridge { background: #b08750; }
+.terrain-road { background: #9a8b6a; }
+.terrain-stone { background: #8aa0ab; }
+.terrain-rock { background: #7c8a96; }
+.terrain-cliff { background: #5b6b76; }
+.terrain-dirt { background: #7d6a4a; }
+.terrain-pebble { background: #9aa6ad; }
+.terrain-sand { background: #c8b87e; }
+/* ===== end Compact Level Info ===== */
+
 .ce-preview-frame {
-  background: var(--ce-asset-preview-frame) center / 100% 100% no-repeat;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 18 fill / 14px stretch;
+  image-rendering: pixelated;
   margin: 8px 4px 6px;
   min-height: 0;
-  padding: 12px;
+  padding: 2px;
 }
 
 .level-preview-board,
@@ -7751,12 +7904,8 @@ h1 {
 .ce-preview-actions {
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) 48px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   padding: 0 4px 8px;
-}
-
-.ce-level-name-field {
-  padding: 7px 4px 5px;
 }
 
 .ce-preview-actions .ce-link-button {
@@ -7764,88 +7913,42 @@ h1 {
 }
 
 .ce-link-button-ghost {
-  border-image-source: var(--ce-slice-button-primary);
-  filter: saturate(.66) brightness(.82);
-}
-
-.ce-settings-grid {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 4px;
-}
-
-.ce-setting-card,
-.ce-notes-card {
-  background: var(--ce-asset-panel-card) center / 100% 100% no-repeat;
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 10px 12px;
-}
-
-.ce-notes-card {
-  grid-template-rows: auto minmax(0, 1fr);
-  margin: 8px 4px 0;
-  min-height: 0;
-  overflow: hidden;
-  padding-bottom: 14px;
-}
-
-.ce-notes-card p,
-.ce-notes-card textarea {
-  background: transparent;
-  border: 0;
-  color: #d6dde0;
-  font-size: .96rem;
-  line-height: 1.36;
-  margin: 0;
-  height: 100%;
-  min-height: 0;
-  outline: none;
-  overflow: auto;
-  resize: none;
-  scrollbar-color: rgba(130, 156, 166, .75) rgba(4, 11, 17, .8);
-  scrollbar-width: thin;
-  width: 100%;
-}
-
-.ce-notes-card textarea::placeholder {
-  color: rgba(214, 221, 224, .62);
+  border-image-source: url("/assets/ui/kit/button-neutral.png");
 }
 
 .ce-footer {
   align-items: center;
-  background: var(--ce-asset-footer-bar) center / 100% 100% no-repeat;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 18 fill / 14px stretch;
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(170px, 1fr) minmax(150px, .82fr) minmax(140px, .72fr) minmax(170px, 1fr);
+  image-rendering: pixelated;
   min-height: 58px;
-  padding: 8px 14px;
+  padding: 4px 10px;
 }
 
 .ce-footer-link {
-  border-image-source: var(--ce-slice-button-primary);
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
+/* Footer: Save = primary; Duplicate + Export = neutral; Delete = danger. */
 .ce-footer .ce-asset-button:nth-child(1) {
-  border-image-source: var(--ce-slice-button-primary);
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
+.ce-import-campaign,
+.ce-footer-secondary,
 .ce-footer .ce-asset-button:nth-child(2) {
-  border-image-source: var(--ce-slice-button-primary);
-}
-
-.ce-footer .ce-asset-button:nth-child(3) {
-  border-image-source: var(--ce-slice-button-primary);
+  border-image-source: url("/assets/ui/kit/button-neutral.png");
 }
 
 .ce-footer .ce-asset-button.is-danger {
-  border-image-source: var(--ce-slice-button-danger);
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 .ce-mid-actions .ce-asset-button.is-danger {
-  border-image-source: var(--ce-slice-button-danger);
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 @media (max-width: 1180px) {
@@ -7887,7 +7990,6 @@ h1 {
 
   .ce-layout,
   .ce-footer,
-  .ce-settings-grid,
   .ce-preview-actions,
   .ce-campaign-summary,
   .ce-campaign-summary dl {
