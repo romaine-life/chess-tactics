@@ -41,6 +41,9 @@ const REGIONS: RegionDef[] = [
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];
 const STORAGE_KEY = 'chess-tactics:surface-dressing:v3';
 const DEFAULT_TILE = 1024;
+// Sentinel stored in surfaces[id] meaning "keep the frame, drop the fill" (transparent interior).
+const CLEAR = '__clear';
+const isSurface = (value: string | null): boolean => !!value && value !== CLEAR;
 
 interface DressingConfig {
   surfaces: Record<RegionId, string | null>; // per-region: which surface fills it (or null = default chrome)
@@ -100,15 +103,26 @@ function buildCss(config: DressingConfig): string {
       continue;
     }
     const name = config.surfaces[region.id];
-    const asset = name ? SURFACE_ASSETS.find((s) => s.name === name) : undefined;
-    if (asset) {
+    if (name === CLEAR) {
+      // Keep the element's frame art but drop the baked `fill` so the interior is transparent —
+      // whatever is behind (the box's surface for buttons/rows; the page for the title) shows
+      // through. Solves the "navy patch on a surfaced box" fill problem.
       parts.push(`${sel} {
+  border-image: ${region.frame} !important;
+  background: transparent !important;
+  image-rendering: pixelated !important;
+}`);
+    } else {
+      const asset = name ? SURFACE_ASSETS.find((s) => s.name === name) : undefined;
+      if (asset) {
+        parts.push(`${sel} {
   border-image: ${region.frame} !important;
   background: url("${asset.file}") ${offsetX}px ${offsetY}px / ${tilePx}px repeat fixed !important;
   background-origin: border-box !important;
   background-clip: border-box !important;
   image-rendering: pixelated !important;
 }`);
+      }
     }
     if (region.isBox) {
       const op = config.boxOpacity[region.id as BoxId];
@@ -208,7 +222,12 @@ export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
     }
   };
 
-  const anyAssigned = REGIONS.some((r) => config.surfaces[r.id]) || BOX_IDS.some((id) => config.boxDisabled[id] || config.boxOpacity[id] < 1);
+  // A real surface image is needed before the global tile/offset sliders do anything.
+  const anySurface = REGIONS.some((r) => isSurface(config.surfaces[r.id]));
+  // Any override at all (surface, transparent, disable, or opacity) means there's CSS to copy.
+  const anyRule = anySurface
+    || REGIONS.some((r) => config.surfaces[r.id] === CLEAR)
+    || BOX_IDS.some((id) => config.boxDisabled[id] || config.boxOpacity[id] < 1);
 
   return (
     <>
@@ -237,7 +256,8 @@ export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
                 {SURFACE_ASSETS.map((s) => (
                   <option key={s.name} value={s.name}>{s.label}</option>
                 ))}
-                <option value="__none">Clear all</option>
+                <option value={CLEAR}>Transparent (see through)</option>
+                <option value="__none">None · default</option>
               </select>
             </label>
 
@@ -253,6 +273,7 @@ export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
                     <span>Surface</span>
                     <select value={name ?? ''} disabled={disabled} onChange={(event) => setSurface(region.id, event.target.value || null)}>
                       <option value="">None · default</option>
+                      <option value={CLEAR}>Transparent (see through)</option>
                       {SURFACE_ASSETS.map((s) => (
                         <option key={s.name} value={s.name}>{s.label}</option>
                       ))}
@@ -274,26 +295,26 @@ export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
               );
             })}
 
-            <div className={`surface-region-card surface-global-card ${anyAssigned ? '' : 'is-empty'}`.trim()}>
+            <div className={`surface-region-card surface-global-card ${anySurface ? '' : 'is-empty'}`.trim()}>
               <strong>Surface · all regions</strong>
               <label className="tileset-catalog-zoom">
                 <span>Tile size · {config.tilePx}px</span>
-                <input type="range" min={128} max={2048} step={16} value={config.tilePx} disabled={!anyAssigned} onChange={(event) => setGlobal({ tilePx: Number(event.target.value) })} />
+                <input type="range" min={128} max={2048} step={16} value={config.tilePx} disabled={!anySurface} onChange={(event) => setGlobal({ tilePx: Number(event.target.value) })} />
               </label>
               <label className="tileset-catalog-zoom">
                 <span>Start X · {config.offsetX}px</span>
-                <input type="range" min={-1024} max={1024} step={4} value={config.offsetX} disabled={!anyAssigned} onChange={(event) => setGlobal({ offsetX: Number(event.target.value) })} />
+                <input type="range" min={-1024} max={1024} step={4} value={config.offsetX} disabled={!anySurface} onChange={(event) => setGlobal({ offsetX: Number(event.target.value) })} />
               </label>
               <label className="tileset-catalog-zoom">
                 <span>Start Y · {config.offsetY}px</span>
-                <input type="range" min={-1024} max={1024} step={4} value={config.offsetY} disabled={!anyAssigned} onChange={(event) => setGlobal({ offsetY: Number(event.target.value) })} />
+                <input type="range" min={-1024} max={1024} step={4} value={config.offsetY} disabled={!anySurface} onChange={(event) => setGlobal({ offsetY: Number(event.target.value) })} />
               </label>
-              <button type="button" className="surface-region-reset" disabled={!anyAssigned} onClick={() => setGlobal({ tilePx: DEFAULT_TILE, offsetX: 0, offsetY: 0 })}>
+              <button type="button" className="surface-region-reset" disabled={!anySurface} onClick={() => setGlobal({ tilePx: DEFAULT_TILE, offsetX: 0, offsetY: 0 })}>
                 Reset zoom & start
               </button>
             </div>
 
-            <button type="button" className="tileset-view-action" onClick={copyCss} disabled={!anyAssigned}>
+            <button type="button" className="tileset-view-action" onClick={copyCss} disabled={!anyRule}>
               {copied ? 'Copied CSS ✓' : 'Copy CSS'}
             </button>
           </div>

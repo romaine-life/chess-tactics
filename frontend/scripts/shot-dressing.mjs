@@ -27,6 +27,8 @@ const scenarios = {
   disable: { surfaces: { title: ST, tabsBox: null, buttons: ST, rowsBox: null, rows: OAK }, boxDisabled: { tabsBox: true, rowsBox: true }, boxOpacity: { tabsBox: 1, rowsBox: 1 } },
   // rows box stone at 50% transparency
   transp: { surfaces: { title: ST, tabsBox: ST, buttons: null, rowsBox: ST, rows: null }, boxDisabled: { tabsBox: false, rowsBox: false }, boxOpacity: { tabsBox: 1, rowsBox: 0.5 } },
+  // boxes wood; buttons + rows set to "Transparent (see through)" → wood flows through them
+  clear: { surfaces: { title: OAK, tabsBox: OAK, buttons: '__clear', rowsBox: OAK, rows: '__clear' }, boxDisabled: { tabsBox: false, rowsBox: false }, boxOpacity: { tabsBox: 1, rowsBox: 1 } },
 };
 const pick = scenarios[process.env.SCENARIO] || { surfaces: { title: surface, tabsBox: surface, buttons: surface, rowsBox: surface, rows: surface }, boxDisabled: { tabsBox: false, rowsBox: false }, boxOpacity: { tabsBox: 1, rowsBox: 1 } };
 const cfg = { ...pick, tilePx, offsetX: 0, offsetY: 0 };
