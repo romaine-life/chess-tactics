@@ -10054,10 +10054,10 @@ h1 {
 .surface-view-panel,
 .surface-view-fill {
   display: block;
-  width: 380px;
-  height: 260px;
+  width: 500px;
+  height: 340px;
   background-repeat: repeat;
-  background-position: top left;
+  background-position: center;
   image-rendering: pixelated;
   border-radius: 6px;
 }

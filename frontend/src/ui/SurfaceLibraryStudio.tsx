@@ -1,4 +1,4 @@
-import { type ReactElement, type ReactNode, type CSSProperties } from 'react';
+import { useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 
 // Read-only catalog grid for background surfaces. Each card shows the texture *tiled* (the
@@ -51,17 +51,28 @@ export function SurfaceLibraryStudio({
 // renders behind chrome) and as a bare tiled field, with a Details readout. Mirrors AssetLab.
 export function SurfaceViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
   const s = SURFACE_ASSETS.find((x) => x.name === name) ?? SURFACE_ASSETS[0];
-  const tiled = (px: number): CSSProperties => ({ backgroundImage: `url("${s.file}")`, backgroundSize: `${px}px`, backgroundRepeat: 'repeat', backgroundPosition: 'top left', imageRendering: 'pixelated' });
+  // Zoom scales the displayed tile size. The surface repeats, so zoom alone is enough to
+  // inspect it — no panning needed; you always see filled content. Low zoom = many tiles
+  // (read it as a surface), high zoom = big pixels (inspect the pixel art / seams).
+  const [zoom, setZoom] = useState(1);
+  const base = s.tilePx / 4;
+  const tiled = (mult: number): CSSProperties => ({
+    backgroundImage: `url("${s.file}")`,
+    backgroundSize: `${Math.round(base * zoom * mult)}px`,
+    backgroundRepeat: 'repeat',
+    backgroundPosition: 'center',
+    imageRendering: 'pixelated',
+  });
   return (
     <>
       <section className="al-lab-main" aria-label="Surface preview">
         <div className="al-lab-stages">
           <figure className="al-stage">
-            <span className="surface-view-panel" style={tiled(Math.round(s.tilePx / 3))} />
+            <span className="surface-view-panel" style={tiled(1)} />
             <figcaption>in a framed panel</figcaption>
           </figure>
           <figure className="al-stage">
-            <span className="surface-view-fill" style={tiled(Math.round(s.tilePx / 4))} />
+            <span className="surface-view-fill" style={tiled(0.85)} />
             <figcaption>tiled surface</figcaption>
           </figure>
         </div>
@@ -71,6 +82,10 @@ export function SurfaceViewer({ name, header }: { name?: string; header?: ReactN
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
+            <label className="tileset-catalog-zoom">
+              <span>Zoom · {zoom.toFixed(1)}×</span>
+              <input type="range" min="0.5" max="8" step="0.1" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+            </label>
             <dl className="al-meta">
               <div><dt>Surface</dt><dd>{s.label}</dd></div>
               <div><dt>Approach</dt><dd>{s.approach}</dd></div>
