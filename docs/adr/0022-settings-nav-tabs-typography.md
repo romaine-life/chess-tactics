@@ -49,6 +49,15 @@ navigates to. The **active** tab keeps the same `md` size and is marked by the
 existing frame-fill swap + color shift (a non-color cue, WCAG-compliant) — not a
 size jump.
 
+> **Amended 2026-06-27:** the tabs still sit at the **content row-title tier** (the
+> core rule here is unchanged) — but that tier was scaled up `md`→`lg` for
+> readability ([ADR-0020](0020-settings-body-typography-role-scale.md) amendment),
+> so the tabs follow to **`--ds-text-lg`**. They now *tie* the "SETTINGS" brand in
+> SIZE — the inversion this ADR originally guarded against. That is a deliberate
+> trade: the brand lockup is shared on every screen (ADR-0003), so it was left `lg`
+> rather than resize all screens, and it keeps its lead by weight + position instead
+> of size. "Tabs = row-title tier, never *above* the rows" still holds.
+
 This corrects the ADR's original `lg` (recorded as "sized by sight, movable") and
 **supersedes the undocumented `1.25rem` tab size from PR #148** ("blue active tab +
 larger labels & icons (concept polish)"), which had no backing ADR — per

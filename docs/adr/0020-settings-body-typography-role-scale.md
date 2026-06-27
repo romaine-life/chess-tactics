@@ -42,14 +42,19 @@ Chosen: **(a)** — settings text maps to the existing scale by role:
 | Role | Token | Examples |
 |---|---|---|
 | eyebrow / status | `--ds-text-2xs` | section title, account status |
-| description / caption | `--ds-text-sm` | row description (amended — see below) |
-| control value / label | `--ds-text-sm` | stepper & slider readouts, row value chip, account name |
-| body / row title | `--ds-text-md` | row `h4` titles |
+| description / caption | `--ds-text-md` | row description (amended — see below) |
+| control value / label | `--ds-text-md` | stepper & slider readouts, row value chip, account name |
+| body / row title | `--ds-text-lg` | row `h4` titles |
 
-> **Amended 2026-06-27:** the row **description** moved `--ds-text-xs` →
-> `--ds-text-sm`. At `xs` it read too small/faint in the live rows; it now shares
-> the `sm` secondary-body tier with the value/label readouts, still a clear step
-> below the `md` row title. The eyebrow (`2xs`) remains the smallest text.
+> **Amended 2026-06-27:** the settings row hierarchy was scaled up one step for
+> readability (the original tiers tested too small): description `xs`→`md`,
+> value/label `sm`→`md`, row title `md`→`lg`. Description and value now share the
+> `md` body tier, a clear step below the `lg` title; the eyebrow (`2xs`) stays the
+> smallest. This is a **settings-only** bump — the shared brand lockup ("SETTINGS",
+> `lg`; ADR-0003 / ADR-0008) was left unchanged to avoid resizing every screen, so
+> the `lg` row title (and the tabs that follow it) now *tie* the brand in size; the
+> brand keeps its lead by weight + position. Rail tabs follow the row-title tier to
+> `lg` ([ADR-0022](0022-settings-nav-tabs-typography.md)).
 
 The UI-Scale **stepper readout**, which had inherited the body's 19px, now uses
 `--ds-text-sm`, matching the slider readout (both are "value" role).

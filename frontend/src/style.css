@@ -12474,13 +12474,12 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab strong {
-  /* Nav rail is subordinate chrome: its tab label sits at the content row-title
-     tier (md), never above it. Nav/tab labels are body-sized across M3/Carbon/
-     Polaris/Apple; lg would tie the "SETTINGS" brand title and overshoot the md
-     rows the tab navigates to (inversion). Active tab is marked by the frame fill
-     swap + color, not size. Governed separately from action buttons (ADR-0022).
-     Supersedes the undocumented 1.25rem from PR #148; its letter-spacing is kept. */
-  font-size: var(--ds-text-md);
+  /* Tab label sits at the content row-title tier and FOLLOWS it (ADR-0022, amended
+     2026-06-27): both moved md -> lg when the row text was enlarged. lg now ties
+     the "SETTINGS" brand title in SIZE; the brand keeps its lead by weight +
+     position (settings-only bump — the shared brand stays lg to avoid resizing
+     every screen). Active tab is marked by the frame fill swap + color, not size. */
+  font-size: var(--ds-text-lg);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -12597,19 +12596,19 @@ button.tileset-relationship-cell {
 }
 
 .settings-row h4 {
-  font-size: var(--ds-text-md);
+  font-size: var(--ds-text-lg);
   text-transform: uppercase;
 }
 
 .settings-row p {
-  font-size: var(--ds-text-sm);
+  font-size: var(--ds-text-md);
   margin-top: 3px;
 }
 
 .settings-row-value {
   flex: none;
   color: #eaf7ff;
-  font-size: var(--ds-text-sm);
+  font-size: var(--ds-text-md);
   min-width: 74px;
   text-align: right;
   text-transform: uppercase;
