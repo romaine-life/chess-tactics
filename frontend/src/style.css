@@ -1131,7 +1131,6 @@ h1 {
 /* Frame + icon layers crop their catalog sheet via the --asset-* custom
    properties emitted by frameStyleForAsset(). */
 .mode-button-art,
-.mode-button-9slice,
 .mode-button-icon {
   position: absolute;
   background-image: var(--asset-image);
@@ -1141,10 +1140,47 @@ h1 {
   pointer-events: none;
 }
 
-.mode-button-art,
-.mode-button-9slice {
+.mode-button-art {
   inset: 0;
   z-index: 0;
+}
+
+/* Frame is the atom-assembled kit 9-slice (ADR-0012), consumed exactly like the
+   settings tab — same gold atoms, 24px slice. Replaces the retired cropped
+   button-9slice.main-menu art. Hover/press is a brightness filter on the frame. */
+.mode-button-9slice {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/main-menu-button.png") 24 fill / 12px round;
+  image-rendering: pixelated;
+  pointer-events: none;
+  transition: filter .08s ease;
+}
+
+.mode-button.uses-atom-frame:hover .mode-button-9slice,
+.mode-button.uses-atom-frame:focus-visible .mode-button-9slice,
+.mode-button.uses-atom-frame.is-active .mode-button-9slice {
+  filter: brightness(1.12) saturate(1.06);
+}
+
+.mode-button.uses-atom-frame:active .mode-button-9slice {
+  filter: brightness(.95) saturate(1.05);
+}
+
+/* Forward chevron — was baked into the old cropped frame art; now a live glyph. */
+.mode-button-arrow {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f4ead6;
+  font-size: clamp(20px, 2.2vw, 34px);
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .mode-button-art {

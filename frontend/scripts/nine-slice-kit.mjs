@@ -51,6 +51,15 @@ export const REGISTRY = {
     frame: { w: 72, h: 72 },
     variants: [{ out: 'panel.png' }],
   },
+  'main-menu-button': {
+    // Main-menu mode buttons — same gold-keyline kit as the settings tabs/panel,
+    // assembled from the shared atoms (ADR-0012) with its own config so the menu
+    // button tunes independently. Replaces the old cropped main-menu-aspirational
+    // sprite the menu still renders.
+    atoms: { corner: 'corner', edge: 'edge', fill: 'fill' },
+    frame: { w: 72, h: 72 },
+    variants: [{ out: 'main-menu-button.png' }],
+  },
   'row': {
     atoms: { corner: 'row-corner', edge: 'row-edge', fill: 'row-fill' },
     frame: { w: 160, h: 112 },
