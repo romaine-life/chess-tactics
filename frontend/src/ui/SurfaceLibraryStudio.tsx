@@ -1,4 +1,4 @@
-import { type ReactElement, type CSSProperties } from 'react';
+import { type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 
 // Read-only catalog grid for background surfaces. Each card shows the texture *tiled* (the
@@ -44,5 +44,42 @@ export function SurfaceLibraryStudio({
       ))}
       {visible.length === 0 ? <p className="tileset-studio-empty">No surfaces match.</p> : null}
     </div>
+  );
+}
+
+// The read-only Viewer for a single surface — shown big, both in a framed panel (the way it
+// renders behind chrome) and as a bare tiled field, with a Details readout. Mirrors AssetLab.
+export function SurfaceViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
+  const s = SURFACE_ASSETS.find((x) => x.name === name) ?? SURFACE_ASSETS[0];
+  const tiled = (px: number): CSSProperties => ({ backgroundImage: `url("${s.file}")`, backgroundSize: `${px}px`, backgroundRepeat: 'repeat', backgroundPosition: 'top left', imageRendering: 'pixelated' });
+  return (
+    <>
+      <section className="al-lab-main" aria-label="Surface preview">
+        <div className="al-lab-stages">
+          <figure className="al-stage">
+            <span className="surface-view-panel" style={tiled(Math.round(s.tilePx / 3))} />
+            <figcaption>in a framed panel</figcaption>
+          </figure>
+          <figure className="al-stage">
+            <span className="surface-view-fill" style={tiled(Math.round(s.tilePx / 4))} />
+            <figcaption>tiled surface</figcaption>
+          </figure>
+        </div>
+      </section>
+      <aside className="tileset-view-controls" aria-label="Surface details">
+        <section className="tileset-inspector-section">
+          <h2>Controls</h2>
+          <div className="tileset-control-stack">
+            {header}
+            <dl className="al-meta">
+              <div><dt>Surface</dt><dd>{s.label}</dd></div>
+              <div><dt>Approach</dt><dd>{s.approach}</dd></div>
+              <div><dt>Material</dt><dd>{s.material}</dd></div>
+              <div><dt>Tile</dt><dd>{s.tilePx}px · seamless · repeat</dd></div>
+            </dl>
+          </div>
+        </section>
+      </aside>
+    </>
   );
 }

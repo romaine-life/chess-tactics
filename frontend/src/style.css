@@ -10050,6 +10050,25 @@ h1 {
   image-rendering: pixelated;
 }
 
+/* Surface viewer stages — big single-surface preview (framed + bare), like the asset viewer. */
+.surface-view-panel,
+.surface-view-fill {
+  display: block;
+  width: 380px;
+  height: 260px;
+  background-repeat: repeat;
+  background-position: top left;
+  image-rendering: pixelated;
+  border-radius: 6px;
+}
+
+.surface-view-panel {
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round;
+  background-origin: border-box;
+  background-clip: border-box;
+}
+
 .tileset-catalog-zoom {
   display: flex;
   gap: 7px;

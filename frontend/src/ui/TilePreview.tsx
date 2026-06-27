@@ -38,7 +38,7 @@ import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
-import { SurfaceLibraryStudio } from './SurfaceLibraryStudio';
+import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
@@ -81,7 +81,7 @@ type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'gl
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor; 'glossary' reads one term in
 // full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary' | 'surface';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -294,7 +294,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedAssetName: kit || undefined,
     selectedArtworkName: art || undefined,
     selectedGlossaryName: gloss || undefined,
-    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' ? vk : undefined,
+    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' || vk === 'surface' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -1932,8 +1932,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
   // the header height constant (the Lab already shares this header — no second
   // row inside the board surface, which is what made the controls rail jump).
-  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'glossary' ? selectedGlossaryName : '';
-  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : 'Asset';
+  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'glossary' ? selectedGlossaryName : viewerKind === 'surface' ? (selectedSurfaceName ?? '') : '';
+  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : viewerKind === 'surface' ? 'Surface' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
       ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : category === 'surfaces' ? 'Surfaces' : 'Tiles']
@@ -2274,6 +2274,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <span>Zoom</span>
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('surface')}>View Selected</button>
         </>
       ),
     },
@@ -2289,6 +2290,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <button type="button" className={viewerKind === 'artwork' ? 'is-active' : ''} onClick={() => setViewerKind('artwork')} title="View the selected artwork.">Artwork</button>
       <button type="button" className={viewerKind === 'portrait' ? 'is-active' : ''} onClick={() => setViewerKind('portrait')} title="Edit unit portrait headshot crops.">Portrait</button>
       <button type="button" className={viewerKind === 'glossary' ? 'is-active' : ''} onClick={() => setViewerKind('glossary')} title="Read a glossary term in full.">Glossary</button>
+      <button type="button" className={viewerKind === 'surface' ? 'is-active' : ''} onClick={() => setViewerKind('surface')} title="View the selected background surface.">Surface</button>
     </div>
   );
 
@@ -2348,7 +2350,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               ? <ArtworkLab name={selectedArtworkName} header={viewerKindTabs} />
               : viewerKind === 'glossary'
                 ? <GlossaryLab name={selectedGlossaryName} header={viewerKindTabs} />
-                : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
+                : viewerKind === 'surface'
+                  ? <SurfaceViewer name={selectedSurfaceName} header={viewerKindTabs} />
+                  : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
