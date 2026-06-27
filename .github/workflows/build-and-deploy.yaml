@@ -159,23 +159,8 @@ jobs:
           grep -qx "  tag: \"${TAG}\"" k8s/values.yaml \
             || { echo "::error::k8s/values.yaml image tag was not updated"; exit 1; }
 
-      # Push the [skip ci] tag bump as the romaine-life github-app, not the default
-      # GITHUB_TOKEN: that app is a bypass actor on main's branch ruleset, so the
-      # deploy keeps writing to main while humans + CI stay gated on the build check.
-      # The minted token is scoped to this repo only.
-      - name: Mint bump-bot app token
-        id: bump_token
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.BUMP_APP_ID }}
-          private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
-          repositories: ${{ github.event.repository.name }}
-
       - name: Commit and push tag bump
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          BUMP_TOKEN: ${{ steps.bump_token.outputs.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -185,4 +170,4 @@ jobs:
             exit 0
           fi
           git commit -m "chore: bump chess-tactics image to fingerprint ${{ env.TAG }} [skip ci]"
-          git push "https://x-access-token:${BUMP_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
+          git push origin HEAD:main
