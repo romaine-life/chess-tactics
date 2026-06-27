@@ -5832,19 +5832,17 @@ h1 {
   width: 100%;
 }
 
+/* No board box: the board container paints NO background — the board art floats on
+   the screen's night-sky background (ADR-0027). A tinted rectangle here is the "box". */
 .skirmish-board-lab {
-  background:
-    radial-gradient(760px 360px at 50% 42%, rgba(54, 135, 162, .18), transparent 72%),
-    linear-gradient(180deg, rgba(5, 18, 28, .18), rgba(2, 7, 12, .46));
+  background: transparent;
 }
 
 .skirmish-board-lab .tileset-view-stage {
   border: 0;
   border-radius: 0;
   padding: 0;
-  background:
-    radial-gradient(820px 420px at 50% 44%, rgba(67, 111, 128, .18), transparent 70%),
-    linear-gradient(180deg, rgba(3, 14, 23, .06), rgba(1, 5, 9, .34));
+  background: transparent;
 }
 
 .skirmish-board-lab .tileset-view-stage:focus-within {
