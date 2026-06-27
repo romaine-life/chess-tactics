@@ -26,6 +26,7 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0020](0020-settings-body-typography-role-scale.md) | Settings body text maps to the role→token type scale (eyebrow 2xs · description xs · value/label sm · row title md); the off-scale stepper readout fixed to sm | accepted | 2026-06-27 |
 | [0021](0021-settings-button-label-sizing.md) | Settings ACTION buttons (header + panel pills) share ONE body-tier (sm) label, grouped by role not frame; kept below titles; box hugs the label at a 40px desktop height (not the 44-48px touch floor — mouse game); emphasis via color/fill | accepted | 2026-06-27 |
 | [0022](0022-settings-nav-tabs-typography.md) | Settings rail tabs are a NAVIGATION component (governed apart from action buttons); sized at the content row-title tier (md), never above the rows they lead to; SETTINGS stays lg as the hierarchy top; supersedes the undocumented 1.25rem tab size from #148 | accepted | 2026-06-27 |
+| [0023](0023-app-title-bar-layout-and-controls.md) | App title bars: centered three-section layout + labeled controls on the kit frame (never bare icons; icon+label in-game, text in menus); generalizes ADR-0010 | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 
