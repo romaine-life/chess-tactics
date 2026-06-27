@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useLayoutEffect, useRef, type ReactElement } from 'react';
 
 // AmbienceBackground renders cross-client-synchronized rain by subscribing to
 // ambience's rain-pinned `/chess` world (https://github.com/romaine-life/ambience).
@@ -61,6 +61,9 @@ function loadVendoredClient(): void {
 let fieldCanvas: HTMLCanvasElement | null = null;
 let overlayCanvas: HTMLCanvasElement | null = null;
 let parked: HTMLDivElement | null = null;
+// The host div currently showing the canvases — so an outgoing screen doesn't park
+// canvases a newly-mounted screen has already claimed (mount/unmount can interleave).
+let currentHost: HTMLDivElement | null = null;
 
 function ensureScene(): void {
   if (fieldCanvas) return;
@@ -113,14 +116,25 @@ function ensureScene(): void {
 export function AmbienceBackground(): ReactElement {
   const hostRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // useLayoutEffect (not useEffect): re-parent the canvases BEFORE the browser
+  // paints the new screen. With useEffect the canvas is detached for one painted
+  // frame during a route swap (the old host is gone, the new one not yet filled),
+  // which reads as the rain blinking/restarting when you change screens.
+  useLayoutEffect(() => {
     ensureScene();
     const host = hostRef.current;
-    if (host && fieldCanvas && overlayCanvas) host.append(fieldCanvas, overlayCanvas);
+    if (host && fieldCanvas && overlayCanvas) {
+      host.append(fieldCanvas, overlayCanvas);
+      currentHost = host;
+    }
     return () => {
       // Park the singletons so they persist (and keep running) across the route
-      // swap, instead of being torn down with this screen's DOM.
-      if (parked && fieldCanvas && overlayCanvas) parked.append(fieldCanvas, overlayCanvas);
+      // swap — but only if we still own them; a screen that mounted before this one
+      // unmounted may have already claimed them.
+      if (currentHost === host && parked && fieldCanvas && overlayCanvas) {
+        parked.append(fieldCanvas, overlayCanvas);
+        currentHost = null;
+      }
     };
   }, []);
 
