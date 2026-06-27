@@ -18,7 +18,7 @@
 // so N codex sessions run concurrently with zero git checkpoint/restore — that
 // checkpointing (in the worktree) is what clobbered the parallel batch earlier.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +28,26 @@ const FRONTEND = fileURLToPath(new URL('..', import.meta.url));
 const REPO = resolve(FRONTEND, '..');
 const KIT = join(FRONTEND, 'public/assets/ui/kit');
 const PROV = join(FRONTEND, 'src/ui/design/kitProvenance.json');
-const CODEX = 'C:/Users/Nelson/AppData/Local/OpenAI/Codex/bin/38dff8711e296435/codex.exe';
+// Resolve the codex binary without hardcoding a machine-specific, hash-named path:
+// the bin/<hash>/ folder changes on every codex update and is unique per machine.
+// Prefer an explicit CODEX_BIN override, else the newest installed build under the
+// default OpenAI/Codex layout, else trust PATH. (Merged from origin/main.)
+function resolveCodex() {
+  if (process.env.CODEX_BIN && existsSync(process.env.CODEX_BIN)) return process.env.CODEX_BIN;
+  const exe = process.platform === 'win32' ? 'codex.exe' : 'codex';
+  const local = process.env.LOCALAPPDATA || join(process.env.USERPROFILE || process.env.HOME || '', 'AppData', 'Local');
+  const binDir = join(local, 'OpenAI', 'Codex', 'bin');
+  try {
+    const builds = readdirSync(binDir)
+      .map((hash) => join(binDir, hash, exe))
+      .filter(existsSync)
+      .map((p) => ({ p, mtime: statSync(p).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    if (builds.length) return builds[0].p;
+  } catch { /* not the default install layout — fall through to PATH */ }
+  return exe; // trust PATH
+}
+const CODEX = resolveCodex();
 const SESSIONS = 'C:/Users/Nelson/.codex/sessions';
 const TODAY = new Date().toISOString().slice(0, 10);
 

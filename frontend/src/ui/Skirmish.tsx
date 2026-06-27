@@ -5,7 +5,6 @@ import { BrandLockup } from './shared/BrandLockup';
 import { useSkirmish } from '../game/store';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace } from '../net/campaignWorkspace';
-import { livingPieces } from '../core/rules';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { PALETTE_FOR_SIDE, isPlayablePieceType, portraitPath } from '../core/pieces';
 import { preloadImages } from '../art/preload';
@@ -24,8 +23,6 @@ export function Skirmish() {
   const [routeLevel, setRouteLevel] = useState(() => (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null));
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const game = useSkirmish((s) => s.game);
-  const playerPieces = livingPieces(game.pieces, 'player');
-  const enemyPieces = livingPieces(game.pieces, 'enemy');
   const turnLabel = game.winner
     ? game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Player Turn' : 'Enemy Turn';
@@ -75,34 +72,34 @@ export function Skirmish() {
 
   return (
     <div data-testid="skirmish" className="skirmish-screen" style={screenStyle}>
-      <section className="skirmish-war-room" aria-label="Skirmish battlefield">
-        <header className="app-titlebar skirmish-topbar" aria-label="Skirmish status">
-          <BrandLockup screenName="Skirmish" />
-          <div className="skirmish-turn-plate">
+      <header className="app-titlebar skirmish-topbar" aria-label="Skirmish status">
+        <BrandLockup screenName="Skirmish" />
+
+        <div className="skirmish-topbar-status">
+          <div className="skirmish-status-chip skirmish-turn-plate">
             <strong>{turnLabel}</strong>
             <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
           </div>
-          <div className="skirmish-objective">
+          <div className="skirmish-status-chip skirmish-objective">
             <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
-              <span>
-                <strong>Objective</strong>
+            <span>
+              <strong>Objective</strong>
               <small>{routeLevel ? OBJECTIVE_COPY[routeLevel.objective] : 'Capture the enemy King'}</small>
-              </span>
+            </span>
           </div>
-          <div className="skirmish-top-counts" aria-label="Remaining forces">
-            <span><span className="skirmish-icon skirmish-icon-rook-blue" aria-hidden="true" />{playerPieces.length}</span>
-            <span><span className="skirmish-icon skirmish-icon-rook-red" aria-hidden="true" />{enemyPieces.length}</span>
-          </div>
+        </div>
+
+        <div className="skirmish-topbar-right">
           <nav className="skirmish-window-actions" aria-label="Skirmish navigation">
-            <a className="skirmish-square-action" href="/" aria-label="Main menu">
-              <span className="skirmish-icon skirmish-icon-menu" aria-hidden="true" />
-            </a>
-            <a className="skirmish-square-action" href="/settings" aria-label="Settings">
+            <a className="skirmish-header-button" href="/settings">
               <span className="skirmish-icon skirmish-icon-gear" aria-hidden="true" />
+              <span className="skirmish-header-button-label">Settings</span>
             </a>
           </nav>
-        </header>
+        </div>
+      </header>
 
+      <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
             <SkirmishBoard />

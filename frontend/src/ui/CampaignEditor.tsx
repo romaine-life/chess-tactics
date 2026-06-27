@@ -6,6 +6,7 @@ import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
 import { campaignEditorAssetVars } from './campaignEditorAssets';
+import { BrandLockup } from './shared/BrandLockup';
 
 const OBJECTIVES: ObjectiveType[] = ['capture-all', 'capture-king', 'survive', 'reach'];
 const DIFFICULTIES = ['easy', 'normal', 'hard'];
@@ -348,23 +349,16 @@ export function CampaignEditor() {
 
   return (
     <div className="ce-screen" data-testid="campaign-editor" style={campaignEditorAssetVars()}>
-      <header className="ce-topbar">
-        <a className="ce-brand" href="/" aria-label="Back to main menu">
-          <img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />
-          <span>
-            <strong>Campaign Editor</strong>
-            <small>Chess Tactics</small>
-          </span>
-        </a>
+      <header className="app-titlebar ce-topbar">
+        <BrandLockup screenName="Campaign Editor" />
         <div className="ce-topbar-stats" aria-label="Campaign workspace stats">
           <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
           <span><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
           <span><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
         </div>
         <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
-          <a href="/" aria-label="Main menu"><CeIcon icon="menu" /></a>
-          <button type="button" onClick={saveWorkspaceNow} aria-label="Save workspace"><CeIcon icon="save" /></button>
-          <a href="/settings" aria-label="Settings"><CeIcon icon="settings" /></a>
+          <button type="button" className="app-header-button app-header-button-active" onClick={saveWorkspaceNow}>Save</button>
+          <a className="app-header-button" href="/settings">Settings</a>
         </nav>
       </header>
 

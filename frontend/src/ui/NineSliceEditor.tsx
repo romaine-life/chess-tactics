@@ -43,7 +43,9 @@ const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
   flipSides: !!a.flipSides,
 }));
 
-const DEFAULT_CONTENT = 12;
+// 0 = no content inset, matching the bake's fallback (normalizeConfig in
+// scripts/nine-slice-kit.mjs) so an unsaved asset previews exactly what it bakes.
+const DEFAULT_CONTENT = 0;
 const STORAGE_KEY = 'nine-slice-editor-v4';
 const Z = 6;
 

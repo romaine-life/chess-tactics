@@ -5346,6 +5346,9 @@ h1 {
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 360px);
+  /* Row-first: a full-bleed title bar spanning both columns on top (ADR-0004),
+     then the board + HUD below. Matches the settings screen's header pattern. */
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -5390,25 +5393,130 @@ h1 {
 
 .skirmish-war-room {
   display: grid;
-  gap: 8px;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
 }
 
 .skirmish-topbar {
-  /* Frame + height come from .app-titlebar; this class is content layout only. */
+  /* Frame + height come from .app-titlebar; this class is content layout only.
+     Spans both screen columns so the bar is full-bleed across the top (ADR-0004).
+     Three sections — brand left, status centered, counts+actions right — with the
+     content row vertically centered on the bar (align-content), per ADR-0010. */
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-content: center;
   align-items: center;
   display: grid;
+  gap: clamp(10px, 1.4vw, 20px);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  padding: 0 clamp(10px, 1.2vw, 18px);
+}
+
+.skirmish-topbar-status {
+  align-items: center;
+  display: flex;
   gap: 12px;
-  grid-template-columns: minmax(190px, .9fr) minmax(200px, .72fr) minmax(220px, .86fr) auto auto;
-  padding: 0 6px;
+  justify-self: center;
+  min-width: 0;
+}
+
+.skirmish-topbar-right {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-self: end;
+  min-width: 0;
+}
+
+/* One shared status-chip frame so turn / objective / counts read as a single
+   family, all the same height and vertically centered (ADR-0010 rhythm). */
+.skirmish-status-chip {
+  align-items: center;
+  background: var(--skirmish-panel);
+  block-size: 46px;
+  border: 1px solid rgba(96, 183, 221, .26);
+  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+/* Chip typography on the design-system scale (ADR-0008 family): a prominent
+   uppercase label line over a muted detail line. Scoped + parent-qualified so it
+   wins over the older ad-hoc per-element font sizes without touching them. */
+.skirmish-topbar .skirmish-status-chip strong {
+  font-size: var(--ds-text-md);
+  letter-spacing: .04em;
+  line-height: 1.1;
+  color: #eaf6ff;
+}
+
+.skirmish-topbar .skirmish-status-chip small {
+  font-size: var(--ds-text-xs);
+  letter-spacing: .02em;
+  line-height: 1.15;
+}
+
+/* Objective chip: keep the flag glyph proportionate to the two text lines and
+   let the chip padding + gap do the spacing. */
+.skirmish-objective .skirmish-icon {
+  height: 24px;
+  width: 24px;
+}
+
+/* The two-line objective copy sits as a left-aligned stack next to the glyph. */
+.skirmish-objective > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Header icon buttons on the kit gold mode-button frame — the same equal-height
+   bracket-frame family the settings header uses (ADR-0010 / kit ADR-0002). */
+/* Icon + visible label button on the kit gold mode-button frame — same equal-height
+   bracket-frame family as the settings header. Research is unanimous that header
+   controls must be labeled, not bare glyphs (NN/g icon usability; gear is not a
+   universal icon), so the glyph is decorative and the label carries the meaning. */
+.skirmish-header-button {
+  align-items: center;
+  block-size: 46px;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  box-sizing: border-box;
+  color: var(--skirmish-ink);
+  display: inline-flex;
+  gap: 8px;
+  image-rendering: pixelated;
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+.skirmish-header-button:hover,
+.skirmish-header-button:focus-visible {
+  filter: brightness(1.14);
+  outline: none;
+}
+
+.skirmish-header-button .skirmish-icon {
+  height: 20px;
+  width: 20px;
+}
+
+.skirmish-header-button-label {
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  letter-spacing: .04em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .skirmish-brand,
 .skirmish-objective,
 .skirmish-count-pip,
-.skirmish-top-counts,
 .skirmish-window-actions {
   align-items: center;
   display: flex;
@@ -5466,15 +5574,10 @@ h1 {
 }
 
 .skirmish-turn-plate {
-  align-self: stretch;
-  background:
-    linear-gradient(180deg, rgba(18, 61, 88, .76), rgba(8, 24, 36, .88));
-  border: 1px solid rgba(96, 183, 221, .32);
-  border-radius: 6px;
+  /* Frame/height come from .skirmish-status-chip; this is inner layout only. */
   display: grid;
   justify-items: center;
   min-width: 0;
-  padding: 8px 14px;
   text-align: center;
 }
 
@@ -5485,51 +5588,9 @@ h1 {
   text-shadow: 0 2px 0 #02070b, 0 0 14px rgba(56, 215, 255, .22);
 }
 
-.skirmish-top-counts {
-  border-left: 1px solid rgba(88, 133, 157, .55);
-  border-right: 1px solid rgba(88, 133, 157, .45);
-  gap: 14px;
-  min-height: 40px;
-  padding: 0 14px;
-}
-
-.skirmish-top-counts span {
-  align-items: center;
-  color: #f7ead4;
-  display: flex;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 1.65rem;
-  gap: 4px;
-  line-height: 1;
-}
-
-.skirmish-top-counts .skirmish-icon {
-  height: 28px;
-  width: 28px;
-}
-
 .skirmish-window-actions {
   gap: 8px;
   justify-content: end;
-}
-
-.skirmish-square-action {
-  align-items: center;
-  background: rgba(3, 10, 16, .5);
-  border: 1px solid rgba(70, 132, 163, .52);
-  color: var(--skirmish-ink);
-  display: grid;
-  height: 48px;
-  justify-items: center;
-  text-decoration: none;
-  width: 48px;
-}
-
-.skirmish-square-action:hover,
-.skirmish-square-action:focus-visible {
-  border-color: var(--skirmish-cyan);
-  box-shadow: 0 0 0 2px rgba(56, 215, 255, .15);
-  outline: none;
 }
 
 .skirmish-field {
@@ -5972,6 +6033,8 @@ h1 {
 
 .skirmish-hud {
   display: grid;
+  grid-column: 2;
+  grid-row: 2;
   align-content: start;
   gap: 8px;
   grid-auto-rows: max-content;
@@ -6492,10 +6555,7 @@ h1 {
     grid-template-columns: minmax(0, 1fr) minmax(286px, 324px);
   }
 
-  .skirmish-topbar {
-    grid-template-columns: minmax(190px, 1fr) minmax(190px, .8fr) auto auto;
-  }
-
+  /* Drop the objective chip first when the bar gets tight; brand + turn + counts stay. */
   .skirmish-objective {
     display: none;
   }
@@ -6505,15 +6565,25 @@ h1 {
 @media (max-width: 860px) {
   .skirmish-screen {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(520px, 62vh) auto;
+    grid-template-rows: auto minmax(520px, 62vh) auto;
     overflow: auto;
   }
 
+  /* Single column: title bar stays full-bleed on top, board then HUD stacked under it. */
+  .skirmish-topbar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   .skirmish-war-room {
+    grid-column: 1;
+    grid-row: 2;
     min-height: 520px;
   }
 
   .skirmish-hud {
+    grid-column: 1;
+    grid-row: 3;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     height: auto;
     max-height: none;
@@ -6530,12 +6600,8 @@ h1 {
     grid-column: 1 / -1;
   }
 
-  .skirmish-topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .skirmish-turn-plate,
-  .skirmish-top-counts {
+  /* Stacked mobile bar: brand left, counts + actions right; hide the center status group. */
+  .skirmish-topbar-status {
     display: none;
   }
 }
@@ -6570,9 +6636,9 @@ h1 {
     width: 34px;
   }
 
-  .skirmish-square-action {
-    height: 38px;
-    width: 38px;
+  .skirmish-header-button {
+    block-size: 40px;
+    min-inline-size: 40px;
   }
 
   .skirmish-hud {
@@ -6940,7 +7006,9 @@ h1 {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 8px 10px 6px;
+  /* Full-bleed: the title bar (and footer bar) run edge-to-edge; inner content
+     gets its own inset on .ce-layout. (ADR-0004 / ADR-0016) */
+  padding: 0;
   position: relative;
 }
 
@@ -6962,15 +7030,14 @@ h1 {
 }
 
 .ce-topbar {
+  /* Frame + height come from .app-titlebar (ADR-0004); this is the shared
+     three-section content layout — brand / stats / controls — centered (ADR-0016). */
+  align-content: center;
   align-items: center;
-  border: 1px solid rgba(69, 111, 132, .58);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .72), 0 14px 32px rgba(0, 0, 0, .2);
   display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(230px, 1fr) auto auto;
-  min-height: 64px;
-  padding: 8px 14px;
-  background: linear-gradient(180deg, rgba(8, 19, 28, .96), rgba(3, 9, 14, .96));
+  gap: clamp(10px, 1.4vw, 20px);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
 .ce-brand,
@@ -7074,8 +7141,6 @@ h1 {
   gap: 10px;
 }
 
-.ce-topbar-actions a,
-.ce-topbar-actions button,
 .ce-icon-button {
   align-items: center;
   aspect-ratio: 1;
@@ -7090,10 +7155,6 @@ h1 {
   padding: 0;
   text-decoration: none;
   width: 46px;
-}
-
-.ce-topbar-actions button {
-  min-height: 0;
 }
 
 .ce-icon-button {
@@ -7138,7 +7199,7 @@ h1 {
   grid-template-columns: minmax(250px, 25%) minmax(360px, 32%) minmax(480px, 1fr);
   min-height: 0;
   overflow: hidden;
-  padding-block: 8px;
+  padding: 8px 10px;
 }
 
 .ce-panel {
@@ -11962,18 +12023,49 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
+  /* Same art-directed backdrop as the main menu (.main-menu-layer, ~line 712) so the
+     settings frames sit over the menu scene + the synced rain. Keep the two in sync.
+     First declaration = PNG fallback for engines without image-set()/type(). */
   background:
-    radial-gradient(920px 620px at 52% 16%, rgba(49, 81, 91, .22), transparent 64%),
-    #02070b;
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat #02070b;
   display: grid;
   height: 100%;
   justify-items: center;
   min-height: 0;
   overflow: hidden;
+  position: relative;
   width: 100%;
 }
 
+/* The "drops cross in front" overlay reads far heavier on settings than on the
+   menu: the dense frames give those front-drops a large surface to cross, while
+   the menu's sparse UI is crossed by only a few. Dim the FRONT layer on settings
+   so the in-front rain matches the menu's restraint. The field rain behind the
+   frames is untouched, and the menu overlay is unaffected (scoped via the
+   re-parented overlay living under .settings-art-route only while on settings). */
+.settings-art-route .ambience-overlay {
+  opacity: 0.3;
+}
+
 .settings-screen {
+  /* ONE label-size token shared by every ACTION button (header buttons + panel
+     pills), regardless of frame skin OR location. Action buttons sit at the
+     body/label tier (sm) everywhere — a title bar is not a license to enlarge an
+     action: Apple/M3/Carbon all size bar buttons the same as content buttons, and
+     emphasis comes from color/fill/weight, never size (ADR-0021). The only larger
+     bar element is the "SETTINGS" title. Nav rail tabs are a DIFFERENT component
+     and set their own size (ADR-0022). */
+  --settings-action-label: var(--ds-text-sm);
   block-size: 100%;
   display: grid;
   gap: clamp(6px, .72vw, 12px);
@@ -11981,6 +12073,10 @@ button.tileset-relationship-cell {
   inline-size: 100%;
   max-inline-size: none;
   min-block-size: 0;
+  /* Above the rain field (z-index 2), below the overlay drops (z-index 5) — mirrors
+     .main-menu-screen so the frames sit over the scene + rain, a few drops in front. */
+  position: relative;
+  z-index: 3;
   /* Flush to the app edges — full-bleed, like the Skirmish bar. Top app bars are
      conventionally edge-to-edge, not inset cards. */
   padding: 0;
@@ -12010,6 +12106,40 @@ button.tileset-relationship-cell {
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
   box-sizing: border-box;
   min-block-size: var(--app-header-h);
+}
+
+/* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
+   height, always labeled (ADR-0016). The cyan `-active` variant marks a single
+   primary action (e.g. Save / Sign In). Used by every app title bar's controls;
+   the in-game skirmish bar uses its own icon+label variant of the same frame. */
+.app-header-button {
+  align-items: center;
+  block-size: 46px;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  box-sizing: border-box;
+  color: #eef6ff;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  gap: 8px;
+  image-rendering: pixelated;
+  letter-spacing: .04em;
+  padding: 0 16px;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.app-header-button-active {
+  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
+}
+
+.app-header-button:hover,
+.app-header-button:focus-visible {
+  filter: brightness(1.14);
+  outline: none;
 }
 
 .settings-header-frame {
@@ -12180,9 +12310,7 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
   image-rendering: pixelated;
   min-height: 56px;
-  /* content inset from the 9-slice editor (--settings-tab-content, generated). */
-  padding: var(--settings-tab-content, 7px);
-  padding: 7px 12px;
+  padding: 7px 12px; /* tuned tab inset; the content-var automation was retired — content stays a saved editor guide */
   text-align: left;
   text-decoration: none;
   transition: color .14s ease;
@@ -12222,7 +12350,13 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab strong {
-  font-size: 1.25rem;
+  /* Nav rail is subordinate chrome: its tab label sits at the content row-title
+     tier (md), never above it. Nav/tab labels are body-sized across M3/Carbon/
+     Polaris/Apple; lg would tie the "SETTINGS" brand title and overshoot the md
+     rows the tab navigates to (inversion). Active tab is marked by the frame fill
+     swap + color, not size. Governed separately from action buttons (ADR-0022).
+     Supersedes the undocumented 1.25rem from PR #148; its letter-spacing is kept. */
+  font-size: var(--ds-text-md);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -12299,16 +12433,12 @@ button.tileset-relationship-cell {
 }
 
 /* Layout container only. Each row carries its own atom-assembled frame
-   (ADR-0012/0014), so there is no CSS border/radius/background wrapping the rows. */
-/* Grouped list: one subtle container per section, rows separated by hairline
-   dividers — not an ornate frame around every row. The gold-bracket chrome stays
-   on the outer panels; the content list reads clean and scannable. */
+   (ADR-0012/0014), so there is NO CSS border/radius/background wrapping the rows.
+   (A merge re-introduced the old grouped-list "bubble" here — a navy fill + an
+   8px-radius border around each section's rows; removed so only the per-row atom
+   frame shows.) */
 .settings-section-rows {
-  background: rgba(8, 22, 34, 0.55);
-  border: 1px solid rgba(67, 127, 179, 0.26);
-  border-radius: 8px;
   display: grid;
-  overflow: hidden;
 }
 
 .settings-row {
@@ -12334,9 +12464,6 @@ button.tileset-relationship-cell {
   padding: 12px 16px;
 }
 
-.settings-row + .settings-row {
-  border-top: 1px solid rgba(67, 127, 179, 0.16);
-}
 
 .settings-row-tall {
   min-height: 80px;
@@ -12387,7 +12514,10 @@ button.tileset-relationship-cell {
   color: #eff9ff;
   display: inline-flex;
   justify-content: center;
-  block-size: 45px;
+  /* 40px desktop default. NOT the 44-48px touch floor — that's a fingertip
+     ergonomic; this game is mouse-driven, where the pointer floor is ~24px
+     (WCAG 2.5.8). Default buttons run 32-40px (Carbon/M3/Bootstrap/Ant). */
+  block-size: 40px;
   inline-size: 176px;
   min-height: 0;
   min-width: 0;
@@ -12413,11 +12543,33 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* Panel action pills (Reset / Open / View Tracks) are ACTION buttons — same
+   action-button label token as the header buttons (shared, by role, not frame).
+   Scoped to a direct child of the row control so the small stepper +/- buttons
+   (nested in .settings-stepper) keep their xs glyph. */
+.settings-row-control > .settings-chrome-button span {
+  /* Body/label tier — below the md row title, never above it (a button label
+     louder than its own row title is a hierarchy inversion). Shares the one
+     action-button token with the header buttons (same role, one size). */
+  font-size: var(--settings-action-label);
+  white-space: nowrap;
+}
+
+/* Size the pill to its label instead of a fixed 176px, so a two-word label
+   ("View Tracks") stays on one line at lg. Single-word pills keep the 176px
+   minimum, so widths only grow for longer labels. */
+.settings-row-control > .settings-chrome-button {
+  /* Box HUGS its label + padding (Carbon/M2: button width = label + padding), not a
+     decreed 176px the label floats in. Touch-min floors short words; longer grow. */
+  inline-size: auto;
+  min-inline-size: 72px;
+}
+
 /* Header buttons wear the SYMMETRIC panel.png frame (square source → equal corners
    on all four sides), matching the design's gold corner-bracket language. The tall
    tab art was the wrong source for a short button (it rendered lopsided). */
 .settings-header-button {
-  block-size: 46px;
+  block-size: 40px; /* desktop default, matches the chrome buttons (not a touch floor) */
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
   flex: none;
@@ -12433,6 +12585,13 @@ button.tileset-relationship-cell {
 .settings-header-button-active {
   border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
   border-width: 12px;
+}
+
+/* Header buttons (Back / Menu / Sign In) are ACTION buttons — they share the one
+   action-button label token with the panel pills below, even though they wear a
+   different frame (bracket vs flat fill). Skin doesn't drive label size (ADR-0021). */
+.settings-header-button span {
+  font-size: var(--settings-action-label);
 }
 
 .settings-stepper {
@@ -12455,6 +12614,9 @@ button.tileset-relationship-cell {
 
 .settings-stepper output {
   color: #f8fcff;
+  /* "value" role — same step as the slider readout, per the scale (style.css:1612).
+     Without this it fell through to the body's 19px base, off the type scale. */
+  font-size: var(--ds-text-sm);
   min-width: 68px;
   text-align: center;
   text-shadow: 0 2px 0 #02070b;
