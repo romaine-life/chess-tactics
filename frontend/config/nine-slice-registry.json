@@ -12,7 +12,6 @@
       "label": "Mode button (tabs / header)",
       "atoms": { "corner": "corner", "edge": "edge", "fill": "fill" },
       "frame": { "w": 72, "h": 72 },
-      "consume": { "selector": ".settings-tab", "cssVar": "--settings-tab-content" },
       "variants": [
         { "out": "mode-button.png" },
         { "out": "mode-button-active.png", "swap": "active", "inspect": "corner-cyan" }
