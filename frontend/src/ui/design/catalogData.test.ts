@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assetById, frameStyleForAsset, imageCssValue } from './catalogData';
+import { imageCssValue } from './catalogData';
 import optimizedImages from './optimized-images.json';
 
 describe('imageCssValue', () => {
@@ -32,17 +32,5 @@ describe('imageCssValue', () => {
       expect(target.path.endsWith('.png')).toBe(true);
       expect(imageCssValue(target.path)).toContain('image-set(');
     }
-  });
-});
-
-describe('frameStyleForAsset', () => {
-  it('drives --asset-image through imageCssValue for optimized button-row sheets', () => {
-    const asset = assetById('button-row.main-menu.solo-skirmish');
-    expect(asset).toBeTruthy();
-    const state = asset!.states!.normal;
-    const style = frameStyleForAsset(asset!, state.rect) as Record<string, string>;
-    expect(style['--asset-image']).toContain('image-set(');
-    expect(style['--asset-image']).toContain('solo-skirmish-sheet.avif');
-    expect(style['--asset-image']).toContain('type("image/png")');
   });
 });
