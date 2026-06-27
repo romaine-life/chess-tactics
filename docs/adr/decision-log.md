@@ -19,6 +19,9 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0013](0013-transparency-chroma-key-via-subscription.md) | Generated-chrome transparency = chroma-key + despill via the subscription codex; native paid-API path rejected on cost | accepted | 2026-06-26 |
 | [0014](0014-ui-chrome-low-fidelity-aesthetic.md) | UI chrome targets the concept's low-fidelity element aesthetic (~few-hundred colors, chunky); forges specify shape + fidelity per ui-chrome-vocabulary.md; never "soft anti-aliased" | accepted | 2026-06-26 |
 | [0015](0015-doodads-frame-units-not-bury-them.md) | Doodads frame the unit, not bury it: shin-height foliage that covers feet only; solids aren't stand-inside props; terrain-gated | accepted | 2026-06-27 |
+| [0016](0016-settings-body-typography-role-scale.md) | Settings body text maps to the role→token type scale (eyebrow 2xs · description xs · value/label sm · row title md); the off-scale stepper readout fixed to sm | accepted | 2026-06-27 |
+| [0017](0017-settings-button-label-sizing.md) | Settings ACTION buttons (header + panel pills) share ONE body-tier (sm) label, grouped by role not frame; kept below titles; box hugs the label at a 40px desktop height (not the 44-48px touch floor — mouse game); emphasis via color/fill | accepted | 2026-06-27 |
+| [0018](0018-settings-nav-tabs-typography.md) | Settings rail tabs are a NAVIGATION component (governed apart from action buttons); sized at the content row-title tier (md), never above the rows they lead to; SETTINGS stays lg as the hierarchy top; supersedes the undocumented 1.25rem tab size from #148 | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 
