@@ -32,6 +32,34 @@ const GOLD2CYAN = {
   '5b4124': '14507f', // deep     lum  69 ->  68
 };
 
+// Alignment baked from the 9-slice editor (/nine-slice-editor), so it lives in git
+// rather than browser localStorage. Only the BRACKET offset changes the atom art
+// (the gold sits flush in the corner); keyline/margin/content are recorded for
+// provenance — margin/content are consumption-side (CSS slice / tab padding).
+const CONFIG = { keyline: { dx: 0, dy: 0 }, bracket: { dx: -5, dy: -5 }, margin: 1, content: 5 };
+
+const isWarm = (r, g, b, a) => a > 40 && r > b + 15; // gold ramp is warm; keyline/navy are cool
+
+// Shift the gold bracket pixels by (dx,dy) over the cool (keyline/navy) base — the
+// same warm/cool split the editor uses. Where the gold moved from becomes
+// transparent, so the frame's fill shows through (exactly like the editor preview).
+function nudgeBracket(src, dx, dy) {
+  const w = src.width, h = src.height;
+  const o = new PNG({ width: w, height: h });
+  o.data.fill(0);
+  for (let i = 0; i < src.data.length; i += 4) {
+    const r = src.data[i], g = src.data[i + 1], b = src.data[i + 2], a = src.data[i + 3];
+    if (!isWarm(r, g, b, a)) { o.data[i] = r; o.data[i + 1] = g; o.data[i + 2] = b; o.data[i + 3] = a; }
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4; const r = src.data[i], g = src.data[i + 1], b = src.data[i + 2], a = src.data[i + 3];
+    if (!isWarm(r, g, b, a)) continue;
+    const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+    const j = (ny * w + nx) * 4; o.data[j] = r; o.data[j + 1] = g; o.data[j + 2] = b; o.data[j + 3] = a;
+  }
+  return o;
+}
+
 const hex = (r, g, b) => `${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 
 function swapPalette(src) {
@@ -49,10 +77,11 @@ function swapPalette(src) {
   return o;
 }
 
-const cyanCorner = swapPalette(corner);
+const tunedCorner = nudgeBracket(corner, CONFIG.bracket.dx, CONFIG.bracket.dy);
+const cyanCorner = swapPalette(tunedCorner);
 
 const W = 72, H = 72; // 24px corners + tiled edges/centre; 9-slice at 24
-writeFileSync(`${OUT}mode-button.png`, PNG.sync.write(buildFrameFrom(corner, edge, fill, W, H)));
+writeFileSync(`${OUT}mode-button.png`, PNG.sync.write(buildFrameFrom(tunedCorner, edge, fill, W, H)));
 writeFileSync(`${OUT}mode-button-active.png`, PNG.sync.write(buildFrameFrom(cyanCorner, edge, fill, W, H)));
 writeFileSync(`${A}corner-cyan.png`, PNG.sync.write(cyanCorner)); // swapped atom, for inspection
-console.log(`built mode-button.png + mode-button-active.png (${W}x${H}, 24px corners) from atoms`);
+console.log(`built mode-button.png + mode-button-active.png (${W}x${H}, 24px corners) from atoms · bracket nudged ${CONFIG.bracket.dx},${CONFIG.bracket.dy}`);
