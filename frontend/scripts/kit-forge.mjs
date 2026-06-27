@@ -6,8 +6,9 @@
 // codex cannot be trusted to have GENERATED the image. Its imagegen skill tells
 // it to hand-draw "code-native" icons, so for a 64px hard-alpha request it writes
 // a PIL/SVG script and the pixel gate can't tell. So we VERIFY THE METHOD first
-// (an `image_generation_call` event must be present, via --json) and only then
-// the pixels. Provenance records the verified method — it is NOT "safe" just
+// (an `image_generation_call` must be present in this run's codex ROLLOUT — NOT on
+// the --json stdout stream, which no longer carries it) and only then the pixels.
+// Provenance records the verified method — it is NOT "safe" just
 // because it passed the gate; the gate certifies clean transparency, not a good
 // drawing. The human eyeball is still the required backstop before onboarding.
 //
@@ -17,7 +18,7 @@
 // so N codex sessions run concurrently with zero git checkpoint/restore — that
 // checkpointing (in the worktree) is what clobbered the parallel batch earlier.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, copyFileSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,7 @@ const REPO = resolve(FRONTEND, '..');
 const KIT = join(FRONTEND, 'public/assets/ui/kit');
 const PROV = join(FRONTEND, 'src/ui/design/kitProvenance.json');
 const CODEX = 'C:/Users/Nelson/AppData/Local/OpenAI/Codex/bin/38dff8711e296435/codex.exe';
+const SESSIONS = 'C:/Users/Nelson/.codex/sessions';
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const GEN = 'docs/art/ui-screen-concepts/generated';
@@ -103,19 +105,41 @@ function runCodex(refAbs, cwd, text) {
   });
 }
 
-// DEFINITIVE method check. A genuine generation emits an `image_generation_call`
-// event (id `ig_…`); a programmatic drawing (PIL/Pillow/cairo/SVG/canvas) emits
-// only `shell_command`. We require proof of real generation EVERY time before we
-// will even look at the pixels. No image_generation_call -> codex coded it ->
-// reject, regardless of how clean the bitmap looks.
-function usedImageGenerator(codexJsonl) {
+// DEFINITIVE method check. A genuine generation records an `image_generation_call`
+// in the codex ROLLOUT; a programmatic drawing (PIL/Pillow/cairo/SVG/canvas) does
+// not. Current codex does NOT surface that marker on the `--json` STDOUT stream —
+// it only lands in the rollout file — so the old stdout grep returned false for
+// EVERY run and rejected real generations. We instead read the rollout: the stdout
+// `thread.started` event carries this run's `thread_id`, which is embedded in the
+// rollout filename, so we read THIS run's exact rollout (concurrency-safe under the
+// forge pool — not "newest file since start"). No marker -> codex coded it -> reject.
+function threadIdOf(codexJsonl) {
   for (const line of codexJsonl.split('\n')) {
-    let j;
-    try { j = JSON.parse(line); } catch { continue; }
-    const t = (j.payload && j.payload.type) || j.type;
-    if (t === 'image_generation_call') return true;
+    let j; try { j = JSON.parse(line); } catch { continue; }
+    if (((j.payload && j.payload.type) || j.type) === 'thread.started') {
+      return j.thread_id || (j.payload && j.payload.thread_id) || null;
+    }
   }
-  return false;
+  return null;
+}
+function rolloutFor(threadId) {
+  if (!threadId) return null;
+  let found = null;
+  const walk = (dir) => {
+    let entries; try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.startsWith('rollout-') && e.name.endsWith('.jsonl') && e.name.includes(threadId)) found = p;
+    }
+  };
+  walk(SESSIONS);
+  return found;
+}
+function usedImageGenerator(codexJsonl) {
+  const rollout = rolloutFor(threadIdOf(codexJsonl));
+  if (!rollout) return false;
+  try { return readFileSync(rollout, 'utf8').includes('image_generation_call'); } catch { return false; }
 }
 
 async function forgeOne(spec, maxTries) {
