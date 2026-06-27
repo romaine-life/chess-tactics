@@ -5638,9 +5638,12 @@ h1 {
 /* One shared status-chip frame so turn / objective / counts read as a single
    family, all the same height and vertically centered (ADR-0010 rhythm). */
 .skirmish-status-chip {
-  /* No box (ADR-0027): turn/objective are status TEXT in the title bar, like the
-     brand — the bar's own panel frame is the container, not a per-chip box. */
+  /* Kit panel frame so the status reads as a contained chip, not floating text —
+     in-theme (panel.png), never the bland CSS box it replaced (ADR-0027/0028). */
   align-items: center;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 10px round;
+  box-sizing: border-box;
   display: flex;
   gap: var(--ds-inline);
 }
