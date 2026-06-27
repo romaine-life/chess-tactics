@@ -7186,7 +7186,6 @@ h1 {
 
 .ce-icon-button {
   align-items: center;
-  aspect-ratio: 1;
   background: transparent;
   border: 10px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 10px round;
@@ -7194,19 +7193,14 @@ h1 {
   color: var(--ce-ink);
   image-rendering: pixelated;
   display: grid;
+  flex: none;
   font-family: var(--ds-font-display);
-  font-size: var(--ds-text-sm);
+  font-size: var(--ds-text-xs);
+  height: 38px;
   justify-content: center;
   min-height: 0;
   padding: 0;
   text-decoration: none;
-  width: 46px;
-}
-
-.ce-icon-button {
-  flex: none;
-  font-size: var(--ds-text-xs);
-  height: 38px;
   width: 38px;
 }
 
@@ -7617,31 +7611,40 @@ h1 {
   filter: brightness(1.2) drop-shadow(0 0 7px rgba(48, 214, 255, .2));
 }
 
-.ce-campaign-summary dl {
+/* Stats as kit rows (settings-row pattern): each label/value pair sits in the
+   atom-assembled row.png frame instead of the old raw border-left dividers. */
+.ce-stat-rows {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 0;
 }
 
-.ce-campaign-summary div {
-  border-left: 1px solid var(--ce-panel-edge);
-  padding-left: 12px;
+.ce-stat-row {
+  align-items: center;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
+  box-sizing: border-box;
+  display: flex;
+  gap: 16px;
+  image-rendering: pixelated;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 2px 16px;
 }
 
-.ce-campaign-summary dt {
+.ce-stat-row dt {
   color: var(--ce-label);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
-  line-height: 1.4;
   text-transform: uppercase;
 }
 
-.ce-campaign-summary dd {
+.ce-stat-row dd {
   color: var(--ce-ink);
   font-size: var(--ds-text-sm);
-  margin: 4px 0 0;
+  margin: 0;
+  text-align: right;
 }
 
 .ce-levels-head {
@@ -8010,8 +8013,7 @@ h1 {
   .ce-layout,
   .ce-footer,
   .ce-preview-actions,
-  .ce-campaign-summary,
-  .ce-campaign-summary dl {
+  .ce-campaign-summary {
     grid-template-columns: 1fr;
   }
 
