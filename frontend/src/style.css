@@ -1337,9 +1337,14 @@ h1 {
 }
 
 .profile-bar::before {
-  background: url("/assets/ui/main-menu/secondary/profile-panel.png") center / 100% 100% no-repeat;
-  border: 0;
+  /* BROKEN ON PURPOSE — there is no atom-assembled 9-slice that matches this panel
+     yet. The old states here (stretched profile-panel.png crop; the panel-9slice.png
+     crop, which loses the gold brackets + cyan accents) are both unmigrated crops.
+     This magenta placeholder is a forcing function: converge the profile bar onto the
+     shared settings/kit panel frame when that session lands, then delete this block. */
+  border: 3px solid #ff00ff;
   border-image: none;
+  background: repeating-linear-gradient(45deg, #ff00ff 0 12px, #b300b3 12px 24px);
 }
 
 /* Crest: transparent PNG cropped from the approved render by normalize-main-menu-profile.mjs. */
