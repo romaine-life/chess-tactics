@@ -10,15 +10,6 @@ import { BrandLockup } from './shared/BrandLockup';
 
 const SHIELDS = ['crown', 'rook', 'crescent', 'snow', 'flame', 'lion'] as const;
 const CE_ICONS = {
-  menu: '/assets/ui/level-editor/icons/menu.png',
-  save: '/assets/ui/level-editor/icons/save.png',
-  settings: '/assets/ui/skirmish/icon-gear.png',
-  up: '/assets/ui/level-editor/icons/height-up.png',
-  down: '/assets/ui/level-editor/icons/height-down.png',
-  delete: '/assets/ui/skirmish/icon-crossed-swords.png',
-  play: '/assets/ui/level-editor/icons/play.png',
-  import: '/assets/ui/level-editor/icons/upload.png',
-  duplicate: '/assets/ui/level-editor/icons/download.png',
   lock: '/assets/ui/level-editor/icons/lock.png',
 } as const;
 
@@ -203,9 +194,9 @@ function LevelRow({
       </span>
       <Stars count={levelRef.stars ?? 0} />
       <span className="ce-row-actions" aria-label="Level actions">
-        <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="up" /></IconButton>
-        <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="down" /></IconButton>
-        <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
+        <IconButton onClick={onMoveUp} aria-label="Move level up">▲</IconButton>
+        <IconButton onClick={onMoveDown} aria-label="Move level down">▼</IconButton>
+        <IconButton danger onClick={onDelete} aria-label="Delete level">✕</IconButton>
       </span>
     </div>
   );
@@ -447,8 +438,8 @@ export function CampaignEditor() {
                 ))}
               </div>
               <div className="ce-mid-actions">
-                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, -1)} aria-label="Move selected level up"><CeIcon icon="up" /></IconButton>
-                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, 1)} aria-label="Move selected level down"><CeIcon icon="down" /></IconButton>
+                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, -1)} aria-label="Move selected level up">▲</IconButton>
+                <IconButton onClick={() => selectedLevelId && useCampaigns.getState().moveLevel(selectedLevelId, 1)} aria-label="Move selected level down">▼</IconButton>
                 <AssetButton danger onClick={() => confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
               </div>
             </>
