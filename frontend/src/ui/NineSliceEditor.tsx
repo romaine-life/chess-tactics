@@ -95,8 +95,10 @@ export function NineSliceEditor(): ReactElement {
   const [assetId, setAssetId] = useState(ASSETS[0].id);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [active, setActive] = useState<PieceKey>('bracket');
-  const [showOuter, setShowOuter] = useState(false);
+  const [showOuter, setShowOuter] = useState(true);
   const [showContent, setShowContent] = useState(false);
+  // gap from each outer-box edge to the art's outermost opaque pixel. + = gap inside; − = beyond (overflow).
+  const [status, setStatus] = useState<{ top: number; right: number; bottom: number; left: number } | null>(null);
   const [edits, setEdits] = useState<Record<string, EditState>>(() => {
     // Only keep well-formed entries — a malformed/old saved shape must never blank the editor.
     try {
@@ -198,32 +200,33 @@ export function NineSliceEditor(): ReactElement {
     for (let y = 0; y < view.height; y += 8) for (let x = 0; x < view.width; x += 8) { vg.fillStyle = ((x / 8 + y / 8) & 1) ? '#3a3f48' : '#2b2f37'; vg.fillRect(x, y, 8, 8); }
     vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);
 
-    // Guides: OUTER box = the actual outermost opaque pixels of the assembled
-    // 9-slice (computed from pixels, so it IS the true extent). CONTENT box =
-    // outer inset by `content` px on each side — where text/icons should start.
-    if (showOuter || showContent) {
-      const od = g.getImageData(0, 0, W, H).data;
-      let minX = W, minY = H, maxX = -1, maxY = -1;
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
-      }
-      if (maxX >= 0) {
-        const bw = maxX - minX + 1, bh = maxY - minY + 1;
-        if (showOuter) {
-          vg.strokeStyle = '#ff5cf0'; vg.lineWidth = 2;
-          vg.strokeRect(minX * Z, minY * Z, bw * Z, bh * Z);
-        }
-        if (showContent) {
-          const c = edit.content;
-          vg.strokeStyle = '#5cff9e'; vg.lineWidth = 2;
-          vg.strokeRect((minX + c) * Z, (minY + c) * Z, (bw - 2 * c) * Z, (bh - 2 * c) * Z);
-        }
-      }
+    // Guides are FIXED references at the asset footprint — you position the
+    // keyline/bracket RELATIVE to them; they do NOT follow the art.
+    // OUTER box = the footprint (the target outer edge). CONTENT box = outer
+    // inset by `content` px — where text/icons should start.
+    const boxX = m, boxY = m, boxW = fw, boxH = fh;
+    if (showOuter) {
+      vg.strokeStyle = '#ff5cf0'; vg.lineWidth = 2;
+      vg.strokeRect(boxX * Z, boxY * Z, boxW * Z, boxH * Z);
+    }
+    if (showContent) {
+      const c = edit.content;
+      vg.strokeStyle = '#5cff9e'; vg.lineWidth = 2;
+      vg.strokeRect((boxX + c) * Z, (boxY + c) * Z, (boxW - 2 * c) * Z, (boxH - 2 * c) * Z);
     }
 
     // pane boundary — shows where the output canvas ends, i.e. the empty space you control
     vg.strokeStyle = '#5aa9ff'; vg.lineWidth = 2;
     vg.strokeRect(1, 1, W * Z - 2, H * Z - 2);
+
+    // STATUS: where the art's outermost opaque pixels sit vs the outer box.
+    // + = gap inside the box (not flush yet); − = pixels BEYOND the box (overflow).
+    const od = g.getImageData(0, 0, W, H).data;
+    let minX = W, minY = H, maxX = -1, maxY = -1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    }
+    setStatus(maxX < 0 ? null : { top: minY - boxY, left: minX - boxX, right: (boxX + boxW - 1) - maxX, bottom: (boxY + boxH - 1) - maxY });
   }, [loaded, edit, showOuter, showContent, asset]);
 
   const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, margin: edit.margin, content: edit.content }, null, 2);
@@ -279,6 +282,19 @@ export function NineSliceEditor(): ReactElement {
               <span style={ST.sizeLabel}>uniform on all sides</span>
             </div>
           </div>
+          {status && (() => {
+            const over = status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0;
+            const px = (n: number) => (n < 0 ? `${-n} over` : `${n}`);
+            return (
+              <div style={{ ...ST.statusBox, borderColor: over ? '#e0556a' : '#5cff9e', color: over ? '#ff9aa8' : '#9affc4' }}>
+                <div style={{ fontWeight: 700 }}>{over ? '✗ overflow — pixels extend beyond the box' : '✓ contained — nothing beyond the box'}</div>
+                <div style={ST.statusGrid}>
+                  <span>T {px(status.top)}</span><span>R {px(status.right)}</span><span>B {px(status.bottom)}</span><span>L {px(status.left)}</span>
+                </div>
+                <div style={{ fontSize: 11, opacity: 0.8 }}>distance from box edge to outermost pixel · "over" = beyond</div>
+              </div>
+            );
+          })()}
           <div style={ST.offsets}>
             <div>keyline: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
@@ -314,6 +330,8 @@ const ST: Record<string, CSSProperties> = {
   sizeW: { fontFamily: 'ui-monospace, monospace', fontSize: 13, minWidth: 46, color: '#dbe9ff' },
   sb: { width: 34, height: 30, fontSize: 16, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 5, cursor: 'pointer' },
   toggle: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#cfe3ff' },
+  statusBox: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, padding: '8px 10px', border: '1px solid', borderRadius: 6, background: '#0a0f1c' },
+  statusGrid: { display: 'flex', gap: 14, fontFamily: 'ui-monospace, monospace', fontSize: 13 },
   offsets: { fontSize: 13, fontFamily: 'ui-monospace, monospace', color: '#dbe9ff', display: 'grid', gap: 2 },
   export: { width: '100%', height: 110, background: '#0a0f1c', color: '#dbe9ff', border: '1px solid #2a3c5e', borderRadius: 4, fontFamily: 'ui-monospace, monospace', fontSize: 12, padding: 8, boxSizing: 'border-box' },
   copy: { padding: '8px 0', background: '#1d5f9e', color: '#fff', border: '1px solid #4fbdf0', borderRadius: 4, cursor: 'pointer' },
