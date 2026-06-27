@@ -19,6 +19,7 @@ const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ defa
 const TilesetStudio = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilesetStudio })));
 const LevelEditor = lazy(() => import('./TilePreview').then((m) => ({ default: m.LevelEditorPage })));
 const PortraitEditor = lazy(() => import('./PortraitEditor').then((m) => ({ default: m.PortraitEditor })));
+const DoodadEditor = lazy(() => import('./DoodadEditor').then((m) => ({ default: m.DoodadEditor })));
 const NineSliceEditor = lazy(() => import('./NineSliceEditor').then((m) => ({ default: m.NineSliceEditor })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
@@ -70,6 +71,7 @@ function renderRoute(path: string): ReactElement {
   // catalog/lab/brush flow stays a single mounted component (no route swaps).
   if (path === '/unit-studio') return split(<TilesetStudio initialCategory="units" />);
   if (path === '/portrait-editor') return split(<PortraitEditor />);
+  if (path === '/doodad-editor') return split(<DoodadEditor />);
   if (path === '/nine-slice-editor') return split(<NineSliceEditor />);
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.

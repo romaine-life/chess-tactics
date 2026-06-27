@@ -53,32 +53,26 @@ function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boole
     );
   }
 
-  // The frame is now the atom-assembled kit 9-slice (kit/main-menu-button.png),
-  // rendered as a border-image in CSS — the old cropped button-9slice.main-menu art
-  // is retired. We still read its rules/rect as layout metadata (icon + label + arrow
-  // slots are proportional to the 897×244 footprint) until the icons themselves move
-  // off the aspirational crop. Hover/press state is a CSS filter on the frame.
   const rules = nineSlice.rules || {};
-  const stateDef = nineSlice.states.normal;
+  const stateDef = nineSlice.states[active ? 'pressed' : 'normal'] || nineSlice.states.normal;
   const icon = assetById(mode.icon);
+  const frameStyle = frameStyleForAsset(nineSlice, stateDef.rect);
   const iconStyle: CSSProperties = icon && icon.rect
     ? { ...insetStyle(rules.iconSlot, stateDef.rect), ...frameStyleForAsset(icon, icon.rect) }
     : {};
   const labelStyle = insetStyle(rules.textInset, stateDef.rect);
-  const arrowStyle = insetStyle(rules.arrowSlot, stateDef.rect);
   const linkStyle = { '--asset-aspect': `${stateDef.rect.w} / ${stateDef.rect.h}` } as CSSProperties;
 
   return (
     <a
-      className={`mode-button uses-atom-frame ${active ? 'is-active' : ''}`.trim()}
+      className={`mode-button ${active ? 'is-active' : ''}`.trim()}
       href={href}
       aria-current={active ? 'page' : undefined}
       style={linkStyle}
     >
-      <span className="mode-button-9slice" aria-hidden="true" />
+      <span className="mode-button-9slice" style={frameStyle} aria-hidden="true" />
       {icon ? <span className="mode-button-icon" style={iconStyle} aria-hidden="true" /> : null}
       <span className="mode-button-label" style={labelStyle}>{mode.label}</span>
-      <span className="mode-button-arrow" style={arrowStyle} aria-hidden="true">›</span>
     </a>
   );
 }

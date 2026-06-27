@@ -8,8 +8,9 @@
 //
 // What bakes into the PNG vs not:
 //   - bracket offset  -> shifts the warm gold pixels in the corner atom (baked)
-//   - keyline offset  -> shifts the cool keyline/navy pixels in the corner atom
-//                        (baked into the corner; edge keyline not shifted — see warn)
+//   - keyline offset  -> INERT (ignored). The border is continuous by construction
+//                        (atoms + flipSides); a keyline nudge is not bakeable, so the
+//                        editor doesn't expose it and the bake ignores it (warns if set).
 //   - content         -> consumption-side (element padding / where text+icons
 //                        start). NOT baked into the PNG; recorded in the config.
 import { PNG } from 'pngjs';
@@ -22,53 +23,16 @@ const ATOMS = `${root}public/assets/ui/kit/atoms/`;
 const KIT = `${root}public/assets/ui/kit/`;
 export const CONFIG_DIR = `${root}config/nine-slice/`;
 
-// gold ramp -> cyan ramp (luminance-matched). Navy structure is left alone.
-export const GOLD2CYAN = {
-  faefbb: 'd6f4ff', // highlight  lum 236 -> 236
-  c79b55: '4fbdf0', // mid        lum 160 -> 162
-  a7793d: '2f93dd', // shadow     lum 128 -> 126
-  '5b4124': '14507f', // deep     lum  69 ->  68
-};
-
-// Per-asset recipe. `atoms` are names in kit/atoms; `out`/`inspect` are written to
-// kit/ and kit/atoms respectively. Add an entry here to make a new asset bakeable.
-export const REGISTRY = {
-  'mode-button': {
-    atoms: { corner: 'corner', edge: 'edge', fill: 'fill' },
-    frame: { w: 72, h: 72 },
-    // content -> the consuming element's inner padding, via a CSS var the bake writes.
-    consume: { selector: '.settings-tab', cssVar: '--settings-tab-content' },
-    variants: [
-      { out: 'mode-button.png' },
-      { out: 'mode-button-active.png', swap: GOLD2CYAN, inspect: 'corner-cyan' },
-    ],
-  },
-  'panel': {
-    // Settings frames (.settings-frame / .app-titlebar) — same gold-keyline kit
-    // family as the tabs, assembled from the shared atoms; a per-asset config tunes
-    // it independently of mode-button. Consumed at a 24px slice (24px corner atom).
-    atoms: { corner: 'corner', edge: 'edge', fill: 'fill' },
-    frame: { w: 72, h: 72 },
-    variants: [{ out: 'panel.png' }],
-  },
-  'main-menu-button': {
-    // Main-menu mode buttons — same gold-keyline kit as the settings tabs/panel,
-    // assembled from the shared atoms (ADR-0012) with its own config so the menu
-    // button tunes independently. Replaces the old cropped main-menu-aspirational
-    // sprite the menu still renders.
-    atoms: { corner: 'corner', edge: 'edge', fill: 'fill' },
-    frame: { w: 72, h: 72 },
-    variants: [{ out: 'main-menu-button.png' }],
-  },
-  'row': {
-    atoms: { corner: 'row-corner', edge: 'row-edge', fill: 'row-fill' },
-    frame: { w: 160, h: 112 },
-    // assemble-frame fills the whole canvas navy then lays the frame on top, which
-    // bleeds navy past the rail into the transparent exterior — carve it back.
-    carve: true,
-    variants: [{ out: 'row.png' }],
-  },
-};
+// Single source of truth — the SAME registry the in-app editor and the catalog
+// edit-link read (config/nine-slice/registry.json). Add a frame there and it
+// becomes bakeable, editable, and catalog-linked with no code change here.
+const REG = JSON.parse(readFileSync(`${root}config/nine-slice-registry.json`, 'utf8'));
+const PALETTES = REG.palettes ?? {};
+// Resolve each variant's palette name (e.g. "gold2cyan") to its actual swap map.
+export const REGISTRY = Object.fromEntries(Object.entries(REG.assets).map(([id, a]) => [id, {
+  ...a,
+  variants: a.variants.map((v) => ({ ...v, swap: v.swap ? PALETTES[v.swap] : undefined })),
+}]));
 
 const hex = (r, g, b) => `${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 const isWarm = (r, g, b, a) => a > 40 && r > b + 15; // gold ramp is warm; keyline/navy are cool
@@ -90,11 +54,14 @@ function over(base, top) {
   for (let i = 0; i < top.data.length; i += 4) if (top.data[i + 3] > 0) { o.data[i] = top.data[i]; o.data[i + 1] = top.data[i + 1]; o.data[i + 2] = top.data[i + 2]; o.data[i + 3] = top.data[i + 3]; }
   return o;
 }
-// Tune a corner: cool base shifted by keyline, warm gold shifted by bracket. The
-// gold's vacated cells become transparent so the frame fill shows through — exactly
-// what the editor preview does.
+// Tune a corner: the warm gold bracket is shifted by `bracket`; the cool keyline
+// base is NOT moved. keyline is inert by design — the border is continuous by
+// construction (atoms + flipSides), and moving only the corner keyline (while the
+// edges stay fixed) would diverge from the editor preview. The editor matches this
+// (it renders the corner/edges at keyline 0). gold's vacated cells go transparent
+// so the fill shows through.
 function tuneCorner(corner, cfg) {
-  const base = layer(corner, cfg.keyline.dx, cfg.keyline.dy, (r, g, b, a) => a > 40 && !isWarm(r, g, b, a));
+  const base = layer(corner, 0, 0, (r, g, b, a) => a > 40 && !isWarm(r, g, b, a));
   const gold = layer(corner, cfg.bracket.dx, cfg.bracket.dy, isWarm);
   return over(base, gold);
 }
@@ -162,10 +129,14 @@ export function buildAsset(assetId, cfgRaw) {
   const edge = loadAtom(rec.atoms.edge), fill = loadAtom(rec.atoms.fill);
   const { w, h } = rec.frame;
   const written = [], warns = [];
-  if (cfg.keyline.dx || cfg.keyline.dy) warns.push('keyline baked into the corner only — edge keyline not shifted; keep keyline at 0 or regenerate the edge atom');
+  if (cfg.keyline.dx || cfg.keyline.dy) warns.push('keyline offset is IGNORED — the border is fixed/continuous by construction; set keyline to 0,0');
   for (const v of rec.variants) {
+    // A variant's palette swap recolors the WHOLE frame (corner + edge + fill), so an
+    // active/selected state can change the body + borders, not just the corner accent.
     const c = v.swap ? swapPalette(corner, v.swap) : corner;
-    const frame = buildFrameFrom(c, edge, fill, w, h);
+    const e = v.swap ? swapPalette(edge, v.swap) : edge;
+    const fl = v.swap ? swapPalette(fill, v.swap) : fill;
+    const frame = buildFrameFrom(c, e, fl, w, h, !!rec.flipSides);
     if (rec.carve) carveExterior(frame);
     writeFileSync(`${KIT}${v.out}`, PNG.sync.write(frame));
     written.push(v.out);

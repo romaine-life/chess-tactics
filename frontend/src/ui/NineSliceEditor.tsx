@@ -17,20 +17,31 @@
 // In dev, Save writes config/nine-slice/<asset>.json and regenerates the asset
 // (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import nineSliceRegistry from '../../config/nine-slice-registry.json';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
 type EditState = { keyline: Off; bracket: Off; content: number };
 type PieceKey = 'keyline' | 'bracket';
 
-type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame };
+type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean };
 
-const ASSETS: Asset[] = [
-  { id: 'mode-button', label: 'Mode button (tabs / header)', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/mode-button.png', frame: { w: 72, h: 72 } },
-  { id: 'row', label: 'Settings row', corner: '/assets/ui/kit/atoms/row-corner.png', edge: '/assets/ui/kit/atoms/row-edge.png', fill: '/assets/ui/kit/atoms/row-fill.png', target: '/assets/ui/kit/row.png', frame: { w: 160, h: 112 } },
-  { id: 'panel', label: 'Settings panel / frame', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/panel.png', frame: { w: 72, h: 72 } },
-  { id: 'main-menu-button', label: 'Main menu button', corner: '/assets/ui/kit/atoms/corner.png', edge: '/assets/ui/kit/atoms/edge.png', fill: '/assets/ui/kit/atoms/fill.png', target: '/assets/ui/kit/main-menu-button.png', frame: { w: 72, h: 72 } },
-];
+// Derived from the SINGLE registry (shared with the Node bake + the catalog). Every
+// atom-built frame appears here automatically — adding one is a registry edit, not a
+// code change in three files.
+type RegAsset = { label: string; atoms: { corner: string; edge: string; fill: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
+const REGISTRY = (nineSliceRegistry as { assets: Record<string, RegAsset> }).assets;
+const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
+  id,
+  label: a.label,
+  corner: `/assets/ui/kit/atoms/${a.atoms.corner}.png`,
+  edge: `/assets/ui/kit/atoms/${a.atoms.edge}.png`,
+  fill: `/assets/ui/kit/atoms/${a.atoms.fill}.png`,
+  target: `/assets/ui/kit/${a.variants[0].out}`,
+  frame: a.frame,
+  carve: !!a.carve,
+  flipSides: !!a.flipSides,
+}));
 
 const DEFAULT_CONTENT = 12;
 const STORAGE_KEY = 'nine-slice-editor-v4';
@@ -63,6 +74,22 @@ function rot90(src: CanvasImageSource, w: number, h: number): HTMLCanvasElement 
     for (let k = 0; k < 4; k++) dd.data[di + k] = sd.data[si + k];
   }
   dctx.putImageData(dd, 0, 0); return c;
+}
+
+// Carve navy bleed outside the rail back to transparent (ports generate-row's
+// carveExterior to canvas): flood from the edges across dark navy, stop at the
+// brighter rail. Mirrors what the shipped row.png does, so the preview matches.
+function carveExterior(canvas: HTMLCanvasElement): void {
+  const { width: w, height: h } = canvas; const g = canvas.getContext('2d')!;
+  const img = g.getImageData(0, 0, w, h); const d = img.data;
+  const i4 = (x: number, y: number) => (y * w + x) * 4;
+  const isNavy = (x: number, y: number) => { const i = i4(x, y); return d[i + 3] > 20 && Math.max(d[i], d[i + 1], d[i + 2]) < 45; };
+  const seen = new Uint8Array(w * h); const stack: number[] = [];
+  const push = (x: number, y: number) => { if (x < 0 || y < 0 || x >= w || y >= h) return; const p = y * w + x; if (seen[p]) return; seen[p] = 1; stack.push(x, y); };
+  for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
+  for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+  while (stack.length) { const y = stack.pop()!, x = stack.pop()!; if (!isNavy(x, y)) continue; d[i4(x, y) + 3] = 0; push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1); }
+  g.putImageData(img, 0, 0);
 }
 
 // Split a corner atom into base (cool keyline) and accent (warm gold bracket).
@@ -103,7 +130,7 @@ type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: b
 // Assemble the 9-slice at an arbitrary W×H (no margin) with the keyline/bracket
 // offsets baked in. This is the single source of truth for both the editor canvas
 // and the live previews, so a preview can never diverge from what you're editing.
-function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number): HTMLCanvasElement {
+function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false, flipSides = false): HTMLCanvasElement {
   const { cw, ch, ew, eh } = L;
   const W = Math.max(2 * cw, w), H = Math.max(2 * ch, h);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -111,8 +138,12 @@ function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: n
   tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
   const topS = toCanvas(L.edge, ew, eh);
   const botS = flip(topS, ew, eh, false, true);
-  const rightS = rot90(L.edge, ew, eh);
-  const leftS = flip(rightS, rightS.width, rightS.height, true, false);
+  // Side edges via rot90; flipSides swaps L/R for beveled rails (row) so the bevel
+  // matches the corner at the join instead of reversing — mirrors assemble-frame.
+  const r = rot90(L.edge, ew, eh);
+  const fr = flip(r, r.width, r.height, true, false);
+  const rightS = flipSides ? fr : r;
+  const leftS = flipSides ? r : fr;
   tileH(g, topS, cw, W - cw, ky);
   tileH(g, botS, cw, W - cw, H - botS.height - ky);
   tileV(g, leftS, ch, H - ch, kx);
@@ -125,6 +156,7 @@ function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: n
   };
   corner(L.base, kx, ky);
   if (L.hasAccent) corner(L.accent, bdx, bdy);
+  if (carve) carveExterior(c);
   return c;
 }
 
@@ -231,8 +263,6 @@ export function NineSliceEditor(): ReactElement {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
-      if (e.key === 'k') { setActive('keyline'); return; }
-      if (e.key === 'b') { setActive('bracket'); return; }
       const moves: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
       const m = moves[e.key]; if (!m) return;
       e.preventDefault(); nudge(m[0], m[1]);
@@ -244,9 +274,8 @@ export function NineSliceEditor(): ReactElement {
   useEffect(() => {
     if (!loaded) return;
     const W = asset.frame.w, H = asset.frame.h;        // canvas = the asset footprint
-    const kx = edit.keyline.dx, ky = edit.keyline.dy;
-
-    const off = buildFrameCanvas(loaded, kx, ky, edit.bracket.dx, edit.bracket.dy, W, H);
+    // keyline is inert (the border is continuous by construction) — always 0, matching the bake.
+    const off = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides);
     const g = off.getContext('2d')!;
 
     const view = canvasRef.current; if (!view) return;
@@ -288,7 +317,7 @@ export function NineSliceEditor(): ReactElement {
       cvs.width = w * scale; cvs.height = h * scale;
       const g = cvs.getContext('2d')!; g.imageSmoothingEnabled = false;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      const f = buildFrameCanvas(loaded, edit.keyline.dx, edit.keyline.dy, edit.bracket.dx, edit.bracket.dy, w, h);
+      const f = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve, asset.flipSides);
       g.drawImage(f, 0, 0, w, h, 0, 0, w * scale, h * scale);
       if (label) {
         g.fillStyle = '#e8f0ff'; g.font = `${13 * scale}px system-ui, sans-serif`;
@@ -301,7 +330,9 @@ export function NineSliceEditor(): ReactElement {
   }, [loaded, edit.keyline, edit.bracket, asset]);
 
   const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content }, null, 2);
-  const pieces: PieceKey[] = loaded?.hasAccent ? ['keyline', 'bracket'] : ['keyline'];
+  // Only the bracket is nudgeable. Keyline is inert (continuous border by construction);
+  // exposing a keyline nudge would let the preview show a state the bake can't reproduce.
+  const pieces: PieceKey[] = loaded?.hasAccent ? ['bracket'] : [];
 
   // Save straight to the on-disk config + regenerate the asset, via the dev-only
   // Vite endpoint. import.meta.env.DEV gates the button; the endpoint only exists
@@ -313,7 +344,8 @@ export function NineSliceEditor(): ReactElement {
     try {
       const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
       const j = await r.json();
-      setSaveMsg(j.ok ? `saved ${j.config} → ${j.written.join(', ')} · hard-refresh the app to see it${j.note ? ` (${j.note})` : ''}` : `error: ${j.error}`);
+      const warn = (j.warns && j.warns.length) ? ` · ⚠ ${j.warns.join('; ')}` : '';
+      setSaveMsg(j.ok ? `saved ${j.config} → ${j.written.join(', ')}${warn} · hard-refresh to see it${j.note ? ` (${j.note})` : ''}` : `error: ${j.error}`);
     } catch (e) { setSaveMsg(`error: ${String(e)}`); }
   };
 
@@ -340,7 +372,7 @@ export function NineSliceEditor(): ReactElement {
               <button key={k} type="button" onClick={() => setActive(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{k}</button>
             ))}
           </div>
-          <p style={ST.hint}>Editing <b>{active}</b> — arrow keys nudge 1px (k / b switch). Keyline = corner+edges locked as one border; bracket = the gold, free.</p>
+          <p style={ST.hint}>Editing the <b>bracket</b> (the gold corner accent) — arrow keys nudge 1px. The keyline border is fixed/continuous by construction.</p>
           <div style={ST.dpad}>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, -1)}>↑</button><div />
             <button type="button" style={ST.nb} onClick={() => nudge(-1, 0)}>←</button>
@@ -377,7 +409,6 @@ export function NineSliceEditor(): ReactElement {
             </div>
           )}
           <div style={ST.offsets}>
-            <div>keyline: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
             <div>content inset: {edit.content} px</div>
           </div>

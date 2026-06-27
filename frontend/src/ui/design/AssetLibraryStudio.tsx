@@ -7,6 +7,7 @@
 import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import manifest from './kitManifest.json';
 import provenance from './kitProvenance.json';
+import nineSliceRegistry from '../../../config/nine-slice-registry.json';
 
 // Every asset card carries three filterable properties: its TYPE (which shelf it
 // lives on — Icons/Game/Shields/Frames, restoring the portfolio's categorisation),
@@ -36,6 +37,13 @@ interface Provenance { assets: Record<string, { forged: string; tries: number }>
 const KIT = manifest as Manifest;
 const PROV = provenance as Provenance;
 const forged = (name: string): boolean => Object.prototype.hasOwnProperty.call(PROV.assets, name);
+
+// Editable frames, derived from the SINGLE registry (config/nine-slice-registry.json)
+// — every composed output (incl. -active variants) maps back to its editable asset
+// id. A frame NOT in here is whole-PNG: migration debt, not a supported state.
+const REG_ASSETS = (nineSliceRegistry as { assets: Record<string, { variants: { out: string }[] }> }).assets;
+const EDITOR_ASSET: Record<string, string> = {};
+for (const [id, a] of Object.entries(REG_ASSETS)) for (const v of a.variants) EDITOR_ASSET[v.out.replace(/\.png$/, '')] = id;
 const GROUP_LABEL: Record<string, string> = { settings: 'Icons', game: 'Game', shields: 'Shields' };
 
 function Card({ name, url, sub, gate, selected, onSelect }: { name: string; url: string; sub: string; gate?: 'pass' | 'fail'; selected: boolean; onSelect: (name: string) => void }): ReactElement {
@@ -158,6 +166,18 @@ export function AssetLab({ name, header }: { name: string; header?: ReactNode })
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
+            {item && EDITOR_ASSET[item.name] ? (
+              <a
+                href={`/nine-slice-editor?asset=${EDITOR_ASSET[item.name]}`}
+                style={{ display: 'block', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', borderRadius: 4, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}
+              >✎ Edit in 9-slice editor</a>
+            ) : found?.kind === 'frame' ? (
+              // A frame that isn't atom-built is migration debt, surfaced as such —
+              // not silently treated as an acceptable alternative.
+              <div style={{ padding: '9px 12px', textAlign: 'center', background: '#3a1c22', color: '#ff9aa8', border: '1px solid #7a2a36', borderRadius: 4, fontWeight: 700, fontSize: 12 }}>
+                ⚠ Not atom-built — needs forging into the kit
+              </div>
+            ) : null}
             {found && item ? (
               <dl className="al-meta">
                 <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h}</dd></div>
