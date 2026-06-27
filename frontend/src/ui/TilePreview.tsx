@@ -2264,7 +2264,7 @@ export function LevelEditor(): ReactElement {
         </section>
 
         {brushKind === 'unit' ? (
-          <section className="skirmish-card">
+          <section className="skirmish-card le-brush-panel">
             <h2>Side</h2>
             <div className="le-seg">
               <button type="button" className={`le-seg-btn ${unitSide === 'player' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('player')}>Player</button>
@@ -2293,7 +2293,7 @@ export function LevelEditor(): ReactElement {
             </div>
           </section>
         ) : (
-          <section className="skirmish-card">
+          <section className="skirmish-card le-brush-panel">
             <h2>Palette</h2>
             <div className="le-palette-scroll">
               {leTileGroups.map(({ family, tiles }) => (

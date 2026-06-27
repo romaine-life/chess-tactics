@@ -5064,7 +5064,7 @@ h1 {
 }
 .level-editor-screen .le-topbar { grid-area: titlebar; }
 .level-editor-screen .skirmish-field { grid-area: board; }
-.level-editor-screen .skirmish-hud { grid-area: rail; }
+.level-editor-screen .skirmish-hud { grid-area: rail; scrollbar-gutter: stable; }
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
@@ -5145,7 +5145,11 @@ h1 {
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
 /* palette (folded into the rail — variant B) */
-.le-palette-scroll { max-height: 300px; overflow-y: auto; padding-right: 4px; scrollbar-color: #315160 #071017; scrollbar-width: thin; }
+/* Tile-palette and unit-controls swap in/out of the same rail slot; pin both to one
+   fixed height so flipping layers can't wobble the panel (Tile was 350px, Unit 354px). */
+.le-brush-panel { display: flex; flex-direction: column; height: 360px; }
+.le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
+.le-palette-scroll { height: 300px; overflow-y: auto; padding-right: 4px; scrollbar-color: #315160 #071017; scrollbar-gutter: stable; scrollbar-width: thin; }
 .le-palette-scroll::-webkit-scrollbar { width: 7px; }
 .le-palette-scroll::-webkit-scrollbar-thumb { background: #315160; border-radius: 4px; }
 .le-pal-group { margin: 0 0 4px; }
