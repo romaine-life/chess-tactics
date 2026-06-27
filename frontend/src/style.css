@@ -7334,7 +7334,7 @@ h1 {
 }
 
 .ce-asset-button.is-danger {
-  border-image-source: url("/assets/ui/kit/panel.png");
+  border-image-source: url("/assets/ui/kit/button-danger.png");
   color: #ffe1d8;
 }
 
@@ -7654,18 +7654,6 @@ h1 {
   padding: 0 8px;
 }
 
-.ce-mid-actions {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 52px 52px minmax(0, 1fr);
-  padding: 8px 4px 0;
-}
-
-.ce-mid-actions .ce-icon-button {
-  height: 48px;
-  width: 48px;
-}
-
 .ce-selected-head h2 {
   min-width: 0;
   overflow: hidden;
@@ -7970,33 +7958,16 @@ h1 {
   border-image: url("/assets/ui/kit/panel.png") 18 fill / 14px stretch;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(170px, 1fr) minmax(150px, .82fr) minmax(140px, .72fr) minmax(170px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   image-rendering: pixelated;
   min-height: 58px;
   padding: 4px 10px;
 }
 
-.ce-footer-link {
-  border-image-source: url("/assets/ui/kit/panel.png");
-}
-
-/* Footer: Save = primary; Duplicate + Export = neutral; Delete = danger. */
-.ce-footer .ce-asset-button:nth-child(1) {
-  border-image-source: url("/assets/ui/kit/panel.png");
-}
-
+/* Footer = campaign actions: Duplicate + Export neutral, Delete Campaign danger (base .is-danger). */
 .ce-import-campaign,
-.ce-footer-secondary,
-.ce-footer .ce-asset-button:nth-child(2) {
+.ce-footer .ce-asset-button:not(.is-danger) {
   border-image-source: url("/assets/ui/kit/button-neutral.png");
-}
-
-.ce-footer .ce-asset-button.is-danger {
-  border-image-source: url("/assets/ui/kit/panel.png");
-}
-
-.ce-mid-actions .ce-asset-button.is-danger {
-  border-image-source: url("/assets/ui/kit/panel.png");
 }
 
 @media (max-width: 1180px) {
@@ -12670,11 +12641,11 @@ button.tileset-relationship-cell {
 }
 
 .settings-chrome-button-primary {
-  border-image-source: url("/assets/ui/kit/panel.png");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 .settings-chrome-button-danger {
-  border-image-source: url("/assets/ui/kit/panel.png");
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 .settings-chrome-button span {
