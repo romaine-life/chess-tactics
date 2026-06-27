@@ -12768,8 +12768,9 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
-/* Volume slider — thin track that fills blue up to a square thumb (via --val),
-   plus the live percentage. Matches the concept's mixing rows. */
+/* Volume slider, low-fi kit look (ADR-0014): a square navy channel that fills kit
+   cyan up to a chunky beveled cyan thumb (via --val). No rounded radius, no glow —
+   those are the generic tells. Re-skins with the stone/wood chrome later. */
 .settings-slider {
   align-items: center;
   display: flex;
@@ -12786,36 +12787,32 @@ button.tileset-relationship-cell {
 }
 
 .settings-slider input[type="range"]::-webkit-slider-runnable-track {
-  background: linear-gradient(90deg, #2f8fe6 var(--val, 0%), #0a1a26 var(--val, 0%));
-  border: 1px solid rgba(67, 127, 179, .5);
-  border-radius: 2px;
-  height: 8px;
+  background: linear-gradient(90deg, #4fbdf0 var(--val, 0%), #0e2236 var(--val, 0%));
+  border: 1px solid #2a4a63;
+  height: 10px;
 }
 .settings-slider input[type="range"]::-moz-range-track {
-  background: linear-gradient(90deg, #2f8fe6 var(--val, 0%), #0a1a26 var(--val, 0%));
-  border: 1px solid rgba(67, 127, 179, .5);
-  border-radius: 2px;
-  height: 8px;
+  background: linear-gradient(90deg, #4fbdf0 var(--val, 0%), #0e2236 var(--val, 0%));
+  border: 1px solid #2a4a63;
+  height: 10px;
 }
 
 .settings-slider input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  background: #3aa0ff;
-  border: 1px solid #cfe9ff;
-  border-radius: 2px;
+  background: #3f8fd0;
+  border: 3px solid;
+  border-color: #c4ecff #123a5c #123a5c #c4ecff;
   block-size: 20px;
-  box-shadow: 0 0 8px rgba(58, 160, 255, .6);
-  inline-size: 16px;
+  inline-size: 14px;
   margin-top: -7px;
 }
 .settings-slider input[type="range"]::-moz-range-thumb {
-  background: #3aa0ff;
-  border: 1px solid #cfe9ff;
-  border-radius: 2px;
+  background: #3f8fd0;
+  border: 3px solid;
+  border-color: #c4ecff #123a5c #123a5c #c4ecff;
   block-size: 20px;
-  box-shadow: 0 0 8px rgba(58, 160, 255, .6);
-  inline-size: 16px;
+  inline-size: 14px;
 }
 
 .settings-slider input[type="range"]:focus-visible {
