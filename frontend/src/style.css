@@ -7307,7 +7307,7 @@ h1 {
   align-items: center;
   background: transparent;
   border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/button-primary.png") 18 fill / 12px stretch;
+  border-image: url("/assets/ui/kit/button-primary.png") 24 fill / 12px round;
   box-sizing: border-box;
   color: var(--ce-ink);
   display: inline-grid;
@@ -7710,7 +7710,7 @@ h1 {
 .ce-level-view-toggle button {
   background: transparent;
   border: 9px solid transparent;
-  border-image: url("/assets/ui/kit/button-neutral.png") 18 fill / 9px stretch;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 9px round;
   color: var(--ce-slate);
   cursor: pointer;
   font-family: var(--ds-font-pixel);
@@ -12620,9 +12620,8 @@ button.tileset-relationship-cell {
 .settings-chrome-button {
   align-items: center;
   appearance: none;
-  border: 9px solid transparent;
-  border-width: 9px 16px;
-  border-image: url("/assets/ui/kit/button-neutral.png") 9 16 fill / 9px 16px stretch;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
   box-sizing: border-box;
   color: #eff9ff;
   display: inline-flex;
