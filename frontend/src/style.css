@@ -10009,6 +10009,47 @@ h1 {
   box-shadow: 0 0 0 2px rgba(42, 166, 255, 0.18);
 }
 
+/* Catalog category selector — a compact dropdown (the category list outgrew a segmented row). */
+.tileset-category-select {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tileset-category-select select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  color: #f3fbff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 700 13px/1 var(--ds-font-sans, system-ui, sans-serif);
+  outline: none;
+  cursor: pointer;
+}
+
+.tileset-category-select select:focus {
+  border-color: rgba(111, 210, 255, 0.82);
+  box-shadow: 0 0 0 2px rgba(42, 166, 255, 0.18);
+}
+
+/* Surface catalog swatch — the texture tiled, the way it fills a panel behind chrome. */
+.surface-swatch {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background-repeat: repeat;
+  background-position: center;
+  image-rendering: pixelated;
+}
+
 .tileset-catalog-zoom {
   display: flex;
   gap: 7px;

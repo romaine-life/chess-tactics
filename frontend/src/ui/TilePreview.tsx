@@ -38,6 +38,7 @@ import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
+import { SurfaceLibraryStudio } from './SurfaceLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
@@ -75,7 +76,7 @@ type StudioMode = 'catalog' | 'lab' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary';
+type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary' | 'surfaces';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor; 'glossary' reads one term in
@@ -245,7 +246,7 @@ const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary' || value === 'surfaces';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -1345,6 +1346,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [assetFilters, setAssetFilters] = useState<AssetFilters>({ type: 'all', prov: 'all', gate: 'all' });
   const [assetSearch, setAssetSearch] = useState('');
   const [artworkSearch, setArtworkSearch] = useState('');
+  const [surfaceSearch, setSurfaceSearch] = useState('');
+  const [selectedSurfaceName, setSelectedSurfaceName] = useState<string | undefined>(undefined);
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
@@ -1933,7 +1936,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
-      ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : 'Tiles']
+      ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : category === 'surfaces' ? 'Surfaces' : 'Tiles']
       : studioMode === 'viewer'
         ? (viewerKind === 'portrait' ? ['Viewer', 'Portrait'] : ['Viewer', viewerKindLabel, viewerName || '—'])
         : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
@@ -2258,6 +2261,22 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
       ),
     },
+    {
+      id: 'surfaces', label: 'Surfaces', hint: 'Browse accepted background surfaces — seamless, tileable pixel-art tiles.',
+      main: <SurfaceLibraryStudio search={surfaceSearch} zoom={zoom} selected={selectedSurfaceName} onSelect={setSelectedSurfaceName} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={surfaceSearch} onChange={(event) => setSurfaceSearch(event.target.value)} placeholder="surface, material…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+        </>
+      ),
+    },
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
 
@@ -2309,19 +2328,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
-              <div className="tileset-tier-seg" aria-label="Catalog asset type">
-                {catalogCategories.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    className={category === entry.id ? 'is-active' : ''}
-                    onClick={() => setCategory(entry.id)}
-                    title={entry.hint}
-                  >
-                    {entry.label}
-                  </button>
-                ))}
-              </div>
+              <label className="tileset-category-select" title={activeCatalog.hint}>
+                <span>Category</span>
+                <select value={category} onChange={(event) => setCategory(event.target.value as StudioCategory)} aria-label="Catalog category">
+                  {catalogCategories.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.label}</option>
+                  ))}
+                </select>
+              </label>
               {activeCatalog.controls}
             </div>
           </section>
