@@ -84,20 +84,20 @@ function splitWarm(img: HTMLImageElement): { base: HTMLCanvasElement; accent: HT
   return { base, accent, hasAccent };
 }
 
-// Top-left of a piece's opaque pixels — used to compute the "max out" offset that
-// makes the piece flush with the footprint corner ((-x,-y) lands its corner on the box).
-function opaqueMin(c: HTMLCanvasElement): { x: number; y: number } {
+// Bounding box of a piece's opaque pixels — used to clamp nudges so a piece can't
+// be pushed out of the footprint, and to compute "max out" (offset = -min = flush).
+function opaqueBox(c: HTMLCanvasElement): { minX: number; minY: number; maxX: number; maxY: number } {
   const { width: w, height: h } = c; const d = c.getContext('2d')!.getImageData(0, 0, w, h).data;
-  let mx = w, my = h;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 20) { if (x < mx) mx = x; if (y < my) my = y; }
-  return { x: mx === w ? 0 : mx, y: my === h ? 0 : my };
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  return maxX < 0 ? { minX: 0, minY: 0, maxX: 0, maxY: 0 } : { minX, minY, maxX, maxY };
 }
 
 const tileH = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number, x1: number, y: number) => { for (let x = x0; x < x1; x += t.width) g.drawImage(t, x, y); };
 const tileV = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, y0: number, y1: number, x: number) => { for (let y = y0; y < y1; y += t.height) g.drawImage(t, x, y); };
 const tileRect = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number, y0: number, x1: number, y1: number) => { for (let y = y0; y < y1; y += t.height) for (let x = x0; x < x1; x += t.width) g.drawImage(t, x, y); };
 
-type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: boolean; edge: HTMLImageElement; fill: HTMLImageElement; target: HTMLImageElement | null; cw: number; ch: number; ew: number; eh: number; baseMin: { x: number; y: number }; accentMin: { x: number; y: number } };
+type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: boolean; edge: HTMLImageElement; fill: HTMLImageElement; target: HTMLImageElement | null; cw: number; ch: number; ew: number; eh: number; baseBox: { minX: number; minY: number; maxX: number; maxY: number }; accentBox: { minX: number; minY: number; maxX: number; maxY: number } };
 
 // Assemble the 9-slice at an arbitrary W×H (no margin) with the keyline/bracket
 // offsets baked in. This is the single source of truth for both the editor canvas
@@ -168,7 +168,7 @@ export function NineSliceEditor(): ReactElement {
       .then(([corner, edge, fill, target]) => {
         if (!live) return;
         const { base, accent, hasAccent } = splitWarm(corner);
-        setLoaded({ base, accent, hasAccent, edge, fill, target, cw: corner.width, ch: corner.height, ew: edge.width, eh: edge.height, baseMin: opaqueMin(base), accentMin: hasAccent ? opaqueMin(accent) : { x: 0, y: 0 } });
+        setLoaded({ base, accent, hasAccent, edge, fill, target, cw: corner.width, ch: corner.height, ew: edge.width, eh: edge.height, baseBox: opaqueBox(base), accentBox: hasAccent ? opaqueBox(accent) : { minX: 0, minY: 0, maxX: corner.width - 1, maxY: corner.height - 1 } });
       }).catch(() => { if (live) setLoaded(null); });
     return () => { live = false; };
   }, [asset]);
@@ -204,13 +204,24 @@ export function NineSliceEditor(): ReactElement {
     const cur = prev[assetId] ?? DEFAULT_EDIT;
     return { ...prev, [assetId]: mut(cur) };
   });
-  const nudge = (dx: number, dy: number) => update((cur) => ({ ...cur, [active]: { dx: cur[active].dx + dx, dy: cur[active].dy + dy } }));
-  // Send the active piece to its max outward position — opaque pixels flush with the
-  // footprint corner (no overflow). For the bracket this lands on (-x,-y) of its gold.
+  // Clamp an offset so the active piece's opaque pixels stay inside the footprint —
+  // outward stops at flush (you can't push out of bounds; that's never wanted), inward
+  // stops before the far edge. -box.min is exactly the "max out" flush position.
+  const clampOffset = (dx: number, dy: number): Off => {
+    if (!loaded) return { dx, dy };
+    const box = active === 'keyline' ? loaded.baseBox : loaded.accentBox;
+    const W = asset.frame.w, H = asset.frame.h;
+    return {
+      dx: Math.max(-box.minX, Math.min(W - 1 - box.maxX, dx)),
+      dy: Math.max(-box.minY, Math.min(H - 1 - box.maxY, dy)),
+    };
+  };
+  const nudge = (dx: number, dy: number) => update((cur) => ({ ...cur, [active]: clampOffset(cur[active].dx + dx, cur[active].dy + dy) }));
+  // Send the active piece to its max outward position — flush with the footprint corner.
   const maxOut = () => {
     if (!loaded) return;
-    const p = active === 'keyline' ? loaded.baseMin : loaded.accentMin;
-    update((cur) => ({ ...cur, [active]: { dx: -p.x, dy: -p.y } }));
+    const box = active === 'keyline' ? loaded.baseBox : loaded.accentBox;
+    update((cur) => ({ ...cur, [active]: { dx: -box.minX, dy: -box.minY } }));
   };
   const setContent = (dc: number) => update((cur) => ({ ...cur, content: Math.max(0, (cur.content ?? DEFAULT_CONTENT) + dc) }));
   const reset = () => update(() => DEFAULT_EDIT);
