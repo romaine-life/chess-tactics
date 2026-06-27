@@ -131,8 +131,12 @@ export function buildAsset(assetId, cfgRaw) {
   const written = [], warns = [];
   if (cfg.keyline.dx || cfg.keyline.dy) warns.push('keyline offset is IGNORED — the border is fixed/continuous by construction; set keyline to 0,0');
   for (const v of rec.variants) {
+    // A variant's palette swap recolors the WHOLE frame (corner + edge + fill), so an
+    // active/selected state can change the body + borders, not just the corner accent.
     const c = v.swap ? swapPalette(corner, v.swap) : corner;
-    const frame = buildFrameFrom(c, edge, fill, w, h, !!rec.flipSides);
+    const e = v.swap ? swapPalette(edge, v.swap) : edge;
+    const fl = v.swap ? swapPalette(fill, v.swap) : fill;
+    const frame = buildFrameFrom(c, e, fl, w, h, !!rec.flipSides);
     if (rec.carve) carveExterior(frame);
     writeFileSync(`${KIT}${v.out}`, PNG.sync.write(frame));
     written.push(v.out);

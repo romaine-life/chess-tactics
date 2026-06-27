@@ -1,7 +1,11 @@
 {
   "_doc": "Single source of truth for atom-built 9-slice frames. Read by the Node bake (scripts/nine-slice-kit.mjs), the in-app editor (NineSliceEditor), and the catalog edit-link (AssetLibraryStudio). Add a frame here and it becomes bakeable, editable, and catalog-linked with no other code change. atoms = names in public/assets/ui/kit/atoms; variants[].out = composed PNG in public/assets/ui/kit; swap = palette name; consume = the CSS var its content drives; carve = flood navy bleed outside the rail.",
   "palettes": {
-    "gold2cyan": { "faefbb": "d6f4ff", "c79b55": "4fbdf0", "a7793d": "2f93dd", "5b4124": "14507f" }
+    "active": {
+      "faefbb": "d6f4ff", "c79b55": "4fbdf0", "a7793d": "2f93dd", "5b4124": "14507f",
+      "414e61": "2896c3", "2f3a48": "1c608c",
+      "121c23": "1c3a5a", "0f181f": "152f4c", "0d151c": "122a46", "101921": "183452"
+    }
   },
   "assets": {
     "mode-button": {
@@ -11,7 +15,7 @@
       "consume": { "selector": ".settings-tab", "cssVar": "--settings-tab-content" },
       "variants": [
         { "out": "mode-button.png" },
-        { "out": "mode-button-active.png", "swap": "gold2cyan", "inspect": "corner-cyan" }
+        { "out": "mode-button-active.png", "swap": "active", "inspect": "corner-cyan" }
       ]
     },
     "panel": {
