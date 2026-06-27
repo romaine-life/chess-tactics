@@ -42,9 +42,14 @@ Chosen: **(a)** — settings text maps to the existing scale by role:
 | Role | Token | Examples |
 |---|---|---|
 | eyebrow / status | `--ds-text-2xs` | section title, account status |
-| description / caption | `--ds-text-xs` | row description |
+| description / caption | `--ds-text-sm` | row description (amended — see below) |
 | control value / label | `--ds-text-sm` | stepper & slider readouts, row value chip, account name |
 | body / row title | `--ds-text-md` | row `h4` titles |
+
+> **Amended 2026-06-27:** the row **description** moved `--ds-text-xs` →
+> `--ds-text-sm`. At `xs` it read too small/faint in the live rows; it now shares
+> the `sm` secondary-body tier with the value/label readouts, still a clear step
+> below the `md` row title. The eyebrow (`2xs`) remains the smallest text.
 
 The UI-Scale **stepper readout**, which had inherited the body's 19px, now uses
 `--ds-text-sm`, matching the slider readout (both are "value" role).

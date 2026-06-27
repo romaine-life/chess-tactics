@@ -12602,7 +12602,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-row p {
-  font-size: var(--ds-text-xs);
+  font-size: var(--ds-text-sm);
   margin-top: 3px;
 }
 
