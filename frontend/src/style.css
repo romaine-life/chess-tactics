@@ -10050,19 +10050,28 @@ h1 {
   image-rendering: pixelated;
 }
 
-/* Surface viewer stages — big single-surface preview (framed + bare), like the asset viewer. */
-.surface-view-panel,
-.surface-view-fill {
-  display: block;
-  width: 500px;
-  height: 340px;
+/* Surface viewer — one surface in isolation, centered, framed or bare, manually resizable. */
+.surface-view-main {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.surface-view-stage {
+  width: 640px;
+  height: 420px;
+  max-width: 100%;
+  resize: both;
+  overflow: hidden;
   background-repeat: repeat;
   background-position: center;
   image-rendering: pixelated;
   border-radius: 6px;
 }
 
-.surface-view-panel {
+.surface-view-stage.is-panel {
   border: 16px solid transparent;
   border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round;
   background-origin: border-box;

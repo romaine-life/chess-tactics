@@ -55,37 +55,36 @@ export function SurfaceViewer({ name, header }: { name?: string; header?: ReactN
   // inspect it — no panning needed; you always see filled content. Low zoom = many tiles
   // (read it as a surface), high zoom = big pixels (inspect the pixel art / seams).
   const [zoom, setZoom] = useState(1);
-  const base = s.tilePx / 4;
-  const tiled = (mult: number): CSSProperties => ({
+  const [view, setView] = useState<'panel' | 'bare'>('panel');
+  const bg: CSSProperties = {
     backgroundImage: `url("${s.file}")`,
-    backgroundSize: `${Math.round(base * zoom * mult)}px`,
+    backgroundSize: `${Math.round((s.tilePx / 4) * zoom)}px`,
     backgroundRepeat: 'repeat',
     backgroundPosition: 'center',
     imageRendering: 'pixelated',
-  });
+  };
   return (
     <>
-      <section className="al-lab-main" aria-label="Surface preview">
-        <div className="al-lab-stages">
-          <figure className="al-stage">
-            <span className="surface-view-panel" style={tiled(1)} />
-            <figcaption>in a framed panel</figcaption>
-          </figure>
-          <figure className="al-stage">
-            <span className="surface-view-fill" style={tiled(0.85)} />
-            <figcaption>tiled surface</figcaption>
-          </figure>
-        </div>
+      <section className="al-lab-main surface-view-main" aria-label="Surface preview">
+        <div className={`surface-view-stage ${view === 'panel' ? 'is-panel' : 'is-bare'}`} style={bg} />
       </section>
       <aside className="tileset-view-controls" aria-label="Surface details">
         <section className="tileset-inspector-section">
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
+            <div className="tileset-filter-field">
+              <span>View</span>
+              <div className="tileset-tier-seg" aria-label="Surface preview mode">
+                <button type="button" className={view === 'panel' ? 'is-active' : ''} onClick={() => setView('panel')}>In panel</button>
+                <button type="button" className={view === 'bare' ? 'is-active' : ''} onClick={() => setView('bare')}>Bare</button>
+              </div>
+            </div>
             <label className="tileset-catalog-zoom">
               <span>Zoom · {zoom.toFixed(1)}×</span>
               <input type="range" min="0.5" max="8" step="0.1" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
             </label>
+            <p className="tileset-catalog-note">Drag the preview's bottom-right corner to resize it.</p>
             <dl className="al-meta">
               <div><dt>Surface</dt><dd>{s.label}</dd></div>
               <div><dt>Approach</dt><dd>{s.approach}</dd></div>
