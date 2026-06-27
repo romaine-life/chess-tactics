@@ -12189,6 +12189,16 @@ button.tileset-relationship-cell {
   width: 100%;
 }
 
+/* The "drops cross in front" overlay reads far heavier on settings than on the
+   menu: the dense frames give those front-drops a large surface to cross, while
+   the menu's sparse UI is crossed by only a few. Dim the FRONT layer on settings
+   so the in-front rain matches the menu's restraint. The field rain behind the
+   frames is untouched, and the menu overlay is unaffected (scoped via the
+   re-parented overlay living under .settings-art-route only while on settings). */
+.settings-art-route .ambience-overlay {
+  opacity: 0.3;
+}
+
 .settings-screen {
   /* ONE label-size token shared by every ACTION button (header buttons + panel
      pills), regardless of frame skin OR location. Action buttons sit at the
@@ -12531,16 +12541,12 @@ button.tileset-relationship-cell {
 }
 
 /* Layout container only. Each row carries its own atom-assembled frame
-   (ADR-0012/0014), so there is no CSS border/radius/background wrapping the rows. */
-/* Grouped list: one subtle container per section, rows separated by hairline
-   dividers — not an ornate frame around every row. The gold-bracket chrome stays
-   on the outer panels; the content list reads clean and scannable. */
+   (ADR-0012/0014), so there is NO CSS border/radius/background wrapping the rows.
+   (A merge re-introduced the old grouped-list "bubble" here — a navy fill + an
+   8px-radius border around each section's rows; removed so only the per-row atom
+   frame shows.) */
 .settings-section-rows {
-  background: rgba(8, 22, 34, 0.55);
-  border: 1px solid rgba(67, 127, 179, 0.26);
-  border-radius: 8px;
   display: grid;
-  overflow: hidden;
 }
 
 .settings-row {
@@ -12566,9 +12572,6 @@ button.tileset-relationship-cell {
   padding: 12px 16px;
 }
 
-.settings-row + .settings-row {
-  border-top: 1px solid rgba(67, 127, 179, 0.16);
-}
 
 .settings-row-tall {
   min-height: 80px;
