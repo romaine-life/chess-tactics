@@ -52,13 +52,15 @@ surface as a separate `background` layer**. Never a per-material baked frame.
 
 ### A. The "line" frame — ornament only
 
-For any frame that needs to sit over a surface, bake a **line** twin from the *same*
-corner + edge atoms with a **transparent fill**, then mask every remaining dark/navy
-pixel back to transparent (max-channel `< 45` → α 0) so only the bright rail /
-ornament survives. This kills both the center fill and the edge-slice bleed.
-`bakeLine(assetId)` in `frontend/scripts/nine-slice-kit.mjs` is the single
-implementation; it reuses the asset's committed corner tune, so the line twin can
-never diverge from the filled frame's geometry.
+For any frame that needs to sit over a surface, bake a **line** twin by assembling the
+*same* corner + edge atoms with a **transparent fill**. The navy interior lives entirely
+in the fill atom, so this yields the **full** ornament/rail (the gold brackets, or the
+steel rail with its dark bevel) over a see-through center — there is no fill to ring it,
+and nothing is masked. `carveExterior` trims exterior navy bleed exactly as the filled
+bake does. (An earlier global dark-pixel mask was wrong: it ate a *dark* rail down to a
+bright keyline, so a surfaced row looked frameless — see §D.) `bakeLine(assetId)` in
+`frontend/scripts/nine-slice-kit.mjs` is the single implementation; it reuses the asset's
+committed corner tune, so the line twin can never diverge from the filled frame's geometry.
 
 ### B. First-class, registry-declared, parity-tested
 
@@ -80,14 +82,14 @@ The element keeps the line frame as `border-image` and paints the surface as its
 (the texture flows unbroken across panel / button / row seams rather than restarting
 per element).
 
-### D. Choose the ornament for see-through
+### D. Every framed element keeps its frame over a surface
 
-A frame whose ornament is **corner brackets** (panel / mode-button) reads cleanly
-when its interior is see-through. A frame whose ornament is a **continuous keyline**
-(the steel row rail) renders as a thin rectangle that hugs the element's edge and
-reads as a *stray boundary* on a surface. So a surfaced **row takes no frame** — the
-surface fills it edge-to-edge and row spacing + content provide separation. Match the
-ornament to the use: brackets survive transparency, full keylines do not.
+A surfaced element keeps its frame just like a filled one — panels and tab buttons show
+their gold brackets, rows show their full steel rail — each over the continuous surface,
+with the texture filling the see-through interior. Frames are **not** dropped. (An earlier
+iteration dropped the row's frame to hide what looked like a thin "phantom" keyline; that
+keyline was the over-masked bake of §A, not the real rail. With the faithful line twin the
+row shows its proper rail, so the frame stays.)
 
 ### Consequences
 
@@ -96,11 +98,10 @@ ornament to the use: brackets survive transparency, full keylines do not.
   twin by adding one registry field, covered by the existing parity test.
 - **Good:** the hand-made `panel-line.png` is replaced by the baked one (byte-pinned
   by the test), so it is regenerable like everything else.
-- **Cost:** the dark-pixel mask threshold (`< 45`) is a heuristic tuned for the
-  navy-on-bright kit palette; a frame with intentionally dark ornament would need a
-  different mask. Re-tune in `bakeLine` and mock-and-measure if that ever happens.
-- **Cost:** a continuous-keyline frame can't be made see-through attractively — such
-  an element drops its frame instead (the row), a deliberate exception.
+- **Cost:** the line twin assumes the navy interior is isolated in the **fill atom**
+  (true for every current kit frame). A frame that baked its body colour into the
+  corner/edge atoms instead would carry it into the line twin — that frame would need
+  its atoms split, not a post-hoc mask (the mask route ate a dark rail; see §A).
 
 ## More Information
 
