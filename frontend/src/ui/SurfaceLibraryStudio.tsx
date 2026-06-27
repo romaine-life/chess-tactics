@@ -18,7 +18,7 @@ export function SurfaceLibraryStudio({
   const q = search.trim().toLowerCase();
   const visible = SURFACE_ASSETS.filter((s) => !q || [s.label, s.approach, s.material].join(' ').toLowerCase().includes(q));
   return (
-    <div className="tileset-studio-grid" aria-label="Surfaces">
+    <div className="tileset-studio-grid surface-grid" aria-label="Surfaces">
       {visible.map((s) => (
         <button
           key={s.name}

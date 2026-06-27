@@ -8875,12 +8875,9 @@ h1 {
    so the rail and pane hold their position — only their contents swap. */
 .tileset-studio-shell.is-catalog,
 .tileset-studio-shell.is-lab,
-.tileset-studio-shell.is-viewer {
+.tileset-studio-shell.is-viewer,
+.tileset-studio-shell.is-dressing {
   grid-template-columns: minmax(0, 1fr) 260px;
-}
-
-.tileset-studio-shell.is-view {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Lab uses the SAME 2-column frame as Catalog — same main, same 260px Controls
@@ -10078,6 +10075,82 @@ h1 {
   background-clip: border-box;
 }
 
+/* Dressing room — the live /settings iframe fills the main pane full-bleed; the per-region
+   controls live in the standard tileset-view-controls aside. */
+.surface-dressing-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: rgba(5, 16, 25, 0.92);
+  border: 1px solid rgba(67, 127, 179, 0.28);
+  border-radius: 6px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+
+.surface-dressing-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 5px;
+  background: #05080c;
+}
+
+.surface-region-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(10, 28, 43, 0.55);
+  border: 1px solid rgba(67, 127, 179, 0.24);
+  border-radius: 6px;
+}
+
+.surface-region-card.is-empty {
+  opacity: 0.74;
+}
+
+.surface-region-card > strong {
+  color: #cfe4f8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.surface-region-reset {
+  justify-self: start;
+  padding: 5px 9px;
+  color: #9ec7ea;
+  background: rgba(12, 31, 48, 0.6);
+  border: 1px solid rgba(91, 157, 216, 0.32);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.surface-region-reset:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.surface-box-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #b9d2ea;
+  cursor: pointer;
+  font: 600 12px/1.2 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.surface-box-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #5b9dd8;
+  cursor: pointer;
+}
+
 .tileset-catalog-zoom {
   display: flex;
   gap: 7px;
@@ -10758,6 +10831,14 @@ button.tileset-relationship-cell {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 12px;
+}
+
+/* Surfaces are few (one short row), so the default grid stretch blows each card up
+   to fill the tall catalog pane. Pack the row to the top and size cards to content. */
+.tileset-studio-grid.surface-grid {
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
 }
 
 .tileset-studio-card {
