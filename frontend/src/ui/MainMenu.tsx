@@ -26,10 +26,11 @@ function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boole
     const labelStyle = insetStyle(rowAsset.rules?.textInset, normalState.rect);
     // buttons-v2 rendered as a HORIZONTAL 3-slice (fixed icon/arrow caps + a
     // stretchable middle, vertical locked) — not a stretched sheet-crop. The CSS
-    // does the border-image slicing; we just hand it the per-mode normal/active art.
+    // does the border-image slicing; we just hand it the per-mode frame art. Hover
+    // is a CSS blue glow on this frame (the -active glow sprite is authored inset,
+    // so swapping to it made the button visibly shrink — see style.css).
     const frameStyle = {
       '--btn-normal': `url("/assets/ui/main-menu/buttons-v2/${mode.slug}-normal.png")`,
-      '--btn-active': `url("/assets/ui/main-menu/buttons-v2/${mode.slug}-active.png")`,
     } as CSSProperties;
 
     return (

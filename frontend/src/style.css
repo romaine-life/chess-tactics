@@ -1176,14 +1176,17 @@ h1 {
   image-rendering: auto;
 }
 
+/* Hover/active: a blue brighten + glow on the SAME frame — no sprite swap (the
+   -active glow art is authored inset/lower, so swapping made the button visibly
+   shrink downward). Pure color/glow, zero geometry change. */
 .mode-button.uses-row-art:hover .mode-button-art-normal,
 .mode-button.uses-row-art:focus-visible .mode-button-art-normal,
 .mode-button.uses-row-art.is-active .mode-button-art-normal {
-  border-image-source: var(--btn-active);
+  filter: brightness(1.28) saturate(1.7) drop-shadow(0 0 7px rgba(90, 196, 255, .6));
 }
 
 .mode-button.uses-row-art:active .mode-button-art-normal {
-  filter: brightness(.96);
+  filter: brightness(1.12) saturate(1.5);
 }
 
 /* .mode-button-icon is positioned by inline left/top/width/height (icon slot). */
