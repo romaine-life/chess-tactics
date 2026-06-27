@@ -96,7 +96,16 @@ export function NineSliceEditor(): ReactElement {
   const [active, setActive] = useState<PieceKey>('bracket');
   const [showTarget, setShowTarget] = useState(false);
   const [edits, setEdits] = useState<Record<string, EditState>>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+    // Only keep well-formed entries — a malformed/old saved shape must never blank the editor.
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const clean: Record<string, EditState> = {};
+      for (const k of Object.keys(raw)) {
+        const e = raw[k];
+        if (e && e.keyline && typeof e.keyline.dx === 'number' && e.bracket && typeof e.bracket.dx === 'number' && typeof e.margin === 'number') clean[k] = e;
+      }
+      return clean;
+    } catch { return {}; }
   });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
