@@ -29,10 +29,17 @@ export function ScrollbarLibraryStudio({
           title={`${s.label} — scrollbar grip`}
         >
           <span className="tileset-studio-card-image" style={{ '--tile-zoom': zoom } as CSSProperties}>
-            <span
-              className="surface-swatch"
-              style={{ backgroundImage: `url("${s.file}")`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', imageRendering: 'pixelated' } as CSSProperties}
-            />
+            {/* Preview AS a scrollbar: a recessed track + a thumb skinned by this entry —
+                'sprite' shows the carved shape, 'texture' fills a plain thumb with the material. */}
+            <span style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '11%' } as CSSProperties}>
+              <span style={{ position: 'relative', width: '22px', height: '74%', background: '#05101c', borderRadius: '2px', border: '1px solid #16314c' } as CSSProperties}>
+                {s.kind === 'texture' ? (
+                  <span style={{ position: 'absolute', top: '6px', left: '2px', right: '2px', height: '46%', borderRadius: '2px', backgroundImage: `url("${s.file}")`, backgroundSize: 'cover', backgroundPosition: 'center', imageRendering: 'pixelated', borderTop: '2px solid rgba(255,245,225,0.4)', borderLeft: '1px solid rgba(255,245,225,0.3)', borderBottom: '2px solid rgba(0,0,0,0.5)', borderRight: '1px solid rgba(0,0,0,0.45)' } as CSSProperties} />
+                ) : (
+                  <span style={{ position: 'absolute', top: '5px', left: '1px', right: '1px', height: '54%', backgroundImage: `url("${s.file}")`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', imageRendering: 'pixelated' } as CSSProperties} />
+                )}
+              </span>
+            </span>
           </span>
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">
