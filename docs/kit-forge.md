@@ -1,15 +1,17 @@
 # Kit forge — generating UI-kit icons with codex
 
-The verified forge is `frontend/scripts/forge-atom.mjs` — it generates one
-transparent UI element via codex img2img, **verifies the method against the
-rollout** (see below), then keys + low-fis it (ADR-0013 / ADR-0014).
+Two codex forges, both **method-verified against the rollout** (see below):
+`frontend/scripts/kit-forge.mjs` produces the UI-kit **icon glyphs** (it owns the
+`SPECS` list, one per icon), and `frontend/scripts/forge-atom.mjs` produces the
+**9-slice atoms** for frames (chroma-key despill + low-fi, ADR-0013 / ADR-0014).
 
-The old single-shot `kit-forge.mjs` was **retired (deleted)**: it gated on `codex
-exec --json` **stdout**, which never carries the generation event (see below), so
-it rejected every real generation and either shipped code-drawn icons or threw
-real ones away. This doc exists because that forge shipped a batch of broken icons
-once, and the reason is non-obvious and easy to repeat. Read this before building
-or "improving" any codex-image forge.
+This doc exists because the forge once shipped a batch of broken icons, and the
+reason is non-obvious and easy to repeat: kit-forge originally gated on `codex exec
+--json` **stdout**, which never carries the generation event, so it rejected every
+real generation (and the un-gated runs before it shipped code-drawn icons). That
+gate was **fixed (#155) to read the rollout** (see below), and a CI check
+(`scripts/check-imagegen-gate.mjs`) now fails the build if any forge regresses to a
+stdout gate. Read this before building or "improving" any codex-image forge.
 
 ## The hard rule: verify the METHOD, never trust the bitmap
 
