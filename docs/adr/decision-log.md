@@ -19,6 +19,7 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0013](0013-transparency-chroma-key-via-subscription.md) | Generated-chrome transparency = chroma-key + despill via the subscription codex; native paid-API path rejected on cost | accepted | 2026-06-26 |
 | [0014](0014-ui-chrome-low-fidelity-aesthetic.md) | UI chrome targets the concept's low-fidelity element aesthetic (~few-hundred colors, chunky); forges specify shape + fidelity per ui-chrome-vocabulary.md; never "soft anti-aliased" | accepted | 2026-06-26 |
 | [0015](0015-doodads-frame-units-not-bury-them.md) | Doodads frame the unit, not bury it: shin-height foliage that covers feet only; solids aren't stand-inside props; terrain-gated | accepted | 2026-06-27 |
+| [0016](0016-ui-typography-system.md) | UI typography is one tokenized system: --ds-font-* families (Jersey 10 dropped) + the --ds-text-* size scale + weight/tracking tokens, mandatory; raw font literals disallowed; migration is staged screen-by-screen | proposed | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 

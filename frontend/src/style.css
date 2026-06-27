@@ -1616,6 +1616,12 @@ h1 {
   --ds-font-sans: "Advance Wars 2 GBA", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
   --ds-font-display: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
   --ds-font-pixel: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
+  --ds-font-mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  /* Deprecated aliases (ADR-0016): --font-sans/--font-serif were used 12x but never
+     defined, silently falling back to the browser default. Defined here as aliases of
+     the --ds-* tokens so the dead path resolves; do NOT add new uses. */
+  --font-sans: var(--ds-font-sans);
+  --font-serif: var(--ds-font-serif);
   /* Type scale — one modular ramp (~1.2 ratio), responsive via clamp so every
      surface scales together instead of each role inventing its own clamp triplet.
      Map text ROLES onto these steps; don't hand-pick font-sizes per element.
@@ -1627,6 +1633,15 @@ h1 {
   --ds-text-md:  clamp(.95rem, 1.1vw, 1.1rem);
   --ds-text-lg:  clamp(1.18rem, 1.55vw, 1.6rem);
   --ds-text-xl:  clamp(1.5rem, 2.1vw, 2.3rem);
+  --ds-text-display: clamp(2.2rem, 3.72vw, 3.9rem); /* menu title — folds in --menu-type-title (ADR-0016) */
+  /* Weights (ADR-0016): pixel faces are 400-only; serif uses these three, strong (600)
+     is reserved for the brand lockup (ADR-0008). */
+  --ds-weight-regular: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-strong: 600;
+  /* Tracking (ADR-0016): two roles — labels vs eyebrows/brand descriptor. */
+  --ds-tracking-tight: .01em;
+  --ds-tracking-wide: .14em;
   /* space */
   --ds-space-1: 4px;
   --ds-space-2: 8px;
