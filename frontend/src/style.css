@@ -12165,14 +12165,27 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
+  /* Same art-directed backdrop as the main menu (.main-menu-layer, ~line 712) so the
+     settings frames sit over the menu scene + the synced rain. Keep the two in sync.
+     First declaration = PNG fallback for engines without image-set()/type(). */
   background:
-    radial-gradient(920px 620px at 52% 16%, rgba(49, 81, 91, .22), transparent 64%),
-    #02070b;
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat #02070b;
   display: grid;
   height: 100%;
   justify-items: center;
   min-height: 0;
   overflow: hidden;
+  position: relative;
   width: 100%;
 }
 
@@ -12192,6 +12205,10 @@ button.tileset-relationship-cell {
   inline-size: 100%;
   max-inline-size: none;
   min-block-size: 0;
+  /* Above the rain field (z-index 2), below the overlay drops (z-index 5) — mirrors
+     .main-menu-screen so the frames sit over the scene + rain, a few drops in front. */
+  position: relative;
+  z-index: 3;
   /* Flush to the app edges — full-bleed, like the Skirmish bar. Top app bars are
      conventionally edge-to-edge, not inset cards. */
   padding: 0;
