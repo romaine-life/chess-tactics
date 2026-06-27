@@ -22,6 +22,8 @@
     "check": "node --check src/bgm.js && node scripts/check-no-chrome-bitmaps.mjs && node scripts/check-bgm-shuffle.mjs && node scripts/check-sprites.mjs && node scripts/check-imagegen-gate.mjs && vitest run && tsc --noEmit"
   },
   "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",

@@ -32,7 +32,7 @@ interface Glyph { name: string; url: string; w: number; h: number; magenta: numb
 interface Group { id: string; label: string; items: Glyph[] }
 interface Frame { name: string; url: string; w: number; h: number }
 interface Manifest { summary: { pass: number; total: number; frames: number }; groups: Group[]; frames: Frame[] }
-interface Provenance { assets: Record<string, { forged: string; tries: number }> }
+interface Provenance { process: string; lastRun: string; note: string; assets: Record<string, { group: string; forged: string; method: string; canvas: string; gate: string }> }
 
 const KIT = manifest as Manifest;
 const PROV = provenance as Provenance;
@@ -181,7 +181,7 @@ export function AssetLab({ name, header }: { name: string; header?: ReactNode })
             {found && item ? (
               <dl className="al-meta">
                 <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h}</dd></div>
-                <div><dt>Process</dt><dd className={prov ? 'al-ok' : ''}>{prov ? `forged ${prov.forged} (${prov.tries} tr)` : 'original (pre-forge)'}</dd></div>
+                <div><dt>Process</dt><dd className={prov ? 'al-ok' : ''}>{prov ? `forged ${prov.forged} · ${prov.method}` : 'original (pre-forge)'}</dd></div>
                 {glyph ? <div><dt>Gate</dt><dd className={glyph.pass ? 'al-ok' : 'al-no'}>{glyph.pass ? 'PASS' : glyph.fails.join(' · ')}</dd></div> : null}
                 {glyph ? <div><dt>Magenta</dt><dd>{glyph.magenta}</dd></div> : null}
                 {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}

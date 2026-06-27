@@ -6,6 +6,7 @@ import { PNG } from 'pngjs';
 // The ADR-0026 glyph-canvas contract: forge-atom pads a trimmed glyph into a
 // uniform centered canvas and the size is asserted. This tests the pure pad step
 // (no codex) so CI guarantees the contract holds.
+// @ts-ignore — forge-atom is an untyped .mjs build script (cf. nineSliceBake.test.ts)
 import { padToCanvas } from '../../../scripts/forge-atom.mjs';
 
 function solidPng(w: number, h: number): Buffer {
