@@ -132,6 +132,14 @@ function buildCss(config: DressingConfig): string {
       if (typeof op === 'number' && op < 1) parts.push(`${sel} { opacity: ${op} !important; }`);
     }
   }
+  if (parts.length) {
+    // background-attachment: fixed anchors to the nearest *transformed* ancestor, not the
+    // viewport. The settings screen carries an (identity) transform, which makes every region
+    // restart the surface from its own corner — the fill reads as a per-element patch instead of
+    // one continuous sheet. Neutralise it so all regions sample the same viewport-anchored
+    // surface: the texture then persists element-to-element as if it filled the whole screen.
+    parts.unshift('[data-testid="settings"] .settings-screen { transform: none !important; }');
+  }
   return parts.join('\n');
 }
 
