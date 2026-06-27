@@ -29,6 +29,7 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0023](0023-app-title-bar-layout-and-controls.md) | App title bars: centered three-section layout + labeled controls on the kit frame (never bare icons; icon+label in-game, text in menus); generalizes ADR-0010 | accepted | 2026-06-27 |
 | [0024](0024-ui-typography-system.md) | UI typography is one tokenized system: --ds-font-* families (Jersey 10 dropped) + the --ds-text-* size scale + weight/tracking tokens, mandatory; raw font literals disallowed; migration is staged screen-by-screen | accepted | 2026-06-27 |
 | [0025](0025-world-scene-art-anti-story-lore.md) | World/scene/portrait art is governed by the anti-story lore (docs/lore-anti-story.md + lore/historical-anchors + background contracts): residue-not-spectacle, faceless pieces, ordinary life beside an unseen real-historical catastrophe; palette per-image (no forced grade) | accepted | 2026-06-27 |
+| [0026](0026-canonical-icon-box-optical-sizing.md) | Main-menu icons share a canonical 72×72 box (60×60 live area, 6px trim) with per-shape OPTICAL keylines (equal optical mass, not box-fill), optical-centering baked into each PNG's padding; whole-pixel/nearest-neighbour; one `--menu-icon-size` token on consumption; re-pack not re-forge | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 
