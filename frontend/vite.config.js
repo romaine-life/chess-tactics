@@ -42,6 +42,35 @@ function doodadCompositionSave() {
   };
 }
 
+// Dev-only mock for the backend's /api/bgm contract. Local dev has no BGM blob
+// backend, so the real endpoint is empty and the Settings "View Tracks" view (and
+// the BGM player) have nothing to show. Opt in with BGM_DEV_TRACKS=1 to serve a
+// sample playlist — off by default, so dev otherwise matches prod-without-BGM.
+// The urls are placeholders (no audio ships in the repo): the track LIST renders,
+// but playback won't actually start in dev.
+function bgmDevMock() {
+  const enabled = process.env.BGM_DEV_TRACKS === '1';
+  return {
+    name: 'bgm-dev-mock',
+    apply: 'serve',
+    configureServer(server) {
+      if (!enabled) return;
+      const titles = [
+        'Opening Theme', "The Knight's Gambit", 'Endgame Tension', 'Castle Walls',
+        'March of the Pawns', 'Queen Ascendant', "Bishop's Diagonal", 'Rook to the Rank',
+      ];
+      const tracks = titles.map((title, i) => ({
+        title, url: `/assets/bgm-dev/${String(i + 1).padStart(2, '0')}.mp3`,
+      }));
+      server.middlewares.use('/api/bgm', (_req, res) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ tracks }));
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), doodadCompositionSave(), nineSliceDevSave()],
+  plugins: [react(), doodadCompositionSave(), nineSliceDevSave(), bgmDevMock()],
 });
