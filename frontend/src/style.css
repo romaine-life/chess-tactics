@@ -282,10 +282,11 @@ button {
   text-shadow: 0 1px 0 #020507;
 }
 
-/* Hover lights the surface up (ADR-0027: emphasis by color, never a painted
-   highlight box); keyboard focus keeps a real outline for a11y. */
+/* Hover lights the LABEL up — text goes bright white; the chrome itself stays
+   quiet, no glow (ADR-0006 low-glare quiet chrome / ADR-0027 emphasis by color).
+   Keyboard focus keeps a crisp outline for a11y (not a glow; tab-only). */
 button:hover {
-  filter: brightness(1.12);
+  color: #f4fbff;
 }
 
 button:focus-visible {
@@ -1363,7 +1364,7 @@ h1 {
   cursor: pointer;
   font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
-.app-update-banner button:hover { filter: brightness(1.12); }
+.app-update-banner button:hover { color: #f4fbff; }
 
 
 /* ── Design-system token layer ────────────────────────────────────────────
@@ -2972,20 +2973,16 @@ h1 {
 }
 
 .utility-button:hover,
-.utility-button:focus-visible,
 .utility-squad-card:hover,
-.utility-squad-card:focus-visible,
-.utility-toggle:hover,
-.utility-toggle:focus-visible {
-  filter: brightness(1.12);
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: -4px;
+.utility-toggle:hover {
+  color: #f4fbff;
 }
 
-.utility-button:active,
-.utility-squad-card:active,
-.utility-toggle:active {
-  transform: translateY(1px);
+.utility-button:focus-visible,
+.utility-squad-card:focus-visible,
+.utility-toggle:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .utility-button.is-disabled,
@@ -4291,10 +4288,14 @@ h1 {
   text-decoration: none;
 }
 
-.skirmish-header-button:hover,
+.skirmish-header-button:hover {
+  color: #f4fbff;
+}
+
 .skirmish-header-button:focus-visible {
-  filter: brightness(1.14);
-  outline: none;
+  color: #f4fbff;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .skirmish-header-button .skirmish-icon {
@@ -4815,10 +4816,14 @@ h1 {
   text-transform: uppercase;
 }
 
-.skirmish-hud-tab:hover,
+.skirmish-hud-tab:hover {
+  color: #f4fbff;
+}
+
 .skirmish-hud-tab:focus-visible {
-  color: var(--skirmish-ink);
-  outline: none;
+  color: #f4fbff;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .skirmish-hud-tab.active {
@@ -5296,10 +5301,6 @@ h1 {
 .skirmish-roster-slot.active {
   outline: none;
   box-shadow: 0 0 0 2px #2896c3;
-}
-
-.skirmish-roster-slot:hover {
-  filter: brightness(1.12);
 }
 
 .skirmish-roster-slot:focus-visible {
@@ -5888,17 +5889,17 @@ h1 {
   max-width: 16px;
 }
 
-.ce-icon-button.is-selected,
-.ce-icon-button:hover,
-.ce-icon-button:focus-visible {
+.ce-icon-button.is-selected {
   border-image-source: url("/assets/ui/kit/panel.png");
   color: var(--ce-cyan-bright);
-  outline: none;
 }
 
-.ce-icon-button.is-danger,
-.ce-icon-button.is-danger:hover,
-.ce-icon-button.is-danger:focus-visible {
+.ce-icon-button:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.ce-icon-button.is-danger {
   border-image-source: url("/assets/ui/kit/panel.png");
   color: var(--ce-enemy);
 }
@@ -5992,13 +5993,16 @@ h1 {
 }
 
 .ce-asset-button:hover,
-.ce-asset-button:focus-visible,
 .ce-link-button:hover,
+.ce-footer-link:hover {
+  color: #f4fbff;
+}
+
+.ce-asset-button:focus-visible,
 .ce-link-button:focus-visible,
-.ce-footer-link:hover,
 .ce-footer-link:focus-visible {
-  filter: brightness(1.12);
-  outline: none;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .ce-asset-button.is-danger {
@@ -6006,9 +6010,8 @@ h1 {
   color: #ffe1d8;
 }
 
-.ce-asset-button.is-danger:hover,
-.ce-asset-button.is-danger:focus-visible {
-  filter: brightness(1.12);
+.ce-asset-button.is-danger:hover {
+  color: #f4fbff;
 }
 
 .ce-asset-button:disabled {
@@ -6090,10 +6093,13 @@ h1 {
   outline: none;
 }
 
-.ce-campaign-row:hover:not(.is-locked):not(.is-selected),
+.ce-campaign-row:hover:not(.is-locked):not(.is-selected) {
+  color: #f4fbff;
+}
+
 .ce-campaign-row:focus-visible:not(.is-selected) {
-  filter: brightness(1.1);
-  outline: none;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .ce-campaign-row.is-locked {
@@ -6114,10 +6120,13 @@ h1 {
   outline: none;
 }
 
-.ce-level-row:hover:not(.is-selected),
+.ce-level-row:hover:not(.is-selected) {
+  color: #f4fbff;
+}
+
 .ce-level-row:focus-visible:not(.is-selected) {
-  filter: brightness(1.1);
-  outline: none;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .ce-row-copy {
@@ -6179,11 +6188,14 @@ h1 {
   width: auto;
 }
 
-.ce-row-favorite.is-selected,
-.ce-row-favorite:hover,
+.ce-row-favorite.is-selected {
+  opacity: 1;
+}
+
 .ce-row-favorite:focus-visible {
   opacity: 1;
-  outline: none;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .ce-stars {
@@ -6260,7 +6272,8 @@ h1 {
 }
 
 .ce-name-field input:focus {
-  filter: brightness(1.2) drop-shadow(0 0 7px rgba(48, 214, 255, .2));
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 /* Stats as kit rows (settings-row pattern): each label/value pair sits in the
@@ -6751,13 +6764,8 @@ h1 {
   transition: border-color 0.15s ease, box-shadow 0.3s ease, transform 0.1s ease, opacity 0.2s ease;
 }
 
-.bgm-control:hover {
-  /* Mild light-up, no lift — ADR-0027 is color-only, never resize/move. */
-  filter: brightness(1.12);
-}
-
 .bgm-control:focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
 
@@ -11074,10 +11082,14 @@ button.tileset-relationship-cell {
   border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
 }
 
-.app-header-button:hover,
+.app-header-button:hover {
+  color: #f4fbff;
+}
+
 .app-header-button:focus-visible {
-  filter: brightness(1.14);
-  outline: none;
+  color: #f4fbff;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .settings-header-frame {
@@ -11244,10 +11256,9 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
-.cluster-icon-button:hover,
 .cluster-icon-button:focus-visible {
-  filter: brightness(1.14);
-  outline: none;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 /* Signed-out Sign In rides the same cluster — match the icon buttons' height so the
@@ -11327,10 +11338,6 @@ button.tileset-relationship-cell {
   padding: 4px;
 }
 
-.account-menu-exit:hover {
-  filter: brightness(1.2);
-}
-
 .account-menu-exit:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
@@ -11406,10 +11413,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab:not(.is-active):hover {
-  /* Brighten the surface on hover instead of painting over it (a background here
-     would clobber the baked stone). */
-  filter: brightness(1.12);
-  color: #eaf4ff;
+  color: #f4fbff;
 }
 
 .settings-tab.is-active {
@@ -11834,12 +11838,14 @@ button.tileset-relationship-cell {
   text-shadow: 0 0 9px rgba(224, 170, 90, 0.6);
 }
 
-.settings-tab:focus-visible,
 .settings-chrome-button:hover,
+.settings-toggle:hover {
+  color: #f4fbff;
+}
+
+.settings-tab:focus-visible,
 .settings-chrome-button:focus-visible,
-.settings-toggle:hover,
 .settings-toggle:focus-visible {
-  filter: brightness(1.12);
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
