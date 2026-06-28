@@ -85,6 +85,7 @@ export function SurfaceViewer({ name, header }: { name?: string; header?: ReactN
               <input type="range" min="0.5" max="8" step="0.1" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
             </label>
             <p className="tileset-catalog-note">Drag the preview's bottom-right corner to resize it.</p>
+            <button type="button" className="tileset-view-action pages-reset" onClick={() => { setZoom(1); setView('panel'); }}>Reset to defaults</button>
             <dl className="al-meta">
               <div><dt>Surface</dt><dd>{s.label}</dd></div>
               <div><dt>Approach</dt><dd>{s.approach}</dd></div>

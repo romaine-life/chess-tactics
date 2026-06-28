@@ -59,6 +59,12 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   const [iconSize, setIconSize] = useState(64);
   const [hoverSlide, setHoverSlide] = useState<'off' | '6' | '10'>('off');
   const [stone, setStone] = useState('stone-slate-blue');
+  const resetDefaults = (): void => {
+    setBtnH(80);
+    setIconSize(64);
+    setHoverSlide('off');
+    setStone('stone-slate-blue');
+  };
   const wrapStyle = {
     '--menu-btn-h': `${btnH}px`,
     '--menu-icon-size': `${iconSize}px`,
@@ -99,6 +105,7 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
                 {STONE_SURFACES.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
               </select>
             </label>
+            <button type="button" className="tileset-view-action pages-reset" onClick={resetDefaults}>Reset to defaults</button>
             <dl className="al-meta">
               <div><dt>Page</dt><dd>{page.label}</dd></div>
               <div><dt>Route</dt><dd>{page.route}</dd></div>

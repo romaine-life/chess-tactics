@@ -1038,11 +1038,9 @@ h1 {
   gap: clamp(8px, 1.1vh, 11px);
   width: min(100%, 370px);
   max-width: 100%;
-  /* ADR-0027: one role token governs icon display size; never re-sized per icon.
-     --menu-btn-h is the primary-nav button height — ADR-0021 fixes settings pills at
-     40px on the mouse register; primary nav clears that step (Fitts + hierarchy). */
-  --menu-icon-size: 64px;
-  --menu-btn-h: 80px;
+  /* --menu-icon-size / --menu-btn-h defaults live on :root (above any viewer tweak
+     wrapper) — declaring them HERE would shadow the Pages Main-Menu editor's override.
+     See :root + ADR-0027 (icon size) / ADR-0021 (button height). */
 }
 
 /* Comparison knob (?indent=hover|hover10): a deliberate slide-RIGHT on hover/focus —
@@ -1591,6 +1589,10 @@ h1 {
    and future Shadow-DOM components, which inherit these from :root. The warm
    editorial palette today; the chess-tactics art style swaps these in one place. */
 :root {
+  /* Main-menu sizing tokens — defaults live here (above any tweak wrapper) so the Pages
+     Main-Menu editor can override them on its wrapper. ADR-0027 (icon) / ADR-0021 (height). */
+  --menu-icon-size: 64px;
+  --menu-btn-h: 80px;
   /* color */
   --ds-canvas: #1B1814;
   --ds-surface: #262119;
