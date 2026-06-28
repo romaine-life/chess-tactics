@@ -11808,15 +11808,20 @@ button.tileset-relationship-cell {
   display: grid;
   /* Inter-section spacing — looser than the row gap so groups read as distinct. */
   gap: clamp(14px, 1.3vw, 22px);
-  /* Contain the row column to a comfortable reading width and centre it, so rows
-     don't stretch the full bleed and leave values floating at the far edge. */
+  /* Contain the row column to a comfortable reading width and centre it inside the
+     scroll viewport, so rows don't stretch the full bleed. Scrolling + the always-on
+     drawn rail (ADR-0030) are owned by the wrapping <KitScroll>, not this element. */
   inline-size: min(100%, 880px);
-  justify-self: center;
+  margin-inline: auto;
   min-height: 0;
-  overflow: auto;
-  padding-right: 4px;
-  scrollbar-color: #58bce8 #07121c;
-  scrollbar-width: thin;
+  padding-block-end: 4px;
+}
+
+/* The settings panel's scroll viewport fills the main frame's single grid row so the
+   ADR-0030 rail spans the full panel height. */
+.settings-scroll {
+  block-size: 100%;
+  min-height: 0;
 }
 
 /* Labeled row groups: an uppercase eyebrow over a tight cluster of rows. */

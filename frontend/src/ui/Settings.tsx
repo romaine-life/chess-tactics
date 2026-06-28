@@ -3,6 +3,7 @@ import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { readDisabledUrls, writeDisabledUrls, setBgmSuspended } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { BrandLockup } from './shared/BrandLockup';
+import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
@@ -612,12 +613,14 @@ export function Settings(): ReactElement {
                 nav button; a visible panel heading just duplicated them. Keep an
                 accessible heading for screen-reader structure. */}
             <h2 className="sr-only">{active.label}</h2>
-            <div className="settings-panel-content">
-              {activeTab === 'general' ? renderGeneral() : null}
-              {activeTab === 'audio' ? (showTracks ? renderTracks() : renderAudio()) : null}
-              {activeTab === 'gameplay' ? renderGameplay() : null}
-              {activeTab === 'creator-tools' ? renderCreatorTools() : null}
-            </div>
+            <KitScroll className="settings-scroll">
+              <div className="settings-panel-content">
+                {activeTab === 'general' ? renderGeneral() : null}
+                {activeTab === 'audio' ? (showTracks ? renderTracks() : renderAudio()) : null}
+                {activeTab === 'gameplay' ? renderGameplay() : null}
+                {activeTab === 'creator-tools' ? renderCreatorTools() : null}
+              </div>
+            </KitScroll>
           </main>
         </div>
       </div>
