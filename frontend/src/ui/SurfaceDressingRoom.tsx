@@ -53,7 +53,6 @@ const REGIONS: RegionDef[] = [
 ];
 
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];
-const STORAGE_KEY = 'chess-tactics:surface-dressing:v3';
 const DEFAULT_TILE = 1024;
 // Sentinel stored in surfaces[id] meaning "keep the frame, drop the fill" (transparent interior).
 const CLEAR = '__clear';
@@ -82,24 +81,10 @@ function seededConfig(seed: string): DressingConfig {
   return { ...base, surfaces: { title: seed, tabsBox: seed, buttons: seed, rowsBox: seed, rows: seed } };
 }
 
+// A fresh load always opens at DEFAULTS, so the dressing room reflects the LIVE page (no
+// overrides) and can never drift from what actually ships. Choices live only in the current
+// session — use "Copy CSS" to keep a result; they're intentionally not persisted across reloads.
 function loadConfig(seed?: string): DressingConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<DressingConfig>;
-      const base = blankConfig();
-      return {
-        surfaces: { ...base.surfaces, ...(parsed.surfaces ?? {}) },
-        boxDisabled: { ...base.boxDisabled, ...(parsed.boxDisabled ?? {}) },
-        boxOpacity: { ...base.boxOpacity, ...(parsed.boxOpacity ?? {}) },
-        tilePx: typeof parsed.tilePx === 'number' ? parsed.tilePx : base.tilePx,
-        offsetX: typeof parsed.offsetX === 'number' ? parsed.offsetX : base.offsetX,
-        offsetY: typeof parsed.offsetY === 'number' ? parsed.offsetY : base.offsetY,
-      };
-    }
-  } catch {
-    /* corrupt/absent storage — fall through to a fresh config */
-  }
   return seed ? seededConfig(seed) : blankConfig();
 }
 
@@ -119,6 +104,24 @@ function buildCss(config: DressingConfig, geom: Map<RegionId, number[]>): string
       continue;
     }
     const name = config.surfaces[region.id];
+    if (region.id === 'title') {
+      // The title bar is no longer a frame+fill region (ADR-0037): it's a full-bleed surface
+      // + a forged stud strip + a centred stud. Mirror that here so dressing it swaps the
+      // SURFACE under the real nailhead chrome, instead of wrapping it in the retired frame —
+      // keeping the dressing room honest with what actually ships. No surface = no override, so
+      // the default shows the live bar; CLEAR keeps the chrome but drops the surface.
+      const studded = 'url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat, url("/assets/ui/titlebar/band-studded.png") left bottom / auto var(--titlebar-rule-h, 14px) repeat-x';
+      if (name === CLEAR) {
+        parts.push(`${sel} { border: 0 !important; border-image: none !important; background: ${studded} !important; image-rendering: pixelated !important; }`);
+      } else if (name) {
+        const asset = SURFACE_ASSETS.find((s) => s.name === name);
+        if (asset) {
+          const surfaceBg = `url("${asset.file}") ${offsetX}px ${offsetY}px / ${tilePx}px repeat fixed`;
+          parts.push(`${sel} { border: 0 !important; border-image: none !important; background: ${studded}, ${surfaceBg} !important; image-rendering: pixelated !important; }`);
+        }
+      }
+      continue;
+    }
     if (name === CLEAR) {
       // Keep the element's frame art but drop the baked `fill` so the interior is transparent —
       // whatever is behind (the box's surface for buttons/rows; the page for the title) shows
@@ -226,16 +229,6 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
   useEffect(() => {
     inject();
   }, [config, inject]);
-
-  // Persist every change so the dressing sticks across reloads (the Studio routes via URL only;
-  // this config is too large for the URL, so it gets its own storage key).
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    } catch {
-      /* private mode / quota — non-fatal */
-    }
-  }, [config]);
 
   // The SPA mounts /settings asynchronously after the iframe load fires, so re-inject on load
   // and on a short interval (mirrors the harness). Same-origin: contentDocument is reachable.
