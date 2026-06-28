@@ -5230,7 +5230,7 @@ h1 {
 .kit-scroll-wrap { position: relative; min-height: 0; }
 .kit-scroll-content { height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: 18px; scrollbar-width: none; }
 .kit-scroll-content::-webkit-scrollbar { width: 0; height: 0; }
-.kit-scroll-rail { position: absolute; top: 0; right: 2px; bottom: 0; width: 14px; border-radius: 3px; background: #0a1828; box-shadow: inset 0 0 0 1px rgba(125, 165, 210, 0.28), inset 1px 1px 3px rgba(0, 0, 0, 0.5); pointer-events: none; }
+.kit-scroll-rail { position: absolute; top: 0; right: 2px; bottom: 0; width: 14px; border-radius: 3px; background: linear-gradient(180deg, #060d16, #091523); box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.72), inset -1px -1px 1px rgba(130, 170, 215, 0.2), 0 0 0 1px rgba(118, 158, 203, 0.22); pointer-events: none; }
 .kit-scroll-thumb { position: absolute; left: 1px; right: 1px; top: 0; min-height: 24px; border-radius: 2px; background: url("/assets/ui/scrollbars/oak-pixellab.png") center / 100% 100% no-repeat; image-rendering: pixelated; cursor: grab; pointer-events: auto; }
 .kit-scroll-thumb:active { cursor: grabbing; }
 .le-pal-group { margin: 0 0 4px; }
