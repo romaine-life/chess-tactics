@@ -33,7 +33,7 @@ import {
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
-import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
+import { CatalogGrid, CatalogControls, CatalogFilters, type CatalogType } from './studio/Catalog';
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
@@ -140,7 +140,6 @@ interface TilesetStudioRouteState {
   selectedAssetId?: string;
   selectedSlotMask?: number;
   boardMode: 'generated' | 'concept';
-  boardScope: 'family' | 'mixed';
   boardSize: 'small' | 'wide';
   boardSeed: number;
   brushKind: 'tile' | 'unit' | 'doodad';
@@ -164,7 +163,6 @@ const studioDefaults: TilesetStudioRouteState = {
   tileFilter: 'base',
   selectedPairId: 'grass-stone',
   boardMode: 'generated',
-  boardScope: 'family',
   boardSize: 'small',
   boardSeed: 4217,
   brushKind: 'tile',
@@ -332,7 +330,6 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedAssetId: asset || undefined,
     selectedSlotMask: Number.isInteger(slot) && slot >= 1 && slot <= 14 ? slot : undefined,
     boardMode: params.get('board') === 'concept' ? 'concept' : studioDefaults.boardMode,
-    boardScope: params.get('scope') === 'mixed' ? 'mixed' : studioDefaults.boardScope,
     boardSize: params.get('size') === 'wide' ? 'wide' : studioDefaults.boardSize,
     boardSeed: Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : studioDefaults.boardSeed,
     brushKind,
@@ -377,7 +374,6 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (route.selectedSlotMask) params.set('slot', String(route.selectedSlotMask));
   params.set('pair', route.selectedPairId);
   params.set('board', route.boardMode);
-  params.set('scope', route.boardScope);
   params.set('size', route.boardSize);
   params.set('seed', String(route.boardSeed));
   if (route.brushKind === 'unit') params.set('brush', 'unit');
@@ -815,7 +811,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [transitionViewMode, setTransitionViewMode] = useState<TransitionViewMode>(() => defaultTransitionViewModeForRoute(initialRoute));
   const transitionSampleSeed = 3117;
   const [boardMode, setBoardMode] = useState<'generated' | 'concept'>(initialRoute.boardMode);
-  const [boardScope, setBoardScope] = useState<'family' | 'mixed'>(initialRoute.boardScope);
   const [boardSize, setBoardSize] = useState<'small' | 'wide'>(initialRoute.boardSize);
   const [boardSeed, setBoardSeed] = useState(initialRoute.boardSeed);
   const [animationPlaying, setAnimationPlaying] = useState(true);
@@ -935,26 +930,32 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const visibleCatalogReferenceAssets = catalogReferenceAssets.filter(matchesCatalogQuery);
   const visibleCatalogTransitionAssets = catalogTransitionAssets.filter(matchesCatalogQuery);
   const visibleCatalogCount = selectedCollectionFilters.includes('base') ? visibleCatalogBaseAssets.length : 0;
-  const generatedAssets =
-    boardScope === 'family'
-      ? activeFamilies
-          .flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile'))
-          .concat(transitionAssets.filter((asset) => asset.terrains?.every((terrain) => selectedFamilyIds.includes(terrain))))
-      : studioFamilies
-          .flatMap((item) => item.assets)
-          .filter((asset) => asset.kind === 'tile')
-          .concat(transitionAssets);
   const generatedBoardSize = boardSize === 'small' ? { columns: 8, rows: 6 } : { columns: 10, rows: 7 };
+  // Board generation draws from the CURRENTLY-FILTERED tile pool (Family + Method filters,
+  // production + non-production). Non-production tiles are probability 0 everywhere else, so
+  // bump them to a usable weight here only — the generator drops probability<=0 tiles.
+  const generatedTilePool = useMemo(() => {
+    const all = [...studioFamilies.flatMap((item) => item.assets), ...nonProductionStudioAssets].filter((asset) => asset.kind === 'tile');
+    return all
+      .filter((asset) => selectedFamilyIds.includes(familyForStudioAsset(asset)))
+      .filter((asset) => selectedTileMethods.includes(tileMethodKeyOf(asset.source)))
+      .map((asset) => (asset.probability > 0 ? asset : { ...asset, probability: 0.7 }));
+  }, [selectedFamilyIds, selectedTileMethods]);
+  const generatedFamilyAssets = useMemo(() => {
+    const map: Record<StudioFamilyId, StudioAsset[]> = { grass: [], dirt: [], stone: [], pebble: [], sand: [], water: [] };
+    for (const asset of generatedTilePool) map[familyForStudioAsset(asset)].push(asset);
+    return map;
+  }, [generatedTilePool]);
   const generatedBoard = useMemo(
     () =>
       generateSocketBoard({
-        assets: generatedAssets,
+        assets: generatedTilePool,
         seed: boardSeed,
         columns: generatedBoardSize.columns,
         rows: generatedBoardSize.rows,
-        familyAssets: studioFamilyAssets,
+        familyAssets: generatedFamilyAssets,
       }),
-    [boardSeed, generatedAssets, generatedBoardSize.columns, generatedBoardSize.rows],
+    [boardSeed, generatedTilePool, generatedFamilyAssets, generatedBoardSize.columns, generatedBoardSize.rows],
   );
   const coverageReport = useMemo(() => buildTileCoverageReport(studioFamilyAssets, transitionAssets), []);
   const familyMissingTransitionSlots = coverageReport.missingTransitionSlots.filter((slot) => transitionPairById(slot.pairId).terrains.includes(family.id));
@@ -999,7 +1000,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const editableGrid = viewKind === 'board' ? { columns: generatedBoardSize.columns, rows: generatedBoardSize.rows } : { columns: 8, rows: 6 };
   // Re-seed the editable board whenever the *loaded view* changes (a new tile,
   // transition, or a freshly generated board). Painting then mutates the seed.
-  const boardSeedKey = `${viewKind}|${selectedAsset.id}|${selectedSlotMask ?? ''}|${boardMode}|${boardSeed}|${boardSize}|${boardScope}|${transitionViewMode}`;
+  // In board view the editable grid re-seeds from the generated board; include the tile
+  // filter signature so changing Family/Method filters re-generates the displayed board.
+  const boardFilterKey = viewKind === 'board' ? `${selectedFamilyIds.join(',')}:${selectedTileMethods.join(',')}` : '';
+  const boardSeedKey = `${viewKind}|${selectedAsset.id}|${selectedSlotMask ?? ''}|${boardMode}|${boardSeed}|${boardSize}|${transitionViewMode}|${boardFilterKey}`;
   const focusedViewBoardRef = useRef(focusedViewBoard);
   focusedViewBoardRef.current = focusedViewBoard;
   const editableGridRef = useRef(editableGrid);
@@ -1170,7 +1174,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       setSelectedSlotMask(route.selectedSlotMask);
       setTransitionViewMode(defaultTransitionViewModeForRoute(route));
       setBoardMode(route.boardMode);
-      setBoardScope(route.boardScope);
       setBoardSize(route.boardSize);
       setBoardSeed(route.boardSeed);
       setBrushKind(route.brushKind);
@@ -1219,7 +1222,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   useEffect(() => {
     setViewPan({ x: 0, y: 0 });
     setViewZoom(defaultViewZoom(viewVisualKind));
-  }, [boardMode, boardScope, boardSeed, boardSize, selectedAsset.id, selectedSlotMask, viewVisualKind]);
+  }, [boardMode, boardSeed, boardSize, selectedAsset.id, selectedSlotMask, viewVisualKind]);
 
   useEffect(() => {
     writeTilesetStudioRoute({
@@ -1236,13 +1239,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedAssetId: viewHasTarget ? selectedAsset.id : undefined,
       selectedSlotMask: viewHasTarget ? selectedSlotMask : undefined,
       boardMode,
-      boardScope,
       boardSize,
       boardSeed,
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
@@ -1371,7 +1373,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     labMode === 'unit'
       ? `${unitBrushAsset.family} unit · ${selectedAsset.label} tile`
       : viewKind === 'board'
-      ? `${boardScope === 'family' ? selectedFamilyLabel : 'Mixed terrain'} · seed ${boardSeed}`
+      ? `${selectedFamilyLabel} · seed ${boardSeed}`
       : viewKind === 'transition'
         ? `${viewTransitionPair?.label ?? 'Transition'} · mask ${viewTransitionSlot?.code ?? selectedAsset.socketMask ?? ''}`
         : `${family.label} · ${selectedAsset.role}`;
@@ -2092,14 +2094,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       </button>
                       {boardSectionOpen ? (
                         <>
-                          <div className="tileset-tier-seg" aria-label="Terrain scope">
-                            <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} title="Generate using only the current family's tiles.">
-                              Family
-                            </button>
-                            <button type="button" className={boardScope === 'mixed' ? 'is-active' : ''} onClick={() => setBoardScope('mixed')} title="Generate using all terrain families mixed together.">
-                              Mixed
-                            </button>
-                          </div>
+                          <p className="tileset-group-label">Tiles used</p>
+                          <CatalogFilters filters={tilesCatalogType.filters ?? []} />
                           <div className="tileset-button-row">
                             <button type="button" onClick={() => setBoardSeed(Math.floor(Math.random() * 999999) + 1)} title="Generate a fresh random board (new seed).">
                               New random

@@ -162,7 +162,9 @@ export function CatalogGrid<A extends { id: string }>({ type }: { type: CatalogT
   );
 }
 
-export function CatalogControls<A extends { id: string }>({ type }: { type: CatalogType<A> }): ReactElement {
+// Active-filter chips + a "Filters" dropdown, driven by CatalogFilterDim[]. Extracted from
+// CatalogControls so the same control can drive both the catalog and the Lab's board generation.
+export function CatalogFilters<A extends { id: string }>({ filters }: { filters: readonly CatalogFilterDim<A>[] }): ReactElement | null {
   const [filterOpen, setFilterOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -176,6 +178,62 @@ export function CatalogControls<A extends { id: string }>({ type }: { type: Cata
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
   }, [filterOpen]);
+  if (filters.length === 0) return null;
+  return (
+    <>
+      <div className="tileset-active-filters" aria-label="Active filters">
+        {filters.flatMap((dim) =>
+          dim.selected.map((optionId) => {
+            const option = dim.options.find((item) => item.id === optionId);
+            return (
+              <button key={`${dim.id}-${optionId}`} type="button" onClick={() => dim.toggle(optionId)} title={`Remove ${option?.label ?? optionId} filter`}>
+                {option?.label ?? optionId}
+              </button>
+            );
+          }),
+        )}
+      </div>
+      <div className="tileset-filter-dropdown" ref={dropdownRef}>
+        <button type="button" className={filterOpen ? 'is-active' : ''} onClick={() => setFilterOpen((value) => !value)} aria-expanded={filterOpen}>
+          Filters
+        </button>
+        {filterOpen ? (
+          <div className="tileset-filter-menu" role="dialog" aria-label="Filters">
+            <div className="tileset-filter-menu-header">
+              <strong>Filters</strong>
+              <span>
+                <button type="button" onClick={() => filters.forEach((dim) => dim.selectAll())}>Select all</button>
+                <button type="button" onClick={() => filters.forEach((dim) => dim.clear())}>Clear</button>
+              </span>
+            </div>
+            {filters.map((dim) => (
+              <section key={dim.id} className="tileset-filter-group" aria-label={dim.label}>
+                <h3>{dim.label}</h3>
+                {dim.options.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`tileset-filter-option${dim.selected.includes(option.id) ? ' is-active' : ''}`}
+                    aria-pressed={dim.selected.includes(option.id)}
+                    onClick={() => dim.toggle(option.id)}
+                  >
+                    <span className="tileset-filter-mark" aria-hidden="true" />
+                    <span className="tileset-filter-option-copy">
+                      <strong>{option.label}</strong>
+                      {option.sub ? <span>{option.sub}</span> : null}
+                    </span>
+                  </button>
+                ))}
+              </section>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+export function CatalogControls<A extends { id: string }>({ type }: { type: CatalogType<A> }): ReactElement {
   return (
     <>
       {type.query ? (
@@ -202,58 +260,7 @@ export function CatalogControls<A extends { id: string }>({ type }: { type: Cata
           />
         </label>
       ) : null}
-      {type.filters && type.filters.length > 0 ? (
-        <>
-          <div className="tileset-active-filters" aria-label="Active filters">
-            {type.filters.flatMap((dim) =>
-              dim.selected.map((optionId) => {
-                const option = dim.options.find((item) => item.id === optionId);
-                return (
-                  <button key={`${dim.id}-${optionId}`} type="button" onClick={() => dim.toggle(optionId)} title={`Remove ${option?.label ?? optionId} filter`}>
-                    {option?.label ?? optionId}
-                  </button>
-                );
-              }),
-            )}
-          </div>
-          <div className="tileset-filter-dropdown" ref={dropdownRef}>
-            <button type="button" className={filterOpen ? 'is-active' : ''} onClick={() => setFilterOpen((value) => !value)} aria-expanded={filterOpen}>
-              Filters
-            </button>
-            {filterOpen ? (
-              <div className="tileset-filter-menu" role="dialog" aria-label="Filters">
-                <div className="tileset-filter-menu-header">
-                  <strong>Filters</strong>
-                  <span>
-                    <button type="button" onClick={() => type.filters!.forEach((dim) => dim.selectAll())}>Select all</button>
-                    <button type="button" onClick={() => type.filters!.forEach((dim) => dim.clear())}>Clear</button>
-                  </span>
-                </div>
-                {type.filters.map((dim) => (
-                  <section key={dim.id} className="tileset-filter-group" aria-label={dim.label}>
-                    <h3>{dim.label}</h3>
-                    {dim.options.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={`tileset-filter-option${dim.selected.includes(option.id) ? ' is-active' : ''}`}
-                        aria-pressed={dim.selected.includes(option.id)}
-                        onClick={() => dim.toggle(option.id)}
-                      >
-                        <span className="tileset-filter-mark" aria-hidden="true" />
-                        <span className="tileset-filter-option-copy">
-                          <strong>{option.label}</strong>
-                          {option.sub ? <span>{option.sub}</span> : null}
-                        </span>
-                      </button>
-                    ))}
-                  </section>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
+      {type.filters && type.filters.length > 0 ? <CatalogFilters filters={type.filters} /> : null}
       <button
         type="button"
         className="tileset-view-action"
