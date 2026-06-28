@@ -164,8 +164,9 @@ export function CatalogGrid<A extends { id: string }>({ type }: { type: CatalogT
   );
 }
 
-// Active-filter chips + a "Filters" dropdown, driven by CatalogFilterDim[]. Extracted from
-// CatalogControls so the same control can drive both the catalog and the Lab's board generation.
+// A "Filters" dropdown driven by CatalogFilterDim[]. Extracted from CatalogControls so the
+// same control can drive both the catalog and the Lab's board generation. Selection lives in
+// the dropdown itself (per-group select-all/clear) — no per-filter chips outside it.
 export function CatalogFilters<A extends { id: string }>({ filters }: { filters: readonly CatalogFilterDim<A>[] }): ReactElement | null {
   const [filterOpen, setFilterOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -183,18 +184,6 @@ export function CatalogFilters<A extends { id: string }>({ filters }: { filters:
   if (filters.length === 0) return null;
   return (
     <>
-      <div className="tileset-active-filters" aria-label="Active filters">
-        {filters.flatMap((dim) =>
-          dim.selected.map((optionId) => {
-            const option = dim.options.find((item) => item.id === optionId);
-            return (
-              <button key={`${dim.id}-${optionId}`} type="button" onClick={() => dim.toggle(optionId)} title={`Remove ${option?.label ?? optionId} filter`}>
-                {option?.label ?? optionId}
-              </button>
-            );
-          }),
-        )}
-      </div>
       <div className="tileset-filter-dropdown" ref={dropdownRef}>
         <button type="button" className={filterOpen ? 'is-active' : ''} onClick={() => setFilterOpen((value) => !value)} aria-expanded={filterOpen}>
           Filters

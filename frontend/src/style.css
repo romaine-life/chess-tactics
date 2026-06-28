@@ -8892,33 +8892,6 @@ h1 {
   text-transform: uppercase;
 }
 
-.tileset-active-filters {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.tileset-active-filters button {
-  flex: none;
-  min-height: 28px;
-  padding: 6px 9px;
-  color: #d8eaff;
-  background: rgba(15, 46, 66, 0.92);
-  border: 1px solid rgba(91, 157, 216, 0.34);
-  border-radius: 999px;
-  cursor: pointer;
-  font: 800 11px/1 var(--ds-font-sans, system-ui, sans-serif);
-}
-
-.tileset-active-filters button:hover {
-  color: #f3fbff;
-  border-color: rgba(111, 210, 255, 0.72);
-}
-
 .tileset-collection-select {
   display: flex;
   gap: 7px;
