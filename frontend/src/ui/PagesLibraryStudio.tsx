@@ -240,6 +240,8 @@ const hexToRgba = (hex: string, alpha: number): string => {
 const ceFillValue = (t: CeGroupTune): string => {
   if (t.fill === 'color') return hexToRgba(t.color, t.opacity);
   const asset = SURFACE_ASSETS.find((s) => s.name === t.surface) ?? SURFACE_ASSETS[0];
+  // 256px is an AUDITIONING scale — surfaces are 1024px native (the dressing room ships them at
+  // 1024), but the campaign editor's chrome is small, so a denser tile reads as material here.
   return `url("${asset.file}") 0 0 / 256px repeat`;
 };
 
@@ -276,9 +278,10 @@ function buildCeGroupCss(g: CeGroup, t: CeGroupTune): string {
     // (These kit frames have no dedicated "line" variant, so edge slices keep a little baked tint —
     // a clean production fill would bake a *-line frame, ADR-0034. Fine for auditioning.)
     frameDecls.push(`border-image-slice: ${g.slice}`);
-    const bg = [`background: ${ceFillValue(t)}`, `background-origin: border-box`, `background-clip: border-box`];
+    // image-rendering rides WITH the background onto fillSel — for panels that's .ce-panel, not its
+    // ::before frame, so the pixel-art surface stays crisp wherever the fill actually lands.
+    const bg = [`background: ${ceFillValue(t)}`, `background-origin: border-box`, `background-clip: border-box`, `image-rendering: pixelated`];
     (g.fillSel === g.frameSel ? frameDecls : fillDecls).push(...bg);
-    frameDecls.push(`image-rendering: pixelated`);
   }
   const blocks: string[] = [];
   if (frameDecls.length) blocks.push(`${g.frameSel} {\n${frameDecls.map((d) => `  ${d} !important;`).join('\n')}\n}`);
@@ -390,6 +393,9 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
                 ))}
               </select>
             </label>
+            {g.frameSel.includes(',') ? (
+              <p className="tileset-catalog-note">Covers several elements at once — size / height / padding tune them together, and the copied CSS bakes one value for the group (any per-element specializations in style.css are flattened).</p>
+            ) : null}
             {g.knobs.frame ? (
               <>
                 <label className="tileset-category-select">
