@@ -57,6 +57,8 @@ import {
   activeUnitFamilies,
   familyLabels,
   hasDirectionSprite,
+  directionCompassCells,
+  rookDirectionLabel,
   unitAssets,
   UNIT_METHOD_OPTIONS,
   type Direction,
@@ -1477,6 +1479,18 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setLabMode('doodad');
     setStudioMode('lab');
   };
+  // Facing controls both the brush (for new placements) AND rotates the unit you're
+  // inspecting in place — the selected cell, or the single unit on the lab board.
+  const setUnitFacing = (dir: Direction): void => {
+    setUnitBrushDirection(dir);
+    setBoardUnits((prev) => {
+      const keys = Object.keys(prev);
+      const selKey = selectedCell ? `${selectedCell.x},${selectedCell.y}` : null;
+      const targetKey = selKey && prev[selKey] ? selKey : keys.length === 1 ? keys[0] : null;
+      if (!targetKey) return prev;
+      return { ...prev, [targetKey]: { ...prev[targetKey], direction: dir } };
+    });
+  };
   const selectDoodadInCatalog = (doodadId: string): void => {
     setDoodadBrushId(doodadId);
   };
@@ -2026,18 +2040,26 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         <span className="tileset-brush-change">Pick in catalog ›</span>
                       </button>
                       {brushKind === 'unit' ? (
-                        <div className="tileset-tier-seg tileset-unit-facing" aria-label="Unit facing">
-                          {(['south', 'east', 'north', 'west'] as Direction[]).map((dir) => (
-                            <button
-                              key={dir}
-                              type="button"
-                              className={unitBrushDirection === dir ? 'is-active' : ''}
-                              onClick={() => setUnitBrushDirection(dir)}
-                              title={`Face ${dir}`}
-                            >
-                              {dir[0].toUpperCase()}
-                            </button>
-                          ))}
+                        <div className="unit-facing-compass" aria-label="Unit facing (8-way)">
+                          {directionCompassCells.map((cell) =>
+                            cell === 'center' ? (
+                              <span key="center" className="unit-facing-center" aria-hidden="true">
+                                {rookDirectionLabel[unitBrushDirection]}
+                              </span>
+                            ) : (
+                              <button
+                                key={cell}
+                                type="button"
+                                className={`unit-facing-cell${unitBrushDirection === cell ? ' is-active' : ''}${hasDirectionSprite(unitBrushAsset, cell) ? '' : ' is-unavailable'}`}
+                                disabled={!hasDirectionSprite(unitBrushAsset, cell)}
+                                onClick={() => setUnitFacing(cell)}
+                                title={`Face ${cell}`}
+                                aria-label={`Face ${cell}`}
+                              >
+                                {rookDirectionLabel[cell]}
+                              </button>
+                            ),
+                          )}
                         </div>
                       ) : null}
 
