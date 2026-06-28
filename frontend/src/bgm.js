@@ -21,6 +21,11 @@ import { readDisabledUrls, BGM_DISABLED_KEY, BGM_DISABLED_CHANGE_EVENT, BGM_COMM
 const BGM_API_URL = '/api/bgm';
 const MUTE_STORAGE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
+// Cross-tab single-owner coordination: exactly one tab holds the Web Lock and is the
+// only one that plays; the BroadcastChannel announces ownership + what's playing so
+// other tabs can show "Playing in another tab".
+const BGM_OWNER_LOCK = 'chess-tactics-bgm-owner';
+const BGM_CHANNEL_NAME = 'chess-tactics-bgm';
 const DEFAULT_VOLUME = 0.5;
 // If a track 404s or fails to decode, wait briefly then skip to the next one so
 // a single bad asset can never wedge the playlist.
@@ -90,10 +95,89 @@ export function initBgm() {
     loaded: false,     // /api/bgm fetch settled (success or failure)
     errorStreak: 0,    // consecutive load/decode failures
     unavailable: false, // whole library unreachable — stop retrying
+    owner: false,      // this tab holds the audio-owner lock (only the owner plays)
+    otherTitle: '',    // what the owner tab is playing (for "Playing in another tab")
+    otherPlaying: false, // another tab owns and is actively playing
   };
 
   const control = buildControl();
   document.body.appendChild(control.el);
+
+  // ---- single-owner cross-tab coordination --------------------------------
+  // Web Locks elect one owner (auto-released when its tab closes → a follower takes
+  // over); the BroadcastChannel announces ownership and now-playing. If neither API
+  // exists, fall back to the legacy behaviour where every tab plays on its own.
+  const locksSupported = !!(navigator.locks && navigator.locks.request);
+  const channel = ('BroadcastChannel' in window) ? new BroadcastChannel(BGM_CHANNEL_NAME) : null;
+  const tabId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  let releaseHeldLock = null; // resolve() to release the held owner lock
+  let queueAbort = null;      // aborts the queued (waiting-to-own) lock request
+  let pendingAction = null;   // a transport action to run once ownership is grabbed
+  if (!locksSupported) state.owner = true;
+
+  function announce(type) {
+    if (channel) channel.postMessage({ type, id: tabId, url: state.currentUrl, title: state.currentTitle, playing: !audio.paused });
+  }
+
+  function onBecomeOwner() {
+    state.owner = true;
+    state.otherPlaying = false;
+    announce('owner');
+    if (pendingAction) { const run = pendingAction; pendingAction = null; run(); }
+    else if (state.ready && !state.muted && !state.stopped) beginPlayback(); // resume on failover
+    updateControl();
+  }
+
+  function onLoseOwner() {
+    state.owner = false;
+    audio.pause();
+    updateControl();
+    queueForOwnership(); // re-queue so we can reclaim if the new owner closes
+  }
+
+  // Wait in line for the lock; granted only when no tab holds it (first load, or the
+  // owner closed). Holding the returned promise keeps the lock until release/close.
+  function queueForOwnership() {
+    if (!locksSupported) return;
+    if (queueAbort) queueAbort.abort();
+    queueAbort = new AbortController();
+    navigator.locks.request(BGM_OWNER_LOCK, { mode: 'exclusive', signal: queueAbort.signal },
+      () => new Promise((resolve) => { releaseHeldLock = resolve; onBecomeOwner(); }))
+      .catch(() => {}); // AbortError when we cancel the wait to steal instead
+  }
+
+  // Take over immediately (a transport action in a follower tab). Steals the lock from
+  // the current owner; that owner hears our 'owner' broadcast and steps down.
+  function takeOwnership() {
+    if (!locksSupported) { onBecomeOwner(); return; }
+    if (state.owner) return;
+    if (queueAbort) { queueAbort.abort(); queueAbort = null; }
+    navigator.locks.request(BGM_OWNER_LOCK, { mode: 'exclusive', steal: true },
+      () => new Promise((resolve) => { releaseHeldLock = resolve; onBecomeOwner(); }))
+      .catch(() => {});
+  }
+
+  if (channel) channel.onmessage = (event) => {
+    const msg = event.data || {};
+    if (msg.id === tabId) return;
+    if (msg.type === 'query') {
+      // A newly-opened tab is asking who's playing — the owner answers so it can show
+      // "Playing in another tab" (BroadcastChannel doesn't replay past announcements).
+      if (state.owner) announce('np');
+      return;
+    }
+    if (msg.type === 'owner' && state.owner) {
+      // Another tab stole ownership — release ours and become a follower.
+      if (releaseHeldLock) { releaseHeldLock(); releaseHeldLock = null; }
+      onLoseOwner();
+    }
+    if (msg.type === 'owner' || msg.type === 'np') {
+      state.otherTitle = msg.title || '';
+      state.otherPlaying = !state.owner && Boolean(msg.playing);
+      updateControl();
+    }
+  };
+  if (channel) channel.postMessage({ type: 'query', id: tabId }); // learn the current owner on open
 
   // Derive the in-rotation list from the full list minus the user's off-set.
   function applyEnabled() {
@@ -128,7 +212,7 @@ export function initBgm() {
   }
 
   function beginPlayback() {
-    if (!state.ready || state.muted || state.stopped) return;
+    if (!state.owner || !state.ready || state.muted || state.stopped) return;
     if (audio.src) {
       // A track is already cued (possibly from a blocked autoplay attempt) —
       // resume/retry it. Do NOT gate on state.started: a blocked autoplay
@@ -303,9 +387,15 @@ export function initBgm() {
   // silences everything and there is never a second song playing underneath.
   window.addEventListener(BGM_COMMAND_EVENT, (event) => {
     const detail = (event && event.detail) || {};
-    if (detail.action === 'play' && detail.url) playUrl(detail.url);
-    else if (detail.action === 'stop') stopPlayback();
-    else if (detail.action === 'shuffle') shufflePlay();
+    const run = () => {
+      if (detail.action === 'play' && detail.url) playUrl(detail.url);
+      else if (detail.action === 'stop') stopPlayback();
+      else if (detail.action === 'shuffle') shufflePlay();
+    };
+    // Acting in a follower tab takes over playback (becomes the owner), so control
+    // follows wherever the user is actually clicking.
+    if (state.owner) run();
+    else { pendingAction = run; takeOwnership(); }
   });
 
   window.addEventListener('storage', (event) => {
@@ -326,7 +416,11 @@ export function initBgm() {
     el.appendChild(icon);
     el.addEventListener('click', (event) => {
       event.preventDefault();
-      if (state.unavailable && !state.muted) {
+      if (!state.owner) {
+        // A follower tab — clicking takes playback over to this tab.
+        pendingAction = null;
+        takeOwnership();
+      } else if (state.unavailable && !state.muted) {
         // In the unavailable state the button is a retry affordance.
         state.unavailable = false;
         state.errorStreak = 0;
@@ -343,13 +437,20 @@ export function initBgm() {
   // on the current row and ▶ Play on the rest.
   function broadcast() {
     window.dispatchEvent(new CustomEvent(BGM_STATE_EVENT, {
-      detail: { playing: !audio.paused, currentUrl: state.currentUrl || null, single: Boolean(state.single) },
+      detail: {
+        playing: !audio.paused && state.owner,
+        currentUrl: state.currentUrl || null,
+        single: Boolean(state.single),
+        otherTab: !state.owner && state.otherPlaying,
+        otherTitle: state.otherTitle || null,
+      },
     }));
   }
 
   function updateControl() {
     renderControl();
     broadcast();
+    if (state.owner) announce('np'); // keep follower tabs' "now playing" in sync
   }
 
   function renderControl() {
@@ -360,6 +461,15 @@ export function initBgm() {
       return;
     }
     el.style.display = '';
+    if (!state.owner && state.otherPlaying) {
+      // Another tab owns playback; this one is a silent follower.
+      el.classList.remove('is-playing');
+      el.classList.add('is-muted');
+      const other = state.otherTitle ? `Playing in another tab — ${state.otherTitle}` : 'Playing in another tab';
+      el.setAttribute('aria-label', `${other} — click to play here`);
+      el.title = `${other} — click to play here`;
+      return;
+    }
     if (state.unavailable && !state.muted) {
       el.classList.remove('is-playing');
       el.classList.add('is-muted');
@@ -403,11 +513,13 @@ export function initBgm() {
     });
 
   updateControl();
+  queueForOwnership(); // claim the audio-owner lock (granted now if no other tab holds it)
 
   return {
     toggleMute,
     setMuted,
     isMuted: () => state.muted,
+    isOwner: () => state.owner,
     nowPlaying: () => state.currentTitle,
     playUrl,
     stop: stopPlayback,

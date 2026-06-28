@@ -261,7 +261,7 @@ export function Settings(): ReactElement {
   const disabledRef = useRef<string[]>(disabledUrls);
   // The single BGM player owns playback; we just reflect its broadcast transport
   // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
-  const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null }>({ playing: false, currentUrl: null });
+  const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   useEffect(() => {
@@ -346,8 +346,13 @@ export function Settings(): ReactElement {
   // Reflect the BGM player's transport state so the playing row shows ■ Stop.
   useEffect(() => {
     const onState = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { playing?: boolean; currentUrl?: string | null };
-      setNowPlaying({ playing: Boolean(detail.playing), currentUrl: detail.currentUrl ?? null });
+      const detail = (event as CustomEvent).detail as { playing?: boolean; currentUrl?: string | null; otherTab?: boolean; otherTitle?: string | null };
+      setNowPlaying({
+        playing: Boolean(detail.playing),
+        currentUrl: detail.currentUrl ?? null,
+        otherTab: Boolean(detail.otherTab),
+        otherTitle: detail.otherTitle ?? null,
+      });
     };
     window.addEventListener(BGM_STATE_EVENT, onState);
     return () => window.removeEventListener(BGM_STATE_EVENT, onState);
@@ -629,7 +634,12 @@ export function Settings(): ReactElement {
                   <section className="settings-row settings-nowplaying-row" aria-label="Now playing">
                     <div className="settings-row-copy">
                       <span className="settings-nowplaying-label">Now Playing</span>
-                      {nowPlayingTrack ? (
+                      {nowPlaying.otherTab ? (
+                        <>
+                          <span className="settings-row-eyebrow">Playing in another tab</span>
+                          <h4 className="settings-nowplaying-empty">{nowPlaying.otherTitle ?? '—'}</h4>
+                        </>
+                      ) : nowPlayingTrack ? (
                         <>
                           {nowPlayingTrack.artist ? <span className="settings-row-eyebrow">{nowPlayingTrack.artist}</span> : null}
                           <h4>{nowPlayingTrack.title}</h4>
