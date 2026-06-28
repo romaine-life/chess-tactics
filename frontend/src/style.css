@@ -7197,7 +7197,7 @@ h1 {
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-xs);
   height: 38px;
-  justify-content: center;
+  place-items: center;
   min-height: 0;
   padding: 0;
   text-decoration: none;
@@ -7212,6 +7212,13 @@ h1 {
   object-fit: contain;
   pointer-events: none;
   width: auto;
+}
+
+/* In the 38px row buttons the content box is only ~18px (frame border), so cap
+   the glyph to fit fully inside the frame and center cleanly. */
+.ce-icon-button .ce-icon-img {
+  max-height: 16px;
+  max-width: 16px;
 }
 
 .ce-icon-button.is-selected,
