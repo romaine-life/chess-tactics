@@ -169,15 +169,17 @@ function SettingsToggle({
     <button
       type="button"
       className={`settings-toggle ${checked ? 'is-on' : 'is-off'}`}
-      aria-pressed={checked}
+      role="switch"
+      aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
     >
-      {/* Atom-built toggle: kit 9-slice track (border-image) + live label + sliding knob.
-          The track scales with --settings-ui-scale and the label is live text, so this
-          control survives resizing and could host any word, not just ON/OFF. */}
-      <span className="settings-toggle-label">{checked ? 'On' : 'Off'}</span>
-      <span className="settings-toggle-knob" aria-hidden="true" />
+      {/* Interim text toggle: two live words; the current state lights up (warm =
+          on, cool = off), the other dims. No chrome-material dependency, so the
+          stone/wood chrome (forged on another branch) can re-skin it later without
+          touching this logic. */}
+      <span className="settings-toggle-opt" data-state="off">Off</span>
+      <span className="settings-toggle-opt" data-state="on">On</span>
     </button>
   );
 }
@@ -242,9 +244,9 @@ function Stepper({
 }): ReactElement {
   return (
     <div className="settings-stepper">
-      <SettingsButton ariaLabel={decreaseLabel} onClick={onDecrease}>-</SettingsButton>
+      <SettingsButton ariaLabel={decreaseLabel} onClick={onDecrease}><span className="stepper-glyph stepper-minus" aria-hidden="true" /></SettingsButton>
       <output>{value}{suffix}</output>
-      <SettingsButton ariaLabel={increaseLabel} onClick={onIncrease}>+</SettingsButton>
+      <SettingsButton ariaLabel={increaseLabel} onClick={onIncrease}><span className="stepper-glyph stepper-plus" aria-hidden="true" /></SettingsButton>
     </div>
   );
 }
