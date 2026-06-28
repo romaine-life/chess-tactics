@@ -20,9 +20,9 @@ floating), and [ADR-0007](0007-brand-shield-baseline-size-and-placement.md)
 
 ## Context and Problem Statement
 
-The five carved-stone main-menu icons (blade, route-map, scroll, pawns, keys —
+The five carved-stone main-menu icons (blade, route-map, scroll, pawns, gear —
 subject governed by [ADR-0025](0025-world-scene-art-anti-story-lore.md)) were forged
-**trimmed-to-content** at five footprints (blade `26×44` … keys `27×46`) and five
+**trimmed-to-content** at five footprints (blade `26×44` … gear `52×50`) and five
 optical weights. [ADR-0026](0026-ui-kit-icon-canvas.md) just established the
 canonical `64×64` canvas with a centered ~`40×40` safe area — but its placement rule
 is **"glyph centered, equal margins."** For glyphs this varied in aspect that fails:
@@ -69,7 +69,7 @@ safe area) — equal optical mass is preserved, only the baseline scale is lifte
 |---|---|---|
 | route-map | **full / square** | fill to **52** on the long axis (largest — a full form reads lightest) |
 | blade | **tall / pointed** | grow height to **56** (into the margin) |
-| keys | **tall** | grow height to **54** (tall-thin reads less massive) |
+| gear | **round / full** | fill to **52** on the long axis (a round/full form reads lightest) |
 | pawns | **wide** | hold **width** to **48** (a wide cluster reads heavier → shrink) |
 | scroll | **upright / blocky** | conservative **48** |
 

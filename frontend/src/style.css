@@ -5290,7 +5290,10 @@ h1 {
 }
 .level-editor-screen .le-topbar { grid-area: titlebar; }
 .level-editor-screen .skirmish-field { grid-area: board; }
-.level-editor-screen .skirmish-hud { grid-area: rail; scrollbar-gutter: stable; }
+/* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable
+   gutter only reserved ~10px of dead space on the RIGHT — making the inner padding
+   lopsided (14px frame on the left, 14px + 10px gutter on the right). */
+.level-editor-screen .skirmish-hud { grid-area: rail; }
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
@@ -5315,18 +5318,6 @@ h1 {
 .level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
 .level-editor-screen .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
 .level-editor-screen .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
-
-/* rail zoom icon button (NOT a title-bar button — stays a small chrome control) */
-.le-iconbtn {
-  background: url("/assets/ui/level-editor/icon-button-normal.png") center/100% 100% no-repeat;
-  border: 0;
-  cursor: pointer;
-  display: grid;
-  height: 44px;
-  place-items: center;
-  width: 44px;
-}
-.le-iconbtn:disabled { cursor: default; opacity: .4; }
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
@@ -5386,7 +5377,12 @@ h1 {
 .kit-scroll-content { height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: 18px; scrollbar-width: none; }
 .kit-scroll-content::-webkit-scrollbar { width: 0; height: 0; }
 .kit-scroll-rail { position: absolute; top: 0; right: 2px; bottom: 0; width: 14px; border-radius: 3px; background: linear-gradient(180deg, #060d16, #091523); box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.72), inset -1px -1px 1px rgba(130, 170, 215, 0.2), 0 0 0 1px rgba(118, 158, 203, 0.22); pointer-events: none; }
-.kit-scroll-thumb { position: absolute; left: 1px; right: 1px; top: 0; min-height: 24px; border-radius: 2px; background: url("/assets/ui/scrollbars/oak-pixellab.png") center / 100% 100% no-repeat; image-rendering: pixelated; cursor: grab; pointer-events: auto; }
+/* Carved oak grip as a 9-slice (ADR-0030): the capital (top) and base (bottom) keep a
+   FIXED height so they never elongate; only the fluted shaft between them stretches to the
+   thumb's length. Painting the sprite with background-size:100% 100% (the old way) scaled
+   the WHOLE column with the thumb, so a tall thumb — the Unit palette has little to scroll,
+   so its grip is nearly full-height — smeared the caps and the central motif vertically. */
+.kit-scroll-thumb { position: absolute; left: 1px; right: 1px; top: 0; min-height: 24px; border-style: solid; border-color: transparent; border-width: 18px 0 20px 0; border-image: url("/assets/ui/scrollbars/oak-pixellab.png") 21 0 24 0 fill / 18px 0 20px 0 / 0 stretch; image-rendering: pixelated; cursor: grab; pointer-events: auto; }
 .kit-scroll-thumb:active { cursor: grabbing; }
 .le-pal-group { margin: 0 0 4px; }
 .le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
@@ -5413,15 +5409,11 @@ h1 {
 .le-details dt { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
 .le-details dd { color: #f3ead8; font-size: var(--ds-text-sm); margin: 0; word-break: break-word; }
 
-/* view / zoom / footprint toggle */
-.le-zoom { align-items: center; display: grid; gap: 8px; grid-template-columns: auto 1fr auto; margin-top: 8px; }
-.le-zoom .le-iconbtn { background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94)); border: 1px solid rgba(82, 142, 170, .34); border-radius: 5px; height: 36px; width: 36px; }
-.le-zoom-read { background: rgba(8, 23, 35, .6); border: 1px solid rgba(64, 115, 147, .45); border-radius: 4px; color: #f3ead8; font-size: var(--ds-text-sm); padding: 7px 0; text-align: center; }
-.le-toggle { align-items: center; background: none; border: 0; color: #d6ecf5; cursor: pointer; display: flex; font: inherit; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 0; text-transform: uppercase; }
-.le-toggle .pip { background: rgba(8, 23, 35, .8); border: 1px solid rgba(82, 142, 170, .5); border-radius: 9px; flex: none; height: 18px; position: relative; width: 34px; }
-.le-toggle.on .pip { background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95)); border-color: var(--skirmish-cyan); }
-.le-toggle .pip::after { background: #bfe6f4; border-radius: 50%; content: ""; height: 12px; left: 2px; position: absolute; top: 2px; transition: .1s; width: 12px; }
-.le-toggle.on .pip::after { background: #eafaff; left: 18px; }
+/* View card controls: a label on the left, the shared kit control on the right. Footprint uses
+   the shared <Toggle> and Zoom the shared <Stepper> (.settings-toggle / .settings-stepper) so
+   they read the same everywhere; we only lay out the label + control row. */
+.le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
+.le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 
 /* status line */
 .le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
