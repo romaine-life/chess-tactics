@@ -1,7 +1,7 @@
 {
   "note": "Where each UI-kit asset is actually used on a real screen — MANUALLY audited. The catalog/manifest only LIST assets; appearing there is not usage. An asset in `orphans` is referenced by no live screen. Re-audit when wiring/unwiring assets. Last audited 2026-06-27, after removing all Settings content-row icons.",
   "usedOn": {
-    "gear": "Settings rail tab — General",
+    "gear": "Settings rail tab — General; Skirmish HUD Settings button (shared carved settings gear)",
     "speaker": "Settings rail tab — Audio",
     "knight": "Settings rail tab — Gameplay",
     "wrench": "Settings rail tab — Creator Tools",
