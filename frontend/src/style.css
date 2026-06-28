@@ -11553,17 +11553,18 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
   grid-template-columns: minmax(0, 1fr) auto auto;
-  /* Baked surface skin (the accepted dressing-room preview): the panel-LINE frame
-     (transparent interior) over a fixed wood surface, instead of .app-titlebar's
-     filled panel. border-width = the fill inset (2px) so the surface clips to the
-     frame's interior; border-image-width (16px) renders the frame at full thickness;
-     padding compensates so content clears the frame art (ADR-0034). */
-  border: 2px solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round;
-  padding: 14px 32px;
-  background: url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
-  background-origin: padding-box;
-  background-clip: padding-box;
+  /* Fork A (ADR-0037): full-bleed oak whose bottom edge is a forged NAILHEAD iron rule
+     (a studded band) capped by a centred diamond stud, replacing the panel-LINE frame.
+     With no border the wood reaches the element edge — no side/top frame and no 1px keyline
+     gap (the original defect). The rule + stud are generated low-fi atoms in
+     /assets/ui/titlebar/ (ADR-0011/0014); the wood stays a fixed surface so it lines up
+     with the rest of the app's wood. */
+  border: 0;
+  padding: 0 32px;
+  background:
+    url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat,
+    url("/assets/ui/titlebar/band-studded.png") left bottom / auto 14px repeat-x,
+    url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
   image-rendering: pixelated;
 }
 
