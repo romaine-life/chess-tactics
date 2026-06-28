@@ -59,23 +59,11 @@ export function AccountMenu({ name, email, avatarUrl, onSignOut, defaultOpen }: 
             </span>
           </div>
           <button type="button" className="account-menu-item" role="menuitem" onClick={onSignOut}>
-            <ExitGlyph />
+            <img className="account-menu-glyph" src="/assets/ui/kit/icons/sign-out.png" alt="" aria-hidden="true" />
             <span>Sign Out</span>
           </button>
         </div>
       )}
     </div>
-  );
-}
-
-// Placeholder door/exit glyph — a doorway with an arrow leaving it. To be re-forged
-// as a proper 64x64 kit icon (ADR-0026) once the look is locked; inline for now so
-// the menu reads correctly in the workshop.
-function ExitGlyph(): ReactElement {
-  return (
-    <svg className="account-menu-glyph" viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges">
-      <path d="M2 1h7v2H4v10h5v2H2z" fill="currentColor" />
-      <path d="M9 7h4V5l3 3-3 3v-2H9z" fill="currentColor" />
-    </svg>
   );
 }

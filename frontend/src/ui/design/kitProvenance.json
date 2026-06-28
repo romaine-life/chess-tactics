@@ -1,6 +1,6 @@
 {
   "process": "forge-atom clean pipeline (codex img2img on a chroma plate -> despill -> low-fi -> trim glyph -> pad to the ADR-0026 64x64 canvas -> dimension assert), method-verified via the codex rollout (image_generation_call), NOT code-drawn",
-  "lastRun": "2026-06-27",
+  "lastRun": "2026-06-28",
   "assets": {
     "gear": {
       "group": "settings",
@@ -154,6 +154,13 @@
       "group": "settings",
       "forged": "2026-06-27",
       "tries": 2,
+      "method": "image-generator (verified)",
+      "gate": "pass"
+    },
+    "sign-out": {
+      "group": "settings",
+      "forged": "2026-06-28",
+      "tries": 1,
       "method": "image-generator (verified)",
       "gate": "pass"
     }

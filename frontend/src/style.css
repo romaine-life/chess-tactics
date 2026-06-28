@@ -11827,9 +11827,13 @@ button.tileset-relationship-cell {
 }
 
 .account-menu-glyph {
-  block-size: 18px;
+  block-size: 26px;
   flex: none;
-  inline-size: 18px;
+  /* Detailed wood/stone door downscaled from the 64px source — smooth (auto), not
+     pixelated, since 26px isn't an integer divisor of 64 (ADR-0026 guidance). */
+  image-rendering: auto;
+  inline-size: 26px;
+  object-fit: contain;
 }
 
 .settings-shell {
