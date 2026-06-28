@@ -30,7 +30,6 @@ const KEEPS_OWN_HEADER = new Set<string>([
 // Not yet migrated to the shell bar — still render their own header (staged rollout).
 const NOT_YET_MIGRATED = new Set<string>([
   '/play', '/skirmish',
-  '/campaigns-next', '/campaigns',
 ]);
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
@@ -44,6 +43,9 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
   }
   if (path === '/edit' || path === '/level-editor') {
     return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, rightSlot: true };
+  }
+  if (path === '/campaigns-next' || path === '/campaigns') {
+    return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true, rightSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
     return { screenName: 'Settings', showAccountCluster: true, showSettingsGear: false, signInReturnTo: '/settings' };

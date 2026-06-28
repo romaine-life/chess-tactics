@@ -5792,6 +5792,14 @@ h1 {
   z-index: 1;
 }
 
+/* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
+   the fixed bar overlay and pin the layout + footer to rows 2/3 (3-row grid). */
+.ce-screen.app-shell-bar-pad {
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr) auto;
+}
+.ce-screen.app-shell-bar-pad > .ce-layout { grid-row: 2; }
+.ce-screen.app-shell-bar-pad > .ce-footer { grid-row: 3; }
+
 .ce-topbar {
   /* Frame + height come from .app-titlebar (ADR-0004); this is the shared
      three-section content layout — brand / stats / controls — centered (ADR-0016). */
