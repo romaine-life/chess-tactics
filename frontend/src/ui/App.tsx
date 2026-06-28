@@ -6,7 +6,6 @@ import { Settings } from './Settings';
 import { ArtworkCompare } from './ArtworkCompare';
 import { TileCompare } from './TileCompare';
 import { SurfaceLab } from './SurfaceLab';
-import { SeamLab } from './SeamLab';
 import { UpdateBanner } from './UpdateBanner';
 import {
   APP_NAVIGATION_EVENT,
@@ -86,6 +85,5 @@ function renderRoute(path: string): ReactElement {
   if (path === '/artwork-compare') return <ArtworkCompare />;
   if (path === '/tile-compare') return <TileCompare />;
   if (path === '/surface-lab') return <SurfaceLab />;
-  if (path === '/seam-lab') return <SeamLab />;
   return <MainMenu />;
 }
