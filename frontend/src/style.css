@@ -12230,6 +12230,15 @@ button.tileset-relationship-cell {
 /* Artwork cards — large landscape thumbnails, smooth (NOT pixelated, these are
    authored illustrations not 64px glyphs). Zoom scales the thumbnail height. */
 .tileset-studio-card.is-artwork .tileset-studio-card-image { min-height: calc(168px * var(--tile-zoom, 1)); }
+/* Portrait-candidate cards show the accepted HUD crop (square), not the full-body master. */
+.artwork-portrait-crop {
+  position: relative;
+  height: calc(168px * var(--tile-zoom, 1));
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 4px;
+}
 .tileset-studio-card.is-artwork .tileset-studio-card-image img {
   box-sizing: border-box;
   height: 100%;
