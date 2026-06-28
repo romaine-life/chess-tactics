@@ -318,6 +318,12 @@ export function initBgm() {
     const el = document.createElement('button');
     el.type = 'button';
     el.className = 'bgm-control';
+    const icon = document.createElement('img');
+    icon.className = 'bgm-control-icon';
+    icon.src = '/assets/ui/kit/icons/music.png';
+    icon.alt = '';
+    icon.setAttribute('aria-hidden', 'true');
+    el.appendChild(icon);
     el.addEventListener('click', (event) => {
       event.preventDefault();
       if (state.unavailable && !state.muted) {
@@ -357,7 +363,6 @@ export function initBgm() {
     if (state.unavailable && !state.muted) {
       el.classList.remove('is-playing');
       el.classList.add('is-muted');
-      el.textContent = '🔈';
       el.setAttribute('aria-label', 'Background music unavailable — click to retry');
       el.title = 'Background music unavailable — click to retry';
       return;
@@ -365,7 +370,6 @@ export function initBgm() {
     const playing = !audio.paused && state.started && !state.muted;
     el.classList.toggle('is-muted', state.muted);
     el.classList.toggle('is-playing', playing);
-    el.textContent = state.muted ? '🔇' : '🔊';
     const now = state.currentTitle ? `♪ ${state.currentTitle}` : 'Background music';
     el.setAttribute('aria-label', state.muted ? 'Unmute background music' : `Mute background music (${now})`);
     el.title = state.muted
