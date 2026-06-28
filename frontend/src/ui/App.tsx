@@ -1,4 +1,4 @@
-import { lazy, startTransition, Suspense, useEffect, useState, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, useTransition, type ReactElement } from 'react';
 import { MainMenu } from './MainMenu';
 import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
@@ -61,20 +61,48 @@ function prefetchRoute(path: string): void {
   void thunk();
 }
 
+// Heavy destinations get the cross-route veil on entry — the screens weighty enough
+// that a plain swap feels abrupt (skirmish, level editor, campaign editor). Light
+// hops (menu, settings, lobbies, party) swap instantly; a fade there would just add
+// friction. Tune membership here.
+const HEAVY_ROUTES = new Set(['/play', '/skirmish', '/edit', '/level-editor', '/campaigns-next', '/campaigns']);
+const isHeavyDestination = (path: string): boolean => HEAVY_ROUTES.has(path);
+
+// Veil timings — keep in lockstep with --route-veil-cover-ms / --route-veil-reveal-ms
+// in style.css (JS drives the route swap; CSS drives the opacity fade).
+const VEIL_COVER_MS = 260;
+const VEIL_REVEAL_MS = 340;
+
 // React router replacing app.js's string-HTML router. Same-origin app links are
 // intercepted below so route changes keep the document, React tree, and BGM
 // audio element alive. Legacy paths (/skirmish, /level-editor, /campaigns,
 // /menu-next, /main-menu) resolve to React surfaces.
 export function App(): ReactElement {
   const [path, setPath] = useState<string>(() => normalizeRoutePath(window.location.pathname));
+  // Cross-route veil: an atmospheric field that fades OVER the current screen, lets
+  // a heavy destination load + compose underneath while opaque, then fades UP into
+  // it — one calm dissolve, never a "Loading…" snap. The reveal is gated on
+  // useTransition's isPending, so we never fade up into a half-loaded screen. Light
+  // hops skip the veil and swap instantly. Timings mirror VEIL_*_MS / style.css.
+  const [veil, setVeil] = useState<'idle' | 'cover' | 'reveal'>('idle');
+  const [isPending, startRouteTransition] = useTransition();
+  const pendingTarget = useRef<string | null>(null);
+  const pathRef = useRef(path);
+  useEffect(() => { pathRef.current = path; }, [path]);
 
+  // Navigation + prefetch wiring (delegated at the document, like the click router).
   useEffect(() => {
-    // startTransition keeps the current screen painted while the next route's
-    // lazy chunk resolves — React holds back the Suspense fallback when it's
-    // transitioning away from already-revealed content, so navigating between
-    // surfaces no longer blanks to "Loading…". (Cold first-load straight onto a
-    // lazy route still shows the fallback, which is correct — nothing to keep.)
-    const syncPath = () => startTransition(() => setPath(normalizeRoutePath(window.location.pathname)));
+    const onNav = () => {
+      const next = normalizeRoutePath(window.location.pathname);
+      if (next === pathRef.current) return;
+      if (isHeavyDestination(next)) {
+        pendingTarget.current = next; // hold the swap until the field is fully opaque
+        setVeil('cover');
+      } else {
+        // Light hop: keep the current screen painted (no fallback flash), swap when ready.
+        startRouteTransition(() => setPath(next));
+      }
+    };
     const onClick = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -98,31 +126,61 @@ export function App(): ReactElement {
       if (url) prefetchRoute(normalizeRoutePath(url.pathname));
     };
 
-    window.addEventListener('popstate', syncPath);
-    window.addEventListener(APP_NAVIGATION_EVENT, syncPath);
+    window.addEventListener('popstate', onNav);
+    window.addEventListener(APP_NAVIGATION_EVENT, onNav);
     document.addEventListener('click', onClick);
     document.addEventListener('pointerover', onIntent);
     document.addEventListener('focusin', onIntent);
     return () => {
-      window.removeEventListener('popstate', syncPath);
-      window.removeEventListener(APP_NAVIGATION_EVENT, syncPath);
+      window.removeEventListener('popstate', onNav);
+      window.removeEventListener(APP_NAVIGATION_EVENT, onNav);
       document.removeEventListener('click', onClick);
       document.removeEventListener('pointerover', onIntent);
       document.removeEventListener('focusin', onIntent);
     };
   }, []);
 
+  // Once the field is fully opaque, swap the route underneath it.
+  useEffect(() => {
+    if (veil !== 'cover') return undefined;
+    const timer = window.setTimeout(() => {
+      const target = pendingTarget.current;
+      if (target != null) startRouteTransition(() => setPath(target));
+    }, VEIL_COVER_MS);
+    return () => window.clearTimeout(timer);
+  }, [veil]);
+
+  // Fade up only once the destination has committed AND its chunk is ready (no
+  // pending transition) — so the player never sees a half-composed screen surface.
+  useEffect(() => {
+    if (veil === 'cover' && pendingTarget.current === path && !isPending) {
+      pendingTarget.current = null;
+      setVeil('reveal');
+    }
+  }, [veil, path, isPending]);
+
+  // Reveal finished → idle.
+  useEffect(() => {
+    if (veil !== 'reveal') return undefined;
+    const timer = window.setTimeout(() => setVeil('idle'), VEIL_REVEAL_MS);
+    return () => window.clearTimeout(timer);
+  }, [veil]);
+
   return (
     <>
       <UpdateBanner />
       {/* ONE stable Suspense boundary above the router. Because the boundary
           persists across every route swap (rather than each route mounting its
-          own), a startTransition navigation keeps the already-revealed screen
-          painted while the next route's lazy chunk loads — so moving between
-          surfaces no longer blanks to "Loading…". The fallback only shows on a
-          genuine cold load straight onto a lazy route, when this boundary has
-          revealed nothing yet. */}
+          own), a transition navigation keeps the already-revealed screen painted
+          while the next route's lazy chunk loads — so moving between surfaces no
+          longer blanks to "Loading…". The fallback only shows on a genuine cold
+          load straight onto a lazy route, when this boundary has revealed nothing
+          yet. Heavy entrances additionally ride the veil below. */}
       <Suspense fallback={fallback}>{renderRoute(path)}</Suspense>
+      <div
+        className={`route-veil${veil === 'cover' ? ' is-cover' : ''}${veil === 'reveal' ? ' is-reveal' : ''}`}
+        aria-hidden="true"
+      />
     </>
   );
 }

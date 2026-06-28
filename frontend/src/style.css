@@ -1335,6 +1335,39 @@ h1 {
   opacity: 0;
 }
 
+/* Cross-route veil (App.tsx) — an atmospheric field that fades OVER the current
+   screen, lets a heavy destination load + compose underneath while opaque, then
+   fades UP into it: one calm dissolve instead of a "Loading…" snap. Only heavy
+   entrances trigger it (skirmish / level editor / campaign editor); light hops
+   swap instantly. Timings mirror VEIL_COVER_MS / VEIL_REVEAL_MS in App.tsx.
+   Retune the field + timing here — it's meant to be tuned by feel. */
+:root {
+  --route-veil-cover-ms: 260ms;
+  --route-veil-reveal-ms: 340ms;
+  /* cold, rainy dark — never white (white is what reads as "browser loading") */
+  --route-veil-field: radial-gradient(130% 130% at 50% 34%, #151c29 0%, #0a0d13 62%, #05070b 100%);
+}
+.route-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--route-veil-field);
+  transition: opacity var(--route-veil-reveal-ms) ease;
+  will-change: opacity;
+}
+.route-veil.is-cover {
+  opacity: 1;
+  pointer-events: auto; /* swallow clicks mid-transition */
+  transition-duration: var(--route-veil-cover-ms);
+}
+.route-veil.is-reveal {
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: var(--route-veil-reveal-ms);
+}
+
 /* "New version available" prompt — quiet, fixed, non-blocking. Shown only after
    a newer build is detected (src/net/appUpdate.ts). */
 .app-update-banner {
