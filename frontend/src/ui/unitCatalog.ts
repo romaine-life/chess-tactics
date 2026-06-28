@@ -291,12 +291,12 @@ const pixelLibraryUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
 );
 
 export const unitAssets: UnitAsset[] = [
-  ...productionUnits.map((unit) => ({ ...unit, method: unit.method ?? 'Codex Sheet' })),
+  ...productionUnits.map((unit) => ({ ...unit, method: unit.method ?? 'Production' })),
   ...pixelLibraryUnits,
 ];
 
 export const UNIT_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
-  { id: 'Codex Sheet', label: 'Codex Sheet', sub: 'Production' },
+  { id: 'Production', label: 'Production', sub: 'shipped' },
   ...PIXEL_LIBRARIES.map((lib) => ({ id: lib.label, label: lib.label, sub: 'Speculative' })),
 ];
 

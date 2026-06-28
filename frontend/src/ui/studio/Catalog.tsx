@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
 // One catalog, any asset type. A `CatalogType<A>` descriptor binds an asset type's
 // data + actions to the host studio; <CatalogGrid> and <CatalogControls> render it
@@ -47,6 +47,8 @@ export interface CatalogType<A extends { id: string }> {
   /** Short helper line under the rail controls. */
   note?: string;
   emptyLabel?: string;
+  /** Optional extra controls for this category's rail (e.g. the unit facing compass). */
+  extra?: ReactNode;
 }
 
 /** Apply the descriptor's search + filter dimensions to its assets. */
@@ -208,7 +210,17 @@ export function CatalogFilters<A extends { id: string }>({ filters }: { filters:
             </div>
             {filters.map((dim) => (
               <section key={dim.id} className="tileset-filter-group" aria-label={dim.label}>
-                <h3>{dim.label}</h3>
+                <div className="tileset-filter-group-head">
+                  <h3>{dim.label}</h3>
+                  <span className="tileset-filter-group-actions">
+                    <button type="button" onClick={() => dim.selectAll()} title={`Select all ${dim.label}`} aria-label={`Select all ${dim.label}`}>
+                      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M2.5 8.5 L6 12 L13.5 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                    <button type="button" onClick={() => dim.clear()} title={`Clear ${dim.label}`} aria-label={`Clear ${dim.label}`}>
+                      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M13.5 2.5 L7 9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M7 9 L3.5 12 L7.5 14 L10 9.8 Z" fill="currentColor" /><path d="M4.6 12.7 L3.9 14.5 M6.4 13.4 L6 15.2 M8.1 12.9 L8.1 14.8" fill="none" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" /></svg>
+                    </button>
+                  </span>
+                </div>
                 {dim.options.map((option) => (
                   <button
                     key={option.id}
@@ -260,6 +272,7 @@ export function CatalogControls<A extends { id: string }>({ type }: { type: Cata
           />
         </label>
       ) : null}
+      {type.extra ?? null}
       {type.filters && type.filters.length > 0 ? <CatalogFilters filters={type.filters} /> : null}
       <button
         type="button"
