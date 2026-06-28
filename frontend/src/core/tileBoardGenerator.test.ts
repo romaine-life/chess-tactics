@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { countIllegalEdges, generateSocketBoard, solveSocketBoard } from './tileBoardGenerator';
 import { transitionPairs } from './tileSockets';
 import type { TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
-import type { FeatureKind } from './featureAutotile';
+import type { FeatureKind, RoadMaterial } from './featureAutotile';
+
+type FeatureEntry = { kind: FeatureKind; material: RoadMaterial };
+const road = (material: RoadMaterial = 'stone'): FeatureEntry => ({ kind: 'road', material });
 
 const grass: TileSocketAsset = { id: 'grass', kind: 'tile', role: 'base', probability: 1 };
 const stone: TileSocketAsset = { id: 'stone', kind: 'tile', role: 'base', probability: 1 };
@@ -34,19 +37,28 @@ describe('solveSocketBoard feature layer', () => {
     expect(board.cells.every((cell) => cell.feature === undefined)).toBe(true);
   });
 
-  it('stamps each featured cell with its kind and connection mask, and leaves others bare', () => {
+  it('stamps each featured cell with its kind, material and connection mask, and leaves others bare', () => {
     // An L: (1,1)-(2,1) then down to (2,2). Bend at (2,1), dead-ends at the tips.
-    const featureMap = new Map<string, FeatureKind>([
-      ['1,1', 'road'],
-      ['2,1', 'road'],
-      ['2,2', 'road'],
+    const featureMap = new Map<string, FeatureEntry>([
+      ['1,1', road('dirt')],
+      ['2,1', road('dirt')],
+      ['2,2', road('dirt')],
     ]);
     const board = solveSocketBoard({ assets: [grass], terrainMap: grid(4, 4), seed: 1, columns: 4, rows: 4, familyAssets, featureMap });
     const at = (x: number, y: number) => board.cells.find((cell) => cell.x === x && cell.y === y)!;
-    expect(at(1, 1).feature).toEqual({ kind: 'road', mask: 0b0010 }); // E only
-    expect(at(2, 2).feature).toEqual({ kind: 'road', mask: 0b0001 }); // N only
-    expect(at(2, 1).feature).toEqual({ kind: 'road', mask: 0b1100 }); // S + W (the bend)
+    expect(at(1, 1).feature).toEqual({ kind: 'road', material: 'dirt', mask: 0b0010 }); // E only
+    expect(at(2, 2).feature).toEqual({ kind: 'road', material: 'dirt', mask: 0b0001 }); // N only
+    expect(at(2, 1).feature).toEqual({ kind: 'road', material: 'dirt', mask: 0b1100 }); // S + W (the bend)
     expect(at(0, 0).feature).toBeUndefined();
+  });
+
+  it('connects roads of different materials (one shape; surface changes per cell)', () => {
+    // (1,1) dirt next to (2,1) stone: they still see each other as road neighbours.
+    const featureMap = new Map<string, FeatureEntry>([['1,1', road('dirt')], ['2,1', road('stone')]]);
+    const board = solveSocketBoard({ assets: [grass], terrainMap: grid(4, 4), seed: 1, columns: 4, rows: 4, familyAssets, featureMap });
+    const at = (x: number, y: number) => board.cells.find((cell) => cell.x === x && cell.y === y)!;
+    expect(at(1, 1).feature).toEqual({ kind: 'road', material: 'dirt', mask: 0b0010 }); // sees E neighbour
+    expect(at(2, 1).feature).toEqual({ kind: 'road', material: 'stone', mask: 0b1000 }); // sees W neighbour
   });
 
   it('does not let the feature layer disturb base-terrain selection', () => {
@@ -54,7 +66,7 @@ describe('solveSocketBoard feature layer', () => {
     const plain = solveSocketBoard({ assets: [grass], terrainMap: map, seed: 7, columns: 4, rows: 4, familyAssets });
     const withRoad = solveSocketBoard({
       assets: [grass], terrainMap: map, seed: 7, columns: 4, rows: 4, familyAssets,
-      featureMap: new Map<string, FeatureKind>([['1,1', 'road']]),
+      featureMap: new Map<string, FeatureEntry>([['1,1', road()]]),
     });
     expect(withRoad.cells.map((cell) => cell.asset?.id)).toEqual(plain.cells.map((cell) => cell.asset?.id));
   });

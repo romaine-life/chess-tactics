@@ -19,6 +19,19 @@
 
 export type FeatureKind = 'road';
 
+// A road's surface look. Roads are one connectivity class (all roads connect
+// regardless of material — the shape flows, the surface can change per cell), but
+// the author picks which material to paint. Each is a baked 16-mask set
+// (road-<material>-<mask>.png); keep this list in sync with scripts/build-road-tiles.py.
+export type RoadMaterial = 'dirt' | 'stone' | 'pebble';
+export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'stone', 'pebble'];
+export const ROAD_MATERIAL_LABELS: Record<RoadMaterial, string> = {
+  dirt: 'Dirt',
+  stone: 'Cobblestone',
+  pebble: 'Gravel',
+};
+export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'stone';
+
 export type FeatureEdge = 'N' | 'E' | 'S' | 'W';
 
 export interface FeatureDir {

@@ -1,7 +1,7 @@
 import { createRng } from './rng';
 import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
 import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
-import type { FeatureKind } from './featureAutotile';
+import type { FeatureKind, RoadMaterial } from './featureAutotile';
 import { featureKey, featureMaskAt } from './featureAutotile';
 
 export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsset> {
@@ -13,9 +13,9 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
   /**
    * A linear-feature overlay (road; rivers later) riding ON TOP of the base tile.
    * Orthogonal to socket selection — it never affects which base `asset` is chosen.
-   * `mask` is the 4-bit connection mask; the renderer maps {kind, mask} to a sprite.
+   * `mask` is the 4-bit connection mask; the renderer maps {kind, material, mask} to a sprite.
    */
-  feature?: { kind: FeatureKind; mask: number };
+  feature?: { kind: FeatureKind; material: RoadMaterial; mask: number };
   missing?: {
     kind: 'missing-art' | 'unsupported-junction';
     label: string;
@@ -240,11 +240,11 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   rows: number;
   familyAssets: Record<TileFamilyId, readonly TAsset[]>;
   /**
-   * Sparse linear-feature layer: cell key ("x,y") -> feature kind. Optional and
+   * Sparse linear-feature layer: cell key ("x,y") -> {kind, material}. Optional and
    * orthogonal to `terrainMap`; cells in here get a `feature` with the connection
    * mask resolved from same-kind neighbours. Omit it for the original behaviour.
    */
-  featureMap?: ReadonlyMap<string, FeatureKind>;
+  featureMap?: ReadonlyMap<string, { kind: FeatureKind; material: RoadMaterial }>;
 }
 
 /**
@@ -272,18 +272,19 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
 
   // Group featured cells by kind once, so each cell's connection mask is resolved
   // against only its OWN kind's neighbours (a road connects to roads, not rivers).
+  // Material is per-cell and does NOT split connectivity — all roads connect.
   const featurePresence = new Map<FeatureKind, Set<string>>();
   if (featureMap) {
-    for (const [key, kind] of featureMap) {
+    for (const [key, { kind }] of featureMap) {
       const set = featurePresence.get(kind) ?? new Set<string>();
       set.add(key);
       featurePresence.set(kind, set);
     }
   }
   const featureAt = (x: number, y: number): SocketBoardCell<TAsset>['feature'] => {
-    const kind = featureMap?.get(featureKey(x, y));
-    if (!kind) return undefined;
-    return { kind, mask: featureMaskAt(featurePresence.get(kind)!, x, y) };
+    const entry = featureMap?.get(featureKey(x, y));
+    if (!entry) return undefined;
+    return { kind: entry.kind, material: entry.material, mask: featureMaskAt(featurePresence.get(entry.kind)!, x, y) };
   };
 
   for (let index = 0; index < columns * rows; index += 1) {

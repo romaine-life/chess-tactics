@@ -6,7 +6,7 @@
 // `category === '…'` branch.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileFamilies, featureFrameSrc } from '../art/tileset';
-import { featureMaskAt, type FeatureKind } from '../core/featureAutotile';
+import { featureMaskAt, ROAD_MATERIALS, ROAD_MATERIAL_LABELS, DEFAULT_ROAD_MATERIAL, type FeatureKind, type RoadMaterial } from '../core/featureAutotile';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
   terrainLabels,
@@ -423,8 +423,8 @@ function StudioEditableBoard({
   cells: Record<string, string>;
   units: Record<string, BoardUnitPlacement>;
   doodads: Record<string, { doodadId: string }>;
-  /** Linear-feature overlays (road; rivers later) keyed by "x,y" -> {kind, mask}. */
-  features?: Record<string, { kind: FeatureKind; mask: number }>;
+  /** Linear-feature overlays (road; rivers later) keyed by "x,y" -> {kind, material, mask}. */
+  features?: Record<string, { kind: FeatureKind; material: RoadMaterial; mask: number }>;
   resolveAsset: (id: string) => StudioAsset | undefined;
   resolveUnit: (id: string) => UnitAsset | undefined;
   resolveDoodad: (id: string) => DoodadAsset | undefined;
@@ -470,7 +470,7 @@ function StudioEditableBoard({
             {placedFeatures[key] ? (
               <img
                 className="tileset-feature-overlay"
-                src={featureFrameSrc(placedFeatures[key].kind, placedFeatures[key].mask)}
+                src={featureFrameSrc(placedFeatures[key].kind, placedFeatures[key].material, placedFeatures[key].mask)}
                 alt=""
                 draggable={false}
               />
@@ -1359,10 +1359,11 @@ export function LevelEditor(): ReactElement {
   const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'road'>(studioArm.kind ?? 'tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>({});
-  // Roads are a LINEAR feature (a ribbon you draw), not a per-cell material: store the
-  // painted cells, then derive each one's connection mask from its neighbours so the
-  // renderer picks straight/corner/T/cross. See core/featureAutotile.ts.
-  const [boardRoads, setBoardRoads] = useState<Record<string, true>>({});
+  // Roads are a LINEAR feature (a ribbon you draw), not a per-cell terrain material:
+  // store each painted cell's road MATERIAL, then derive its connection mask from its
+  // neighbours so the renderer picks straight/corner/T/cross. See core/featureAutotile.ts.
+  const [boardRoads, setBoardRoads] = useState<Record<string, RoadMaterial>>({});
+  const [roadMaterial, setRoadMaterial] = useState<RoadMaterial>(DEFAULT_ROAD_MATERIAL);
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : unitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -1412,10 +1413,10 @@ export function LevelEditor(): ReactElement {
   // ribbon re-knits itself whenever a cell is added or removed.
   const roadFeatures = useMemo(() => {
     const present = new Set(Object.keys(boardRoads));
-    const out: Record<string, { kind: FeatureKind; mask: number }> = {};
+    const out: Record<string, { kind: FeatureKind; material: RoadMaterial; mask: number }> = {};
     for (const key of present) {
       const [x, y] = key.split(',').map(Number);
-      out[key] = { kind: 'road', mask: featureMaskAt(present, x, y) };
+      out[key] = { kind: 'road', material: boardRoads[key], mask: featureMaskAt(present, x, y) };
     }
     return out;
   }, [boardRoads]);
@@ -1425,7 +1426,7 @@ export function LevelEditor(): ReactElement {
   const paintCell = (x: number, y: number): void => {
     const key = `${x},${y}`;
     if (brushKind === 'road') {
-      setBoardRoads((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+      setBoardRoads((prev) => (prev[key] === roadMaterial ? prev : { ...prev, [key]: roadMaterial }));
       return;
     }
     if (brushKind === 'unit') {
@@ -1572,11 +1573,11 @@ export function LevelEditor(): ReactElement {
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'road'
-                ? <img src={featureFrameSrc('road', 15)} alt="" draggable={false} />
+                ? <img src={featureFrameSrc('road', roadMaterial, 15)} alt="" draggable={false} />
                 : <img src={brushAsset.src} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'road' ? 'Road' : brushAsset.label}</strong>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'road' ? `${ROAD_MATERIAL_LABELS[roadMaterial]} road` : brushAsset.label}</strong>
               <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'road' ? 'feature · road' : 'tile'}</span>
             </span>
           </div>
@@ -1637,15 +1638,22 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : brushKind === 'road' ? (
           <section className="skirmish-card le-brush-panel">
-            <h2>Road</h2>
-            <div className="le-brush-pick">
-              <span className="le-brush-thumb"><img src={featureFrameSrc('road', 15)} alt="" draggable={false} /></span>
-              <span className="le-brush-meta">
-                <strong>Road</strong>
-                <span>Drag to draw — tiles auto-connect</span>
-              </span>
+            <h2>Road material</h2>
+            <div className="le-swatches">
+              {ROAD_MATERIALS.map((mat) => (
+                <button
+                  type="button"
+                  key={mat}
+                  className={`le-swatch ${roadMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  title={ROAD_MATERIAL_LABELS[mat]}
+                  onClick={() => { setRoadMaterial(mat); setBrushKind('road'); setLayer('road'); setTool('brush'); }}
+                >
+                  <img src={featureFrameSrc('road', mat, 15)} alt="" draggable={false} />
+                  <small>{ROAD_MATERIAL_LABELS[mat]}</small>
+                </button>
+              ))}
             </div>
-            <p className="le-board-note">Draw a path across the board; each tile picks its own piece (straight, corner, junction) from its road neighbours. Erase to cut the road — the ends re-cap automatically.</p>
+            <p className="le-board-note">Drag to draw a road; each tile picks its own piece (straight, corner, junction) from its road neighbours. Roads of any material connect — the surface just changes per cell. Erase to cut; the ends re-cap.</p>
           </section>
         ) : (
           <section className="skirmish-card le-brush-panel">
