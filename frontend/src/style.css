@@ -5011,7 +5011,7 @@ h1 {
 }
 
 /* active brush picker */
-.le-brush-pick { align-items: center; display: grid; gap: 8px; grid-template-columns: 44px minmax(0, 1fr); margin-top: 6px; }
+.le-brush-pick { align-items: center; display: grid; gap: 8px; grid-template-columns: 48px minmax(0, 1fr); margin-top: 6px; }
 .le-brush-thumb {
   background: radial-gradient(circle at 50% 40%, rgba(63, 148, 190, .18), transparent 64%), rgba(3, 12, 19, .74);
   border: 1px solid rgba(87, 153, 184, .4);
@@ -5020,9 +5020,16 @@ h1 {
   height: 44px;
   overflow: hidden;
   place-items: center;
-  width: 60px;
+  width: 48px;
 }
-.le-brush-thumb img { height: 90%; image-rendering: pixelated; object-fit: contain; width: 90%; }
+/* Fit the brush preview INSIDE the thumb. The old height:90% mis-resolved against the
+   auto grid row, so portrait sprites (roads) overflowed to ~88px and clipped. */
+.le-brush-thumb img { display: block; max-width: 100%; max-height: 100%; image-rendering: pixelated; object-fit: contain; }
+/* Feature (road) sprites carry their art only in the top diamond of a tall 96x180
+   frame, so plain contain leaves them tiny + floating. Frame them: fill the box and
+   crop to the diamond band. Same override on the material swatches. */
+.le-brush-thumb img.le-thumb-feature,
+.le-swatch img.le-thumb-feature { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 30%; }
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 

@@ -1658,7 +1658,7 @@ export function LevelEditor(): ReactElement {
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'road'
-                ? <img src={featureFrameSrc('road', roadMaterial, 15)} alt="" draggable={false} />
+                ? <img className="le-thumb-feature" src={featureFrameSrc('road', roadMaterial, 15)} alt="" draggable={false} />
                 : <img src={brushAsset.src} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
@@ -1733,7 +1733,7 @@ export function LevelEditor(): ReactElement {
                   title={ROAD_MATERIAL_LABELS[mat]}
                   onClick={() => { setRoadMaterial(mat); setBrushKind('road'); setLayer('road'); setTool('brush'); }}
                 >
-                  <img src={featureFrameSrc('road', mat, 15)} alt="" draggable={false} />
+                  <img className="le-thumb-feature" src={featureFrameSrc('road', mat, 15)} alt="" draggable={false} />
                   <small>{ROAD_MATERIAL_LABELS[mat]}</small>
                 </button>
               ))}
