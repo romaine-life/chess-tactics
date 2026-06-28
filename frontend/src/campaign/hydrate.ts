@@ -5,7 +5,7 @@
 // lists can't drift.
 
 import { useCampaigns } from './store';
-import { createDemoWorkspace } from './demoWorkspace';
+import { createDefaultWorkspace } from './defaultWorkspace';
 import { loadWorkspace } from '../net/campaignWorkspace';
 
 let inFlight: Promise<void> | null = null;
@@ -22,9 +22,9 @@ export function ensureCampaignsHydrated(): Promise<void> {
       if (ws.campaigns.length) useCampaigns.getState().hydrate(ws);
     } catch {
       // No reachable workspace (dev has no /api proxy; or unauthorized) → fall back
-      // to the same demo the editor seeds.
+      // to the same single-campaign default the editor seeds.
       if (useCampaigns.getState().campaigns.length === 0) {
-        useCampaigns.getState().hydrate(createDemoWorkspace());
+        useCampaigns.getState().hydrate(createDefaultWorkspace());
       }
     } finally {
       inFlight = null;
