@@ -5,8 +5,6 @@
 // rollout. A non-null config means "the app-shell bar owns this screen's title bar".
 export interface TitleBarConfig {
   screenName: string;
-  /** 'brand-hero' makes the game title the dominant line (home/entry only). */
-  lockupVariant?: 'default' | 'brand-hero';
   /** Bar column layout modifier; default = brand + trailing cluster (2-trailing). */
   columns?: 'section' | 'editor';
   /** Render the shared HeaderAccountCluster on the right. */

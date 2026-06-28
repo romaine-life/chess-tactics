@@ -16,7 +16,7 @@ export function AppTitleBar({ path }: { path: string }): ReactElement | null {
   const columnClass = config.columns ? ` app-titlebar--${config.columns}` : '';
   return (
     <header className={`app-titlebar settings-header-frame app-shell-titlebar${columnClass}`}>
-      <BrandLockup screenName={config.screenName} variant={config.lockupVariant} />
+      <BrandLockup screenName={config.screenName} />
       {config.showAccountCluster ? <HeaderAccountCluster signInReturnTo={config.signInReturnTo} /> : null}
     </header>
   );
