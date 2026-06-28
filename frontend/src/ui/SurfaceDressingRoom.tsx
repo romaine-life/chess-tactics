@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 import panelCfg from '../../config/nine-slice/panel.json';
 import modeButtonCfg from '../../config/nine-slice/mode-button.json';
@@ -176,7 +176,10 @@ function buildCss(config: DressingConfig, geom: Map<RegionId, number[]>): string
   return parts.join('\n');
 }
 
-export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
+// `header` (optional) is the Studio Viewer's kind-selector strip, injected when the dressing
+// room is mounted as the Settings page's viewer (Pages catalog) so it matches the sibling page
+// viewers. Omitted when it runs as the standalone Dressing studio mode.
+export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [config, setConfig] = useState<DressingConfig>(() => loadConfig(seed));
   const [copied, setCopied] = useState(false);
@@ -297,6 +300,7 @@ export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
         <section className="tileset-inspector-section">
           <h2>Dressing room</h2>
           <div className="tileset-control-stack">
+            {header}
             <p className="tileset-catalog-note">
               Assign a surface to each region of the live Settings page. Zoom and starting point are shared, so the texture reads as one continuous surface. The Tabs and Rows boxes can also be disabled or made transparent. Choices are saved.
             </p>
