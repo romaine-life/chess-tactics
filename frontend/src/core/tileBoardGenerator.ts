@@ -1,4 +1,5 @@
 import { createRng } from './rng';
+import type { GroundCover } from './groundCover';
 import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
 import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
 
@@ -8,6 +9,8 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
   asset?: TAsset;
   sockets: EdgeSockets;
   terrain: TileFamilyId;
+  /** Ambient vegetation resolved at board build (see core/groundCover). Not per-render. */
+  groundCover?: GroundCover;
   missing?: {
     kind: 'missing-art' | 'unsupported-junction';
     label: string;

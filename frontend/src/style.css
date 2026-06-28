@@ -9806,6 +9806,25 @@ button.tileset-relationship-cell {
    level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
    The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */
 
+/* Ground-cover tufts (see render/GroundCoverLayer). The sway is BAKED frames in a
+   horizontal sheet; this only advances the frame index via steps() — no visual effect.
+   Per-tuft phase comes from a negative --gc-delay so the field never pulses in unison. */
+.gc-tuft {
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  animation: gc-sway var(--gc-dur, 1.14s) steps(6) infinite;
+  animation-delay: var(--gc-delay, 0s);
+  will-change: background-position;
+}
+@keyframes gc-sway {
+  from { background-position-x: 0; }
+  to { background-position-x: var(--gc-travel, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gc-tuft { animation: none; }
+}
+
 .tileset-generated-board-overlay-cell {
   position: absolute;
   width: 96px;
