@@ -188,9 +188,11 @@ export function initBgm() {
     if (state.muted) {
       audio.pause();
     } else {
-      // Unmuting is also the "retry" affordance if the library was unreachable.
+      // Unmuting is also the "retry" affordance if the library was unreachable, and
+      // it clears a prior hard-stop so turning audio back on actually resumes.
       state.unavailable = false;
       state.errorStreak = 0;
+      state.stopped = false;
       beginPlayback();
     }
     updateControl();

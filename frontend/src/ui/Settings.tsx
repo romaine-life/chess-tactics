@@ -383,6 +383,24 @@ export function Settings(): ReactElement {
     writeDisabledUrls(next); // persist + notify the running player
   };
 
+  // Play/Shuffle start audio even when it was muted; reflect that in the controls so
+  // they don't lie — turn Background Music (and Master Audio) back on to match.
+  const restoreAudibleControls = () => {
+    if (muted) { setMuted(false); writeMuted(false); }
+    if (!settings.masterAudio) updateSetting('masterAudio', true);
+  };
+
+  const playTrack = (track: BgmTrack, playing: boolean) => {
+    if (playing) { sendBgmCommand('stop'); return; }
+    sendBgmCommand('play', track.url);
+    restoreAudibleControls();
+  };
+
+  const shuffleTracks = () => {
+    sendBgmCommand('shuffle');
+    restoreAudibleControls();
+  };
+
   const signOut = async () => {
     try { await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }); } catch { /* ignore */ }
     window.location.reload();
@@ -501,7 +519,7 @@ export function Settings(): ReactElement {
                 description={enabled ? undefined : 'Off — excluded from background music.'}
               >
                 <SettingsButton
-                  onClick={() => sendBgmCommand(playing ? 'stop' : 'play', playing ? undefined : track.url)}
+                  onClick={() => playTrack(track, playing)}
                   ariaLabel={playing ? `Stop ${track.title}` : `Play ${track.title}`}
                 >{playing ? '■ Stop' : '▶ Play'}</SettingsButton>
                 <Toggle
@@ -590,7 +608,7 @@ export function Settings(): ReactElement {
                 <div className="settings-tracks-bar-col">
                   <div className="settings-tracks-bar-actions">
                     <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
-                    <SettingsButton onClick={() => sendBgmCommand('shuffle')} ariaLabel="Shuffle and play the soundtrack">⇄ Shuffle</SettingsButton>
+                    <SettingsButton onClick={shuffleTracks} ariaLabel="Shuffle and play the soundtrack">⇄ Shuffle</SettingsButton>
                   </div>
                   <h3 className="settings-section-title">Soundtrack</h3>
                 </div>
