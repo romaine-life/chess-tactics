@@ -3706,1073 +3706,6 @@ h1 {
   text-align: center;
 }
 
-.menu-layer.level-editor-layer {
-  align-items: start;
-  justify-content: start;
-  pointer-events: none;
-}
-
-.level-editor-hud {
-  background:
-    linear-gradient(180deg, rgba(36, 28, 66, .97), rgba(18, 14, 34, .98));
-  border: 3px solid #7567ad;
-  box-shadow:
-    0 0 0 3px #0d0a1c,
-    inset 0 0 0 2px rgba(174, 230, 255, .14),
-    0 16px 0 rgba(0, 0, 0, .28);
-  display: grid;
-  gap: 10px;
-  max-width: min(720px, calc(100vw - 58px));
-  padding: 14px;
-  pointer-events: auto;
-  width: 100%;
-}
-
-.level-editor-hud h2 {
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.85rem, 2vw, 1.2rem);
-  line-height: 1.3;
-}
-
-.level-editor-hud.collapsed {
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, auto);
-  max-width: min(640px, calc(100vw - 58px));
-  padding: 10px;
-}
-
-.level-editor-title {
-  min-width: 0;
-}
-
-.level-editor-hud.collapsed .level-editor-title h2 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.level-editor-actions {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.level-editor-hud.collapsed .level-editor-actions {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.level-editor-actions button {
-  min-height: 38px;
-  text-align: center;
-}
-
-.shell.level-editor-active {
-  gap: 0;
-  padding: 0;
-}
-
-.shell.level-editor-active > .topbar {
-  display: none;
-}
-
-/* Asset-backed Level Editor chrome. The central Pixi board remains owned by
-   EditorBoard; these rules only skin the surrounding live controls. */
-.level-editor-shell {
-  --le-cyan: #25d7ff;
-  --le-cyan-soft: rgba(37, 215, 255, .18);
-  --le-gold: #d4aa4f;
-  --le-ink: #ecf7fb;
-  --le-muted: #9fb3bd;
-  --le-bg: rgba(4, 13, 20, .94);
-  color: var(--le-ink);
-  display: grid;
-  gap: 6px;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 6px;
-  pointer-events: auto;
-  position: relative;
-  z-index: 5;
-}
-
-.level-editor-shell::before {
-  background:
-    radial-gradient(720px 460px at 50% 8%, rgba(42, 112, 146, .23), transparent 64%),
-    linear-gradient(180deg, rgba(2, 8, 12, .2), rgba(1, 4, 7, .7));
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-  z-index: -1;
-}
-
-.le-topbar {
-  align-items: stretch;
-  background: var(--le-bg);
-  border: 1px solid rgba(101, 184, 255, .22);
-  box-shadow: inset 0 0 0 1px rgba(212, 170, 79, .18), 0 12px 28px rgba(0, 0, 0, .3);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.2fr) auto minmax(360px, auto);
-  min-height: 74px;
-  padding: 7px;
-}
-
-.le-brand {
-  align-items: center;
-  color: var(--le-ink);
-  display: flex;
-  gap: 12px;
-  min-width: 0;
-  padding: 5px 10px;
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
-.le-brand-crest {
-  height: 50px;
-  image-rendering: pixelated;
-  width: 50px;
-}
-
-.le-brand span {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.le-brand small,
-.le-panel h2,
-.le-status,
-.le-tray-controls,
-.le-field span,
-.le-check {
-  color: #ffc95f;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.le-brand strong {
-  color: #fff;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: clamp(23px, 2.3vw, 32px);
-  letter-spacing: 0.01em;
-  line-height: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 2px 0 #02070a, 0 0 14px rgba(37, 215, 255, .34);
-  white-space: nowrap;
-}
-
-/* The "Chess Tactics" wordmark is the shared bitmap (not type), small as a kicker
-   above the "Level Editor" line — the 03 corner lockup. */
-.le-brand-title {
-  display: block;
-  line-height: 0;
-}
-
-.le-brand-title img {
-  display: block;
-  height: 32px;
-  width: auto;
-}
-
-.le-tool-tabs {
-  background: url("/assets/ui/level-editor/toolbar-tabs-normal.png") center / 100% 100% no-repeat;
-  display: grid;
-  gap: 2px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  min-width: 0;
-  padding: 6px;
-}
-
-.le-tool-tab {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  color: var(--le-muted);
-  display: grid;
-  gap: 2px;
-  justify-items: center;
-  min-height: 0;
-  padding: 3px;
-  text-transform: uppercase;
-}
-
-.le-tool-tab.is-active {
-  background: url("/assets/ui/level-editor/button-active.png") center / 100% 100% no-repeat;
-  color: #dff8ff;
-  text-shadow: 0 0 9px rgba(37, 215, 255, .7);
-}
-
-.le-tool-tab img {
-  height: 28px;
-  image-rendering: pixelated;
-  width: 28px;
-}
-
-.le-tool-tab span,
-.le-action-button span,
-.le-menu-link,
-.le-library-list button,
-.le-layer-row span,
-.le-palette-grid button span,
-.le-unit-side,
-.le-tray-assets button span {
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 14px;
-  letter-spacing: 0.02em;
-  line-height: 1.1;
-  text-transform: uppercase;
-}
-
-.le-history,
-.le-save-actions {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  justify-content: end;
-}
-
-.le-save-actions {
-  min-width: 0;
-}
-
-.le-icon-button,
-.le-menu-link {
-  align-items: center;
-  background: url("/assets/ui/level-editor/icon-button-normal.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-radius: 0;
-  display: inline-grid;
-  height: 54px;
-  justify-items: center;
-  min-height: 0;
-  padding: 0;
-  place-items: center;
-  width: 54px;
-}
-
-.le-icon-button.is-active,
-.le-icon-button:hover,
-.le-icon-button:focus-visible,
-.le-menu-link:hover,
-.le-menu-link:focus-visible {
-  background-image: url("/assets/ui/level-editor/icon-button-active.png");
-}
-
-.le-icon-button img,
-.le-menu-link img {
-  height: 31px;
-  image-rendering: pixelated;
-  width: 31px;
-}
-
-.le-action-button {
-  align-items: center;
-  background: url("/assets/ui/level-editor/button-normal.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-radius: 0;
-  color: var(--le-ink);
-  display: inline-flex;
-  gap: 8px;
-  justify-content: center;
-  min-height: 54px;
-  min-width: 116px;
-  padding: 8px 14px;
-}
-
-.le-action-button.is-primary,
-.le-action-button:hover,
-.le-action-button:focus-visible {
-  background-image: url("/assets/ui/level-editor/button-active.png");
-}
-
-.le-action-button img {
-  height: 27px;
-  image-rendering: pixelated;
-  width: 27px;
-}
-
-.le-workspace {
-  display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr) minmax(230px, 330px);
-  min-height: 0;
-  overflow: hidden;
-}
-
-.le-left-rail,
-.le-right-rail {
-  display: grid;
-  gap: 6px;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-color: var(--le-cyan) #071018;
-  scrollbar-width: thin;
-}
-
-.le-panel {
-  background: rgba(5, 17, 25, .9);
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/level-editor/panel-frame.png") 32 fill / 16px stretch;
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-  padding: 3px;
-}
-
-.le-panel h2 {
-  margin: 0 0 2px;
-}
-
-.le-field {
-  align-items: center;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(62px, .45fr) minmax(0, 1fr);
-}
-
-.le-field select {
-  background: rgba(2, 10, 15, .78);
-  border: 1px solid rgba(101, 184, 255, .34);
-  color: var(--le-ink);
-  font: 16px/1 "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  min-height: 32px;
-  padding: 4px 8px;
-  width: 100%;
-}
-
-.le-check {
-  align-items: center;
-  color: var(--le-ink);
-  display: flex;
-  gap: 8px;
-  line-height: 1.4;
-}
-
-.le-check input {
-  accent-color: #0c8cff;
-}
-
-.le-layer-row {
-  align-items: center;
-  background: url("/assets/ui/level-editor/layer-row-normal.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-radius: 0;
-  color: var(--le-ink);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 30px minmax(0, 1fr) 28px;
-  min-height: 43px;
-  padding: 4px 13px;
-  text-align: left;
-}
-
-.le-layer-row.is-selected,
-.le-layer-row:hover,
-.le-layer-row:focus-visible {
-  background-image: url("/assets/ui/level-editor/layer-row-selected.png");
-  color: #e5fbff;
-}
-
-.le-layer-row img {
-  height: 24px;
-  image-rendering: pixelated;
-  width: 24px;
-}
-
-.le-board-stage {
-  /* The painted night scene from the main menu sits behind the board, dimmed by a
-     dark overlay so painted tiles stay readable — the 03 concept backdrop. */
-  background:
-    radial-gradient(760px 460px at 50% 16%, rgba(19, 67, 98, .32), transparent 72%),
-    linear-gradient(180deg, rgba(4, 12, 20, .52), rgba(2, 8, 13, .8)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center top / cover no-repeat,
-    #02080d;
-  border: 1px solid rgba(101, 184, 255, .26);
-  box-shadow: inset 0 0 0 1px rgba(212, 170, 79, .14);
-  display: grid;
-  min-height: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.le-board-stage::before {
-  background-image:
-    linear-gradient(rgba(37, 215, 255, .07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(37, 215, 255, .07) 1px, transparent 1px);
-  background-size: 54px 54px;
-  content: "";
-  inset: 0;
-  opacity: .35;
-  pointer-events: none;
-  position: absolute;
-}
-
-.le-board-frame {
-  display: grid;
-  min-height: 0;
-  overflow: auto;
-  place-items: center;
-  position: relative;
-  z-index: 1;
-}
-
-.le-board-frame canvas {
-  border: 1px solid rgba(37, 215, 255, .25);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .34), 0 0 0 3px rgba(2, 8, 12, .8);
-  image-rendering: pixelated;
-}
-
-.le-palette-panel {
-  border-image-source: url("/assets/ui/level-editor/palette-frame.png");
-  min-height: 276px;
-}
-
-.le-palette-grid {
-  display: grid;
-  gap: 5px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.le-palette-grid button,
-.le-unit-side button,
-.le-tray-assets button {
-  background: rgba(4, 14, 21, .84);
-  border: 1px solid rgba(101, 184, 255, .2);
-  border-radius: 0;
-  color: var(--le-muted);
-  min-height: 0;
-}
-
-.le-palette-grid button {
-  align-items: center;
-  aspect-ratio: 1;
-  display: grid;
-  gap: 3px;
-  justify-items: center;
-  padding: 5px;
-}
-
-.le-palette-grid button.is-active,
-.le-palette-grid button:hover,
-.le-unit-side button.is-active,
-.le-unit-side button:hover,
-.le-tray-assets button.is-active,
-.le-tray-assets button:hover {
-  border-color: var(--le-cyan);
-  box-shadow: inset 0 0 0 1px rgba(37, 215, 255, .24), 0 0 12px rgba(37, 215, 255, .16);
-  color: #e5fbff;
-}
-
-.le-palette-grid i,
-.le-tray-assets i {
-  border: 1px solid rgba(255, 255, 255, .22);
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .08), 0 2px 0 #02070a;
-  display: block;
-  height: 24px;
-  width: 30px;
-}
-
-.le-brush-tools {
-  display: grid;
-  gap: 7px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.le-unit-groups {
-  display: grid;
-  gap: 10px;
-}
-
-.le-unit-side {
-  color: var(--le-muted);
-  display: grid;
-  gap: 6px;
-}
-
-.le-unit-side.is-player > span {
-  color: #77bfff;
-}
-
-.le-unit-side.is-enemy > span {
-  color: #ff9a7d;
-}
-
-.le-unit-side div {
-  display: grid;
-  gap: 5px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.le-unit-side button {
-  color: var(--le-ink);
-  font: 20px/1 "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  min-height: 38px;
-  padding: 4px;
-}
-
-.le-library-head {
-  align-items: center;
-  color: var(--le-muted);
-  display: flex;
-  font-size: 1rem;
-  gap: 8px;
-  justify-content: space-between;
-}
-
-.le-library-head button,
-.le-sign-in {
-  background: rgba(8, 28, 41, .84);
-  border: 1px solid rgba(37, 215, 255, .44);
-  color: var(--le-ink);
-  font-size: .55rem;
-  min-height: 30px;
-  padding: 5px 8px;
-  text-decoration: none;
-}
-
-.le-library-list {
-  display: grid;
-  gap: 5px;
-  max-height: 178px;
-  overflow: auto;
-}
-
-.le-library-list button {
-  align-items: center;
-  background: rgba(3, 12, 18, .8);
-  border: 1px solid rgba(101, 184, 255, .2);
-  color: var(--le-ink);
-  display: grid;
-  gap: 3px;
-  justify-items: start;
-  min-height: 36px;
-  padding: 6px 8px;
-  text-align: left;
-}
-
-.le-library-list small,
-.le-muted {
-  color: var(--le-muted);
-  font-size: .95rem;
-}
-
-.le-bottom-tray {
-  align-items: center;
-  background: url("/assets/ui/level-editor/bottom-tray.png") center / 100% 100% no-repeat;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 104px;
-  padding: 18px 22px;
-}
-
-.le-tray-assets {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.le-tray-assets button {
-  align-items: center;
-  display: grid;
-  gap: 2px;
-  justify-items: center;
-  min-width: 70px;
-  padding: 5px;
-}
-
-.le-tray-assets img {
-  height: 34px;
-  image-rendering: pixelated;
-  width: 34px;
-}
-
-.le-tray-controls {
-  align-items: center;
-  color: var(--le-ink);
-  display: flex;
-  gap: 8px;
-}
-
-.le-status {
-  align-items: center;
-  background: rgba(4, 14, 21, .94);
-  border: 1px solid rgba(101, 184, 255, .24);
-  color: var(--le-muted);
-  display: flex;
-  gap: 22px;
-  min-height: 30px;
-  overflow: hidden;
-  padding: 6px 12px;
-  white-space: nowrap;
-}
-
-.le-status-dot {
-  background: #76d65f;
-  border-radius: 50%;
-  box-shadow: 0 0 10px rgba(118, 214, 95, .64);
-  flex: 0 0 auto;
-  height: 12px;
-  width: 12px;
-}
-
-/* Desktop concept pass: keep the editor chrome restrained and technical.
-   The board and placeable asset art remain intentionally placeholder quality. */
-@media (min-width: 1181px) {
-  .level-editor-shell {
-    --le-cyan: #21d7ff;
-    --le-gold: #ffbf3e;
-    --le-panel-line: rgba(74, 111, 128, .64);
-    gap: 4px;
-    padding: 4px;
-  }
-
-  .le-topbar {
-    background:
-      linear-gradient(180deg, rgba(5, 14, 21, .98), rgba(2, 8, 13, .98));
-    border-color: var(--le-panel-line);
-    box-shadow: inset 0 -1px 0 rgba(33, 215, 255, .1);
-    gap: 4px;
-    grid-template-columns: 390px minmax(450px, 1fr) 130px 360px;
-    min-height: 70px;
-    padding: 4px;
-  }
-
-  .le-brand {
-    border-right: 1px solid rgba(74, 111, 128, .64);
-    gap: 12px;
-    padding-inline: 18px;
-  }
-
-  .le-brand img {
-    height: 45px;
-    width: 45px;
-  }
-
-  .le-brand small {
-    color: #f5f8f4;
-    font-size: .52rem;
-  }
-
-  .le-brand strong {
-    font-size: 1.2rem;
-    overflow: visible;
-    text-overflow: clip;
-  }
-
-  .le-tool-tabs {
-    background: none;
-    gap: 0;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    padding: 0;
-  }
-
-  .le-tool-tab {
-    background:
-      linear-gradient(180deg, rgba(8, 20, 29, .96), rgba(5, 13, 20, .96));
-    border: 1px solid rgba(74, 111, 128, .5);
-    color: #b8c8cf;
-    min-height: 62px;
-  }
-
-  .le-tool-tab.is-active {
-    background:
-      linear-gradient(180deg, rgba(8, 35, 48, .98), rgba(5, 22, 32, .98));
-    border-color: var(--le-cyan);
-    box-shadow: inset 0 0 0 1px rgba(33, 215, 255, .42);
-  }
-
-  .le-tool-tab:disabled {
-    opacity: .52;
-  }
-
-  .le-tool-tab img {
-    height: 26px;
-    width: 26px;
-  }
-
-  .le-history {
-    border-left: 1px solid rgba(74, 111, 128, .42);
-    justify-content: center;
-  }
-
-  .le-save-actions {
-    justify-content: end;
-  }
-
-  .le-icon-button,
-  .le-menu-link,
-  .le-action-button {
-    background:
-      linear-gradient(180deg, rgba(10, 24, 34, .96), rgba(5, 12, 18, .96));
-    border: 1px solid rgba(74, 111, 128, .58);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03);
-  }
-
-  .le-icon-button,
-  .le-menu-link {
-    height: 50px;
-    width: 50px;
-  }
-
-  .le-icon-button.is-active,
-  .le-icon-button:hover,
-  .le-icon-button:focus-visible,
-  .le-menu-link:hover,
-  .le-menu-link:focus-visible,
-  .le-action-button.is-primary,
-  .le-action-button:hover,
-  .le-action-button:focus-visible {
-    background:
-      linear-gradient(180deg, rgba(10, 60, 103, .98), rgba(6, 38, 70, .98));
-    border-color: var(--le-cyan);
-    box-shadow: inset 0 0 0 1px rgba(33, 215, 255, .34);
-  }
-
-  .le-action-button {
-    min-height: 50px;
-    min-width: 118px;
-  }
-
-  .le-workspace {
-    gap: 4px;
-    grid-template-columns: 256px minmax(0, 1fr) 350px;
-  }
-
-  .le-panel {
-    background:
-      linear-gradient(180deg, rgba(7, 20, 28, .96), rgba(4, 13, 19, .96));
-    border: 1px solid var(--le-panel-line);
-    border-image: none;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025);
-    gap: 10px;
-    padding: 14px;
-  }
-
-  .le-panel h2 {
-    border-bottom: 1px solid rgba(74, 111, 128, .35);
-    color: var(--le-gold);
-    padding-bottom: 8px;
-  }
-
-  .le-left-rail,
-  .le-right-rail {
-    gap: 4px;
-  }
-
-  .le-field {
-    grid-template-columns: 88px minmax(0, 1fr);
-  }
-
-  .le-field select {
-    background: rgba(3, 12, 18, .92);
-    border-color: rgba(118, 157, 176, .46);
-    min-height: 28px;
-  }
-
-  .le-layers-panel {
-    gap: 4px;
-  }
-
-  .le-layer-row {
-    background: rgba(5, 16, 24, .9);
-    border: 1px solid rgba(74, 111, 128, .32);
-    grid-template-columns: 28px minmax(0, 1fr) 54px;
-    min-height: 38px;
-    padding: 6px 10px;
-  }
-
-  .le-layer-row.is-selected,
-  .le-layer-row:hover,
-  .le-layer-row:focus-visible {
-    background: rgba(13, 71, 137, .72);
-    border-color: var(--le-cyan);
-  }
-
-  .le-layer-row img {
-    height: 18px;
-    width: 18px;
-  }
-
-  .le-minimap-panel,
-  .le-camera-panel,
-  .le-library-panel {
-    min-height: 0;
-  }
-
-  .le-minimap {
-    aspect-ratio: 1.3;
-    background:
-      linear-gradient(135deg, rgba(78, 127, 65, .9) 0 40%, rgba(42, 95, 137, .88) 40% 55%, rgba(105, 102, 80, .88) 55% 100%);
-    border: 1px solid rgba(118, 157, 176, .48);
-    display: grid;
-    place-items: center;
-    position: relative;
-  }
-
-  .le-minimap::before {
-    background-image:
-      linear-gradient(rgba(255, 255, 255, .2) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, .2) 1px, transparent 1px);
-    background-size: 16px 16px;
-    content: "";
-    inset: 12px;
-    position: absolute;
-  }
-
-  .le-minimap span {
-    border: 2px solid rgba(255, 255, 255, .82);
-    height: 58%;
-    width: 58%;
-    z-index: 1;
-  }
-
-  .le-camera-modes {
-    display: grid;
-    gap: 8px;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .le-camera-modes .le-icon-button {
-    width: 100%;
-  }
-
-  .le-camera-slider {
-    align-items: center;
-    display: grid;
-    gap: 10px;
-    grid-template-columns: 24px 1fr;
-  }
-
-  .le-camera-slider span {
-    background: url("/assets/ui/level-editor/icons/undo.png") center / contain no-repeat;
-    height: 22px;
-    image-rendering: pixelated;
-    width: 22px;
-  }
-
-  .le-camera-slider i {
-    background: linear-gradient(90deg, rgba(255, 255, 255, .28), #03090d 76%);
-    display: block;
-    height: 5px;
-    position: relative;
-  }
-
-  .le-camera-slider i::after {
-    background: #d9e9ee;
-    border-radius: 50%;
-    content: "";
-    height: 13px;
-    left: 48%;
-    position: absolute;
-    top: -4px;
-    width: 13px;
-  }
-
-  .le-library-panel {
-    display: none;
-  }
-
-  .le-palette-panel {
-    border-image: none;
-    min-height: 0;
-  }
-
-  .le-palette-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-
-  .le-palette-grid button {
-    min-height: 52px;
-    padding: 4px;
-  }
-
-  .le-palette-grid button span {
-    display: none;
-  }
-
-  .le-palette-grid i,
-  .le-tray-assets i {
-    height: 28px;
-    transform: rotateX(58deg) rotateZ(45deg);
-    width: 28px;
-  }
-
-  .le-brush-tools,
-  .le-zone-tools {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .le-brush-tools {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .le-brush-tools .le-icon-button,
-  .le-zone-tools .le-icon-button {
-    width: 100%;
-  }
-
-  .le-range {
-    align-items: center;
-    color: var(--le-ink);
-    display: grid;
-    gap: 8px;
-    grid-template-columns: 88px minmax(0, 1fr) 42px;
-  }
-
-  .le-range span,
-  .le-range b {
-    color: #c8dce4;
-    font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-    font-size: .48rem;
-    font-weight: 400;
-    text-transform: uppercase;
-  }
-
-  .le-range input {
-    accent-color: var(--le-cyan);
-    width: 100%;
-  }
-
-  .le-bottom-tray {
-    background:
-      linear-gradient(180deg, rgba(7, 20, 28, .98), rgba(4, 13, 19, .98));
-    border: 1px solid var(--le-panel-line);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025);
-    min-height: 92px;
-    padding: 12px 14px;
-  }
-
-  .le-tray-assets {
-    gap: 10px;
-  }
-
-  .le-tray-assets button {
-    background: transparent;
-    border: 0;
-    min-width: 58px;
-  }
-
-  .le-tray-assets img {
-    height: 38px;
-    width: 38px;
-  }
-
-  .le-status {
-    background: rgba(3, 12, 18, .96);
-    min-height: 28px;
-    padding-block: 5px;
-  }
-}
-
-@media (max-width: 1180px) {
-  .le-topbar {
-    grid-template-columns: minmax(180px, .8fr) minmax(280px, 1.2fr) auto;
-  }
-
-  .le-save-actions {
-    grid-column: 1 / -1;
-    justify-content: stretch;
-  }
-
-  .le-save-actions .le-action-button {
-    flex: 1;
-  }
-
-  .le-workspace {
-    grid-template-columns: minmax(188px, 220px) minmax(0, 1fr);
-  }
-
-  .le-right-rail {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    overflow: visible;
-  }
-
-  .le-bottom-tray {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .level-editor-shell {
-    height: auto;
-    min-height: 100%;
-    overflow: auto;
-  }
-
-  .le-topbar,
-  .le-workspace,
-  .le-right-rail {
-    grid-template-columns: 1fr;
-  }
-
-  .le-brand strong {
-    white-space: normal;
-  }
-
-  .le-tool-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .le-history,
-  .le-save-actions {
-    justify-content: start;
-    overflow: visible;
-  }
-
-  .le-save-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) 54px;
-  }
-
-  .le-save-actions .le-action-button {
-    min-width: 0;
-    padding-inline: 6px;
-    width: 100%;
-  }
-
-  .le-action-button img {
-    height: 22px;
-    width: 22px;
-  }
-
-  .le-left-rail,
-  .le-right-rail,
-  .le-board-frame {
-    overflow: visible;
-  }
-
-  .le-board-stage {
-    min-height: 360px;
-    overflow: auto;
-  }
-
-  .le-bottom-tray {
-    background-size: auto 100%;
-    padding-inline: 16px;
-  }
-
-  .le-status {
-    flex-wrap: wrap;
-    gap: 8px 14px;
-    white-space: normal;
-  }
-}
-
 .canvas-palette {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -5428,17 +4361,24 @@ h1 {
   z-index: 5;
 }
 
-.shell.skirmish-active {
+/* Immersive / full-bleed screens hide the static global .topbar (index.html) and let
+   .app-root own the whole viewport, so the screen shows only its OWN title bar instead
+   of stacking under the global one. Skirmish uses `.skirmish-active`; screen-agnostic
+   surfaces (the level editor) use `.is-immersive` — same behaviour, neutral name. */
+.shell.skirmish-active,
+.shell.is-immersive {
   gap: 0;
   grid-template-rows: minmax(0, 1fr);
   padding: 0;
 }
 
-.shell.skirmish-active .topbar {
+.shell.skirmish-active .topbar,
+.shell.is-immersive .topbar {
   display: none;
 }
 
-.shell.skirmish-active .app-root {
+.shell.skirmish-active .app-root,
+.shell.is-immersive .app-root {
   grid-row: 1;
   height: 100%;
   min-height: 0;
@@ -5446,7 +4386,9 @@ h1 {
 }
 
 .shell.skirmish-active + .bgm-control,
-.shell.skirmish-active ~ .bgm-control { display: none; }
+.shell.skirmish-active ~ .bgm-control,
+.shell.is-immersive + .bgm-control,
+.shell.is-immersive ~ .bgm-control { display: none; }
 
 .skirmish-screen::before {
   background:
@@ -6173,6 +5115,178 @@ h1 {
   gap: 4px;
   min-width: 56px;
 }
+
+/* ============================================================
+   LEVEL EDITOR — Skirmish-sibling rail helpers.
+   The /edit shell reuses the real .skirmish-screen / .skirmish-war-room /
+   .skirmish-field / .skirmish-board-frame / .skirmish-hud / .skirmish-card
+   chrome (so it IS the same game). These .le-* classes only add the
+   editor-specific controls; nothing here restyles the Skirmish page itself.
+   ============================================================ */
+/* Full-bleed title row across the top (ADR-0004), board + rail below it. The editor is
+   NOT the battle HUD, so it takes the standard full-width title bar rather than Skirmish's
+   board-column placement. Columns, CSS vars, and the night-sky ::before still come from
+   .skirmish-screen; we only re-grid into a title row + a board|rail row. */
+.level-editor-screen {
+  grid-template-areas:
+    "titlebar titlebar"
+    "board    rail";
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.level-editor-screen .le-topbar { grid-area: titlebar; }
+.level-editor-screen .skirmish-field { grid-area: board; }
+.level-editor-screen .skirmish-hud { grid-area: rail; scrollbar-gutter: stable; }
+
+.level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
+.level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
+
+/* Title bar = the app's editor pattern (ADR-0023; mirrors the campaign editor's
+   .ce-topbar): three sections — brand · save-state · labeled header buttons
+   (.app-header-button on the kit gold frame). Scoped under .level-editor-screen so it
+   overrides the LEGACY bare .le-topbar still in this file (the old /edit chrome) and
+   neutralizes its leaked background/shadow. */
+.level-editor-screen .le-topbar {
+  align-content: center;
+  align-items: center;
+  background: none;
+  box-shadow: none;
+  display: grid;
+  gap: clamp(10px, 1.4vw, 20px);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0 clamp(10px, 1.2vw, 18px);
+}
+.level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
+.level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
+.level-editor-screen .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+.level-editor-screen .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
+
+/* rail zoom icon button (NOT a title-bar button — stays a small chrome control) */
+.le-iconbtn {
+  background: url("/assets/ui/level-editor/icon-button-normal.png") center/100% 100% no-repeat;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  height: 44px;
+  place-items: center;
+  width: 44px;
+}
+.le-iconbtn:disabled { cursor: default; opacity: .4; }
+
+/* segmented switch (layer / tool / fill) */
+.le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
+.le-seg-btn {
+  background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94));
+  border: 1px solid rgba(82, 142, 170, .34);
+  border-radius: 5px;
+  color: #cfe6f1;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 5px;
+  grid-auto-flow: column;
+  line-height: 1;
+  min-height: 40px;
+  padding: 5px 4px;
+  place-items: center;
+  text-transform: uppercase;
+}
+.le-seg-btn:disabled { cursor: default; opacity: .4; }
+.le-seg-btn.active {
+  background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
+  border-color: var(--skirmish-cyan);
+  box-shadow: 0 0 0 1px rgba(56, 215, 255, .3);
+  color: #eafaff;
+}
+
+/* active brush picker */
+.le-brush-pick { align-items: center; display: grid; gap: 10px; grid-template-columns: 60px minmax(0, 1fr); margin-top: 10px; }
+.le-brush-thumb {
+  background: radial-gradient(circle at 50% 40%, rgba(63, 148, 190, .18), transparent 64%), rgba(3, 12, 19, .74);
+  border: 1px solid rgba(87, 153, 184, .4);
+  border-radius: 5px;
+  display: grid;
+  height: 60px;
+  overflow: hidden;
+  place-items: center;
+  width: 60px;
+}
+.le-brush-thumb img { height: 90%; image-rendering: pixelated; object-fit: contain; width: 90%; }
+.le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
+.le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
+
+/* palette (folded into the rail — variant B) */
+/* Tile-palette and unit-controls swap in/out of the same rail slot; pin both to one
+   fixed height so flipping layers can't wobble the panel (Tile was 350px, Unit 354px). */
+.le-brush-panel { display: flex; flex-direction: column; height: 360px; overflow: hidden; }
+.le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
+.le-palette-scroll { height: 300px; padding-right: 4px; }
+
+/* kit-scroll — the shared scroll primitive. An always-visible bare rail whose thumb is skinned
+   with the chosen grip (PixelLab oak — the Scrollbars catalog's preferred), via ::-webkit-scrollbar
+   (Chrome-only). A non-auto scrollbar-color/width — even INHERITED from a parent rail like
+   .skirmish-hud — makes Chrome drop the whole webkit skin, so we reset both to `auto` here to
+   neutralize the inheritance; Firefox falls back via @supports. Put it on a rounded container that
+   clips (overflow:hidden) so the bar can't square off the corner. */
+.kit-scroll { overflow-y: scroll; overflow-x: hidden; scrollbar-gutter: stable; scrollbar-color: auto; scrollbar-width: auto; }
+.kit-scroll::-webkit-scrollbar { width: 16px; }
+/* The bare rail must always READ as a scrollbar even with no thumb — never vanish. A clearly
+   recessed groove: a faint lit edge + an inner shadow, distinct from the panel behind it. */
+.kit-scroll::-webkit-scrollbar-track { background: #050f1a; border-radius: 2px; margin: 2px; box-shadow: inset 0 0 0 1px rgba(120, 160, 205, 0.22), inset 1px 1px 3px rgba(0, 0, 0, 0.55); }
+.kit-scroll::-webkit-scrollbar-thumb { background: url("/assets/ui/scrollbars/oak-pixellab.png") center / 100% 100% no-repeat; image-rendering: pixelated; }
+@supports not selector(::-webkit-scrollbar) { .kit-scroll { scrollbar-width: thin; scrollbar-color: #6e4a2f #06121f; } }
+.le-pal-group { margin: 0 0 4px; }
+.le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
+.le-pal-grouplabel:first-child { margin-top: 0; }
+.le-swatches { display: grid; gap: 6px; grid-template-columns: repeat(4, 1fr); }
+.le-swatch {
+  background: radial-gradient(circle at 50% 36%, rgba(63, 148, 190, .13), transparent 66%), rgba(4, 13, 20, .7);
+  border: 1px solid rgba(82, 142, 170, .3);
+  border-radius: 5px;
+  color: var(--skirmish-muted);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  padding: 5px 2px;
+}
+.le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
+.le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
+.le-swatch.active { border-color: var(--skirmish-cyan); box-shadow: 0 0 0 1px rgba(56, 215, 255, .35); color: #eafaff; }
+
+/* details inspector */
+.le-details dl { display: grid; gap: 6px; margin: 0; }
+.le-details div { align-items: center; display: grid; gap: 8px; grid-template-columns: 72px minmax(0, 1fr); }
+.le-details dt { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
+.le-details dd { color: #f3ead8; font-size: var(--ds-text-sm); margin: 0; word-break: break-word; }
+
+/* view / zoom / footprint toggle */
+.le-zoom { align-items: center; display: grid; gap: 8px; grid-template-columns: auto 1fr auto; margin-top: 8px; }
+.le-zoom .le-iconbtn { background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94)); border: 1px solid rgba(82, 142, 170, .34); border-radius: 5px; height: 36px; width: 36px; }
+.le-zoom-read { background: rgba(8, 23, 35, .6); border: 1px solid rgba(64, 115, 147, .45); border-radius: 4px; color: #f3ead8; font-size: var(--ds-text-sm); padding: 7px 0; text-align: center; }
+.le-toggle { align-items: center; background: none; border: 0; color: #d6ecf5; cursor: pointer; display: flex; font: inherit; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 0; text-transform: uppercase; }
+.le-toggle .pip { background: rgba(8, 23, 35, .8); border: 1px solid rgba(82, 142, 170, .5); border-radius: 9px; flex: none; height: 18px; position: relative; width: 34px; }
+.le-toggle.on .pip { background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95)); border-color: var(--skirmish-cyan); }
+.le-toggle .pip::after { background: #bfe6f4; border-radius: 50%; content: ""; height: 12px; left: 2px; position: absolute; top: 2px; transition: .1s; width: 12px; }
+.le-toggle.on .pip::after { background: #eafaff; left: 18px; }
+
+/* status line */
+.le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
+.le-statusline b { color: #9fe0ff; }
+
+/* editor rail icons */
+.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 24px; image-rendering: pixelated; width: 24px; }
+.ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
+.ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
+.ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
+.ic-grid { background-image: url("/assets/ui/level-editor/icons/grid.png"); }
+.ic-zone { background-image: url("/assets/ui/level-editor/icons/zone.png"); }
+.ic-undo { background-image: url("/assets/ui/level-editor/icons/undo.png"); }
+.ic-redo { background-image: url("/assets/ui/level-editor/icons/redo.png"); }
+.ic-save { background-image: url("/assets/ui/level-editor/icons/save.png"); }
+.ic-play { background-image: url("/assets/ui/level-editor/icons/play.png"); }
+.ic-up { background-image: url("/assets/ui/level-editor/icons/height-up.png"); }
+.ic-down { background-image: url("/assets/ui/level-editor/icons/height-down.png"); }
 
 .skirmish-count-pip strong {
   font-size: .72rem;
@@ -6938,15 +6052,6 @@ h1 {
   }
   .level-palette {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .level-editor-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .level-editor-hud.collapsed {
-    grid-template-columns: 1fr;
-  }
-  .level-editor-hud.collapsed .level-editor-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .game-menu { padding: 16px; }
 
@@ -8848,12 +7953,9 @@ h1 {
    so the rail and pane hold their position — only their contents swap. */
 .tileset-studio-shell.is-catalog,
 .tileset-studio-shell.is-lab,
-.tileset-studio-shell.is-viewer {
+.tileset-studio-shell.is-viewer,
+.tileset-studio-shell.is-dressing {
   grid-template-columns: minmax(0, 1fr) 260px;
-}
-
-.tileset-studio-shell.is-view {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Lab uses the SAME 2-column frame as Catalog — same main, same 260px Controls
@@ -9982,6 +9084,151 @@ h1 {
   box-shadow: 0 0 0 2px rgba(42, 166, 255, 0.18);
 }
 
+/* Catalog category selector — a compact dropdown (the category list outgrew a segmented row). */
+.tileset-category-select {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tileset-category-select select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  color: #f3fbff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 700 13px/1 var(--ds-font-sans, system-ui, sans-serif);
+  outline: none;
+  cursor: pointer;
+}
+
+.tileset-category-select select:focus {
+  border-color: rgba(111, 210, 255, 0.82);
+  box-shadow: 0 0 0 2px rgba(42, 166, 255, 0.18);
+}
+
+/* Surface catalog swatch — the texture tiled, the way it fills a panel behind chrome. */
+.surface-swatch {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background-repeat: repeat;
+  background-position: center;
+  image-rendering: pixelated;
+}
+
+/* Surface viewer — one surface in isolation, centered, framed or bare, manually resizable. */
+.surface-view-main {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.surface-view-stage {
+  width: 640px;
+  height: 420px;
+  max-width: 100%;
+  resize: both;
+  overflow: hidden;
+  background-repeat: repeat;
+  background-position: center;
+  image-rendering: pixelated;
+  border-radius: 6px;
+}
+
+.surface-view-stage.is-panel {
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round;
+  background-origin: border-box;
+  background-clip: border-box;
+}
+
+/* Dressing room — the live /settings iframe fills the main pane full-bleed; the per-region
+   controls live in the standard tileset-view-controls aside. */
+.surface-dressing-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: rgba(5, 16, 25, 0.92);
+  border: 1px solid rgba(67, 127, 179, 0.28);
+  border-radius: 6px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+
+.surface-dressing-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 5px;
+  background: #05080c;
+}
+
+.surface-region-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(10, 28, 43, 0.55);
+  border: 1px solid rgba(67, 127, 179, 0.24);
+  border-radius: 6px;
+}
+
+.surface-region-card.is-empty {
+  opacity: 0.74;
+}
+
+.surface-region-card > strong {
+  color: #cfe4f8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.surface-region-reset {
+  justify-self: start;
+  padding: 5px 9px;
+  color: #9ec7ea;
+  background: rgba(12, 31, 48, 0.6);
+  border: 1px solid rgba(91, 157, 216, 0.32);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.surface-region-reset:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.surface-box-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #b9d2ea;
+  cursor: pointer;
+  font: 600 12px/1.2 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.surface-box-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #5b9dd8;
+  cursor: pointer;
+}
+
 .tileset-catalog-zoom {
   display: flex;
   gap: 7px;
@@ -10662,6 +9909,14 @@ button.tileset-relationship-cell {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 12px;
+}
+
+/* Surfaces are few (one short row), so the default grid stretch blows each card up
+   to fill the tall catalog pane. Pack the row to the top and size cards to content. */
+.tileset-studio-grid.surface-grid {
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
 }
 
 .tileset-studio-card {

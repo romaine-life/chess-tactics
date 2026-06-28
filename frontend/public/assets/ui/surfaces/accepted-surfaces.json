@@ -1,0 +1,91 @@
+{
+  "tile_px": 1024,
+  "background_repeat": "repeat",
+  "image_rendering": "pixelated",
+  "surfaces": [
+    {
+      "name": "hybrid-stone-blue",
+      "approach": "hybrid",
+      "material": "stone-blue",
+      "file": "assets/ui/surfaces/hybrid-stone-blue.png",
+      "native": [
+        768,
+        768
+      ],
+      "seam_lr_tb": [
+        9.7,
+        10.9
+      ]
+    },
+    {
+      "name": "hybrid-wood-oak",
+      "approach": "hybrid",
+      "material": "wood-oak",
+      "file": "assets/ui/surfaces/hybrid-wood-oak.png",
+      "native": [
+        768,
+        768
+      ],
+      "seam_lr_tb": [
+        8.4,
+        8.5
+      ]
+    },
+    {
+      "name": "pixel-model-stone-blue",
+      "approach": "pixel-model",
+      "material": "stone-blue",
+      "file": "assets/ui/surfaces/pixel-model-stone-blue.png",
+      "native": [
+        768,
+        768
+      ],
+      "seam_lr_tb": [
+        9.9,
+        8.3
+      ]
+    },
+    {
+      "name": "baseline-stone-blue",
+      "approach": "baseline",
+      "material": "stone-blue",
+      "file": "assets/ui/surfaces/baseline-stone-blue.png",
+      "native": [
+        960,
+        640
+      ],
+      "seam_lr_tb": [
+        8.1,
+        11.4
+      ]
+    },
+    {
+      "name": "baseline-wood-oak",
+      "approach": "baseline",
+      "material": "wood-oak",
+      "file": "assets/ui/surfaces/baseline-wood-oak.png",
+      "native": [
+        960,
+        640
+      ],
+      "seam_lr_tb": [
+        6.3,
+        7.4
+      ]
+    },
+    {
+      "name": "pixellab-stone-blue",
+      "approach": "pixellab",
+      "material": "stone-blue",
+      "file": "assets/ui/surfaces/pixellab-stone-blue.png",
+      "native": [
+        512,
+        320
+      ],
+      "seam_lr_tb": [
+        17.6,
+        4.0
+      ]
+    }
+  ]
+}
