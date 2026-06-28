@@ -59,6 +59,7 @@ import {
   hasDirectionSprite,
   directionCompassCells,
   rookDirectionLabel,
+  rookDirections,
   unitAssets,
   UNIT_METHOD_OPTIONS,
   type Direction,
@@ -1491,6 +1492,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       return { ...prev, [targetKey]: { ...prev[targetKey], direction: dir } };
     });
   };
+  // Center compass hub: spin one step clockwise (rookDirections is N→NE→E…→NW), skipping
+  // any direction this unit doesn't have a sprite for.
+  const rotateFacingCw = (): void => {
+    const n = rookDirections.length;
+    const start = rookDirections.indexOf(unitBrushDirection);
+    for (let step = 1; step <= n; step += 1) {
+      const next = rookDirections[(start + step) % n];
+      if (hasDirectionSprite(unitBrushAsset, next)) {
+        setUnitFacing(next);
+        return;
+      }
+    }
+  };
   const selectDoodadInCatalog = (doodadId: string): void => {
     setDoodadBrushId(doodadId);
   };
@@ -2043,9 +2057,16 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         <div className="unit-facing-compass" aria-label="Unit facing (8-way)">
                           {directionCompassCells.map((cell) =>
                             cell === 'center' ? (
-                              <span key="center" className="unit-facing-center" aria-hidden="true">
-                                {rookDirectionLabel[unitBrushDirection]}
-                              </span>
+                              <button
+                                key="center"
+                                type="button"
+                                className="unit-facing-cell unit-facing-rotate"
+                                onClick={rotateFacingCw}
+                                title="Rotate clockwise"
+                                aria-label="Rotate unit clockwise"
+                              >
+                                ↻
+                              </button>
                             ) : (
                               <button
                                 key={cell}

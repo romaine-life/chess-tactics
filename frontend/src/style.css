@@ -10529,9 +10529,9 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
-.unit-facing-center {
-  font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
-  color: #6f86a0;
+.unit-facing-rotate {
+  font-size: 19px;
+  color: #9ec7ff;
 }
 
 .unit-scene-empty {
