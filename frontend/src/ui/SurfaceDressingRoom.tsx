@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { SURFACE_ASSETS } from './surfaceCatalog';
+import panelCfg from '../../config/nine-slice/panel.json';
+import modeButtonCfg from '../../config/nine-slice/mode-button.json';
+
+// Each frame's FILL boundary (px inset from the footprint) — set by eye in the 9-slice editor,
+// stored in config/nine-slice/<asset>.json. The surface clips to it so it stops where the frame's
+// visual interior begins, while the frame's corners bleed outside it. (See ADR-0029 / the editor's
+// Fill box.) 0 = no inset (surface fills to the footprint, the old behaviour).
+type FrameId = 'panel' | 'mode-button';
+const FRAME_FILL: Record<FrameId, number> = {
+  panel: (panelCfg as { fill?: number }).fill ?? 0,
+  'mode-button': (modeButtonCfg as { fill?: number }).fill ?? 0,
+};
 
 // The "settings dressing room": a kept Studio tool that iframes the REAL /settings page and
 // fills its chrome with accepted surfaces, so you can decide what goes where before we bake it
@@ -25,17 +37,19 @@ interface RegionDef {
   // transparent and the surface shows through while the frame art is preserved. Boxes use the
   // ornamental panel-line frame (matching the title bar); buttons/rows keep their own art.
   frame: string;
+  frameWidth: number; // the border-image rendered width (px) = the element's native border-width
+  configId: FrameId; // which frame config supplies this region's FILL boundary
   isBox: boolean;
 }
 
 // Selectors verified against the live Settings DOM (Settings.tsx). The main box is
 // `.settings-main-frame` (a bare `.settings-frame` would also hit the rail — shared class).
 const REGIONS: RegionDef[] = [
-  { id: 'title', label: 'Title bar', selector: '[data-testid="settings"] .app-titlebar.settings-header-frame', hint: 'The top header strip.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', isBox: false },
-  { id: 'tabsBox', label: 'Tabs box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', isBox: true },
-  { id: 'buttons', label: 'Buttons · tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round', isBox: false },
-  { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', isBox: true },
-  { id: 'rows', label: 'Rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round', isBox: false },
+  { id: 'title', label: 'Title bar', selector: '[data-testid="settings"] .app-titlebar.settings-header-frame', hint: 'The top header strip.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: false },
+  { id: 'tabsBox', label: 'Tabs box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true },
+  { id: 'buttons', label: 'Buttons · tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round', frameWidth: 12, configId: 'mode-button', isBox: false },
+  { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true },
+  { id: 'rows', label: 'Rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round', frameWidth: 14, configId: 'panel', isBox: false },
 ];
 
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];
@@ -90,7 +104,9 @@ function loadConfig(seed?: string): DressingConfig {
 }
 
 // Build the override stylesheet injected into the /settings iframe (and copied for baking-in).
-function buildCss(config: DressingConfig): string {
+// `geom` carries each region's ORIGINAL padding (read live once) so the FILL clip can compensate
+// it and keep content from shifting; absent it (not measured yet) we fall back to no-clip.
+function buildCss(config: DressingConfig, geom: Map<RegionId, number[]>): string {
   const { tilePx, offsetX, offsetY } = config;
   const parts: string[] = [];
   for (const region of REGIONS) {
@@ -115,13 +131,33 @@ function buildCss(config: DressingConfig): string {
     } else {
       const asset = name ? SURFACE_ASSETS.find((s) => s.name === name) : undefined;
       if (asset) {
-        parts.push(`${sel} {
+        const surfaceBg = `url("${asset.file}") ${offsetX}px ${offsetY}px / ${tilePx}px repeat fixed`;
+        const fill = FRAME_FILL[region.configId] ?? 0;
+        const pad = geom.get(region.id);
+        if (fill > 0 && pad) {
+          // FILL clip: shrink border-width to the fill inset so background-clip:padding-box lands on
+          // the fill box, but keep the frame at its full thickness via border-image-width, and add
+          // (frameWidth − fill) to the original padding so content stays put. The surface then stops
+          // at the fill boundary while the frame's corners bleed past it.
+          const compensated = pad.map((p) => `${Math.max(0, Math.round(p + region.frameWidth - fill))}px`).join(' ');
+          parts.push(`${sel} {
   border-image: ${region.frame} !important;
-  background: url("${asset.file}") ${offsetX}px ${offsetY}px / ${tilePx}px repeat fixed !important;
+  border-width: ${fill}px !important;
+  padding: ${compensated} !important;
+  background: ${surfaceBg} !important;
+  background-origin: padding-box !important;
+  background-clip: padding-box !important;
+  image-rendering: pixelated !important;
+}`);
+        } else {
+          parts.push(`${sel} {
+  border-image: ${region.frame} !important;
+  background: ${surfaceBg} !important;
   background-origin: border-box !important;
   background-clip: border-box !important;
   image-rendering: pixelated !important;
 }`);
+        }
       }
     }
     if (region.isBox) {
@@ -149,6 +185,9 @@ export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
   // stable (no re-subscribe per keystroke) while always painting current values.
   const configRef = useRef(config);
   configRef.current = config;
+  // Each region's ORIGINAL padding [t,r,b,l], measured ONCE per element class (before the FILL
+  // clip overrides it) so the clip can compensate padding without the value drifting on re-inject.
+  const geomRef = useRef<Map<RegionId, number[]>>(new Map());
 
   const inject = useCallback(() => {
     const iframe = iframeRef.current;
@@ -156,13 +195,25 @@ export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
     try {
       const doc = iframe.contentDocument;
       if (!doc || !doc.head) return; // transient during navigation
+      const win = doc.defaultView;
+      if (win) {
+        // Measure uncached regions. Our non-clip rules never touch padding, so what we read here
+        // is the element's true original padding even if a prior inject already styled it.
+        for (const region of REGIONS) {
+          if (geomRef.current.has(region.id)) continue;
+          const el = doc.querySelector(region.selector);
+          if (!el) continue;
+          const cs = win.getComputedStyle(el);
+          geomRef.current.set(region.id, [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map((v) => parseFloat(v) || 0));
+        }
+      }
       let style = doc.getElementById('surface-dressing') as HTMLStyleElement | null;
       if (!style) {
         style = doc.createElement('style');
         style.id = 'surface-dressing';
         doc.head.appendChild(style);
       }
-      style.textContent = buildCss(configRef.current);
+      style.textContent = buildCss(configRef.current, geomRef.current);
     } catch {
       /* same-origin access can blip during reload — re-inject on the next tick/load */
     }
@@ -220,7 +271,7 @@ export function SurfaceDressingRoom({ seed }: { seed?: string }): ReactElement {
     setConfig((prev) => ({ ...prev, ...patch }));
 
   const copyCss = async (): Promise<void> => {
-    const css = buildCss(config) || '/* Nothing assigned yet — pick a surface for a region. */';
+    const css = buildCss(config, geomRef.current) || '/* Nothing assigned yet — pick a surface for a region. */';
     try {
       await navigator.clipboard.writeText(css);
       setCopied(true);
