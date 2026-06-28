@@ -1,8 +1,7 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
+import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -122,9 +121,10 @@ export function Skirmish() {
 
   return (
     <div data-testid="skirmish" className="skirmish-screen" style={screenStyle}>
-      <header className="app-titlebar settings-header-frame skirmish-topbar" aria-label="Skirmish status">
-        <BrandLockup screenName="Skirmish" />
-
+      {/* Title bar lives in the app shell now; the in-game live status portals into its
+          center section (turn/objective read from the game store, in scope here). The
+          brand + account cluster are rendered by the shell bar itself. */}
+      <TitleBarSlot region="center">
         <div className="skirmish-topbar-status">
           <div className="skirmish-status-chip skirmish-turn-plate">
             <strong>{turnLabel}</strong>
@@ -138,9 +138,7 @@ export function Skirmish() {
             </span>
           </div>
         </div>
-
-        <HeaderAccountCluster />
-      </header>
+      </TitleBarSlot>
 
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <div className="skirmish-field">

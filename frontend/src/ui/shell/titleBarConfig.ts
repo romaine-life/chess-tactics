@@ -27,14 +27,12 @@ const KEEPS_OWN_HEADER = new Set<string>([
   '/artwork-compare', '/tile-compare', '/surface-lab',
 ]);
 
-// Not yet migrated to the shell bar — still render their own header (staged rollout).
-const NOT_YET_MIGRATED = new Set<string>([
-  '/play', '/skirmish',
-]);
-
 export function titleBarConfig(path: string): TitleBarConfig | null {
-  if (KEEPS_OWN_HEADER.has(path) || NOT_YET_MIGRATED.has(path)) return null;
+  if (KEEPS_OWN_HEADER.has(path)) return null;
 
+  if (path === '/play' || path === '/skirmish') {
+    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true, showAccountCluster: true };
+  }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return { screenName: 'Lobbies', showAccountCluster: true, signInReturnTo: '/lobbies' };
   }

@@ -4271,8 +4271,9 @@ h1 {
 
 /* Higher specificity than .settings-header-frame so the in-game three-section centred
    layout wins over the menu's 2-trailing grid: brand (left) · live status (centre) ·
-   account cluster (right). */
-.skirmish-screen .skirmish-topbar {
+   account cluster (right). Scoped to the bar element (it lives in the app shell now,
+   outside .skirmish-screen) — two classes still out-rank the single .settings-header-frame. */
+.app-shell-titlebar.skirmish-topbar {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
