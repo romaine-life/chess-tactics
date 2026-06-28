@@ -4284,14 +4284,6 @@ h1 {
   min-width: 0;
 }
 
-.skirmish-topbar-right {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-self: end;
-  min-width: 0;
-}
-
 /* One shared status-chip frame so turn / objective / counts read as a single
    family, all the same height and vertically centered (ADR-0010 rhythm). */
 .skirmish-status-chip {
@@ -4340,54 +4332,9 @@ h1 {
   min-width: 0;
 }
 
-/* Header icon buttons on the kit gold mode-button frame — the same equal-height
-   bracket-frame family the settings header uses (ADR-0010 / kit ADR-0002). */
-/* Icon + visible label button on the kit gold mode-button frame — same equal-height
-   bracket-frame family as the settings header. Research is unanimous that header
-   controls must be labeled, not bare glyphs (NN/g icon usability; gear is not a
-   universal icon), so the glyph is decorative and the label carries the meaning. */
-.skirmish-header-button {
-  align-items: center;
-  block-size: 46px;
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
-  box-sizing: border-box;
-  color: var(--skirmish-ink);
-  display: inline-flex;
-  gap: 8px;
-  image-rendering: pixelated;
-  padding: 0 12px;
-  text-decoration: none;
-}
-
-.skirmish-header-button:hover {
-  color: #f4fbff;
-}
-
-.skirmish-header-button:focus-visible {
-  color: #f4fbff;
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-
-.skirmish-header-button .skirmish-icon {
-  height: 20px;
-  width: 20px;
-}
-
-.skirmish-header-button-label {
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
 .skirmish-brand,
 .skirmish-objective,
-.skirmish-count-pip,
-.skirmish-window-actions {
+.skirmish-count-pip {
   align-items: center;
   display: flex;
 }
@@ -4442,11 +4389,6 @@ h1 {
   justify-items: center;
   min-width: 0;
   text-align: center;
-}
-
-.skirmish-window-actions {
-  gap: 8px;
-  justify-content: end;
 }
 
 .skirmish-field {
@@ -5450,7 +5392,6 @@ h1 {
    the contact-sheet slices (ADR-0011/0032). menu + rook have no forged twin yet. */
 .skirmish-icon-flag { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
 .skirmish-icon-hourglass { background-image: url("/assets/ui/kit/icons/game/wait.png"); }
-.skirmish-icon-gear { background-image: url("/assets/ui/kit/icons/gear.png"); }
 .skirmish-icon-menu { background-image: url("/assets/ui/skirmish/icon-menu.png"); }
 .skirmish-icon-move { background-image: url("/assets/ui/kit/icons/game/move.png"); }
 .skirmish-icon-power { background-image: url("/assets/ui/kit/icons/game/power.png"); }
@@ -5583,11 +5524,6 @@ h1 {
   .skirmish-objective .skirmish-icon {
     height: 34px;
     width: 34px;
-  }
-
-  .skirmish-header-button {
-    block-size: 40px;
-    min-inline-size: 40px;
   }
 
   .skirmish-hud {
@@ -5922,6 +5858,14 @@ h1 {
 .ce-save-state.is-dirty {
   color: var(--ce-gold-bright);
   text-shadow: 0 0 8px rgba(240, 189, 85, .28);
+}
+
+/* Admin "Edit Officials" mode marker — the editor is a dev/admin surface, so a
+   plain high-contrast tag is fine (out of scope for player chrome polish). */
+.ce-official-badge {
+  color: var(--ce-gold-bright);
+  font-weight: 700;
+  letter-spacing: .08em;
 }
 
 .ce-topbar-actions {
@@ -7377,66 +7321,6 @@ h1 {
   font-family: var(--ds-font-sans, system-ui, sans-serif);
 }
 
-.tileset-studio-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  min-height: 0;
-  margin: 0;
-  width: 100%;
-}
-
-.tileset-studio-brand {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  min-width: 0;
-}
-
-.tileset-studio-product {
-  display: grid;
-  gap: 3px;
-  flex: none;
-  min-width: 250px;
-  padding: 8px 12px;
-  background: rgba(10, 28, 43, 0.72);
-  border: 1px solid rgba(67, 127, 179, 0.28);
-  border-radius: 6px;
-}
-
-.tileset-studio-product strong {
-  color: #f3f7fb;
-  font-family: var(--ds-font-display, var(--ds-font-sans, system-ui, sans-serif));
-  font-size: 20px;
-  line-height: 1;
-}
-
-.tileset-studio-product span {
-  color: #72bde8;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.tileset-studio-titleblock {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-/* Slim topbar: a quiet wordmark + a breadcrumb that carries location. No big
-   titleblock, so the topbar height is constant and nothing below it shifts. */
-.tileset-studio-wordmark {
-  flex: none;
-  color: #f3f7fb;
-  font-family: var(--ds-font-display, var(--ds-font-sans, system-ui, sans-serif));
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
 .tileset-crumb {
   display: flex;
   align-items: center;
@@ -7475,56 +7359,8 @@ h1 {
   text-overflow: ellipsis;
 }
 
-.tileset-studio-kicker {
-  margin: 0;
-  color: #72bde8;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.tileset-studio-header h1 {
-  margin: 0;
-  color: #f3f7fb;
-  font-family: var(--ds-font-display, var(--ds-font-sans, system-ui, sans-serif));
-  font-size: 26px;
-  line-height: 1;
-}
-
-.tileset-studio-subtitle {
-  margin: 0;
-  max-width: 820px;
-  color: #9eb1c5;
-  font-size: 13px;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tileset-studio-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-end;
-  white-space: nowrap;
-}
-
-/* Match the standalone Settings link's box height to the segmented tab groups
-   (which are taller because of their container padding), so the row aligns. */
-.tileset-studio-actions > a {
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 82px;
-}
-
-.tileset-studio-actions a,
 .tileset-mode-tabs button,
-.tileset-view-action,
-.tileset-studio-controls button {
+.tileset-view-action {
   min-height: 36px;
   padding: 9px 12px;
   color: #d8eaff;
@@ -7555,8 +7391,7 @@ h1 {
   border-color: transparent;
 }
 
-.tileset-mode-tabs button.is-active,
-.tileset-studio-controls button.is-active {
+.tileset-mode-tabs button.is-active {
   color: #f3fbff;
   background: rgba(25, 94, 132, 0.95);
   border-color: rgba(111, 210, 255, 0.76);
@@ -9008,12 +8843,6 @@ h1 {
   font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
-.tileset-studio-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 .tileset-catalog-controls {
   align-self: stretch;
 }
@@ -9261,20 +9090,6 @@ button.tileset-relationship-cell {
   align-content: stretch;
   gap: 8px;
   padding: 10px;
-}
-
-.tileset-studio-controls label {
-  display: grid;
-  gap: 4px;
-  min-width: 150px;
-  color: #9eb1c5;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.tileset-studio-controls input {
-  accent-color: #5bc8ff;
 }
 
 .tileset-inspector-tabs {
@@ -11319,9 +11134,11 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
 }
 
-/* Shared brand lockup — [shield] SCREEN NAME · chess tactics — the ONE top-left
-   mark used on every screen except the main-menu hero. Same mark/structure/spot
-   everywhere; only the screen name changes. Component: src/ui/shared/BrandLockup. */
+/* Shared brand lockup — [shield] CHESS TACTICS / screen name — the ONE top-left
+   mark on every screen. The game wordmark is the persistent header (the dominant
+   line); the screen name sits beneath it as the small subordinate line. Same
+   mark/structure/spot everywhere; only the screen name changes. DOM order is
+   brand-then-name, so no reordering is needed. Component: src/ui/shared/BrandLockup. */
 .brand-lockup {
   align-items: center;
   color: #eef8ff;
@@ -11346,49 +11163,26 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 
-.brand-lockup-copy strong {
-  color: #f0eadb;
-  font-size: var(--ds-text-lg);
-  font-weight: 600;
-  line-height: 1.04;
-  text-shadow: 0 2px 0 #02070b;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
+/* The game wordmark — the dominant, persistent header line. */
 .brand-lockup-copy em {
-  color: #79d3ff;
-  font-size: var(--ds-text-sm);
-  font-style: normal;
-  letter-spacing: .14em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-/* Home/entry route only (variant="brand-hero"): the entry screen IS the title
-   screen, so lead with the brand — the game title becomes the dominant line and
-   the screen name drops to the small subordinate slot. Same slots/structure as the
-   shared lockup; only the size/weight/colour ratio of the two lines is flipped
-   (and `order` restacks them so the brand sits on top). */
-.brand-lockup--brand-hero .brand-lockup-copy em {
   color: #f0eadb;
   font-size: var(--ds-text-lg);
+  font-style: normal;
   font-weight: 600;
-  letter-spacing: 0;
   line-height: 1.04;
-  order: 0;
   text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
-.brand-lockup--brand-hero .brand-lockup-copy strong {
+/* The screen name — the small subordinate line beneath the brand. */
+.brand-lockup-copy strong {
   color: #79d3ff;
   font-size: var(--ds-text-sm);
   font-weight: 400;
   letter-spacing: .14em;
   line-height: 1.2;
-  order: 1;
-  text-shadow: none;
+  text-transform: uppercase;
 }
 
 .settings-tab span,
@@ -11411,50 +11205,6 @@ button.tileset-relationship-cell {
   color: #9fc4d5;
   font-style: normal;
   line-height: 1.25;
-}
-
-.settings-header-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.settings-account {
-  align-items: center;
-  align-self: center;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  justify-content: flex-end;
-  min-width: 0;
-  padding: 0 4px 0 12px;
-}
-
-.settings-account span {
-  display: grid;
-  min-width: 0;
-  text-align: right;
-}
-
-.settings-account strong {
-  color: #f6fbff;
-  font-size: var(--ds-text-sm);
-  line-height: 1.05;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 2px 0 #02070b;
-  white-space: nowrap;
-}
-
-.settings-account em {
-  color: #79d3ff;
-  font-size: var(--ds-text-2xs);
-  font-style: normal;
-  line-height: 1.2;
-  text-transform: uppercase;
 }
 
 /* --- Trailing-edge "settings + user" cluster ----------------------------------
@@ -11609,6 +11359,18 @@ button.tileset-relationship-cell {
   gap: clamp(9px, .8vw, 13px);
   padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
 }
+
+/* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label
+   (text is exempt from the kit-surface rule, ADR-0032). */
+.campaign-rail-group {
+  margin: 4px 6px 0;
+  font-size: var(--ds-text-2xs, .72rem);
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
+}
+.campaign-rail-group:first-child { margin-top: 0; }
 
 /* Clean sidebar nav — icon + label rows; the SELECTED item is highlighted with a
    subtle fill + accent bar, the rest stay plain. No per-item frame (the rail panel
@@ -11972,35 +11734,6 @@ button.tileset-relationship-cell {
   min-inline-size: 72px;
 }
 
-/* Header buttons wear the SYMMETRIC panel.png frame (square source → equal corners
-   on all four sides), matching the design's gold corner-bracket language. The tall
-   tab art was the wrong source for a short button (it rendered lopsided). */
-.settings-header-button {
-  block-size: 40px; /* desktop default, matches the chrome buttons (not a touch floor) */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
-  flex: none;
-  image-rendering: pixelated;
-  inline-size: auto;
-  min-inline-size: 92px;
-  padding: 0 14px;
-}
-
-/* Sign In / Sign Out is the primary account action — the cyan-bracket mode-button
-   frame (same family as the nav active) marks it primary while Back/Menu stay
-   gold. Matches the concept's bracket buttons. */
-.settings-header-button-active {
-  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
-  border-width: 12px;
-}
-
-/* Header buttons (Back / Menu / Sign In) are ACTION buttons — they share the one
-   action-button label token with the panel pills below, even though they wear a
-   different frame (bracket vs flat fill). Skin doesn't drive label size (ADR-0021). */
-.settings-header-button span {
-  font-size: var(--settings-action-label);
-}
-
 .settings-stepper {
   align-items: center;
   display: grid;
@@ -12180,18 +11913,6 @@ button.tileset-relationship-cell {
   .settings-header-frame {
     align-items: start;
     flex-direction: column;
-  }
-
-  .settings-account {
-    margin-left: 0;
-  }
-
-  .settings-account span {
-    text-align: left;
-  }
-
-  .settings-header-actions {
-    justify-content: start;
   }
 
   .settings-shell {
