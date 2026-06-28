@@ -11675,6 +11675,163 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* --- Trailing-edge "settings + user" cluster ----------------------------------
+   The signed-in chrome at the top-right: an icon-only Settings gear + the avatar
+   account button, framed identically so the pair reads as one matched unit
+   (Material-3 "few trailing items"; the avatar opens the account menu below). */
+.header-account-cluster {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Square icon-only button — the app's kit mode-button frame, made equal-sided. A
+   slightly thinner border than the labelled header button so the 32px opening
+   carries a glyph/avatar without the frame dominating. */
+.cluster-icon-button {
+  align-items: center;
+  block-size: 52px;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  image-rendering: pixelated;
+  inline-size: 52px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.cluster-icon-button:hover,
+.cluster-icon-button:focus-visible {
+  filter: brightness(1.14);
+  outline: none;
+}
+
+.cluster-icon-button > img {
+  block-size: 26px;
+  image-rendering: pixelated;
+  inline-size: 26px;
+  object-fit: contain;
+}
+
+/* The Gravatar fills the avatar button's opening, clipped square by the frame. */
+.account-avatar-button .account-avatar-img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+.account-avatar-fallback {
+  align-items: center;
+  background: #07111a;
+  color: var(--cobalt-bright);
+  display: grid;
+  font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;
+  place-items: center;
+}
+
+.account-menu-root {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+
+/* Account menu — small kit panel-framed popover anchored under the avatar. */
+.account-menu {
+  border: 18px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 18px round;
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
+  image-rendering: pixelated;
+  inset-block-start: calc(100% + 12px);
+  inset-inline-end: 0;
+  min-inline-size: 248px;
+  padding: 6px;
+  position: absolute;
+  z-index: 60;
+}
+
+.account-menu-head {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 46px minmax(0, 1fr);
+  padding: 6px 8px 12px;
+}
+
+.account-menu-avatar {
+  block-size: 46px;
+  image-rendering: pixelated;
+  inline-size: 46px;
+  object-fit: cover;
+}
+
+.account-menu-id {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.account-menu-id strong {
+  color: #f6fbff;
+  font-size: var(--ds-text-sm);
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 0 #02070b;
+  white-space: nowrap;
+}
+
+.account-menu-id em {
+  color: #9fc4d5;
+  font-size: var(--ds-text-2xs);
+  font-style: normal;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sign-out action — its own kit mode-button frame, so it reads as a real button
+   and stands apart from the identity header without a raw divider. */
+.account-menu-item {
+  align-items: center;
+  block-size: 46px;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  box-sizing: border-box;
+  color: #eef6ff;
+  cursor: pointer;
+  display: flex;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  gap: 10px;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  letter-spacing: .04em;
+  padding: 0 14px;
+  text-transform: uppercase;
+}
+
+.account-menu-item:hover,
+.account-menu-item:focus-visible {
+  filter: brightness(1.14);
+  outline: none;
+}
+
+.account-menu-glyph {
+  block-size: 18px;
+  flex: none;
+  inline-size: 18px;
+}
+
 .settings-shell {
   display: grid;
   grid-template-columns: minmax(244px, 304px) minmax(0, 1fr);
