@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode, type WheelEvent } from 'react';
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
 import { tileFamilies } from '../art/tileset';
-import { speculativeTileAssets, speculativeTileFamilyOf, SPECULATIVE_TILE_METHODS } from '../art/speculativeTiles';
+import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import { buildTileCoverageReport } from '../core/tileCoverage';
 import { generateSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { createRng } from '../core/rng';
@@ -198,7 +198,22 @@ const studioFamilies: StudioFamily[] = (Object.keys(tileFamilies) as TileFamilyI
 // random fill, and family base resolution all read studioFamilies/studioFamilyAssets, which
 // stay production-only. Remove the whole set by deleting frontend/src/art/speculativeTiles.ts
 // and this import (see that file's header).
-const speculativeStudioAssets: StudioAsset[] = speculativeTileAssets.map((asset): StudioAsset => ({ ...asset }));
+const nonProductionStudioAssets: StudioAsset[] = nonProductionTileAssets.map((asset): StudioAsset => ({ ...asset }));
+
+// Tile "Method" facet — production picks first, then the non-production methods.
+const TILE_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
+  { id: 'codexfilter', label: 'Codex → Filter', sub: 'Production' },
+  { id: 'pixellab', label: 'PixelLab', sub: 'Production' },
+  { id: 'textured', label: 'Textured', sub: 'Non-production' },
+  { id: 'filter3', label: 'Filter ×3', sub: 'Non-production' },
+  { id: 'filter2', label: 'Filter ×2', sub: 'Non-production' },
+  { id: 'codex', label: 'Codex', sub: 'Non-production' },
+];
+// Method key from the asset source: `pixel:codexfilter` / `bakeoff:filter3` / `textured`.
+const tileMethodKeyOf = (source: string): string => {
+  const sep = source.indexOf(':');
+  return sep >= 0 ? source.slice(sep + 1) : source;
+};
 
 interface CandidateBatch {
   id: string;
@@ -390,13 +405,13 @@ const defaultTransitionViewModeForRoute = (route: TilesetStudioRouteState): Tran
 const socketsForAsset = (asset: StudioAsset): Record<EdgeName, StudioFamilyId> => {
   // Speculative tiles aren't in studioFamilyAssets, so resolve their family explicitly
   // (a hard-edge base tile sockets to its own family on all four edges).
-  const speculativeFamily = speculativeTileFamilyOf.get(asset.id);
+  const speculativeFamily = nonProductionTileFamilyOf.get(asset.id);
   if (speculativeFamily) return baseSocketsForFamily(speculativeFamily);
   return tileSocketsForAsset(asset, studioFamilyAssets);
 };
 
 const familyForStudioAsset = (asset: StudioAsset): StudioFamilyId => {
-  return studioFamilies.find((item) => item.assets.some((candidate) => candidate.id === asset.id))?.id ?? speculativeTileFamilyOf.get(asset.id) ?? asset.terrains?.[0] ?? 'grass';
+  return studioFamilies.find((item) => item.assets.some((candidate) => candidate.id === asset.id))?.id ?? nonProductionTileFamilyOf.get(asset.id) ?? asset.terrains?.[0] ?? 'grass';
 };
 
 const boardFromCells = (cells: SocketBoardCell<StudioAsset>[]): SocketBoardResult<StudioAsset> => ({
@@ -765,7 +780,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   // Tile "Method" facet: 'production' plus each speculative bake-off method. All on by default.
-  const allTileMethodIds = useMemo(() => ['production', ...SPECULATIVE_TILE_METHODS.map((m) => m.key)], []);
+  const allTileMethodIds = useMemo(() => TILE_METHOD_OPTIONS.map((m) => m.id), []);
   const [selectedTileMethods, setSelectedTileMethods] = useState<string[]>(allTileMethodIds);
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<CollectionFilter[]>(
     initialRoute.tileFilter === 'board' ? ['base'] : [initialRoute.tileFilter],
@@ -845,7 +860,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedSlotMask, setSelectedSlotMask] = useState<number | undefined>(initialRoute.selectedSlotMask);
   const familyTransitionPairs = transitionPairsForFamily(family.id);
   const selectedPair = familyTransitionPairs.find((pair) => pair.id === selectedPairId) ?? familyTransitionPairs[0] ?? transitionPairs[0];
-  const allStudioAssets = useMemo(() => [...studioFamilies.flatMap((item) => item.assets), ...transitionAssets, ...speculativeStudioAssets], []);
+  const allStudioAssets = useMemo(() => [...studioFamilies.flatMap((item) => item.assets), ...transitionAssets, ...nonProductionStudioAssets], []);
   const selectedAsset = allStudioAssets.find((asset) => asset.id === selectedAssetId) ?? family.assets[0];
   const resolveStudioAsset = (id: string): StudioAsset | undefined => allStudioAssets.find((asset) => asset.id === id);
   const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
@@ -1186,7 +1201,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       setSelectedAssetId((currentAssetId) =>
         // Keep a speculative selection (it's browsable across families and lives outside
         // family.assets) — only snap back to this family's first tile for a stale/production id.
-        visibleAssets.some((asset) => asset.id === currentAssetId) || speculativeStudioAssets.some((asset) => asset.id === currentAssetId)
+        visibleAssets.some((asset) => asset.id === currentAssetId) || nonProductionStudioAssets.some((asset) => asset.id === currentAssetId)
           ? currentAssetId
           : visibleAssets[0].id,
       );
@@ -1504,28 +1519,27 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // render either of these; a new asset type is just another descriptor.
   const tileFamilyOf = new Map<string, StudioFamilyId>();
   for (const fam of studioFamilies) for (const a of fam.assets) tileFamilyOf.set(a.id, fam.id);
-  for (const [id, fam] of speculativeTileFamilyOf) tileFamilyOf.set(id, fam);
-  // 'production' for shipped tiles; the speculative method key (from `bakeoff:<key>`) otherwise.
-  const tileMethodOf = (a: StudioAsset): string => (a.source.startsWith('bakeoff:') ? a.source.slice('bakeoff:'.length) : 'production');
+  for (const [id, fam] of nonProductionTileFamilyOf) tileFamilyOf.set(id, fam);
+  const tileMethodOf = (a: StudioAsset): string => tileMethodKeyOf(a.source);
   const toggleTileMethod = (id: string) =>
     setSelectedTileMethods((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   const tilesCatalogType: CatalogType<StudioAsset> = {
     id: 'tiles',
     label: 'Tiles',
-    assets: [...studioFamilies.flatMap((fam) => fam.assets), ...speculativeStudioAssets],
+    assets: [...studioFamilies.flatMap((fam) => fam.assets), ...nonProductionStudioAssets],
     card: (a) => ({ img: assetFrameSrc(a, animationFrame), title: a.label, badge: a.method ?? a.role }),
     sections: (visible) => {
       const tiles = visible.filter((a) => a.kind === 'tile');
-      const sections = [{ id: 'base', label: 'Base Tiles', assets: tiles.filter((a) => !a.speculative) }];
-      const speculative = tiles.filter((a) => a.speculative);
-      if (speculative.length) sections.push({ id: 'speculative', label: 'Speculative — pixel-art bake-off (not shipped)', assets: speculative });
+      const sections = [{ id: 'production', label: 'Production', assets: tiles.filter((a) => !a.speculative) }];
+      const nonProduction = tiles.filter((a) => a.speculative);
+      if (nonProduction.length) sections.push({ id: 'non-production', label: 'Non-production (legacy textured + other bake-off methods)', assets: nonProduction });
       return sections;
     },
     query: {
       value: catalogQuery,
       set: setCatalogQuery,
       placeholder: 'label, method, source...',
-      match: (a, q) => [a.label, a.role, a.source, a.notes, a.method ?? '', a.speculative ? 'speculative tentative bake-off' : '', ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
+      match: (a, q) => [a.label, a.role, a.source, a.notes, a.method ?? '', a.speculative ? 'non-production' : 'production', ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
     filters: [
@@ -1542,10 +1556,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       {
         id: 'method',
         label: 'Method',
-        options: [
-          { id: 'production', label: 'Production', sub: 'Shipped tiles' },
-          ...SPECULATIVE_TILE_METHODS.map((m) => ({ id: m.key, label: m.label, sub: 'Speculative' })),
-        ],
+        options: TILE_METHOD_OPTIONS,
         memberOf: (a) => [tileMethodOf(a)],
         selected: selectedTileMethods,
         toggle: toggleTileMethod,
