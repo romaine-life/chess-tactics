@@ -6343,7 +6343,6 @@ h1 {
 
 .ce-icon-button {
   align-items: center;
-  aspect-ratio: 1;
   background: transparent;
   border: 10px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 10px round;
@@ -6351,19 +6350,14 @@ h1 {
   color: var(--ce-ink);
   image-rendering: pixelated;
   display: grid;
+  flex: none;
   font-family: var(--ds-font-display);
-  font-size: var(--ds-text-sm);
-  justify-content: center;
+  font-size: var(--ds-text-xs);
+  height: 38px;
+  place-items: center;
   min-height: 0;
   padding: 0;
   text-decoration: none;
-  width: 46px;
-}
-
-.ce-icon-button {
-  flex: none;
-  font-size: var(--ds-text-xs);
-  height: 38px;
   width: 38px;
 }
 
@@ -6375,6 +6369,13 @@ h1 {
   object-fit: contain;
   pointer-events: none;
   width: auto;
+}
+
+/* In the 38px row buttons the content box is only ~18px (frame border), so cap
+   the glyph to fit fully inside the frame and center cleanly. */
+.ce-icon-button .ce-icon-img {
+  max-height: 16px;
+  max-width: 16px;
 }
 
 .ce-icon-button.is-selected,
@@ -6464,7 +6465,7 @@ h1 {
   align-items: center;
   background: transparent;
   border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/button-primary.png") 18 fill / 12px stretch;
+  border-image: url("/assets/ui/kit/button-primary.png") 24 fill / 12px round;
   box-sizing: border-box;
   color: var(--ce-ink);
   display: inline-grid;
@@ -6491,7 +6492,7 @@ h1 {
 }
 
 .ce-asset-button.is-danger {
-  border-image-source: url("/assets/ui/kit/panel.png");
+  border-image-source: url("/assets/ui/kit/button-danger.png");
   color: #ffe1d8;
 }
 
@@ -6566,7 +6567,7 @@ h1 {
   cursor: pointer;
   display: grid;
   gap: 9px;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 72px;
   padding: 0 2px 0 0;
   position: relative;
@@ -6608,29 +6609,6 @@ h1 {
   filter: brightness(1.1);
   outline: none;
 }
-
-.ce-shield {
-  aspect-ratio: 88 / 116;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  display: block;
-  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .45));
-  height: 56px;
-  image-rendering: pixelated;
-  width: auto;
-}
-
-.ce-shield.is-active {
-  filter: drop-shadow(0 0 9px rgba(48, 214, 255, .42)) drop-shadow(0 3px 0 rgba(0, 0, 0, .45));
-}
-
-.ce-shield-lion { background-image: url("/assets/ui/kit/icons/shields/lion.png"); }
-.ce-shield-rook { background-image: url("/assets/ui/kit/icons/shields/rook.png"); }
-.ce-shield-crescent { background-image: url("/assets/ui/kit/icons/shields/crescent.png"); }
-.ce-shield-snow { background-image: url("/assets/ui/kit/icons/shields/snow.png"); }
-.ce-shield-flame { background-image: url("/assets/ui/kit/icons/shields/flame.png"); }
-.ce-shield-crown { background-image: url("/assets/ui/kit/icons/shields/crown.png"); }
 
 .ce-row-copy {
   display: grid;
@@ -6704,8 +6682,14 @@ h1 {
   white-space: nowrap;
 }
 
-.ce-stars span:not(.is-filled) {
-  color: rgba(208, 219, 222, .4);
+.ce-star {
+  height: 14px;
+  image-rendering: pixelated;
+  width: 14px;
+}
+
+.ce-stars .ce-star:not(.is-filled) {
+  opacity: .32;
 }
 
 .ce-level-thumb {
@@ -6734,13 +6718,8 @@ h1 {
   align-items: center;
   display: grid;
   gap: 10px 14px;
-  grid-template-columns: 74px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   padding: 12px 12px 12px;
-}
-
-.ce-campaign-summary .ce-shield {
-  height: 78px;
-  width: auto;
 }
 
 .ce-name-field {
@@ -6774,31 +6753,40 @@ h1 {
   filter: brightness(1.2) drop-shadow(0 0 7px rgba(48, 214, 255, .2));
 }
 
-.ce-campaign-summary dl {
+/* Stats as kit rows (settings-row pattern): each label/value pair sits in the
+   atom-assembled row.png frame instead of the old raw border-left dividers. */
+.ce-stat-rows {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 0;
 }
 
-.ce-campaign-summary div {
-  border-left: 1px solid var(--ce-panel-edge);
-  padding-left: 12px;
+.ce-stat-row {
+  align-items: center;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
+  box-sizing: border-box;
+  display: flex;
+  gap: 16px;
+  image-rendering: pixelated;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 2px 16px;
 }
 
-.ce-campaign-summary dt {
+.ce-stat-row dt {
   color: var(--ce-label);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-2xs);
-  line-height: 1.4;
   text-transform: uppercase;
 }
 
-.ce-campaign-summary dd {
+.ce-stat-row dd {
   color: var(--ce-ink);
   font-size: var(--ds-text-sm);
-  margin: 4px 0 0;
+  margin: 0;
+  text-align: right;
 }
 
 .ce-levels-head {
@@ -6809,18 +6797,6 @@ h1 {
   min-height: 34px;
   min-width: 132px;
   padding: 0 8px;
-}
-
-.ce-mid-actions {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 52px 52px minmax(0, 1fr);
-  padding: 8px 4px 0;
-}
-
-.ce-mid-actions .ce-icon-button {
-  height: 48px;
-  width: 48px;
 }
 
 .ce-selected-head h2 {
@@ -6879,7 +6855,7 @@ h1 {
 .ce-level-view-toggle button {
   background: transparent;
   border: 9px solid transparent;
-  border-image: url("/assets/ui/kit/button-neutral.png") 18 fill / 9px stretch;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 9px round;
   color: var(--ce-slate);
   cursor: pointer;
   font-family: var(--ds-font-pixel);
@@ -7127,33 +7103,16 @@ h1 {
   border-image: url("/assets/ui/kit/panel.png") 18 fill / 14px stretch;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(170px, 1fr) minmax(150px, .82fr) minmax(140px, .72fr) minmax(170px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   image-rendering: pixelated;
   min-height: 58px;
   padding: 4px 10px;
 }
 
-.ce-footer-link {
-  border-image-source: url("/assets/ui/kit/panel.png");
-}
-
-/* Footer: Save = primary; Duplicate + Export = neutral; Delete = danger. */
-.ce-footer .ce-asset-button:nth-child(1) {
-  border-image-source: url("/assets/ui/kit/panel.png");
-}
-
+/* Footer = campaign actions: Duplicate + Export neutral, Delete Campaign danger (base .is-danger). */
 .ce-import-campaign,
-.ce-footer-secondary,
-.ce-footer .ce-asset-button:nth-child(2) {
+.ce-footer .ce-asset-button:not(.is-danger) {
   border-image-source: url("/assets/ui/kit/button-neutral.png");
-}
-
-.ce-footer .ce-asset-button.is-danger {
-  border-image-source: url("/assets/ui/kit/panel.png");
-}
-
-.ce-mid-actions .ce-asset-button.is-danger {
-  border-image-source: url("/assets/ui/kit/panel.png");
 }
 
 @media (max-width: 1180px) {
@@ -7196,8 +7155,7 @@ h1 {
   .ce-layout,
   .ce-footer,
   .ce-preview-actions,
-  .ce-campaign-summary,
-  .ce-campaign-summary dl {
+  .ce-campaign-summary {
     grid-template-columns: 1fr;
   }
 
@@ -9997,6 +9955,14 @@ button.tileset-relationship-cell {
   grid-auto-rows: max-content;
 }
 
+/* Surfaces are few (one short row), so the default grid stretch blows each card up
+   to fill the tall catalog pane. Pack the row to the top and size cards to content. */
+.tileset-studio-grid.surface-grid {
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
+}
+
 .tileset-studio-card {
   position: relative;
   display: grid;
@@ -11657,6 +11623,7 @@ button.tileset-relationship-cell {
 .settings-tab span,
 .settings-row-copy {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -11806,13 +11773,12 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab strong {
-  /* Nav rail is subordinate chrome: its tab label sits at the content row-title
-     tier (md), never above it. Nav/tab labels are body-sized across M3/Carbon/
-     Polaris/Apple; lg would tie the "SETTINGS" brand title and overshoot the md
-     rows the tab navigates to (inversion). Active tab is marked by the frame fill
-     swap + color, not size. Governed separately from action buttons (ADR-0022).
-     Supersedes the undocumented 1.25rem from PR #148; its letter-spacing is kept. */
-  font-size: var(--ds-text-md);
+  /* Tab label sits at the content row-title tier and FOLLOWS it (ADR-0022, amended
+     2026-06-27): both moved md -> lg when the row text was enlarged. lg now ties
+     the "SETTINGS" brand title in SIZE; the brand keeps its lead by weight +
+     position (settings-only bump — the shared brand stays lg to avoid resizing
+     every screen). Active tab is marked by the frame fill swap + color, not size. */
+  font-size: var(--ds-text-lg);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -11907,9 +11873,12 @@ button.tileset-relationship-cell {
   border: 14px solid transparent;
   border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
   image-rendering: pixelated;
-  display: grid;
+  /* Flex, not grid: a row carries an OPTIONAL value and/or control, so a fixed
+     column count strands an empty track + gap when one is absent — the lopsiding
+     ADR-0028 fixes. copy fills; value/control hug the end; side inset stays the
+     symmetric 16px (--ds-space-4) padding both sides. */
+  display: flex;
   gap: 16px;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
   min-height: 60px;
   padding: 6px 16px;
 }
@@ -11925,27 +11894,20 @@ button.tileset-relationship-cell {
   min-height: 80px;
 }
 
-.settings-row-icon {
-  display: block;
-  height: 36px;
-  image-rendering: pixelated;
-  object-fit: contain;
-  width: 36px;
-}
-
 .settings-row h4 {
-  font-size: var(--ds-text-md);
+  font-size: var(--ds-text-lg);
   text-transform: uppercase;
 }
 
 .settings-row p {
-  font-size: var(--ds-text-xs);
+  font-size: var(--ds-text-md);
   margin-top: 3px;
 }
 
 .settings-row-value {
+  flex: none;
   color: #eaf7ff;
-  font-size: var(--ds-text-sm);
+  font-size: var(--ds-text-md);
   min-width: 74px;
   text-align: right;
   text-transform: uppercase;
@@ -11953,6 +11915,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-row-control {
+  flex: none;
   align-items: center;
   display: flex;
   gap: clamp(10px, 1vw, 16px);
@@ -11963,9 +11926,8 @@ button.tileset-relationship-cell {
 .settings-chrome-button {
   align-items: center;
   appearance: none;
-  border: 9px solid transparent;
-  border-width: 9px 16px;
-  border-image: url("/assets/ui/kit/button-neutral.png") 9 16 fill / 9px 16px stretch;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
   box-sizing: border-box;
   color: #eff9ff;
   display: inline-flex;
@@ -11984,11 +11946,11 @@ button.tileset-relationship-cell {
 }
 
 .settings-chrome-button-primary {
-  border-image-source: url("/assets/ui/kit/panel.png");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 .settings-chrome-button-danger {
-  border-image-source: url("/assets/ui/kit/panel.png");
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 .settings-chrome-button span {
@@ -12058,14 +12020,41 @@ button.tileset-relationship-cell {
 }
 
 .settings-stepper .settings-chrome-button {
-  background: rgba(12, 31, 48, 0.92);
-  border: 1px solid rgba(91, 157, 216, 0.5);
-  border-image: none;
-  border-radius: 6px;
+  /* Use the forged button frame (inherited from .settings-chrome-button), shrunk
+     to a 32px square stepper key — NOT a raw CSS border/fill (ADR-0011/0014). */
   block-size: 32px;
   inline-size: 32px;
   min-width: 32px;
+  border-width: 8px;
+  border-image-width: 8px;
   padding: 0;
+}
+
+/* +/- drawn as bold geometric marks: simple utilitarian chrome -> DOM/CSS
+   (ui-art-direction render-accuracy rule). Crisp, icon-weight, inherits the button
+   color. The pixel font is weight-400 only, so a CSS mark reads far stronger than a
+   thin text "-"/"+". minus = the horizontal bar; plus = bar + vertical cross. */
+.stepper-glyph {
+  display: inline-block;
+  position: relative;
+  block-size: 14px;
+  inline-size: 14px;
+}
+.stepper-glyph::before {
+  background: currentColor;
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: calc(50% - 1.5px);
+  block-size: 3px;
+}
+.stepper-plus::after {
+  background: currentColor;
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(50% - 1.5px);
+  inline-size: 3px;
 }
 
 .settings-stepper output {
@@ -12078,8 +12067,11 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
-/* Volume slider — thin track that fills blue up to a square thumb (via --val),
-   plus the live percentage. Matches the concept's mixing rows. */
+/* Volume slider — ADR-0025 natural palette, NOT a forced UI-blue: a dark STONE
+   channel that fills warm BRONZE up to a beveled bronze handle (the kit gold/bronze
+   ramp — the same warm material as the brackets and the bell). Flat CSS for now;
+   the real stone/wood MATERIAL texture comes from the forged chrome (another branch)
+   that re-skins this. No cyan, no glow, no rounded radius. */
 .settings-slider {
   align-items: center;
   display: flex;
@@ -12096,36 +12088,32 @@ button.tileset-relationship-cell {
 }
 
 .settings-slider input[type="range"]::-webkit-slider-runnable-track {
-  background: linear-gradient(90deg, #2f8fe6 var(--val, 0%), #0a1a26 var(--val, 0%));
-  border: 1px solid rgba(67, 127, 179, .5);
-  border-radius: 2px;
-  height: 8px;
+  background: linear-gradient(90deg, #c79b55 var(--val, 0%), #26231e var(--val, 0%));
+  border: 1px solid #5a5248;
+  height: 10px;
 }
 .settings-slider input[type="range"]::-moz-range-track {
-  background: linear-gradient(90deg, #2f8fe6 var(--val, 0%), #0a1a26 var(--val, 0%));
-  border: 1px solid rgba(67, 127, 179, .5);
-  border-radius: 2px;
-  height: 8px;
+  background: linear-gradient(90deg, #c79b55 var(--val, 0%), #26231e var(--val, 0%));
+  border: 1px solid #5a5248;
+  height: 10px;
 }
 
 .settings-slider input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  background: #3aa0ff;
-  border: 1px solid #cfe9ff;
-  border-radius: 2px;
+  background: #b88a45;
+  border: 3px solid;
+  border-color: #f0dba8 #5b4124 #5b4124 #f0dba8;
   block-size: 20px;
-  box-shadow: 0 0 8px rgba(58, 160, 255, .6);
-  inline-size: 16px;
+  inline-size: 14px;
   margin-top: -7px;
 }
 .settings-slider input[type="range"]::-moz-range-thumb {
-  background: #3aa0ff;
-  border: 1px solid #cfe9ff;
-  border-radius: 2px;
+  background: #b88a45;
+  border: 3px solid;
+  border-color: #f0dba8 #5b4124 #5b4124 #f0dba8;
   block-size: 20px;
-  box-shadow: 0 0 8px rgba(58, 160, 255, .6);
-  inline-size: 16px;
+  inline-size: 14px;
 }
 
 .settings-slider input[type="range"]:focus-visible {
@@ -12141,51 +12129,44 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
-/* Clean pill switch — a rounded track that fills blue when on, with a sliding
-   white knob. The row title labels the control; the On/Off word is kept for
-   screen readers only. Replaces the heavy bracketed pixel-art track + knob. */
+/* Interim text toggle — the forged stone/wood track lands later (another branch).
+   Two live words; the current state is "lit" (warm wood-light on, cool stone-light
+   off) and the other dims. No raw-CSS chrome to throw away. */
 .settings-toggle {
   align-items: center;
   appearance: none;
-  background: rgba(70, 104, 132, 0.55);
-  border: 1px solid rgba(67, 127, 179, 0.45);
-  border-radius: 999px;
+  background: transparent;
+  /* The forged button frame (shared button-neutral 9-slice) — when the stone/wood
+     chrome re-skins that frame, this toggle inherits it for free. */
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
   box-sizing: border-box;
   cursor: pointer;
-  display: flex;
-  inline-size: 52px;
-  block-size: 28px;
-  justify-content: flex-start;
-  padding: 3px;
-  transition: background .16s ease, border-color .16s ease;
+  display: inline-flex;
+  gap: 12px;
+  image-rendering: pixelated;
+  block-size: 40px;
+  padding: 0 10px;
 }
 
-.settings-toggle.is-on {
-  background: #2f8fe6;
-  border-color: #7cd1ff;
+.settings-toggle-opt {
+  color: #46586a;
+  font-size: var(--ds-text-sm);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  transition: color .18s ease, text-shadow .18s ease;
 }
 
-.settings-toggle-label {
-  block-size: 1px;
-  clip: rect(0 0 0 0);
-  inline-size: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
+/* OFF active — cool stone-light */
+.settings-toggle.is-off .settings-toggle-opt[data-state="off"] {
+  color: #bcd2e2;
+  text-shadow: 0 0 9px rgba(150, 190, 220, 0.55);
 }
 
-.settings-toggle-knob {
-  background: #f3fbff;
-  border-radius: 999px;
-  block-size: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-  flex: none;
-  inline-size: 20px;
-  transition: transform .16s ease;
-}
-
-.settings-toggle.is-on .settings-toggle-knob {
-  transform: translateX(24px);
+/* ON active — warm wood-light */
+.settings-toggle.is-on .settings-toggle-opt[data-state="on"] {
+  color: #f0c48a;
+  text-shadow: 0 0 9px rgba(224, 170, 90, 0.6);
 }
 
 .settings-tab:focus-visible,
@@ -12253,16 +12234,13 @@ button.tileset-relationship-cell {
   }
 
   .settings-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-row-icon {
-    display: none;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .settings-row-value,
   .settings-row-control {
-    grid-column: auto;
+    text-align: left;
   }
 
   .settings-stepper {
@@ -12473,7 +12451,9 @@ button.tileset-relationship-cell {
 /* Per-asset property chips (gate + provenance) stacked at the card's trailing edge. */
 .asset-card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 .asset-prov,
+.asset-orphan,
 .asset-gate { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; text-transform: uppercase; }
+.asset-orphan { background: rgba(214, 138, 90, .16); border: 1px solid rgba(214, 138, 90, .5); color: #f0a06a; }
 .asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
 .asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
 .asset-prov.is-original { background: rgba(158, 177, 197, .12); border: 1px solid rgba(158, 177, 197, .34); color: #9eb1c5; }

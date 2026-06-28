@@ -87,7 +87,7 @@ function despill(src, dst) {
 // and quantize to a limited palette. Downscaling smooth art to its real on-screen
 // size IS the pixelation; the quantize collapses it toward the concept's few-hundred
 // colors. This is what makes the atom chunky/low-fi instead of a smooth render.
-function lofi(src, dst, footprint, colors) {
+export function lofi(src, dst, footprint, colors) {
   const py = "from PIL import Image\nimport sys\ninp,outp,fp,cols=sys.argv[1],sys.argv[2],int(sys.argv[3]),int(sys.argv[4])\nim=Image.open(inp).convert('RGBA')\nw,h=im.size\ns=fp/max(w,h)\nim2=im.resize((max(1,round(w*s)),max(1,round(h*s))),Image.LANCZOS)\na=im2.split()[3]\nrgb=im2.convert('RGB').quantize(colors=cols,method=Image.MEDIANCUT).convert('RGBA')\nrgb.putalpha(a)\nrgb.save(outp)";
   return spawnSync(PY, ['-c', py, src, dst, String(footprint), String(colors)], { encoding: 'utf8' });
 }
@@ -112,7 +112,7 @@ function transparencyOk(file) {
 // assembler's full-canvas fill bleeds navy into. So we trim the atom to its opaque
 // bounding box, guaranteeing the frame is flush to the edge — the same property the
 // accepted gold atoms already have. Throws if the atom is empty.
-function trimToEdge(file) {
+export function trimToEdge(file) {
   const png = PNG.sync.read(readFileSync(file));
   const { width: w, height: h, data } = png;
   const a = (x, y) => data[(y * w + x) * 4 + 3];
@@ -128,7 +128,36 @@ function trimToEdge(file) {
   return { margins, w: cw, h: ch };
 }
 
-export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 48, colors = 64 }) {
+// GLYPH-CANVAS contract (ADR-0026): a kit icon glyph must ship on ONE uniform
+// canvas (64×64), centered, never as a bare opaque bbox. trimToEdge above finds the
+// glyph's true extent; this then centers that trimmed glyph in a transparent cw×ch
+// canvas. Never upscales (s capped at 1) — a glyph already at/under the safe area
+// keeps its pixels 1:1; an over-large glyph is scaled DOWN (nearest-neighbor, to
+// preserve the low-fi look) to fit the margin. The result is dimension-asserted by
+// the caller, so the canvas is enforced, not requested.
+export function padToCanvas(file, cw, ch, margin = 2) {
+  const png = PNG.sync.read(readFileSync(file));
+  const { width: w, height: h } = png;
+  const innerW = cw - margin * 2, innerH = ch - margin * 2;
+  const s = Math.min(1, innerW / w, innerH / h);
+  let src = png, sw = w, sh = h;
+  if (s < 1) {
+    sw = Math.max(1, Math.round(w * s)); sh = Math.max(1, Math.round(h * s));
+    src = new PNG({ width: sw, height: sh });
+    for (let y = 0; y < sh; y += 1) for (let x = 0; x < sw; x += 1) {
+      const sx = Math.min(w - 1, Math.floor(x / s)), sy = Math.min(h - 1, Math.floor(y / s));
+      const a = (sy * w + sx) * 4, b = (y * sw + x) * 4;
+      src.data[b] = png.data[a]; src.data[b + 1] = png.data[a + 1]; src.data[b + 2] = png.data[a + 2]; src.data[b + 3] = png.data[a + 3];
+    }
+  }
+  const out = new PNG({ width: cw, height: ch }); // Buffer.alloc zero-fills -> fully transparent canvas
+  const ox = Math.floor((cw - sw) / 2), oy = Math.floor((ch - sh) / 2);
+  PNG.bitblt(src, out, 0, 0, sw, sh, ox, oy);
+  writeFileSync(file, PNG.sync.write(out));
+  return { cw, ch, placed: { w: sw, h: sh, ox, oy } };
+}
+
+export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 48, colors = 64, canvas = null, margin = 2 }) {
   if (!existsSync(ref)) throw new Error(`forge-atom: ref not found: ${ref}`);
   banner(key);
   const started = Date.now();
@@ -144,15 +173,30 @@ export async function forgeAtom({ ref, out, desc, key = '#00ff00', footprint = 4
   copyFileSync(produced, raw);
   const cr = despill(produced, smooth);
   if (cr.status !== 0) throw new Error(`forge-atom: despill failed: ${cr.stderr || cr.error}`);
+  // GLYPH mode (ADR-0026): trim the HIGH-RES cutout to the glyph BEFORE low-fi, so
+  // `footprint` sizes the GLYPH itself. Codex pads a frame around the subject; sizing
+  // that padded frame to footprint leaves the glyph far smaller than the safe area.
+  // ATOM mode keeps low-fi-then-edge-flush-trim.
+  if (canvas) trimToEdge(smooth);
   const lr = lofi(smooth, out, footprint, colors);       // ADR-0014: native footprint + limited palette
   if (lr.status !== 0) throw new Error(`forge-atom: low-fi step failed: ${lr.stderr || lr.error}`);
-  const trim = trimToEdge(out);                          // edge-flush: frame reaches the edge, no exterior margin to bleed into
+  let pad = null, trim;
+  if (canvas) {                                          // ADR-0026 glyph mode: center the safe-area-sized glyph in a uniform canvas
+    const [cw, ch] = canvas;
+    pad = padToCanvas(out, cw, ch, margin);
+    const fin = PNG.sync.read(readFileSync(out));        // DIMENSION ASSERT: the canvas is enforced, never just requested
+    if (fin.width !== cw || fin.height !== ch) throw new Error(`forge-atom: canvas assert FAILED — ${fin.width}x${fin.height} != ${cw}x${ch} (ADR-0026)`);
+    trim = { margins: { top: 0, left: 0, bottom: 0, right: 0 }, w: pad.placed.w, h: pad.placed.h };
+  } else {
+    trim = trimToEdge(out);                              // atom edge-flush: frame reaches the edge, no exterior margin
+  }
   const t = transparencyOk(out);
   if (!t.ok) {
     throw new Error(`forge-atom: transparency gate failed — ${(t.frac * 100).toFixed(0)}% transparent (expected 5–97%). ~0% = opaque plate (key not removed); ~100% = empty. A mid-range miss can mean the art used the ${key} key color (holes) — re-run with a different --key (e.g. #ff00ff). Output: ${out}`);
   }
   const m = trim.margins;
-  console.log(`forge-atom OK -> ${out}  (${trim.w}x${trim.h} edge-flush, ${colors}-color low-fi; trimmed margin t${m.top}/l${m.left}/b${m.bottom}/r${m.right}; ${(t.frac * 100).toFixed(0)}% transparent)`);
+  const shape = pad ? `${pad.cw}x${pad.ch} canvas, glyph ${pad.placed.w}x${pad.placed.h} centered (ADR-0026)` : `${trim.w}x${trim.h} edge-flush`;
+  console.log(`forge-atom OK -> ${out}  (${shape}, ${colors}-color low-fi; trimmed margin t${m.top}/l${m.left}/b${m.bottom}/r${m.right}; ${(t.frac * 100).toFixed(0)}% transparent)`);
   return out;
 }
 
@@ -162,12 +206,16 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const ref = get('--ref'); const out = get('--out'); const key = get('--key') || '#00ff00';
   const footprint = Number(get('--footprint')) || 48;
   const colors = Number(get('--colors')) || 64;
+  const canvasArg = get('--canvas');                     // ADR-0026 glyph mode: "64" -> 64x64, "64x80" -> 64x80
+  let canvas = null;
+  if (canvasArg) { const p = canvasArg.split('x').map(Number); canvas = p.length === 1 ? [p[0], p[0]] : p; }
+  const margin = Number(get('--margin')) || 2;
   let desc = get('--desc');
   if (get('--desc-file')) desc = readFileSync(get('--desc-file'), 'utf8');
   if (!ref || !out || !desc) {
-    console.error('usage: forge-atom.mjs --ref <png> --out <atoms/x.png> --desc "..." [--key #00ff00] [--footprint 48] [--colors 64]');
+    console.error('usage: forge-atom.mjs --ref <png> --out <atoms/x.png> --desc "..." [--key #00ff00] [--footprint 48] [--colors 64] [--canvas 64|64x80] [--margin 2]');
     process.exit(2);
   }
-  try { await forgeAtom({ ref, out, desc, key, footprint, colors }); }
+  try { await forgeAtom({ ref, out, desc, key, footprint, colors, canvas, margin }); }
   catch (e) { console.error(String(e.message || e)); process.exit(1); }
 }

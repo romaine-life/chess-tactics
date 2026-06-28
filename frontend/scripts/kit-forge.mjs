@@ -94,6 +94,12 @@ const SPECS = [
   ['shields', 'snow', ref.campaign, 'a snowflake emblem on a heraldic shield (dark field, gold border)'],
   ['shields', 'flame', ref.campaign, 'a flame emblem on a heraldic shield (dark field, gold border)'],
   ['shields', 'lion', ref.campaign, 'a lion emblem on a heraldic shield (dark field, gold border)'],
+  // campaign-editor UI control icons (64x64)
+  ['settings', 'star', ref.general, 'a single gold five-pointed star, flat low-fi'],
+  ['settings', 'chevron-up', ref.general, 'a single upward chevron / caret (the ^ symbol), pale steel blue, flat low-fi'],
+  ['settings', 'chevron-down', ref.general, 'a single downward chevron / caret (an inverted ^), pale steel blue, flat low-fi'],
+  ['settings', 'delete', ref.general, 'a red X delete mark: two crossed diagonal strokes, flat low-fi'],
+  ['settings', 'lock', ref.general, 'a closed gold padlock, flat low-fi'],
 ].map(([group, name, r, desc]) => {
   const dir = group === 'settings' ? 'icons' : `icons/${group}`;
   const [w, h] = group === 'shields' ? [64, 80] : [64, 64];

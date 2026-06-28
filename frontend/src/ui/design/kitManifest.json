@@ -2,8 +2,8 @@
   "generated": "2026-06-27",
   "gate": "verify-kit-asset.mjs --glyph (transparency hygiene: magenta despill + edge bleed; anti-aliasing allowed)",
   "summary": {
-    "pass": 30,
-    "total": 30,
+    "pass": 32,
+    "total": 32,
     "frames": 12
   },
   "groups": [
@@ -11,6 +11,17 @@
       "id": "settings",
       "label": "Settings icons",
       "items": [
+        {
+          "name": "bell",
+          "url": "/assets/ui/kit/icons/bell.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 13.4,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
         {
           "name": "brand-shield",
           "url": "/assets/ui/kit/icons/brand-shield.png",
@@ -27,8 +38,8 @@
           "url": "/assets/ui/kit/icons/design-index.png",
           "w": 64,
           "h": 64,
-          "magenta": 1,
-          "semiPct": 0,
+          "magenta": 0,
+          "semiPct": 7.2,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -38,8 +49,8 @@
           "url": "/assets/ui/kit/icons/effects.png",
           "w": 64,
           "h": 64,
-          "magenta": 3,
-          "semiPct": 0,
+          "magenta": 0,
+          "semiPct": 13.5,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -50,7 +61,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 13.3,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -61,7 +72,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0.3,
+          "semiPct": 7.1,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -72,7 +83,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 1,
+          "semiPct": 3,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -83,7 +94,18 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 8.2,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "lyre",
+          "url": "/assets/ui/kit/icons/lyre.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 22,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -94,7 +116,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 1.8,
+          "semiPct": 5.3,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -104,8 +126,8 @@
           "url": "/assets/ui/kit/icons/music.png",
           "w": 64,
           "h": 64,
-          "magenta": 5,
-          "semiPct": 0,
+          "magenta": 0,
+          "semiPct": 10.8,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -116,7 +138,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 1.8,
+          "semiPct": 14.7,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -127,7 +149,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 1,
+          "semiPct": 4.2,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -138,7 +160,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 13.2,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -148,8 +170,8 @@
           "url": "/assets/ui/kit/icons/tileset-review.png",
           "w": 64,
           "h": 64,
-          "magenta": 3,
-          "semiPct": 0,
+          "magenta": 0,
+          "semiPct": 13.3,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -159,8 +181,8 @@
           "url": "/assets/ui/kit/icons/tileset-studio.png",
           "w": 64,
           "h": 64,
-          "magenta": 2,
-          "semiPct": 0,
+          "magenta": 0,
+          "semiPct": 21,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -170,8 +192,8 @@
           "url": "/assets/ui/kit/icons/unit-studio.png",
           "w": 64,
           "h": 64,
-          "magenta": 8,
-          "semiPct": 0,
+          "magenta": 0,
+          "semiPct": 8,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -182,7 +204,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 0,
+          "semiPct": 10.1,
           "edge": 0,
           "pass": true,
           "fails": []
