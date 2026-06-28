@@ -83,6 +83,37 @@ function asset(file: string): string {
   return `/assets/ui/kit/icons/${file.replace(/^icon-/, '').replace(/-generated/, '')}`;
 }
 
+// Build / server provenance, stamped by vite.config buildInfo, surfaced in About so
+// "which server/build am I actually on?" is summonable from one place — dev or prod.
+// In dev it names the WORKTREE + commit + live port (a server from the wrong worktree
+// reports its own name, so being on the wrong one is a glance, not a 2-hour hunt).
+declare const __BUILD_INFO__:
+  | { mode: 'dev'; worktree: string; commit: string; dirty: boolean; startedAt: number }
+  | { mode: 'prod'; commit: string; dirty: boolean }
+  | undefined;
+
+// The deployed entry-chunk hash (empty in dev) — the live asset-bundle id for prod.
+function bootedEntryHash(): string {
+  const el = document.querySelector('script[type="module"][src*="/assets/index-"]') as HTMLScriptElement | null;
+  return (el?.src || '').match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/)?.[1] || '';
+}
+
+function buildSummary(): { headline: string; detail: string } {
+  const info = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
+  if (info && info.mode === 'dev') {
+    const port = window.location.port || 'default';
+    return {
+      headline: `${info.worktree} · ${info.commit}${info.dirty ? '*' : ''}`,
+      detail: `Local dev server · :${port} · started ${new Date(info.startedAt).toLocaleTimeString()}`,
+    };
+  }
+  const hash = bootedEntryHash();
+  return {
+    headline: `${info?.commit ?? '(unknown)'}${info?.dirty ? '*' : ''}${hash ? ` · ${hash}` : ''}`,
+    detail: 'Production build',
+  };
+}
+
 function readMuted(): boolean {
   try { return localStorage.getItem(MUTE_KEY) === 'true'; } catch { return false; }
 }
@@ -341,6 +372,7 @@ export function Settings(): ReactElement {
   const signedIn = Boolean(me?.signed_in);
   const accountName = displayAccountName(me);
   const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
+  const build = buildSummary();
 
   const renderGeneral = () => (
     <>
@@ -374,6 +406,13 @@ export function Settings(): ReactElement {
         >
           <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
         </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title="About">
+        <SettingsRow
+          title="Build"
+          description={build.detail}
+          value={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{build.headline}</span>}
+        />
       </SettingsSection>
     </>
   );
