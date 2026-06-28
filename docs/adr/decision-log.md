@@ -37,6 +37,7 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0031](0031-ui-spacing-system.md) | UI spacing is one tokenized system: ratify `--ds-space-*` (extend 48/64), spatial roles (inset/stack/inline/gutter), compact/comfortable density per ADR-0006, raw px on spacing banned; spacing sibling of ADR-0024 | accepted | 2026-06-27 |
 | [0032](0032-no-bland-html-css-every-surface-is-kit.md) | No bland HTML/CSS: every VISIBLE surface (panel/box/button/chip/frame) is a kit 9-slice or generated sprite; raw-CSS surfaces banned app-wide; layout containers + text exempt; generalizes ADR-0002/0011/0012/0014 | accepted | 2026-06-27 |
 | [0033](0033-board-plus-control-panel-layout.md) | Board/canvas + controls views (skirmish, level editor): clean board floating on the scene (no CSS box), one right-side kit control panel (tabs + content + actions, panel.png matching the title bar); shared precedent | accepted | 2026-06-27 |
+| [0034](0034-nine-slice-line-frames-for-surface-fill.md) | A surface behind kit chrome uses a transparent-interior "line" frame (full ornament over a see-through center — assembled from the same atoms with a transparent fill; no masking, no carve) + the surface as a separate border-box background; a surfaced element keeps a frame, but the ornament must reach the element edge (corner brackets do; the inset steel row rail does not, so surfaced rows borrow the bracket frame); never a per-material baked frame; opt-in via a registry `line` field, parity-tested | accepted | 2026-06-27 |
 
 ## Minor decisions (no ADR)
 

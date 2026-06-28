@@ -18,10 +18,11 @@
 // (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import nineSliceRegistry from '../../config/nine-slice-registry.json';
+import { SURFACE_ASSETS } from './surfaceCatalog';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
-type EditState = { keyline: Off; bracket: Off; content: number };
+type EditState = { keyline: Off; bracket: Off; content: number; fill: number };
 type PieceKey = 'keyline' | 'bracket';
 
 type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean };
@@ -46,6 +47,9 @@ const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
 // 0 = no content inset, matching the bake's fallback (normalizeConfig in
 // scripts/nine-slice-kit.mjs) so an unsaved asset previews exactly what it bakes.
 const DEFAULT_CONTENT = 0;
+// 0 = the fill boundary IS the footprint edge (no inset). The fill box marks where a surface
+// painted behind this frame should stop — the frame's corners can bleed outside it.
+const DEFAULT_FILL = 0;
 const STORAGE_KEY = 'nine-slice-editor-v4';
 const Z = 6;
 
@@ -132,12 +136,13 @@ type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: b
 // Assemble the 9-slice at an arbitrary W×H (no margin) with the keyline/bracket
 // offsets baked in. This is the single source of truth for both the editor canvas
 // and the live previews, so a preview can never diverge from what you're editing.
-function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false, flipSides = false): HTMLCanvasElement {
+function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false, flipSides = false, noFill = false): HTMLCanvasElement {
   const { cw, ch, ew, eh } = L;
   const W = Math.max(2 * cw, w), H = Math.max(2 * ch, h);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d')!; g.imageSmoothingEnabled = false;
-  tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
+  // noFill = ornament only (transparent interior) — the "line" frame a surface shows through.
+  if (!noFill) tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
   const topS = toCanvas(L.edge, ew, eh);
   const botS = flip(topS, ew, eh, false, true);
   // Side edges via rot90; flipSides swaps L/R for beveled rails (row) so the bevel
@@ -171,6 +176,12 @@ export function NineSliceEditor(): ReactElement {
   const [active, setActive] = useState<PieceKey>('bracket');
   const [showOuter, setShowOuter] = useState(true);
   const [showContent, setShowContent] = useState(false);
+  const [showFill, setShowFill] = useState(false);
+  // Fill PREVIEW: paint a real surface clipped to the fill box, with the ornament (no-fill frame)
+  // on top — so you can judge the fill boundary against an actual fill, not just the guide line.
+  const [previewFill, setPreviewFill] = useState(false);
+  const [previewSurfaceName, setPreviewSurfaceName] = useState(SURFACE_ASSETS[0]?.name ?? '');
+  const [surfaceImg, setSurfaceImg] = useState<HTMLImageElement | null>(null);
   // gap from each outer-box edge to the art's outermost opaque pixel. + = gap inside; − = beyond (overflow).
   const [status, setStatus] = useState<{ top: number; right: number; bottom: number; left: number } | null>(null);
   const [edits, setEdits] = useState<Record<string, EditState>>(() => {
@@ -188,13 +199,17 @@ export function NineSliceEditor(): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pvActualRef = useRef<HTMLCanvasElement>(null);
   const pvUseRef = useRef<HTMLCanvasElement>(null);
+  // Where the editor was opened from (the catalog passes ?return=<its url>). Captured on mount,
+  // before the asset-URL sync rewrites the query — so "Back to catalog" lands exactly there.
+  const returnUrl = useRef(new URLSearchParams(window.location.search).get('return') || '/tileset-studio');
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
-  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, content: DEFAULT_CONTENT };
+  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, content: DEFAULT_CONTENT, fill: DEFAULT_FILL };
   const stored = edits[assetId];
   const edit: EditState = {
     keyline: stored?.keyline ?? { dx: 0, dy: 0 },
     bracket: stored?.bracket ?? { dx: 0, dy: 0 },
     content: stored?.content ?? DEFAULT_CONTENT,
+    fill: stored?.fill ?? DEFAULT_FILL,
   };
 
   useEffect(() => {
@@ -210,6 +225,15 @@ export function NineSliceEditor(): ReactElement {
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
 
+  // Load the chosen preview surface (for the fill preview).
+  useEffect(() => {
+    const s = SURFACE_ASSETS.find((a) => a.name === previewSurfaceName);
+    if (!s) { setSurfaceImg(null); return; }
+    let live = true;
+    loadImage(s.file).then((img) => { if (live) setSurfaceImg(img); }).catch(() => { if (live) setSurfaceImg(null); });
+    return () => { live = false; };
+  }, [previewSurfaceName]);
+
   // Hydrate from the on-disk config (dev) the first time each asset is opened, so the
   // editor reflects what's actually baked — not stale localStorage or defaults. This
   // is what stops a fresh editor from saving default values over your real config.
@@ -222,7 +246,7 @@ export function NineSliceEditor(): ReactElement {
       .then((j) => {
         if (!live || !j.ok || !j.config) return;
         hydrated.current.add(assetId);
-        setEdits((prev) => ({ ...prev, [assetId]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content } }));
+        setEdits((prev) => ({ ...prev, [assetId]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL } }));
       })
       .catch(() => {});
     return () => { live = false; };
@@ -259,6 +283,8 @@ export function NineSliceEditor(): ReactElement {
     update((cur) => ({ ...cur, [active]: { dx: -box.minX, dy: -box.minY } }));
   };
   const setContent = (dc: number) => update((cur) => ({ ...cur, content: Math.max(0, (cur.content ?? DEFAULT_CONTENT) + dc) }));
+  // Fill inset can't exceed half the smaller frame dim (box would invert); clamp to >= 0.
+  const setFill = (df: number) => update((cur) => ({ ...cur, fill: Math.max(0, Math.min(Math.floor(Math.min(asset.frame.w, asset.frame.h) / 2) - 1, (cur.fill ?? DEFAULT_FILL) + df)) }));
   const reset = () => update(() => DEFAULT_EDIT);
 
   useEffect(() => {
@@ -284,7 +310,22 @@ export function NineSliceEditor(): ReactElement {
     view.width = W * Z; view.height = H * Z;
     const vg = view.getContext('2d')!; vg.imageSmoothingEnabled = false;
     for (let y = 0; y < view.height; y += 8) for (let x = 0; x < view.width; x += 8) { vg.fillStyle = ((x / 8 + y / 8) & 1) ? '#3a3f48' : '#2b2f37'; vg.fillRect(x, y, 8, 8); }
-    vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);
+    if (previewFill && surfaceImg) {
+      // Surface clipped to the FILL box, with the ornament-only frame on top — what a surface fill
+      // actually looks like. Outside the fill box (the checkerboard ring) is whatever sits behind.
+      const f = edit.fill;
+      vg.save();
+      vg.beginPath();
+      vg.rect(f * Z, f * Z, (W - 2 * f) * Z, (H - 2 * f) * Z);
+      vg.clip();
+      const tile = 16 * Z; // 16 footprint px per tile — enough texture to read
+      for (let y = 0; y < view.height; y += tile) for (let x = 0; x < view.width; x += tile) vg.drawImage(surfaceImg, x, y, tile, tile);
+      vg.restore();
+      const orn = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides, true);
+      vg.drawImage(orn, 0, 0, W, H, 0, 0, W * Z, H * Z);
+    } else {
+      vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);
+    }
 
     // Guides are FIXED references at the asset footprint — you position the
     // keyline/bracket RELATIVE to them; they do NOT follow the art.
@@ -298,6 +339,12 @@ export function NineSliceEditor(): ReactElement {
       vg.strokeStyle = '#5cff9e'; vg.lineWidth = 2;
       vg.strokeRect(c * Z, c * Z, (W - 2 * c) * Z, (H - 2 * c) * Z);
     }
+    // FILL box = where a surface behind this frame stops (inset by `fill` from the footprint).
+    if (showFill) {
+      const f = edit.fill;
+      vg.strokeStyle = '#ffb454'; vg.lineWidth = 2;
+      vg.strokeRect(f * Z, f * Z, (W - 2 * f) * Z, (H - 2 * f) * Z);
+    }
 
     // STATUS: where the art's outermost opaque pixels sit vs the footprint edge.
     // Only surfaces on overflow (pixels beyond the box).
@@ -307,7 +354,7 @@ export function NineSliceEditor(): ReactElement {
       if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
     }
     setStatus(maxX < 0 ? null : { top: minY, left: minX, right: (W - 1) - maxX, bottom: (H - 1) - maxY });
-  }, [loaded, edit, showOuter, showContent, asset]);
+  }, [loaded, edit, showOuter, showContent, showFill, previewFill, surfaceImg, asset]);
 
   // LIVE previews — the same builder rendered at actual size and stretched in-use,
   // so you can judge the real result here without an apply-and-screenshot round trip.
@@ -331,7 +378,7 @@ export function NineSliceEditor(): ReactElement {
     draw(pvUseRef, 150, 44, 2, 'Settings');
   }, [loaded, edit.keyline, edit.bracket, asset]);
 
-  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content }, null, 2);
+  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content, fill: edit.fill }, null, 2);
   // Only the bracket is nudgeable. Keyline is inert (continuous border by construction);
   // exposing a keyline nudge would let the preview show a state the bake can't reproduce.
   const pieces: PieceKey[] = loaded?.hasAccent ? ['bracket'] : [];
@@ -358,7 +405,7 @@ export function NineSliceEditor(): ReactElement {
         <select value={assetId} onChange={(e) => setAssetId(e.target.value)} style={ST.select}>
           {ASSETS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
         </select>
-        <a href="/tileset-studio" style={ST.link}>← Studio</a>
+        <a href={returnUrl.current} style={ST.link}>← Back to catalog</a>
       </header>
       <div style={ST.body}>
         <div style={ST.stage}>
@@ -398,6 +445,27 @@ export function NineSliceEditor(): ReactElement {
               <button type="button" style={ST.sb} onClick={() => setContent(1)}>＋</button>
               <span style={ST.sizeLabel}>uniform on all sides</span>
             </div>
+            <label style={ST.toggle}>
+              <input type="checkbox" checked={showFill} onChange={(e) => setShowFill(e.target.checked)} />
+              <span style={{ color: '#ffb454' }}>■</span> Fill box — where a surface fill stops (frame may bleed outside it)
+            </label>
+            <div style={ST.sizeRow}>
+              <span style={ST.sizeW}>inset {edit.fill} px</span>
+              <button type="button" style={ST.sb} onClick={() => setFill(-1)}>−</button>
+              <button type="button" style={ST.sb} onClick={() => setFill(1)}>＋</button>
+              <span style={ST.sizeLabel}>uniform on all sides</span>
+            </div>
+            <label style={ST.toggle}>
+              <input type="checkbox" checked={previewFill} onChange={(e) => setPreviewFill(e.target.checked)} />
+              <span style={{ color: '#cfa' }}>▦</span> Preview fill — paint a real surface clipped to the fill box
+            </label>
+            {previewFill && (
+              <div style={ST.sizeRow}>
+                <select value={previewSurfaceName} onChange={(e) => setPreviewSurfaceName(e.target.value)} style={{ ...ST.select, fontSize: 13, flex: 1 }}>
+                  {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                </select>
+              </div>
+            )}
           </div>
           {status && (status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0) && (
             <div style={{ ...ST.statusBox, borderColor: '#e0556a', color: '#ff9aa8' }}>
@@ -413,6 +481,7 @@ export function NineSliceEditor(): ReactElement {
           <div style={ST.offsets}>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
             <div>content inset: {edit.content} px</div>
+            <div>fill inset: {edit.fill} px</div>
           </div>
           {isDev && (
             <>
