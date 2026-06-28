@@ -152,6 +152,7 @@ function LevelRow({
   level,
   index,
   active,
+  readOnly = false,
   onSelect,
   onMoveUp,
   onMoveDown,
@@ -161,6 +162,7 @@ function LevelRow({
   level: Level | undefined;
   index: number;
   active: boolean;
+  readOnly?: boolean;
   onSelect: () => void;
   onMoveUp: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onMoveDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -188,11 +190,13 @@ function LevelRow({
         <small>{objectiveLabel[objective]}</small>
       </span>
       <Stars count={levelRef.stars ?? 0} />
-      <span className="ce-row-actions" aria-label="Level actions">
-        <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
-        <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="chevron-down" /></IconButton>
-        <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
-      </span>
+      {readOnly ? null : (
+        <span className="ce-row-actions" aria-label="Level actions">
+          <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
+          <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="chevron-down" /></IconButton>
+          <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
+        </span>
+      )}
     </div>
   );
 }
@@ -332,7 +336,9 @@ export function CampaignEditor() {
   };
 
   const exportWorkspace = () => {
-    const workspace = workspaceFromStore();
+    // Export only the tier you author (tags stripped) — never the co-mingled store, or
+    // a re-import would carry origin:'official' and be silently dropped on save.
+    const workspace = useCampaigns.getState().officialMode ? officialWorkspaceForSave() : userWorkspaceForSave();
     const blob = new Blob([`${JSON.stringify(workspace, null, 2)}\n`], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -361,6 +367,11 @@ export function CampaignEditor() {
   };
 
   const camp = campaigns.find((c) => c.id === selectedCampaignId) ?? null;
+  // Official campaigns are read-only in normal mode (locked); in officialMode they're
+  // editable (readOnly is cleared by hydrateOfficialForEditing). This drives every
+  // mutation control below so a read-only official can never be edited in-place.
+  const readOnly = Boolean(camp?.readOnly);
+  const ownCount = campaigns.filter((c) => c.origin !== 'official').length;
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
   const levelDoc = selectedLevelId ? levels[selectedLevelId] : null;
   const levelRef = camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
@@ -394,7 +405,7 @@ export function CampaignEditor() {
         <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
           <div className="ce-panel-head">
             <h2>Campaigns</h2>
-            <span>{campaigns.length} / 20</span>
+            <span>{officialMode ? `${campaigns.length} official` : `${ownCount} / 20`}</span>
           </div>
           <AssetButton data-testid="new-campaign" className="ce-new-campaign" onClick={() => useCampaigns.getState().newCampaign()}>
             + New Campaign
@@ -439,6 +450,7 @@ export function CampaignEditor() {
             <>
               <div className="ce-section-title">
                 <h2>Campaign Details</h2>
+                {readOnly ? <span className="ce-official-badge">Official campaign — read-only</span> : null}
               </div>
               <div className="ce-campaign-summary">
                 <label className="ce-name-field">
@@ -446,6 +458,7 @@ export function CampaignEditor() {
                   <input
                     data-testid="campaign-name"
                     value={camp.name}
+                    disabled={readOnly}
                     onChange={(e) => useCampaigns.getState().renameCampaign(camp.id, e.target.value)}
                   />
                 </label>
@@ -458,7 +471,7 @@ export function CampaignEditor() {
 
               <div className="ce-levels-head">
                 <h2>Levels</h2>
-                <AssetButton data-testid="add-level" onClick={() => useCampaigns.getState().addLevel()}>+ Add Level</AssetButton>
+                {readOnly ? null : <AssetButton data-testid="add-level" onClick={() => useCampaigns.getState().addLevel()}>+ Add Level</AssetButton>}
               </div>
               <div className="ce-level-list">
                 {orderedLevels.length === 0 ? <p className="ce-empty">No levels. Add one to begin.</p> : null}
@@ -469,6 +482,7 @@ export function CampaignEditor() {
                     level={levels[ref.levelId]}
                     index={index}
                     active={ref.levelId === selectedLevelId}
+                    readOnly={readOnly}
                     onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
                     onMoveUp={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, -1); }}
                     onMoveDown={(event) => { event.stopPropagation(); useCampaigns.getState().moveLevel(ref.levelId, 1); }}
@@ -517,7 +531,7 @@ export function CampaignEditor() {
       <footer className="ce-footer">
         <AssetButton disabled={!camp || camp.origin === 'official'} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
-        <AssetButton danger disabled={!camp} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
+        <AssetButton danger disabled={!camp || readOnly} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
       </footer>
     </div>
   );

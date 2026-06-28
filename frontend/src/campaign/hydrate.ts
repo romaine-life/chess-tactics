@@ -16,9 +16,12 @@ let hydrated = false;
 let inFlight: Promise<void> | null = null;
 
 export function ensureCampaignsHydrated(): Promise<void> {
-  // Already populated (a fresh page load starts empty; the editor may have hydrated it
-  // earlier this SPA session) — reuse it rather than clobbering possible unsaved edits.
-  if (hydrated || useCampaigns.getState().campaigns.length) return Promise.resolve();
+  const state = useCampaigns.getState();
+  // If the editor left the store in official-AUTHORING mode (whole-store editable
+  // official drafts), the play screen must NOT reuse it — rebuild the player view.
+  // Otherwise: already populated (a fresh page load starts empty; the editor may have
+  // hydrated it this SPA session) — reuse it rather than clobbering unsaved edits.
+  if (!state.officialMode && (hydrated || state.campaigns.length)) return Promise.resolve();
   if (inFlight) return inFlight;
   inFlight = (async () => {
     // 1. Officials — always, for everyone. loadOfficialCampaigns never throws (it

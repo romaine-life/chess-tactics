@@ -1544,14 +1544,18 @@ function officialCampaignsRowId(raw) {
 }
 
 // Every campaign/level id in an official Workspace must be an `off-` prefixed,
-// DIGIT-FREE slug (so officials can't collide the per-user `c/l<n>` id counter).
+// lowercase, DIGIT-FREE slug — exactly what the client minter produces
+// (`off-<c|l>-<slug>`, slug ∈ [a-z-]). Digit-free so officials can't collide the
+// per-user `c/l<n>` id counter; lowercase-only so the id matches isOfficialId and the
+// loader's assumptions (rejects off-FOO, off-a_b, off-l-1).
+const OFFICIAL_WORKSPACE_ID_PATTERN = /^off-[a-z]+(-[a-z]+)*$/;
 function validateOfficialWorkspaceIds(data) {
-  const offDigitFree = (id) => typeof id === 'string' && id.startsWith('off-') && !/[0-9]/.test(id);
+  const validId = (id) => typeof id === 'string' && OFFICIAL_WORKSPACE_ID_PATTERN.test(id);
   for (const key of Object.keys((data && data.levels) || {})) {
-    if (!offDigitFree(key)) return `level id "${key}" must be an off- prefixed, digit-free slug`;
+    if (!validId(key)) return `level id "${key}" must be an off- prefixed, lowercase, digit-free slug`;
   }
   for (const campaign of (data && data.campaigns) || []) {
-    if (!offDigitFree(campaign && campaign.id)) return `campaign id "${campaign && campaign.id}" must be an off- prefixed, digit-free slug`;
+    if (!validId(campaign && campaign.id)) return `campaign id "${campaign && campaign.id}" must be an off- prefixed, lowercase, digit-free slug`;
   }
   return null;
 }
