@@ -78,6 +78,18 @@ const SPECS = [
   ['settings', 'tileset-studio', ref.creator, 'a green grass terrain tile'],
   ['settings', 'unit-studio', ref.creator, 'a gray chess knight / unit bust'],
   ['settings', 'tileset-review', ref.creator, 'a green clipboard with a checklist'],
+  // chess-piece icons (64x64) — the flat piece set for the Party squad picker and
+  // lobby rows. kit/icons/knight.png already shipped; these complete the set in the
+  // same cream-and-gray Staunton style off the same gameplay style ref.
+  ['settings', 'pawn', ref.gameplay, 'a cream-and-gray chess pawn piece'],
+  ['settings', 'bishop', ref.gameplay, 'a cream-and-gray chess bishop piece'],
+  // 'castle', not 'rook': provenance + the forge name-filter key by bare name, and the
+  // shields/rook heraldic emblem already owns 'rook'. So the flat rook PIECE ships as
+  // castle.png (a real synonym) to avoid clobbering the shield on a `kit-forge rook`.
+  ['settings', 'castle', ref.gameplay, 'a cream-and-gray chess rook (castle tower) piece'],
+  ['settings', 'queen', ref.gameplay, 'a cream-and-gray chess queen piece, with a crown of rounded points'],
+  ['settings', 'king', ref.gameplay, 'a cream-and-gray chess king piece, topped by a cross'],
+  ['settings', 'players', ref.gameplay, 'two cream-and-gray chess pawns standing side by side, a multiplayer / players mark'],
   // game icons (64x64)
   ['game', 'move', ref.skirmish, 'boots or directional movement arrows'],
   ['game', 'attack', ref.skirmish, 'a sword'],
