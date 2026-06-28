@@ -12768,9 +12768,11 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
-/* Volume slider, low-fi kit look (ADR-0014): a square navy channel that fills kit
-   cyan up to a chunky beveled cyan thumb (via --val). No rounded radius, no glow —
-   those are the generic tells. Re-skins with the stone/wood chrome later. */
+/* Volume slider — ADR-0025 natural palette, NOT a forced UI-blue: a dark STONE
+   channel that fills warm BRONZE up to a beveled bronze handle (the kit gold/bronze
+   ramp — the same warm material as the brackets and the bell). Flat CSS for now;
+   the real stone/wood MATERIAL texture comes from the forged chrome (another branch)
+   that re-skins this. No cyan, no glow, no rounded radius. */
 .settings-slider {
   align-items: center;
   display: flex;
@@ -12787,30 +12789,30 @@ button.tileset-relationship-cell {
 }
 
 .settings-slider input[type="range"]::-webkit-slider-runnable-track {
-  background: linear-gradient(90deg, #4fbdf0 var(--val, 0%), #0e2236 var(--val, 0%));
-  border: 1px solid #2a4a63;
+  background: linear-gradient(90deg, #c79b55 var(--val, 0%), #26231e var(--val, 0%));
+  border: 1px solid #5a5248;
   height: 10px;
 }
 .settings-slider input[type="range"]::-moz-range-track {
-  background: linear-gradient(90deg, #4fbdf0 var(--val, 0%), #0e2236 var(--val, 0%));
-  border: 1px solid #2a4a63;
+  background: linear-gradient(90deg, #c79b55 var(--val, 0%), #26231e var(--val, 0%));
+  border: 1px solid #5a5248;
   height: 10px;
 }
 
 .settings-slider input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  background: #3f8fd0;
+  background: #b88a45;
   border: 3px solid;
-  border-color: #c4ecff #123a5c #123a5c #c4ecff;
+  border-color: #f0dba8 #5b4124 #5b4124 #f0dba8;
   block-size: 20px;
   inline-size: 14px;
   margin-top: -7px;
 }
 .settings-slider input[type="range"]::-moz-range-thumb {
-  background: #3f8fd0;
+  background: #b88a45;
   border: 3px solid;
-  border-color: #c4ecff #123a5c #123a5c #c4ecff;
+  border-color: #f0dba8 #5b4124 #5b4124 #f0dba8;
   block-size: 20px;
   inline-size: 14px;
 }
