@@ -5090,6 +5090,14 @@ h1 {
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
 
+/* road connection editor — clickable diamond edges for the selected road tile */
+.le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
+.le-roadconn-edge.is-joined, .le-roadconn-edge.is-cut { cursor: pointer; }
+.le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
+.le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
+.le-roadconn-edge:focus-visible { outline: none; }
+.le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
+
 /* status line */
 .le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
 .le-statusline b { color: #9fe0ff; }

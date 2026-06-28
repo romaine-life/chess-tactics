@@ -51,21 +51,49 @@ export const FEATURE_DIRS: readonly FeatureDir[] = [
 
 export const featureKey = (x: number, y: number): string => `${x},${y}`;
 
-/** The connection mask (0–15) for the cell at (x, y) given the set of featured cells. */
-export function featureMaskAt(present: ReadonlySet<string>, x: number, y: number): number {
+/**
+ * Canonical key for the EDGE between two adjacent cells (order-independent), used to
+ * record a manually SEVERED connection. A cut is a property of the shared edge, so
+ * severing from either tile cuts it for both — `roadEdgeKey(a,b) === roadEdgeKey(b,a)`.
+ */
+export const roadEdgeKey = (ax: number, ay: number, bx: number, by: number): string => {
+  const a = featureKey(ax, ay);
+  const b = featureKey(bx, by);
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+};
+
+/**
+ * The connection mask (0–15) for the cell at (x, y) given the set of featured cells.
+ * A neighbour contributes its bit only if it carries the feature AND the shared edge
+ * isn't severed — so `isSevered` lets an author cut a connection that would otherwise
+ * auto-join. Omit `isSevered` for pure auto-connect.
+ */
+export function featureMaskAt(
+  present: ReadonlySet<string>,
+  x: number,
+  y: number,
+  isSevered?: (edgeKey: string) => boolean,
+): number {
   let mask = 0;
   for (const dir of FEATURE_DIRS) {
-    if (present.has(featureKey(x + dir.dx, y + dir.dy))) mask |= dir.bit;
+    const nx = x + dir.dx;
+    const ny = y + dir.dy;
+    if (!present.has(featureKey(nx, ny))) continue;
+    if (isSevered?.(roadEdgeKey(x, y, nx, ny))) continue;
+    mask |= dir.bit;
   }
   return mask;
 }
 
 /** Compute the mask for every featured cell. Keys are "x,y"; values are 0–15. */
-export function featureMaskMap(present: ReadonlySet<string>): Map<string, number> {
+export function featureMaskMap(
+  present: ReadonlySet<string>,
+  isSevered?: (edgeKey: string) => boolean,
+): Map<string, number> {
   const masks = new Map<string, number>();
   for (const key of present) {
     const [x, y] = key.split(',').map(Number);
-    masks.set(key, featureMaskAt(present, x, y));
+    masks.set(key, featureMaskAt(present, x, y, isSevered));
   }
   return masks;
 }

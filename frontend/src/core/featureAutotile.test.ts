@@ -6,6 +6,7 @@ import {
   featureMaskAt,
   featureMaskMap,
   featurePiece,
+  roadEdgeKey,
 } from './featureAutotile';
 
 const setOf = (...keys: string[]): Set<string> => new Set(keys);
@@ -89,6 +90,36 @@ describe('featureMaskMap', () => {
     const masks = featureMaskMap(road);
     expect(masks.get('3,3')).toBe(15);
     expect(featurePiece(masks.get('3,3')!)).toBe('cross');
+  });
+});
+
+describe('roadEdgeKey', () => {
+  it('is order-independent (the cut belongs to the shared edge)', () => {
+    expect(roadEdgeKey(2, 2, 2, 1)).toBe(roadEdgeKey(2, 1, 2, 2));
+    expect(roadEdgeKey(2, 2, 3, 2)).toBe('2,2|3,2');
+  });
+});
+
+describe('featureMaskAt with severed edges', () => {
+  it('drops a neighbour bit when its shared edge is severed', () => {
+    const present = setOf('2,2', '2,1', '3,2'); // N and E neighbours present
+    const full = featureMaskAt(present, 2, 2);
+    expect(full).toBe(0b0011); // N + E
+    const cutNorth = (e: string) => e === roadEdgeKey(2, 2, 2, 1);
+    expect(featureMaskAt(present, 2, 2, cutNorth)).toBe(0b0010); // E only — N severed
+  });
+
+  it('severs symmetrically: both tiles of the cut edge lose the bit', () => {
+    const present = setOf('2,1', '2,2'); // a vertical pair
+    const cut = (e: string) => e === roadEdgeKey(2, 1, 2, 2);
+    expect(featureMaskAt(present, 2, 2, cut)).toBe(0); // (2,2) loses its N
+    expect(featureMaskAt(present, 2, 1, cut)).toBe(0); // (2,1) loses its S — same edge
+  });
+
+  it('severing an edge with no neighbour is a no-op', () => {
+    const present = setOf('2,2');
+    const cut = () => true;
+    expect(featureMaskAt(present, 2, 2, cut)).toBe(0);
   });
 });
 
