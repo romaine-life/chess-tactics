@@ -53,7 +53,6 @@ const REGIONS: RegionDef[] = [
 ];
 
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];
-const STORAGE_KEY = 'chess-tactics:surface-dressing:v3';
 const DEFAULT_TILE = 1024;
 // Sentinel stored in surfaces[id] meaning "keep the frame, drop the fill" (transparent interior).
 const CLEAR = '__clear';
@@ -82,24 +81,10 @@ function seededConfig(seed: string): DressingConfig {
   return { ...base, surfaces: { title: seed, tabsBox: seed, buttons: seed, rowsBox: seed, rows: seed } };
 }
 
+// A fresh load always opens at DEFAULTS, so the dressing room reflects the LIVE page (no
+// overrides) and can never drift from what actually ships. Choices live only in the current
+// session — use "Copy CSS" to keep a result; they're intentionally not persisted across reloads.
 function loadConfig(seed?: string): DressingConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<DressingConfig>;
-      const base = blankConfig();
-      return {
-        surfaces: { ...base.surfaces, ...(parsed.surfaces ?? {}) },
-        boxDisabled: { ...base.boxDisabled, ...(parsed.boxDisabled ?? {}) },
-        boxOpacity: { ...base.boxOpacity, ...(parsed.boxOpacity ?? {}) },
-        tilePx: typeof parsed.tilePx === 'number' ? parsed.tilePx : base.tilePx,
-        offsetX: typeof parsed.offsetX === 'number' ? parsed.offsetX : base.offsetX,
-        offsetY: typeof parsed.offsetY === 'number' ? parsed.offsetY : base.offsetY,
-      };
-    }
-  } catch {
-    /* corrupt/absent storage — fall through to a fresh config */
-  }
   return seed ? seededConfig(seed) : blankConfig();
 }
 
@@ -226,16 +211,6 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
   useEffect(() => {
     inject();
   }, [config, inject]);
-
-  // Persist every change so the dressing sticks across reloads (the Studio routes via URL only;
-  // this config is too large for the URL, so it gets its own storage key).
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    } catch {
-      /* private mode / quota — non-fatal */
-    }
-  }, [config]);
 
   // The SPA mounts /settings asynchronously after the iframe load fires, so re-inject on load
   // and on a short interval (mirrors the harness). Same-origin: contentDocument is reachable.
