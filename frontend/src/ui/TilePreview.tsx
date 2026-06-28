@@ -5,7 +5,7 @@
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { tileFamilies } from '../art/tileset';
+import { tileFamilies, edgeTiles } from '../art/tileset';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
   terrainLabels,
@@ -169,6 +169,23 @@ const studioDefaults: TilesetStudioRouteState = {
 
 const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
   asset.animation ? asset.animation.frames[animationFrame % asset.animation.frames.length] ?? asset.src : asset.src;
+
+// ADR-0039: render a placed tile as a SIDE layer with the TOP over it (the same two-layer
+// model the game's BoardLabBoard uses). On a void-facing cell — no painted neighbor toward
+// the front (+x or +y) — the side becomes the family's frayed edge, so the editor previews
+// the real dropping board edge instead of a clean cut.
+function tileLayerImages(asset: StudioAsset, voidFacing: boolean, animationFrame: number): ReactNode {
+  const topBase = assetFrameSrc(asset, animationFrame);
+  const family = asset.id.split('-')[0] as TileFamilyId;
+  const edge = voidFacing ? edgeTiles[family] : undefined;
+  const sideBase = edge ? edge.src : topBase;
+  return (
+    <>
+      <img className="tile-layer-side" src={sideBase.replace(/\.png$/, '-side.png')} alt="" draggable={false} />
+      <img className="tile-layer-top" src={topBase.replace(/\.png$/, '-top.png')} alt="" draggable={false} />
+    </>
+  );
+}
 
 const transitionAssets: StudioAsset[] = [];
 
@@ -463,6 +480,8 @@ function StudioEditableBoard({
       const assetId = placed[key];
       const asset = assetId ? resolveAsset(assetId) : undefined;
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
+      // Void-facing if no painted tile toward the front (the +x or +y neighbor) — frayed edge side.
+      const voidFacing = !placed[`${x + 1},${y}`] || !placed[`${x},${y + 1}`];
       cells.push({
         key,
         x,
@@ -470,7 +489,7 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {asset && !hidden?.tile ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
+            {asset && !hidden?.tile ? tileLayerImages(asset, voidFacing, animationFrame) : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"

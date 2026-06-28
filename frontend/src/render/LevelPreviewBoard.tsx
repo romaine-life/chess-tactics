@@ -1,5 +1,5 @@
 import { useMemo, type ReactElement } from 'react';
-import { tileAssets, tileFamilies, tileFrameSrc, type TileAsset } from '../art/tileset';
+import { tileAssets, tileFamilies, tileFrameSrc, edgeTiles, type TileAsset } from '../art/tileset';
 import { PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
@@ -57,6 +57,7 @@ function solveLevelBoard(level: Level): SocketBoardResult<TileAsset> {
     columns: level.board.cols,
     rows: level.board.rows,
     familyAssets: tileFamilies,
+    edgeAssets: edgeTiles,
   });
 }
 
