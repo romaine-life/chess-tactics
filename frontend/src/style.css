@@ -11432,9 +11432,8 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab.is-active {
-  /* Keep the stone surface + line frame; mark selection with a cyan inset ring +
-     glow (replaces the old cyan-bracket frame, which clashed with the line frame). */
-  box-shadow: inset 0 0 0 2px rgba(101, 184, 255, 0.78), inset 0 0 16px rgba(101, 184, 255, 0.22);
+  /* Selection = a crisp cyan inset ring + white label, no blurred glow. */
+  box-shadow: inset 0 0 0 2px rgba(101, 184, 255, 0.78);
   color: #f3fbff;
 }
 
