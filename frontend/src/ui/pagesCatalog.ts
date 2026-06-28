@@ -16,7 +16,7 @@ export const PAGE_ENTRIES: PageEntry[] = [
   { name: 'main-menu', label: 'Main Menu', route: '/', status: 'functional', blurb: 'The "Wet Stone & Cold Iron" home screen — tune button + icon sizing live.' },
   { name: 'settings', label: 'Settings', route: '/settings', status: 'functional', blurb: 'The settings screen — the live dressing room: assign a surface to each region.' },
   { name: 'skirmish', label: 'Skirmish', route: '/play', status: 'stub', blurb: 'A live skirmish match screen.' },
-  { name: 'campaign-editor', label: 'Campaign Editor', route: '/campaigns-next', status: 'stub', blurb: 'The campaign authoring screen.' },
+  { name: 'campaign-editor', label: 'Campaign Editor', route: '/campaigns-next', status: 'functional', blurb: 'The campaign authoring screen — tune the action buttons (size, frame, fill) live.' },
   { name: 'level-editor', label: 'Level Editor', route: '/edit', status: 'stub', blurb: 'The level / terrain editor.' },
   { name: 'lobbies', label: 'Lobbies', route: '/lobbies', status: 'stub', blurb: 'Multiplayer lobbies.' },
 ];

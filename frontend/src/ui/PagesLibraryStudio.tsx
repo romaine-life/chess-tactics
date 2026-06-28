@@ -1,7 +1,8 @@
-import { useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
 import { MainMenu } from './MainMenu';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
+import { SURFACE_ASSETS } from './surfaceCatalog';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -160,6 +161,255 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   );
 }
 
+// The kit button frames the campaign editor's action buttons can wear (files under
+// public/assets/ui/kit/). Same three baked variants the editor already ships with.
+const CE_BUTTON_FRAMES = [
+  { id: 'primary', label: 'Primary', file: '/assets/ui/kit/button-primary.png' },
+  { id: 'neutral', label: 'Neutral', file: '/assets/ui/kit/button-neutral.png' },
+  { id: 'danger', label: 'Danger', file: '/assets/ui/kit/button-danger.png' },
+] as const;
+type CeFrameId = (typeof CE_BUTTON_FRAMES)[number]['id'];
+// 'shipped' leaves each button's own frame alone (the editor uses primary for most, neutral for
+// Duplicate/Export/Import, danger/red for Delete); the others FORCE one frame on every action button.
+type CeFrameChoice = 'shipped' | CeFrameId;
+
+// Shipped baseline values of the .ce-asset-button rule (style.css ~6434). A control only emits an
+// override when it DIFFERS from these — so "no tuning" injects nothing and the preview is identical
+// to the real editor (it keeps each button's own frame, size and the danger button's red).
+const CE_SHIPPED = { minH: 40, padX: 8, border: 12 } as const;
+
+interface CeButtonTune {
+  frame: CeFrameChoice;
+  minW: number; // 0 = auto (natural width)
+  minH: number;
+  padX: number; // horizontal padding
+  border: number; // border + border-image width (scales the ornament)
+  fill: 'none' | 'color' | 'surface';
+  color: string; // hex, used when fill === 'color'
+  opacity: number; // 0..1, alpha of the colour fill
+  surface: string; // surface asset name, used when fill === 'surface'
+}
+
+const CE_TUNE_DEFAULTS: CeButtonTune = {
+  // Defaults = the shipped baseline, so an untouched panel overrides nothing.
+  frame: 'shipped',
+  minW: 0,
+  minH: CE_SHIPPED.minH,
+  padX: CE_SHIPPED.padX,
+  border: CE_SHIPPED.border,
+  fill: 'none',
+  color: '#0b2236',
+  opacity: 1,
+  surface: SURFACE_ASSETS[0]?.name ?? '',
+};
+
+const hexToRgba = (hex: string, alpha: number): string => {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return `rgba(11, 34, 54, ${alpha})`;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+};
+
+// Build the override rule for the campaign editor's rectangular action buttons
+// (.ce-asset-button / .ce-link-button / .ce-footer-link). Injected into the live /campaigns-next
+// iframe AND copied verbatim by "Copy CSS", so the bare selector is exactly what you paste into
+// style.css. Two principles keep it honest:
+//  1. ONLY emit a declaration for a knob that differs from the shipped baseline — so an untouched
+//     panel emits nothing and the preview matches the real editor exactly.
+//  2. Use border-image LONGHANDS, never the shorthand — so changing thickness/fill doesn't reset
+//     border-image-source, letting each button keep its own frame (danger=red, neutral=Duplicate…)
+//     unless the Frame control is explicitly set to force one.
+function buildCeButtonCss(t: CeButtonTune): string {
+  const decls: string[] = [];
+  if (t.minW > 0) decls.push(`min-width: ${t.minW}px`);
+  if (t.minH !== CE_SHIPPED.minH) decls.push(`min-height: ${t.minH}px`);
+  if (t.padX !== CE_SHIPPED.padX) {
+    decls.push(`padding-left: ${t.padX}px`);
+    decls.push(`padding-right: ${t.padX}px`);
+  }
+  if (t.border !== CE_SHIPPED.border) {
+    // border-width AND border-image-width move together so the ornament scales with the border.
+    decls.push(`border-width: ${t.border}px`);
+    decls.push(`border-image-width: ${t.border}px`);
+  }
+  if (t.frame !== 'shipped') {
+    // Force one frame on EVERY action button (overrides the per-button danger/neutral sources).
+    const frame = CE_BUTTON_FRAMES.find((f) => f.id === t.frame) ?? CE_BUTTON_FRAMES[0];
+    decls.push(`border-image-source: url("${frame.file}")`);
+  }
+  if (t.fill !== 'none') {
+    // Drop the baked `fill` slice so the interior goes transparent and the chosen fill shows, then
+    // paint it into the border box. (These kit frames have no dedicated "line" variant, so edge
+    // slices keep a little baked tint — a clean production fill would bake a button-line frame,
+    // ADR-0034. Fine for auditioning.) image-rendering keeps the now-sliced frame crisp.
+    decls.push(`border-image-slice: 24`);
+    if (t.fill === 'color') {
+      decls.push(`background: ${hexToRgba(t.color, t.opacity)}`);
+    } else {
+      const asset = SURFACE_ASSETS.find((s) => s.name === t.surface) ?? SURFACE_ASSETS[0];
+      decls.push(`background: url("${asset.file}") 0 0 / 256px repeat`);
+    }
+    decls.push(`background-origin: border-box`);
+    decls.push(`background-clip: border-box`);
+    decls.push(`image-rendering: pixelated`);
+  }
+  if (!decls.length) return '/* No changes — the panel matches the live editor. Tune a control to override. */';
+  const body = decls.map((d) => `  ${d} !important;`).join('\n');
+  return `.ce-asset-button,\n.ce-link-button,\n.ce-footer-link {\n${body}\n}`;
+}
+
+// Functional viewer: the LIVE campaign editor (ADR-0029 req 4 — real component, not a dead image)
+// in an iframe, with controls that inject a tuning stylesheet into it — the same proven shape as
+// the Settings dressing room. Iframing isolates the full-page editor's layout + mount side-effects
+// and means this touches ZERO shipped CSS; "Copy CSS" exports the bare rule to bake in later.
+function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [tune, setTune] = useState<CeButtonTune>(CE_TUNE_DEFAULTS);
+  const [copied, setCopied] = useState(false);
+  const patch = (next: Partial<CeButtonTune>): void => setTune((prev) => ({ ...prev, ...next }));
+
+  // Read the latest tune via a ref so the load handler / interval stay stable while always
+  // painting current values (mirrors SurfaceDressingRoom).
+  const tuneRef = useRef(tune);
+  tuneRef.current = tune;
+
+  const inject = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.head) return; // transient during navigation
+      let style = doc.getElementById('ce-button-tuning') as HTMLStyleElement | null;
+      if (!style) {
+        style = doc.createElement('style');
+        style.id = 'ce-button-tuning';
+        doc.head.appendChild(style);
+      }
+      style.textContent = buildCeButtonCss(tuneRef.current);
+    } catch {
+      /* same-origin access can blip during reload — re-inject on the next tick/load */
+    }
+  }, []);
+
+  // Re-inject live whenever the tune changes.
+  useEffect(() => {
+    inject();
+  }, [tune, inject]);
+
+  // The SPA mounts /campaigns-next asynchronously after the iframe load fires, so re-inject on
+  // load and on a short interval until it sticks (same handshake as the dressing room).
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const onLoad = () => inject();
+    iframe.addEventListener('load', onLoad);
+    let n = 0;
+    const timer = window.setInterval(() => {
+      inject();
+      if (++n > 24) window.clearInterval(timer);
+    }, 250);
+    return () => {
+      iframe.removeEventListener('load', onLoad);
+      window.clearInterval(timer);
+    };
+  }, [inject]);
+
+  const copyCss = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(buildCeButtonCss(tune));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      /* clipboard blocked — ignore; values are still live in the preview */
+    }
+  };
+
+  return (
+    <>
+      <section className="al-lab-main pages-view-main" aria-label="Campaign Editor preview">
+        <iframe ref={iframeRef} className="pages-stub-frame" src={page.route} title="Live campaign editor preview" />
+      </section>
+      <aside className="tileset-view-controls" aria-label="Campaign Editor button controls">
+        <section className="tileset-inspector-section">
+          <h2>Buttons</h2>
+          <div className="tileset-control-stack">
+            {header}
+            <p className="tileset-catalog-note">
+              Tune the campaign editor’s action buttons (New Campaign, Duplicate, Export, Delete…) on the live page. Defaults match the editor exactly — each control only overrides what you touch. Nothing is saved; “Copy CSS” gives you just those overrides to paste into style.css.
+            </p>
+            <div className="tileset-filter-field">
+              <span>Frame</span>
+              <div className="tileset-tier-seg" aria-label="Button frame">
+                <button type="button" className={tune.frame === 'shipped' ? 'is-active' : ''} onClick={() => patch({ frame: 'shipped' })}>As-is</button>
+                {CE_BUTTON_FRAMES.map((f) => (
+                  <button key={f.id} type="button" className={tune.frame === f.id ? 'is-active' : ''} onClick={() => patch({ frame: f.id })}>{f.label}</button>
+                ))}
+              </div>
+            </div>
+            {tune.frame !== 'shipped' ? (
+              <p className="tileset-catalog-note">Forces this frame on every action button. “As-is” keeps each button’s own frame (Delete is red, Duplicate/Export are neutral).</p>
+            ) : null}
+            <label className="tileset-catalog-zoom">
+              <span>Button width · {tune.minW === 0 ? 'auto' : `${tune.minW}px`}</span>
+              <input type="range" min="0" max="360" step="4" value={tune.minW} onChange={(e) => patch({ minW: Number(e.target.value) })} />
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Button height · {tune.minH}px</span>
+              <input type="range" min="28" max="72" step="1" value={tune.minH} onChange={(e) => patch({ minH: Number(e.target.value) })} />
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Horizontal padding · {tune.padX}px</span>
+              <input type="range" min="0" max="32" step="1" value={tune.padX} onChange={(e) => patch({ padX: Number(e.target.value) })} />
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Frame thickness · {tune.border}px</span>
+              <input type="range" min="6" max="20" step="1" value={tune.border} onChange={(e) => patch({ border: Number(e.target.value) })} />
+            </label>
+            <div className="tileset-filter-field">
+              <span>Background fill</span>
+              <div className="tileset-tier-seg" aria-label="Background fill">
+                <button type="button" className={tune.fill === 'none' ? 'is-active' : ''} onClick={() => patch({ fill: 'none' })}>None</button>
+                <button type="button" className={tune.fill === 'color' ? 'is-active' : ''} onClick={() => patch({ fill: 'color' })}>Color</button>
+                <button type="button" className={tune.fill === 'surface' ? 'is-active' : ''} onClick={() => patch({ fill: 'surface' })}>Surface</button>
+              </div>
+            </div>
+            {tune.fill === 'color' ? (
+              <>
+                <label className="tileset-category-select">
+                  <span>Fill color</span>
+                  <input type="color" value={tune.color} onChange={(e) => patch({ color: e.target.value })} aria-label="Fill color" />
+                </label>
+                <label className="tileset-catalog-zoom">
+                  <span>Fill opacity · {Math.round(tune.opacity * 100)}%</span>
+                  <input type="range" min="0" max="1" step="0.05" value={tune.opacity} onChange={(e) => patch({ opacity: Number(e.target.value) })} />
+                </label>
+              </>
+            ) : null}
+            {tune.fill === 'surface' ? (
+              <label className="tileset-category-select">
+                <span>Fill surface</span>
+                <select value={tune.surface} onChange={(e) => patch({ surface: e.target.value })} aria-label="Fill surface">
+                  {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {tune.fill !== 'none' ? (
+              <p className="tileset-catalog-note">Fill drops the frame’s baked interior so the colour/surface shows. These kit frames have no “line” variant yet, so a faint edge tint may remain — fine for auditioning a look.</p>
+            ) : null}
+            <button type="button" className="tileset-view-action pages-reset" onClick={() => setTune(CE_TUNE_DEFAULTS)}>Reset to defaults</button>
+            <button type="button" className="tileset-view-action" onClick={copyCss}>{copied ? 'Copied CSS ✓' : 'Copy CSS'}</button>
+            <dl className="al-meta">
+              <div><dt>Page</dt><dd>{page.label}</dd></div>
+              <div><dt>Route</dt><dd>{page.route}</dd></div>
+              <div><dt>State</dt><dd>tunable (live)</dd></div>
+            </dl>
+          </div>
+        </section>
+      </aside>
+    </>
+  );
+}
+
 // Stub viewer for the other pages — still LIVE (ADR-0029 req 4) via an iframe of the real
 // route, with a Details readout. Per-page tweak controls land later.
 function PageStubViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
@@ -193,5 +443,6 @@ export function PagesViewer({ name, header }: { name?: string; header?: ReactNod
   const page = PAGE_ENTRIES.find((p) => p.name === name) ?? PAGE_ENTRIES[0];
   if (page.name === 'main-menu') return <MainMenuViewer page={page} header={header} />;
   if (page.name === 'settings') return <SurfaceDressingRoom header={header} />;
+  if (page.name === 'campaign-editor') return <CampaignEditorViewer page={page} header={header} />;
   return <PageStubViewer page={page} header={header} />;
 }
