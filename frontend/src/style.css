@@ -1600,13 +1600,24 @@ h1 {
   /* Tracking (ADR-0016): two roles — labels vs eyebrows/brand descriptor. */
   --ds-tracking-tight: .01em;
   --ds-tracking-wide: .14em;
-  /* space */
+  /* space — the 8px base + 4px half-step scale (ADR-0031). Map spatial ROLES onto
+     these steps; don't hand-pick px per element. */
   --ds-space-1: 4px;
   --ds-space-2: 8px;
   --ds-space-3: 12px;
   --ds-space-4: 16px;
   --ds-space-5: 24px;
   --ds-space-6: 32px;
+  --ds-space-7: 48px;
+  --ds-space-8: 64px;
+  /* Spatial-role tokens (ADR-0031) — COMFORTABLE density is the default; in-game
+     surfaces override these to the tight end (see .skirmish-screen). inset = padding
+     on all sides; stack = vertical gap; inline = horizontal gap; gutter = section gaps. */
+  --ds-inset: var(--ds-space-4);
+  --ds-stack: var(--ds-space-4);
+  --ds-inline: var(--ds-space-3);
+  --ds-inline-tight: var(--ds-space-2);
+  --ds-gutter: var(--ds-space-5);
   /* radius */
   --ds-radius-sm: 6px;
   --ds-radius-md: 8px;
@@ -4344,6 +4355,13 @@ h1 {
   --skirmish-muted: #a7c1ce;
   --skirmish-panel: rgba(7, 19, 29, .86);
   --skirmish-panel-strong: rgba(10, 29, 42, .94);
+  /* COMPACT density — this is an in-game surface (ADR-0006 lean + ADR-0031). The
+     spatial-role tokens resolve to the tight end of the scale here. */
+  --ds-inset: var(--ds-space-2);
+  --ds-stack: var(--ds-space-2);
+  --ds-inline: var(--ds-space-2);
+  --ds-inline-tight: var(--ds-space-1);
+  --ds-gutter: var(--ds-space-3);
   align-items: stretch;
   color: var(--skirmish-ink);
   display: grid;
@@ -4447,27 +4465,32 @@ h1 {
 /* One shared status-chip frame so turn / objective / counts read as a single
    family, all the same height and vertically centered (ADR-0010 rhythm). */
 .skirmish-status-chip {
+  /* Kit panel frame so the status reads as a contained chip, not floating text —
+     in-theme (panel.png), never the bland CSS box it replaced (ADR-0032/0033).
+     Fixed 46px height = the header buttons, so the bar's elements line up. */
   align-items: center;
-  background: var(--skirmish-panel);
   block-size: 46px;
-  border: 1px solid rgba(96, 183, 221, .26);
-  border-radius: 6px;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 8px round;
+  box-sizing: border-box;
   display: flex;
-  gap: 10px;
-  padding: 0 14px;
+  gap: var(--ds-inline);
 }
 
-/* Chip typography on the design-system scale (ADR-0008 family): a prominent
-   uppercase label line over a muted detail line. Scoped + parent-qualified so it
-   wins over the older ad-hoc per-element font sizes without touching them. */
+/* Chip text on the --ds-text role scale (ADR-0024) — label line over a muted
+   value line; no ad-hoc rem sizes or glows. */
 .skirmish-topbar .skirmish-status-chip strong {
-  font-size: var(--ds-text-md);
-  letter-spacing: .04em;
-  line-height: 1.1;
   color: #eaf6ff;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  letter-spacing: .06em;
+  line-height: 1.1;
+  text-transform: uppercase;
 }
 
 .skirmish-topbar .skirmish-status-chip small {
+  color: var(--skirmish-muted);
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-xs);
   letter-spacing: .02em;
   line-height: 1.15;
@@ -4550,8 +4573,6 @@ h1 {
 .skirmish-turn-plate strong,
 .skirmish-card h2,
 .skirmish-action-button strong,
-.skirmish-end-turn,
-.skirmish-new-run,
 .skirmish-score-panel strong {
   font-family: "Advance Wars 2 GBA", "Jersey 10", "Press Start 2P", "VT323", ui-monospace, monospace;
   letter-spacing: 0;
@@ -4578,12 +4599,7 @@ h1 {
 }
 
 .skirmish-objective strong {
-  color: #d9f2ff;
   display: block;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 1.12rem;
-  line-height: 1.35;
-  text-transform: uppercase;
 }
 
 .skirmish-turn-plate {
@@ -4592,13 +4608,6 @@ h1 {
   justify-items: center;
   min-width: 0;
   text-align: center;
-}
-
-.skirmish-turn-plate strong {
-  color: #d9f4ff;
-  font-size: clamp(1rem, 1.34vw, 1.34rem);
-  line-height: 1;
-  text-shadow: 0 2px 0 #02070b, 0 0 14px rgba(56, 215, 255, .22);
 }
 
 .skirmish-window-actions {
@@ -4615,17 +4624,8 @@ h1 {
   position: relative;
 }
 
-.skirmish-field::before {
-  background:
-    radial-gradient(640px 320px at 52% 38%, rgba(50, 159, 209, .16), transparent 70%),
-    linear-gradient(180deg, rgba(5, 20, 34, .28), rgba(1, 5, 9, .56));
-  border: 1px solid rgba(45, 105, 139, .58);
-  box-shadow: inset 0 0 72px rgba(0, 0, 0, .38);
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-}
+/* No board box: the board (game art) floats on the screen's night-sky background,
+   per the concept and ADR-0032 (a fabricated CSS box around the scene isn't allowed). */
 
 .skirmish-board-frame {
   display: grid;
@@ -4642,7 +4642,7 @@ h1 {
 
 .skirmish-board-frame [data-testid="skirmish-board"] {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   max-width: 100%;
   overflow: hidden;
@@ -4650,73 +4650,21 @@ h1 {
   width: 100%;
 }
 
+/* No board box: the board container paints NO background — the board art floats on
+   the screen's night-sky background (ADR-0032). A tinted rectangle here is the "box". */
 .skirmish-board-lab {
-  background:
-    radial-gradient(760px 360px at 50% 42%, rgba(54, 135, 162, .18), transparent 72%),
-    linear-gradient(180deg, rgba(5, 18, 28, .18), rgba(2, 7, 12, .46));
+  background: transparent;
 }
 
 .skirmish-board-lab .tileset-view-stage {
   border: 0;
   border-radius: 0;
   padding: 0;
-  background:
-    radial-gradient(820px 420px at 50% 44%, rgba(67, 111, 128, .18), transparent 70%),
-    linear-gradient(180deg, rgba(3, 14, 23, .06), rgba(1, 5, 9, .34));
+  background: transparent;
 }
 
 .skirmish-board-lab .tileset-view-stage:focus-within {
   outline: none;
-}
-
-.skirmish-board-tools {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
-  min-height: 44px;
-  padding: 6px 10px;
-  position: relative;
-  z-index: 3;
-}
-
-.skirmish-board-tools button {
-  align-items: center;
-  background: rgba(7, 24, 36, .78);
-  border: 1px solid rgba(83, 156, 190, .38);
-  border-radius: 5px;
-  color: #dff4ff;
-  display: grid;
-  font: 800 .82rem/1 var(--ds-font-sans, system-ui, sans-serif);
-  min-height: 30px;
-  min-width: 32px;
-  padding: 6px 9px;
-  text-shadow: none;
-}
-
-.skirmish-board-tools button.active {
-  background: rgba(24, 87, 125, .9);
-  border-color: rgba(111, 210, 255, .72);
-  box-shadow: 0 0 0 2px rgba(56, 215, 255, .12);
-}
-
-.skirmish-board-tools select {
-  min-height: 30px;
-  max-width: 170px;
-  color: #dff4ff;
-  background: rgba(7, 24, 36, .86);
-  border: 1px solid rgba(83, 156, 190, .38);
-  border-radius: 5px;
-  font: 800 .78rem/1 var(--ds-font-sans, system-ui, sans-serif);
-  padding: 5px 8px;
-}
-
-.skirmish-board-tools span {
-  color: #a9c4d4;
-  font: 800 .78rem/1 var(--ds-font-sans, system-ui, sans-serif);
-  min-width: 42px;
-  text-align: center;
 }
 
 .skirmish-board-surface .tileset-generated-board-tile {
@@ -5045,34 +4993,124 @@ h1 {
 }
 
 .skirmish-hud {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   grid-column: 2;
   grid-row: 2;
-  align-content: start;
-  gap: 8px;
-  grid-auto-rows: max-content;
+  /* The right side is ONE control panel: a single kit panel frame (same panel.png +
+     14px corner as the title bar, so they read consistently) holding the tabs, the
+     active content, and the actions. Inner sections are frameless content, not nested
+     boxes. This is the precedent for the level editor's right side too (ADR-0033). */
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  box-sizing: border-box;
+  gap: var(--ds-stack);
   height: 100%;
   max-height: none;
   min-height: 0;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 10px 12px 12px 0;
+  overflow: hidden;
+  padding: 0;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
 }
 
+/* Tabbed HUD (ADR-0006 in-game density): one section visible at a time so the
+   growing command surface stays scannable. Tabs + bottom actions are pinned; the
+   active panel takes the remaining height and scrolls on its own. */
+.skirmish-hud-tabs {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--ds-inline-tight);
+}
+
+.skirmish-hud-tab {
+  appearance: none;
+  background: transparent;
+  /* Grow to fill each row; wraps to a second row past ~3 tabs in the narrow panel. */
+  flex: 1 1 76px;
+  /* Kit mode-button frame — atom-assembled (ADR-0012/0016), the SAME tab/header
+     frame the settings nav uses; gold brackets, cyan when active. Chrome must be
+     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014). */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border-radius: 0;
+  color: var(--skirmish-muted);
+  cursor: pointer;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  image-rendering: pixelated;
+  letter-spacing: .04em;
+  line-height: 1;
+  min-block-size: 44px;
+  padding: 0 var(--ds-inline);
+  text-transform: uppercase;
+}
+
+.skirmish-hud-tab:hover,
+.skirmish-hud-tab:focus-visible {
+  color: var(--skirmish-ink);
+  outline: none;
+}
+
+.skirmish-hud-tab.active {
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  color: #f3fbff;
+}
+
+.skirmish-hud-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--ds-stack);
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-color: #315160 #071017;
+  scrollbar-width: thin;
+}
+
+/* View tab: layout only — the buttons themselves wear the kit mode-button frame
+   (.app-header-button), so no raw-CSS chrome here. */
+.skirmish-view-group {
+  display: grid;
+  gap: var(--ds-stack);
+}
+
+.skirmish-view-group + .skirmish-view-group {
+  margin-top: var(--ds-gutter);
+}
+
+.skirmish-view-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-inline);
+}
+
+.skirmish-view-row .app-header-button {
+  font-size: var(--ds-text-xs);
+  min-block-size: 40px;
+  padding: 0 var(--ds-gutter);
+}
+
+.skirmish-zoom-readout {
+  color: var(--skirmish-ink);
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  min-width: 44px;
+  text-align: center;
+}
+
 .skirmish-score-panel,
 .skirmish-card {
-  background:
-    linear-gradient(180deg, rgba(13, 34, 48, .92), rgba(5, 15, 24, .92));
-  border: 1px solid rgba(76, 140, 171, .36);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 1px 0 rgba(221, 244, 255, .05),
-    0 10px 22px rgba(0, 0, 0, .18);
+  /* Frameless content INSIDE the control panel — the one panel frame is on
+     .skirmish-hud, so these are plain sections, not nested boxes (ADR-0032/0033). */
+  background: transparent;
+  border: 0;
+  box-sizing: border-box;
   min-width: 0;
-  padding: 12px;
+  padding: 0;
   position: relative;
 }
 
@@ -5304,15 +5342,14 @@ h1 {
 
 .skirmish-portrait-frame {
   align-items: center;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(65, 151, 190, .18), transparent 62%),
-    rgba(3, 12, 19, .74);
-  border: 1px solid rgba(87, 153, 184, .35);
-  border-radius: 5px;
+  /* Kit panel frame (ADR-0032) — no `fill`, so the portrait backdrop shows through the
+     center; the bust crop fills the content box edge-to-edge. Not a raw-CSS box. */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 / 12px round;
+  box-sizing: border-box;
   display: grid;
+  image-rendering: pixelated;
   min-height: 86px;
-  /* no padding: the portrait crop fills the frame edge-to-edge (the crop is the
-     framing; its transparent margins let the backdrop show through). */
   padding: 0;
   place-items: center;
   overflow: hidden;
@@ -5325,10 +5362,8 @@ h1 {
     rgba(3, 12, 19, .74);
   background-position: center;
   background-size: cover;
-  box-shadow:
-    inset 0 0 0 1px rgba(2, 8, 13, .58),
-    inset 0 -22px 26px rgba(0, 0, 0, .42);
-  overflow: hidden;
+  /* Bottom vignette grounds the bust (image treatment, not a fabricated frame edge). */
+  box-shadow: inset 0 -22px 26px rgba(0, 0, 0, .42);
 }
 
 /* Eye-level portrait bust (separate render contract from the iso board sprite). Smooth
@@ -5391,34 +5426,17 @@ h1 {
 .skirmish-selected-copy dd {
   align-items: center;
   color: #f3ead8;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 48px minmax(0, 1fr);
+  display: flex;
   margin: 0;
-  width: 100%;
-}
-
-.skirmish-stat-bar {
-  display: grid;
-  gap: 3px;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-}
-
-.skirmish-stat-bar span {
-  background: #081723;
-  border: 1px solid rgba(64, 115, 147, .72);
-  height: 9px;
-}
-
-.skirmish-stat-bar span.filled {
-  background: linear-gradient(180deg, #3fd4ff, #1e77e5);
-  box-shadow: 0 0 7px rgba(56, 215, 255, .38);
 }
 
 .skirmish-service-record {
-  border-top: 1px solid rgba(76, 140, 171, .28);
-  margin-top: 12px;
-  padding-top: 10px;
+  /* In-theme kit sub-panel so the stats aren't bare/"headless" on the control panel
+     (ADR-0032). One frame for the whole block — not five sets of brackets. */
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 12px round;
+  box-sizing: border-box;
+  margin-top: var(--ds-stack);
 }
 
 .skirmish-service-record h3 {
@@ -5444,15 +5462,13 @@ h1 {
    number read ambiguously against the neighbouring column). A single row of five
    keeps the panel as short as the original so the rail still fits. */
 .skirmish-service-record dl div {
+  /* Frameless stat column (ADR-0032) — number over label, no per-cell CSS box. */
   align-items: center;
-  background: rgba(3, 12, 19, .5);
-  border: 1px solid rgba(64, 115, 147, .32);
-  border-radius: 4px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 5px 1px;
+  padding: 4px 1px 0;
 }
 
 .skirmish-service-record dt {
@@ -5478,63 +5494,6 @@ h1 {
   order: 1;
 }
 
-.skirmish-actions {
-  display: grid;
-  gap: 6px;
-}
-
-.skirmish-action-button {
-  align-items: center;
-  background:
-    linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94));
-  border: 1px solid rgba(82, 142, 170, .34);
-  border-radius: 5px;
-  display: grid;
-  gap: 9px;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  min-height: 48px;
-  padding: 6px 14px 6px 10px;
-  text-align: left;
-}
-
-.skirmish-action-button.blue {
-  background:
-    linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
-  border-color: rgba(99, 190, 255, .46);
-}
-
-.skirmish-action-button.red {
-  background:
-    linear-gradient(180deg, rgba(126, 49, 35, .95), rgba(48, 18, 17, .96));
-  border-color: rgba(255, 121, 86, .46);
-}
-
-.skirmish-action-button:hover,
-.skirmish-action-button:focus-visible {
-  border-color: rgba(241, 216, 134, .82);
-  box-shadow: 0 0 0 2px rgba(241, 216, 134, .12);
-  outline: 2px solid rgba(255, 215, 116, .7);
-  outline-offset: -3px;
-}
-
-.skirmish-action-button:active { transform: translateY(1px); }
-
-.skirmish-action-button:disabled {
-  filter: grayscale(.35) brightness(.78);
-  opacity: .6;
-}
-
-.skirmish-action-button strong {
-  color: #f7f0e3;
-  font-size: 1.35rem;
-  line-height: .95;
-}
-
-.skirmish-action-button small {
-  justify-self: end;
-  white-space: nowrap;
-}
-
 .skirmish-roster-rows {
   display: grid;
   gap: 8px;
@@ -5543,28 +5502,39 @@ h1 {
 .skirmish-roster-strip {
   display: grid;
   gap: 7px;
-  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
 }
 
 .skirmish-roster-slot {
+  /* Kit mode-button frame — same gold bracket frame as the tabs/.app-header-button
+     (ADR-0011/0012/0032), not a hand-rolled gradient box. Cyan -active when selected.
+     Holds the unit's portrait bust as its content. */
   aspect-ratio: 1;
-  background:
-    radial-gradient(circle at 50% 38%, rgba(63, 148, 190, .16), transparent 66%),
-    rgba(4, 13, 20, .72);
-  border: 1px solid rgba(82, 142, 170, .34);
-  border-radius: 5px;
+  background: transparent;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
+  border-radius: 0;
+  box-sizing: border-box;
   display: grid;
-  min-height: 42px;
-  padding: 4px;
+  image-rendering: pixelated;
+  min-height: 62px;
+  overflow: hidden;
   place-items: center;
 }
 
 .skirmish-roster-slot.active,
 .skirmish-roster-slot:hover,
 .skirmish-roster-slot:focus-visible {
-  filter: brightness(1.18);
-  outline: 1px solid rgba(56, 215, 255, .8);
-  outline-offset: -2px;
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+  outline: none;
+}
+
+.skirmish-roster-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  image-rendering: auto;
 }
 
 .skirmish-roster-slot:disabled {
@@ -5572,33 +5542,12 @@ h1 {
   opacity: .86;
 }
 
-.skirmish-threat-card ul,
 .skirmish-log-card ul {
   display: grid;
   gap: 5px;
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-.skirmish-threat-card li {
-  align-items: center;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
-  min-height: 40px;
-}
-
-.skirmish-threat-card .skirmish-icon {
-  height: 34px;
-  width: 34px;
-}
-
-.skirmish-threat-card strong {
-  color: #f8e2ba;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 1.15rem;
-  font-weight: 400;
 }
 
 .skirmish-log-card { min-height: 108px; }
@@ -5637,30 +5586,6 @@ h1 {
   min-width: 0;
 }
 
-.skirmish-bottom-actions {
-  display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr) 72px;
-}
-
-.skirmish-end-turn,
-.skirmish-new-run {
-  background:
-    linear-gradient(180deg, rgba(27, 101, 145, .96), rgba(13, 51, 83, .96));
-  border: 1px solid rgba(104, 198, 255, .42);
-  border-radius: 5px;
-  color: #f5eee3;
-  font-size: 1rem;
-  min-height: 44px;
-  text-shadow: 0 2px 0 #02070b;
-}
-
-.skirmish-new-run {
-  background:
-    linear-gradient(180deg, rgba(22, 45, 58, .96), rgba(8, 20, 30, .96));
-  font-size: .9rem;
-}
-
 .skirmish-icon {
   background-position: center;
   background-repeat: no-repeat;
@@ -5674,26 +5599,18 @@ h1 {
 
 .skirmish-icon-rook-blue { background-image: url("/assets/ui/skirmish/icon-rook-blue.png"); }
 .skirmish-icon-rook-red { background-image: url("/assets/ui/skirmish/icon-rook-red.png"); }
-.skirmish-icon-flag { background-image: url("/assets/ui/skirmish/icon-flag.png"); }
-.skirmish-icon-hourglass { background-image: url("/assets/ui/skirmish/icon-hourglass.png"); }
-.skirmish-icon-gear { background-image: url("/assets/ui/skirmish/icon-gear.png"); }
+/* Point at the clean, method-forged kit glyphs (transparent, no baked box) instead of
+   the contact-sheet slices (ADR-0011/0032). menu + rook have no forged twin yet. */
+.skirmish-icon-flag { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
+.skirmish-icon-hourglass { background-image: url("/assets/ui/kit/icons/game/wait.png"); }
+.skirmish-icon-gear { background-image: url("/assets/ui/kit/icons/gear.png"); }
 .skirmish-icon-menu { background-image: url("/assets/ui/skirmish/icon-menu.png"); }
-.skirmish-icon-move { background-image: url("/assets/ui/skirmish/icon-move.png"); }
-.skirmish-icon-power { background-image: url("/assets/ui/skirmish/icon-power.png"); }
-.skirmish-icon-shield { background-image: url("/assets/ui/skirmish/icon-shield.png"); }
-.skirmish-icon-sword { background-image: url("/assets/ui/skirmish/icon-sword.png"); }
-.skirmish-icon-crossed-swords { background-image: url("/assets/ui/skirmish/icon-crossed-swords.png"); }
+.skirmish-icon-move { background-image: url("/assets/ui/kit/icons/game/move.png"); }
+.skirmish-icon-power { background-image: url("/assets/ui/kit/icons/game/power.png"); }
+.skirmish-icon-shield { background-image: url("/assets/ui/kit/icons/game/defend.png"); }
+.skirmish-icon-sword { background-image: url("/assets/ui/kit/icons/game/attack.png"); }
+.skirmish-icon-crossed-swords { background-image: url("/assets/ui/kit/icons/game/capture.png"); }
 
-.skirmish-brand .skirmish-icon,
-.skirmish-objective .skirmish-icon {
-  height: 42px;
-  width: 42px;
-}
-
-.skirmish-action-button .skirmish-icon {
-  height: 31px;
-  width: 31px;
-}
 
 .skirmish-unit-badge {
   align-items: center;
@@ -5769,23 +5686,23 @@ h1 {
   .skirmish-hud {
     grid-column: 1;
     grid-row: 3;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     height: auto;
     max-height: none;
     overflow: visible;
     padding: 0 8px 12px;
   }
 
-  .skirmish-score-panel {
-    display: flex;
+  /* Page scrolls on mobile — don't nest a panel scroll inside it. */
+  .skirmish-hud-panel {
+    overflow: visible;
   }
 
-  .skirmish-score-panel,
-  .skirmish-bottom-actions {
+  .skirmish-score-panel {
+    display: flex;
     grid-column: 1 / -1;
   }
 
-  /* Stacked mobile bar: brand left, counts + actions right; hide the center status group. */
+  /* Stacked mobile bar: brand left, counts on the right; hide the center status group. */
   .skirmish-topbar-status {
     display: none;
   }
