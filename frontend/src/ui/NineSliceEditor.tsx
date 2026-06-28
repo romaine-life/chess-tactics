@@ -16,7 +16,7 @@
 //
 // In dev, Save writes config/nine-slice/<asset>.json and regenerates the asset
 // (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import nineSliceRegistry from '../../config/nine-slice-registry.json';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 
@@ -177,11 +177,20 @@ function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: n
   return c;
 }
 
-export function NineSliceEditor(): ReactElement {
-  const [assetId, setAssetId] = useState(() => {
-    const a = new URLSearchParams(window.location.search).get('asset');
-    return ASSETS.some((x) => x.id === a) ? a! : ASSETS[0].id;
-  });
+// Editor asset ids + labels, exported so the host studio can default/seed the frame
+// selection without reaching into the registry itself.
+export const NINE_SLICE_ASSETS: { id: string; label: string }[] = ASSETS.map((a) => ({ id: a.id, label: a.label }));
+export const DEFAULT_NINE_SLICE_ASSET = ASSETS[0].id;
+
+// The 9-slice editor as an embedded studio surface — the Assets editing kind, the
+// frame twin of PortraitLab. It renders [main][aside] straight into the studio
+// shell like every other Viewer surface: the canvas stage is the main pane, the
+// editing controls are the Controls panel. Asset selection is owned by the studio
+// (assetId/onAssetId ride its URL), so there is NO own route, NO page chrome, and
+// NO "Back" link — the Catalog tab is back (docs/studio-control-architecture.md).
+export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; onAssetId: (id: string) => void; header?: ReactNode }): ReactElement {
+  const asset = useMemo(() => ASSETS.find((a) => a.id === assetId) ?? ASSETS[0], [assetId]);
+  const aid = asset.id;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // Fingerprints of the exact tile bytes this view is built from (corner/edge/fill),
   // shown in the header so the asset on screen is identifiable and matchable to disk.
@@ -215,12 +224,8 @@ export function NineSliceEditor(): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pvActualRef = useRef<HTMLCanvasElement>(null);
   const pvUseRef = useRef<HTMLCanvasElement>(null);
-  // Where the editor was opened from (the catalog passes ?return=<its url>). Captured on mount,
-  // before the asset-URL sync rewrites the query — so "Back to catalog" lands exactly there.
-  const returnUrl = useRef(new URLSearchParams(window.location.search).get('return') || '/tileset-studio');
-  const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
   const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, content: DEFAULT_CONTENT, fill: DEFAULT_FILL };
-  const stored = edits[assetId];
+  const stored = edits[aid];
   const edit: EditState = {
     keyline: stored?.keyline ?? { dx: 0, dy: 0 },
     bracket: stored?.bracket ?? { dx: 0, dy: 0 },
@@ -268,29 +273,22 @@ export function NineSliceEditor(): ReactElement {
   // is what stops a fresh editor from saving default values over your real config.
   const hydrated = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!((import.meta as { env?: { DEV?: boolean } }).env?.DEV) || hydrated.current.has(assetId)) return;
+    if (!((import.meta as { env?: { DEV?: boolean } }).env?.DEV) || hydrated.current.has(aid)) return;
     let live = true;
-    fetch(`/__nine-slice/config?asset=${assetId}`)
+    fetch(`/__nine-slice/config?asset=${aid}`)
       .then((r) => r.json())
       .then((j) => {
         if (!live || !j.ok || !j.config) return;
-        hydrated.current.add(assetId);
-        setEdits((prev) => ({ ...prev, [assetId]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL } }));
+        hydrated.current.add(aid);
+        setEdits((prev) => ({ ...prev, [aid]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL } }));
       })
       .catch(() => {});
     return () => { live = false; };
-  }, [assetId]);
-
-  // Asset selection lives in the URL so the editor is deep-linkable (?asset=panel).
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search);
-    p.set('asset', assetId);
-    window.history.replaceState(window.history.state, '', `${window.location.pathname}?${p.toString()}`);
-  }, [assetId]);
+  }, [aid]);
 
   const update = (mut: (cur: EditState) => EditState) => setEdits((prev) => {
-    const cur = prev[assetId] ?? DEFAULT_EDIT;
-    return { ...prev, [assetId]: mut(cur) };
+    const cur = prev[aid] ?? DEFAULT_EDIT;
+    return { ...prev, [aid]: mut(cur) };
   });
   // Clamp an offset so the active piece's opaque pixels stay inside the footprint —
   // outward stops at flush (you can't push out of bounds; that's never wanted), inward
@@ -326,7 +324,7 @@ export function NineSliceEditor(): ReactElement {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, assetId, loaded]);
+  }, [active, aid, loaded]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -409,7 +407,7 @@ export function NineSliceEditor(): ReactElement {
     draw(pvUseRef, 150, 44, 2, 'Settings');
   }, [loaded, edit.keyline, edit.bracket, asset, backing]);
 
-  const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content, fill: edit.fill }, null, 2);
+  const exportJson = JSON.stringify({ asset: aid, keyline: edit.keyline, bracket: edit.bracket, content: edit.content, fill: edit.fill }, null, 2);
   // Only the bracket is nudgeable. Keyline is inert (continuous border by construction);
   // exposing a keyline nudge would let the preview show a state the bake can't reproduce.
   const pieces: PieceKey[] = loaded?.hasAccent ? ['bracket'] : [];
@@ -430,15 +428,8 @@ export function NineSliceEditor(): ReactElement {
   };
 
   return (
-    <section style={ST.page}>
-      <header style={ST.bar}>
-        <strong style={{ fontSize: 18 }}>9-slice editor</strong>
-        <select value={assetId} onChange={(e) => setAssetId(e.target.value)} style={ST.select}>
-          {ASSETS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-        </select>
-        <a href={returnUrl.current} style={ST.link}>← Back to catalog</a>
-      </header>
-      <div style={ST.body}>
+    <>
+      <section className="al-lab-main" aria-label="9-slice frame editor">
         <div style={ST.stage}>
           <canvas ref={canvasRef} style={{ imageRendering: 'pixelated', maxWidth: '100%' }} />
           <div style={ST.previewStrip}>
@@ -446,16 +437,27 @@ export function NineSliceEditor(): ReactElement {
             <div style={ST.previewItem}><span style={ST.previewLabel}>stretched in-use · 2×</span><canvas ref={pvUseRef} style={{ imageRendering: 'pixelated' }} /></div>
           </div>
         </div>
-        <aside style={ST.panel}>
-          <div style={ST.fpBox}>
-            <div style={ST.fpHead}>Tiles in this view — served path · sha-256[:5]</div>
-            {(['corner', 'edge', 'fill'] as const).map((k) => (
-              <div key={k} style={ST.fpRow}>
-                <span style={ST.fpPath}>{asset[k]}</span>
-                <span style={ST.fp}>{tileHashes[k] ?? '…'}</span>
-              </div>
-            ))}
-          </div>
+      </section>
+      <aside className="tileset-view-controls" aria-label="9-slice controls">
+        <section className="tileset-inspector-section">
+          <h2>Controls</h2>
+          <div className="tileset-control-stack">
+            {header}
+            <label className="tileset-category-select" title="Which kit frame you're aligning.">
+              <span>Frame</span>
+              <select value={aid} onChange={(e) => onAssetId(e.target.value)} aria-label="9-slice frame">
+                {ASSETS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </label>
+            <div style={ST.fpBox}>
+              <div style={ST.fpHead}>Tiles in this view — served path · sha-256[:5]</div>
+              {(['corner', 'edge', 'fill'] as const).map((k) => (
+                <div key={k} style={ST.fpRow}>
+                  <span style={ST.fpPath}>{asset[k]}</span>
+                  <span style={ST.fp}>{tileHashes[k] ?? '…'}</span>
+                </div>
+              ))}
+            </div>
           <div style={ST.pieceRow}>
             {pieces.map((k) => (
               <button key={k} type="button" onClick={() => setActive(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{k}</button>
@@ -537,32 +539,28 @@ export function NineSliceEditor(): ReactElement {
           <label style={ST.hint}>Export — paste this back:</label>
           <textarea readOnly value={exportJson} style={ST.export} onFocus={(e) => e.currentTarget.select()} />
           <button type="button" style={ST.copy} onClick={() => navigator.clipboard?.writeText(exportJson)}>Copy JSON</button>
-        </aside>
-      </div>
-    </section>
+          </div>
+        </section>
+      </aside>
+    </>
   );
 }
 
 const ST: Record<string, CSSProperties> = {
-  page: { position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#06080d', color: '#cfe3ff', fontFamily: 'var(--ds-font-sans, system-ui, sans-serif)' },
-  bar: { display: 'flex', alignItems: 'center', gap: 14, padding: '10px 14px', borderBottom: '1px solid #1b2740', background: '#0b1220' },
   select: { fontSize: 15, padding: '4px 8px', background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 4 },
-  link: { marginLeft: 'auto', color: '#9fd8ff', textDecoration: 'none' },
   fpBox: { display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 10px', background: '#0a0f1c', border: '1px solid #1b2740', borderRadius: 6 },
   fpHead: { fontSize: 11, color: '#7f93ad', letterSpacing: 0.2 },
   fpRow: { display: 'flex', flexWrap: 'wrap', gap: '0 10px', alignItems: 'baseline', justifyContent: 'space-between' },
   fpPath: { fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#9fc4d5', wordBreak: 'break-all' },
   fp: { fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#bfe3ff', fontWeight: 600, flex: 'none' },
-  body: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 320px', minHeight: 0 },
   stage: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 26, overflow: 'auto', padding: 20 },
   previewStrip: { display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'center' },
   previewItem: { display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 16, background: '#0e1626', border: '1px solid #1b2740', borderRadius: 8 },
   previewLabel: { fontSize: 11, color: '#9fc4d5', letterSpacing: 0.3 },
-  panel: { borderLeft: '1px solid #1b2740', background: '#0b1220', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto' },
   pieceRow: { display: 'flex', gap: 6 },
   pieceBtn: { flex: 1, padding: '8px 0', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', textTransform: 'capitalize' },
   pieceBtnOn: { background: '#1d5f9e', color: '#fff', borderColor: '#4fbdf0' },
-  hint: { fontSize: 13, color: '#9fc4d5', margin: 0 },
+  hint: { fontSize: 13, color: '#9fc4d5', margin: 0, textTransform: 'none', fontWeight: 400, letterSpacing: 0 },
   dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 56px)', gridAutoRows: '56px', gap: 6, justifyContent: 'center' },
   nb: { fontSize: 22, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
   nbReset: { fontSize: 14, background: '#17223a', color: '#9fc4d5', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
@@ -572,7 +570,7 @@ const ST: Record<string, CSSProperties> = {
   sizeRow: { display: 'flex', alignItems: 'center', gap: 6 },
   sizeW: { fontFamily: 'ui-monospace, monospace', fontSize: 13, minWidth: 46, color: '#dbe9ff' },
   sb: { width: 34, height: 30, fontSize: 16, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 5, cursor: 'pointer' },
-  toggle: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#cfe3ff' },
+  toggle: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#cfe3ff', textTransform: 'none', fontWeight: 400, letterSpacing: 0 },
   statusBox: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, padding: '8px 10px', border: '1px solid', borderRadius: 6, background: '#0a0f1c' },
   statusGrid: { display: 'flex', gap: 14, fontFamily: 'ui-monospace, monospace', fontSize: 13 },
   offsets: { fontSize: 13, fontFamily: 'ui-monospace, monospace', color: '#dbe9ff', display: 'grid', gap: 2 },
