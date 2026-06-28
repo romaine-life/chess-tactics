@@ -82,3 +82,9 @@ export const tileFrameSrc = (asset: TileAsset): string => asset.src;
 // mask (0–15), not selected by the socket solver. Baked by scripts/build-road-tiles.py.
 export const featureFrameSrc = (kind: FeatureKind, material: RoadMaterial, mask: number): string =>
   `/assets/tiles/feature/${kind}-${material}-${mask}.png`;
+
+// A square, pre-centered preview icon for editor palettes/brush (the board sprites
+// are tall 96x180 frames with the art only in the top diamond, so they don't center
+// in a small box — this is cropped + squared at bake time). See build-road-tiles.py.
+export const featureThumbSrc = (kind: FeatureKind, material: RoadMaterial): string =>
+  `/assets/tiles/feature/${kind}-${material}-thumb.png`;

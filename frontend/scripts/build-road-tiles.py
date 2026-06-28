@@ -151,6 +151,23 @@ MATERIALS = {
 }
 
 
+def build_thumb(mat):
+    """A square, pre-CENTERED preview icon for the editor palette/active-brush: the
+    cross piece cropped to its art and padded to a square, so plain object-fit:contain
+    centers it in any box (cover+object-position can't — it centres by overflow, which
+    depends on the box aspect). road-<material>-thumb.png."""
+    cross = build(15, mat)
+    alpha = np.array(cross)[:, :, 3]
+    ys, xs = np.where(alpha > 10)
+    if len(xs) == 0:
+        return cross
+    crop = cross.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
+    side = max(crop.size) + 8
+    square = Image.new('RGBA', (side, side), (0, 0, 0, 0))
+    square.paste(crop, ((side - crop.size[0]) // 2, (side - crop.size[1]) // 2))
+    return square
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     for stale in os.listdir(OUT):  # drop any previous road-*.png so renames don't linger
@@ -162,7 +179,8 @@ def main():
         for mask in range(16):
             build(mask, mat).save(f'{OUT}/road-{name}-{mask}.png')
             total += 1
-    print(f'wrote {total} road overlays ({", ".join(MATERIALS)}) to {OUT}')
+        build_thumb(mat).save(f'{OUT}/road-{name}-thumb.png')
+    print(f'wrote {total} road overlays + {len(MATERIALS)} thumbs ({", ".join(MATERIALS)}) to {OUT}')
 
 
 if __name__ == '__main__':

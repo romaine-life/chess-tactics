@@ -5,7 +5,7 @@
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { tileFamilies, featureFrameSrc } from '../art/tileset';
+import { tileFamilies, featureFrameSrc, featureThumbSrc } from '../art/tileset';
 import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, ROAD_MATERIAL_LABELS, DEFAULT_ROAD_MATERIAL, type FeatureKind, type RoadMaterial } from '../core/featureAutotile';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
@@ -1658,7 +1658,7 @@ export function LevelEditor(): ReactElement {
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'road'
-                ? <img className="le-thumb-feature" src={featureFrameSrc('road', roadMaterial, 15)} alt="" draggable={false} />
+                ? <img src={featureThumbSrc('road', roadMaterial)} alt="" draggable={false} />
                 : <img src={brushAsset.src} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
@@ -1733,7 +1733,7 @@ export function LevelEditor(): ReactElement {
                   title={ROAD_MATERIAL_LABELS[mat]}
                   onClick={() => { setRoadMaterial(mat); setBrushKind('road'); setLayer('road'); setTool('brush'); }}
                 >
-                  <img className="le-thumb-feature" src={featureFrameSrc('road', mat, 15)} alt="" draggable={false} />
+                  <img src={featureThumbSrc('road', mat)} alt="" draggable={false} />
                   <small>{ROAD_MATERIAL_LABELS[mat]}</small>
                 </button>
               ))}
