@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Bake the ROAD feature overlay set — 16 transparent tiles, one per 4-bit
-connection mask — into public/assets/tiles/feature/road-<mask>.png.
+"""Bake the linear-FEATURE overlay sets (roads + rivers) — 16 transparent tiles per
+material, one per 4-bit connection mask — into
+public/assets/tiles/feature/<kind>-<material>-<mask>.png (+ a square -thumb.png).
 
 Per ADR-0040 (own the geometry, generate the material): the connection FOOTPRINT
 (which stubs the ribbon has, where they meet the shared seam) is computed here so
 pieces always tessellate; the painted SURFACE is a GENERATED top-down material
 (docs/art/pixellab-runs/surfaces/<fam>/) projected into the iso top-diamond and
 masked to the ribbon — the same surface-swap shape as the base tiles
-(build-surface-tiles.py). NO hardcoded fill colours: the look is generated art;
-only a darker TONE of that same material is derived for the ribbon casing (exactly
-as the base tiles tone their side faces to their own top).
+(build-surface-tiles.py). NO hardcoded fill colours.
+  - ROADS: body = a road surface; casing = a darker TONE of that same body (as the
+    base tiles tone their side faces).
+  - RIVERS: body = the water surface; casing = a separate generated BANK material
+    (earth), so the ribbon reads as water between two banks.
 
 Geometry pinned to the canonical iso frame (matches build-surface-tiles.py and the
 .tileset-generated-board-tile / boardProjection contract):
@@ -17,12 +20,11 @@ Geometry pinned to the canonical iso frame (matches build-surface-tiles.py and t
   centre (48,68); edge midpoints  N(72,54.5) E(72,81.5) S(24,81.5) W(24,54.5)
 Bit order N,E,S,W = 1,2,4,8, matching featureAutotile.FEATURE_DIRS.
 
-Each road MATERIAL is its own 16-mask set (road-<material>-<mask>.png); the editor
-lets the author pick which to draw, and all road cells connect regardless of
-material (one shape, the surface changes per cell). To add a material, add a row to
-MATERIALS below (name -> source surface family/variant) and re-run.
+Each material is its own 16-mask set; all cells of one KIND connect regardless of
+material (rivers connect to rivers, roads to roads). Add a row to FEATURES to add a
+selectable material; the editor reads the same lists (ROAD_MATERIALS / RIVER_MATERIALS).
 
-Usage (from frontend/):  python scripts/build-road-tiles.py    (bakes every MATERIAL)
+Usage (from frontend/):  python scripts/build-feature-tiles.py    (bakes everything)
 """
 import math
 import os
@@ -43,12 +45,10 @@ BITS = (1, 2, 4, 8)
 SS = 4   # supersample for clean diagonals, then box-filter down.
 PX = 2   # final pixel-art chunk (NEAREST), to sit with the pixelated base tiles.
 EXT = 4  # px each connected stub runs PAST the seam, so neighbours overlap.
-ROAD_W = 22.0      # body width (screen px)
-OUT_W = ROAD_W + 6 # casing width (a 3px darker band each side)
-HUB = ROAD_W / 2
-HUB_OUT = OUT_W / 2
-NODE = ROAD_W / 2 + 3   # lone-cell marker radius
-CASING_TONE = 0.55      # casing = this fraction of the body material's brightness
+BODY_W = 22.0           # default body width (screen px)
+ROAD_CASING_W = BODY_W + 6   # 3px casing band each side (road)
+RIVER_CASING_W = BODY_W + 10  # 5px bank band each side (river reads as water + banks)
+CASING_TONE = 0.55     # road casing = this fraction of the body material's brightness
 
 
 def _end(bit):
@@ -86,9 +86,8 @@ def ribbon_alpha(conns, half, hub, node_r):
 def _flatten_opaque(raw):
     """Force the generated material fully opaque so ONLY the ribbon shape decides
     transparency. Some generated surfaces (e.g. stone) carry scattered transparent
-    pixels; left alone they'd punch holes in the road. Fill those with the material's
-    own mean colour (not an invented colour) and set alpha 255 — mirrors how
-    build-surface-tiles.py pastes the raw through the diamond mask, ignoring its alpha."""
+    pixels; left alone they'd punch holes in the ribbon. Fill those with the material's
+    own mean colour (not an invented colour) and set alpha 255."""
     arr = np.array(raw.convert('RGBA'))
     opaque = arr[:, :, 3] >= 250
     if opaque.any() and not opaque.all():
@@ -128,35 +127,24 @@ def _masked(mat, alpha):
     return out
 
 
-def build(mask, mat):
+def build(mask, body_mat, casing_mat, casing_w):
     conns = [b for b in BITS if mask & b]
-    body = ribbon_alpha(conns, HUB, HUB, NODE)
-    casing = ribbon_alpha(conns, HUB_OUT, HUB_OUT, NODE + 3)
-    casing_only = ImageChops.subtract(casing, body)  # the edge band
+    body = ribbon_alpha(conns, BODY_W / 2, BODY_W / 2, BODY_W / 2 + 3)
+    casing = ribbon_alpha(conns, casing_w / 2, casing_w / 2, BODY_W / 2 + 6)
+    casing_only = ImageChops.subtract(casing, body)  # the edge band (road casing / river bank)
     out = Image.new('RGBA', (W * SS, H * SS), (0, 0, 0, 0))
-    out.alpha_composite(_masked(_toned(mat, CASING_TONE), casing_only))  # darker edge first
-    out.alpha_composite(_masked(mat, body))                              # bright body over it
+    out.alpha_composite(_masked(casing_mat, casing_only))  # edge band first
+    out.alpha_composite(_masked(body_mat, body))           # body over it
     tile = out.resize((W, H), Image.LANCZOS)
     if PX > 1:
         tile = tile.resize((W // PX, H // PX), Image.NEAREST).resize((W, H), Image.NEAREST)
     return tile
 
 
-# Road material name -> source generated surface (family, variant). Add a row to
-# add a selectable road material; the editor reads the same list (ROAD_MATERIALS).
-MATERIALS = {
-    'dirt': ('dirt', '0'),
-    'stone': ('stone', '0'),
-    'pebble': ('pebble', '0'),
-}
-
-
-def build_thumb(mat):
-    """A square, pre-CENTERED preview icon for the editor palette/active-brush: the
-    cross piece cropped to its art and padded to a square, so plain object-fit:contain
-    centers it in any box (cover+object-position can't — it centres by overflow, which
-    depends on the box aspect). road-<material>-thumb.png."""
-    cross = build(15, mat)
+def build_thumb(body_mat, casing_mat, casing_w):
+    """A square, pre-CENTERED preview icon (the cross piece cropped to its art +
+    padded square), so plain object-fit:contain centres it in any editor box."""
+    cross = build(15, body_mat, casing_mat, casing_w)
     alpha = np.array(cross)[:, :, 3]
     ys, xs = np.where(alpha > 10)
     if len(xs) == 0:
@@ -168,19 +156,31 @@ def build_thumb(mat):
     return square
 
 
+# kind, material name, body surface (fam, var), bank surface or None (None ⇒ a toned
+# body, the road casing). Keep in sync with featureAutotile ROAD_MATERIALS/RIVER_MATERIALS.
+FEATURES = [
+    ('road', 'dirt', ('dirt', '0'), None),
+    ('road', 'stone', ('stone', '0'), None),
+    ('road', 'pebble', ('pebble', '0'), None),
+    ('river', 'water', ('water', '0'), ('dirt', '0')),
+]
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for stale in os.listdir(OUT):  # drop any previous road-*.png so renames don't linger
-        if stale.startswith('road-') and stale.endswith('.png'):
+    for stale in os.listdir(OUT):  # drop previous feature tiles so renames don't linger
+        if stale.endswith('.png') and (stale.startswith('road-') or stale.startswith('river-')):
             os.remove(os.path.join(OUT, stale))
     total = 0
-    for name, (fam, var) in MATERIALS.items():
-        mat = project_material(Image.open(f'{RAW}/{fam}/tile_{var}.png'))
+    for kind, name, (bf, bv), bank in FEATURES:
+        body_mat = project_material(Image.open(f'{RAW}/{bf}/tile_{bv}.png'))
+        casing_w = RIVER_CASING_W if kind == 'river' else ROAD_CASING_W
+        casing_mat = project_material(Image.open(f'{RAW}/{bank[0]}/tile_{bank[1]}.png')) if bank else _toned(body_mat, CASING_TONE)
         for mask in range(16):
-            build(mask, mat).save(f'{OUT}/road-{name}-{mask}.png')
+            build(mask, body_mat, casing_mat, casing_w).save(f'{OUT}/{kind}-{name}-{mask}.png')
             total += 1
-        build_thumb(mat).save(f'{OUT}/road-{name}-thumb.png')
-    print(f'wrote {total} road overlays + {len(MATERIALS)} thumbs ({", ".join(MATERIALS)}) to {OUT}')
+        build_thumb(body_mat, casing_mat, casing_w).save(f'{OUT}/{kind}-{name}-thumb.png')
+    print(f'wrote {total} feature overlays + {len(FEATURES)} thumbs to {OUT}')
 
 
 if __name__ == '__main__':
