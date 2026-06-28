@@ -1739,8 +1739,10 @@ h1 {
   --ds-control-h: 34px;
   /* Shared top-bar height — the ONE standard header height across pages.
      Material's normal app bar is ~48-56dp; the tall 96-128dp "prominent" bar is
-     only for hero moments. This sits just above normal for the ornate frame. */
-  --app-header-h: clamp(64px, 5vw, 72px);
+     only for hero moments. Sized to seat the ~54px content with an ADR-0031
+     --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
+     + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
+  --app-header-h: clamp(84px, 5vw, 88px);
 }
 
 .main-assets-header .eyebrow {
@@ -11591,11 +11593,18 @@ button.tileset-relationship-cell {
      gap (the original defect). The rule + stud are generated low-fi atoms in
      /assets/ui/titlebar/ (ADR-0011/0014); the wood stays a fixed surface so it lines up
      with the rest of the app's wood. */
+  /* The forged rule occupies the bottom band, so the content's bottom boundary is the
+     rule's TOP, not the bar edge. Content gets an ADR-0031 inset (--ds-space-2 = 8px)
+     off the top edge AND above the rule's top line; the bottom padding adds the rule
+     height (a chrome metric, exempt from the spacing scale) on top of that inset.
+     --app-header-h is sized so this inset fits (content + rule + 2×inset). */
+  --titlebar-rule-h: 14px;
+  --ds-titlebar-inset: var(--ds-space-2);
   border: 0;
-  padding: 0 32px;
+  padding: var(--ds-titlebar-inset) var(--ds-space-6) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
   background:
     url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat,
-    url("/assets/ui/titlebar/band-studded.png") left bottom / auto 14px repeat-x,
+    url("/assets/ui/titlebar/band-studded.png") left bottom / auto var(--titlebar-rule-h) repeat-x,
     url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
   image-rendering: pixelated;
 }
