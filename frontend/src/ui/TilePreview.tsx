@@ -21,9 +21,9 @@ import {
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
-import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
+import { CatalogGrid, CatalogControls, CatalogFilters, type CatalogType, type CatalogFilterDim } from './studio/Catalog';
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
-import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
+import { ArtworkLibraryStudio, ArtworkLab, ARTWORK_GROUPS } from './design/ArtworkLibraryStudio';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
@@ -560,6 +560,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [assetFilters, setAssetFilters] = useState<AssetFilters>({ type: 'all', prov: 'all', gate: 'all' });
   const [assetSearch, setAssetSearch] = useState('');
   const [artworkSearch, setArtworkSearch] = useState('');
+  const [selectedArtworkGroups, setSelectedArtworkGroups] = useState<string[]>(ARTWORK_GROUPS.map((g) => g.id));
   const [surfaceSearch, setSurfaceSearch] = useState('');
   const [scrollbarSearch, setScrollbarSearch] = useState('');
   const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
@@ -1020,6 +1021,20 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     note: 'Doodads place only on their home terrain. Pick one to arm the brush, then paint a matching tile.',
   };
 
+  // Artwork browses via a bespoke library component (not a CatalogType), so it wires the
+  // shared Filters dropdown directly: one dimension, the manifest Group. memberOf is unused
+  // here (CatalogFilters only reads options/selected/toggle); the grid filters in the component.
+  const artworkGroupFilter: CatalogFilterDim<{ id: string }> = {
+    id: 'group',
+    label: 'Group',
+    options: ARTWORK_GROUPS.map((g) => ({ id: g.id, label: g.label, sub: `${g.count} ${g.count === 1 ? 'piece' : 'pieces'}` })),
+    memberOf: () => [],
+    selected: selectedArtworkGroups,
+    toggle: (id) => setSelectedArtworkGroups((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
+    selectAll: () => setSelectedArtworkGroups(ARTWORK_GROUPS.map((g) => g.id)),
+    clear: () => setSelectedArtworkGroups([]),
+  };
+
   // The catalog is one registry, not a chain of `category === …` branches: every
   // category supplies its grid (`main`) and its rail body (`controls`), and the
   // selector tabs / main pane / controls are rendered by mapping or reading the
@@ -1092,6 +1107,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <ArtworkLibraryStudio
           search={artworkSearch}
           zoom={zoom}
+          groups={selectedArtworkGroups}
           selected={selectedArtworkName}
           onSelect={setSelectedArtworkName}
           onView={(id) => { setSelectedArtworkName(id); openViewer('artwork'); }}
@@ -1108,6 +1124,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <span>Zoom</span>
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
+          <CatalogFilters filters={[artworkGroupFilter]} />
           <button type="button" className="tileset-view-action" onClick={() => openViewer('artwork')}>View Selected</button>
         </>
       ),
