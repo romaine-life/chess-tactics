@@ -85,7 +85,7 @@ export function MainMenu(): ReactElement {
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
       <div className="settings-screen main-menu-twin-screen">
         <header className="app-titlebar settings-header-frame main-menu-twin-header">
-          <BrandLockup screenName="Main Menu" />
+          <BrandLockup screenName="Main Menu" variant="brand-hero" />
           {/* Trailing "settings + user" cluster (ADR-0036): the Settings gear, then
               the account control — the avatar menu when signed in, Sign In when not. */}
           <HeaderAccountCluster signInReturnTo="/" />
