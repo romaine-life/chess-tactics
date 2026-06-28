@@ -4986,11 +4986,12 @@ h1 {
   cursor: pointer;
   display: grid;
   font: inherit;
+  font-size: var(--ds-text-xs);
   gap: 5px;
   grid-auto-flow: column;
   line-height: 1;
-  min-height: 40px;
-  padding: 5px 4px;
+  min-height: 30px;
+  padding: 4px 6px;
   place-items: center;
   text-transform: uppercase;
 }
@@ -5010,13 +5011,13 @@ h1 {
 }
 
 /* active brush picker */
-.le-brush-pick { align-items: center; display: grid; gap: 10px; grid-template-columns: 60px minmax(0, 1fr); margin-top: 10px; }
+.le-brush-pick { align-items: center; display: grid; gap: 8px; grid-template-columns: 44px minmax(0, 1fr); margin-top: 6px; }
 .le-brush-thumb {
   background: radial-gradient(circle at 50% 40%, rgba(63, 148, 190, .18), transparent 64%), rgba(3, 12, 19, .74);
   border: 1px solid rgba(87, 153, 184, .4);
   border-radius: 5px;
   display: grid;
-  height: 60px;
+  height: 44px;
   overflow: hidden;
   place-items: center;
   width: 60px;
@@ -5025,10 +5026,12 @@ h1 {
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
-/* palette (folded into the rail — variant B) */
-/* Tile-palette and unit-controls swap in/out of the same rail slot; pin both to one
-   fixed height so flipping layers can't wobble the panel (Tile was 350px, Unit 354px). */
-.le-brush-panel { display: flex; flex-direction: column; height: 360px; overflow: hidden; }
+/* palette (folded into the rail) */
+/* The palette is the PRIMARY work area, so it flex-GROWS to take all height the
+   fixed controls (Layer/Tool/brush/Fill/View) leave, and is the single scroll
+   region — not a fixed box competing with a whole-rail scroll. Tile- and unit-
+   panels share this one growing slot, so flipping layers can't wobble the rail. */
+.le-brush-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 150px; overflow: hidden; }
 .le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
 .le-palette-scroll { height: 300px; }
 
@@ -5092,7 +5095,7 @@ h1 {
 .le-statusline b { color: #9fe0ff; }
 
 /* editor rail icons */
-.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 24px; image-rendering: pixelated; width: 24px; }
+.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
 .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
 .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
 .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }

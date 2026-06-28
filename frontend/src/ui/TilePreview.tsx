@@ -1712,8 +1712,9 @@ export function LevelEditor(): ReactElement {
           </div>
         </section>
 
+        {(selectedUnitAsset || selectedDoodadAsset || selectedAsset || selectedCell) ? (
         <section className="skirmish-card le-details">
-          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedAsset ? 'Tile' : selectedCell ? 'Cell' : 'Board'}</h2>
+          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedAsset ? 'Tile' : 'Cell'}</h2>
           {selectedUnitAsset && selectedUnit ? (
             <dl>
               <div><dt>Piece</dt><dd>{selectedUnitAsset.label}</dd></div>
@@ -1740,6 +1741,7 @@ export function LevelEditor(): ReactElement {
             </dl>
           )}
         </section>
+        ) : null}
 
         <div className="le-statusline">
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · {boardCols}×{boardRows}
