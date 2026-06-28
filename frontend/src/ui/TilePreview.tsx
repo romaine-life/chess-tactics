@@ -203,8 +203,8 @@ const nonProductionStudioAssets: StudioAsset[] = nonProductionTileAssets.map((as
 
 // Tile "Method" facet — production picks first, then the non-production methods.
 const TILE_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
-  { id: 'codexfilter', label: 'Codex → Filter', sub: 'Production' },
   { id: 'pixellab', label: 'PixelLab', sub: 'Production' },
+  { id: 'codexfilter', label: 'Codex → Filter', sub: 'Non-production' },
   { id: 'textured', label: 'Textured', sub: 'Non-production' },
   { id: 'filter3', label: 'Filter ×3', sub: 'Non-production' },
   { id: 'filter2', label: 'Filter ×2', sub: 'Non-production' },

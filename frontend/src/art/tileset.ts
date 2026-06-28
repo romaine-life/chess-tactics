@@ -20,31 +20,42 @@ export interface TileAsset extends TileSocketAsset {
   method?: string;
 }
 
-// PRODUCTION TILESET — pixel-art tiles chosen from the conversion bake-off:
-//   • codex→filter — a faithful pixelation of the Blender source tile (the base look)
-//   • pixellab     — fresh-drawn pixel art (a variant)
-// The previous textured Blender tiles and the other bake-off methods (filter ×2/×3, codex)
-// are non-production now and live in frontend/src/art/nonProductionTiles.ts.
+// PRODUCTION TILESET — surface-swap tiles. Each tile is a Blender-derived iso EDGE
+// (the codexfilter pixelation, perfect grid geometry) with a separately-generated
+// flat top-down PixelLab surface projected into the exact top diamond
+// (frontend/scripts/project-tile-surface.py). This sidesteps PixelLab's unreliable iso-top
+// drawing: Blender owns the geometry, PixelLab only paints a flat material.
+// Eight variants per family. The raw PixelLab blocks, textured Blender tiles, and the
+// rejected conversion methods are non-production — see frontend/src/art/nonProductionTiles.ts.
 const FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
 
-const PRODUCTION_VARIANTS = [
-  { key: 'codexfilter', label: 'Codex → Filter', role: 'base' as const, probability: 1 },
-  { key: 'pixellab', label: 'PixelLab', role: 'variant' as const, probability: 0.85 },
-] as const;
+interface ProductionVariant {
+  key: string;
+  label: string;
+  role: 'base' | 'variant';
+  probability: number;
+}
 
-const pixelTile = (family: TileFamilyId, variant: (typeof PRODUCTION_VARIANTS)[number]): TileAsset => ({
-  id: `${family}-${variant.key}`,
+const PRODUCTION_VARIANTS: ProductionVariant[] = Array.from({ length: 8 }, (_, n) => ({
+  key: `${n}`,
+  label: `Surface ${n + 1}`,
+  role: n === 0 ? 'base' : 'variant',
+  probability: n === 0 ? 1 : 0.8,
+}));
+
+const surfaceTile = (family: TileFamilyId, variant: ProductionVariant): TileAsset => ({
+  id: `${family}-surf-${variant.key}`,
   label: `${terrainLabels[family]} · ${variant.label}`,
-  src: `/assets/tiles/pixel/${family}-${variant.key}.png`,
+  src: `/assets/tiles/surface/${family}-${variant.key}.png`,
   role: variant.role,
   kind: 'tile',
-  source: `pixel:${variant.key}`,
-  method: variant.label,
+  source: 'pixel:surface',
+  method: 'Surface (Blender edge + PixelLab top)',
   probability: variant.probability,
-  notes: `${terrainLabels[family]} — ${variant.label} pixel-art tile (production).`,
+  notes: `${terrainLabels[family]} — ${variant.label}: Blender-derived iso edge with a generated pixel-art top (production).`,
 });
 
-const familyTiles = (family: TileFamilyId): TileAsset[] => PRODUCTION_VARIANTS.map((variant) => pixelTile(family, variant));
+const familyTiles = (family: TileFamilyId): TileAsset[] => PRODUCTION_VARIANTS.map((variant) => surfaceTile(family, variant));
 
 export const tileFamilies: Record<TileFamilyId, readonly TileAsset[]> = {
   grass: familyTiles('grass'),

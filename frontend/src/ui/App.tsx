@@ -4,6 +4,8 @@ import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
 import { ArtworkCompare } from './ArtworkCompare';
+import { TileCompare } from './TileCompare';
+import { SurfaceLab } from './SurfaceLab';
 import { UpdateBanner } from './UpdateBanner';
 import {
   APP_NAVIGATION_EVENT,
@@ -81,5 +83,7 @@ function renderRoute(path: string): ReactElement {
   if (path === '/party') return <Party />;
   if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
   if (path === '/artwork-compare') return <ArtworkCompare />;
+  if (path === '/tile-compare') return <TileCompare />;
+  if (path === '/surface-lab') return <SurfaceLab />;
   return <MainMenu />;
 }

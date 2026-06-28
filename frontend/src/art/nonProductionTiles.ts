@@ -6,14 +6,14 @@ import type { TileAsset } from './tileset';
 // NON-PRODUCTION TILES — kept in the Studio catalog for reference/comparison only.
 //
 // Held OUT of `tileFamilies`, board generation, coverage, and the shipped game.
-// Two groups:
-//   • Legacy textured Blender tiles — the FORMER production set, superseded by the
-//     pixel-art tiles in tileset.ts. PNGs still live under /assets/tiles/textured/
-//     (the doodad editor / glossary reference them by path), so they stay available.
-//   • Rejected bake-off methods — filter ×3, filter ×2, codex (the conversion methods
-//     not chosen for production). PNGs under /assets/tiles/speculative/.
+// Groups:
+//   • Legacy textured Blender tiles — the FORMER production set. PNGs under
+//     /assets/tiles/textured/ (the doodad editor / glossary reference them by path).
+//   • codex→filter — a faithful pixelation of the Blender tile; lost the bake-off to PixelLab.
+//     PNGs under /assets/tiles/pixel/<fam>-codexfilter.png.
+//   • Rejected bake-off methods — filter ×3, filter ×2, codex. PNGs under /assets/tiles/speculative/.
 //
-// The PRODUCTION set (codex→filter + pixellab) lives in tileset.ts.
+// The PRODUCTION set (PixelLab variants) lives in tileset.ts.
 // To drop a whole group later: delete its block below + its PNGs.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -47,6 +47,20 @@ const texturedTile = (family: TileFamilyId, file: string): TileAsset => ({
   notes: `${terrainLabels[family]} terrain, legacy textured Blender tile. ${REMOVAL_NOTE}`,
 });
 
+// --- codex→filter (bake-off runner-up) --------------------------------------
+const codexFilterTile = (family: TileFamilyId): TileAsset => ({
+  id: `${family}-codexfilter`,
+  label: `${terrainLabels[family]} · Codex → Filter`,
+  src: `/assets/tiles/pixel/${family}-codexfilter.png`,
+  role: 'non-production',
+  kind: 'tile',
+  source: 'legacy:codexfilter',
+  method: 'Codex → Filter',
+  probability: 0,
+  speculative: true,
+  notes: `${terrainLabels[family]} terrain, codex→filter pixelation of the Blender tile. ${REMOVAL_NOTE}`,
+});
+
 // --- Rejected bake-off methods ----------------------------------------------
 export interface NonProductionMethod {
   key: string;
@@ -74,12 +88,14 @@ const bakeoffTile = (family: TileFamilyId, method: NonProductionMethod): TileAss
 });
 
 export const nonProductionTileAssets: readonly TileAsset[] = [
+  ...FAMILIES.map((family) => codexFilterTile(family)),
   ...FAMILIES.flatMap((family) => TEXTURED_FILES[family].map((file) => texturedTile(family, file))),
   ...FAMILIES.flatMap((family) => REJECTED_BAKEOFF_METHODS.map((method) => bakeoffTile(family, method))),
 ];
 
 /** Family lookup for the catalog filter (these assets aren't in `tileFamilies`). */
 export const nonProductionTileFamilyOf = new Map<string, TileFamilyId>([
+  ...FAMILIES.map((family) => [`${family}-codexfilter`, family] as const),
   ...FAMILIES.flatMap((family) => TEXTURED_FILES[family].map((file) => [file, family] as const)),
   ...FAMILIES.flatMap((family) => REJECTED_BAKEOFF_METHODS.map((method) => [`spec-${family}-${method.key}`, family] as const)),
 ]);
