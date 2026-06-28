@@ -36,6 +36,10 @@ export type UnitAsset = {
   footprint: UnitFootprint;
   unitAnchorX?: string;
   unitAnchorY?: string;
+  /** How this sprite was produced (e.g. "Blender", "Codex→Filter", "PixelLab"). */
+  method?: string;
+  /** Non-production candidates: shown in the Studio catalog for comparison, held OUT of the shipped roster/game. */
+  speculative?: boolean;
   sprite: (faction: Faction, direction: Direction) => string;
 };
 
@@ -136,7 +140,7 @@ export const MISSING_DIRECTION_SPRITE =
 
 export const hasDirectionSprite = (unit: UnitAsset, dir: Direction) => (unit.directions ? unit.directions.includes(dir) : dir === 'south');
 
-export const unitAssets: UnitAsset[] = [
+const productionUnits: UnitAsset[] = [
   {
     id: 'rook-blender-v4-calibrated',
     family: 'rook',
@@ -217,6 +221,68 @@ export const unitAssets: UnitAsset[] = [
     unitAnchorY: KING_CROWN_CONTACT_ANCHOR_Y,
     sprite: paletteSprite('king'),
   },
+];
+
+// --- Speculative pixel-art candidate libraries (the unit "bake-off") ---------
+// Mirrors the tile pipeline: candidates produced by Filter / Codex→Filter / PixelLab
+// are kept OUT of the shipped roster but live in the Studio catalog, each tagged with
+// a `method` + `speculative` flag so they can be filtered and culled later. Navy palette
+// only (factionMode 'fixed') until a library is promoted to production. Sprites are framed
+// onto the same 512 canvas as the Blender source, so the per-piece footprints below seat them.
+export type PixelLibraryKey = 'codexfilter' | 'filter2' | 'filter3' | 'pixellab';
+export const PIXEL_LIBRARIES: { key: PixelLibraryKey; label: string; dirs: Direction[] }[] = [
+  { key: 'codexfilter', label: 'Codex→Filter', dirs: ['south'] },
+  { key: 'filter2', label: 'Filter ×2', dirs: rookDirections },
+  { key: 'filter3', label: 'Filter ×3', dirs: rookDirections },
+  { key: 'pixellab', label: 'PixelLab', dirs: rookDirections },
+];
+
+const PIXEL_PIECE_FOOTPRINT: Record<PieceId, { footprint: UnitFootprint; anchorX: string; anchorY: string }> = {
+  rook: { footprint: squareFootprint(ROOK_KEEP_CANVAS_PX, ROOK_KEEP_CONTACT_FOOTPRINT_PX), anchorX: ROOK_KEEP_CONTACT_ANCHOR_X, anchorY: ROOK_KEEP_CONTACT_ANCHOR_Y },
+  knight: { footprint: circleFootprint(KNIGHT_FUR_CANVAS_PX, KNIGHT_FUR_CONTACT_FOOTPRINT_PX), anchorX: KNIGHT_FUR_CONTACT_ANCHOR_X, anchorY: KNIGHT_FUR_CONTACT_ANCHOR_Y },
+  bishop: { footprint: circleFootprint(BISHOP_MITRE_CANVAS_PX, BISHOP_MITRE_CONTACT_FOOTPRINT_PX), anchorX: BISHOP_MITRE_CONTACT_ANCHOR_X, anchorY: BISHOP_MITRE_CONTACT_ANCHOR_Y },
+  queen: { footprint: circleFootprint(QUEEN_TIARA_CANVAS_PX, QUEEN_TIARA_CONTACT_FOOTPRINT_PX), anchorX: QUEEN_TIARA_CONTACT_ANCHOR_X, anchorY: QUEEN_TIARA_CONTACT_ANCHOR_Y },
+  king: { footprint: circleFootprint(KING_CROWN_CANVAS_PX, KING_CROWN_CONTACT_FOOTPRINT_PX), anchorX: KING_CROWN_CONTACT_ANCHOR_X, anchorY: KING_CROWN_CONTACT_ANCHOR_Y },
+  pawn: { footprint: circleFootprint(512, 150), anchorX: '50%', anchorY: '80.241%' },
+};
+
+const PIXEL_PIECES: PieceId[] = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
+
+const pixelLibrarySprite = (key: PixelLibraryKey, piece: PieceId) =>
+  (_faction: Faction, direction: Direction) => `/assets/units-pixel/${key}/${piece}/navy-blue/${direction}.png`;
+
+const speculativeUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
+  PIXEL_LIBRARIES.map((lib): UnitAsset => {
+    const fp = PIXEL_PIECE_FOOTPRINT[piece];
+    return {
+      id: `${piece}-${lib.key}`,
+      family: piece,
+      label: `${familyLabels[piece]} · ${lib.label}`,
+      badge: lib.label,
+      preview: `/assets/units-pixel/${lib.key}/${piece}/navy-blue/south.png`,
+      read: `${familyLabels[piece]} — ${lib.label} pixel-art candidate (speculative; navy only).`,
+      status: 'speculative candidate',
+      directions: lib.dirs,
+      factionMode: 'fixed',
+      defaultScale: 100,
+      footprint: fp.footprint,
+      unitAnchorX: fp.anchorX,
+      unitAnchorY: fp.anchorY,
+      method: lib.label,
+      speculative: true,
+      sprite: pixelLibrarySprite(lib.key, piece),
+    };
+  }),
+);
+
+export const unitAssets: UnitAsset[] = [
+  ...productionUnits.map((unit) => ({ ...unit, method: unit.method ?? 'Blender' })),
+  ...speculativeUnits,
+];
+
+export const UNIT_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
+  { id: 'Blender', label: 'Blender', sub: 'Production' },
+  ...PIXEL_LIBRARIES.map((lib) => ({ id: lib.label, label: lib.label, sub: 'Speculative' })),
 ];
 
 export const activeUnitFamilies = [...new Set(unitAssets.map((unit) => unit.family))];
