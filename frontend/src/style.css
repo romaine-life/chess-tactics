@@ -282,11 +282,15 @@ button {
   text-shadow: 0 1px 0 #020507;
 }
 
-button:hover,
+/* Hover lights the surface up (ADR-0027: emphasis by color, never a painted
+   highlight box); keyboard focus keeps a real outline for a11y. */
+button:hover {
+  filter: brightness(1.12);
+}
+
 button:focus-visible {
-  border-color: var(--cobalt-bright);
-  box-shadow: 0 0 0 2px rgba(101, 184, 255, .12);
-  outline: none;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 button.active {
@@ -1634,7 +1638,7 @@ h1 {
   cursor: pointer;
   font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
-.app-update-banner button:hover { background: rgba(33, 116, 160, 0.98); }
+.app-update-banner button:hover { filter: brightness(1.12); }
 
 
 /* ── Design-system token layer ────────────────────────────────────────────
@@ -5641,11 +5645,20 @@ h1 {
   padding: 0;
 }
 
-.skirmish-roster-slot.active,
-.skirmish-roster-slot:hover,
-.skirmish-roster-slot:focus-visible {
+/* Cyan ring marks the SELECTED slot only. Hover lights the portrait up rather
+   than painting a second ring (ADR-0027); keyboard focus keeps a real outline. */
+.skirmish-roster-slot.active {
   outline: none;
   box-shadow: 0 0 0 2px #2896c3;
+}
+
+.skirmish-roster-slot:hover {
+  filter: brightness(1.12);
+}
+
+.skirmish-roster-slot:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .skirmish-roster-slot:disabled {
@@ -7218,8 +7231,8 @@ h1 {
 }
 
 .bgm-control:hover {
-  border-color: var(--cobalt-bright);
-  transform: translateY(-1px);
+  /* Mild light-up, no lift — ADR-0027 is color-only, never resize/move. */
+  filter: brightness(1.12);
 }
 
 .bgm-control:focus-visible {
