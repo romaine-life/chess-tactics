@@ -2,7 +2,7 @@ import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { BrandLockup } from './shared/BrandLockup';
-import { useSkirmish } from '../game/store';
+import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace } from '../net/campaignWorkspace';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
@@ -47,8 +47,17 @@ export function Skirmish() {
   }, [game.pieces]);
 
   useEffect(() => {
+    // Returning here from the menu (or any other screen) should resume, not
+    // restart: the store is a singleton that already holds the live board. Only
+    // build a fresh game when there isn't a matching in-progress one — i.e. the
+    // first launch, after a finished game, or when a different level is opened.
+    const shouldStartFresh = (levelId: string | null): boolean =>
+      shouldStartFreshSkirmish(useSkirmish.getState(), levelId);
+    const freshSeed = () => Math.floor(Math.random() * 999999) + 1;
+
     if (!routeLevelId || routeLevel) {
-      newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: routeLevel ?? undefined });
+      const levelId = routeLevel?.id ?? null;
+      if (shouldStartFresh(levelId)) newSkirmish({ seed: freshSeed(), level: routeLevel ?? undefined });
       return;
     }
     let active = true;
@@ -60,9 +69,9 @@ export function Skirmish() {
         useCampaigns.getState().selectLevel(routeLevelId);
         const level = useCampaigns.getState().levels[routeLevelId] ?? null;
         setRouteLevel(level);
-        newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: level ?? undefined });
+        if (shouldStartFresh(level?.id ?? null)) newSkirmish({ seed: freshSeed(), level: level ?? undefined });
       })
-      .catch(() => newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1 }));
+      .catch(() => { if (shouldStartFresh(null)) newSkirmish({ seed: freshSeed() }); });
     return () => { active = false; };
   }, [newSkirmish, routeCampaignId, routeLevel, routeLevelId]);
 

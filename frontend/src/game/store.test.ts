@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove } from './store';
+import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, shouldStartFreshSkirmish } from './store';
 import { livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
+import { createBlankLevel } from '../core/level';
 
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
 // turn-taking rather than a simultaneous swap. Fake timers let us drive that
@@ -69,6 +70,48 @@ describe('skirmish store', () => {
 
   it('is fully deterministic for a seed + move sequence', () => {
     expect(playFirstMove(5)).toEqual(playFirstMove(5));
+  });
+
+  it('newSkirmish marks the game as started and records its level', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    expect(useSkirmish.getState().started).toBe(true);
+    expect(useSkirmish.getState().levelId).toBeNull(); // free skirmish
+
+    useSkirmish.getState().newSkirmish({ seed: 5, level: createBlankLevel('lvl-7') });
+    expect(useSkirmish.getState().levelId).toBe('lvl-7');
+  });
+});
+
+// The skirmish screen remounts whenever you leave and return (route swap), but
+// the store is a singleton that already holds the live board — so re-entry must
+// resume, not restart. shouldStartFreshSkirmish encodes exactly when a rebuild
+// is warranted; this is the regression guard for "menu → back wiped my game".
+describe('shouldStartFreshSkirmish (resume vs restart on re-entry)', () => {
+  const live = (overrides: Partial<{ winner: 'player' | 'enemy' | 'draw' | null }> = {}) => ({
+    started: true,
+    levelId: null as string | null,
+    game: { winner: null, ...overrides } as GameState,
+  });
+
+  it('starts fresh on the very first entry (nothing started yet)', () => {
+    expect(shouldStartFreshSkirmish({ started: false, levelId: null, game: { winner: null } as GameState }, null)).toBe(true);
+  });
+
+  it('resumes an in-progress free skirmish (the menu → back case)', () => {
+    expect(shouldStartFreshSkirmish(live(), null)).toBe(false);
+  });
+
+  it('starts fresh after a finished game rather than re-showing the result', () => {
+    expect(shouldStartFreshSkirmish(live({ winner: 'player' }), null)).toBe(true);
+    expect(shouldStartFreshSkirmish(live({ winner: 'enemy' }), null)).toBe(true);
+    expect(shouldStartFreshSkirmish(live({ winner: 'draw' }), null)).toBe(true);
+  });
+
+  it('resumes the same level but rebuilds when a different level is opened', () => {
+    const onLevelA = { started: true, levelId: 'A' as string | null, game: { winner: null } as GameState };
+    expect(shouldStartFreshSkirmish(onLevelA, 'A')).toBe(false); // same level → resume
+    expect(shouldStartFreshSkirmish(onLevelA, 'B')).toBe(true); // different level → fresh
+    expect(shouldStartFreshSkirmish(onLevelA, null)).toBe(true); // level → free skirmish → fresh
   });
 });
 
