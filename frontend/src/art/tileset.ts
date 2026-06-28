@@ -93,8 +93,9 @@ const edgeTile = (family: TileFamilyId): TileAsset => ({
   terrains: [family],
 });
 
-// Families that have generated edge art. Grass first; the rest follow once the look lands.
-const EDGE_FAMILIES: readonly TileFamilyId[] = ['grass'];
+// Families with a generated frayed edge. Water is intentionally excluded — its edge is the
+// (animated) waterfall, gated on river types; a static frayed water lip reads as clip-art.
+const EDGE_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand'];
 export const edgeTiles: Partial<Record<TileFamilyId, TileAsset>> = Object.fromEntries(
   EDGE_FAMILIES.map((family) => [family, edgeTile(family)]),
 ) as Partial<Record<TileFamilyId, TileAsset>>;
