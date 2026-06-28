@@ -118,3 +118,7 @@ ingress:
   gatewayNamespace: envoy-gateway-system
   certIssuer: letsencrypt-prod
   tlsSecret: chess-tactics-tls
+
+# ADR-0038: comma-separated allowlist of emails allowed to publish the global
+# OFFICIAL campaign tier (backend requireAdmin). Fail-closed when empty; not a secret.
+adminEmails: "nelson@romaine.life"
