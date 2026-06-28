@@ -43,7 +43,13 @@ A catalog category MUST provide:
 
 1. **A grid** (`main`) — selectable cards (image + label + meta/badge), filtered
    by the category's search, using the shared studio card classes so it matches
-   the other grids.
+   the other grids. **Cards hug their content — no pointless vertical space.** The
+   grid packs rows to the top and sizes each card to its content
+   (`align-content: start; grid-auto-rows: max-content`, now the default on
+   `.tileset-studio-grid`); a sparse category must NOT let its single row stretch to
+   fill the tall catalog pane, leaving a dead gap under every card. (Recurring bug —
+   first patched per-grid for Surfaces, then Pages, now folded into the default so no
+   new category re-hits it.)
 2. **Controls** (`controls`):
    - **Search** — always.
    - **Zoom** — every *visual* catalog (all but text-only Glossary).

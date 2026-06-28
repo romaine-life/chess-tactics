@@ -1038,26 +1038,74 @@ h1 {
   gap: clamp(8px, 1.1vh, 11px);
   width: min(100%, 370px);
   max-width: 100%;
-  /* ADR-0027: one role token governs icon display size; never re-sized per icon. */
-  --menu-icon-size: 30px;
+  /* --menu-icon-size / --menu-btn-h defaults live on :root (above any viewer tweak
+     wrapper) — declaring them HERE would shadow the Pages Main-Menu editor's override.
+     See :root + ADR-0027 (icon size) / ADR-0021 (button height). */
+}
+
+/* Comparison knob (?indent=hover|hover10): a deliberate slide-RIGHT on hover/focus —
+   the game "row leans toward the action" focus cue. NOT the old accidental shrink:
+   it's smooth (GPU transform only), paired with the iron-lip lift as a non-motion cue,
+   keyboard-reachable, and disabled under reduced-motion. Static indent is settled FLUSH
+   (the brand + buttons are siblings sharing one left edge), so it is not on the knob. */
+.main-menu-actions-assets.indent-hover .mode-button-stone {
+  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), border-color .1s ease, box-shadow .1s ease;
+}
+.main-menu-actions-assets.indent-hover .mode-button-stone:hover,
+.main-menu-actions-assets.indent-hover .mode-button-stone:focus-visible { transform: translateX(6px); }
+.main-menu-actions-assets.indent-hover-10 .mode-button-stone:hover,
+.main-menu-actions-assets.indent-hover-10 .mode-button-stone:focus-visible { transform: translateX(10px); }
+@media (prefers-reduced-motion: reduce) {
+  .main-menu-actions-assets.indent-hover .mode-button-stone:hover,
+  .main-menu-actions-assets.indent-hover .mode-button-stone:focus-visible { transform: none; }
+}
+
+/* ── Pages catalog viewer (ADR-0029) — the live page mounts inside the viewer stage.
+   The menu's absolute .menu-layer (inset:8px) fills this relatively-positioned stage; the
+   tweak wrapper carries the --menu-* overrides + the hover-slide class from the rail. */
+.pages-view-main { position: relative; overflow: hidden; min-height: 0; }
+.pages-menu-tweak { position: absolute; inset: 0; }
+.pages-menu-tweak.indent-hover .mode-button-stone {
+  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), border-color .1s ease, box-shadow .1s ease;
+}
+.pages-menu-tweak.indent-hover .mode-button-stone:hover,
+.pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: translateX(6px); }
+.pages-menu-tweak.indent-hover-10 .mode-button-stone:hover,
+.pages-menu-tweak.indent-hover-10 .mode-button-stone:focus-visible { transform: translateX(10px); }
+@media (prefers-reduced-motion: reduce) {
+  .pages-menu-tweak.indent-hover .mode-button-stone:hover,
+  .pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: none; }
+}
+.pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
+/* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
+   sprites): a solid stone-ish plate with the page initial, centered by the base place-items. */
+.tileset-studio-card-image.pages-card-image {
+  min-height: 96px;
+  font-family: var(--ds-font-display); font-size: 1.9rem; color: #9db8da;
+  background: linear-gradient(180deg, #16243a, #0b1422);
 }
 
 /* ── Main-menu mode buttons — "Wet Stone & Cold Iron" (ADR-0025 register) ───────────
    A matte wet-stone slab with a thin forged-iron lip, carrying the forged carved-stone
    icon (icons-carved/<slug>.png, canonical 64×64 per ADR-0026, optical keylines ADR-0027) at --menu-icon-size.
    Hover lifts the iron lip (no glow); active = a contained cobalt hairline (the board's
-   move-overlay tongue). NOTE: the slab surface is still CSS — forging its 9-slice frame
-   is the remaining chrome step (ADR-0002/0012); the icons are forged. */
+   move-overlay tongue). Slab = the forged stone-slate-blue tile (#162 surface set); the
+   iron lip is still a CSS border — baking it into a 9-slice frame (ADR-0002/0012) is next. */
 .mode-button-stone {
   display: flex;
   align-items: center;
   gap: 13px;
-  height: 50px;
-  padding: 0 16px;
+  min-height: var(--menu-btn-h, 60px);
+  padding: 8px 16px;
   text-decoration: none;
   color: #cdd6e2;
   background-color: #0f1b2b;
-  background-image: linear-gradient(180deg, rgba(40, 56, 74, .35) 0%, rgba(8, 16, 28, 0) 38%, rgba(0, 0, 0, .30) 100%);
+  background-image:
+    linear-gradient(180deg, rgba(54, 72, 94, .24) 0%, rgba(8, 16, 28, 0) 46%, rgba(0, 0, 0, .42) 100%),
+    var(--menu-stone-surface, url("/assets/ui/surfaces/stone-slate-blue.png"));
+  background-size: auto, 48px 48px;
+  background-repeat: no-repeat, repeat;
+  image-rendering: pixelated;
   border: 2px solid #1c2836;
   border-top-color: #2a3a4c;
   border-radius: 3px;
@@ -1541,6 +1589,10 @@ h1 {
    and future Shadow-DOM components, which inherit these from :root. The warm
    editorial palette today; the chess-tactics art style swaps these in one place. */
 :root {
+  /* Main-menu sizing tokens — defaults live here (above any tweak wrapper) so the Pages
+     Main-Menu editor can override them on its wrapper. ADR-0027 (icon) / ADR-0021 (height). */
+  --menu-icon-size: 64px;
+  --menu-btn-h: 80px;
   /* color */
   --ds-canvas: #1B1814;
   --ds-surface: #262119;
@@ -9811,6 +9863,13 @@ button.tileset-relationship-cell {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 12px;
+  /* Pack rows to the top and size each card to its content. A grid with few items
+     otherwise STRETCHES its single row to fill the tall catalog pane, leaving a dead
+     gap under every card (ADR-0029: cards hug content, no pointless vertical space).
+     This is the DEFAULT for every category — not a per-grid opt-in. */
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
 }
 
 /* Surfaces are few (one short row), so the default grid stretch blows each card up

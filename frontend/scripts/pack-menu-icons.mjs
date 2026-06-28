@@ -19,15 +19,17 @@ const PY = 'D:/automation/python312/python.exe';
 const DIR = 'public/assets/ui/main-menu/icons-carved';
 const CANVAS = 64, LIVE = 40, COLORS = 48;
 
-// Per-shape-class keylines (ADR-0027), in px on the 64 canvas (~40 safe area). axis =
-// which axis the target governs; the other follows from the art's aspect. nudgeY =
+// Per-shape-class keylines (ADR-0027 §C), in px on the 64 canvas. This is the HERO
+// band — the primary-menu set fills toward the canvas margin (not the ~40 kit safe
+// area) because it's a bold, sparse-screen hero set; equal OPTICAL mass is preserved,
+// only the baseline scale is raised. axis = which axis the target governs; nudgeY =
 // the documented optical-centering offset (down = +), baked into padding.
 const ICONS = [
-  { slug: 'solo-skirmish',   cls: 'tall-pointed', axis: 'h',    target: 44, nudgeY: 1 }, // blade: pointed, reaches into margin
-  { slug: 'campaign-editor', cls: 'full',         axis: 'long', target: 40, nudgeY: 0 }, // route-map: full/square, fills safe area
-  { slug: 'level-editor',    cls: 'upright',      axis: 'h',    target: 38, nudgeY: 0 }, // scroll: blocky, held back
-  { slug: 'lobbies',         cls: 'wide',         axis: 'w',    target: 38, nudgeY: 0 }, // pawns: wide cluster, held back on width
-  { slug: 'settings',        cls: 'tall',         axis: 'h',    target: 42, nudgeY: 0 }, // keys: tall-thin, gains height
+  { slug: 'solo-skirmish',   cls: 'tall-pointed', axis: 'h',    target: 56, nudgeY: 1 }, // blade: pointed, into margin
+  { slug: 'campaign-editor', cls: 'full',         axis: 'long', target: 52, nudgeY: 0 }, // route-map: full/square
+  { slug: 'level-editor',    cls: 'upright',      axis: 'h',    target: 48, nudgeY: 0 }, // scroll: blocky, held back
+  { slug: 'lobbies',         cls: 'wide',         axis: 'w',    target: 48, nudgeY: 0 }, // pawns: wide cluster, held back
+  { slug: 'settings',        cls: 'tall',         axis: 'h',    target: 54, nudgeY: 0 }, // keys: tall-thin, gains height
 ];
 
 const PYSRC = `
