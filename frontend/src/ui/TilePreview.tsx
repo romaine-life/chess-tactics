@@ -1230,6 +1230,22 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     });
   }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedFrameName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
+  // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
+  // the card you came from — not the top of the grid. The selection is already kept
+  // (the card is highlighted); here we scroll that highlighted card into view inside
+  // the catalog's scroll pane. Fires when you (re)enter Catalog mode; the active
+  // category's grid is mounted by then. Not keyed on category, so a manual category
+  // switch while browsing doesn't yank the scroll.
+  useEffect(() => {
+    if (studioMode !== 'catalog') return;
+    const raf = window.requestAnimationFrame(() => {
+      const card = document.querySelector('.tileset-studio-shell .tileset-studio-tab-panel .tileset-studio-card.is-selected');
+      card?.scrollIntoView({ block: 'center', inline: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studioMode]);
+
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
       const next = current.includes(nextFamilyId) ? current.filter((item) => item !== nextFamilyId) : [...current, nextFamilyId];
