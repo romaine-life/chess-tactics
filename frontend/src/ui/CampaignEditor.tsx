@@ -8,9 +8,12 @@ import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { BrandLockup } from './shared/BrandLockup';
 
-const SHIELDS = ['crown', 'rook', 'crescent', 'snow', 'flame', 'lion'] as const;
 const CE_ICONS = {
-  lock: '/assets/ui/level-editor/icons/lock.png',
+  star: '/assets/ui/kit/icons/star.png',
+  'chevron-up': '/assets/ui/kit/icons/chevron-up.png',
+  'chevron-down': '/assets/ui/kit/icons/chevron-down.png',
+  delete: '/assets/ui/kit/icons/delete.png',
+  lock: '/assets/ui/kit/icons/lock.png',
 } as const;
 
 const objectiveLabel: Record<ObjectiveType, string> = {
@@ -80,15 +83,10 @@ function IconButton({
   );
 }
 
-function ShieldBadge({ index, active = false }: { index: number; active?: boolean }): ReactElement {
-  const shield = SHIELDS[index % SHIELDS.length];
-  return <span className={`ce-shield ce-shield-${shield} ${active ? 'is-active' : ''}`.trim()} aria-hidden="true" />;
-}
-
 function Stars({ count = 0 }: { count?: number }): ReactElement {
   return (
     <span className="ce-stars" aria-label={`${count} stars`}>
-      {[0, 1, 2].map((i) => <span key={i} className={i < count ? 'is-filled' : ''}>★</span>)}
+      {[0, 1, 2].map((i) => <img key={i} className={`ce-star ${i < count ? 'is-filled' : ''}`.trim()} src={CE_ICONS.star} alt="" aria-hidden="true" />)}
     </span>
   );
 }
@@ -124,7 +122,6 @@ function CampaignRow({
         }
       }}
     >
-      <ShieldBadge index={index} active={active} />
       <span className="ce-row-copy">
         <strong>{campaign.name}</strong>
         <small>{campaign.levels.length} levels</small>
@@ -140,7 +137,7 @@ function CampaignRow({
           aria-label={campaign.favorite ? `Unfavorite ${campaign.name}` : `Favorite ${campaign.name}`}
           onClick={onFavorite}
         >
-          ★
+          <img className="ce-star" src={CE_ICONS.star} alt="" aria-hidden="true" />
         </button>
       )}
     </div>
@@ -193,9 +190,9 @@ function LevelRow({
       </span>
       <Stars count={levelRef.stars ?? 0} />
       <span className="ce-row-actions" aria-label="Level actions">
-        <IconButton onClick={onMoveUp} aria-label="Move level up">▲</IconButton>
-        <IconButton onClick={onMoveDown} aria-label="Move level down">▼</IconButton>
-        <IconButton danger onClick={onDelete} aria-label="Delete level">✕</IconButton>
+        <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
+        <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="chevron-down" /></IconButton>
+        <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
       </span>
     </div>
   );
@@ -399,7 +396,6 @@ export function CampaignEditor() {
                 <h2>Campaign Details</h2>
               </div>
               <div className="ce-campaign-summary">
-                <ShieldBadge index={campaigns.findIndex((c) => c.id === camp.id)} active />
                 <label className="ce-name-field">
                   <span>Campaign Name</span>
                   <input
@@ -449,9 +445,7 @@ export function CampaignEditor() {
                 <span className="ce-force ce-force-ally"><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
                 <span className="ce-force ce-force-enemy"><img src="/assets/ui/main-menu/profile-rook-red.png" alt="" />Enemies <strong>{enemyCount}</strong></span>
               </div>
-            ) : (
-              <span aria-hidden="true">✎</span>
-            )}
+            ) : null}
           </div>
           <div className="ce-preview-frame">
             {levelDoc ? (
