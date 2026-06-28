@@ -11073,9 +11073,11 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
 }
 
-/* Shared brand lockup — [shield] SCREEN NAME · chess tactics — the ONE top-left
-   mark used on every screen except the main-menu hero. Same mark/structure/spot
-   everywhere; only the screen name changes. Component: src/ui/shared/BrandLockup. */
+/* Shared brand lockup — [shield] CHESS TACTICS / screen name — the ONE top-left
+   mark on every screen. The game wordmark is the persistent header (the dominant
+   line); the screen name sits beneath it as the small subordinate line. Same
+   mark/structure/spot everywhere; only the screen name changes. DOM order is
+   brand-then-name, so no reordering is needed. Component: src/ui/shared/BrandLockup. */
 .brand-lockup {
   align-items: center;
   color: #eef8ff;
@@ -11100,49 +11102,26 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 
-.brand-lockup-copy strong {
-  color: #f0eadb;
-  font-size: var(--ds-text-lg);
-  font-weight: 600;
-  line-height: 1.04;
-  text-shadow: 0 2px 0 #02070b;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
+/* The game wordmark — the dominant, persistent header line. */
 .brand-lockup-copy em {
-  color: #79d3ff;
-  font-size: var(--ds-text-sm);
-  font-style: normal;
-  letter-spacing: .14em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-/* Home/entry route only (variant="brand-hero"): the entry screen IS the title
-   screen, so lead with the brand — the game title becomes the dominant line and
-   the screen name drops to the small subordinate slot. Same slots/structure as the
-   shared lockup; only the size/weight/colour ratio of the two lines is flipped
-   (and `order` restacks them so the brand sits on top). */
-.brand-lockup--brand-hero .brand-lockup-copy em {
   color: #f0eadb;
   font-size: var(--ds-text-lg);
+  font-style: normal;
   font-weight: 600;
-  letter-spacing: 0;
   line-height: 1.04;
-  order: 0;
   text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
-.brand-lockup--brand-hero .brand-lockup-copy strong {
+/* The screen name — the small subordinate line beneath the brand. */
+.brand-lockup-copy strong {
   color: #79d3ff;
   font-size: var(--ds-text-sm);
   font-weight: 400;
   letter-spacing: .14em;
   line-height: 1.2;
-  order: 1;
-  text-shadow: none;
+  text-transform: uppercase;
 }
 
 .settings-tab span,
