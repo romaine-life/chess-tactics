@@ -26,13 +26,22 @@ interface MenuTab { slug: string; label: string; href: string; iconSlug: string 
 // carving is forged.
 const MENU_TABS: MenuTab[] = [
   { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
-  ...MENU_MODES.map((mode) => ({
-    slug: mode.slug,
-    label: mode.label,
-    href: MODE_HREFS[mode.slug] || '/',
-    iconSlug: mode.slug,
-  })),
+  // Settings is excluded from the rail — it now lives in the trailing "settings +
+  // user" chrome cluster (the gear beside the account control), not as a mode tab.
+  ...MENU_MODES
+    .filter((mode) => mode.slug !== 'settings')
+    .map((mode) => ({
+      slug: mode.slug,
+      label: mode.label,
+      href: MODE_HREFS[mode.slug] || '/',
+      iconSlug: mode.slug,
+    })),
 ];
+
+// The trailing-edge Settings control (carved gear) — moved out of the rail into the
+// account cluster (ADR-0036). Lives next to the avatar so the top-right reads as one
+// "settings + user" unit.
+const SETTINGS_ICON = `${ICONS}/settings.png`;
 
 // Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
 // chrome can be previewed/screenshotted without a backend: ?demo=1 stubs this user,
@@ -80,7 +89,7 @@ export function MainMenu(): ReactElement {
   }, []);
 
   useEffect(() => {
-    const urls = new Set<string>([BRAND_SHIELD]);
+    const urls = new Set<string>([BRAND_SHIELD, SETTINGS_ICON]);
     for (const tab of MENU_TABS) urls.add(`${ICONS}/${tab.iconSlug}.png`);
     let done = false;
     const reveal = () => { if (!done) { done = true; setReady(true); } };
@@ -103,7 +112,6 @@ export function MainMenu(): ReactElement {
 
   const signedIn = Boolean(effectiveMe?.signed_in);
   const accountName = signedIn ? (effectiveMe!.name || effectiveMe!.email || 'Player') : 'Guest';
-  const accountStatus = signedIn ? 'Signed in' : effectiveMe === null ? 'Checking account' : 'Not signed in';
 
   return (
     <div className={`menu-layer main-menu-layer ${ready ? 'is-ready' : 'is-loading'}`} data-testid="main-menu-next">
@@ -113,27 +121,23 @@ export function MainMenu(): ReactElement {
       <div className="settings-screen main-menu-twin-screen">
         <header className="app-titlebar settings-header-frame main-menu-twin-header">
           <BrandLockup screenName="Main Menu" />
-          {/* Trailing-edge account chrome: signed in → the avatar account menu (the
-              Settings gear joins this cluster when it moves out of the rail); signed
-              out → the name + Sign In. */}
-          {signedIn ? (
-            <div className="header-account-cluster" aria-label="Account">
+          {/* Trailing "settings + user" cluster (ADR-0036): the Settings gear, then
+              the account control — the avatar menu when signed in, Sign In when not. */}
+          <div className="header-account-cluster" aria-label="Settings and account">
+            <a className="cluster-icon-button" href="/settings" aria-label="Settings" title="Settings">
+              <img src={SETTINGS_ICON} alt="" />
+            </a>
+            {signedIn ? (
               <AccountMenu
                 name={accountName}
                 avatarUrl={effectiveMe!.avatar_url ?? null}
                 onSignOut={signOut}
                 defaultOpen={menuOpen}
               />
-            </div>
-          ) : (
-            <div className="settings-account" aria-label="Account">
-              <span>
-                <strong>{accountName}</strong>
-                <em>{accountStatus}</em>
-              </span>
+            ) : (
               <a className="app-header-button app-header-button-active" href={signInHref('/')}>Sign In</a>
-            </div>
-          )}
+            )}
+          </div>
         </header>
 
         <div className="settings-shell">

@@ -11715,6 +11715,12 @@ button.tileset-relationship-cell {
   outline: none;
 }
 
+/* Signed-out Sign In rides the same cluster — match the icon buttons' height so the
+   gear + control read as one unit. */
+.header-account-cluster .app-header-button {
+  block-size: 52px;
+}
+
 .cluster-icon-button > img {
   block-size: 26px;
   image-rendering: pixelated;
