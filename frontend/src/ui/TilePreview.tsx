@@ -6,6 +6,7 @@
 // `category === '…'` branch.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileFamilies } from '../art/tileset';
+import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
   terrainLabels,
   transitionPairs,
@@ -104,6 +105,10 @@ interface StudioAsset extends TileSocketAsset {
   source: string;
   probability: number;
   notes: string;
+  /** Non-production reference tile (held out of the board/game); shown in the catalog only. */
+  speculative?: boolean;
+  /** How a tile was produced, e.g. "Codex → Filter", "Textured". */
+  method?: string;
 }
 
 interface StudioFamily {
@@ -180,6 +185,11 @@ const studioFamilies: StudioFamily[] = (Object.keys(tileFamilies) as TileFamilyI
   ...STUDIO_FAMILY_META[id],
   assets: tileFamilies[id].map((asset): StudioAsset => ({ ...asset })),
 }));
+
+// Non-production reference tiles (legacy textured, codex→filter, rejected bake-off methods).
+// Injected into the Tiles CATALOG only (below) — deliberately NOT in studioFamilies, so they
+// never reach board generation or the Level Editor brush. See art/nonProductionTiles.ts.
+const nonProductionStudioTiles: StudioAsset[] = nonProductionTileAssets.map((asset): StudioAsset => ({ ...asset }));
 
 const familyCounts = (family: StudioFamily): string => {
   const variants = family.assets.filter((asset) => asset.kind === 'tile').length;
@@ -875,17 +885,26 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // render either of these; a new asset type is just another descriptor.
   const tileFamilyOf = new Map<string, StudioFamilyId>();
   for (const fam of studioFamilies) for (const a of fam.assets) tileFamilyOf.set(a.id, fam.id);
+  for (const a of nonProductionStudioTiles) tileFamilyOf.set(a.id, nonProductionTileFamilyOf.get(a.id) ?? 'grass');
   const tilesCatalogType: CatalogType<StudioAsset> = {
     id: 'tiles',
     label: 'Tiles',
-    assets: studioFamilies.flatMap((fam) => fam.assets),
+    assets: [...studioFamilies.flatMap((fam) => fam.assets), ...nonProductionStudioTiles],
     card: (a) => ({ img: assetFrameSrc(a, animationFrame), title: a.label, badge: a.role }),
-    sections: (visible) => [{ id: 'base', label: 'Base Tiles', assets: visible.filter((a) => a.kind === 'tile') }],
+    sections: (visible) => {
+      const tiles = visible.filter((a) => a.kind === 'tile');
+      const prod = tiles.filter((a) => !a.speculative);
+      const spec = tiles.filter((a) => a.speculative);
+      const out: { id: string; label: string; assets: StudioAsset[] }[] = [];
+      if (prod.length) out.push({ id: 'base', label: 'Base Tiles', assets: prod });
+      if (spec.length) out.push({ id: 'non-production', label: 'Non-production — reference & rejected bake-off methods', assets: spec });
+      return out;
+    },
     query: {
       value: catalogQuery,
       set: setCatalogQuery,
       placeholder: 'label, source, socket...',
-      match: (a, q) => [a.label, a.role, a.source, a.notes, ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
+      match: (a, q) => [a.label, a.role, a.source, a.notes, a.method ?? '', a.speculative ? 'non-production speculative' : '', ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
     filters: [
