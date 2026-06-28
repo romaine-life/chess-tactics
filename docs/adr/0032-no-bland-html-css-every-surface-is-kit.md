@@ -4,7 +4,7 @@ date: 2026-06-27
 deciders: Nelson, Claude
 ---
 
-# ADR-0027: No bland HTML/CSS — every visible surface in the app is the game's kit
+# ADR-0032: No bland HTML/CSS — every visible surface in the app is the game's kit
 
 The universal version of the kit rule. [ADR-0002](0002-nine-slice-border-image-for-pixel-art-chrome.md)
 (9-slice mechanism), [ADR-0011](0011-chrome-art-generated-not-extracted.md) /
@@ -13,7 +13,7 @@ atom-assembled) and [ADR-0014](0014-ui-chrome-low-fidelity-aesthetic.md) (low-fi
 look) all govern "chrome" — but nothing states the blanket rule, so plain
 hand-rolled CSS boxes keep reappearing on every new surface. This ADR makes it
 absolute and app-wide. It is the visual-surface peer of [ADR-0024](0024-ui-typography-system.md)
-(all text → type tokens) and [ADR-0026](0026-ui-spacing-system.md) (all spacing →
+(all text → type tokens) and [ADR-0031](0031-ui-spacing-system.md) (all spacing →
 space tokens).
 
 ## Context and Problem Statement
@@ -57,7 +57,7 @@ box — **is not allowed, anywhere, no exceptions.**
 
 - **Layout containers** — `display: flex/grid`, gaps, alignment, sizing on an element
   with **no** background/border/frame. Invisible scaffolding is fine (and spacing
-  comes from the tokens, ADR-0026).
+  comes from the tokens, ADR-0031).
 - **Text** — typography is its own system (ADR-0024); text isn't a surface.
 - **The board/scene render** and sprites — game art, not chrome.
 - A genuinely new surface type the kit lacks a frame for is **not** an excuse for raw
@@ -83,7 +83,7 @@ box — **is not allowed, anywhere, no exceptions.**
   [ADR-0011](0011-chrome-art-generated-not-extracted.md),
   [ADR-0012](0012-nine-slice-frames-are-atom-assembled.md),
   [ADR-0014](0014-ui-chrome-low-fidelity-aesthetic.md). Peers:
-  [ADR-0024](0024-ui-typography-system.md) (text), [ADR-0026](0026-ui-spacing-system.md) (space).
+  [ADR-0024](0024-ui-typography-system.md) (text), [ADR-0031](0031-ui-spacing-system.md) (space).
 - Kit: registry `frontend/config/nine-slice-registry.json` → `panel.png` /
   `mode-button.png` / `row.png` in `public/assets/ui/kit/`; apply via `border-image`.
 - Enforcement intent: a lint rule flagging `background`/`border`/`box-shadow` that

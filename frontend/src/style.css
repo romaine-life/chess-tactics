@@ -1620,7 +1620,7 @@ h1 {
   --ds-text-md:  clamp(.95rem, 1.1vw, 1.1rem);
   --ds-text-lg:  clamp(1.18rem, 1.55vw, 1.6rem);
   --ds-text-xl:  clamp(1.5rem, 2.1vw, 2.3rem);
-  /* space — the 8px base + 4px half-step scale (ADR-0026). Map spatial ROLES onto
+  /* space — the 8px base + 4px half-step scale (ADR-0031). Map spatial ROLES onto
      these steps; don't hand-pick px per element. */
   --ds-space-1: 4px;
   --ds-space-2: 8px;
@@ -1630,7 +1630,7 @@ h1 {
   --ds-space-6: 32px;
   --ds-space-7: 48px;
   --ds-space-8: 64px;
-  /* Spatial-role tokens (ADR-0026) — COMFORTABLE density is the default; in-game
+  /* Spatial-role tokens (ADR-0031) — COMFORTABLE density is the default; in-game
      surfaces override these to the tight end (see .skirmish-screen). inset = padding
      on all sides; stack = vertical gap; inline = horizontal gap; gutter = section gaps. */
   --ds-inset: var(--ds-space-4);
@@ -5537,7 +5537,7 @@ h1 {
   --skirmish-muted: #a7c1ce;
   --skirmish-panel: rgba(7, 19, 29, .86);
   --skirmish-panel-strong: rgba(10, 29, 42, .94);
-  /* COMPACT density — this is an in-game surface (ADR-0006 lean + ADR-0026). The
+  /* COMPACT density — this is an in-game surface (ADR-0006 lean + ADR-0031). The
      spatial-role tokens resolve to the tight end of the scale here. */
   --ds-inset: var(--ds-space-2);
   --ds-stack: var(--ds-space-2);
@@ -5639,7 +5639,7 @@ h1 {
    family, all the same height and vertically centered (ADR-0010 rhythm). */
 .skirmish-status-chip {
   /* Kit panel frame so the status reads as a contained chip, not floating text —
-     in-theme (panel.png), never the bland CSS box it replaced (ADR-0027/0028).
+     in-theme (panel.png), never the bland CSS box it replaced (ADR-0032/0033).
      Fixed 46px height = the header buttons, so the bar's elements line up. */
   align-items: center;
   block-size: 46px;
@@ -5799,7 +5799,7 @@ h1 {
 }
 
 /* No board box: the board (game art) floats on the screen's night-sky background,
-   per the concept and ADR-0027 (a fabricated CSS box around the scene isn't allowed). */
+   per the concept and ADR-0032 (a fabricated CSS box around the scene isn't allowed). */
 
 .skirmish-board-frame {
   display: grid;
@@ -5825,7 +5825,7 @@ h1 {
 }
 
 /* No board box: the board container paints NO background — the board art floats on
-   the screen's night-sky background (ADR-0027). A tinted rectangle here is the "box". */
+   the screen's night-sky background (ADR-0032). A tinted rectangle here is the "box". */
 .skirmish-board-lab {
   background: transparent;
 }
@@ -6174,7 +6174,7 @@ h1 {
   /* The right side is ONE control panel: a single kit panel frame (same panel.png +
      14px corner as the title bar, so they read consistently) holding the tabs, the
      active content, and the actions. Inner sections are frameless content, not nested
-     boxes. This is the precedent for the level editor's right side too (ADR-0028). */
+     boxes. This is the precedent for the level editor's right side too (ADR-0033). */
   border: 14px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
   box-sizing: border-box;
@@ -6279,7 +6279,7 @@ h1 {
 .skirmish-score-panel,
 .skirmish-card {
   /* Frameless content INSIDE the control panel — the one panel frame is on
-     .skirmish-hud, so these are plain sections, not nested boxes (ADR-0027/0028). */
+     .skirmish-hud, so these are plain sections, not nested boxes (ADR-0032/0033). */
   background: transparent;
   border: 0;
   box-sizing: border-box;
@@ -6344,7 +6344,7 @@ h1 {
 
 .skirmish-portrait-frame {
   align-items: center;
-  /* Kit panel frame (ADR-0027) — no `fill`, so the portrait backdrop shows through the
+  /* Kit panel frame (ADR-0032) — no `fill`, so the portrait backdrop shows through the
      center; the bust crop fills the content box edge-to-edge. Not a raw-CSS box. */
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 / 12px round;
@@ -6434,7 +6434,7 @@ h1 {
 
 .skirmish-service-record {
   /* In-theme kit sub-panel so the stats aren't bare/"headless" on the control panel
-     (ADR-0027). One frame for the whole block — not five sets of brackets. */
+     (ADR-0032). One frame for the whole block — not five sets of brackets. */
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 12px round;
   box-sizing: border-box;
@@ -6464,7 +6464,7 @@ h1 {
    number read ambiguously against the neighbouring column). A single row of five
    keeps the panel as short as the original so the rail still fits. */
 .skirmish-service-record dl div {
-  /* Frameless stat column (ADR-0027) — number over label, no per-cell CSS box. */
+  /* Frameless stat column (ADR-0032) — number over label, no per-cell CSS box. */
   align-items: center;
   display: flex;
   flex-direction: column;
@@ -6509,7 +6509,7 @@ h1 {
 
 .skirmish-roster-slot {
   /* Kit mode-button frame — same gold bracket frame as the tabs/.app-header-button
-     (ADR-0011/0012/0027), not a hand-rolled gradient box. Cyan -active when selected.
+     (ADR-0011/0012/0032), not a hand-rolled gradient box. Cyan -active when selected.
      Holds the unit's portrait bust as its content. */
   aspect-ratio: 1;
   background: transparent;
@@ -6602,7 +6602,7 @@ h1 {
 .skirmish-icon-rook-blue { background-image: url("/assets/ui/skirmish/icon-rook-blue.png"); }
 .skirmish-icon-rook-red { background-image: url("/assets/ui/skirmish/icon-rook-red.png"); }
 /* Point at the clean, method-forged kit glyphs (transparent, no baked box) instead of
-   the contact-sheet slices (ADR-0011/0027). menu + rook have no forged twin yet. */
+   the contact-sheet slices (ADR-0011/0032). menu + rook have no forged twin yet. */
 .skirmish-icon-flag { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
 .skirmish-icon-hourglass { background-image: url("/assets/ui/kit/icons/game/wait.png"); }
 .skirmish-icon-gear { background-image: url("/assets/ui/kit/icons/gear.png"); }
