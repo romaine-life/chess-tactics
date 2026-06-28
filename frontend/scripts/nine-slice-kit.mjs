@@ -22,7 +22,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const ATOMS = `${root}public/assets/ui/kit/atoms/`;
 export const KIT = `${root}public/assets/ui/kit/`;
 // Transparent-interior "line" variants (ornament only) live here, beside panel-line.png.
-// They are the fix for the 9-slice fill problem (see bakeLine / ADR-0029).
+// They are the fix for the 9-slice fill problem (see bakeLine / ADR-0034).
 export const LINE_DIR = `${root}public/assets/ui/explore/frames/`;
 export const CONFIG_DIR = `${root}config/nine-slice/`;
 
@@ -196,7 +196,7 @@ export function bakeLine(assetId) {
   // MASK ate dark ornament down to a keyline; carveExterior ate a dark rail's outer bevel,
   // pulling the frame off the element edge so surface spilled outside it. A line frame must be
   // an ornament that reaches the element EDGE — corner brackets do; a continuous inset rail does
-  // not, so a surfaced row uses the bracket frame, not its own rail. See ADR-0029 §D.)
+  // not, so a surfaced row uses the bracket frame, not its own rail. See ADR-0034 §D.)
   const clearFill = new PNG({ width: fillAtom.width, height: fillAtom.height }); clearFill.data.fill(0);
   const { w, h } = rec.frame;
   return buildFrameFrom(corner, edge, clearFill, w, h, !!rec.flipSides);

@@ -5,7 +5,7 @@ import modeButtonCfg from '../../config/nine-slice/mode-button.json';
 
 // Each frame's FILL boundary (px inset from the footprint) — set by eye in the 9-slice editor,
 // stored in config/nine-slice/<asset>.json. The surface clips to it so it stops where the frame's
-// visual interior begins, while the frame's corners bleed outside it. (See ADR-0029 / the editor's
+// visual interior begins, while the frame's corners bleed outside it. (See ADR-0034 / the editor's
 // Fill box.) 0 = no inset (surface fills to the footprint, the old behaviour).
 type FrameId = 'panel' | 'mode-button';
 const FRAME_FILL: Record<FrameId, number> = {

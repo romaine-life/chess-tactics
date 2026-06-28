@@ -4,7 +4,7 @@ date: 2026-06-27
 deciders: Nelson, Claude
 ---
 
-# ADR-0029: A surface behind kit chrome uses a transparent-interior "line" frame, not a per-material baked frame
+# ADR-0034: A surface behind kit chrome uses a transparent-interior "line" frame, not a per-material baked frame
 
 Extends the atom-assembled 9-slice kit ([ADR-0012](0012-nine-slice-frames-are-atom-assembled.md))
 and the low-fidelity chrome aesthetic ([ADR-0014](0014-ui-chrome-low-fidelity-aesthetic.md)).
