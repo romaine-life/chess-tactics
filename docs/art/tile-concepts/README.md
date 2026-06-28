@@ -16,6 +16,11 @@ Source texture packs are license-pending (downloaded); raw zips not committed.
 Tiles are now full 3D-feel sprites in a **96×180** frame (≈42px headroom above the contact
 diamond for protrusion). Run: `blender -b --python render_tile_3d.py -- <mode> <out> <basecolor> [packdir] [seed]`
 - **ground** — PBR (normal/AO/roughness auto-wired from packdir) + displacement relief (height map if present, else procedural noise). For dirt/stone/sand.
+  **stone-c flattened (2026-06-27):** the `overgrown-stone-tiles` height map at strength 0.22
+  extruded every hex into spiky protrusions that read as baked "doodads." Re-rendered with the
+  top displacement disabled (`add_top_relief(0.0, None)` — flat hex floor, pattern carried by
+  normal/basecolor only); same fix-class as the grass/pebble cleanup, see
+  [ADR-0015](../../adr/0015-doodads-frame-units-not-bury-them.md).
 - **grass** — grassy base + scattered standing 3D grass blades (seeded per variant).
   **Superseded for the shipped tiles (2026-06-27):** those baked blades were "fake
   doodads" — a unit couldn't nest in flat painted grass and real doodads double-stacked.

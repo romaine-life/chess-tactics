@@ -17,7 +17,7 @@ import {
 const Skirmish = lazy(() => import('./Skirmish').then((m) => ({ default: m.Skirmish })));
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 const TilesetStudio = lazy(() => import('./TilePreview').then((m) => ({ default: m.TilesetStudio })));
-const LevelEditor = lazy(() => import('./TilePreview').then((m) => ({ default: m.LevelEditorPage })));
+const LevelEditor = lazy(() => import('./TilePreview').then((m) => ({ default: m.LevelEditor })));
 const PortraitEditor = lazy(() => import('./PortraitEditor').then((m) => ({ default: m.PortraitEditor })));
 const DoodadEditor = lazy(() => import('./DoodadEditor').then((m) => ({ default: m.DoodadEditor })));
 const NineSliceEditor = lazy(() => import('./NineSliceEditor').then((m) => ({ default: m.NineSliceEditor })));
