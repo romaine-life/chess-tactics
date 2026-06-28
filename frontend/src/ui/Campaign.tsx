@@ -3,7 +3,8 @@ import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { AmbienceBackground } from './AmbienceBackground';
 import { BrandLockup } from './shared/BrandLockup';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
-import { loadCampaigns } from '../campaign/defaultCampaigns';
+import { useCampaigns } from '../campaign/store';
+import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import type { Campaign as CampaignDoc } from '../core/level';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -35,12 +36,13 @@ function CampaignTab({ campaign, active }: { campaign: CampaignDoc; active: bool
 }
 
 // The Campaign (play) screen: a settings-twin of the main menu whose rail lists the
-// campaigns to pick from (the editor at /campaigns-next authors them; this plays
-// them). Click the brand lockup (top-left) to return home.
+// campaigns to pick from. It reads the same workspace store as the editor at
+// /campaigns-next (which authors them), so the two lists always match. Click the
+// brand lockup (top-left) to return home.
 export function Campaign(): ReactElement {
   const [me, setMe] = useState<AuthUser | null>(null);
   const [selectedId, setSelectedId] = useState<string>(() => campaignIdFromPath(window.location.pathname));
-  const campaigns = loadCampaigns();
+  const campaigns = useCampaigns((s) => s.campaigns);
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -48,12 +50,10 @@ export function Campaign(): ReactElement {
     return () => shell?.classList.remove('main-menu-active');
   }, []);
 
+  // Load the shared workspace the same way the editor does, so the lists match.
+  useEffect(() => { void ensureCampaignsHydrated(); }, []);
+
   useEffect(() => {
-    // Bare /campaign normalizes to the first campaign so the URL always names one.
-    const first = campaigns[0];
-    if (first && normalizeRoutePath(window.location.pathname) === '/campaign') {
-      navigateApp(`/campaign/${first.id}`, { replace: true, scroll: false });
-    }
     const sync = () => setSelectedId(campaignIdFromPath(window.location.pathname));
     window.addEventListener('popstate', sync);
     window.addEventListener(APP_NAVIGATION_EVENT, sync);
@@ -61,7 +61,16 @@ export function Campaign(): ReactElement {
       window.removeEventListener('popstate', sync);
       window.removeEventListener(APP_NAVIGATION_EVENT, sync);
     };
-  }, [campaigns]);
+  }, []);
+
+  // Once campaigns load, a bare /campaign (or an unknown id) normalizes to the first
+  // campaign so the URL always names a real one.
+  useEffect(() => {
+    if (!campaigns.length) return;
+    if (!campaigns.some((c) => c.id === selectedId)) {
+      navigateApp(`/campaign/${campaigns[0].id}`, { replace: true, scroll: false });
+    }
+  }, [campaigns, selectedId]);
 
   useEffect(() => {
     let active = true;
@@ -77,7 +86,7 @@ export function Campaign(): ReactElement {
   const signedIn = Boolean(me?.signed_in);
   const accountName = signedIn ? (me!.name || me!.email || 'Player') : 'Guest';
   const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
-  const activeId = selectedId || campaigns[0]?.id || '';
+  const activeId = campaigns.some((c) => c.id === selectedId) ? selectedId : campaigns[0]?.id ?? '';
 
   return (
     <div className="menu-layer main-menu-layer is-ready" data-testid="campaign-menu">
