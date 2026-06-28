@@ -12605,3 +12605,36 @@ button.tileset-relationship-cell {
 .al-lab-empty { margin: 0; color: #9eb1c5; font-size: 13px; }
 .al-lab-stages { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; }
 .tileset-view-controls .al-meta { grid-template-columns: 1fr; gap: 8px; max-width: none; }
+
+/* Campaign battle result — a modal over the board when a campaign level is won or
+   lost. Layout only: the panel itself wears the shared baked-skin .settings-frame,
+   and the buttons are the standard .app-header-button chrome. */
+.campaign-result {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 7, 11, .62);
+}
+.campaign-result-panel {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(20px, 3vw, 36px);
+  min-width: min(420px, 86vw);
+}
+.campaign-result-panel h2 {
+  margin: 0;
+  font-size: clamp(26px, 3.4vw, 38px);
+  letter-spacing: .04em;
+  color: var(--ds-ink-1, #eaf2f6);
+}
+.campaign-result-panel p {
+  margin: 0;
+  color: var(--ds-ink-3, #9eb1c5);
+}
+.campaign-result-stars { display: inline-flex; gap: 8px; }
+.campaign-result-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 4px; }

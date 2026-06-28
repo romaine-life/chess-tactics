@@ -52,27 +52,44 @@ lathe set: helmeted pawn (`docs/art/archive/units/pawn/pawn_helmet.blend`), orna
 (`bishop-mitre`), badass keep (`rook-badass-keep`), beaded tiara (`queen-tiara`), gold crown
 (`king-crown`). See `render_all.sh` for the exact map.
 
-## Asset path & wiring
-- `/assets/units/<piece>/portrait/<palette>.png`
-- `portraitPath(type, palette)` in `frontend/src/core/pieces.ts`; the HUD picks the palette
-  from the selected piece's side (`PALETTE_FOR_SIDE`) and renders `<img class="skirmish-portrait">`,
-  falling back to the badge glyph for non-roster pieces.
+## Asset path & wiring (live render — PR #189)
+The HUD does **not** load a pre-baked PNG. The Selected-Unit portrait, the roster slots, and the
+Portrait editor previews all render **live in the browser** through one shared `<UnitPortrait>`
+component (`frontend/src/ui/PortraitEditor.tsx`) and the `.unit-portrait` CSS box
+(`frontend/src/style.css`):
+- **Master render:** `/assets/portrait-editor/<piece>/<palette>.png` (full-body, transparent).
+- **Crop:** per-piece `cx, cy, s` from `frontend/src/art/portraitCrops.json` (the committed
+  source of truth the HUD reads), applied via `CroppedView` so the bust fills the box at the
+  dialled framing — including the intentional off-center "lead room" placement.
+- **Frame:** the transparent `panel-line` 9-slice, filling to the panel Fill-box boundary
+  (`config/nine-slice/panel.json` `fill`) with the bracket ornament bleeding over. The
+  Selected-Unit portrait composites a backdrop scene behind the bust; the roster shows a cyan ring
+  when selected. Non-roster pieces fall back to the badge glyph.
+
+Because all three surfaces read the same master + crop, framing / fill / placement are defined once
+and can't diverge — change the crop in the editor, commit it to `portraitCrops.json`, and every
+surface updates. No re-bake.
+
+## The baked PNGs are superseded (decision, PR #189 follow-up)
+`/assets/units/<piece>/portrait/<palette>.png` (via `portraitPath()` in `frontend/src/core/pieces.ts`)
+and the bake that produces them (`bake_finals.sh` below) are **no longer consumed by the game** —
+the HUD renders live from the masters above. They are **retained only as studio catalog artwork**
+(`frontend/src/ui/design/artworkManifest.json` lists them as a rendered reference gallery).
+**Decision:** keep the baked PNGs as catalog artwork; treat the live master+crop render as the
+source of truth; run the bake only to refresh that catalog reference — it is not required for the
+HUD, and re-baking does not affect what the HUD shows.
 
 ## Framing workflow (current)
-The shipped headshots are **cropped from full-body "master" renders**, with the crop
-dialled in interactively rather than guessed:
-1. The **Portrait Editor** (`/portrait-editor`, `frontend/src/ui/PortraitEditor.tsx`) shows
-   each unit full-body and lets you drag/zoom a square crop with a live HUD-frame preview.
-   The HUD frame has no padding and uses `object-fit:cover`, so the crop **fills** the box.
-2. Export the JSON and save it to `docs/art/unit-concepts/portraits/crops.json` (per-piece
-   `cx, cy, s` over the master, plus the master framing).
-3. Bake: `BLENDER="…/blender.exe" bash docs/art/unit-concepts/portraits/bake_finals.sh` —
-   re-renders hi-res masters at the master framing, crops each by `crops.json`, resizes to
-   512, and writes `frontend/public/assets/units/<piece>/portrait/<palette>.png`.
+1. Open the **Portrait Editor** (`/portrait-editor`, `frontend/src/ui/PortraitEditor.tsx`) — the
+   full-body master with a draggable/zoomable square crop and a live `<UnitPortrait>` preview at
+   HUD size.
+2. Dial the crop, **Copy JSON**, and commit the per-piece `cx, cy, s` to
+   `frontend/src/art/portraitCrops.json`. The HUD reads it directly — done, no bake.
 
-Master framing per piece lives in `crops.json` (`pawn/knight/bishop/queen/king` Tz 0.50
-span 1.45; `rook` Tz 0.45 span 1.75). Editor masters are at
-`/assets/portrait-editor/<piece>/<palette>.png`.
+Editor masters live at `/assets/portrait-editor/<piece>/<palette>.png`. The master *render* framing
+(`Tz`/`span` per piece — `pawn/knight/bishop/queen/king` Tz 0.50 span 1.45; `rook` Tz 0.45 span
+1.75), used only to regenerate the masters/baked catalog, is recorded in
+`docs/art/unit-concepts/portraits/crops.json` (distinct from the HUD's `portraitCrops.json`).
 
 ## Reproduce (low-level)
 - Single blend piece: `blender -b --python docs/art/unit-concepts/portraits/portrait_render.py -- <blend> <outfile> <palette> <r> <g> <b> <keep|iron> <yaw> [metal] [rough]` (`PORTRAIT_TZ`/`PORTRAIT_SPAN`/`PORTRAIT_RES` env override framing/resolution)

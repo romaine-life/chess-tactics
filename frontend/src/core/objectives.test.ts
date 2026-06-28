@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateObjective } from './objectives';
+import { evaluateObjective, objectiveContextForLevel, DEFAULT_SURVIVE_TURNS } from './objectives';
+import { createBlankLevel } from './level';
 import type { GameState, Piece, PieceType, Side } from './types';
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number): Piece {
@@ -39,5 +40,31 @@ describe('evaluateObjective', () => {
     const s = state([piece('p', 'player', 'knight', 3, 3), piece('e', 'enemy', 'pawn', 1, 1)]);
     expect(evaluateObjective(s, 'reach', { reachCells: [{ x: 7, y: 0 }] })).toBeNull();
     expect(evaluateObjective(s, 'reach', { reachCells: [{ x: 3, y: 3 }, { x: 7, y: 0 }] })).toBe('player');
+  });
+});
+
+describe('objectiveContextForLevel', () => {
+  it('capture objectives imply no extra context', () => {
+    expect(objectiveContextForLevel(createBlankLevel('a'))).toEqual({}); // createBlankLevel = capture-all
+  });
+
+  it('survive implies the default turn target', () => {
+    const level = { ...createBlankLevel('a'), objective: 'survive' as const };
+    expect(objectiveContextForLevel(level)).toEqual({ surviveTurns: DEFAULT_SURVIVE_TURNS });
+  });
+
+  it('reach uses authored objective-zone tiles when present', () => {
+    const base = createBlankLevel('a', 'x', 4, 4);
+    const level = {
+      ...base,
+      objective: 'reach' as const,
+      layers: { ...base.layers, zones: [{ id: 'z', type: 'objective' as const, tiles: [[1, 1], [2, 2]] as Array<[number, number]> }] },
+    };
+    expect(objectiveContextForLevel(level).reachCells).toEqual([{ x: 1, y: 1 }, { x: 2, y: 2 }]);
+  });
+
+  it('reach falls back to the enemy back rank (y=0) when no zone is authored', () => {
+    const level = { ...createBlankLevel('a', 'x', 3, 3), objective: 'reach' as const };
+    expect(objectiveContextForLevel(level).reachCells).toEqual([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }]);
   });
 });

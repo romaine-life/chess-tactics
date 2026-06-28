@@ -3,7 +3,7 @@ import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { AmbienceBackground } from './AmbienceBackground';
 import { BrandLockup } from './shared/BrandLockup';
 import { AccountMenu } from './shared/AccountMenu';
-import { MENU_MODES, type MenuMode } from './design/catalogData';
+import { MENU_MODES } from './design/catalogData';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
 const BRAND_SHIELD = '/assets/ui/kit/icons/brand-shield.png';
@@ -16,17 +16,33 @@ const MODE_HREFS: Record<string, string> = {
   settings: '/settings',
 };
 
-// Workshop harness (reversible, query-param gated — the default menu is unchanged):
-//   ?account=a   trailing "settings + avatar" cluster, name lives in the menu only
-//   ?account=b   same cluster, plus the first name inline beside the avatar
-//   ?demo=1      force a signed-in stub so the cluster renders without a backend
-//   ?menu=open   render the account menu open (for screenshots)
+interface MenuTab { slug: string; label: string; href: string; iconSlug: string }
+
+// The main-menu rail. The Campaign (play) mode is menu-only — not a design-catalog
+// widget — so it lives here rather than in MENU_MODES (the catalog's source of
+// truth). It leads the rail as the headline mode and sits apart from the Campaign
+// Editor so the shared placeholder icon doesn't read as a duplicate of an adjacent
+// tab. Temp icon: reuses the campaign-editor carving until a dedicated 'campaign'
+// carving is forged.
+const MENU_TABS: MenuTab[] = [
+  { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
+  ...MENU_MODES.map((mode) => ({
+    slug: mode.slug,
+    label: mode.label,
+    href: MODE_HREFS[mode.slug] || '/',
+    iconSlug: mode.slug,
+  })),
+];
+
+// Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
+// chrome can be previewed/screenshotted without a backend: ?demo=1 stubs this user,
+// ?menu=open renders the account menu open.
 const DEMO_USER: AuthUser = {
   signed_in: true,
   name: 'Nelson',
   email: 'nelson@romaine.life',
   // Retro (8-bit) Gravatar fallback — the default look for a user with no custom
-  // avatar set; representative of what most players see (workshop demo only).
+  // avatar set; representative of what most players see (demo only).
   avatar_url: 'https://www.gravatar.com/avatar/6b1b9282bc036370f9a6998fe9296233?d=retro&s=80&f=y',
 };
 
@@ -34,14 +50,13 @@ const DEMO_USER: AuthUser = {
 // line frame over the stone surface — carved icon + label). The same chrome the
 // Settings sidebar uses, so the menu and the rest of the app read as one family
 // (retires the bespoke stone slabs).
-function ModeTab({ mode }: { mode: MenuMode }): ReactElement {
-  const href = MODE_HREFS[mode.slug] || '/';
+function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
   return (
-    <a className="settings-tab main-menu-mode-tab" href={href}>
+    <a className="settings-tab main-menu-mode-tab" href={tab.href}>
       <span className="settings-tab-icon" aria-hidden="true">
-        <img src={`${ICONS}/${mode.slug}.png`} alt="" />
+        <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
-      <span><strong>{mode.label}</strong></span>
+      <span><strong>{tab.label}</strong></span>
     </a>
   );
 }
@@ -66,7 +81,7 @@ export function MainMenu(): ReactElement {
 
   useEffect(() => {
     const urls = new Set<string>([BRAND_SHIELD]);
-    for (const mode of MENU_MODES) urls.add(`${ICONS}/${mode.slug}.png`);
+    for (const tab of MENU_TABS) urls.add(`${ICONS}/${tab.iconSlug}.png`);
     let done = false;
     const reveal = () => { if (!done) { done = true; setReady(true); } };
     Promise.allSettled([...urls].map((src) => { const img = new Image(); img.src = src; return img.decode(); })).then(reveal);
@@ -123,7 +138,7 @@ export function MainMenu(): ReactElement {
 
         <div className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_MODES.map((mode) => <ModeTab key={mode.slug} mode={mode} />)}
+            {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
           </aside>
         </div>
       </div>
