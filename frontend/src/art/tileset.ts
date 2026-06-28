@@ -22,11 +22,13 @@ export interface TileAsset extends TileSocketAsset {
 
 // PRODUCTION TILESET — surface-swap tiles. Each tile is a Blender-derived iso EDGE
 // (the codexfilter pixelation, perfect grid geometry) with a separately-generated
-// flat top-down PixelLab surface projected into the exact top diamond
-// (frontend/scripts/project-tile-surface.py). This sidesteps PixelLab's unreliable iso-top
+// flat top-down PixelLab surface projected into the exact top diamond, then the side
+// faces palette-tied to a darker tone of that tile's own top so top↔side reads as one
+// material (the approved seam treatment). This sidesteps PixelLab's unreliable iso-top
 // drawing: Blender owns the geometry, PixelLab only paints a flat material.
-// Eight variants per family. The raw PixelLab blocks, textured Blender tiles, and the
-// rejected conversion methods are non-production — see frontend/src/art/nonProductionTiles.ts.
+// Built by frontend/scripts/build-surface-tiles.py. Eight variants per family. The raw
+// PixelLab blocks, textured Blender tiles, and the rejected conversion methods are
+// non-production — see frontend/src/art/nonProductionTiles.ts.
 const FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
 
 interface ProductionVariant {
