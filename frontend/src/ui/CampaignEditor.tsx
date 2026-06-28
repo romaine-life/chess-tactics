@@ -9,7 +9,11 @@ import { LevelInfoCompact } from './LevelInfoCompact';
 import { BrandLockup } from './shared/BrandLockup';
 
 const CE_ICONS = {
-  lock: '/assets/ui/level-editor/icons/lock.png',
+  star: '/assets/ui/kit/icons/star.png',
+  'chevron-up': '/assets/ui/kit/icons/chevron-up.png',
+  'chevron-down': '/assets/ui/kit/icons/chevron-down.png',
+  delete: '/assets/ui/kit/icons/delete.png',
+  lock: '/assets/ui/kit/icons/lock.png',
 } as const;
 
 const objectiveLabel: Record<ObjectiveType, string> = {
@@ -82,7 +86,7 @@ function IconButton({
 function Stars({ count = 0 }: { count?: number }): ReactElement {
   return (
     <span className="ce-stars" aria-label={`${count} stars`}>
-      {[0, 1, 2].map((i) => <span key={i} className={i < count ? 'is-filled' : ''}>★</span>)}
+      {[0, 1, 2].map((i) => <img key={i} className={`ce-star ${i < count ? 'is-filled' : ''}`.trim()} src={CE_ICONS.star} alt="" aria-hidden="true" />)}
     </span>
   );
 }
@@ -133,7 +137,7 @@ function CampaignRow({
           aria-label={campaign.favorite ? `Unfavorite ${campaign.name}` : `Favorite ${campaign.name}`}
           onClick={onFavorite}
         >
-          ★
+          <img className="ce-star" src={CE_ICONS.star} alt="" aria-hidden="true" />
         </button>
       )}
     </div>
@@ -186,9 +190,9 @@ function LevelRow({
       </span>
       <Stars count={levelRef.stars ?? 0} />
       <span className="ce-row-actions" aria-label="Level actions">
-        <IconButton onClick={onMoveUp} aria-label="Move level up">▲</IconButton>
-        <IconButton onClick={onMoveDown} aria-label="Move level down">▼</IconButton>
-        <IconButton danger onClick={onDelete} aria-label="Delete level">✕</IconButton>
+        <IconButton onClick={onMoveUp} aria-label="Move level up"><CeIcon icon="chevron-up" /></IconButton>
+        <IconButton onClick={onMoveDown} aria-label="Move level down"><CeIcon icon="chevron-down" /></IconButton>
+        <IconButton danger onClick={onDelete} aria-label="Delete level"><CeIcon icon="delete" /></IconButton>
       </span>
     </div>
   );

@@ -7518,8 +7518,14 @@ h1 {
   white-space: nowrap;
 }
 
-.ce-stars span:not(.is-filled) {
-  color: rgba(208, 219, 222, .4);
+.ce-star {
+  height: 14px;
+  image-rendering: pixelated;
+  width: 14px;
+}
+
+.ce-stars .ce-star:not(.is-filled) {
+  opacity: .32;
 }
 
 .ce-level-thumb {
