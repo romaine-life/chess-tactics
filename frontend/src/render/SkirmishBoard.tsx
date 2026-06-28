@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
+import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGenerator';
 import type { BoardSize, Move, Piece, TerrainType, Vec } from '../core/types';
 import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
@@ -83,6 +83,7 @@ function solveSkirmishBoard(
     columns: game.size.cols,
     rows: game.size.rows,
     familyAssets: tileFamilies,
+    edgeAssets: edgeTiles,
   });
 }
 
