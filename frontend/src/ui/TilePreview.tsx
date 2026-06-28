@@ -48,6 +48,8 @@ import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 import { BrandLockup } from './shared/BrandLockup';
+import { Stepper } from './shared/Stepper';
+import { Toggle } from './shared/Toggle';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
@@ -2434,11 +2436,20 @@ export function LevelEditor(): ReactElement {
 
         <section className="skirmish-card">
           <h2>View</h2>
-          <button type="button" className={`le-toggle ${showFootprint ? 'on' : ''}`.trim()} onClick={() => setShowFootprint((value) => !value)}><span className="pip" aria-hidden="true" />Footprint</button>
-          <div className="le-zoom">
-            <button type="button" className="le-iconbtn" title="Zoom out" onClick={() => adjustZoom(-0.2)}><span className="le-ico ic-down" aria-hidden="true" /></button>
-            <span className="le-zoom-read">Zoom {Math.round(viewZoom * 100)}%</span>
-            <button type="button" className="le-iconbtn" title="Zoom in" onClick={() => adjustZoom(0.2)}><span className="le-ico ic-up" aria-hidden="true" /></button>
+          <div className="le-ctrlrow">
+            <span className="le-ctrllabel">Footprint</span>
+            <Toggle checked={showFootprint} label="Toggle footprint overlay" onChange={setShowFootprint} />
+          </div>
+          <div className="le-ctrlrow">
+            <span className="le-ctrllabel">Zoom</span>
+            <Stepper
+              value={Math.round(viewZoom * 100)}
+              suffix="%"
+              decreaseLabel="Zoom out"
+              increaseLabel="Zoom in"
+              onDecrease={() => adjustZoom(-0.2)}
+              onIncrease={() => adjustZoom(0.2)}
+            />
           </div>
         </section>
 
