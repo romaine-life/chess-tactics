@@ -17,8 +17,10 @@ export interface DoodadAsset {
 
 const sprite = (id: string, half: 'back' | 'front') => `/assets/doodads/${id}/${half}.png`;
 
+// Grass tuft retired: ambient grass is now the general ground-cover tile feature
+// (core/groundCover + GroundCoverLayer), not a placed doodad. The glossary keeps the
+// grass-tuft sprites only as a static figure illustrating the back/front split.
 export const DOODAD_ASSETS: DoodadAsset[] = [
-  { id: 'grass-tuft', label: 'Grass tuft', status: 'placeholder', terrains: ['grass'], back: sprite('grass-tuft', 'back'), front: sprite('grass-tuft', 'front') },
   { id: 'boulder', label: 'Boulder', status: 'render', terrains: ['stone'], back: sprite('boulder', 'back'), front: sprite('boulder', 'front') },
   { id: 'stump', label: 'Tree stump', status: 'render', terrains: ['dirt'], back: sprite('stump', 'back'), front: sprite('stump', 'front') },
   { id: 'fern', label: 'Fern', status: 'render', terrains: ['water'], back: sprite('fern', 'back'), front: sprite('fern', 'front') },

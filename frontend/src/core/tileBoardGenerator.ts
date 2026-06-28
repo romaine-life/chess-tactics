@@ -1,4 +1,5 @@
 import { createRng } from './rng';
+import type { GroundCover } from './groundCover';
 import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
 import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
 import type { FeatureKind, RoadMaterial } from './featureAutotile';
@@ -17,6 +18,8 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
   sideAsset?: TAsset;
   sockets: EdgeSockets;
   terrain: TileFamilyId;
+  /** Ambient vegetation resolved at board build (see core/groundCover). Not per-render. */
+  groundCover?: GroundCover;
   /**
    * A linear-feature overlay (road; rivers later) riding ON TOP of the base tile.
    * Orthogonal to socket selection — it never affects which base `asset` is chosen.

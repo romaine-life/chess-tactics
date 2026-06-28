@@ -34,6 +34,9 @@ import {
 } from './studioBoard';
 import { featureFrameSrc, featureThumbSrc } from '../art/tileset';
 import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, ROAD_MATERIAL_LABELS, DEFAULT_ROAD_MATERIAL, type FeatureKind, type RoadMaterial } from '../core/featureAutotile';
+import { type TileFamilyId } from '../core/tileSockets';
+import { GroundCoverLayer } from '../render/GroundCoverLayer';
+import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -308,10 +311,15 @@ export function LevelEditor(): ReactElement {
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'road'>(studioArm.kind ?? 'tile');
-  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'road'>(studioArm.kind ?? 'tile');
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'cover' | 'road'>(studioArm.kind ?? 'tile');
+  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'cover' | 'road'>(studioArm.kind ?? 'tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>({});
+  // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
+  // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
+  const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>({});
+  const [coverBrushDensity, setCoverBrushDensity] = useState<GroundCoverDensity>('sparse');
+  const [coverSeed, setCoverSeed] = useState(1234);
   // Roads are a LINEAR feature (a ribbon you draw), not a per-cell terrain material:
   // store each painted cell's road MATERIAL, then derive its connection mask from its
   // neighbours so the renderer picks straight/corner/T/cross. See core/featureAutotile.ts.
@@ -396,6 +404,13 @@ export function LevelEditor(): ReactElement {
       setBoardDoodads((prev) => ({ ...prev, [key]: { doodadId: doodadBrushAsset.id } }));
       return;
     }
+    if (brushKind === 'cover') {
+      // Cover grows only on a tile whose terrain has a cover set (grass for now).
+      const terrain = boardCells[key] ? leFamilyOfTile(boardCells[key])?.id : undefined;
+      if (!terrain || !groundCoverSet(terrain as TileFamilyId)) return;
+      setBoardCover((prev) => ({ ...prev, [key]: coverBrushDensity }));
+      return;
+    }
     setBoardCells((prev) => ({ ...prev, [key]: brushAsset.id }));
   };
   const eraseCell = (x: number, y: number): void => {
@@ -415,9 +430,10 @@ export function LevelEditor(): ReactElement {
     }
     if (brushKind === 'unit') return eraseKey(setBoardUnits, key);
     if (brushKind === 'doodad') return eraseKey(setBoardDoodads, key);
+    if (brushKind === 'cover') return eraseKey(setBoardCover, key);
     eraseKey(setBoardCells, key);
   };
-  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardRoads({}); setBoardRoadCuts({}); setSelectedCell(null); };
+  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardCover({}); setBoardRoads({}); setBoardRoadCuts({}); setSelectedCell(null); };
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
@@ -446,6 +462,7 @@ export function LevelEditor(): ReactElement {
     setBoardCells((prev) => prune(prev));
     setBoardUnits((prev) => prune(prev));
     setBoardDoodads((prev) => prune(prev));
+    setBoardCover((prev) => prune(prev));
     setBoardRoads((prev) => prune(prev));
     // Cuts are keyed by edge ("a|b"); keep only edges whose BOTH endpoints survive.
     setBoardRoadCuts((prev) => {
@@ -472,6 +489,20 @@ export function LevelEditor(): ReactElement {
   const selectedUnitAsset = selectedUnit ? resolveUnitAsset(selectedUnit.unitId) : undefined;
   const selectedDoodad = selectedCell ? boardDoodads[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedDoodadAsset = selectedDoodad ? resolveDoodadAsset(selectedDoodad.doodadId) : undefined;
+  const coverCount = Object.keys(boardCover).length;
+  // Resolve the painted cover into concrete tufts (once, here — not per render). Re-roll
+  // bumps coverSeed to reshuffle every cell's scatter while keeping the same densities.
+  const coverCells = useMemo(() => {
+    const list: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover: GroundCover }> = [];
+    for (const [key, density] of Object.entries(boardCover)) {
+      const [x, y] = key.split(',').map(Number);
+      const tileId = boardCells[key];
+      const terrain = tileId ? (leFamilyOfTile(tileId)?.id as TileFamilyId | undefined) : undefined;
+      if (!terrain || !groundCoverSet(terrain)) continue;
+      list.push({ x, y, terrain, groundCover: { density, tufts: rollGroundCover(terrain, x, y, coverSeed, density) } });
+    }
+    return list;
+  }, [boardCover, boardCells, coverSeed]);
   const selectedRoad = selectedCell ? boardRoads[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const toggleRoadCut = (edge: string): void =>
     setBoardRoadCuts((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
@@ -519,6 +550,7 @@ export function LevelEditor(): ReactElement {
                   onPaint={paintCell}
                   onErase={eraseCell}
                   onSelect={selectCell}
+                  overlay={<GroundCoverLayer cells={coverCells} />}
                 />
               </div>
             </ViewPane>
@@ -534,9 +566,11 @@ export function LevelEditor(): ReactElement {
             <button type="button" className={`le-seg-btn ${layer === 'road' ? 'active' : ''}`.trim()} onClick={() => { setLayer('road'); setBrushKind('road'); setTool('brush'); }}>Road</button>
             <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
             <button type="button" className={`le-seg-btn ${layer === 'doodad' ? 'active' : ''}`.trim()} onClick={() => { setLayer('doodad'); setBrushKind('doodad'); setTool('brush'); }}>Doodad</button>
+            <button type="button" className={`le-seg-btn ${layer === 'cover' ? 'active' : ''}`.trim()} onClick={() => { setLayer('cover'); setBrushKind('cover'); setTool('brush'); }}>Cover</button>
           </div>
         </section>
 
+        <KitScroll className="le-hud-scroll">
         {layer === 'board' ? (
           <section className="skirmish-card">
             <h2>Board</h2>
@@ -563,15 +597,27 @@ export function LevelEditor(): ReactElement {
                 : <img src={brushAsset.src} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'road' ? `${ROAD_MATERIAL_LABELS[roadMaterial]} road` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'road' ? 'feature · road' : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : brushKind === 'road' ? `${ROAD_MATERIAL_LABELS[roadMaterial]} road` : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'cover' ? 'ground cover' : brushKind === 'road' ? 'feature · road' : 'tile'}</span>
             </span>
           </div>
         </section>
 
+        {brushKind === 'cover' ? (
+          <section className="skirmish-card">
+            <h2>Cover density</h2>
+            <div className="le-seg">
+              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
+              <button type="button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
+            </div>
+            <p className="le-board-note">Brush paints {coverBrushDensity} grass on grass tiles; Erase clears a tile. The tufts scatter from the density.</p>
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
+            <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
+          </section>
+        ) : null}
+
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
-            <KitScroll className="le-palette-scroll">
             <h2>Side</h2>
             <div className="le-seg">
               <button type="button" className={`le-seg-btn ${unitSide === 'player' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('player')}>Player</button>
@@ -599,12 +645,10 @@ export function LevelEditor(): ReactElement {
                 </button>
               ))}
             </div>
-            </KitScroll>
           </section>
         ) : brushKind === 'doodad' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Doodads</h2>
-            <KitScroll className="le-palette-scroll">
               <div className="le-swatches">
                 {DOODAD_ASSETS.map((doodad) => (
                   <button
@@ -619,7 +663,6 @@ export function LevelEditor(): ReactElement {
                   </button>
                 ))}
               </div>
-            </KitScroll>
             <p className="le-board-note">Doodads only land on a tile of their home terrain.</p>
           </section>
         ) : brushKind === 'road' ? (
@@ -641,10 +684,9 @@ export function LevelEditor(): ReactElement {
             </div>
             <p className="le-board-note">Drag to draw a road; each tile picks its own piece (straight, corner, junction) from its road neighbours. Roads of any material connect — the surface just changes per cell. Erase to cut; the ends re-cap.</p>
           </section>
-        ) : (
+        ) : brushKind === 'tile' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Palette</h2>
-            <KitScroll className="le-palette-scroll">
               {leTileGroups.map(({ family, tiles }) => (
                 <div className="le-pal-group" key={family.id}>
                   <span className="le-pal-grouplabel">{family.label}</span>
@@ -664,9 +706,8 @@ export function LevelEditor(): ReactElement {
                   </div>
                 </div>
               ))}
-            </KitScroll>
           </section>
-        )}
+        ) : null}
 
         {layer === 'road' && selectedCell && selectedRoad ? (
           <section className="skirmish-card">
@@ -740,6 +781,7 @@ export function LevelEditor(): ReactElement {
         <div className="le-statusline">
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · {boardCols}×{boardRows}
         </div>
+        </KitScroll>
       </aside>
     </div>
   );
