@@ -402,7 +402,19 @@ export function NineSliceEditor(): ReactElement {
         <select value={assetId} onChange={(e) => setAssetId(e.target.value)} style={ST.select}>
           {ASSETS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
         </select>
-        <a href="/tileset-studio" style={ST.link}>← Studio</a>
+        <a
+          href="/tileset-studio"
+          style={ST.link}
+          onClick={(e) => {
+            // Return to exactly where you opened the editor from (the catalog asset/category),
+            // not the catalog landing. The catalog opens the editor same-tab, so history.back()
+            // restores its full URL state. Fall back to the href on a direct / cross-site load.
+            try {
+              const fromStudio = document.referrer && new URL(document.referrer).pathname === '/tileset-studio';
+              if (fromStudio && window.history.length > 1) { e.preventDefault(); window.history.back(); }
+            } catch { /* malformed referrer — let the href fallback run */ }
+          }}
+        >← Back to catalog</a>
       </header>
       <div style={ST.body}>
         <div style={ST.stage}>
