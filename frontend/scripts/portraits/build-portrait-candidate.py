@@ -97,9 +97,11 @@ def codex_restyle(piece, style):
 
     if style == "stone":
         style_desc = (
-            "carved navy-blue STONE, a clean limited palette (~16-24 colors), crisp blocky pixel "
-            "clusters, hand-placed dithering, dark readable outline. ONE solid stone material - no "
-            "skin tones, no gold, no extra colors."
+            "a carved navy-blue STONE body with a clean limited palette (~16-24 colors), crisp blocky "
+            "pixel clusters, hand-placed dithering and a dark readable outline. PRESERVE the original "
+            "warm and metallic accents from image 1 exactly where they are: a gold crown, tiara, trim "
+            "or finials stay GOLD, red/crimson velvet stays red, jewels keep their colour - only the "
+            "plain body is navy stone. Do NOT turn the gold or coloured accents into stone; add no new colors."
         )
     else:
         style_desc = (
@@ -138,8 +140,18 @@ image with the image_generation tool; do not write or move files."""
         time.sleep(2)
     if not imgs:
         sys.exit(f"NO_IMAGE in {tdir}")
+    # Codex may still be writing the PNG when it first appears — wait for the size to
+    # stop growing before keying, else remove_chroma_key reads a partial file and fails.
+    raw = imgs[-1]
+    prev = -1
+    for _ in range(20):
+        sz = os.path.getsize(raw)
+        if sz > 0 and sz == prev:
+            break
+        prev = sz
+        time.sleep(0.4)
     keyed = work / f"{piece}-{style}-keyed.png"
-    subprocess.run([sys.executable, rck, "--input", imgs[-1], "--out", str(keyed), "--auto-key", "border",
+    subprocess.run([sys.executable, rck, "--input", raw, "--out", str(keyed), "--auto-key", "border",
                     "--soft-matte", "--transparent-threshold", "12", "--opaque-threshold", "220", "--despill"], check=True)
     return load_rgba(keyed)
 
