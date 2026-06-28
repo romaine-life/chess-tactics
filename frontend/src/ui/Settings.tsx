@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
+import { readDisabledUrls, writeDisabledUrls, setBgmSuspended } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { BrandLockup } from './shared/BrandLockup';
 import { Stepper } from './shared/Stepper';
@@ -248,6 +249,12 @@ export function Settings(): ReactElement {
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
   const [tracksStatus, setTracksStatus] = useState('');
+  const [disabledUrls, setDisabledUrls] = useState<string[]>(() => readDisabledUrls());
+  // Mirrors disabledUrls so back-to-back toggles read the latest set, not a stale
+  // render snapshot (otherwise rapid toggles clobber each other before re-render).
+  const disabledRef = useRef<string[]>(disabledUrls);
+  const [playingUrl, setPlayingUrl] = useState<string | null>(null);
+  const previewRef = useRef<HTMLAudioElement | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   useEffect(() => {
@@ -324,6 +331,20 @@ export function Settings(): ReactElement {
     return () => { active = false; };
   }, [showTracks]);
 
+  // Stop any in-progress preview when leaving the tracks view, and on unmount, so
+  // the background music can resume and no audio is orphaned.
+  useEffect(() => {
+    if (showTracks) return;
+    previewRef.current?.pause();
+    setPlayingUrl(null);
+    setBgmSuspended(false);
+  }, [showTracks]);
+
+  useEffect(() => () => {
+    previewRef.current?.pause();
+    setBgmSuspended(false);
+  }, []);
+
   const active = useMemo(() => tabs.find((tab) => tab.id === activeTab) || tabs[0], [activeTab]);
 
   const updateSetting = <Key extends keyof LocalSettings>(key: Key, value: LocalSettings[Key]) => {
@@ -352,6 +373,41 @@ export function Settings(): ReactElement {
     setMuted(false);
     writeMuted(false);
     setConfirmingReset(false);
+  };
+
+  const stopPreview = () => {
+    previewRef.current?.pause();
+    setPlayingUrl(null);
+    setBgmSuspended(false); // let the background shuffle resume
+  };
+
+  const togglePreview = (track: BgmTrack) => {
+    if (playingUrl === track.url) { stopPreview(); return; }
+    let el = previewRef.current;
+    if (!el) {
+      el = new Audio();
+      el.preload = 'none';
+      el.addEventListener('ended', stopPreview);
+      el.addEventListener('error', stopPreview);
+      previewRef.current = el;
+    }
+    el.src = track.url;
+    el.muted = !settings.masterAudio; // master audio off silences everything
+    el.volume = clamp(settings.musicVolume, 0, 100, DEFAULT_SETTINGS.musicVolume) / 100;
+    setBgmSuspended(true); // park the background music while auditioning
+    setPlayingUrl(track.url);
+    const attempt = el.play();
+    if (attempt && typeof attempt.catch === 'function') attempt.catch(stopPreview);
+  };
+
+  const setTrackEnabled = (track: BgmTrack, enabled: boolean) => {
+    const base = disabledRef.current;
+    const next = enabled
+      ? base.filter((url) => url !== track.url)
+      : Array.from(new Set([...base, track.url]));
+    disabledRef.current = next;
+    setDisabledUrls(next);
+    writeDisabledUrls(next); // persist + notify the running player
   };
 
   const signOut = async () => {
@@ -462,9 +518,27 @@ export function Settings(): ReactElement {
             description={tracksStatus || 'No background music is configured for this environment.'}
           />
         ) : (
-          tracks.map((track, index) => (
-            <SettingsRow key={track.url} title={track.title} value={<span>{index + 1}</span>} />
-          ))
+          tracks.map((track) => {
+            const enabled = !disabledUrls.includes(track.url);
+            const playing = playingUrl === track.url;
+            return (
+              <SettingsRow
+                key={track.url}
+                title={track.title}
+                description={enabled ? undefined : 'Off — excluded from background music.'}
+              >
+                <SettingsButton
+                  onClick={() => togglePreview(track)}
+                  ariaLabel={playing ? `Stop preview of ${track.title}` : `Preview ${track.title}`}
+                >{playing ? '■ Stop' : '▶ Play'}</SettingsButton>
+                <Toggle
+                  checked={enabled}
+                  label={`Include ${track.title} in background music`}
+                  onChange={(value) => setTrackEnabled(track, value)}
+                />
+              </SettingsRow>
+            );
+          })
         )}
       </SettingsSection>
     </>

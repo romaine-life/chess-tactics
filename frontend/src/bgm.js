@@ -16,6 +16,8 @@
 //   - User control: a persisted mute toggle; muting pauses (no silent
 //     background streaming) and unmuting resumes.
 
+import { readDisabledUrls, BGM_DISABLED_KEY, BGM_DISABLED_CHANGE_EVENT, BGM_SUSPEND_EVENT } from './bgmPrefs.js';
+
 const BGM_API_URL = '/api/bgm';
 const MUTE_STORAGE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -73,13 +75,17 @@ export function initBgm() {
   audio.setAttribute('aria-hidden', 'true');
 
   const state = {
-    tracks: [],        // [{ title, url }]
+    all: [],           // full playlist from /api/bgm [{ title, url }]
+    tracks: [],        // enabled subset actually in rotation [{ title, url }]
+    disabled: new Set(readDisabledUrls()), // urls the user excluded in Settings
     queue: [],         // remaining indices for this shuffle cycle
     lastIndex: -1,     // last index played (to avoid back-to-back repeats)
     currentTitle: '',
+    currentUrl: '',
     muted: readMuted(),
+    suspended: false,  // parked for an in-app preview (does not touch mute pref)
     started: false,    // playback has begun at least once
-    ready: false,      // playlist loaded with at least one track
+    ready: false,      // playlist loaded with at least one enabled track
     loaded: false,     // /api/bgm fetch settled (success or failure)
     errorStreak: 0,    // consecutive load/decode failures
     unavailable: false, // whole library unreachable — stop retrying
@@ -87,6 +93,12 @@ export function initBgm() {
 
   const control = buildControl();
   document.body.appendChild(control.el);
+
+  // Derive the in-rotation list from the full list minus the user's off-set.
+  function applyEnabled() {
+    state.tracks = state.all.filter((track) => !state.disabled.has(track.url));
+    state.ready = state.tracks.length > 0;
+  }
 
   function refreshQueue() {
     state.queue = planShuffleCycle(state.tracks.length, state.lastIndex);
@@ -99,6 +111,7 @@ export function initBgm() {
     state.lastIndex = index;
     const track = state.tracks[index];
     state.currentTitle = track.title;
+    state.currentUrl = track.url;
     audio.src = track.url;
     state.started = true;
     const attempt = audio.play();
@@ -113,7 +126,7 @@ export function initBgm() {
   }
 
   function beginPlayback() {
-    if (!state.ready || state.muted) return;
+    if (!state.ready || state.muted || state.suspended) return;
     if (audio.src) {
       // A track is already cued (possibly from a blocked autoplay attempt) —
       // resume/retry it. Do NOT gate on state.started: a blocked autoplay
@@ -156,7 +169,7 @@ export function initBgm() {
   // ---- audio element events ------------------------------------------------
   audio.addEventListener('ended', () => {
     state.errorStreak = 0;
-    if (state.muted) return;
+    if (state.muted || state.suspended) return;
     playNext();
   });
   audio.addEventListener('error', () => {
@@ -201,8 +214,45 @@ export function initBgm() {
   window.addEventListener(MUTE_CHANGE_EVENT, (event) => {
     setMuted(Boolean(event && event.detail && event.detail.muted), { persist: false, notify: false });
   });
+
+  // Live updates to the user's track on/off set (from the Settings soundtrack
+  // manager). Re-filter the rotation; if the playing track was just turned off,
+  // skip to an enabled one; if nothing is left enabled, stop.
+  function onDisabledChange() {
+    const wasPlaying = state.currentUrl;
+    state.disabled = new Set(readDisabledUrls());
+    applyEnabled();
+    state.lastIndex = -1; // indices point into state.tracks, which just changed
+    refreshQueue();
+    if (!state.tracks.length) {
+      audio.pause();
+      updateControl();
+      return;
+    }
+    const stillEnabled = wasPlaying && state.tracks.some((track) => track.url === wasPlaying);
+    if (!stillEnabled && !state.muted && !state.suspended) {
+      playNext();
+    } else {
+      updateControl();
+    }
+  }
+  window.addEventListener(BGM_DISABLED_CHANGE_EVENT, onDisabledChange);
+
+  // Preview suspend: park/resume the background shuffle while a track preview
+  // plays in the UI, without disturbing the persisted mute preference.
+  window.addEventListener(BGM_SUSPEND_EVENT, (event) => {
+    state.suspended = Boolean(event && event.detail && event.detail.suspended);
+    if (state.suspended) {
+      audio.pause();
+    } else {
+      beginPlayback();
+    }
+    updateControl();
+  });
+
   window.addEventListener('storage', (event) => {
     if (event.key === MUTE_STORAGE_KEY) setMuted(readMuted(), { persist: false });
+    if (event.key === BGM_DISABLED_KEY) onDisabledChange();
   });
 
   // ---- mute control UI -----------------------------------------------------
@@ -260,10 +310,10 @@ export function initBgm() {
     })
     .then((payload) => {
       const list = Array.isArray(payload && payload.tracks) ? payload.tracks : [];
-      state.tracks = list
+      state.all = list
         .filter((t) => t && t.url)
         .map((t) => ({ title: t.title || t.url, url: t.url }));
-      state.ready = state.tracks.length > 0;
+      applyEnabled();
       state.loaded = true;
       refreshQueue();
       updateControl();

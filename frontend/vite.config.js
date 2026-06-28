@@ -42,12 +42,40 @@ function doodadCompositionSave() {
   };
 }
 
+// Generate a short mono sine-tone WAV (16-bit PCM) with a tiny fade in/out so it
+// doesn't click. Used only by the dev BGM mock below.
+function toneWav(freq, seconds, rate = 8000) {
+  const n = Math.floor(rate * seconds);
+  const buf = Buffer.alloc(44 + n * 2);
+  let o = 0;
+  buf.write('RIFF', o); o += 4;
+  buf.writeUInt32LE(36 + n * 2, o); o += 4;
+  buf.write('WAVE', o); o += 4;
+  buf.write('fmt ', o); o += 4;
+  buf.writeUInt32LE(16, o); o += 4;      // PCM chunk size
+  buf.writeUInt16LE(1, o); o += 2;       // format = PCM
+  buf.writeUInt16LE(1, o); o += 2;       // channels = mono
+  buf.writeUInt32LE(rate, o); o += 4;    // sample rate
+  buf.writeUInt32LE(rate * 2, o); o += 4; // byte rate
+  buf.writeUInt16LE(2, o); o += 2;       // block align
+  buf.writeUInt16LE(16, o); o += 2;      // bits per sample
+  buf.write('data', o); o += 4;
+  buf.writeUInt32LE(n * 2, o); o += 4;
+  const amp = 0.18 * 0x7fff;
+  const fade = Math.max(1, Math.floor(rate * 0.04));
+  for (let i = 0; i < n; i += 1) {
+    const env = Math.min(1, i / fade, (n - i) / fade);
+    buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * freq * i) / rate) * amp * env), 44 + i * 2);
+  }
+  return buf;
+}
+
 // Dev-only mock for the backend's /api/bgm contract. Local dev has no BGM blob
-// backend, so the real endpoint is empty and the Settings "View Tracks" view (and
-// the BGM player) have nothing to show. Opt in with BGM_DEV_TRACKS=1 to serve a
-// sample playlist — off by default, so dev otherwise matches prod-without-BGM.
-// The urls are placeholders (no audio ships in the repo): the track LIST renders,
-// but playback won't actually start in dev.
+// backend, so the real endpoint is empty and the Settings soundtrack manager (and
+// the BGM player) have nothing to exercise. Opt in with BGM_DEV_TRACKS=1 to serve a
+// sample playlist whose tracks are real, playable sine tones (one pitch each), so
+// Play/Stop and the per-track on/off rotation can be tested for real. Off by
+// default, so dev otherwise matches prod-without-BGM.
 function bgmDevMock() {
   const enabled = process.env.BGM_DEV_TRACKS === '1';
   return {
@@ -59,13 +87,25 @@ function bgmDevMock() {
         'Opening Theme', "The Knight's Gambit", 'Endgame Tension', 'Castle Walls',
         'March of the Pawns', 'Queen Ascendant', "Bishop's Diagonal", 'Rook to the Rank',
       ];
+      const freqs = [262, 294, 330, 349, 392, 440, 494, 523]; // a C-major scale
       const tracks = titles.map((title, i) => ({
-        title, url: `/assets/bgm-dev/${String(i + 1).padStart(2, '0')}.mp3`,
+        title,
+        url: `/assets/bgm-dev/tone.wav?f=${freqs[i]}&t=${String(i + 1).padStart(2, '0')}`,
       }));
       server.middlewares.use('/api/bgm', (_req, res) => {
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ tracks }));
+      });
+      server.middlewares.use('/assets/bgm-dev/tone.wav', (req, res) => {
+        const params = new URL(req.url || '', 'http://localhost').searchParams;
+        const freq = Math.min(2000, Math.max(50, Number(params.get('f')) || 440));
+        const seconds = Math.min(30, Math.max(1, Number(params.get('s')) || 8));
+        const wav = toneWav(freq, seconds);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('Content-Length', String(wav.length));
+        res.end(wav);
       });
     },
   };
