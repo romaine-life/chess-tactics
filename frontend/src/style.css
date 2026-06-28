@@ -11977,6 +11977,19 @@ button.tileset-relationship-cell {
   min-inline-size: 72px;
 }
 
+/* Tracks sub-view: a back bar above the soundtrack list. The list reuses the
+   standard section/row chrome; only this bar needs layout. The back pill hugs its
+   label (like the row-control action pills) instead of the decreed 176px box. */
+.settings-tracks-bar {
+  align-items: center;
+  display: flex;
+}
+
+.settings-tracks-bar > .settings-chrome-button {
+  inline-size: auto;
+  min-inline-size: 72px;
+}
+
 /* Header buttons wear the SYMMETRIC panel.png frame (square source → equal corners
    on all four sides), matching the design's gold corner-bracket language. The tall
    tab art was the wrong source for a short button (it rendered lopsided). */

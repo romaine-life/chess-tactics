@@ -65,9 +65,19 @@ const TAB_PATHS: Record<SettingsTab, string> = {
 };
 
 function tabFromPath(pathname: string): SettingsTab {
-  const id = normalizeRoutePath(pathname).match(/^\/settings\/(.+)$/)?.[1];
+  // Match only the leading section segment, so deeper routes (e.g.
+  // /settings/audio/tracks) still resolve to their owning tab and keep it lit.
+  const id = normalizeRoutePath(pathname).match(/^\/settings\/([^/]+)/)?.[1];
   if (id === 'audio' || id === 'gameplay' || id === 'creator-tools' || id === 'general') return id;
   return 'general';
+}
+
+// The Audio tab has one sub-view: the soundtrack list at /settings/audio/tracks.
+// It's its own route so the ← back button, reload, and browser back all work.
+const TRACKS_PATH = '/settings/audio/tracks';
+
+function isTracksView(pathname: string): boolean {
+  return normalizeRoutePath(pathname) === TRACKS_PATH;
 }
 
 // One creator-tools entry — the studio is the single workspace: tiles, units,
@@ -232,6 +242,7 @@ function Slider({
 
 export function Settings(): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
+  const [showTracks, setShowTracks] = useState<boolean>(() => isTracksView(window.location.pathname));
   const [me, setMe] = useState<AuthUser | null>(null);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
@@ -250,7 +261,10 @@ export function Settings(): ReactElement {
     if (normalizeRoutePath(window.location.pathname) === '/settings') {
       navigateApp(TAB_PATHS.general, { replace: true, scroll: false });
     }
-    const sync = () => setActiveTab(tabFromPath(window.location.pathname));
+    const sync = () => {
+      setActiveTab(tabFromPath(window.location.pathname));
+      setShowTracks(isTracksView(window.location.pathname));
+    };
     window.addEventListener('popstate', sync);
     window.addEventListener(APP_NAVIGATION_EVENT, sync);
     return () => {
@@ -280,6 +294,36 @@ export function Settings(): ReactElement {
     applyUiScale(settings.uiScale);
   }, [settings]);
 
+  // Load the soundtrack list whenever the dedicated tracks view is opened. A fresh
+  // fetch each entry (the backend caches for 5 min); `tracks === null` is the loading
+  // state, an empty array means none / unavailable (disambiguated by tracksStatus).
+  useEffect(() => {
+    if (!showTracks) return;
+    let active = true;
+    setTracks(null);
+    setTracksStatus('Loading tracks...');
+    (async () => {
+      try {
+        const response = await fetch('/api/bgm');
+        if (!response.ok) throw new Error(`bgm ${response.status}`);
+        const payload = await response.json() as { tracks?: Array<Partial<BgmTrack>> };
+        const nextTracks = Array.isArray(payload.tracks)
+          ? payload.tracks
+              .filter((track): track is BgmTrack => typeof track.title === 'string' && typeof track.url === 'string')
+              .map((track) => ({ title: track.title, url: track.url }))
+          : [];
+        if (!active) return;
+        setTracks(nextTracks);
+        setTracksStatus(nextTracks.length ? `${nextTracks.length} tracks loaded.` : 'No tracks are available.');
+      } catch {
+        if (!active) return;
+        setTracks([]);
+        setTracksStatus('Tracks are unavailable right now.');
+      }
+    })();
+    return () => { active = false; };
+  }, [showTracks]);
+
   const active = useMemo(() => tabs.find((tab) => tab.id === activeTab) || tabs[0], [activeTab]);
 
   const updateSetting = <Key extends keyof LocalSettings>(key: Key, value: LocalSettings[Key]) => {
@@ -308,25 +352,6 @@ export function Settings(): ReactElement {
     setMuted(false);
     writeMuted(false);
     setConfirmingReset(false);
-  };
-
-  const viewTracks = async () => {
-    setTracksStatus('Loading tracks...');
-    try {
-      const response = await fetch('/api/bgm');
-      if (!response.ok) throw new Error(`bgm ${response.status}`);
-      const payload = await response.json() as { tracks?: Array<Partial<BgmTrack>> };
-      const nextTracks = Array.isArray(payload.tracks)
-        ? payload.tracks
-            .filter((track): track is BgmTrack => typeof track.title === 'string' && typeof track.url === 'string')
-            .map((track) => ({ title: track.title, url: track.url }))
-        : [];
-      setTracks(nextTracks);
-      setTracksStatus(nextTracks.length ? `${nextTracks.length} tracks loaded.` : 'No tracks are available.');
-    } catch {
-      setTracks([]);
-      setTracksStatus('Tracks are unavailable right now.');
-    }
   };
 
   const signOut = async () => {
@@ -396,7 +421,7 @@ export function Settings(): ReactElement {
             label="Music Volume"
             onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.musicVolume))}
           />
-          <SettingsButton onClick={viewTracks}>View Tracks</SettingsButton>
+          <SettingsButton href={TRACKS_PATH} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Effects">
@@ -415,8 +440,32 @@ export function Settings(): ReactElement {
       <SettingsSection title="Notes">
         <SettingsRow
           title="Local Settings"
-          description={tracksStatus || 'Audio settings are saved on this device.'}
+          description="Audio settings are saved on this device."
         />
+      </SettingsSection>
+    </>
+  );
+
+  // Dedicated soundtrack list, reached from the Music section's "View Tracks" pill.
+  // Its own route (/settings/audio/tracks); the ← back returns to the Audio page.
+  const renderTracks = () => (
+    <>
+      <div className="settings-tracks-bar">
+        <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+      </div>
+      <SettingsSection title="Soundtrack">
+        {tracks === null ? (
+          <SettingsRow title="Loading tracks…" description="Fetching the background music playlist." />
+        ) : tracks.length === 0 ? (
+          <SettingsRow
+            title="No tracks to show"
+            description={tracksStatus || 'No background music is configured for this environment.'}
+          />
+        ) : (
+          tracks.map((track, index) => (
+            <SettingsRow key={track.url} title={track.title} value={<span>{index + 1}</span>} />
+          ))
+        )}
       </SettingsSection>
     </>
   );
@@ -491,7 +540,7 @@ export function Settings(): ReactElement {
             <h2 className="sr-only">{active.label}</h2>
             <div className="settings-panel-content">
               {activeTab === 'general' ? renderGeneral() : null}
-              {activeTab === 'audio' ? renderAudio() : null}
+              {activeTab === 'audio' ? (showTracks ? renderTracks() : renderAudio()) : null}
               {activeTab === 'gameplay' ? renderGameplay() : null}
               {activeTab === 'creator-tools' ? renderCreatorTools() : null}
             </div>
