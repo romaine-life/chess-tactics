@@ -1,4 +1,5 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
+import { terrainLabels } from '../core/tileSockets';
 
 export interface TileAsset extends TileSocketAsset {
   id: string;
@@ -9,64 +10,67 @@ export interface TileAsset extends TileSocketAsset {
   source: string;
   probability: number;
   notes: string;
+  /**
+   * Non-production tiles: kept in the Studio catalog for reference/comparison but held OUT
+   * of `tileFamilies`, board generation, and the shipped game. The legacy textured tiles and
+   * the rejected bake-off methods live there — see frontend/src/art/nonProductionTiles.ts.
+   */
+  speculative?: boolean;
+  /** How a tile was produced (e.g. "Codex → Filter", "PixelLab", "Textured"). */
+  method?: string;
 }
 
-// Textured iso tiles (Blender-rendered from real PBR texture packs, calibrated to the
-// 96x140 board grid). Hard edges — no transition tiles; terrains butt up directly.
-const tile = (id: string, label: string, file: string, role: 'base' | 'variant', probability: number): TileAsset => ({
-  id,
-  label,
-  src: `/assets/tiles/textured/${file}.png`,
-  role,
+// PRODUCTION TILESET — surface-swap tiles. Each tile is a Blender-derived iso EDGE
+// (the codexfilter pixelation, perfect grid geometry) with a separately-generated
+// flat top-down PixelLab surface projected into the exact top diamond, then the side
+// faces palette-tied to a darker tone of that tile's own top so top↔side reads as one
+// material (the approved seam treatment). This sidesteps PixelLab's unreliable iso-top
+// drawing: Blender owns the geometry, PixelLab only paints a flat material.
+// Built by frontend/scripts/build-surface-tiles.py. Eight variants per family. The raw
+// PixelLab blocks, textured Blender tiles, and the rejected conversion methods are
+// non-production — see frontend/src/art/nonProductionTiles.ts.
+const FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
+
+interface ProductionVariant {
+  key: string;
+  label: string;
+  role: 'base' | 'variant';
+  probability: number;
+}
+
+const PRODUCTION_VARIANTS: ProductionVariant[] = Array.from({ length: 8 }, (_, n) => ({
+  key: `${n}`,
+  label: `Surface ${n + 1}`,
+  role: n === 0 ? 'base' : 'variant',
+  probability: n === 0 ? 1 : 0.8,
+}));
+
+const surfaceTile = (family: TileFamilyId, variant: ProductionVariant): TileAsset => ({
+  id: `${family}-surf-${variant.key}`,
+  label: `${terrainLabels[family]} · ${variant.label}`,
+  src: `/assets/tiles/surface/${family}-${variant.key}.png`,
+  role: variant.role,
   kind: 'tile',
-  source: 'textured',
-  probability,
-  notes: `${label} — textured tile.`,
+  source: 'pixel:surface',
+  method: 'Surface (Blender edge + PixelLab top)',
+  probability: variant.probability,
+  notes: `${terrainLabels[family]} — ${variant.label}: Blender-derived iso edge with a generated pixel-art top (production).`,
 });
 
+const familyTiles = (family: TileFamilyId): TileAsset[] => PRODUCTION_VARIANTS.map((variant) => surfaceTile(family, variant));
+
 export const tileFamilies: Record<TileFamilyId, readonly TileAsset[]> = {
-  grass: [
-    tile('grass-a', 'Grass A', 'grass-a', 'base', 1),
-    tile('grass-b', 'Grass B', 'grass-b', 'variant', 0.85),
-    tile('grass-c', 'Grass C', 'grass-c', 'variant', 0.85),
-    tile('grass-d', 'Grass D', 'grass-d', 'variant', 0.7),
-    tile('grass-e', 'Grass E', 'grass-e', 'variant', 0.7),
-    tile('grass-f', 'Grass F', 'grass-f', 'variant', 0.7),
-    tile('grass-g', 'Grass G', 'grass-g', 'variant', 0.6),
-  ],
-  dirt: [
-    tile('dirt-a', 'Dirt A', 'dirt-a', 'base', 1),
-    tile('dirt-b', 'Dirt B', 'dirt-b', 'variant', 0.8),
-    tile('dirt-c', 'Dirt C', 'dirt-c', 'variant', 0.75),
-    tile('dirt-d', 'Dirt D', 'dirt-d', 'variant', 0.7),
-  ],
-  stone: [
-    tile('stone-a', 'Stone A', 'stone-a', 'base', 1),
-    tile('stone-b', 'Stone B', 'stone-b', 'variant', 0.8),
-    tile('stone-c', 'Stone C', 'stone-c', 'variant', 0.75),
-  ],
-  pebble: [
-    tile('pebble-a', 'Pebble A', 'pebble-a', 'base', 1),
-  ],
-  sand: [
-    tile('sand-a', 'Sand A', 'sand-a', 'base', 1),
-  ],
-  water: [
-    tile('water-a', 'Water A', 'water-a', 'base', 1),
-    tile('water-b', 'Water B', 'water-b', 'variant', 0.8),
-  ],
+  grass: familyTiles('grass'),
+  dirt: familyTiles('dirt'),
+  stone: familyTiles('stone'),
+  pebble: familyTiles('pebble'),
+  sand: familyTiles('sand'),
+  water: familyTiles('water'),
 };
 
 // No transition tiles in the hard-edge tileset; kept exported (empty) for back-compat.
 export const transitionAssets: readonly TileAsset[] = [];
 
-export const tileAssets: readonly TileAsset[] = [
-  ...tileFamilies.grass,
-  ...tileFamilies.dirt,
-  ...tileFamilies.stone,
-  ...tileFamilies.pebble,
-  ...tileFamilies.sand,
-  ...tileFamilies.water,
-];
+export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 
 export const tileFrameSrc = (asset: TileAsset): string => asset.src;

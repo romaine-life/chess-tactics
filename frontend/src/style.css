@@ -10199,7 +10199,9 @@ button.tileset-relationship-cell {
   display: block;
   width: 96px;
   height: 180px;
-  image-rendering: auto;
+  /* Pixel-art tiles: render crisp (nearest-neighbor), not bilinear-smoothed. The old
+     `auto` was a holdover from the smooth 3D-render tiles and blurred the pixel art. */
+  image-rendering: pixelated;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
