@@ -50,10 +50,16 @@ export function AccountMenu({ name, avatarUrl, onSignOut, defaultOpen }: Account
 
       {open && (
         <div className="account-menu" role="menu" aria-label="Account">
-          <p className="account-menu-name">{name}</p>
-          <button type="button" className="account-menu-item" role="menuitem" onClick={onSignOut}>
+          <span className="account-menu-name">{name}</span>
+          <button
+            type="button"
+            className="account-menu-exit"
+            role="menuitem"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={onSignOut}
+          >
             <img className="account-menu-glyph" src="/assets/ui/kit/icons/sign-out.png" alt="" aria-hidden="true" />
-            <span>Sign Out</span>
           </button>
         </div>
       )}

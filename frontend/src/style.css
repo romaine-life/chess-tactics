@@ -11742,71 +11742,62 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
-/* Account menu — small kit panel-framed popover anchored under the avatar. */
+/* Account menu — small kit panel-framed popover anchored under the avatar. A
+   minimal one-line row: the username + the door (the door IS the sign-out, no
+   text label — the bar avatar already carries identity). */
 .account-menu {
+  align-items: center;
   border: 18px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 18px round;
   box-sizing: border-box;
-  display: grid;
-  gap: 8px;
+  display: flex;
+  gap: 14px;
   image-rendering: pixelated;
   inset-block-start: calc(100% + 12px);
   inset-inline-end: 0;
-  min-inline-size: 200px;
-  padding: 6px;
+  justify-content: space-between;
+  padding: 4px 12px;
   position: absolute;
+  white-space: nowrap;
   z-index: 60;
 }
 
-/* Just the username — the avatar already carries identity in the bar, so the menu
-   names who's signed in (no redundant second avatar) and then acts. */
 .account-menu-name {
   color: #f6fbff;
   font-size: var(--ds-text-sm);
   line-height: 1.1;
   margin: 0;
-  overflow: hidden;
-  padding: 8px 10px 10px;
-  text-align: center;
-  text-overflow: ellipsis;
   text-shadow: 0 2px 0 #02070b;
-  white-space: nowrap;
 }
 
-/* Sign-out action — its own kit mode-button frame, so it reads as a real button
-   and stands apart from the identity header without a raw divider. */
-.account-menu-item {
+/* The door is the action — a bare icon button (no fabricated surface), labelled
+   for screen readers + a hover tooltip, brightening on hover/focus. */
+.account-menu-exit {
   align-items: center;
-  block-size: 46px;
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
-  box-sizing: border-box;
-  color: #eef6ff;
+  appearance: none;
+  background: none;
+  border: 0;
   cursor: pointer;
-  display: flex;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: var(--ds-text-sm);
-  gap: 10px;
-  image-rendering: pixelated;
-  inline-size: 100%;
-  letter-spacing: .04em;
-  padding: 0 14px;
-  text-transform: uppercase;
+  display: inline-flex;
+  padding: 4px;
 }
 
-.account-menu-item:hover,
-.account-menu-item:focus-visible {
-  filter: brightness(1.14);
-  outline: none;
+.account-menu-exit:hover {
+  filter: brightness(1.2);
+}
+
+.account-menu-exit:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 .account-menu-glyph {
-  block-size: 26px;
+  block-size: 32px;
   flex: none;
-  /* Detailed wood/stone door downscaled from the 64px source — smooth (auto), not
-     pixelated, since 26px isn't an integer divisor of 64 (ADR-0026 guidance). */
-  image-rendering: auto;
-  inline-size: 26px;
+  /* 32px is an exact half of the 64px source, so nearest-neighbour (pixelated)
+     stays crisp (ADR-0026 guidance: integer divisor → pixelated). */
+  image-rendering: pixelated;
+  inline-size: 32px;
   object-fit: contain;
 }
 
