@@ -1,10 +1,14 @@
-import { type CSSProperties, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
-import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, pieceSpritePath, portraitPath } from '../core/pieces';
+import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, pieceSpritePath } from '../core/pieces';
 import type { Piece, PieceType, Side } from '../core/types';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
+// One shared "unit portrait box" (master render + crop + the fill-frame) — the Selected-Unit
+// portrait AND the roster slots both render through it, so framing/fill/crop are defined once and
+// never re-derived per surface. See docs/portrait-contract.md.
+import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -86,6 +90,15 @@ export function SkirmishHud() {
 
   const [tab, setTab] = useState<HudTab>('unit');
 
+  // Portrait crops come from the SAME source the editor writes (localStorage), so the HUD bust
+  // matches the editor live; re-read when the editor saves in another tab.
+  const [portraitCrops, setPortraitCrops] = useState(loadCrops);
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => { if (e.key === STORAGE_KEY) setPortraitCrops(loadCrops()); };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const showMoves = useSkirmishView((s) => s.showMoves);
   const showEnemyAttacks = useSkirmishView((s) => s.showEnemyAttacks);
   const showBlocked = useSkirmishView((s) => s.showBlocked);
@@ -100,9 +113,6 @@ export function SkirmishHud() {
   const enemyPieces = livingPieces(game.pieces, 'enemy');
   const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins — capture the enemy King.'];
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
-  const portraitFrameStyle = focusedPortraitBackdrop
-    ? { '--skirmish-portrait-bg': `url("${focusedPortraitBackdrop}")` } as CSSProperties
-    : undefined;
   const turnLabel = game.winner
     ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Your turn' : 'Enemy turn';
@@ -147,18 +157,19 @@ export function SkirmishHud() {
           <section className="skirmish-card skirmish-selected-card" aria-label="Selected unit">
             <h2>Selected Unit</h2>
             <div className="skirmish-selected-body">
-              <div className={`skirmish-portrait-frame ${focusedPortraitBackdrop ? 'has-backdrop' : ''}`} style={portraitFrameStyle}>
-                {focused && isPlayablePieceType(focused.type) ? (
-                  <img
-                    className="skirmish-portrait"
-                    src={portraitPath(focused.type, PALETTE_FOR_SIDE[focused.side])}
-                    alt=""
-                    draggable={false}
-                  />
-                ) : (
+              {focused && isPlayablePieceType(focused.type) ? (
+                <UnitPortrait
+                  piece={focused.type as PortraitPiece}
+                  palette={PALETTE_FOR_SIDE[focused.side] as PortraitPalette}
+                  crop={portraitCrops[focused.type as PortraitPiece]}
+                  backdrop={focusedPortraitBackdrop}
+                  className="unit-portrait--hud"
+                />
+              ) : (
+                <div className="unit-portrait unit-portrait--hud" style={{ display: 'grid', placeItems: 'center' }}>
                   <UnitBadge piece={focused} large />
-                )}
-              </div>
+                </div>
+              )}
               <div className="skirmish-selected-copy">
                 <strong data-testid="selected-name">{focused ? TYPE_LABEL[focused.type] : 'None'}</strong>
                 <span>{focused ? `${focused.side === 'enemy' ? 'Enemy' : focused.side === 'player' ? 'Blue' : 'Neutral'} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
@@ -204,11 +215,11 @@ export function SkirmishHud() {
                       aria-label={`${piece.side} ${TYPE_LABEL[piece.type]}`}
                     >
                       {isPlayablePieceType(piece.type) ? (
-                        <img
-                          className="skirmish-roster-portrait"
-                          src={portraitPath(piece.type, PALETTE_FOR_SIDE[piece.side])}
-                          alt=""
-                          draggable={false}
+                        <UnitPortrait
+                          piece={piece.type as PortraitPiece}
+                          palette={PALETTE_FOR_SIDE[piece.side] as PortraitPalette}
+                          crop={portraitCrops[piece.type as PortraitPiece]}
+                          className="unit-portrait--roster"
                         />
                       ) : (
                         <UnitBadge piece={piece} />
