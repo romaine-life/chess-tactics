@@ -1859,7 +1859,7 @@ export function LevelEditor(): ReactElement {
             </div>
             <p className="le-board-note">Drag to draw a road; each tile picks its own piece (straight, corner, junction) from its road neighbours. Roads of any material connect — the surface just changes per cell. Erase to cut; the ends re-cap.</p>
           </section>
-        ) : (
+        ) : brushKind === 'tile' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Palette</h2>
               {leTileGroups.map(({ family, tiles }) => (
@@ -1882,7 +1882,7 @@ export function LevelEditor(): ReactElement {
                 </div>
               ))}
           </section>
-        )}
+        ) : null}
 
         {layer === 'road' && selectedCell && selectedRoad ? (
           <section className="skirmish-card">
