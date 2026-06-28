@@ -4,7 +4,9 @@
 
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move } from '../core/types';
-import { applyMove, enemyMove, legalMoves, type MoveEnv } from '../core/rules';
+import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
+import { evaluateObjective } from '../core/objectives';
+import type { ObjectiveType } from '../core/level';
 import { buildTerrainIndex } from '../core/terrain';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
@@ -39,6 +41,25 @@ function firstPlayerId(game: GameState): string | null {
   return game.pieces.find((p) => p.side === 'player' && p.alive)?.id ?? null;
 }
 
+/** True if any living player piece has at least one legal move. */
+export function playerHasLegalMove(game: GameState, env: MoveEnv): boolean {
+  return livingPieces(game.pieces, 'player').some((p) => legalMoves(p, game.pieces, game.size, env).length > 0);
+}
+
+/**
+ * Resolve a soft-lock: with no manual "end turn" anymore, a player who has zero
+ * legal moves would otherwise be stuck forever. There is no voluntary passing in
+ * chess, so a player who genuinely cannot move ends the game in a stalemate — a
+ * draw. Only acts on the player's undecided turn with no move available;
+ * otherwise returns the state unchanged.
+ */
+export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean } {
+  if (game.turn === 'player' && !game.winner && !playerHasLegalMove(game, env)) {
+    return { game: { ...game, winner: 'draw', turn: 'done' }, stuck: true };
+  }
+  return { game, stuck: false };
+}
+
 /** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
 function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv): { game: GameState; tick: number; events: GameEvent[] } {
   const events: GameEvent[] = [];
@@ -62,12 +83,13 @@ export interface SkirmishState {
   seed: number;
   tick: number;
   log: string[];
+  /** Win condition for this game. A free skirmish defaults to capture-king. */
+  objective: ObjectiveType;
   newSkirmish: (opts: SkirmishOptions) => void;
   select: (id: string | null) => void;
   focus: (id: string | null) => void;
   movesForSelected: () => Move[];
   tryMoveTo: (x: number, y: number) => void;
-  endTurn: () => void;
 }
 
 const INITIAL_GAME = createSkirmish({ seed: 1 });
@@ -83,12 +105,16 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       if (cur.game.turn !== 'enemy' || cur.game.winner) return;
       const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game));
       const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
+      // With no manual End Turn, a player handed the turn with no legal move would
+      // soft-lock — resolve that as a loss (you can't pass in chess).
+      const { game, stuck } = resolveIfPlayerStuck(enemyRes.game, envFor(enemyRes.game));
+      if (stuck) msgs.push('Stalemate — no legal moves remain. The skirmish is a draw.');
       set({
-        game: enemyRes.game,
-        env: envFor(enemyRes.game),
+        game,
+        env: envFor(game),
         tick: enemyRes.tick,
-        selectedId: firstPlayerId(enemyRes.game),
-        focusedId: firstPlayerId(enemyRes.game),
+        selectedId: firstPlayerId(game),
+        focusedId: firstPlayerId(game),
         log: [...msgs.reverse(), ...cur.log].slice(0, 12),
       });
     }, ENEMY_REPLY_DELAY);
@@ -101,15 +127,20 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   focusedId: null,
   seed: 1,
   tick: 0,
-  log: [],
+  log: [`Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`],
+  objective: 'capture-king',
 
   newSkirmish: (opts) => {
-    const game = createSkirmish(opts);
+    const created = createSkirmish(opts);
+    const env = envFor(created);
+    // Safety net: a degenerate start with no player move resolves rather than locks.
+    const { game } = resolveIfPlayerStuck(created, env);
+    const objective: ObjectiveType = opts.level?.objective ?? 'capture-king';
     const intro = opts.level
       ? `Test play begins — objective: ${OBJECTIVE_LOG_COPY[opts.level.objective]}.`
-      : 'Skirmish begins — move or capture; last side standing wins.';
+      : `Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`;
     const selectedId = firstPlayerId(game);
-    set({ game, env: envFor(game), seed: opts.seed, tick: 0, selectedId, focusedId: selectedId, log: [intro] });
+    set({ game, env, seed: opts.seed, tick: 0, selectedId, focusedId: selectedId, log: [intro], objective });
   },
 
   select: (id) => {
@@ -140,26 +171,34 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
     const playerRes = applyMove(s.game, p.id, mv);
+    let game = playerRes.state;
     const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
+    // Objective win: capturing the enemy King ends the game immediately, even with
+    // other enemy pieces still on the board — this is what makes the displayed
+    // "capture the enemy King" objective honest. (capture-all already equals
+    // applyMove's last-standing rule; survive/reach need extra context and aren't
+    // wired here, so they fall back to last-standing.)
+    if (!game.winner && (s.objective === 'capture-king' || s.objective === 'capture-all')) {
+      const winner = evaluateObjective(game, s.objective);
+      if (winner) {
+        game = { ...game, winner, turn: 'done' };
+        msgs.push(winner === 'player'
+          ? (s.objective === 'capture-king' ? 'Victory — the enemy King is captured.' : 'Victory — the enemy is routed.')
+          : 'Defeat — your force has fallen.');
+      }
+    }
     // Beat 1: commit the player's move on its own so it animates and the board
     // reads before the enemy answers. applyMove flips the turn to 'enemy', which
     // also locks further player input until the reply resolves.
     set({
-      game: playerRes.state,
-      env: envFor(playerRes.state),
+      game,
+      env: envFor(game),
       selectedId: null,
       focusedId: null,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
     });
     // Beats 2–3: a read beat, then the enemy "thinks" and answers.
-    if (playerRes.state.turn === 'enemy' && !playerRes.state.winner) scheduleEnemyReply();
-  },
-
-  endTurn: () => {
-    const s = get();
-    if (s.game.turn !== 'player' || s.game.winner) return;
-    set({ game: { ...s.game, turn: 'enemy' }, selectedId: null, focusedId: null });
-    scheduleEnemyReply();
+    if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
   },
   };
 });

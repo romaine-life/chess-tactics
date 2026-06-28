@@ -21,13 +21,14 @@ const ROLE: Record<PieceType, string> = {
 
 const MARK = PIECE_MARK;
 
-type HudTab = 'unit' | 'roster' | 'log' | 'view';
+type HudTab = 'unit' | 'roster' | 'log' | 'view' | 'controls';
 
 const HUD_TABS: { id: HudTab; label: string }[] = [
   { id: 'unit', label: 'Unit' },
   { id: 'roster', label: 'Roster' },
   { id: 'log', label: 'Log' },
   { id: 'view', label: 'View' },
+  { id: 'controls', label: 'Controls' },
 ];
 
 function unitSprite(piece: Piece | null): string | null {
@@ -82,7 +83,6 @@ export function SkirmishHud() {
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
-  const endTurn = useSkirmish((s) => s.endTurn);
 
   const [tab, setTab] = useState<HudTab>('unit');
 
@@ -98,13 +98,13 @@ export function SkirmishHud() {
   const focused = game.pieces.find((p) => p.id === focusedId && p.alive) ?? selected;
   const playerPieces = livingPieces(game.pieces, 'player');
   const enemyPieces = livingPieces(game.pieces, 'enemy');
-  const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins - move or capture; last side standing wins.'];
+  const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins — capture the enemy King.'];
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
   const portraitFrameStyle = focusedPortraitBackdrop
     ? { '--skirmish-portrait-bg': `url("${focusedPortraitBackdrop}")` } as CSSProperties
     : undefined;
   const turnLabel = game.winner
-    ? game.winner === 'player' ? 'Victory' : 'Defeat'
+    ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Your turn' : 'Enemy turn';
 
   return (
@@ -203,7 +203,16 @@ export function SkirmishHud() {
                       onClick={() => piece.side === 'player' ? select(piece.id) : focus(piece.id)}
                       aria-label={`${piece.side} ${TYPE_LABEL[piece.type]}`}
                     >
-                      <UnitBadge piece={piece} />
+                      {isPlayablePieceType(piece.type) ? (
+                        <img
+                          className="skirmish-roster-portrait"
+                          src={portraitPath(piece.type, PALETTE_FOR_SIDE[piece.side])}
+                          alt=""
+                          draggable={false}
+                        />
+                      ) : (
+                        <UnitBadge piece={piece} />
+                      )}
                     </button>
                   ))}
                 </div>
@@ -249,25 +258,25 @@ export function SkirmishHud() {
             </div>
           </section>
         )}
-      </div>
 
-      <div className="skirmish-bottom-actions">
-        <button
-          className="skirmish-end-turn"
-          type="button"
-          onClick={() => endTurn()}
-          disabled={game.turn !== 'player' || !!game.winner}
-        >
-          End Turn
-        </button>
-        <button
-          className="skirmish-new-run"
-          data-testid="new-skirmish"
-          type="button"
-          onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
-        >
-          New
-        </button>
+        {tab === 'controls' && (
+          <section className="skirmish-card skirmish-controls-card" aria-label="Page controls">
+            <h2>Controls</h2>
+            <div className="skirmish-view-group">
+              <span className="skirmish-eyebrow">Match</span>
+              <div className="skirmish-view-row">
+                <button
+                  type="button"
+                  className="app-header-button"
+                  data-testid="new-skirmish"
+                  onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
+                >
+                  New skirmish
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </aside>
   );

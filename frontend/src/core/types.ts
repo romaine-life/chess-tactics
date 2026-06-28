@@ -114,7 +114,8 @@ export interface Move {
   enPassant?: boolean;
 }
 
-export type Winner = Side | null;
+/** Game outcome: a side won, 'draw' (e.g. stalemate — no legal moves), or null while undecided. */
+export type Winner = Side | 'draw' | null;
 export type Turn = Side | 'done';
 
 export interface GameState {

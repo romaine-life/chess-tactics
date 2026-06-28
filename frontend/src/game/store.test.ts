@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish } from './store';
+import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove } from './store';
 import { livingPieces } from '../core/rules';
+import type { MoveEnv } from '../core/rules';
+import type { GameState, Piece, PieceType, Side } from '../core/types';
 
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
 // turn-taking rather than a simultaneous swap. Fake timers let us drive that
@@ -67,5 +69,88 @@ describe('skirmish store', () => {
 
   it('is fully deterministic for a seed + move sequence', () => {
     expect(playFirstMove(5)).toEqual(playFirstMove(5));
+  });
+});
+
+function piece(id: string, side: Side, type: PieceType, x: number, y: number): Piece {
+  return { id, side, type, x, y, alive: true, startY: y };
+}
+
+/** Load a hand-built board into the store as the active capture-king skirmish. */
+function loadCaptureKing(pieces: Piece[], selectedId: string): void {
+  const game: GameState = { size: { cols: 8, rows: 8 }, pieces, turn: 'player', winner: null };
+  useSkirmish.setState({
+    game,
+    env: { terrain: undefined, lastMove: undefined },
+    objective: 'capture-king',
+    selectedId,
+    focusedId: selectedId,
+    log: [],
+  });
+}
+
+describe('skirmish store: capture-king objective', () => {
+  it('wins the instant the enemy King is captured, even with lesser enemies still alive', () => {
+    // Player rook shares a column with the enemy King; an enemy pawn survives elsewhere.
+    loadCaptureKing(
+      [piece('pr', 'player', 'rook', 0, 0), piece('ek', 'enemy', 'king', 0, 5), piece('ep', 'enemy', 'pawn', 7, 7)],
+      'pr',
+    );
+    useSkirmish.getState().tryMoveTo(0, 5); // capture the King
+
+    const { game, log } = useSkirmish.getState();
+    expect(game.winner).toBe('player');
+    expect(game.turn).toBe('done');
+    expect(game.pieces.find((p) => p.id === 'ep')?.alive).toBe(true); // lesser enemy still on the board
+    expect(log[0]).toMatch(/King is captured/i);
+  });
+
+  it('does not win when a non-royal enemy is captured — the game continues', () => {
+    loadCaptureKing(
+      [piece('pr', 'player', 'rook', 0, 0), piece('ek', 'enemy', 'king', 7, 7), piece('ep', 'enemy', 'pawn', 0, 5)],
+      'pr',
+    );
+    useSkirmish.getState().tryMoveTo(0, 5); // capture the pawn, not the King
+
+    const { game } = useSkirmish.getState();
+    expect(game.winner).toBeNull();
+    expect(game.turn).toBe('enemy'); // handed to the enemy, not resolved
+  });
+});
+
+describe('soft-lock guard (no manual End Turn)', () => {
+  const OPEN_ENV: MoveEnv = { terrain: undefined, lastMove: undefined };
+  const stateOf = (pieces: Piece[], cols: number, rows: number): GameState => ({
+    size: { cols, rows },
+    pieces,
+    turn: 'player',
+    winner: null,
+  });
+
+  it('a player with no legal move on their turn ends in a draw (stalemate — cannot pass)', () => {
+    // 1-wide board: the lone pawn is blocked head-on by the enemy King (pawns do not
+    // capture forward) and has no diagonal capture available off the board's edges.
+    const trapped = stateOf([piece('p', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 0, 0)], 1, 2);
+    expect(playerHasLegalMove(trapped, OPEN_ENV)).toBe(false);
+
+    const res = resolveIfPlayerStuck(trapped, OPEN_ENV);
+    expect(res.stuck).toBe(true);
+    expect(res.game.winner).toBe('draw');
+    expect(res.game.turn).toBe('done');
+  });
+
+  it('leaves a state untouched when the player can still move', () => {
+    const free = stateOf([piece('p', 'player', 'pawn', 0, 2), piece('ek', 'enemy', 'king', 0, 0)], 1, 3);
+    expect(playerHasLegalMove(free, OPEN_ENV)).toBe(true);
+
+    const res = resolveIfPlayerStuck(free, OPEN_ENV);
+    expect(res.stuck).toBe(false);
+    expect(res.game).toBe(free); // unchanged reference
+  });
+
+  it('never fires off the player turn or after the game is decided', () => {
+    const trapped = stateOf([piece('p', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 0, 0)], 1, 2);
+    expect(resolveIfPlayerStuck({ ...trapped, turn: 'enemy' }, OPEN_ENV).stuck).toBe(false);
+    expect(resolveIfPlayerStuck({ ...trapped, winner: 'player', turn: 'done' }, OPEN_ENV).stuck).toBe(false);
   });
 });
