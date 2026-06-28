@@ -221,19 +221,32 @@ const productionUnits: UnitAsset[] = [
     unitAnchorY: KING_CROWN_CONTACT_ANCHOR_Y,
     sprite: paletteSprite('king'),
   },
+  {
+    id: 'pawn-codexsheet',
+    family: 'pawn',
+    label: 'Pawn',
+    badge: '8 directions · pixel art',
+    preview: pieceSpritePath('pawn'),
+    read: 'Helmeted pawn — Codex Sheet pixel-art production unit (true-isometric, 8 directions).',
+    status: 'active production unit',
+    directions: rookDirections,
+    factionMode: 'palette',
+    defaultScale: 100,
+    footprint: circleFootprint(512, 150),
+    unitAnchorX: '50%',
+    unitAnchorY: '80.241%',
+    sprite: paletteSprite('pawn'),
+  },
 ];
 
-// --- Speculative pixel-art candidate libraries (the unit "bake-off") ---------
-// Mirrors the tile pipeline: candidates produced by Filter / Codex→Filter / PixelLab
-// are kept OUT of the shipped roster but live in the Studio catalog, each tagged with
-// a `method` + `speculative` flag so they can be filtered and culled later. Navy palette
-// only (factionMode 'fixed') until a library is promoted to production. Sprites are framed
-// onto the same 512 canvas as the Blender source, so the per-piece footprints below seat them.
-export type PixelLibraryKey = 'codexsheet' | 'codexfilter' | 'filter2' | 'filter3';
+// --- Speculative pixel-art comparison libraries (the unit "bake-off") --------
+// The accepted PRODUCTION pixel-art set ("Codex Sheet") was promoted into the shipped
+// roster above — it renders from the canonical /assets/units/<piece>/<palette> path with
+// team colors. These remaining libraries stay in the Studio catalog ONLY for comparison
+// (held out of the game), each tagged `speculative` so they can be culled. Navy palette
+// only; sprites framed onto the same 512 canvas, seated via the per-piece footprints below.
+export type PixelLibraryKey = 'codexfilter' | 'filter2' | 'filter3';
 export const PIXEL_LIBRARIES: { key: PixelLibraryKey; label: string; dirs: Direction[] }[] = [
-  // Codex Sheet: the whole 8-direction rotation drawn in ONE cohesive Codex pass from the
-  // real Blender angles, anchored to the concept-art style (rook uses the ruinwall design).
-  { key: 'codexsheet', label: 'Codex Sheet', dirs: rookDirections },
   { key: 'codexfilter', label: 'Codex→Filter', dirs: rookDirections },
   { key: 'filter2', label: 'Filter ×2', dirs: rookDirections },
   { key: 'filter3', label: 'Filter ×3', dirs: rookDirections },
@@ -253,23 +266,17 @@ const PIXEL_PIECES: PieceId[] = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'k
 const pixelLibrarySprite = (key: PixelLibraryKey, piece: PieceId) =>
   (_faction: Faction, direction: Direction) => `/assets/units-pixel/${key}/${piece}/navy-blue/${direction}.png`;
 
-// Codex Sheet is the accepted PRODUCTION pixel-art set (user-approved, all 6 pieces);
-// the other libraries (Filter ×2/×3, Codex→Filter) stay speculative for comparison.
-const PRODUCTION_PIXEL_LIBRARY: PixelLibraryKey = 'codexsheet';
 const pixelLibraryUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
   PIXEL_LIBRARIES.map((lib): UnitAsset => {
     const fp = PIXEL_PIECE_FOOTPRINT[piece];
-    const isProduction = lib.key === PRODUCTION_PIXEL_LIBRARY;
     return {
       id: `${piece}-${lib.key}`,
       family: piece,
       label: `${familyLabels[piece]} · ${lib.label}`,
       badge: lib.label,
       preview: `/assets/units-pixel/${lib.key}/${piece}/navy-blue/south.png`,
-      read: isProduction
-        ? `${familyLabels[piece]} — ${lib.label} production pixel-art unit (navy; team palettes pending).`
-        : `${familyLabels[piece]} — ${lib.label} pixel-art candidate (speculative; navy only).`,
-      status: isProduction ? 'production pixel-art unit' : 'speculative candidate',
+      read: `${familyLabels[piece]} — ${lib.label} pixel-art candidate (speculative; navy only).`,
+      status: 'speculative candidate',
       directions: lib.dirs,
       factionMode: 'fixed',
       defaultScale: 100,
@@ -277,19 +284,19 @@ const pixelLibraryUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
       unitAnchorX: fp.anchorX,
       unitAnchorY: fp.anchorY,
       method: lib.label,
-      speculative: !isProduction,
+      speculative: true,
       sprite: pixelLibrarySprite(lib.key, piece),
     };
   }),
 );
 
 export const unitAssets: UnitAsset[] = [
-  ...productionUnits.map((unit) => ({ ...unit, method: unit.method ?? 'Blender' })),
+  ...productionUnits.map((unit) => ({ ...unit, method: unit.method ?? 'Codex Sheet' })),
   ...pixelLibraryUnits,
 ];
 
 export const UNIT_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
-  { id: 'Blender', label: 'Blender', sub: 'Production' },
+  { id: 'Codex Sheet', label: 'Codex Sheet', sub: 'Production' },
   ...PIXEL_LIBRARIES.map((lib) => ({ id: lib.label, label: lib.label, sub: 'Speculative' })),
 ];
 
