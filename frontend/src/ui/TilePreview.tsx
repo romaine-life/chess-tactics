@@ -144,6 +144,9 @@ interface TilesetStudioRouteState {
   boardSeed: number;
   brushKind: 'tile' | 'unit' | 'doodad';
   selectedUnitId?: string;
+  /** Tile catalog/board filters (undefined ⇒ all selected). Encoded as ?methods= / ?fams=. */
+  tileMethods?: string[];
+  tileFamilies?: StudioFamilyId[];
 }
 
 type ReviewItem =
@@ -211,6 +214,20 @@ const TILE_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
 const tileMethodKeyOf = (source: string): string => {
   const sep = source.indexOf(':');
   return sep >= 0 ? source.slice(sep + 1) : source;
+};
+
+// Tile-filter URL encoding (?methods= / ?fams=). Undefined ⇒ all selected (clean URL).
+const ALL_TILE_FAMILY_IDS: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
+const TILE_METHOD_ID_SET = new Set(TILE_METHOD_OPTIONS.map((m) => m.id));
+const TILE_FAMILY_ID_SET = new Set<string>(ALL_TILE_FAMILY_IDS);
+const parseFilterList = (raw: string | null, valid: ReadonlySet<string>): string[] | undefined => {
+  if (!raw) return undefined;
+  const items = raw.split(',').filter((value) => valid.has(value));
+  return items.length ? items : undefined;
+};
+// Write a comma list only when it's a strict subset, so the default (all) stays a clean URL.
+const setFilterListParam = (params: URLSearchParams, key: string, selected: readonly string[] | undefined, total: number): void => {
+  if (selected && selected.length < total) params.set(key, selected.join(','));
 };
 
 interface CandidateBatch {
@@ -300,6 +317,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const unit = params.get('unit');
   const slot = Number(params.get('slot'));
   const seed = Number(params.get('seed'));
+  const tileMethods = parseFilterList(params.get('methods'), TILE_METHOD_ID_SET);
+  const tileFamilies = parseFilterList(params.get('fams'), TILE_FAMILY_ID_SET) as StudioFamilyId[] | undefined;
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization). 'view' is a legacy alias.
   const studioMode = isStudioMode(mode) ? mode : mode === 'view' ? 'lab' : studioDefaults.studioMode;
@@ -334,6 +353,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     boardSeed: Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : studioDefaults.boardSeed,
     brushKind,
     selectedUnitId: isUnitAssetId(unit) ? unit : undefined,
+    tileMethods,
+    tileFamilies,
   };
 };
 
@@ -348,6 +369,10 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'assets' && route.selectedAssetName) catalogParams.set('kit', route.selectedAssetName);
     if (route.category === 'artwork' && route.selectedArtworkName) catalogParams.set('art', route.selectedArtworkName);
     if (route.category === 'glossary' && route.selectedGlossaryName) catalogParams.set('gloss', route.selectedGlossaryName);
+    if (route.category === undefined || route.category === 'tiles') {
+      setFilterListParam(catalogParams, 'methods', route.tileMethods, TILE_METHOD_OPTIONS.length);
+      setFilterListParam(catalogParams, 'fams', route.tileFamilies, ALL_TILE_FAMILY_IDS.length);
+    }
     const catalogQuery = catalogParams.toString();
     const nextHref = catalogQuery ? `${window.location.pathname}?${catalogQuery}` : window.location.pathname;
     const currentHref = `${window.location.pathname}${window.location.search}`;
@@ -379,6 +404,8 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (route.brushKind === 'unit') params.set('brush', 'unit');
   else if (route.brushKind === 'doodad') params.set('brush', 'doodad');
   if (route.selectedUnitId) params.set('unit', route.selectedUnitId);
+  setFilterListParam(params, 'methods', route.tileMethods, TILE_METHOD_OPTIONS.length);
+  setFilterListParam(params, 'fams', route.tileFamilies, ALL_TILE_FAMILY_IDS.length);
   const nextHref = `${window.location.pathname}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
   if (nextHref !== currentHref) {
@@ -774,10 +801,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [doodadBrushId, setDoodadBrushId] = useState<string>('grass-tuft');
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
-  const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
-  // Tile "Method" facet: 'production' plus each speculative bake-off method. All on by default.
+  const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>(initialRoute.tileFamilies ?? studioFamilies.map((fam) => fam.id));
+  // Tile "Method" facet — all on by default; URL-addressable via ?methods=.
   const allTileMethodIds = useMemo(() => TILE_METHOD_OPTIONS.map((m) => m.id), []);
-  const [selectedTileMethods, setSelectedTileMethods] = useState<string[]>(allTileMethodIds);
+  const [selectedTileMethods, setSelectedTileMethods] = useState<string[]>(initialRoute.tileMethods ?? allTileMethodIds);
   const [selectedCollectionFilters, setSelectedCollectionFilters] = useState<CollectionFilter[]>(
     initialRoute.tileFilter === 'board' ? ['base'] : [initialRoute.tileFilter],
   );
@@ -1158,7 +1185,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       const route = readTilesetStudioRoute();
       const routeFamily = studioFamilyById(route.familyId);
       setFamilyId(route.familyId);
-      setSelectedFamilyIds([route.familyId]);
+      setSelectedFamilyIds(route.tileFamilies ?? studioFamilies.map((fam) => fam.id));
+      setSelectedTileMethods(route.tileMethods ?? allTileMethodIds);
       setStudioMode(route.studioMode);
       if (route.category) setCategory(route.category);
       if (route.selectedAssetName) setSelectedAssetName(route.selectedAssetName);
@@ -1243,8 +1271,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       boardSeed,
       brushKind,
       selectedUnitId: unitBrushId,
+      tileMethods: selectedTileMethods,
+      tileFamilies: selectedFamilyIds,
     });
-  }, [boardMode, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget, selectedTileMethods, selectedFamilyIds]);
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
