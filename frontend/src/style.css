@@ -4955,11 +4955,12 @@ h1 {
   cursor: pointer;
   display: grid;
   font: inherit;
+  font-size: var(--ds-text-xs);
   gap: 5px;
   grid-auto-flow: column;
   line-height: 1;
-  min-height: 40px;
-  padding: 5px 4px;
+  min-height: 30px;
+  padding: 4px 6px;
   place-items: center;
   text-transform: uppercase;
 }
@@ -4979,25 +4980,29 @@ h1 {
 }
 
 /* active brush picker */
-.le-brush-pick { align-items: center; display: grid; gap: 10px; grid-template-columns: 60px minmax(0, 1fr); margin-top: 10px; }
+.le-brush-pick { align-items: center; display: grid; gap: 8px; grid-template-columns: 48px minmax(0, 1fr); margin-top: 6px; }
 .le-brush-thumb {
   background: radial-gradient(circle at 50% 40%, rgba(63, 148, 190, .18), transparent 64%), rgba(3, 12, 19, .74);
   border: 1px solid rgba(87, 153, 184, .4);
   border-radius: 5px;
   display: grid;
-  height: 60px;
+  height: 44px;
   overflow: hidden;
   place-items: center;
-  width: 60px;
+  width: 48px;
 }
-.le-brush-thumb img { height: 90%; image-rendering: pixelated; object-fit: contain; width: 90%; }
+/* Fit the brush preview INSIDE the thumb. The old height:90% mis-resolved against the
+   auto grid row, so portrait sprites (roads) overflowed to ~88px and clipped. */
+.le-brush-thumb img { display: block; max-width: 100%; max-height: 100%; image-rendering: pixelated; object-fit: contain; }
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
-/* palette (folded into the rail — variant B) */
-/* Tile-palette and unit-controls swap in/out of the same rail slot; pin both to one
-   fixed height so flipping layers can't wobble the panel (Tile was 350px, Unit 354px). */
-.le-brush-panel { display: flex; flex-direction: column; height: 360px; overflow: hidden; }
+/* palette (folded into the rail) */
+/* The palette is the PRIMARY work area, so it flex-GROWS to take all height the
+   fixed controls (Layer/Tool/brush/Fill/View) leave, and is the single scroll
+   region — not a fixed box competing with a whole-rail scroll. Tile- and unit-
+   panels share this one growing slot, so flipping layers can't wobble the rail. */
+.le-brush-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 150px; overflow: hidden; }
 .le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
 .le-palette-scroll { height: 300px; }
 
@@ -5056,12 +5061,20 @@ h1 {
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
 
+/* road connection editor — clickable diamond edges for the selected road tile */
+.le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
+.le-roadconn-edge.is-joined, .le-roadconn-edge.is-cut { cursor: pointer; }
+.le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
+.le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
+.le-roadconn-edge:focus-visible { outline: none; }
+.le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
+
 /* status line */
 .le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
 .le-statusline b { color: #9fe0ff; }
 
 /* editor rail icons */
-.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 24px; image-rendering: pixelated; width: 24px; }
+.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
 .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
 .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
 .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
@@ -9678,6 +9691,16 @@ button.tileset-relationship-cell {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Linear-feature overlay (road; rivers later): a transparent ribbon sprite stacked
+   directly over the base tile in the same 96x180 frame, so it aligns pixel-for-pixel.
+   The base <img> sits at top:0 of the tile box; this overrides its block flow to
+   occupy the identical box rather than stacking below it. */
+.tileset-generated-board-tile img.tileset-feature-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
 /* Units and doodads no longer render inside cells here — both boards seat them at grid

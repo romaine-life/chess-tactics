@@ -1,6 +1,8 @@
 import { createRng } from './rng';
 import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
 import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
+import type { FeatureKind, RoadMaterial } from './featureAutotile';
+import { featureKey, featureMaskAt } from './featureAutotile';
 
 export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsset> {
   x: number;
@@ -15,6 +17,12 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
   sideAsset?: TAsset;
   sockets: EdgeSockets;
   terrain: TileFamilyId;
+  /**
+   * A linear-feature overlay (road; rivers later) riding ON TOP of the base tile.
+   * Orthogonal to socket selection — it never affects which base `asset` is chosen.
+   * `mask` is the 4-bit connection mask; the renderer maps {kind, material, mask} to a sprite.
+   */
+  feature?: { kind: FeatureKind; material: RoadMaterial; mask: number };
   missing?: {
     kind: 'missing-art' | 'unsupported-junction';
     label: string;
@@ -239,6 +247,12 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   rows: number;
   familyAssets: Record<TileFamilyId, readonly TAsset[]>;
   /**
+   * Sparse linear-feature layer: cell key ("x,y") -> {kind, material}. Optional and
+   * orthogonal to `terrainMap`; cells in here get a `feature` with the connection
+   * mask resolved from same-kind neighbours. Omit it for the original behaviour.
+   */
+  featureMap?: ReadonlyMap<string, { kind: FeatureKind; material: RoadMaterial }>;
+  /**
    * Optional per-family edge tiles. When supplied, any cell on a FRONT screen edge
    * (`x === columns - 1` or `y === rows - 1` — the void-facing rows in `x+y` paint order)
    * gets the family's edge tile as its independent SIDE layer (ADR-0039), so the outer ring
@@ -262,6 +276,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   columns,
   rows,
   familyAssets,
+  featureMap,
   edgeAssets,
 }: SolveSocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
@@ -271,14 +286,32 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   const cells: SocketBoardCell<TAsset>[] = [];
   const fallbacks: SocketBoardFallback[] = [];
 
+  // Group featured cells by kind once, so each cell's connection mask is resolved
+  // against only its OWN kind's neighbours (a road connects to roads, not rivers).
+  // Material is per-cell and does NOT split connectivity — all roads connect.
+  const featurePresence = new Map<FeatureKind, Set<string>>();
+  if (featureMap) {
+    for (const [key, { kind }] of featureMap) {
+      const set = featurePresence.get(kind) ?? new Set<string>();
+      set.add(key);
+      featurePresence.set(kind, set);
+    }
+  }
+  const featureAt = (x: number, y: number): SocketBoardCell<TAsset>['feature'] => {
+    const entry = featureMap?.get(featureKey(x, y));
+    if (!entry) return undefined;
+    return { kind: entry.kind, material: entry.material, mask: featureMaskAt(featurePresence.get(entry.kind)!, x, y) };
+  };
+
   for (let index = 0; index < columns * rows; index += 1) {
     const y = Math.floor(index / columns);
     const x = index % columns;
     const terrain = terrainAt(terrainMap, x, y, columns, rows) ?? 'grass';
     const sockets = socketGrid[index];
+    const feature = featureAt(x, y);
     const candidates = boardAssets.filter((asset) => assetMatchesSockets(asset, sockets, familyAssets));
     if (candidates.length > 0) {
-      cells.push({ x, y, sockets, terrain, asset: pickWeightedAsset(candidates, rng.next) });
+      cells.push({ x, y, sockets, terrain, feature, asset: pickWeightedAsset(candidates, rng.next) });
       continue;
     }
     // Hard edge: no socket-legal tile (a terrain boundary with no transition asset).
@@ -286,11 +319,11 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     // instead of leaving a gap. The socket mismatch at the seam is intentional.
     const familyTiles = (familyAssets[terrain] ?? []).filter((asset) => asset.kind === 'tile' && asset.probability > 0) as TAsset[];
     if (familyTiles.length > 0) {
-      cells.push({ x, y, sockets, terrain, asset: pickWeightedAsset(familyTiles, rng.next) });
+      cells.push({ x, y, sockets, terrain, feature, asset: pickWeightedAsset(familyTiles, rng.next) });
     } else {
       const missing = missingForSockets(sockets);
       fallbacks.push({ x, y, requiredNorth: sockets.north, requiredWest: sockets.west, candidateCount: candidates.length });
-      cells.push({ x, y, sockets, terrain, missing });
+      cells.push({ x, y, sockets, terrain, feature, missing });
     }
   }
 
