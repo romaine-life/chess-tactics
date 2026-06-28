@@ -46,7 +46,7 @@ const ORPHANS = new Set((usage as { orphans: string[] }).orphans);
 // Editable frames, derived from the SINGLE registry (config/nine-slice-registry.json)
 // — every composed output (incl. -active variants) maps back to its editable asset
 // id. A frame NOT in here is whole-PNG: migration debt, not a supported state.
-const REG_ASSETS = (nineSliceRegistry as { assets: Record<string, { variants: { out: string }[] }> }).assets;
+const REG_ASSETS = (nineSliceRegistry as { assets: Record<string, { label: string; variants: { out: string; swap?: string }[] }> }).assets;
 const EDITOR_ASSET: Record<string, string> = {};
 for (const [id, a] of Object.entries(REG_ASSETS)) for (const v of a.variants) EDITOR_ASSET[v.out.replace(/\.png$/, '')] = id;
 const GROUP_LABEL: Record<string, string> = { settings: 'Settings', game: 'Skirmish', shields: 'Campaign' };
@@ -96,9 +96,22 @@ export function AssetLibraryStudio({ filters, search, zoom, selected, onSelect }
     }));
 
   // Frames aren't gated, so they only appear when the gate facet isn't narrowing to pass/fail.
-  const frameSection = (filters.type === 'all' || filters.type === 'frames') && filters.gate === 'all'
-    ? [{ key: 'frames', label: 'Chrome', items: KIT.frames.filter((f) => provOk(f.name) && searchOk(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `${f.w}×${f.h}`, gate: undefined as 'pass' | 'fail' | undefined })) }]
-    : [];
+  // They're grouped by ENTITY (the registry frame) under its ROLE label, with each entity's
+  // states (default / active) as its cards — so panel vs mode-button vs row read as distinct
+  // things at a glance, instead of a flat list of byte-named PNGs.
+  const showFrames = (filters.type === 'all' || filters.type === 'frames') && filters.gate === 'all';
+  const claimed = new Set<string>();
+  const frameEntitySections = !showFrames ? [] : Object.entries(REG_ASSETS).map(([id, a]) => ({
+    key: `frame-${id}`,
+    label: a.label,
+    items: a.variants
+      .map((v) => { const name = v.out.replace(/\.png$/, ''); claimed.add(name); return { name, state: v.swap ? 'active / selected' : 'default' }; })
+      .map((v) => { const f = KIT.frames.find((fr) => fr.name === v.name); return f ? { f, state: v.state } : null; })
+      .filter((x): x is { f: Frame; state: string } => !!x && provOk(x.f.name) && searchOk(x.f.name))
+      .map(({ f, state }) => ({ name: f.name, url: f.url, sub: `${state} · ${f.w}×${f.h}`, gate: undefined as 'pass' | 'fail' | undefined })),
+  }));
+  const orphanFrames = !showFrames ? [] : KIT.frames.filter((f) => !claimed.has(f.name) && provOk(f.name) && searchOk(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `unforged · ${f.w}×${f.h}`, gate: undefined as 'pass' | 'fail' | undefined }));
+  const frameSection = [...frameEntitySections, ...(orphanFrames.length ? [{ key: 'frame-unforged', label: 'Unforged frames (migration debt)', items: orphanFrames }] : [])];
 
   const sections = [...groupSections, ...frameSection].filter((s) => s.items.length);
 
@@ -174,7 +187,7 @@ export function AssetLab({ name, header }: { name: string; header?: ReactNode })
             {header}
             {item && EDITOR_ASSET[item.name] ? (
               <a
-                href={`/nine-slice-editor?asset=${EDITOR_ASSET[item.name]}`}
+                href={`/nine-slice-editor?asset=${EDITOR_ASSET[item.name]}&return=${encodeURIComponent(window.location.pathname + window.location.search)}`}
                 style={{ display: 'block', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', borderRadius: 4, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}
               >✎ Edit in 9-slice editor</a>
             ) : found?.kind === 'frame' ? (
