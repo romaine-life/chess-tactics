@@ -253,17 +253,23 @@ const PIXEL_PIECES: PieceId[] = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'k
 const pixelLibrarySprite = (key: PixelLibraryKey, piece: PieceId) =>
   (_faction: Faction, direction: Direction) => `/assets/units-pixel/${key}/${piece}/navy-blue/${direction}.png`;
 
-const speculativeUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
+// Codex Sheet is the accepted PRODUCTION pixel-art set (user-approved, all 6 pieces);
+// the other libraries (Filter ×2/×3, Codex→Filter) stay speculative for comparison.
+const PRODUCTION_PIXEL_LIBRARY: PixelLibraryKey = 'codexsheet';
+const pixelLibraryUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
   PIXEL_LIBRARIES.map((lib): UnitAsset => {
     const fp = PIXEL_PIECE_FOOTPRINT[piece];
+    const isProduction = lib.key === PRODUCTION_PIXEL_LIBRARY;
     return {
       id: `${piece}-${lib.key}`,
       family: piece,
       label: `${familyLabels[piece]} · ${lib.label}`,
       badge: lib.label,
       preview: `/assets/units-pixel/${lib.key}/${piece}/navy-blue/south.png`,
-      read: `${familyLabels[piece]} — ${lib.label} pixel-art candidate (speculative; navy only).`,
-      status: 'speculative candidate',
+      read: isProduction
+        ? `${familyLabels[piece]} — ${lib.label} production pixel-art unit (navy; team palettes pending).`
+        : `${familyLabels[piece]} — ${lib.label} pixel-art candidate (speculative; navy only).`,
+      status: isProduction ? 'production pixel-art unit' : 'speculative candidate',
       directions: lib.dirs,
       factionMode: 'fixed',
       defaultScale: 100,
@@ -271,7 +277,7 @@ const speculativeUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
       unitAnchorX: fp.anchorX,
       unitAnchorY: fp.anchorY,
       method: lib.label,
-      speculative: true,
+      speculative: !isProduction,
       sprite: pixelLibrarySprite(lib.key, piece),
     };
   }),
@@ -279,7 +285,7 @@ const speculativeUnits: UnitAsset[] = PIXEL_PIECES.flatMap((piece) =>
 
 export const unitAssets: UnitAsset[] = [
   ...productionUnits.map((unit) => ({ ...unit, method: unit.method ?? 'Blender' })),
-  ...speculativeUnits,
+  ...pixelLibraryUnits,
 ];
 
 export const UNIT_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
