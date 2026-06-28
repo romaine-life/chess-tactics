@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { AmbienceBackground } from './AmbienceBackground';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 const OPTIONS = PLAYABLE_PIECE_TYPES.filter((piece) => piece !== 'pawn');
 
@@ -26,12 +24,7 @@ export function Party() {
   return (
     <section className="settings-art-route" aria-label="Party" data-testid="party">
       <AmbienceBackground />
-      <div className="settings-screen utility-twin-screen">
-        <header className="app-titlebar settings-header-frame">
-          <BrandLockup screenName="Party" />
-          <HeaderAccountCluster signInReturnTo="/party" />
-        </header>
-
+      <div className="settings-screen utility-twin-screen app-shell-bar-pad">
         <div className="utility-screen utility-party">
           <section className="utility-panel">
             <p className="utility-lead">Pawn is locked in. Choose two more ({picks.length}/2).</p>

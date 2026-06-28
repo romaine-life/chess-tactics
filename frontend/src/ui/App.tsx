@@ -8,6 +8,7 @@ import { ArtworkCompare } from './ArtworkCompare';
 import { TileCompare } from './TileCompare';
 import { SurfaceLab } from './SurfaceLab';
 import { UpdateBanner } from './UpdateBanner';
+import { AppTitleBar } from './shell/AppTitleBar';
 import {
   APP_NAVIGATION_EVENT,
   getAppNavigationUrl,
@@ -169,6 +170,10 @@ export function App(): ReactElement {
   return (
     <>
       <UpdateBanner />
+      {/* The single persistent title bar, rendered OUTSIDE the routed screen so it
+          survives navigation (only its contents change). Renders nothing for routes
+          that keep their own header (Studio/dev + not-yet-migrated screens). */}
+      <AppTitleBar path={path} />
       {/* ONE stable Suspense boundary above the router. Because the boundary
           persists across every route swap (rather than each route mounting its
           own), a transition navigation keeps the already-revealed screen painted
