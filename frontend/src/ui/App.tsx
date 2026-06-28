@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type ReactElement } from 'react';
 import { MainMenu } from './MainMenu';
+import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
@@ -78,6 +79,9 @@ function renderRoute(path: string): ReactElement {
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return split(<LevelEditor />);
+  // /campaign (singular) is the play surface — pick a campaign; /campaigns-next is
+  // the authoring editor. Distinct paths, so order here doesn't matter.
+  if (path === '/campaign' || path.startsWith('/campaign/')) return <Campaign />;
   if (path === '/campaigns-next' || path === '/campaigns') return split(<CampaignEditor />);
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;

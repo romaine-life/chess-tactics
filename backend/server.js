@@ -231,7 +231,9 @@ function gravatarUrl(email, size = 96) {
   const normalized = String(email || '').trim().toLowerCase();
   if (!normalized) return null;
   const hash = crypto.createHash('md5').update(normalized).digest('hex');
-  return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=${size}`;
+  // d=retro — the 8-bit pixel-art fallback for users with no Gravatar set, which
+  // matches the game's pixel aesthetic (was d=identicon, smooth geometric tiles).
+  return `https://www.gravatar.com/avatar/${hash}?d=retro&s=${size}`;
 }
 
 function publicUser(session) {
