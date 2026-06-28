@@ -26,6 +26,9 @@ export interface TileAsset extends TileSocketAsset {
 // faces palette-tied to a darker tone of that tile's own top so top↔side reads as one
 // material (the approved seam treatment). This sidesteps PixelLab's unreliable iso-top
 // drawing: Blender owns the geometry, PixelLab only paints a flat material.
+// On the BOARD these render as two layers — top over side (ADR-0039); split-tiles.py derives
+// the -top/-side halves, and `src` here is the combined sprite (the split source + the
+// catalog/inspector image).
 // Built by frontend/scripts/build-surface-tiles.py. Eight variants per family. The raw
 // PixelLab blocks, textured Blender tiles, and the rejected conversion methods are
 // non-production — see frontend/src/art/nonProductionTiles.ts.

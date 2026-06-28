@@ -81,16 +81,18 @@ anchor to the equator, not the frame top, so the headroom never shifts the grid.
 
 ### Migration (phased, low-risk)
 
-1. **Phase 1 (this change): a pixel-identical structural split.** `split-tiles.py`
-   cuts every baked surface tile into `<name>-top.png` (diamond) + `<name>-side.png`
-   (everything outside it); `top ∪ side == the original` by construction. The game
-   board (`BoardLabBoard` → skirmish + level preview) renders the two layers; the
-   board looks identical. The frayed edge becomes the first real side *layer*.
-2. **Later:** the solver selects a top (from family/variant) and a side (from
-   family + edge/terrain flags) **independently**, so a frayed/river/waterfall side
-   composes with any top; build a small side library; animate the waterfall side as
-   a frame sequence. The Studio's editable board and the catalog adopt the same
-   split.
+1. **Phase 1 (shipped): the structural split AND the first independent side
+   selection.** `split-tiles.py` cuts every baked surface tile into `<name>-top.png`
+   (diamond) + `<name>-side.png` (everything outside it); `top ∪ side == the original`
+   by construction. The game board (`BoardLabBoard` → skirmish + level preview)
+   renders the two layers. Selection is *already independent*: `SocketBoardCell` gains
+   a separate `sideAsset` field, and the void-facing ring is given the frayed edge as
+   its **side** while keeping its own top variant. A plain cell is pixel-identical; an
+   edge cell keeps its own top with a frayed side.
+2. **Later:** a fuller **side library** (frayed sides per family; animated
+   river/waterfall sides as frame sequences) selected by terrain/edge flags; the
+   Studio's editable board and the catalog adopting the same split; and optionally
+   flattening the static interior to a baked sprite as an export optimization.
 
 ## Consequences
 
@@ -115,5 +117,6 @@ anchor to the equator, not the frame top, so the headroom never shifts the grid.
   `frontend/src/render/BoardLabBoard.tsx` (now renders side+top),
   `frontend/src/render/boardProjection.ts` (`zIndex = x+y`).
 - Geometry: `frontend/src/art/projectionContract.ts` (140 content / 180 frame).
-- Selection: `frontend/src/core/tileBoardGenerator.ts` (`edgeAssets` swaps the
-  void-facing ring today; becomes an independent side selection later).
+- Selection: `frontend/src/core/tileBoardGenerator.ts` (`edgeAssets` sets the
+  void-facing ring's `sideAsset` — an independent side selection, decoupled from the
+  top; extends to river/waterfall sides).
