@@ -1,5 +1,6 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
 import { terrainLabels } from '../core/tileSockets';
+import type { FeatureKind } from '../core/featureAutotile';
 
 export interface TileAsset extends TileSocketAsset {
   id: string;
@@ -74,3 +75,10 @@ export const transitionAssets: readonly TileAsset[] = [];
 export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 
 export const tileFrameSrc = (asset: TileAsset): string => asset.src;
+
+// Linear-feature overlays (roads now; rivers later) live in their OWN registry,
+// deliberately apart from the socket base tiles above: a feature is a transparent
+// ribbon composited OVER any base tile, keyed by its 4-bit connection mask (0–15),
+// not selected by the socket solver. Baked by scripts/build-road-tiles.py.
+export const featureFrameSrc = (kind: FeatureKind, mask: number): string =>
+  `/assets/tiles/feature/${kind}-${mask}.png`;

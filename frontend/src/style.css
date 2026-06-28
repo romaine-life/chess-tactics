@@ -9802,6 +9802,16 @@ button.tileset-relationship-cell {
   -webkit-user-select: none;
 }
 
+/* Linear-feature overlay (road; rivers later): a transparent ribbon sprite stacked
+   directly over the base tile in the same 96x180 frame, so it aligns pixel-for-pixel.
+   The base <img> sits at top:0 of the tile box; this overrides its block flow to
+   occupy the identical box rather than stacking below it. */
+.tileset-generated-board-tile img.tileset-feature-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
 /* Units and doodads no longer render inside cells here — both boards seat them at grid
    level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
    The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */

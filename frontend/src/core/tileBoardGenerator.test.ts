@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { countIllegalEdges, generateSocketBoard } from './tileBoardGenerator';
+import { countIllegalEdges, generateSocketBoard, solveSocketBoard } from './tileBoardGenerator';
 import { transitionPairs } from './tileSockets';
 import type { TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
+import type { FeatureKind } from './featureAutotile';
 
 const grass: TileSocketAsset = { id: 'grass', kind: 'tile', role: 'base', probability: 1 };
 const stone: TileSocketAsset = { id: 'stone', kind: 'tile', role: 'base', probability: 1 };
@@ -24,6 +25,40 @@ const familyAssets: Record<TileFamilyId, TileSocketAsset[]> = {
   pebble: [],
   sand: [],
 };
+
+describe('solveSocketBoard feature layer', () => {
+  const grid = (cols: number, rows: number): TileFamilyId[] => Array.from({ length: cols * rows }, () => 'grass' as TileFamilyId);
+
+  it('leaves cells featureless when no featureMap is given (back-compat)', () => {
+    const board = solveSocketBoard({ assets: [grass], terrainMap: grid(4, 4), seed: 1, columns: 4, rows: 4, familyAssets });
+    expect(board.cells.every((cell) => cell.feature === undefined)).toBe(true);
+  });
+
+  it('stamps each featured cell with its kind and connection mask, and leaves others bare', () => {
+    // An L: (1,1)-(2,1) then down to (2,2). Bend at (2,1), dead-ends at the tips.
+    const featureMap = new Map<string, FeatureKind>([
+      ['1,1', 'road'],
+      ['2,1', 'road'],
+      ['2,2', 'road'],
+    ]);
+    const board = solveSocketBoard({ assets: [grass], terrainMap: grid(4, 4), seed: 1, columns: 4, rows: 4, familyAssets, featureMap });
+    const at = (x: number, y: number) => board.cells.find((cell) => cell.x === x && cell.y === y)!;
+    expect(at(1, 1).feature).toEqual({ kind: 'road', mask: 0b0010 }); // E only
+    expect(at(2, 2).feature).toEqual({ kind: 'road', mask: 0b0001 }); // N only
+    expect(at(2, 1).feature).toEqual({ kind: 'road', mask: 0b1100 }); // S + W (the bend)
+    expect(at(0, 0).feature).toBeUndefined();
+  });
+
+  it('does not let the feature layer disturb base-terrain selection', () => {
+    const map = grid(4, 4);
+    const plain = solveSocketBoard({ assets: [grass], terrainMap: map, seed: 7, columns: 4, rows: 4, familyAssets });
+    const withRoad = solveSocketBoard({
+      assets: [grass], terrainMap: map, seed: 7, columns: 4, rows: 4, familyAssets,
+      featureMap: new Map<string, FeatureKind>([['1,1', 'road']]),
+    });
+    expect(withRoad.cells.map((cell) => cell.asset?.id)).toEqual(plain.cells.map((cell) => cell.asset?.id));
+  });
+});
 
 describe('generateSocketBoard', () => {
   it('is deterministic for a seed', () => {

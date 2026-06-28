@@ -3,6 +3,7 @@ import { boardLabCellPosition } from './boardProjection';
 import { TileGrid } from './TileGrid';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
+import { featureFrameSrc } from '../art/tileset';
 
 // Re-export the projection so existing importers (SkirmishBoard, LevelPreviewBoard,
 // TilePreview) keep working; the math itself now lives in one place: boardProjection.
@@ -53,10 +54,22 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       'data-board-x': cell.x,
       'data-board-y': cell.y,
     },
-    children: cell.asset ? (
-      <img src={assetFrameSrc(cell.asset)} alt="" draggable={false} />
-    ) : (
-      <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
+    children: (
+      <>
+        {cell.asset ? (
+          <img src={assetFrameSrc(cell.asset)} alt="" draggable={false} />
+        ) : (
+          <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
+        )}
+        {cell.feature ? (
+          <img
+            className="tileset-feature-overlay"
+            src={featureFrameSrc(cell.feature.kind, cell.feature.mask)}
+            alt=""
+            draggable={false}
+          />
+        ) : null}
+      </>
     ),
   }));
 
