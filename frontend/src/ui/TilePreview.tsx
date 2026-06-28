@@ -4,31 +4,20 @@
 // (control sets that share that board), NOT separate views; the frame never moves; a new
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactElement, type ReactNode, type WheelEvent } from 'react';
-import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileFamilies } from '../art/tileset';
-import { buildTileCoverageReport } from '../core/tileCoverage';
-import { generateSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
-import { createRng } from '../core/rng';
 import {
-  socketEdges,
   terrainLabels,
-  transitionMaskCode,
   transitionPairs,
   transitionPairById,
   transitionPairsForFamily,
-  transitionSlotLabel,
   transitionSlotsForPair,
-  tileSocketsForAsset,
-  type EdgeName,
   type TileAssetKind,
   type TileFamilyId,
   type TileSocketAsset,
   type TerrainPairId,
-  type TransitionPair,
-  type TransitionSlot,
 } from '../core/tileSockets';
-import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
+import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
@@ -42,6 +31,7 @@ import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { PAGE_ENTRIES } from './pagesCatalog';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
+import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
@@ -50,6 +40,7 @@ import { ViewPane } from './shared/ViewPane';
 import { BrandLockup } from './shared/BrandLockup';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { BoardSizePanel } from './shared/BoardSizePanel';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
@@ -65,27 +56,26 @@ import {
 
 
 
-const TRUE_ISO_TILE_SOURCE = 'canonical-true-iso';
 
 
 type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
-// The studio has three persistent destinations (tier-1), all always reachable and
-// decoupled from the catalog category: 'catalog' browses a grid; 'lab' is the
-// board workbench (direct manipulation — tiles/units get placed there); 'viewer'
-// is the read-only stage for one finished, non-manipulable thing (an asset or an
-// artwork). Each remembers its own last state, so switching between them is free.
-// See docs/studio-control-architecture.md.
-type StudioMode = 'catalog' | 'lab' | 'viewer';
+// The studio has two persistent destinations (tier-1), both always reachable and
+// decoupled from the catalog category: 'catalog' browses a grid; 'viewer' is the
+// read-only stage for one finished, non-manipulable thing (an asset or an artwork).
+// Board editing lives in the standalone Level Editor (/level-editor), which the
+// catalog cards and the "Lab" tab route to. See docs/studio-control-architecture.md.
+type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
 type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
-// 'portrait' is the embedded portrait crop editor; 'glossary' reads one term in
-// full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page';
+// 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
+// 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
+// in full (definition + any long-form process doc). This records the active kind.
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -129,6 +119,7 @@ interface TilesetStudioRouteState {
   selectedArtworkName?: string;
   selectedGlossaryName?: string;
   selectedPageName?: string;
+  selectedFrameName?: string;
   viewerKind?: ViewerKind;
   labMode: LabMode;
   tileFilter: TileFilter;
@@ -143,9 +134,6 @@ interface TilesetStudioRouteState {
   selectedUnitId?: string;
 }
 
-type ReviewItem =
-  | { type: 'asset'; asset: StudioAsset }
-  | { type: 'slot'; pair: TransitionPair; slot: TransitionSlot<StudioAsset> };
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -189,68 +177,19 @@ const studioFamilies: StudioFamily[] = (Object.keys(tileFamilies) as TileFamilyI
   assets: tileFamilies[id].map((asset): StudioAsset => ({ ...asset })),
 }));
 
-interface CandidateBatch {
-  id: string;
-  label: string;
-  purpose: string;
-  familyId: StudioFamilyId;
-  assets: StudioAsset[];
-}
-
-type CandidateReviewDecision = 'pending' | 'approved' | 'rejected' | 'revise';
-type CandidateReviewStage = 'tile' | 'board' | 'compare';
-
-type ReviewQueueItem =
-  | {
-      type: 'candidate';
-      id: string;
-      asset: StudioAsset;
-      assetIndex: number;
-      batch: CandidateBatch;
-      family: StudioFamily;
-    }
-  | {
-      type: 'transition-work';
-      id: string;
-      pair: TransitionPair;
-      slot: TransitionSlot<StudioAsset>;
-      family: StudioFamily;
-    };
-
-const candidateBatches: CandidateBatch[] = [];
-
-const kindLabels: Record<StudioAssetKind, string> = {
-  tile: 'Tile',
-  reference: 'Reference',
-};
-
-const studioFamilyAssets: Record<StudioFamilyId, readonly StudioAsset[]> = {
-  grass: studioFamilies.find((family) => family.id === 'grass')?.assets ?? [],
-  stone: studioFamilies.find((family) => family.id === 'stone')?.assets ?? [],
-  water: studioFamilies.find((family) => family.id === 'water')?.assets ?? [],
-  dirt: studioFamilies.find((family) => family.id === 'dirt')?.assets ?? [],
-  pebble: studioFamilies.find((family) => family.id === 'pebble')?.assets ?? [],
-  sand: studioFamilies.find((family) => family.id === 'sand')?.assets ?? [],
-};
-
 const familyCounts = (family: StudioFamily): string => {
   const variants = family.assets.filter((asset) => asset.kind === 'tile').length;
   return `${variants} ${variants === 1 ? 'tile' : 'tiles'}`;
 };
-
-const CANDIDATE_REVIEW_KEY = 'chess-tactics:tileset-review-decisions:v1';
 
 const familySample = (family: StudioFamily): StudioAsset => family.assets.find((asset) => asset.kind === 'tile') ?? family.assets[0];
 
 const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
   studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
 
-const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
-  studioFamilyById(familyId).assets.find((asset) => asset.kind === 'tile' && asset.role === 'base') ?? familySample(studioFamilyById(familyId));
-
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
-const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
+const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
 const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
@@ -277,10 +216,16 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const unit = params.get('unit');
   const slot = Number(params.get('slot'));
   const seed = Number(params.get('seed'));
+  // /nine-slice-editor is a deep-link ALIAS into this one studio (like /unit-studio):
+  // it opens the embedded 9-slice surface (Assets category, Viewer mode, 'nineslice'
+  // kind) with ?asset=<frame>. The studio's own route writer then canonicalises the
+  // URL to /tileset-studio?…&frame=<frame>. No separate route, no page chrome.
+  const isNineSliceAlias = window.location.pathname === '/nine-slice-editor';
+  const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
   // Destination is decoupled from category — any mode is valid with any category,
-  // so the URL is taken at face value (no normalization). 'view' is a legacy alias.
-  const studioMode = isStudioMode(mode) ? mode : mode === 'view' ? 'lab' : studioDefaults.studioMode;
-  const routeCategory = isStudioCategory(cat) ? cat : undefined;
+  // so the URL is taken at face value (no normalization).
+  const studioMode = isNineSliceAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
+  const routeCategory = isNineSliceAlias ? 'assets' : isStudioCategory(cat) ? cat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -301,11 +246,13 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedArtworkName: art || undefined,
     selectedGlossaryName: gloss || undefined,
     selectedPageName: page || undefined,
-    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' ? vk : undefined,
+    selectedFrameName: frame || undefined,
+    viewerKind: isNineSliceAlias ? 'nineslice'
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
-    selectedAssetId: asset || undefined,
+    selectedAssetId: isNineSliceAlias ? undefined : asset || undefined,
     selectedSlotMask: Number.isInteger(slot) && slot >= 1 && slot <= 14 ? slot : undefined,
     boardMode: params.get('board') === 'concept' ? 'concept' : studioDefaults.boardMode,
     boardScope: params.get('scope') === 'mixed' ? 'mixed' : studioDefaults.boardScope,
@@ -316,8 +263,13 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   };
 };
 
+const STUDIO_PATH = '/tileset-studio';
+
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
-  if (window.location.pathname !== '/tileset-studio') return;
+  // Canonicalise to /tileset-studio even when entered via the /nine-slice-editor
+  // alias, so the alias is a pure entry point and all subsequent state rides the
+  // one studio URL (the embedded 9-slice surface is not its own route).
+  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/nine-slice-editor') return;
   if (route.studioMode === 'catalog') {
     // Tiles is the default, so it stays a clean bare URL; Units/Assets get a
     // ?cat= so the chosen catalog survives a reload and is directly linkable.
@@ -328,7 +280,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'artwork' && route.selectedArtworkName) catalogParams.set('art', route.selectedArtworkName);
     if (route.category === 'glossary' && route.selectedGlossaryName) catalogParams.set('gloss', route.selectedGlossaryName);
     const catalogQuery = catalogParams.toString();
-    const nextHref = catalogQuery ? `${window.location.pathname}?${catalogQuery}` : window.location.pathname;
+    const nextHref = catalogQuery ? `${STUDIO_PATH}?${catalogQuery}` : STUDIO_PATH;
     const currentHref = `${window.location.pathname}${window.location.search}`;
     if (nextHref !== currentHref) {
       window.history.replaceState({}, '', nextHref);
@@ -340,15 +292,15 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   params.set('mode', route.studioMode);
   if (route.category && route.category !== 'tiles') params.set('cat', route.category);
   if (route.studioMode === 'viewer') {
-    // The Viewer persists which kind it last held (asset/artwork/portrait) and,
-    // for the read-only kinds, the item name. Portrait state lives in localStorage.
+    // The Viewer persists which kind it last held and, for the named kinds, the item.
+    // Portrait state lives in localStorage; 'nineslice' persists the frame being edited.
     params.set('vk', route.viewerKind ?? 'artwork');
     if (route.viewerKind === 'asset' && route.selectedAssetName) params.set('kit', route.selectedAssetName);
     else if (route.viewerKind === 'artwork' && route.selectedArtworkName) params.set('art', route.selectedArtworkName);
     else if (route.viewerKind === 'glossary' && route.selectedGlossaryName) params.set('gloss', route.selectedGlossaryName);
     else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
+    else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
   }
-  if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
   if (route.selectedSlotMask) params.set('slot', String(route.selectedSlotMask));
@@ -360,14 +312,12 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (route.brushKind === 'unit') params.set('brush', 'unit');
   else if (route.brushKind === 'doodad') params.set('brush', 'doodad');
   if (route.selectedUnitId) params.set('unit', route.selectedUnitId);
-  const nextHref = `${window.location.pathname}?${params.toString()}`;
+  const nextHref = `${STUDIO_PATH}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
   if (nextHref !== currentHref) {
     window.history.replaceState({}, '', nextHref);
   }
 };
-
-const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
 const defaultViewZoom = (kind: 'tile' | 'transition' | 'board'): number => {
   if (kind === 'tile') return 1.35;
@@ -378,176 +328,6 @@ const defaultViewZoom = (kind: 'tile' | 'transition' | 'board'): number => {
 const defaultTransitionViewModeForRoute = (route: TilesetStudioRouteState): TransitionViewMode => {
   return route.selectedAssetId && transitionAssets.some((asset) => asset.id === route.selectedAssetId) ? 'tile' : 'proof';
 };
-
-const socketsForAsset = (asset: StudioAsset): Record<EdgeName, StudioFamilyId> => {
-  return tileSocketsForAsset(asset, studioFamilyAssets);
-};
-
-const familyForStudioAsset = (asset: StudioAsset): StudioFamilyId => {
-  return studioFamilies.find((item) => item.assets.some((candidate) => candidate.id === asset.id))?.id ?? asset.terrains?.[0] ?? 'grass';
-};
-
-const boardFromCells = (cells: SocketBoardCell<StudioAsset>[]): SocketBoardResult<StudioAsset> => ({
-  cells,
-  fallbacks: [],
-  stats: {
-    placed: cells.filter((cell) => cell.asset).length,
-    missingPlacements: cells.filter((cell) => cell.missing).length,
-    illegalEdges: 0,
-    candidateAssets: cells.filter((cell) => cell.asset).length,
-  },
-});
-
-const boardCellForAsset = (asset: StudioAsset, x: number, y: number): SocketBoardCell<StudioAsset> => ({
-  x,
-  y,
-  asset,
-  sockets: socketsForAsset(asset),
-  terrain: familyForStudioAsset(asset),
-});
-
-const boardForAsset = (asset: StudioAsset): SocketBoardResult<StudioAsset> => {
-  return boardFromCells([boardCellForAsset(asset, 0, 0)]);
-};
-
-const boardForTransitionSlot = (
-  pair: TransitionPair | undefined,
-  slot: TransitionSlot<StudioAsset>,
-  asset: StudioAsset | undefined,
-): SocketBoardResult<StudioAsset> => {
-  const north = familyBaseAsset(slot.sockets.north);
-  const east = familyBaseAsset(slot.sockets.east);
-  const south = familyBaseAsset(slot.sockets.south);
-  const west = familyBaseAsset(slot.sockets.west);
-  const center: SocketBoardCell<StudioAsset> = asset
-    ? boardCellForAsset(asset, 1, 1)
-    : {
-        x: 1,
-        y: 1,
-        sockets: slot.sockets,
-        terrain: slot.sockets.north,
-        missing: {
-          kind: 'missing-art',
-          label: pair ? `${pair.label} ${slot.code}` : `Transition ${slot.code}`,
-          pairId: pair?.id,
-          mask: slot.mask,
-          families: Array.from(new Set(socketEdges.map((edge) => slot.sockets[edge]))),
-        },
-      };
-
-  return boardFromCells([
-    boardCellForAsset(north, 1, 0),
-    boardCellForAsset(west, 0, 1),
-    center,
-    boardCellForAsset(east, 2, 1),
-    boardCellForAsset(south, 1, 2),
-  ]);
-};
-
-const randomTileForFamily = (familyId: StudioFamilyId, seed: number): StudioAsset => {
-  const rng = createRng(seed);
-  const candidates = studioFamilyById(familyId).assets.filter((asset) => asset.kind === 'tile');
-  return rng.pick(candidates.length > 0 ? candidates : [familyBaseAsset(familyId)]);
-};
-
-const boardForTransitionSample = (
-  pair: TransitionPair | undefined,
-  slot: TransitionSlot<StudioAsset>,
-  asset: StudioAsset | undefined,
-  seed: number,
-): SocketBoardResult<StudioAsset> => {
-  const families = socketEdges.map((edge) => slot.sockets[edge]);
-  const [north, east, south, west] = families.map((familyId, index) => randomTileForFamily(familyId, seed + index * 101));
-  const center: SocketBoardCell<StudioAsset> = asset
-    ? boardCellForAsset(asset, 1, 1)
-    : {
-        x: 1,
-        y: 1,
-        sockets: slot.sockets,
-        terrain: slot.sockets.north,
-        missing: {
-          kind: 'missing-art',
-          label: pair ? `${pair.label} ${slot.code}` : `Transition ${slot.code}`,
-          pairId: pair?.id,
-          mask: slot.mask,
-          families: Array.from(new Set(families)),
-        },
-      };
-
-  return boardFromCells([
-    boardCellForAsset(north, 1, 0),
-    boardCellForAsset(west, 0, 1),
-    center,
-    boardCellForAsset(east, 2, 1),
-    boardCellForAsset(south, 1, 2),
-  ]);
-};
-
-const propertyHelp: Record<string, string> = {
-  'Tile Type': 'How this asset participates in the tileset: base terrain, transition tile, reference, or invalid transition.',
-  North: 'The terrain family this tile exposes on its north edge.',
-  East: 'The terrain family this tile exposes on its east edge.',
-  South: 'The terrain family this tile exposes on its south edge.',
-  West: 'The terrain family this tile exposes on its west edge.',
-  Pair: 'The two terrain families this transition tile is allowed to connect.',
-  Mask: 'Four-bit edge socket code in north, east, south, west order.',
-  Source: 'The asset folder or generation source this item is loaded from.',
-  Projection: 'Whether this item is already in the true-isometric production footprint or still needs review.',
-  'Fill Weight': 'Relative chance this tile appears when generating random boards. Zero means it is not used by random fill.',
-};
-
-function InspectorRow({ label, children }: { label: string; children: ReactElement | string }): ReactElement {
-  const help = propertyHelp[label];
-
-  return (
-    <div title={help}>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
-}
-
-function EdgeLedger({ asset }: { asset: StudioAsset }): ReactElement {
-  const sockets = socketsForAsset(asset);
-  const typeLabel = tileTypeLabel(asset);
-
-  return (
-    <>
-      <InspectorRow label="Tile Type">{typeLabel}</InspectorRow>
-      <InspectorRow label="Source">{asset.source}</InspectorRow>
-      <InspectorRow label="Projection">{asset.source === TRUE_ISO_TILE_SOURCE ? 'true-iso locked' : 'review required'}</InspectorRow>
-      {socketEdges.map((edge) => (
-        <InspectorRow key={edge} label={`${edge[0].toUpperCase()}${edge.slice(1)}`}>
-          {terrainLabels[sockets[edge]]}
-        </InspectorRow>
-      ))}
-      {asset.pairId ? (
-        <>
-          <InspectorRow label="Pair">{transitionPairById(asset.pairId).label}</InspectorRow>
-          <InspectorRow label="Mask">{typeof asset.socketMask === 'number' ? transitionMaskCode(asset.socketMask) : 'unset'}</InspectorRow>
-        </>
-      ) : null}
-    </>
-  );
-}
-
-const tileTypeLabel = (asset: StudioAsset): string => {
-  if (asset.kind === 'reference') return 'Reference';
-  if (!asset.pairId) return 'Base tile';
-  if (typeof asset.socketMask !== 'number' || asset.socketMask === 0 || asset.socketMask === 15) return 'Invalid transition';
-  return 'Transition tile';
-};
-
-function useAnimationFrameIndex(): number {
-  const [animationFrame, setAnimationFrame] = useState(0);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setAnimationFrame((frame) => (frame + 1) % 9), 150);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return animationFrame;
-}
 
 function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 150): number {
   const [animationFrame, setAnimationFrame] = useState(0);
@@ -563,31 +343,6 @@ function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 150): num
   }, [frameCount]);
 
   return animationFrame;
-}
-
-function StudioGeneratedBoard({
-  board,
-  showFootprint,
-  boardZoom,
-  boardPan,
-  animationFrame,
-}: {
-  board: SocketBoardResult<StudioAsset>;
-  showFootprint: boolean;
-  boardZoom: number;
-  boardPan: { x: number; y: number };
-  animationFrame: number;
-}): ReactElement {
-  return (
-    <BoardLabBoard
-      board={board}
-      showFootprint={showFootprint}
-      boardZoom={boardZoom}
-      boardPan={boardPan}
-      assetFrameSrc={(asset) => assetFrameSrc(asset, animationFrame)}
-      ariaLabel="Generated board from selected tileset"
-    />
-  );
 }
 
 // Unified editable board: every Studio view renders through this. It's a full
@@ -773,38 +528,27 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedAssetName, setSelectedAssetName] = useState(initialRoute.selectedAssetName ?? 'gear');
   const [selectedArtworkName, setSelectedArtworkName] = useState(initialRoute.selectedArtworkName ?? FIRST_ARTWORK_ID);
   const [selectedGlossaryName, setSelectedGlossaryName] = useState(initialRoute.selectedGlossaryName ?? '9-slice');
+  // Which kit frame the embedded 9-slice editor (Viewer 'nineslice' kind) is aligning.
+  const [selectedFrameName, setSelectedFrameName] = useState(initialRoute.selectedFrameName ?? DEFAULT_NINE_SLICE_ASSET);
   // Which item the Viewer is showing (independent of the catalog category).
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
   const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
-  const [showFootprint, setShowFootprint] = useState(true);
   const [zoom, setZoom] = useState(1);
-  const [viewZoom, setViewZoom] = useState(1);
-  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [, setViewZoom] = useState(1);
+  const [, setViewPan] = useState({ x: 0, y: 0 });
   const [transitionViewMode, setTransitionViewMode] = useState<TransitionViewMode>(() => defaultTransitionViewModeForRoute(initialRoute));
-  const transitionSampleSeed = 3117;
   const [boardMode, setBoardMode] = useState<'generated' | 'concept'>(initialRoute.boardMode);
   const [boardScope, setBoardScope] = useState<'family' | 'mixed'>(initialRoute.boardScope);
   const [boardSize, setBoardSize] = useState<'small' | 'wide'>(initialRoute.boardSize);
   const [boardSeed, setBoardSeed] = useState(initialRoute.boardSeed);
-  const [animationPlaying, setAnimationPlaying] = useState(true);
+  const [animationPlaying] = useState(true);
   const [manualAnimationFrame, setManualAnimationFrame] = useState(0);
   // Unified editable board (temporary, in-memory only — re-seeds when a new view loads).
-  const [tool, setTool] = useState<'select' | 'brush' | 'erase'>(initialRoute.brushKind === 'unit' ? 'brush' : 'select');
+  const [, setTool] = useState<'select' | 'brush' | 'erase'>(initialRoute.brushKind === 'unit' ? 'brush' : 'select');
   const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad'>(initialRoute.brushKind);
-  const [brushId, setBrushId] = useState<string>(initialRoute.selectedAssetId ?? '');
   const [unitBrushId, setUnitBrushId] = useState<string>(initialRoute.selectedUnitId ?? unitAssets[0].id);
-  const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
-  const [unitBrushFaction] = useState<Faction>('navy-blue');
-  const [boardCells, setBoardCells] = useState<Record<string, string>>({});
-  const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
-  const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>({});
-  // Per-layer visibility — each focus's eye toggle flips its own layer; the board hides it.
-  const [hiddenLayers, setHiddenLayers] = useState<{ tile: boolean; unit: boolean; doodad: boolean }>({ tile: false, unit: false, doodad: false });
-  const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
-  const [boardSectionOpen, setBoardSectionOpen] = useState(true);
-  const [viewSectionOpen, setViewSectionOpen] = useState(true);
 
   const family = studioFamilies.find((item) => item.id === familyId) ?? studioFamilies[0];
   // The Blender textured tileset is hard-edged: only base tiles, no transition or
@@ -832,67 +576,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const selectedPair = familyTransitionPairs.find((pair) => pair.id === selectedPairId) ?? familyTransitionPairs[0] ?? transitionPairs[0];
   const allStudioAssets = useMemo(() => [...studioFamilies.flatMap((item) => item.assets), ...transitionAssets], []);
   const selectedAsset = allStudioAssets.find((asset) => asset.id === selectedAssetId) ?? family.assets[0];
-  const resolveStudioAsset = (id: string): StudioAsset | undefined => allStudioAssets.find((asset) => asset.id === id);
   const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
-  const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAsset(id);
-  const brushAsset = resolveStudioAsset(brushId) ?? selectedAsset;
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
-  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? DOODAD_ASSETS[0];
-  // A base tile's terrain IS its family (grass/stone/water) — base tiles don't carry a
-  // separate terrains tag, so resolve through the family that owns the tile id.
-  const terrainOfTileId = (id: string | undefined): StudioFamilyId | undefined =>
-    id ? studioFamilies.find((fam) => fam.assets.some((asset) => asset.id === id))?.id : undefined;
-  const doodadFitsTile = (doodad: DoodadAsset, tileId: string | undefined): boolean => {
-    const terrain = terrainOfTileId(tileId);
-    return terrain !== undefined && doodad.terrains.includes(terrain);
-  };
-  const paintCell = (x: number, y: number): void => {
-    if (brushKind === 'unit') {
-      setBoardUnits((prev) => ({
-        ...prev,
-        [`${x},${y}`]: {
-          unitId: unitBrushAsset.id,
-          direction: unitBrushDirection,
-          faction: unitBrushFaction,
-        },
-      }));
-      setLabMode('unit');
-      return;
-    }
-    if (brushKind === 'doodad') {
-      // HARD gate: a doodad only lands on a tile of its home terrain. Painting onto bare
-      // ground or the wrong terrain is a no-op (the cursor shows it's blocked — see the board).
-      if (!doodadFitsTile(doodadBrushAsset, boardCells[`${x},${y}`])) return;
-      setBoardDoodads((prev) => ({ ...prev, [`${x},${y}`]: { doodadId: doodadBrushAsset.id } }));
-      setLabMode('doodad');
-      return;
-    }
-    setBoardCells((prev) => ({ ...prev, [`${x},${y}`]: brushAsset.id }));
-    setLabMode('tile');
-  };
-  const eraseFrom = <T,>(setter: (updater: (prev: Record<string, T>) => Record<string, T>) => void, x: number, y: number): void =>
-    setter((prev) => {
-      const key = `${x},${y}`;
-      if (!(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  const eraseCell = (x: number, y: number): void => {
-    if (brushKind === 'unit') return eraseFrom(setBoardUnits, x, y);
-    if (brushKind === 'doodad') return eraseFrom(setBoardDoodads, x, y);
-    return eraseFrom(setBoardCells, x, y);
-  };
-  const clearBoard = (): void => {
-    setBoardCells({});
-    setBoardUnits({});
-    setSelectedCell(null);
-    setLabMode('board');
-  };
-  const filteredTileAssets = tileFilter === 'base' ? family.assets.filter((asset) => asset.kind === 'tile') : [];
   const catalogBaseAssets = activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile'));
-  const catalogReferenceAssets = activeFamilies.flatMap((item) => item.assets.filter((asset) => asset.kind === 'reference'));
-  const catalogTransitionAssets = transitionAssets.filter((asset) => asset.terrains?.some((terrain) => selectedFamilyIds.includes(terrain)));
   const normalizedCatalogQuery = catalogQuery.trim().toLowerCase();
   const matchesCatalogQuery = (asset: StudioAsset): boolean => {
     if (!normalizedCatalogQuery) return true;
@@ -902,32 +588,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       .includes(normalizedCatalogQuery);
   };
   const visibleCatalogBaseAssets = catalogBaseAssets.filter(matchesCatalogQuery);
-  const visibleCatalogReferenceAssets = catalogReferenceAssets.filter(matchesCatalogQuery);
-  const visibleCatalogTransitionAssets = catalogTransitionAssets.filter(matchesCatalogQuery);
   const visibleCatalogCount = selectedCollectionFilters.includes('base') ? visibleCatalogBaseAssets.length : 0;
-  const generatedAssets =
-    boardScope === 'family'
-      ? activeFamilies
-          .flatMap((item) => item.assets.filter((asset) => asset.kind === 'tile'))
-          .concat(transitionAssets.filter((asset) => asset.terrains?.every((terrain) => selectedFamilyIds.includes(terrain))))
-      : studioFamilies
-          .flatMap((item) => item.assets)
-          .filter((asset) => asset.kind === 'tile')
-          .concat(transitionAssets);
-  const generatedBoardSize = boardSize === 'small' ? { columns: 8, rows: 6 } : { columns: 10, rows: 7 };
-  const generatedBoard = useMemo(
-    () =>
-      generateSocketBoard({
-        assets: generatedAssets,
-        seed: boardSeed,
-        columns: generatedBoardSize.columns,
-        rows: generatedBoardSize.rows,
-        familyAssets: studioFamilyAssets,
-      }),
-    [boardSeed, generatedAssets, generatedBoardSize.columns, generatedBoardSize.rows],
-  );
-  const coverageReport = useMemo(() => buildTileCoverageReport(studioFamilyAssets, transitionAssets), []);
-  const familyMissingTransitionSlots = coverageReport.missingTransitionSlots.filter((slot) => transitionPairById(slot.pairId).terrains.includes(family.id));
   const selectedTransitionSlot = selectedSlotMask
     ? transitionSlotsForPair(selectedPair, transitionAssets).find((slot) => slot.mask === selectedSlotMask)
     : undefined;
@@ -951,151 +612,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const animationFrameCount = inspectedAnimation?.frames.length ?? 8;
   const autoAnimationFrame = useAnimationClock(animationPlaying, animationFrameCount, inspectedAnimation?.frameMs ?? 150);
   const animationFrame = inspectedAnimation ? (animationPlaying ? autoAnimationFrame : manualAnimationFrame) : autoAnimationFrame;
-  const focusedTileBoard = useMemo(() => boardForAsset(selectedAsset), [selectedAsset]);
-  const focusedTransitionBoard = useMemo(
-    () =>
-      viewTransitionSlot
-        ? transitionViewMode === 'tile' && viewTransitionAsset
-          ? boardForAsset(viewTransitionAsset)
-          : transitionViewMode === 'sample'
-            ? boardForTransitionSample(viewTransitionPair, viewTransitionSlot, viewTransitionAsset, transitionSampleSeed)
-            : boardForTransitionSlot(viewTransitionPair, viewTransitionSlot, viewTransitionAsset)
-        : undefined,
-    [transitionSampleSeed, transitionViewMode, viewTransitionAsset, viewTransitionPair, viewTransitionSlot],
-  );
-  const focusedViewBoard = viewKind === 'board' ? generatedBoard : viewKind === 'transition' && focusedTransitionBoard ? focusedTransitionBoard : focusedTileBoard;
-  // The editable board grid: generated boards keep their own size; single tiles
-  // and transitions get a default grid so you can paint around them.
-  const editableGrid = viewKind === 'board' ? { columns: generatedBoardSize.columns, rows: generatedBoardSize.rows } : { columns: 8, rows: 6 };
-  // Re-seed the editable board whenever the *loaded view* changes (a new tile,
-  // transition, or a freshly generated board). Painting then mutates the seed.
-  const boardSeedKey = `${viewKind}|${selectedAsset.id}|${selectedSlotMask ?? ''}|${boardMode}|${boardSeed}|${boardSize}|${boardScope}|${transitionViewMode}`;
-  const focusedViewBoardRef = useRef(focusedViewBoard);
-  focusedViewBoardRef.current = focusedViewBoard;
-  const editableGridRef = useRef(editableGrid);
-  editableGridRef.current = editableGrid;
-  useEffect(() => {
-    const board = focusedViewBoardRef.current;
-    const grid = editableGridRef.current;
-    const placed = board.cells.filter((cell) => cell.asset);
-    let offX = 0;
-    let offY = 0;
-    if (viewKind !== 'board' && placed.length) {
-      const xs = placed.map((cell) => cell.x);
-      const ys = placed.map((cell) => cell.y);
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
-      offX = Math.floor((grid.columns - (maxX - minX + 1)) / 2) - minX;
-      offY = Math.floor((grid.rows - (maxY - minY + 1)) / 2) - minY;
-    }
-    const seeded: Record<string, string> = {};
-    for (const cell of placed) {
-      if (cell.asset) seeded[`${cell.x + offX},${cell.y + offY}`] = cell.asset.id;
-    }
-    const seededUnits: Record<string, BoardUnitPlacement> = {};
-    const seededDoodads: Record<string, { doodadId: string }> = {};
-    if ((labMode === 'unit' || labMode === 'doodad') && placed.length) {
-      const xs = placed.map((cell) => cell.x + offX);
-      const ys = placed.map((cell) => cell.y + offY);
-      const x = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
-      const y = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
-      seededUnits[`${x},${y}`] = {
-        unitId: unitBrushAsset.id,
-        direction: unitBrushDirection,
-        faction: unitBrushFaction,
-      };
-      // Doodad focus: stand the unit IN a doodad so the back/front bracketing is visible.
-      if (labMode === 'doodad') seededDoodads[`${x},${y}`] = { doodadId: doodadBrushId };
-    }
-    setBoardCells(seeded);
-    if (viewKind !== 'board' || labMode === 'unit' || labMode === 'doodad') setBoardUnits(seededUnits);
-    setBoardDoodads(seededDoodads);
-    setSelectedCell(null);
-    if (selectedAsset.kind === 'tile') setBrushId(selectedAsset.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardSeedKey]);
-
-  useEffect(() => {
-    if (labMode !== 'unit' || Object.keys(boardUnits).length > 0) return;
-    const placed = Object.keys(boardCells).map((key) => key.split(',').map(Number) as [number, number]);
-    if (placed.length === 0) return;
-    const xs = placed.map(([x]) => x);
-    const ys = placed.map(([, y]) => y);
-    const x = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
-    const y = Math.round((Math.min(...ys) + Math.max(...ys)) / 2);
-    setBoardUnits({
-      [`${x},${y}`]: {
-        unitId: unitBrushAsset.id,
-        direction: unitBrushDirection,
-        faction: unitBrushFaction,
-      },
-    });
-  }, [boardCells, boardUnits, labMode, unitBrushAsset.id, unitBrushDirection, unitBrushFaction]);
-  // Select a tile, then "Fill cardinals" places the legal base tile of each edge
-  // socket's family at N/E/S/W — recreating the old transition-proof view.
-  const fillCardinals = (): void => {
-    if (!selectedCell) return;
-    const id = boardCells[`${selectedCell.x},${selectedCell.y}`];
-    const asset = id ? resolveStudioAsset(id) : undefined;
-    if (!asset) return;
-    const sockets = socketsForAsset(asset);
-    const { x, y } = selectedCell;
-    const targets: Array<[number, number, StudioFamilyId]> = [
-      [x, y - 1, sockets.north],
-      [x + 1, y, sockets.east],
-      [x, y + 1, sockets.south],
-      [x - 1, y, sockets.west],
-    ];
-    setBoardCells((prev) => {
-      const next = { ...prev };
-      for (const [nx, ny, family] of targets) {
-        const base = familyBaseAsset(family);
-        if (base) next[`${nx},${ny}`] = base.id;
-      }
-      return next;
-    });
-  };
-  // Fill the grid with the current brush — either only blank cells, or all cells.
-  const fillBoard = (mode: 'empty' | 'all'): void => {
-    setBoardCells((prev) => {
-      const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
-      for (let y = 0; y < editableGrid.rows; y += 1) {
-        for (let x = 0; x < editableGrid.columns; x += 1) {
-          const key = `${x},${y}`;
-          if (mode === 'all' || !(key in next)) next[key] = brushAsset.id;
-        }
-      }
-      return next;
-    });
-  };
-  const selectBoardCell = (x: number, y: number): void => {
-    const key = `${x},${y}`;
-    setSelectedCell({ x, y });
-    if (boardUnits[key]) {
-      setLabMode('unit');
-      return;
-    }
-    if (boardCells[key]) {
-      setLabMode('tile');
-      return;
-    }
-    setLabMode('board');
-  };
-  const reviewItems: ReviewItem[] =
-    tileFilter === 'board'
-      ? Array.from(new Map(generatedBoard.cells.flatMap((cell) => (cell.asset ? [[cell.asset.id, cell.asset] as const] : []))).values()).map((asset) => ({ type: 'asset', asset }))
-      : filteredTileAssets.map((asset) => ({ type: 'asset', asset }));
-  const selectedReviewIndex = Math.max(
-    0,
-    reviewItems.findIndex((item) =>
-      item.type === 'slot'
-        ? selectedSlotMask === item.slot.mask && selectedPair.id === item.pair.id
-        : !selectedSlotMask && item.asset.id === selectedAsset.id,
-    ),
-  );
-  const selectedReviewPosition = reviewItems.length > 0 ? `${selectedReviewIndex + 1} of ${reviewItems.length}` : '0 of 0';
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -1130,6 +646,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedAssetName) setSelectedAssetName(route.selectedAssetName);
       if (route.selectedArtworkName) setSelectedArtworkName(route.selectedArtworkName);
       if (route.selectedGlossaryName) setSelectedGlossaryName(route.selectedGlossaryName);
+      if (route.selectedFrameName) setSelectedFrameName(route.selectedFrameName);
       if (route.viewerKind) setViewerKind(route.viewerKind);
       setViewHasTarget(Boolean(route.selectedAssetId || route.selectedSlotMask || route.tileFilter === 'board'));
       setTileFilter(route.tileFilter);
@@ -1194,6 +711,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedArtworkName,
       selectedGlossaryName,
       selectedPageName,
+      selectedFrameName,
       viewerKind,
       labMode,
       tileFilter,
@@ -1207,7 +725,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedFrameName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+
+  // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
+  // the card you came from — not the top of the grid. The selection is already kept
+  // (the card is highlighted); here we scroll that highlighted card into view inside
+  // the catalog's scroll pane. Fires when you (re)enter Catalog mode; the active
+  // category's grid is mounted by then. Not keyed on category, so a manual category
+  // switch while browsing doesn't yank the scroll.
+  useEffect(() => {
+    if (studioMode !== 'catalog') return;
+    const raf = window.requestAnimationFrame(() => {
+      const card = document.querySelector('.tileset-studio-shell .tileset-studio-tab-panel .tileset-studio-card.is-selected');
+      card?.scrollIntoView({ block: 'center', inline: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studioMode]);
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
@@ -1224,114 +758,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     });
   };
 
-  const toggleCollectionFilter = (collection: CollectionFilter) => {
-    setSelectedCollectionFilters((current) => {
-      const next = current.includes(collection) ? current.filter((item) => item !== collection) : [...current, collection];
-      if (next.length > 0) {
-        setTileFilter(next[0]);
-      }
-      return next;
-    });
+  // Every catalog card (tile/unit/doodad, paintbrush + inspect) now opens the standalone
+  // Level Editor with that asset pre-armed as the brush — the in-studio board lab is retired.
+  const openInLevelEditor = (kind: 'tile' | 'unit' | 'doodad', id: string): void => {
+    navigateApp(`/level-editor?from=studio&kind=${kind}&brush=${encodeURIComponent(id)}`);
   };
 
-  const openBoardLab = () => {
-    setLabMode('board');
-    setViewHasTarget(true);
-    setStudioMode('lab');
-  };
-
-  const inspectAsset = (asset: StudioAsset) => {
-    setSelectedAssetId(asset.id);
-    setSelectedSlotMask(undefined);
-    setTileFilter('base');
-    setLabMode('tile');
-    setViewHasTarget(true);
-    setStudioMode('lab');
-  };
-
-  // Catalog paintbrush: arm a tile as the brush and drop onto the CURRENT board
-  // without changing the loaded view (so the board isn't wiped/re-seeded).
-  const armBrush = (asset: StudioAsset) => {
-    if (asset.kind !== 'tile') return;
-    setBrushId(asset.id);
-    setBrushKind('tile');
-    setTool('brush');
-    setLabMode('board');
-    setStudioMode('lab');
-  };
-
-  // Inert: the hard-edged textured tileset has no transition slots, so this is
-  // never reached (kept type-valid for the unused transition catalog scaffolding).
-  const inspectSlot = (pair: TransitionPair, slot: TransitionSlot<StudioAsset>) => {
-    setSelectedPairId(pair.id);
-    setSelectedSlotMask(slot.mask);
-    setTileFilter('base');
-    setTransitionViewMode(slot.assets[0] ? 'tile' : 'proof');
-    setLabMode('tile');
-    setViewHasTarget(true);
-    setStudioMode('lab');
-  };
-
-  const selectOrInspectAsset = (asset: StudioAsset) => {
-    inspectAsset(asset);
-  };
-
-  const selectOrInspectSlot = (pair: TransitionPair, slot: TransitionSlot<StudioAsset>) => {
-    inspectSlot(pair, slot);
-  };
-
-  const viewCurrentSelection = () => {
-    if (selectedTransitionSlot) {
-      inspectSlot(selectedPair, selectedTransitionSlot);
-      return;
-    }
-    inspectAsset(selectedAsset);
-  };
-
-  const selectReviewItem = (item: ReviewItem) => {
-    if (item.type === 'slot') {
-      setSelectedPairId(item.pair.id);
-      setSelectedSlotMask(item.slot.mask);
-    } else {
-      setSelectedAssetId(item.asset.id);
-      setSelectedSlotMask(undefined);
-    }
-    setViewHasTarget(true);
-    setStudioMode('lab');
-  };
-
-  const moveReviewSelection = (direction: -1 | 1) => {
-    if (reviewItems.length === 0) return;
-    const currentIndex = selectedReviewIndex >= 0 ? selectedReviewIndex : 0;
-    const nextIndex = (currentIndex + direction + reviewItems.length) % reviewItems.length;
-    selectReviewItem(reviewItems[nextIndex]);
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) return;
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        moveReviewSelection(-1);
-      }
-      if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        moveReviewSelection(1);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [reviewItems, selectedReviewIndex]);
-
-  const viewTitle =
-    labMode === 'unit'
-      ? unitBrushAsset.label
-      : viewKind === 'board'
-      ? 'Board View'
-      : viewKind === 'transition'
-        ? viewTransitionAsset?.label ?? `Missing ${viewTransitionPair?.label ?? 'Transition'} ${viewTransitionSlot?.label ?? ''}`
-        : selectedAsset.label;
   const viewSubtitle =
     labMode === 'unit'
       ? `${unitBrushAsset.family} unit · ${selectedAsset.label} tile`
@@ -1340,11 +772,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       : viewKind === 'transition'
         ? `${viewTransitionPair?.label ?? 'Transition'} · mask ${viewTransitionSlot?.code ?? selectedAsset.socketMask ?? ''}`
         : `${family.label} · ${selectedAsset.role}`;
-  const hasLabTiles = Object.keys(boardCells).length > 0;
-  const hasLabUnits = Object.keys(boardUnits).length > 0;
-  // The layer the current focus governs — its eye toggle hides that layer on the board.
-  const visionLayer: 'tile' | 'unit' | 'doodad' = labMode === 'unit' ? 'unit' : labMode === 'doodad' ? 'doodad' : 'tile';
-  const visionLabel = visionLayer === 'unit' ? 'units' : visionLayer === 'doodad' ? 'doodads' : 'tiles';
   const normalizedUnitQuery = catalogQuery.trim().toLowerCase();
   const visibleUnits = normalizedUnitQuery
     ? unitAssets.filter((unit) => [unit.label, unit.badge, unit.family, unit.read, unit.status].join(' ').toLowerCase().includes(normalizedUnitQuery))
@@ -1352,8 +779,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
   // the header height constant (the Lab already shares this header — no second
   // row inside the board surface, which is what made the controls rail jump).
-  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'glossary' ? selectedGlossaryName : viewerKind === 'surface' ? (selectedSurfaceName ?? '') : viewerKind === 'scrollbar' ? (selectedScrollbarName ?? '') : viewerKind === 'slider' ? (selectedSliderName ?? '') : viewerKind === 'page' ? (selectedPageName ?? '') : '';
-  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : viewerKind === 'surface' ? 'Surface' : viewerKind === 'scrollbar' ? 'Scrollbar' : viewerKind === 'slider' ? 'Slider' : viewerKind === 'page' ? 'Page' : 'Asset';
+  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'nineslice' ? selectedFrameName : viewerKind === 'glossary' ? selectedGlossaryName : viewerKind === 'surface' ? (selectedSurfaceName ?? '') : viewerKind === 'scrollbar' ? (selectedScrollbarName ?? '') : viewerKind === 'slider' ? (selectedSliderName ?? '') : viewerKind === 'page' ? (selectedPageName ?? '') : '';
+  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'nineslice' ? '9-Slice' : viewerKind === 'glossary' ? 'Glossary' : viewerKind === 'surface' ? 'Surface' : viewerKind === 'scrollbar' ? 'Scrollbar' : viewerKind === 'slider' ? 'Slider' : viewerKind === 'page' ? 'Page' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
       ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : category === 'surfaces' ? 'Surfaces' : category === 'scrollbars' ? 'Scrollbars' : category === 'sliders' ? 'Sliders' : category === 'pages' ? 'Pages' : 'Tiles']
@@ -1385,7 +812,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       ? `${PAGE_ENTRIES.length} pages`
                       : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
       : studioMode === 'viewer'
-        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'glossary' ? 'definition + process doc' : viewerKind === 'surface' ? 'tiled surface preview' : viewerKind === 'scrollbar' ? 'live scroll test' : viewerKind === 'slider' ? 'live drag test' : viewerKind === 'page' ? 'live page preview' : 'preview on backdrops')
+        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'nineslice' ? 'frame alignment editor' : viewerKind === 'glossary' ? 'definition + process doc' : viewerKind === 'surface' ? 'tiled surface preview' : viewerKind === 'scrollbar' ? 'live scroll test' : viewerKind === 'slider' ? 'live drag test' : viewerKind === 'page' ? 'live page preview' : 'preview on backdrops')
         : viewSubtitle;
   const openCatalogMode = (): void => {
     if (tileFilter === 'board') setTileFilter('base');
@@ -1398,81 +825,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const selectUnitInCatalog = (unitId: string): void => {
     setUnitBrushId(unitId);
   };
-  const armUnitBrush = (unitId: string): void => {
-    // Arm the unit as the active brush (mirrors armBrush for tiles) — do NOT place it.
-    // The user paints it by then clicking a board cell; arming must not draw.
-    setUnitBrushId(unitId);
-    setBrushKind('unit');
-    setTool('brush');
-    setLabMode('board');
-    setStudioMode('lab');
-  };
-  const placeUnitOnLoadedBoard = (unitId: string): void => {
-    const occupiedTileKeys = Object.keys(boardCells);
-    const [x, y] = selectedCell
-      ? [selectedCell.x, selectedCell.y]
-      : occupiedTileKeys.length > 0
-        ? (() => {
-            const positions = occupiedTileKeys.map((key) => key.split(',').map(Number) as [number, number]);
-            const xs = positions.map(([cellX]) => cellX);
-            const ys = positions.map(([, cellY]) => cellY);
-            return [Math.round((Math.min(...xs) + Math.max(...xs)) / 2), Math.round((Math.min(...ys) + Math.max(...ys)) / 2)];
-          })()
-        : [Math.floor(editableGrid.columns / 2), Math.floor(editableGrid.rows / 2)];
-    setUnitBrushId(unitId);
-    setBrushKind('unit');
-    setTool('select');
-    setBoardUnits((prev) => ({
-      ...prev,
-      [`${x},${y}`]: {
-        unitId,
-        direction: unitBrushDirection,
-        faction: unitBrushFaction,
-      },
-    }));
-    setSelectedCell({ x, y });
-    setLabMode('unit');
-    setViewHasTarget(true);
-    setStudioMode('lab');
-  };
-  const inspectUnitInLab = (unitId: string): void => {
-    placeUnitOnLoadedBoard(unitId);
-  };
-  const openTileLab = (): void => {
-    if (!hasLabTiles) return;
-    setLabMode('tile');
-    setStudioMode('lab');
-  };
-  const openUnitLab = (): void => {
-    if (!hasLabUnits) return;
-    setLabMode('unit');
-    setBrushKind('unit');
-    setStudioMode('lab');
-  };
-  const openDoodadLab = (): void => {
-    if (!hasLabTiles) return;
-    setLabMode('doodad');
-    setStudioMode('lab');
-  };
   const selectDoodadInCatalog = (doodadId: string): void => {
     setDoodadBrushId(doodadId);
   };
-  // Jump from an inspector property to its full explanation in the Glossary Viewer.
-  const openGlossaryTerm = (term: string): void => {
-    setSelectedGlossaryName(term);
-    setCategory('glossary');
-    openViewer('glossary');
-  };
-  const armDoodadBrush = (doodadId: string): void => {
-    // Arm the doodad as the active brush (mirrors armUnitBrush) — do NOT place it. The user
-    // paints it onto a matching-terrain tile; the paint itself enforces the hard gate.
-    setDoodadBrushId(doodadId);
-    setBrushKind('doodad');
-    setTool('brush');
-    setLabMode('board');
-    setStudioMode('lab');
-  };
-
   // Catalog asset-type descriptors. The generic <CatalogGrid>/<CatalogControls>
   // render either of these; a new asset type is just another descriptor.
   const tileFamilyOf = new Map<string, StudioFamilyId>();
@@ -1503,8 +858,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       },
     ],
     onSelect: (a) => { setSelectedAssetId(a.id); setSelectedSlotMask(undefined); },
-    onView: inspectAsset,
-    onArm: armBrush,
+    onView: (a) => openInLevelEditor('tile', a.id),
+    onArm: (a) => openInLevelEditor('tile', a.id),
     selectedId: selectedAssetId,
   };
   const unitFamilyCount = (family: PieceId) => unitAssets.filter((u) => u.family === family).length;
@@ -1537,8 +892,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       },
     ],
     onSelect: (u) => selectUnitInCatalog(u.id),
-    onView: (u) => inspectUnitInLab(u.id),
-    onArm: (u) => armUnitBrush(u.id),
+    onView: (u) => openInLevelEditor('unit', u.id),
+    onArm: (u) => openInLevelEditor('unit', u.id),
     selectedId: unitBrushId,
     note: 'Select a unit card to place it in the shared lab board.',
   };
@@ -1571,8 +926,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       },
     ],
     onSelect: (d) => selectDoodadInCatalog(d.id),
-    onView: (d) => openDoodadLab(),
-    onArm: (d) => armDoodadBrush(d.id),
+    onView: (d) => openInLevelEditor('doodad', d.id),
+    onArm: (d) => openInLevelEditor('doodad', d.id),
     selectedId: doodadBrushId,
     note: 'Doodads place only on their home terrain. Pick one to arm the brush, then paint a matching tile.',
   };
@@ -1767,6 +1122,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="asset">Asset</option>
         <option value="artwork">Artwork</option>
         <option value="portrait">Portrait</option>
+        <option value="nineslice">9-Slice</option>
         <option value="glossary">Glossary</option>
         <option value="surface">Surface</option>
         <option value="scrollbar">Scrollbar</option>
@@ -1793,7 +1149,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse the catalogs.">
               Catalog
             </button>
-            <button type="button" className={studioMode === 'lab' ? 'is-active' : ''} onClick={openBoardLab} title="The board workbench — place and edit tiles and units.">
+            <button type="button" onClick={() => navigateApp('/level-editor?from=studio')} title="Open the Level Editor — paint tiles and units and set the board size.">
               Lab
             </button>
             <button type="button" className={studioMode === 'viewer' ? 'is-active' : ''} onClick={() => setStudioMode('viewer')} title="View one finished asset or artwork.">
@@ -1828,6 +1184,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         ) : studioMode === 'viewer' ? (
           viewerKind === 'portrait'
             ? <PortraitLab header={viewerKindSelect} />
+            : viewerKind === 'nineslice'
+            ? <NineSliceLab assetId={selectedFrameName} onAssetId={setSelectedFrameName} header={viewerKindSelect} />
             : viewerKind === 'artwork'
               ? <ArtworkLab name={selectedArtworkName} header={viewerKindSelect} />
               : viewerKind === 'glossary'
@@ -1840,364 +1198,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       ? <SliderViewer name={selectedSliderName} header={viewerKindSelect} />
                       : viewerKind === 'page'
                         ? <PagesViewer name={selectedPageName} header={viewerKindSelect} />
-                        : <AssetLab name={selectedAssetName} header={viewerKindSelect} />
-        ) : (
-          <>
-            <section className="tileset-lab-stage" aria-label="Lab board surface">
-            <ViewPane
-              kind={viewVisualKind}
-              ariaLabel={`${viewTitle} visual inspection`}
-              zoom={viewZoom}
-              pan={viewPan}
-              minZoom={0.55}
-              maxZoom={2.2}
-              onZoomChange={setViewZoom}
-              onPanChange={setViewPan}
-              onAssetClick={(assetId) => {
-                const asset = allStudioAssets.find((item) => item.id === assetId);
-                if (asset) inspectAsset(asset);
-              }}
-            >
-              <div className={`tileset-view-board-content is-${viewVisualKind}`}>
-                <StudioEditableBoard
-                  cols={editableGrid.columns}
-                  rows={editableGrid.rows}
-                  cells={boardCells}
-                  units={boardUnits}
-                  doodads={boardDoodads}
-                  resolveAsset={resolveStudioAsset}
-                  resolveUnit={resolveUnitAsset}
-                  resolveDoodad={resolveDoodadAsset}
-                  tool={tool}
-                  selectedCell={selectedCell}
-                  showFootprint={showFootprint}
-                  boardZoom={viewZoom}
-                  boardPan={viewPan}
-                  animationFrame={animationFrame}
-                  onPaint={paintCell}
-                  onErase={eraseCell}
-                  onSelect={selectBoardCell}
-                  hidden={hiddenLayers}
-                />
-              </div>
-            </ViewPane>
-            </section>
-
-            <aside className="tileset-view-controls tileset-catalog-controls" aria-label="Lab controls">
-              <section className="tileset-inspector-section">
-                <h2>Controls</h2>
-                <div className="tileset-control-stack">
-              <div className="tileset-tier-seg" aria-label="Component view">
-                <button
-                  type="button"
-                  className={labMode === 'board' ? 'is-active' : ''}
-                  onClick={openBoardLab}
-                  title="Inspect and edit the loaded board."
-                >
-                  Board
-                </button>
-                <button
-                  type="button"
-                  className={labMode === 'tile' ? 'is-active' : ''}
-                  onClick={openTileLab}
-                  disabled={!hasLabTiles}
-                  title={hasLabTiles ? 'Inspect the selected tile on the loaded board.' : 'Place or select a tile first.'}
-                >
-                  Tile
-                </button>
-                <button
-                  type="button"
-                  className={labMode === 'unit' ? 'is-active' : ''}
-                  onClick={openUnitLab}
-                  disabled={!hasLabUnits}
-                  title={hasLabUnits ? 'Inspect the selected unit on the loaded board.' : 'Place or select a unit first.'}
-                >
-                  Unit
-                </button>
-                <button
-                  type="button"
-                  className={labMode === 'doodad' ? 'is-active' : ''}
-                  onClick={openDoodadLab}
-                  disabled={!hasLabTiles}
-                  title={hasLabTiles ? 'Inspect a doodad on the loaded board.' : 'Load a board first.'}
-                >
-                  Doodad
-                </button>
-              </div>
-                      <button
-                        type="button"
-                        className={`tileset-vision-toggle ${hiddenLayers[visionLayer] ? 'is-hidden' : ''}`.trim()}
-                        onClick={() => setHiddenLayers((h) => ({ ...h, [visionLayer]: !h[visionLayer] }))}
-                        aria-pressed={hiddenLayers[visionLayer]}
-                        title={`${hiddenLayers[visionLayer] ? 'Show' : 'Hide'} all ${visionLabel} on the board`}
-                      >
-                        {hiddenLayers[visionLayer] ? (
-                          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 8 C4 4.5 12 4.5 14 8 C12 11.5 4 11.5 2 8 Z" fill="none" stroke="currentColor" strokeWidth="1.3" /><circle cx="8" cy="8" r="2.1" fill="currentColor" /><line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
-                        ) : (
-                          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 8 C4 4.5 12 4.5 14 8 C12 11.5 4 11.5 2 8 Z" fill="none" stroke="currentColor" strokeWidth="1.3" /><circle cx="8" cy="8" r="2.1" fill="currentColor" /></svg>
-                        )}
-                        {hiddenLayers[visionLayer] ? `${visionLabel} hidden` : `Hide ${visionLabel}`}
-                      </button>
-                      <div className="tileset-tier-seg tileset-tools" aria-label="Board tool">
-                        <button type="button" className={tool === 'select' ? 'is-active' : ''} onClick={() => setTool('select')} title="Select tool — click a tile to highlight it (then fill its neighbors). Doesn't paint or erase.">
-                          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 2 L3 13 L6 10 L8 14.6 L9.8 13.8 L7.8 9.4 L12.5 9.4 Z" fill="currentColor" /></svg>
-                          Select
-                        </button>
-                        <button type="button" className={tool === 'brush' ? 'is-active' : ''} onClick={() => setTool('brush')} title="Brush tool — click or drag to stamp the current brush tile.">
-                          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M13.4 2.6 L7.4 8.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M7.6 8.2 C5.8 7.8 4.3 8.6 3.9 10.1 C3.6 11.2 3 11.7 2.3 11.9 C3.4 13.4 6 13.9 7.6 12.3 C8.6 11.3 8.6 9.4 7.6 8.2 Z" fill="currentColor" /></svg>
-                          Brush
-                        </button>
-                        <button type="button" className={tool === 'erase' ? 'is-active' : ''} onClick={() => setTool('erase')} title="Erase tool — click or drag to remove tiles. (Right-click removes with any tool.)">
-                          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2.6" y="7.6" width="9.4" height="5" rx="1.2" transform="rotate(-40 7.3 10.1)" fill="none" stroke="currentColor" strokeWidth="1.5" /><line x1="6" y1="13.6" x2="13.6" y2="13.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-                          Erase
-                        </button>
-                      </div>
-
-                      <p className="tileset-group-label">Brush</p>
-                      <div className="tileset-tier-seg" aria-label="Placeable brush type">
-                        <button type="button" className={brushKind === 'tile' ? 'is-active' : ''} onClick={() => setBrushKind('tile')} title="Paint terrain tiles.">
-                          Tile
-                        </button>
-                        <button type="button" className={brushKind === 'unit' ? 'is-active' : ''} onClick={() => setBrushKind('unit')} title="Place chess units on top of tiles.">
-                          Unit
-                        </button>
-                        <button type="button" className={brushKind === 'doodad' ? 'is-active' : ''} onClick={() => setBrushKind('doodad')} title="Place terrain doodads — only land on a tile of their home terrain.">
-                          Doodad
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        className="tileset-brush-display"
-                        onClick={() => {
-                          setCategory(brushKind === 'unit' ? 'units' : brushKind === 'doodad' ? 'doodads' : 'tiles');
-                          setStudioMode('catalog');
-                        }}
-                        title={brushKind === 'unit' ? 'Pick a different unit from the unit catalog' : brushKind === 'doodad' ? 'Pick a different doodad from the doodad catalog' : 'Pick a different tile from the tile catalog'}
-                        aria-label={`Active brush: ${brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushAsset.label}. Pick a different ${brushKind}.`}
-                      >
-                        <img src={brushKind === 'unit' ? unitBrushAsset.preview : brushKind === 'doodad' ? doodadBrushAsset.front : brushAsset.src} alt="" draggable={false} />
-                        <span className="tileset-brush-label">{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushAsset.label}</span>
-                        <span className="tileset-brush-change">Pick in catalog ›</span>
-                      </button>
-                      {brushKind === 'unit' ? (
-                        <div className="tileset-tier-seg tileset-unit-facing" aria-label="Unit facing">
-                          {(['south', 'east', 'north', 'west'] as Direction[]).map((dir) => (
-                            <button
-                              key={dir}
-                              type="button"
-                              className={unitBrushDirection === dir ? 'is-active' : ''}
-                              onClick={() => setUnitBrushDirection(dir)}
-                              title={`Face ${dir}`}
-                            >
-                              {dir[0].toUpperCase()}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {brushKind === 'tile' ? (
-                        <>
-                          <p className="tileset-group-label">Fill</p>
-                          {tool === 'select' && selectedCell && boardCells[`${selectedCell.x},${selectedCell.y}`] ? (
-                            <button type="button" className="tileset-wide-action" onClick={fillCardinals} title="Place the matching base tile of each edge's family around the selected tile (N/E/S/W).">
-                              Fill cardinal neighbors
-                            </button>
-                          ) : null}
-                          <div className="tileset-button-row">
-                            <button type="button" onClick={() => fillBoard('empty')} title="Fill every blank cell with the current brush.">Empty</button>
-                            <button type="button" onClick={() => fillBoard('all')} title="Fill the whole board with the current brush (overwrites everything).">Whole</button>
-                            <button type="button" className="tileset-action-danger" onClick={clearBoard} disabled={Object.keys(boardCells).length === 0 && Object.keys(boardUnits).length === 0} title="Remove every tile and unit from the board.">
-                              Clear
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="tileset-button-row">
-                          <button type="button" className="tileset-action-danger" onClick={clearBoard} disabled={Object.keys(boardCells).length === 0 && Object.keys(boardUnits).length === 0} title="Remove every tile and unit from the board.">
-                            Clear board
-                          </button>
-                        </div>
-                      )}
-
-                  {viewKind === 'board' ? (
-                    <>
-                      <button type="button" className="tileset-group-label is-collapsible" aria-expanded={boardSectionOpen} onClick={() => setBoardSectionOpen((value) => !value)} title={boardSectionOpen ? 'Collapse the Board section' : 'Expand the Board section'}>
-                        <span>Board</span>
-                        <span className="tileset-group-rule" aria-hidden="true" />
-                        <svg className="tileset-group-chevron" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6 L8 10 L12 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      </button>
-                      {boardSectionOpen ? (
-                        <>
-                          <div className="tileset-tier-seg" aria-label="Terrain scope">
-                            <button type="button" className={boardScope === 'family' ? 'is-active' : ''} onClick={() => setBoardScope('family')} title="Generate using only the current family's tiles.">
-                              Family
-                            </button>
-                            <button type="button" className={boardScope === 'mixed' ? 'is-active' : ''} onClick={() => setBoardScope('mixed')} title="Generate using all terrain families mixed together.">
-                              Mixed
-                            </button>
-                          </div>
-                          <div className="tileset-button-row">
-                            <button type="button" onClick={() => setBoardSeed(Math.floor(Math.random() * 999999) + 1)} title="Generate a fresh random board (new seed).">
-                              New random
-                            </button>
-                            <button type="button" onClick={() => setBoardSize((size) => (size === 'small' ? 'wide' : 'small'))} title="Toggle board size (8×6 ↔ 10×7).">
-                              {boardSize === 'small' ? '8 × 6' : '10 × 7'}
-                            </button>
-                          </div>
-                        </>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  <button type="button" className="tileset-group-label is-collapsible" aria-expanded={viewSectionOpen} onClick={() => setViewSectionOpen((value) => !value)} title={viewSectionOpen ? 'Collapse the View section' : 'Expand the View section'}>
-                    <span>View</span>
-                    <span className="tileset-group-rule" aria-hidden="true" />
-                    <svg className="tileset-group-chevron" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 6 L8 10 L12 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  </button>
-                  {viewSectionOpen ? (
-                    <>
-                  <div className="tileset-button-row">
-                    <button
-                      type="button"
-                      className={`tileset-toggle ${showFootprint ? 'is-on' : ''}`}
-                      aria-pressed={showFootprint}
-                      onClick={() => setShowFootprint((value) => !value)}
-                      title="Overlay the canonical tile-footprint diamond on each tile to check that the art lines up with the locked geometry."
-                    >
-                      <span>Footprint</span>
-                      <span className="tileset-toggle-pill" aria-hidden="true" />
-                    </button>
-                    <button type="button" onClick={() => setViewPan({ x: 0, y: 0 })} title="Recenter the board in the viewport.">
-                      Center
-                    </button>
-                  </div>
-                  {inspectedAnimation ? (
-                    <div className="tileset-animation-controls" aria-label={`${inspectedAnimation.label} frame controls`}>
-                      <h3>Animation</h3>
-                      <div className="tileset-animation-control-row">
-                        <button
-                          type="button"
-                          title={animationPlaying ? 'Pause the animation preview.' : 'Play the animation preview.'}
-                          onClick={() => {
-                            if (animationPlaying) setManualAnimationFrame(animationFrame);
-                            setAnimationPlaying((value) => !value);
-                          }}
-                        >
-                          {animationPlaying ? 'Pause' : 'Play'}
-                        </button>
-                        <button
-                          type="button"
-                          title="Step to the previous animation frame."
-                          onClick={() => {
-                            setAnimationPlaying(false);
-                            setManualAnimationFrame((animationFrame - 1 + animationFrameCount) % animationFrameCount);
-                          }}
-                        >
-                          Prev
-                        </button>
-                        <button
-                          type="button"
-                          title="Step to the next animation frame."
-                          onClick={() => {
-                            setAnimationPlaying(false);
-                            setManualAnimationFrame((animationFrame + 1) % animationFrameCount);
-                          }}
-                        >
-                          Next
-                        </button>
-                      </div>
-                      <label>
-                        Frame {animationFrame + 1} / {animationFrameCount}
-                        <input
-                          type="range"
-                          min="0"
-                          max={animationFrameCount - 1}
-                          step="1"
-                          value={animationFrame}
-                          onChange={(event) => {
-                            setAnimationPlaying(false);
-                            setManualAnimationFrame(Number(event.target.value));
-                          }}
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                  <label>
-                    View Zoom
-                    <input
-                      type="range"
-                      min="0.55"
-                      max="2.2"
-                      step="0.05"
-                      value={viewZoom}
-                      onChange={(event) => setViewZoom(Number(event.target.value))}
-                    />
-                  </label>
-                    </>
-                  ) : null}
-                  <p className="tileset-control-footnote">Board edits are temporary — not saved.</p>
-                </div>
-              </section>
-
-              <section className="tileset-inspector-section" aria-label="Selected item details">
-                <h2>Details</h2>
-                {labMode === 'doodad' ? (
-                  <dl>
-                    <InspectorRow label="Doodad">{doodadBrushAsset.label}</InspectorRow>
-                    <InspectorRow label="Home Terrain">{doodadBrushAsset.terrains.join(', ') || '—'}</InspectorRow>
-                    <InspectorRow label="Layering">
-                      <button type="button" className="tileset-inline-link" onClick={() => openGlossaryTerm('split-layer doodad')}>
-                        Split-layer doodad →
-                      </button>
-                    </InspectorRow>
-                    <InspectorRow label="Status">{doodadBrushAsset.status}</InspectorRow>
-                  </dl>
-                ) : labMode === 'unit' ? (
-                  <dl>
-                    <InspectorRow label="Unit">{unitBrushAsset.label}</InspectorRow>
-                    <InspectorRow label="Piece">{unitBrushAsset.family}</InspectorRow>
-                    <InspectorRow label="Status">{unitBrushAsset.status}</InspectorRow>
-                    <InspectorRow label="Footprint">{unitBrushAsset.footprint.shape}</InspectorRow>
-                    <InspectorRow label="Ground">{selectedAsset.label}</InspectorRow>
-                  </dl>
-                ) : viewTransitionSlot ? (
-                  <dl>
-                    <InspectorRow label="Tile Type">{viewTransitionAsset ? 'Transition tile' : 'Missing art'}</InspectorRow>
-                    {viewTransitionAsset ? (
-                      <>
-                        <InspectorRow label="Source">{viewTransitionAsset.source}</InspectorRow>
-                        <InspectorRow label="Projection">
-                          {viewTransitionAsset.source === TRUE_ISO_TILE_SOURCE ? 'true-iso locked' : 'review required'}
-                        </InspectorRow>
-                      </>
-                    ) : null}
-                    {viewTransitionAsset?.animation ? (
-                      <InspectorRow label="Animation">{`${viewTransitionAsset.animation.label} · ${viewTransitionAsset.animation.status}`}</InspectorRow>
-                    ) : null}
-                    <InspectorRow label="Pair">{viewTransitionPair?.label ?? 'Transition'}</InspectorRow>
-                    <InspectorRow label="Mask">{viewTransitionSlot.code}</InspectorRow>
-                    {socketEdges.map((edge) => (
-                      <InspectorRow key={edge} label={`${edge[0].toUpperCase()}${edge.slice(1)}`}>
-                        {terrainLabels[viewTransitionSlot.sockets[edge]]}
-                      </InspectorRow>
-                    ))}
-                  </dl>
-                ) : (
-                  <dl>
-                    <EdgeLedger asset={selectedAsset} />
-                    {selectedAsset.animation ? (
-                      <InspectorRow label="Animation">{`${selectedAsset.animation.label} · ${selectedAsset.animation.status}`}</InspectorRow>
-                    ) : null}
-                    <InspectorRow label="Fill Weight">
-                      {selectedAsset.probability === 0 ? 'not random-filled' : selectedAsset.probability.toFixed(2)}
-                    </InspectorRow>
-                  </dl>
-                )}
-                <p>{labMode === 'doodad' ? 'A split-layer prop the unit stands inside; placeable only on its home terrain. See the Layering link for how the split works.' : labMode === 'unit' ? unitBrushAsset.read : viewTransitionSlot ? viewTransitionAsset?.notes ?? 'This transition slot is required but has no production tile assigned yet.' : selectedAsset.notes}</p>
-              </section>
-            </aside>
-          </>
-        )}
+                        : <AssetLab name={selectedAssetName} header={viewerKindSelect} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
+        ) : null}
       </section>
     </main>
   );
@@ -2230,16 +1232,36 @@ const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
+  // The Studio routes here with ?from=studio (show a "back to catalog" link) and optionally
+  // ?kind=tile|unit|doodad&brush=<id> to pre-arm the brush you clicked in the catalog. Read
+  // once at mount; reached from the main menu these are all absent and we open on tiles.
+  const studioArm = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const kindParam = params.get('kind');
+    const kind: 'tile' | 'unit' | 'doodad' | undefined =
+      kindParam === 'unit' || kindParam === 'doodad' || kindParam === 'tile' ? kindParam : undefined;
+    return {
+      fromStudio: params.get('from') === 'studio',
+      kind,
+      brush: params.get('brush') ?? undefined,
+    };
+  }, []);
+  const cameFromStudio = studioArm.fromStudio;
   const [boardCells, setBoardCells] = useState<Record<string, string>>(leSeedBoard);
+  const [boardCols, setBoardCols] = useState(LE_COLS);
+  const [boardRows, setBoardRows] = useState(LE_ROWS);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase'>('brush');
-  const [brushId, setBrushId] = useState<string>(leDefaultTile.id);
+  const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit'>('tile');
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad'>(studioArm.kind ?? 'tile');
+  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad'>(studioArm.kind ?? 'tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
-  const [unitBrushId, setUnitBrushId] = useState<string>(unitAssets[0].id);
+  const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>({});
+  const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : unitAssets[0].id);
+  const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
   const [unitSide, setUnitSide] = useState<'player' | 'enemy'>('player');
 
@@ -2256,6 +1278,13 @@ export function LevelEditor(): ReactElement {
   const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
   const unitFaction: Faction = LE_SIDE_FACTION[unitSide];
+  const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAsset(id);
+  const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? DOODAD_ASSETS[0];
+  // HARD terrain gate (mirrors the Studio): a doodad only lands on a tile of its home terrain.
+  const doodadFitsTile = (doodad: DoodadAsset, tileId: string | undefined): boolean => {
+    const terrain = tileId ? leFamilyOfTile(tileId)?.id : undefined;
+    return terrain !== undefined && doodad.terrains.includes(terrain);
+  };
 
   const eraseKey = <T,>(setter: (updater: (prev: Record<string, T>) => Record<string, T>) => void, key: string): void =>
     setter((prev) => { if (!(key in prev)) return prev; const next = { ...prev }; delete next[key]; return next; });
@@ -2265,18 +1294,25 @@ export function LevelEditor(): ReactElement {
       setBoardUnits((prev) => ({ ...prev, [key]: { unitId: unitBrushAsset.id, direction: unitBrushDirection, faction: unitFaction } }));
       return;
     }
+    if (brushKind === 'doodad') {
+      // A doodad only lands on a tile of its home terrain; painting elsewhere is a no-op.
+      if (!doodadFitsTile(doodadBrushAsset, boardCells[key])) return;
+      setBoardDoodads((prev) => ({ ...prev, [key]: { doodadId: doodadBrushAsset.id } }));
+      return;
+    }
     setBoardCells((prev) => ({ ...prev, [key]: brushAsset.id }));
   };
   const eraseCell = (x: number, y: number): void => {
     const key = `${x},${y}`;
     if (brushKind === 'unit') return eraseKey(setBoardUnits, key);
+    if (brushKind === 'doodad') return eraseKey(setBoardDoodads, key);
     eraseKey(setBoardCells, key);
   };
-  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setSelectedCell(null); };
+  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setSelectedCell(null); };
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
-      for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) {
+      for (let y = 0; y < boardRows; y += 1) for (let x = 0; x < boardCols; x += 1) {
         const key = `${x},${y}`;
         if (mode === 'all' || !(key in next)) next[key] = brushAsset.id;
       }
@@ -2284,13 +1320,37 @@ export function LevelEditor(): ReactElement {
     });
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+  // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
+  // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
+  // bounds, so nothing keeps rendering or counting off the edge of the board.
+  const resizeBoard = (nextCols: number, nextRows: number): void => {
+    const within = (key: string): boolean => {
+      const [cx, cy] = key.split(',').map(Number);
+      return cx < nextCols && cy < nextRows;
+    };
+    const prune = <T,>(map: Record<string, T>): Record<string, T> => {
+      const next: Record<string, T> = {};
+      let dropped = false;
+      for (const key of Object.keys(map)) { if (within(key)) next[key] = map[key]; else dropped = true; }
+      return dropped ? next : map;
+    };
+    setBoardCells((prev) => prune(prev));
+    setBoardUnits((prev) => prune(prev));
+    setBoardDoodads((prev) => prune(prev));
+    setSelectedCell((sel) => (sel && (sel.x >= nextCols || sel.y >= nextRows) ? null : sel));
+    setBoardCols(nextCols);
+    setBoardRows(nextRows);
+  };
 
   const paintedCount = Object.keys(boardCells).length;
   const unitCount = Object.keys(boardUnits).length;
+  const doodadCount = Object.keys(boardDoodads).length;
   const selectedTileId = selectedCell ? boardCells[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedAsset = selectedTileId ? resolveAsset(selectedTileId) : undefined;
   const selectedUnit = selectedCell ? boardUnits[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedUnitAsset = selectedUnit ? resolveUnitAsset(selectedUnit.unitId) : undefined;
+  const selectedDoodad = selectedCell ? boardDoodads[`${selectedCell.x},${selectedCell.y}`] : undefined;
+  const selectedDoodadAsset = selectedDoodad ? resolveDoodadAsset(selectedDoodad.doodadId) : undefined;
   const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
 
   return (
@@ -2302,6 +1362,7 @@ export function LevelEditor(): ReactElement {
             <span className="le-save-state is-dirty">Unsaved</span>
           </div>
           <nav className="le-topbar-actions" aria-label="Editor actions">
+            {cameFromStudio ? <a className="app-header-button le-back-catalog" href="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</a> : null}
             <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
             <button type="button" className="app-header-button app-header-button-active" disabled title="Saving unlocks once the editor is hosted.">Save</button>
             <a className="app-header-button" href="/settings">Settings</a>
@@ -2313,14 +1374,14 @@ export function LevelEditor(): ReactElement {
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
               <div className="tileset-view-board-content is-board">
                 <StudioEditableBoard
-                  cols={LE_COLS}
-                  rows={LE_ROWS}
+                  cols={boardCols}
+                  rows={boardRows}
                   cells={boardCells}
                   units={boardUnits}
-                  doodads={{}}
+                  doodads={boardDoodads}
                   resolveAsset={resolveAsset}
                   resolveUnit={resolveUnitAsset}
-                  resolveDoodad={() => undefined}
+                  resolveDoodad={resolveDoodadAsset}
                   tool={tool}
                   selectedCell={selectedCell}
                   showFootprint={showFootprint}
@@ -2340,12 +1401,20 @@ export function LevelEditor(): ReactElement {
         <section className="skirmish-card">
           <h2>Layer</h2>
           <div className="le-seg">
-            <button type="button" className="le-seg-btn" disabled>Board</button>
-            <button type="button" className={`le-seg-btn ${brushKind === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('tile'); setTool('brush'); }}>Tile</button>
-            <button type="button" className={`le-seg-btn ${brushKind === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('unit'); setTool('brush'); }}>Unit</button>
-            <button type="button" className="le-seg-btn" disabled>Doodad</button>
+            <button type="button" className={`le-seg-btn ${layer === 'board' ? 'active' : ''}`.trim()} onClick={() => { setLayer('board'); setTool('select'); }}>Board</button>
+            <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
+            <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
+            <button type="button" className={`le-seg-btn ${layer === 'doodad' ? 'active' : ''}`.trim()} onClick={() => { setLayer('doodad'); setBrushKind('doodad'); setTool('brush'); }}>Doodad</button>
           </div>
         </section>
+
+        {layer === 'board' ? (
+          <section className="skirmish-card">
+            <h2>Board</h2>
+            <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
+            <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
+          </section>
+        ) : (<>
 
         <section className="skirmish-card">
           <h2>Tool</h2>
@@ -2358,11 +1427,13 @@ export function LevelEditor(): ReactElement {
             <span className="le-brush-thumb">
               {brushKind === 'unit'
                 ? <img src={unitBrushAsset.sprite(unitFaction, 'south')} alt="" draggable={false} />
+                : brushKind === 'doodad'
+                ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : <img src={brushAsset.src} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -2397,6 +1468,27 @@ export function LevelEditor(): ReactElement {
               ))}
             </div>
             </KitScroll>
+          </section>
+        ) : brushKind === 'doodad' ? (
+          <section className="skirmish-card le-brush-panel">
+            <h2>Doodads</h2>
+            <KitScroll className="le-palette-scroll">
+              <div className="le-swatches">
+                {DOODAD_ASSETS.map((doodad) => (
+                  <button
+                    type="button"
+                    key={doodad.id}
+                    className={`le-swatch ${doodadBrushId === doodad.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    title={`${doodad.label} · ${doodad.terrains.join(', ')}`}
+                    onClick={() => { setDoodadBrushId(doodad.id); setBrushKind('doodad'); setTool('brush'); }}
+                  >
+                    <img src={doodad.front} alt="" draggable={false} />
+                    <small>{doodad.label}</small>
+                  </button>
+                ))}
+              </div>
+            </KitScroll>
+            <p className="le-board-note">Doodads only land on a tile of their home terrain.</p>
           </section>
         ) : (
           <section className="skirmish-card le-brush-panel">
@@ -2434,6 +1526,8 @@ export function LevelEditor(): ReactElement {
           </div>
         </section>
 
+        </>)}
+
         <section className="skirmish-card">
           <h2>View</h2>
           <div className="le-ctrlrow">
@@ -2454,12 +1548,18 @@ export function LevelEditor(): ReactElement {
         </section>
 
         <section className="skirmish-card le-details">
-          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedAsset ? 'Tile' : selectedCell ? 'Cell' : 'Board'}</h2>
+          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedAsset ? 'Tile' : selectedCell ? 'Cell' : 'Board'}</h2>
           {selectedUnitAsset && selectedUnit ? (
             <dl>
               <div><dt>Piece</dt><dd>{selectedUnitAsset.label}</dd></div>
               <div><dt>Side</dt><dd>{selectedUnit.faction === 'crimson' ? 'Enemy' : 'Player'}</dd></div>
               <div><dt>Facing</dt><dd>{selectedUnit.direction}</dd></div>
+            </dl>
+          ) : selectedDoodadAsset && selectedDoodad ? (
+            <dl>
+              <div><dt>Doodad</dt><dd>{selectedDoodadAsset.label}</dd></div>
+              <div><dt>Terrain</dt><dd>{selectedDoodadAsset.terrains.join(', ')}</dd></div>
+              <div><dt>Cell</dt><dd>{selectedCell?.x}, {selectedCell?.y}</dd></div>
             </dl>
           ) : selectedAsset ? (
             <dl>
@@ -2471,12 +1571,13 @@ export function LevelEditor(): ReactElement {
             <dl>
               <div><dt>Tiles</dt><dd>{paintedCount}</dd></div>
               <div><dt>Units</dt><dd>{unitCount}</dd></div>
+              <div><dt>Doodads</dt><dd>{doodadCount}</dd></div>
             </dl>
           )}
         </section>
 
         <div className="le-statusline">
-          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · {LE_COLS}×{LE_ROWS}
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · {boardCols}×{boardRows}
         </div>
       </aside>
     </div>

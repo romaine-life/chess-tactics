@@ -5414,6 +5414,7 @@ h1 {
    they read the same everywhere; we only lay out the label + control row. */
 .le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
+.le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
 
 /* status line */
 .le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
@@ -5447,42 +5448,56 @@ h1 {
   grid-template-columns: 86px minmax(0, 1fr);
 }
 
-.skirmish-portrait-frame {
-  align-items: center;
-  /* Kit panel frame (ADR-0032) — no `fill`, so the portrait backdrop shows through the
-     center; the bust crop fills the content box edge-to-edge. Not a raw-CSS box. */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 / 12px round;
+/* The ONE unit-portrait box (see UnitPortrait in PortraitEditor.tsx). A transparent panel-line
+   frame whose bracket ornament bleeds over a bust/backdrop that fills to the `--up-fill` boundary
+   (the editor's Fill box, config/nine-slice/panel.json `fill` = 2). The Selected-Unit HUD, the
+   roster slots, and the editor previews ALL render through this — the framing/fill is defined here
+   ONCE, never re-derived per surface. `--up-frame-w` = rendered frame thickness; `--up-backdrop` =
+   the scene art (when a surface composites one behind the bust). Not a raw-CSS box. */
+.unit-portrait {
+  --up-fill: 2px;
+  --up-frame-w: 12px;
+  position: relative;
   box-sizing: border-box;
-  display: grid;
-  image-rendering: pixelated;
-  min-height: 86px;
-  padding: 0;
-  place-items: center;
   overflow: hidden;
+  background-color: rgba(3, 12, 19, .74);
+  background-clip: padding-box;
+  background-origin: padding-box;
+  border: var(--up-fill) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--up-frame-w) round;
+  padding: calc(var(--up-frame-w) - var(--up-fill));
+  image-rendering: pixelated;
 }
 
-.skirmish-portrait-frame.has-backdrop {
-  background:
+.unit-portrait.has-backdrop {
+  background-image:
     linear-gradient(180deg, rgba(2, 8, 13, .1), rgba(2, 8, 13, .34)),
-    var(--skirmish-portrait-bg),
-    rgba(3, 12, 19, .74);
+    var(--up-backdrop);
   background-position: center;
   background-size: cover;
   /* Bottom vignette grounds the bust (image treatment, not a fabricated frame edge). */
   box-shadow: inset 0 -22px 26px rgba(0, 0, 0, .42);
 }
 
-/* Eye-level portrait bust (separate render contract from the iso board sprite). Smooth
-   (not pixelated) since it's a detailed hero render; bottom-anchored so the bust sits in
-   the frame instead of floating. */
-.skirmish-portrait {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+/* Eye-level bust wrapper holding the shared <CroppedView>; its transparent areas let the backdrop
+   show through. Smooth (detailed hero render, not pixelated); drop-shadow grounds the bust. */
+.unit-portrait__bust {
+  position: absolute;
+  inset: 0;
   image-rendering: auto;
   filter: drop-shadow(0 9px 8px rgba(0, 0, 0, .52));
+}
+
+/* Selected-Unit HUD: fills the 86px first column of the info grid. */
+.unit-portrait--hud {
+  min-height: 86px;
+}
+
+/* Roster thumbnail: fills its button; thinner frame so the bracket doesn't swamp the small square. */
+.unit-portrait--roster {
+  --up-frame-w: 9px;
+  width: 100%;
+  height: 100%;
 }
 
 .skirmish-selected-copy {
@@ -5613,35 +5628,24 @@ h1 {
 }
 
 .skirmish-roster-slot {
-  /* Kit mode-button frame — same gold bracket frame as the tabs/.app-header-button
-     (ADR-0011/0012/0032), not a hand-rolled gradient box. Cyan -active when selected.
-     Holds the unit's portrait bust as its content. */
+  /* Plain click target; the gold bracket frame + bust now come from the <UnitPortrait> inside
+     (unit-portrait--roster), so each roster thumbnail matches the Selected-Unit portrait exactly.
+     Selected/hover state is a cyan ring (replacing the old mode-button-active frame swap). */
   aspect-ratio: 1;
   background: transparent;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
-  border-radius: 0;
+  border: 0;
+  border-radius: 2px;
   box-sizing: border-box;
-  display: grid;
-  image-rendering: pixelated;
+  cursor: pointer;
   min-height: 62px;
-  overflow: hidden;
-  place-items: center;
+  padding: 0;
 }
 
 .skirmish-roster-slot.active,
 .skirmish-roster-slot:hover,
 .skirmish-roster-slot:focus-visible {
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
   outline: none;
-}
-
-.skirmish-roster-portrait {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center top;
-  image-rendering: auto;
+  box-shadow: 0 0 0 2px #2896c3;
 }
 
 .skirmish-roster-slot:disabled {
@@ -11554,17 +11558,18 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
   grid-template-columns: minmax(0, 1fr) auto auto;
-  /* Baked surface skin (the accepted dressing-room preview): the panel-LINE frame
-     (transparent interior) over a fixed wood surface, instead of .app-titlebar's
-     filled panel. border-width = the fill inset (2px) so the surface clips to the
-     frame's interior; border-image-width (16px) renders the frame at full thickness;
-     padding compensates so content clears the frame art (ADR-0034). */
-  border: 2px solid transparent;
-  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round;
-  padding: 14px 32px;
-  background: url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
-  background-origin: padding-box;
-  background-clip: padding-box;
+  /* Fork A (ADR-0037): full-bleed oak whose bottom edge is a forged NAILHEAD iron rule
+     (a studded band) capped by a centred diamond stud, replacing the panel-LINE frame.
+     With no border the wood reaches the element edge — no side/top frame and no 1px keyline
+     gap (the original defect). The rule + stud are generated low-fi atoms in
+     /assets/ui/titlebar/ (ADR-0011/0014); the wood stays a fixed surface so it lines up
+     with the rest of the app's wood. */
+  border: 0;
+  padding: 0 32px;
+  background:
+    url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat,
+    url("/assets/ui/titlebar/band-studded.png") left bottom / auto 14px repeat-x,
+    url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
   image-rendering: pixelated;
 }
 
@@ -11678,6 +11683,138 @@ button.tileset-relationship-cell {
   font-style: normal;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+/* --- Trailing-edge "settings + user" cluster ----------------------------------
+   The signed-in chrome at the top-right: an icon-only Settings gear + the avatar
+   account button, framed identically so the pair reads as one matched unit
+   (Material-3 "few trailing items"; the avatar opens the account menu below). */
+.header-account-cluster {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Square icon-only button — the app's kit mode-button frame, made equal-sided. A
+   slightly thinner border than the labelled header button so the 32px opening
+   carries a glyph/avatar without the frame dominating. */
+.cluster-icon-button {
+  align-items: center;
+  block-size: 52px;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  image-rendering: pixelated;
+  inline-size: 52px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.cluster-icon-button:hover,
+.cluster-icon-button:focus-visible {
+  filter: brightness(1.14);
+  outline: none;
+}
+
+/* Signed-out Sign In rides the same cluster — match the icon buttons' height so the
+   gear + control read as one unit. */
+.header-account-cluster .app-header-button {
+  block-size: 52px;
+}
+
+.cluster-icon-button > img {
+  block-size: 26px;
+  image-rendering: pixelated;
+  inline-size: 26px;
+  object-fit: contain;
+}
+
+/* The Gravatar fills the avatar button's opening, clipped square by the frame. */
+.account-avatar-button .account-avatar-img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+.account-avatar-fallback {
+  align-items: center;
+  background: #07111a;
+  color: var(--cobalt-bright);
+  display: grid;
+  font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;
+  place-items: center;
+}
+
+.account-menu-root {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+
+/* Account menu — small kit panel-framed popover anchored under the avatar. A
+   minimal one-line row: the username + the door (the door IS the sign-out, no
+   text label — the bar avatar already carries identity). */
+.account-menu {
+  align-items: center;
+  border: 18px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 18px round;
+  box-sizing: border-box;
+  display: flex;
+  gap: 14px;
+  image-rendering: pixelated;
+  inset-block-start: calc(100% + 12px);
+  inset-inline-end: 0;
+  justify-content: space-between;
+  padding: 4px 12px;
+  position: absolute;
+  white-space: nowrap;
+  z-index: 60;
+}
+
+.account-menu-name {
+  color: #f6fbff;
+  font-size: var(--ds-text-sm);
+  line-height: 1.1;
+  margin: 0;
+  text-shadow: 0 2px 0 #02070b;
+}
+
+/* The door is the action — a bare icon button (no fabricated surface), labelled
+   for screen readers + a hover tooltip, brightening on hover/focus. */
+.account-menu-exit {
+  align-items: center;
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px;
+}
+
+.account-menu-exit:hover {
+  filter: brightness(1.2);
+}
+
+.account-menu-exit:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.account-menu-glyph {
+  block-size: 32px;
+  flex: none;
+  /* 32px is an exact half of the 64px source, so nearest-neighbour (pixelated)
+     stays crisp (ADR-0026 guidance: integer divisor → pixelated). */
+  image-rendering: pixelated;
+  inline-size: 32px;
+  object-fit: contain;
 }
 
 .settings-shell {
@@ -12570,3 +12707,36 @@ button.tileset-relationship-cell {
 .al-lab-empty { margin: 0; color: #9eb1c5; font-size: 13px; }
 .al-lab-stages { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; }
 .tileset-view-controls .al-meta { grid-template-columns: 1fr; gap: 8px; max-width: none; }
+
+/* Campaign battle result — a modal over the board when a campaign level is won or
+   lost. Layout only: the panel itself wears the shared baked-skin .settings-frame,
+   and the buttons are the standard .app-header-button chrome. */
+.campaign-result {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 7, 11, .62);
+}
+.campaign-result-panel {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(20px, 3vw, 36px);
+  min-width: min(420px, 86vw);
+}
+.campaign-result-panel h2 {
+  margin: 0;
+  font-size: clamp(26px, 3.4vw, 38px);
+  letter-spacing: .04em;
+  color: var(--ds-ink-1, #eaf2f6);
+}
+.campaign-result-panel p {
+  margin: 0;
+  color: var(--ds-ink-3, #9eb1c5);
+}
+.campaign-result-stars { display: inline-flex; gap: 8px; }
+.campaign-result-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 4px; }

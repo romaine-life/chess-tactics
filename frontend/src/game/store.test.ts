@@ -161,6 +161,46 @@ describe('skirmish store: capture-king objective', () => {
   });
 });
 
+describe('skirmish store: survive + reach objectives', () => {
+  it('survive: wins once the required rounds elapse (after the enemy reply)', () => {
+    useSkirmish.setState({
+      game: { size: { cols: 8, rows: 8 }, pieces: [piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 0)], turn: 'player', winner: null },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'survive',
+      objectiveCtx: { surviveTurns: 1 },
+      turnsElapsed: 0,
+      seed: 1,
+      tick: 0,
+      selectedId: 'pk',
+      focusedId: 'pk',
+      log: [],
+    });
+    useSkirmish.getState().tryMoveTo(0, 6); // king steps to an empty square
+    expect(useSkirmish.getState().game.winner).toBeNull(); // round not complete yet
+    vi.runAllTimers(); // enemy replies → one round elapses → survive target met
+    expect(useSkirmish.getState().game.winner).toBe('player');
+  });
+
+  it('reach: wins the instant a player piece steps onto a target cell', () => {
+    useSkirmish.setState({
+      game: { size: { cols: 8, rows: 8 }, pieces: [piece('pr', 'player', 'rook', 0, 3), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'reach',
+      objectiveCtx: { reachCells: [{ x: 0, y: 0 }] },
+      turnsElapsed: 0,
+      seed: 1,
+      tick: 0,
+      selectedId: 'pr',
+      focusedId: 'pr',
+      log: [],
+    });
+    useSkirmish.getState().tryMoveTo(0, 0); // rook slides up the file onto the target
+    const { game } = useSkirmish.getState();
+    expect(game.winner).toBe('player');
+    expect(game.turn).toBe('done');
+  });
+});
+
 describe('soft-lock guard (no manual End Turn)', () => {
   const OPEN_ENV: MoveEnv = { terrain: undefined, lastMove: undefined };
   const stateOf = (pieces: Piece[], cols: number, rows: number): GameState => ({

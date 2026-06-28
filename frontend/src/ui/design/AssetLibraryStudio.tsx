@@ -153,7 +153,7 @@ function findAsset(name: string): Found | null {
 // `header` slot) above a read-only Details readout (provenance/gate). Assets are
 // inspected, not manipulated, so this is the Viewer destination, not the board
 // Lab. It renders [main][aside] straight into the shell to match every other mode.
-export function AssetLab({ name, header }: { name: string; header?: ReactNode }): ReactElement {
+export function AssetLab({ name, header, onEditFrame }: { name: string; header?: ReactNode; onEditFrame?: (editorAssetId: string) => void }): ReactElement {
   const found = name ? findAsset(name) : null;
   const item = found?.item;
   const prov = item && forged(item.name) ? PROV.assets[item.name] : null;
@@ -185,11 +185,12 @@ export function AssetLab({ name, header }: { name: string; header?: ReactNode })
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            {item && EDITOR_ASSET[item.name] ? (
-              <a
-                href={`/nine-slice-editor?asset=${EDITOR_ASSET[item.name]}&return=${encodeURIComponent(window.location.pathname + window.location.search)}`}
-                style={{ display: 'block', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', borderRadius: 4, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}
-              >✎ Edit in 9-slice editor</a>
+            {item && EDITOR_ASSET[item.name] && onEditFrame ? (
+              <button
+                type="button"
+                onClick={() => onEditFrame(EDITOR_ASSET[item.name])}
+                style={{ display: 'block', width: '100%', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
+              >✎ Edit in 9-slice editor</button>
             ) : found?.kind === 'frame' ? (
               // A frame that isn't atom-built is migration debt, surfaced as such —
               // not silently treated as an acceptable alternative.
