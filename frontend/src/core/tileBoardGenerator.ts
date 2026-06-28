@@ -231,6 +231,13 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   columns: number;
   rows: number;
   familyAssets: Record<TileFamilyId, readonly TAsset[]>;
+  /**
+   * Optional per-family edge tiles. When supplied, any cell on a FRONT screen edge
+   * (`x === columns - 1` or `y === rows - 1` — the void-facing rows in `x+y` paint order)
+   * has its asset swapped for the family's edge tile, so the board's outer ring reads as a
+   * frayed land edge instead of a clean cut. Same family/sockets, so adjacency is unchanged.
+   */
+  edgeAssets?: Partial<Record<TileFamilyId, TAsset>>;
 }
 
 /**
@@ -247,6 +254,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   columns,
   rows,
   familyAssets,
+  edgeAssets,
 }: SolveSocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
   const boardAssets = usableAssets.length > 0 ? usableAssets : assets.filter((asset) => asset.kind === 'tile');
@@ -275,6 +283,17 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
       const missing = missingForSockets(sockets);
       fallbacks.push({ x, y, requiredNorth: sockets.north, requiredWest: sockets.west, candidateCount: candidates.length });
       cells.push({ x, y, sockets, terrain, missing });
+    }
+  }
+
+  // Swap front-edge cells for the family's frayed edge tile (same sockets, so legality and
+  // the stats below are unaffected). Only the void-facing rows in `x+y` paint order.
+  if (edgeAssets) {
+    for (const cell of cells) {
+      if (cell.asset && (cell.x === columns - 1 || cell.y === rows - 1)) {
+        const edge = edgeAssets[cell.terrain];
+        if (edge) cell.asset = edge;
+      }
     }
   }
 

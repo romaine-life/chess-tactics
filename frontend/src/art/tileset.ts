@@ -71,6 +71,31 @@ export const tileFamilies: Record<TileFamilyId, readonly TileAsset[]> = {
 // No transition tiles in the hard-edge tileset; kept exported (empty) for back-compat.
 export const transitionAssets: readonly TileAsset[] = [];
 
+// Frayed perimeter EDGE tiles. Same top diamond as the family base (so the surface seams
+// invisibly with interior tiles), but the cliff face is recolored to torn earth/rock with
+// an irregular broken bottom that fades into shadow — the diorama "tearaway base" so the
+// board reads as a chunk of land, not a machine cut. Held OUT of tileFamilies and random
+// placement (no probability); the board solver injects them ONLY on the front screen edges
+// by position. Built by frontend/scripts/build-edge-tiles.py.
+const edgeTile = (family: TileFamilyId): TileAsset => ({
+  id: `${family}-edge`,
+  label: `${terrainLabels[family]} · Edge`,
+  src: `/assets/tiles/surface/${family}-edge.png`,
+  role: 'edge',
+  kind: 'tile',
+  source: 'pixel:surface',
+  method: 'Edge (frayed cliff)',
+  probability: 0,
+  notes: `${terrainLabels[family]} — frayed perimeter edge (torn land cross-section).`,
+  terrains: [family],
+});
+
+// Families that have generated edge art. Grass first; the rest follow once the look lands.
+const EDGE_FAMILIES: readonly TileFamilyId[] = ['grass'];
+export const edgeTiles: Partial<Record<TileFamilyId, TileAsset>> = Object.fromEntries(
+  EDGE_FAMILIES.map((family) => [family, edgeTile(family)]),
+) as Partial<Record<TileFamilyId, TileAsset>>;
+
 export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 
 export const tileFrameSrc = (asset: TileAsset): string => asset.src;

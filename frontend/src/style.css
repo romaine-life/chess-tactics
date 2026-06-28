@@ -9791,6 +9791,13 @@ button.tileset-relationship-cell {
 }
 
 .tileset-generated-board-tile img {
+  /* ADR-0039: a tile may render as two stacked layers (SIDE under TOP). Both occupy the
+     same 96x180 frame via absolute positioning so they overlay 1:1 with zero offset; their
+     pixels are disjoint (diamond vs. cliff), so there is no overlap to blend. A single-layer
+     tile is just one image at the same origin — unchanged. */
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
   width: 96px;
   height: 180px;

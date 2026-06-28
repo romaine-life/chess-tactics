@@ -42,23 +42,32 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   const byKey = new Map<string, SocketBoardCell<TAsset>>(
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x}-${cell.y}`, cell]),
   );
-  const cells = sourceCells.map((cell) => ({
-    key: `${cell.x}-${cell.y}`,
-    x: cell.x,
-    y: cell.y,
-    className: cell.missing ? 'is-missing' : '',
-    data: {
-      'data-asset-id': cell.asset?.id,
-      'data-missing': cell.missing?.label,
-      'data-board-x': cell.x,
-      'data-board-y': cell.y,
-    },
-    children: cell.asset ? (
-      <img src={assetFrameSrc(cell.asset)} alt="" draggable={false} />
-    ) : (
-      <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
-    ),
-  }));
+  const cells = sourceCells.map((cell) => {
+    // ADR-0039: render a tile as a SIDE layer with the TOP composited over it — two <img>s
+    // in the cell's one z-band — so a side can vary independently of its top. The layers are
+    // derived from the baked tile's path (`-side`/`-top`); top ∪ side == the original tile.
+    const baseSrc = cell.asset ? assetFrameSrc(cell.asset) : undefined;
+    return {
+      key: `${cell.x}-${cell.y}`,
+      x: cell.x,
+      y: cell.y,
+      className: cell.missing ? 'is-missing' : '',
+      data: {
+        'data-asset-id': cell.asset?.id,
+        'data-missing': cell.missing?.label,
+        'data-board-x': cell.x,
+        'data-board-y': cell.y,
+      },
+      children: baseSrc ? (
+        <>
+          <img className="tile-layer-side" src={baseSrc.replace(/\.png$/, '-side.png')} alt="" draggable={false} />
+          <img className="tile-layer-top" src={baseSrc.replace(/\.png$/, '-top.png')} alt="" draggable={false} />
+        </>
+      ) : (
+        <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
+      ),
+    };
+  });
 
   return (
     <TileGrid
