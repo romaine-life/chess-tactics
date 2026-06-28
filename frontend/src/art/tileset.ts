@@ -26,6 +26,9 @@ export interface TileAsset extends TileSocketAsset {
 // faces palette-tied to a darker tone of that tile's own top so top↔side reads as one
 // material (the approved seam treatment). This sidesteps PixelLab's unreliable iso-top
 // drawing: Blender owns the geometry, PixelLab only paints a flat material.
+// On the BOARD these render as two layers — top over side (ADR-0039); split-tiles.py derives
+// the -top/-side halves, and `src` here is the combined sprite (the split source + the
+// catalog/inspector image).
 // Built by frontend/scripts/build-surface-tiles.py. Eight variants per family. The raw
 // PixelLab blocks, textured Blender tiles, and the rejected conversion methods are
 // non-production — see frontend/src/art/nonProductionTiles.ts.
@@ -70,6 +73,32 @@ export const tileFamilies: Record<TileFamilyId, readonly TileAsset[]> = {
 
 // No transition tiles in the hard-edge tileset; kept exported (empty) for back-compat.
 export const transitionAssets: readonly TileAsset[] = [];
+
+// Frayed perimeter EDGE tiles. Same top diamond as the family base (so the surface seams
+// invisibly with interior tiles), but the cliff face is recolored to torn earth/rock with
+// an irregular broken bottom that fades into shadow — the diorama "tearaway base" so the
+// board reads as a chunk of land, not a machine cut. Held OUT of tileFamilies and random
+// placement (no probability); the board solver injects them ONLY on the front screen edges
+// by position. Built by frontend/scripts/build-edge-tiles.py.
+const edgeTile = (family: TileFamilyId): TileAsset => ({
+  id: `${family}-edge`,
+  label: `${terrainLabels[family]} · Edge`,
+  src: `/assets/tiles/surface/${family}-edge.png`,
+  role: 'edge',
+  kind: 'tile',
+  source: 'pixel:surface',
+  method: 'Edge (frayed cliff)',
+  probability: 0,
+  notes: `${terrainLabels[family]} — frayed perimeter edge (torn land cross-section).`,
+  terrains: [family],
+});
+
+// Families with a generated frayed edge. Water is intentionally excluded — its edge is the
+// (animated) waterfall, gated on river types; a static frayed water lip reads as clip-art.
+const EDGE_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand'];
+export const edgeTiles: Partial<Record<TileFamilyId, TileAsset>> = Object.fromEntries(
+  EDGE_FAMILIES.map((family) => [family, edgeTile(family)]),
+) as Partial<Record<TileFamilyId, TileAsset>>;
 
 export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 

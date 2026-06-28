@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
-import { generateSocketBoard } from '../core/tileBoardGenerator';
+import { tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
+import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
 import { BrandLockup } from './shared/BrandLockup';
 import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 // Inspector for the production surface-swap tileset (Blender edge + flat PixelLab top,
 // palette-tied sides; built by scripts/build-surface-tiles.py). Two views:
-//   • Board — a real generated mixed board through the game's BoardLabBoard renderer
-//     (tessellation/seating matches the live game), with zoom + re-roll + Smooth/Crisp.
+//   • Board — a real ALL-OF-ONE-FAMILY board (pick the family) through the game's
+//     BoardLabBoard renderer, WITH the frayed perimeter EDGE layer (ADR-0039), so you can
+//     judge a family's tiles AND its dropping edge on a clean board. Re-roll + zoom + Crisp.
 //   • Tiles — per-family grid: each production tile + the flat top-down surface it came from.
-// Use this to review whatever the pipeline generates next. Route: /surface-lab.
+// Use this to review whatever the pipeline generates next. Route: /surface-lab?view=board&family=grass.
 
 const FAMILIES = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'] as const;
 type Family = (typeof FAMILIES)[number];
@@ -53,9 +54,21 @@ export function SurfaceLab(): ReactElement {
     window.history.replaceState(window.history.state, '', `${window.location.pathname}?${p.toString()}`);
   }, [view, family, crisp]);
 
+  // All-of-one-family board (the selected family) WITH the frayed perimeter edge layer
+  // (ADR-0039), so the chosen family's tiles AND its dropping edge read on a real board.
+  const COLS = 11;
+  const ROWS = 9;
   const board = useMemo(
-    () => generateSocketBoard({ assets: tileAssets as readonly TileAsset[], seed, columns: 11, rows: 9, familyAssets: tileFamilies }),
-    [seed],
+    () => solveSocketBoard({
+      assets: tileAssets as readonly TileAsset[],
+      terrainMap: Array.from({ length: COLS * ROWS }, () => family),
+      seed,
+      columns: COLS,
+      rows: ROWS,
+      familyAssets: tileFamilies,
+      edgeAssets: edgeTiles,
+    }),
+    [family, seed],
   );
 
   return (
@@ -70,13 +83,12 @@ export function SurfaceLab(): ReactElement {
           <button type="button" className={`sl-tab ${view === 'board' ? 'is-active' : ''}`} onClick={() => setView('board')}>Board</button>
           <button type="button" className={`sl-tab ${view === 'tiles' ? 'is-active' : ''}`} onClick={() => setView('tiles')}>Tiles</button>
         </div>
-        {view === 'tiles' ? (
-          <nav className="sl-tabs">
-            {FAMILIES.map((f) => (
-              <button key={f} type="button" className={`sl-tab ${f === family ? 'is-active' : ''}`} onClick={() => setFamily(f)}>{cap(f)}</button>
-            ))}
-          </nav>
-        ) : (
+        <nav className="sl-tabs">
+          {FAMILIES.map((f) => (
+            <button key={f} type="button" className={`sl-tab ${f === family ? 'is-active' : ''}`} onClick={() => setFamily(f)}>{cap(f)}</button>
+          ))}
+        </nav>
+        {view === 'board' ? (
           <div className="sl-seg">
             <button type="button" className="sl-tab" onClick={() => setSeed((s) => (s % 9999) + 1)}>↻ Re-roll</button>
             <button type="button" className="sl-tab" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}>−</button>
@@ -85,7 +97,7 @@ export function SurfaceLab(): ReactElement {
             <button type="button" className={`sl-tab ${!crisp ? 'is-active' : ''}`} onClick={() => setCrisp(false)}>Smooth</button>
             <button type="button" className={`sl-tab ${crisp ? 'is-active' : ''}`} onClick={() => setCrisp(true)}>Crisp</button>
           </div>
-        )}
+        ) : null}
       </header>
 
       {view === 'board' ? (

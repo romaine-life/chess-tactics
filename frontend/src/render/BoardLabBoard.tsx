@@ -42,23 +42,36 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   const byKey = new Map<string, SocketBoardCell<TAsset>>(
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x}-${cell.y}`, cell]),
   );
-  const cells = sourceCells.map((cell) => ({
-    key: `${cell.x}-${cell.y}`,
-    x: cell.x,
-    y: cell.y,
-    className: cell.missing ? 'is-missing' : '',
-    data: {
-      'data-asset-id': cell.asset?.id,
-      'data-missing': cell.missing?.label,
-      'data-board-x': cell.x,
-      'data-board-y': cell.y,
-    },
-    children: cell.asset ? (
-      <img src={assetFrameSrc(cell.asset)} alt="" draggable={false} />
-    ) : (
-      <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
-    ),
-  }));
+  const cells = sourceCells.map((cell) => {
+    // ADR-0039: a tile is a SIDE layer with the TOP composited over it — two <img>s in the
+    // cell's one z-band. The TOP comes from `asset`; the SIDE comes from `sideAsset` when set
+    // (the frayed edge / future river-waterfall), else from `asset` itself. Each layer is the
+    // baked tile's `-top`/`-side` half; top ∪ side == the original cube, so a plain cell is
+    // unchanged and an edge cell keeps its own top with a frayed side.
+    const topSrc = cell.asset ? assetFrameSrc(cell.asset) : undefined;
+    const sideSrc = cell.sideAsset ? assetFrameSrc(cell.sideAsset) : topSrc;
+    return {
+      key: `${cell.x}-${cell.y}`,
+      x: cell.x,
+      y: cell.y,
+      className: cell.missing ? 'is-missing' : '',
+      data: {
+        'data-asset-id': cell.asset?.id,
+        'data-side-id': cell.sideAsset?.id,
+        'data-missing': cell.missing?.label,
+        'data-board-x': cell.x,
+        'data-board-y': cell.y,
+      },
+      children: topSrc ? (
+        <>
+          <img className="tile-layer-side" src={(sideSrc ?? topSrc).replace(/\.png$/, '-side.png')} alt="" draggable={false} />
+          <img className="tile-layer-top" src={topSrc.replace(/\.png$/, '-top.png')} alt="" draggable={false} />
+        </>
+      ) : (
+        <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
+      ),
+    };
+  });
 
   return (
     <TileGrid
