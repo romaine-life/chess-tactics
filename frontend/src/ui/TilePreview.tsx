@@ -37,6 +37,7 @@ import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio'
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
+import { KitScroll } from './KitScroll';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { PortraitLab } from './PortraitEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
@@ -2354,7 +2355,7 @@ export function LevelEditor(): ReactElement {
         ) : (
           <section className="skirmish-card le-brush-panel">
             <h2>Palette</h2>
-            <div className="le-palette-scroll kit-scroll">
+            <KitScroll className="le-palette-scroll">
               {leTileGroups.map(({ family, tiles }) => (
                 <div className="le-pal-group" key={family.id}>
                   <span className="le-pal-grouplabel">{family.label}</span>
@@ -2374,7 +2375,7 @@ export function LevelEditor(): ReactElement {
                   </div>
                 </div>
               ))}
-            </div>
+            </KitScroll>
           </section>
         )}
 
