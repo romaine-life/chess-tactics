@@ -5135,12 +5135,7 @@ h1 {
 }
 .level-editor-screen .le-topbar { grid-area: titlebar; }
 .level-editor-screen .skirmish-field { grid-area: board; }
-/* The editor's controls column scrolls as ONE never-vanish oak rail (ADR-0030): .skirmish-hud
-   becomes a plain positioned container and a <KitScroll> inside owns the scroll + drawn rail,
-   replacing the old conditional native bar (overflow:auto) that vanished on tall windows. */
-.level-editor-screen .skirmish-hud { grid-area: rail; display: block; overflow: visible; padding: 0; scrollbar-gutter: auto; }
-.level-editor-screen .skirmish-hud > .kit-scroll-wrap { height: 100%; }
-.le-hud-cards { display: grid; gap: 8px; grid-auto-rows: max-content; align-content: start; padding-top: 10px; padding-bottom: 12px; }
+.level-editor-screen .skirmish-hud { grid-area: rail; scrollbar-gutter: stable; }
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
@@ -5221,11 +5216,11 @@ h1 {
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
 /* palette (folded into the rail — variant B) */
-/* One-rail layout: the whole controls column scrolls (see .le-hud-cards below), so the brush
-   panels just grow to fit — no inner scroll, no fixed height. Switching Tile/Unit changes the
-   column's scroll length, not a panel's size, so nothing wobbles. */
-.le-brush-panel { display: flex; flex-direction: column; }
-.le-palette-list { display: flex; flex-direction: column; }
+/* Tile-palette and unit-controls swap in/out of the same rail slot; pin both to one
+   fixed height so flipping layers can't wobble the panel (Tile was 350px, Unit 354px). */
+.le-brush-panel { display: flex; flex-direction: column; height: 360px; overflow: hidden; }
+.le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
+.le-palette-scroll { height: 300px; }
 
 /* kit-scroll — the DRAWN scroll primitive (ADR-0030), rendered by <KitScroll>. The native bar is
    hidden; we draw an ALWAYS-PRESENT rail (a real DOM element the browser can't hide) + a grip thumb
