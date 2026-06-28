@@ -54,6 +54,17 @@ try {
     return style && style.textContent && style.textContent.includes('background');
   }, { timeout: 12000 }).catch(() => {});
   await new Promise((r) => setTimeout(r, 800));
+  if (process.env.BREAK === '1') {
+    // Re-apply a transform to the settings screen to reproduce the OLD broken continuity (each
+    // element restarts the fixed surface from its own corner) for before/after comparison.
+    await page.evaluate(() => {
+      const d = document.querySelector('.surface-dressing-frame').contentDocument;
+      const s = d.createElement('style');
+      s.textContent = '[data-testid="settings"] .settings-screen{transform:translate(0px,0px) !important;}';
+      d.head.appendChild(s);
+    });
+    await new Promise((r) => setTimeout(r, 300));
+  }
   const el = process.env.FULL === '1' ? null : await page.$('.surface-dressing-main');
   if (el) await el.screenshot({ path: out });
   else await page.screenshot({ path: out });

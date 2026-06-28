@@ -21,6 +21,9 @@ import { buildFrameFrom } from './assemble-frame.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const ATOMS = `${root}public/assets/ui/kit/atoms/`;
 export const KIT = `${root}public/assets/ui/kit/`;
+// Transparent-interior "line" variants (ornament only) live here, beside panel-line.png.
+// They are the fix for the 9-slice fill problem (see bakeLine / ADR-0034).
+export const LINE_DIR = `${root}public/assets/ui/explore/frames/`;
 export const CONFIG_DIR = `${root}config/nine-slice/`;
 
 // Single source of truth — the SAME registry the in-app editor and the catalog
@@ -115,6 +118,11 @@ export function normalizeConfig(c) {
     // 0 = no content inset. MUST stay in sync with NineSliceEditor's DEFAULT_CONTENT
     // (src/ui/NineSliceEditor.tsx) so an unsaved asset previews what it would bake.
     content: c.content ?? 0,
+    // `fill` = uniform inset (px) from the footprint to the FILL boundary: where a surface
+    // painted behind this frame should stop. The frame's ornament can bleed OUTSIDE this box
+    // (corners extend out to feel alive), so the fill boundary is distinct from the footprint.
+    // Consumption-side like `content` (not baked into the PNG); 0 = fill to the footprint edge.
+    fill: c.fill ?? 0,
   };
 }
 export function loadConfig(assetId) {
@@ -158,14 +166,47 @@ export function buildAsset(assetId, cfgRaw) {
     written.push(v.out);
     if (v.inspectPng) writeFileSync(`${ATOMS}${v.inspect}.png`, PNG.sync.write(v.inspectPng));
   }
+  // Frames flagged with a `line` output also get their transparent-interior twin baked, so the
+  // line variant can never drift from the filled frame (same atoms, same corner tune).
+  const rec = REGISTRY[assetId];
+  if (rec && rec.line) {
+    writeFileSync(`${LINE_DIR}${rec.line}`, PNG.sync.write(bakeLine(assetId)));
+    written.push(`explore/frames/${rec.line}`);
+  }
   return { written, warns, note };
+}
+
+// Bake an ornament-only (transparent-interior) variant of an asset's frame: the SAME
+// tuned corner + edge atoms, but a fully transparent fill, and every remaining dark
+// (navy) pixel masked back to transparent so only the bright rail/ornament survives.
+// A surface painted behind the element then shows straight through the 9-slice instead
+// of the baked navy fill. This is the GENERAL fix for the "navy ring" 9-slice fill
+// problem (cf. the hand-made panel-line.png): dropping border-image `fill` alone is not
+// enough because the 8 edge slices still carry the fill colour inward.
+export function bakeLine(assetId) {
+  const rec = REGISTRY[assetId];
+  if (!rec) throw new Error(`nine-slice-kit: unknown asset "${assetId}" (known: ${Object.keys(REGISTRY).join(', ')})`);
+  let cfg; try { cfg = loadConfig(assetId); } catch { cfg = normalizeConfig({ asset: assetId }); }
+  const corner = tuneCorner(loadAtom(rec.atoms.corner), cfg);
+  const edge = loadAtom(rec.atoms.edge);
+  const fillAtom = loadAtom(rec.atoms.fill);
+  // Assemble from the corner + edge atoms with a TRANSPARENT fill. The navy interior lives
+  // ENTIRELY in the fill atom, so this alone is the full ornament over a see-through center —
+  // nothing to mask, nothing to carve. (Two cleanup passes were tried and rejected: a dark-pixel
+  // MASK ate dark ornament down to a keyline; carveExterior ate a dark rail's outer bevel,
+  // pulling the frame off the element edge so surface spilled outside it. A line frame must be
+  // an ornament that reaches the element EDGE — corner brackets do; a continuous inset rail does
+  // not, so a surfaced row uses the bracket frame, not its own rail. See ADR-0034 §D.)
+  const clearFill = new PNG({ width: fillAtom.width, height: fillAtom.height }); clearFill.data.fill(0);
+  const { w, h } = rec.frame;
+  return buildFrameFrom(corner, edge, clearFill, w, h, !!rec.flipSides);
 }
 
 // Compare a freshly baked variant PNG to its committed file on disk, returning a
 // plain serializable result so a (type-checked) test can assert bake parity without
 // importing pngjs/fs/Buffer itself. Used by the nine-slice bake regression test.
-export function diffCommitted(out, freshPng) {
-  const committed = PNG.sync.read(readFileSync(`${KIT}${out}`));
+export function diffCommitted(out, freshPng, dir = KIT) {
+  const committed = PNG.sync.read(readFileSync(`${dir}${out}`));
   const sameSize = committed.width === freshPng.width && committed.height === freshPng.height;
   return {
     out,

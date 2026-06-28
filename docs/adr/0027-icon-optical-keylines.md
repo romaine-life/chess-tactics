@@ -61,19 +61,34 @@ a **wide** glyph is held inside it.
 ### C. Per-shape optical keylines — the refinement
 
 Each icon is scaled to its **shape-class keyline**, not to equal margins, so all five
-carry **equal optical mass**:
+carry **equal optical mass**. The main-menu set is a **hero set** on a sparse screen,
+so it uses a raised keyline band that fills toward the canvas margin (not the ~40 kit
+safe area) — equal optical mass is preserved, only the baseline scale is lifted:
 
-| Icon | Shape class | Keyline (on the 64 canvas) |
+| Icon | Shape class | Hero keyline (on the 64 canvas) |
 |---|---|---|
-| route-map | **full / square** | fill the `40` safe area on the long axis (largest — a full form reads lightest) |
-| blade | **tall / pointed** | grow height to **44** (reaches into the margin) |
-| keys | **tall** | grow height to **42** (tall-thin reads less massive) |
-| pawns | **wide** | hold **width** to **38** (a wide cluster reads heavier → shrink) |
-| scroll | **upright / blocky** | conservative **38** |
+| route-map | **full / square** | fill to **52** on the long axis (largest — a full form reads lightest) |
+| blade | **tall / pointed** | grow height to **56** (into the margin) |
+| keys | **tall** | grow height to **54** (tall-thin reads less massive) |
+| pawns | **wide** | hold **width** to **48** (a wide cluster reads heavier → shrink) |
+| scroll | **upright / blocky** | conservative **48** |
 
 Rule: full/round grows largest; tall/pointed gain **height, never width**; wide is
 held back on width; blocky is conservative (Material keylines; Helena Zhang, *Icon
-grids & keylines demystified*).
+grids & keylines demystified*). A *functional* (non-hero) set on the same canvas keeps
+ADR-0026's ~40 safe area instead.
+
+### C.1 Display size — the lead-emblem ratio
+
+On a sparse, atmospheric menu the emblem **leads**, so it is sized off the row, not
+the dense-icon floor: a lead emblem runs **~0.75 of row height** (defensible
+0.62–0.82, the top earned by whitespace — Material's icon→avatar→thumbnail ladder;
+NN/g visual hierarchy). The **ceiling** is where the emblem stops being the label's
+co-equal and becomes its headline (visual weight inverts, scannability drops). The
+main-menu mode buttons are pinned at an **80px row / 64px emblem** (`--menu-btn-h` /
+`--menu-icon-size`) — the top of the band, still ≤ the 64 native footprint so it is a
+clean downscale with **no reforge** (ADR-0014). Rendering an emblem **above 64px**
+requires a reforge to a **128×128** native (clean 2× of the grid), never an upscale.
 
 ### D. Optical centering frozen as padding
 

@@ -5,6 +5,14 @@ import { MENU_MODES, bestImageUrl, type MenuMode } from './design/catalogData';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
 
+// Temporary comparison knob: `?indent=hover` (6px slide) or `?indent=hover10` (10px)
+// to FEEL the deliberate hover slide on the REAL menu. Remove once the call is made.
+function indentClass(): string {
+  const v = new URLSearchParams(window.location.search).get('indent');
+  return v === 'hover' ? ' indent-hover'
+    : v === 'hover10' ? ' indent-hover indent-hover-10' : '';
+}
+
 const MODE_HREFS: Record<string, string> = {
   'solo-skirmish': '/play',
   'campaign-editor': '/campaigns-next',
@@ -108,7 +116,7 @@ export function MainMenu(): ReactElement {
               <strong>Chess Tactics</strong>
             </span>
           </a>
-          <nav className="main-menu-actions main-menu-actions-assets" aria-label="Game modes">
+          <nav className={`main-menu-actions main-menu-actions-assets${indentClass()}`} aria-label="Game modes">
             {MENU_MODES.map((mode) => (
               <ModeMenuLink key={mode.slug} mode={mode} />
             ))}
