@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
+import { BrandLockup } from './shared/BrandLockup';
+import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 // Inspector for the production surface-swap tileset (Blender edge + flat PixelLab top,
 // palette-tied sides; built by scripts/build-surface-tiles.py). Two views:
@@ -72,8 +74,11 @@ export function SurfaceLab(): ReactElement {
   return (
     <section className="sl">
       <style>{SL_CSS}</style>
+      <header className="app-titlebar settings-header-frame">
+        <BrandLockup screenName="Surface Lab" />
+        <HeaderAccountCluster />
+      </header>
       <header className="sl-bar">
-        <strong className="sl-name">Surface lab</strong>
         <div className="sl-seg">
           <button type="button" className={`sl-tab ${view === 'board' ? 'is-active' : ''}`} onClick={() => setView('board')}>Board</button>
           <button type="button" className={`sl-tab ${view === 'tiles' ? 'is-active' : ''}`} onClick={() => setView('tiles')}>Tiles</button>

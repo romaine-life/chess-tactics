@@ -41,6 +41,7 @@ import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
 import { BrandLockup } from './shared/BrandLockup';
+import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
@@ -1282,11 +1283,35 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     </label>
   );
 
+  // The studio workspace switcher (Catalog / Lab / Viewer). Per the title-bar
+  // standardization (ADR-0023) it lives in the CONTROL PANEL, not the title bar:
+  // it rides the top of the catalog controls rail and the Viewer labs' `header`
+  // slot, so it shows in both modes while the bar carries only brand + account.
+  const studioModeTabs = (
+    <div className="tileset-mode-field">
+      <span className="tileset-control-label">Workspace</span>
+      <span className="tileset-mode-tabs" aria-label="Workspace">
+        <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse the catalogs.">
+          Catalog
+        </button>
+        <button type="button" onClick={() => navigateApp('/level-editor?from=studio')} title="Open the Level Editor — paint tiles and units and set the board size.">
+          Lab
+        </button>
+        <button type="button" className={studioMode === 'viewer' ? 'is-active' : ''} onClick={() => setStudioMode('viewer')} title="View one finished asset or artwork.">
+          Viewer
+        </button>
+      </span>
+    </div>
+  );
+  // Viewer labs render their controls through a `header` slot; lead it with the
+  // workspace switcher so the relocated tabs sit atop the Viewer control panel too.
+  const studioViewerHeader = <>{studioModeTabs}{viewerKindSelect}</>;
+
   return (
     <main className="tileset-studio-page">
-      <header className="tileset-studio-header">
-        <div className="tileset-studio-brand">
-          <strong className="tileset-studio-wordmark">Studio</strong>
+      <header className="app-titlebar settings-header-frame tileset-studio-titlebar">
+        <BrandLockup screenName="Studio" />
+        <div className="tileset-studio-context">
           <nav className="tileset-crumb" aria-label="Location">
             {crumbTrail.map((part, index) => (
               <span key={index} className={index === crumbTrail.length - 1 ? 'is-current' : ''}>{part}</span>
@@ -1294,20 +1319,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           </nav>
           {crumbMeta ? <span className="tileset-crumb-meta">{crumbMeta}</span> : null}
         </div>
-        <nav className="tileset-studio-actions" aria-label="Tileset studio navigation">
-          <span className="tileset-mode-tabs" aria-label="Workspace">
-            <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse the catalogs.">
-              Catalog
-            </button>
-            <button type="button" onClick={() => navigateApp('/level-editor?from=studio')} title="Open the Level Editor — paint tiles and units and set the board size.">
-              Lab
-            </button>
-            <button type="button" className={studioMode === 'viewer' ? 'is-active' : ''} onClick={() => setStudioMode('viewer')} title="View one finished asset or artwork.">
-              Viewer
-            </button>
-          </span>
-          <a href="/settings">Settings</a>
-        </nav>
+        <HeaderAccountCluster />
       </header>
 
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'artwork' ? 'is-artwork' : ''}`} aria-label="Tileset browser">
@@ -1318,6 +1330,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
+              {studioModeTabs}
               <label className="tileset-category-select" title={activeCatalog.hint}>
                 <span>Category</span>
                 <select value={category} onChange={(event) => setCategory(event.target.value as StudioCategory)} aria-label="Catalog category">
@@ -1333,24 +1346,24 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
         ) : studioMode === 'viewer' ? (
           viewerKind === 'portrait'
-            ? <PortraitLab header={viewerKindSelect} />
+            ? <PortraitLab header={studioViewerHeader} />
             : viewerKind === 'nineslice'
-            ? <NineSliceLab assetId={selectedFrameName} onAssetId={setSelectedFrameName} header={viewerKindSelect} />
+            ? <NineSliceLab assetId={selectedFrameName} onAssetId={setSelectedFrameName} header={studioViewerHeader} />
             : viewerKind === 'artwork'
-              ? <ArtworkLab name={selectedArtworkName} header={viewerKindSelect} />
+              ? <ArtworkLab name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'
-                ? <GlossaryLab name={selectedGlossaryName} header={viewerKindSelect} />
+                ? <GlossaryLab name={selectedGlossaryName} header={studioViewerHeader} />
                 : viewerKind === 'surface'
-                  ? <SurfaceViewer name={selectedSurfaceName} header={viewerKindSelect} />
+                  ? <SurfaceViewer name={selectedSurfaceName} header={studioViewerHeader} />
                   : viewerKind === 'scrollbar'
-                    ? <ScrollbarViewer name={selectedScrollbarName} header={viewerKindSelect} />
+                    ? <ScrollbarViewer name={selectedScrollbarName} header={studioViewerHeader} />
                     : viewerKind === 'slider'
-                      ? <SliderViewer name={selectedSliderName} header={viewerKindSelect} />
+                      ? <SliderViewer name={selectedSliderName} header={studioViewerHeader} />
                       : viewerKind === 'page'
-                        ? <PagesViewer name={selectedPageName} header={viewerKindSelect} />
+                        ? <PagesViewer name={selectedPageName} header={studioViewerHeader} />
                         : viewerKind === 'tileside'
-                          ? <TileSidesViewer name={selectedTileSideId} header={viewerKindSelect} />
-                          : <AssetLab name={selectedAssetName} header={viewerKindSelect} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
+                          ? <TileSidesViewer name={selectedTileSideId} header={studioViewerHeader} />
+                          : <AssetLab name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
         ) : null}
       </section>
     </main>
@@ -1524,7 +1537,7 @@ export function LevelEditor(): ReactElement {
 
   return (
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
-        <header className="app-titlebar le-topbar" aria-label="Level editor">
+        <header className="app-titlebar settings-header-frame le-topbar" aria-label="Level editor">
           <BrandLockup screenName="Level Editor" />
           <div className="le-topbar-stats" aria-label="Level status">
             <span className="le-level-name">Untitled level</span>

@@ -7,6 +7,10 @@ export interface AuthUser {
   email?: string;
   name?: string;
   avatar_url?: string | null;
+  // True when the signed-in email is in the server's ADMIN_EMAILS allowlist. UI
+  // affordance only (gates the editor's "Edit Officials" tab); the real gate is
+  // server-side requireAdmin. See ADR-0038.
+  is_admin?: boolean;
 }
 
 export async function fetchMe(): Promise<AuthUser> {
