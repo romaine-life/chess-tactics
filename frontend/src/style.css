@@ -768,6 +768,31 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .46));
 }
 
+/* ── Settings-twin main menu (ADR-0003 superseded) ──────────────────────────────────
+   The home screen reuses the SAME baked-skin chrome as /settings — app title bar
+   (line frame over wood-oak) + the account slot, and a rail of stone-surface mode tabs
+   (.settings-tab) floating on the ambience — instead of the retired bespoke "Chess
+   Tactics" hero + stone slabs. Only the screen grid is menu-specific; the frames, tabs,
+   and surfaces are the shared settings skin. */
+.main-menu-twin-screen {
+  position: relative;
+  z-index: 3;
+  block-size: 100%;
+  inline-size: 100%;
+  display: grid;
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  gap: clamp(6px, .72vw, 12px);
+  min-block-size: 0;
+  /* .menu-layer.main-menu-layer is pointer-events:none (so the rain stays click-through);
+     the old menu re-enabled interaction on .main-menu-left/right. Re-enable it for the whole
+     twin UI, or every click falls through to the app root and the tabs do nothing. */
+  pointer-events: auto;
+}
+/* Home has no Back/Menu actions, so the bar is just brand | account. */
+.main-menu-twin-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 /* Ambience shared-world effect canvas. Sits over the menu's background art
    (the layer's CSS background) and under the menu UI (.main-menu-screen, z3).
    The sim only paints lit pixels, so the background scene shows through. */
@@ -4742,14 +4767,20 @@ h1 {
   background: transparent;
 }
 
-.skirmish-board-lab .tileset-view-stage {
+/* Strip the default .tileset-view-stage box (checkerboard fill + border + radius) on
+   both in-game boards: the live skirmish board AND the level editor. They share the
+   same world background, so they must read identically — the editor board floats on
+   the night sky too, not on the studio's transparency-checker stage (ADR-0032). */
+.skirmish-board-lab .tileset-view-stage,
+.level-editor-screen .tileset-view-stage {
   border: 0;
   border-radius: 0;
   padding: 0;
   background: transparent;
 }
 
-.skirmish-board-lab .tileset-view-stage:focus-within {
+.skirmish-board-lab .tileset-view-stage:focus-within,
+.level-editor-screen .tileset-view-stage:focus-within {
   outline: none;
 }
 
@@ -7939,8 +7970,7 @@ h1 {
    so the rail and pane hold their position — only their contents swap. */
 .tileset-studio-shell.is-catalog,
 .tileset-studio-shell.is-lab,
-.tileset-studio-shell.is-viewer,
-.tileset-studio-shell.is-dressing {
+.tileset-studio-shell.is-viewer {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
@@ -11451,8 +11481,13 @@ button.tileset-relationship-cell {
   /* Flush to the app edges — full-bleed, like the Skirmish bar. Top app bars are
      conventionally edge-to-edge, not inset cards. */
   padding: 0;
-  transform: scale(var(--settings-ui-scale, 1));
-  transform-origin: center;
+  /* UI Scale is applied with `zoom`, NOT `transform: scale()`. A transform here would
+     make the baked surfaces (background-attachment: fixed on the title/tabs/rows)
+     anchor per-element — each region restarts the texture — instead of sampling one
+     continuous viewport sheet. zoom scales the screen identically but is not a
+     containing block for fixed backgrounds, so the surface stays unbroken across
+     regions at any scale. */
+  zoom: var(--settings-ui-scale, 1);
 }
 
 /* Shared frame primitive. One panel.png 9-slice with a SINGLE corner-size token,
@@ -11462,9 +11497,11 @@ button.tileset-relationship-cell {
    corners desync again (which is exactly the bug this replaces: header/rail/main
    each set their own 9/18/24px border, scaling the shared 36px corner three ways). */
 .settings-frame {
+  /* Baked: the rail and main containers float — no frame, transparent — so the
+     framed tabs/rows sit directly on the page (the dressing-room "disable box").
+     The transparent border is kept only as the inset that positions their content. */
   --settings-frame-corner: 16px;
   border: var(--settings-frame-corner) solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / var(--settings-frame-corner) round;
   box-sizing: border-box;
 }
 
@@ -11520,7 +11557,18 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
   grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 0 clamp(12px, 1.3vw, 20px);
+  /* Baked surface skin (the accepted dressing-room preview): the panel-LINE frame
+     (transparent interior) over a fixed wood surface, instead of .app-titlebar's
+     filled panel. border-width = the fill inset (2px) so the surface clips to the
+     frame's interior; border-image-width (16px) renders the frame at full thickness;
+     padding compensates so content clears the frame art (ADR-0034). */
+  border: 2px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round;
+  padding: 14px 32px;
+  background: url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
+  background-origin: padding-box;
+  background-clip: padding-box;
+  image-rendering: pixelated;
 }
 
 /* Shared brand lockup — [shield] SCREEN NAME · chess tactics — the ONE top-left
@@ -11669,11 +11717,10 @@ button.tileset-relationship-cell {
   --settings-tab-icon-size: 34px;
   align-items: center;
   appearance: none;
-  background: transparent;
-  /* Mode-button frame: atom-assembled (symmetric by construction), gold brackets;
-     active swaps to the cyan-bracket frame. Built by scripts/generate-mode-button.mjs. */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
+     mode-button frame). Active swaps the marker, not the frame (below). ADR-0034. */
+  border: 2px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round;
   border-radius: 0;
   box-sizing: border-box;
   color: #c4d6e6;
@@ -11682,10 +11729,13 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
   image-rendering: pixelated;
   min-height: 56px;
-  padding: 7px 12px; /* tuned tab inset; the content-var automation was retired — content stays a saved editor guide */
+  padding: 17px 22px; /* frame-compensated inset so content clears the line frame */
+  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  background-origin: padding-box;
+  background-clip: padding-box;
   text-align: left;
   text-decoration: none;
-  transition: color .14s ease;
+  transition: color .14s ease, filter .14s ease;
 }
 
 .settings-tab > span:not(.settings-tab-icon) {
@@ -11693,14 +11743,16 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab:not(.is-active):hover {
-  background: rgba(47, 143, 230, 0.1);
+  /* Brighten the surface on hover instead of painting over it (a background here
+     would clobber the baked stone). */
+  filter: brightness(1.12);
   color: #eaf4ff;
 }
 
 .settings-tab.is-active {
-  background: transparent;
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
-  box-shadow: none;
+  /* Keep the stone surface + line frame; mark selection with a cyan inset ring +
+     glow (replaces the old cyan-bracket frame, which clashed with the line frame). */
+  box-shadow: inset 0 0 0 2px rgba(101, 184, 255, 0.78), inset 0 0 16px rgba(101, 184, 255, 0.22);
   color: #f3fbff;
 }
 
@@ -11815,27 +11867,28 @@ button.tileset-relationship-cell {
 .settings-row {
   align-items: center;
   box-sizing: border-box;
-  /* Atom-assembled low-fi steel row frame (ADR-0012/0014): row.png is built by
-     scripts/generate-row.mjs from the forged row-corner atom (mirrored) + derived
-     edge/fill. image-rendering: pixelated keeps the low-fi pixels crisp when the
-     border-image scales. Slice 16 captures the rail+notch in the corner's outer band. */
-  border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
+  /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
+     steel row.png frame). border-width = the fill inset; border-image-width renders
+     the frame full; padding compensates so content clears it (ADR-0034). */
+  border: 2px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round;
+  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  background-origin: padding-box;
+  background-clip: padding-box;
   image-rendering: pixelated;
   /* Flex, not grid: a row carries an OPTIONAL value and/or control, so a fixed
      column count strands an empty track + gap when one is absent — the lopsiding
-     ADR-0028 fixes. copy fills; value/control hug the end; side inset stays the
-     symmetric 16px (--ds-space-4) padding both sides. */
+     ADR-0028 fixes. copy fills; value/control hug the end. */
   display: flex;
   gap: 16px;
   min-height: 60px;
-  padding: 6px 16px;
+  padding: 18px 28px;
 }
 
 .settings-row + .settings-row {
   margin-top: 10px;
   min-height: 56px;
-  padding: 12px 16px;
+  padding: 18px 28px;
 }
 
 
@@ -12132,7 +12185,7 @@ button.tileset-relationship-cell {
   .settings-screen {
     inline-size: 100%;
     min-block-size: 100%;
-    transform: none;
+    zoom: 1;
   }
 
   .settings-header-frame {

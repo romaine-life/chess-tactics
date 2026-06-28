@@ -1,6 +1,7 @@
 import { useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
 import { MainMenu } from './MainMenu';
+import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -185,11 +186,12 @@ function PageStubViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   );
 }
 
-// Dispatcher: routes the selected page to its viewer — Main Menu is functional; the rest are
+// Dispatcher: routes the selected page to its viewer — Main Menu tunes the live menu; Settings
+// is the dressing room (assign surfaces to each region of the live /settings page); the rest are
 // live stubs. One arm in the TilePreview viewer ladder calls this.
 export function PagesViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
   const page = PAGE_ENTRIES.find((p) => p.name === name) ?? PAGE_ENTRIES[0];
-  return page.name === 'main-menu'
-    ? <MainMenuViewer page={page} header={header} />
-    : <PageStubViewer page={page} header={header} />;
+  if (page.name === 'main-menu') return <MainMenuViewer page={page} header={header} />;
+  if (page.name === 'settings') return <SurfaceDressingRoom header={header} />;
+  return <PageStubViewer page={page} header={header} />;
 }
