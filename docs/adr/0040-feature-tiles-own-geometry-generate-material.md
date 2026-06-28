@@ -4,13 +4,16 @@ date: 2026-06-28
 deciders: Nelson, Claude
 ---
 
-# ADR-0038: Board/feature tile art — own the geometry, generate the material (no code-drawn art)
+# ADR-0040: Board/feature tile art — own the geometry, generate the material (no code-drawn art)
 
 Extends [ADR-0011](0011-chrome-art-generated-not-extracted.md) (art is generated,
 not code-drawn) from UI chrome to the **board**, and applies the surface-swap
 pipeline ([tile-asset-roadmap.md](../tile-asset-roadmap.md)) to the new class of
 **connection / linear-feature tiles** (roads now; rivers, walls, fences, tracks
-later). Sibling of [ADR-0032](0032-no-bland-html-css-every-surface-is-kit.md)
+later). Complements [ADR-0039](0039-tile-top-and-side-are-composable-layers.md)
+(top/side are composable layers — the side is where a river's waterfall will live;
+this record governs how the feature OVERLAY itself is produced). Sibling of
+[ADR-0032](0032-no-bland-html-css-every-surface-is-kit.md)
 (every visible surface is generated/kit, never raw treatment).
 
 ## Context and Problem Statement

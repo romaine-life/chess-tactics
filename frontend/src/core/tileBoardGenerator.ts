@@ -7,7 +7,14 @@ import { featureKey, featureMaskAt } from './featureAutotile';
 export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsset> {
   x: number;
   y: number;
+  /** The TOP tile for this cell (the walkable surface; also the default SIDE). */
   asset?: TAsset;
+  /**
+   * Optional independent SIDE layer (ADR-0039). When set, the renderer composes this asset's
+   * `-side` under `asset`'s `-top`, so the side (frayed edge, future river/waterfall) varies
+   * independently of the top. Unset ⇒ the side comes from `asset` itself (the normal cube).
+   */
+  sideAsset?: TAsset;
   sockets: EdgeSockets;
   terrain: TileFamilyId;
   /**
@@ -245,6 +252,14 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
    * mask resolved from same-kind neighbours. Omit it for the original behaviour.
    */
   featureMap?: ReadonlyMap<string, { kind: FeatureKind; material: RoadMaterial }>;
+  /**
+   * Optional per-family edge tiles. When supplied, any cell on a FRONT screen edge
+   * (`x === columns - 1` or `y === rows - 1` — the void-facing rows in `x+y` paint order)
+   * gets the family's edge tile as its independent SIDE layer (ADR-0039), so the outer ring
+   * frays while keeping its own top variant. The top (`asset`) and sockets are untouched, so
+   * terrain and adjacency are unchanged — only the cliff face changes.
+   */
+  edgeAssets?: Partial<Record<TileFamilyId, TAsset>>;
 }
 
 /**
@@ -262,6 +277,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   rows,
   familyAssets,
   featureMap,
+  edgeAssets,
 }: SolveSocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
   const boardAssets = usableAssets.length > 0 ? usableAssets : assets.filter((asset) => asset.kind === 'tile');
@@ -308,6 +324,18 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
       const missing = missingForSockets(sockets);
       fallbacks.push({ x, y, requiredNorth: sockets.north, requiredWest: sockets.west, candidateCount: candidates.length });
       cells.push({ x, y, sockets, terrain, feature, missing });
+    }
+  }
+
+  // Give front-edge cells the family's frayed SIDE layer (ADR-0039), keeping each cell's own
+  // top variant and sockets — so legality and the stats below are unaffected. Only the
+  // void-facing rows in `x+y` paint order.
+  if (edgeAssets) {
+    for (const cell of cells) {
+      if (cell.asset && (cell.x === columns - 1 || cell.y === rows - 1)) {
+        const edge = edgeAssets[cell.terrain];
+        if (edge) cell.sideAsset = edge;
+      }
     }
   }
 

@@ -138,6 +138,9 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     BGM_BASE_URL: `http://127.0.0.1:${bgmPort}`,
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
+    // The mock auth returns player@example.com for any non-rival session; make that
+    // the official-campaigns admin so the requireAdmin path is exercised (ADR-0038).
+    ADMIN_EMAILS: 'player@example.com',
     // DATABASE_URL is set above (external or self-provisioned) and inherited
     // here via ...process.env.
   },
@@ -179,7 +182,7 @@ function get(path, headers) {
 // server applies migrations before it begins listening (and /health gates on
 // that), so waitForServer() has already returned by the time this runs.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns');
+  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns');
 }
 
 async function queryDb(sql, params = []) {
@@ -436,6 +439,98 @@ async function main() {
     testSlotPortfolioWriteBody.portfolio.updated_by !== 'test-slot@chess-tactics.local'
   ) {
     throw new Error(`Test-slot design portfolio write should not require sign-in: ${testSlotPortfolioWrite.statusCode} ${testSlotPortfolioWrite.body}`);
+  }
+
+  // --- Official (global) campaign tier (/api/official-campaigns): public GET,
+  //     admin-gated PUT, off-prefixed digit-free ids (ADR-0038) ----------------
+  const officialWorkspace = {
+    campaigns: [{
+      formatVersion: 1, id: 'off-c-test', name: 'Test Official', difficulty: 'normal', chapters: 1,
+      levels: [{ levelId: 'off-l-test', ordinal: 0, objective: 'capture-all' }],
+    }],
+    levels: {
+      'off-l-test': {
+        formatVersion: 1, id: 'off-l-test', name: 'Test Level', notes: '',
+        board: { cols: 8, rows: 8, heightLevels: 1 }, objective: 'capture-all', difficulty: 'normal',
+        economy: { startingFunds: 1000, incomePerTurn: 100 }, theme: 'grassland',
+        layers: { terrain: [], decals: [], zones: [], units: [] },
+      },
+    },
+  };
+
+  const emptyOfficial = await get('/api/official-campaigns/default');
+  const emptyOfficialBody = JSON.parse(emptyOfficial.body);
+  if (emptyOfficial.statusCode !== 200 || emptyOfficialBody.portfolio.revision !== 0 || Object.keys(emptyOfficialBody.portfolio.data).length !== 0) {
+    throw new Error(`Unexpected empty official campaigns response: ${emptyOfficial.statusCode} ${emptyOfficial.body}`);
+  }
+
+  const anonymousOfficialWrite = await request(
+    'PUT', '/api/official-campaigns/default',
+    { 'content-type': 'application/json' },
+    JSON.stringify({ data: officialWorkspace }),
+  );
+  if (anonymousOfficialWrite.statusCode !== 401) {
+    throw new Error(`Anonymous official write should require sign-in: ${anonymousOfficialWrite.statusCode} ${anonymousOfficialWrite.body}`);
+  }
+
+  const nonAdminOfficialWrite = await request(
+    'PUT', '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ data: officialWorkspace }),
+  );
+  if (nonAdminOfficialWrite.statusCode !== 403) {
+    throw new Error(`Non-admin official write should be forbidden: ${nonAdminOfficialWrite.statusCode} ${nonAdminOfficialWrite.body}`);
+  }
+
+  const invalidOfficialId = await get('/api/official-campaigns/Bad%20ID');
+  if (invalidOfficialId.statusCode !== 400) {
+    throw new Error(`Invalid official campaign id should fail: ${invalidOfficialId.statusCode} ${invalidOfficialId.body}`);
+  }
+
+  const adminOfficialWrite = await request(
+    'PUT', '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: officialWorkspace }),
+  );
+  const adminOfficialWriteBody = JSON.parse(adminOfficialWrite.body);
+  if (
+    adminOfficialWrite.statusCode !== 200 ||
+    adminOfficialWriteBody.portfolio.revision !== 1 ||
+    adminOfficialWriteBody.portfolio.updated_by !== 'player@example.com' ||
+    adminOfficialWriteBody.portfolio.data.campaigns[0].id !== 'off-c-test'
+  ) {
+    throw new Error(`Unexpected admin official write: ${adminOfficialWrite.statusCode} ${adminOfficialWrite.body}`);
+  }
+
+  // Public GET now returns the published officials — visible WITHOUT a session.
+  const publishedOfficial = await get('/api/official-campaigns/default');
+  const publishedOfficialBody = JSON.parse(publishedOfficial.body);
+  if (
+    publishedOfficial.statusCode !== 200 ||
+    publishedOfficialBody.portfolio.revision !== 1 ||
+    publishedOfficialBody.portfolio.data.campaigns[0].id !== 'off-c-test'
+  ) {
+    throw new Error(`Official campaigns did not persist for public read: ${publishedOfficial.statusCode} ${publishedOfficial.body}`);
+  }
+
+  // Non-off-prefixed ids are rejected (would collide the per-user id counter).
+  const nonOffIdWrite = await request(
+    'PUT', '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'c1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} } }),
+  );
+  if (nonOffIdWrite.statusCode !== 400 || JSON.parse(nonOffIdWrite.body).error !== 'invalid_official_ids') {
+    throw new Error(`Non-off-prefixed official ids should be rejected: ${nonOffIdWrite.statusCode} ${nonOffIdWrite.body}`);
+  }
+
+  // Digits inside an off- id are also rejected (must stay digit-free).
+  const digitOffIdWrite = await request(
+    'PUT', '/api/official-campaigns/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: { campaigns: [{ formatVersion: 1, id: 'off-c-test1', name: 'Bad', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} } }),
+  );
+  if (digitOffIdWrite.statusCode !== 400 || JSON.parse(digitOffIdWrite.body).error !== 'invalid_official_ids') {
+    throw new Error(`Official ids with digits should be rejected: ${digitOffIdWrite.statusCode} ${digitOffIdWrite.body}`);
   }
 
   // --- New-format level persistence (/api/levels): per-user, DB-backed -------

@@ -2,7 +2,7 @@
 """Bake the ROAD feature overlay set — 16 transparent tiles, one per 4-bit
 connection mask — into public/assets/tiles/feature/road-<mask>.png.
 
-Per ADR-0038 (own the geometry, generate the material): the connection FOOTPRINT
+Per ADR-0040 (own the geometry, generate the material): the connection FOOTPRINT
 (which stubs the ribbon has, where they meet the shared seam) is computed here so
 pieces always tessellate; the painted SURFACE is a GENERATED top-down material
 (docs/art/pixellab-runs/surfaces/<fam>/) projected into the iso top-diamond and
@@ -70,7 +70,7 @@ def _quad(draw, p0, p1, half):
 
 def ribbon_alpha(conns, half, hub, node_r):
     """The ribbon SHAPE (single channel, supersampled) for a width/hub/node — pure
-    computed geometry, the footprint half of ADR-0038."""
+    computed geometry, the footprint half of ADR-0040."""
     img = Image.new('L', (W * SS, H * SS), 0)
     d = ImageDraw.Draw(img)
     c = (CENTER[0] * SS, CENTER[1] * SS)

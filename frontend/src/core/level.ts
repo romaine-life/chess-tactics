@@ -79,6 +79,12 @@ export interface Campaign {
   locked?: boolean;
   unlockRequirement?: string;
   levels: CampaignLevelRef[];
+  // Tier tag, set at hydrate time and STRIPPED before the per-user Save PUT (so the
+  // persisted body stays identical to today). 'official' = global game content;
+  // 'mine' = the signed-in user's own campaign. Absent ⇒ treated as 'mine'.
+  origin?: 'official' | 'mine';
+  // Official campaigns render read-only in the editor (set alongside origin).
+  readOnly?: boolean;
 }
 
 export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows = 8): Level {
