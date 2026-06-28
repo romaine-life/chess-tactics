@@ -1062,6 +1062,29 @@ h1 {
   .main-menu-actions-assets.indent-hover .mode-button-stone:focus-visible { transform: none; }
 }
 
+/* ── Pages catalog viewer (ADR-0029) — the live page mounts inside the viewer stage.
+   The menu's absolute .menu-layer (inset:8px) fills this relatively-positioned stage; the
+   tweak wrapper carries the --menu-* overrides + the hover-slide class from the rail. */
+.pages-view-main { position: relative; overflow: hidden; min-height: 0; }
+.pages-menu-tweak { position: absolute; inset: 0; }
+.pages-menu-tweak.indent-hover .mode-button-stone {
+  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), border-color .1s ease, box-shadow .1s ease;
+}
+.pages-menu-tweak.indent-hover .mode-button-stone:hover,
+.pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: translateX(6px); }
+.pages-menu-tweak.indent-hover-10 .mode-button-stone:hover,
+.pages-menu-tweak.indent-hover-10 .mode-button-stone:focus-visible { transform: translateX(10px); }
+@media (prefers-reduced-motion: reduce) {
+  .pages-menu-tweak.indent-hover .mode-button-stone:hover,
+  .pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: none; }
+}
+.pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
+.pages-card-image {
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--ds-font-display); font-size: 1.9rem; color: #9db8da;
+  background: linear-gradient(180deg, #16243a, #0b1422);
+}
+
 /* ── Main-menu mode buttons — "Wet Stone & Cold Iron" (ADR-0025 register) ───────────
    A matte wet-stone slab with a thin forged-iron lip, carrying the forged carved-stone
    icon (icons-carved/<slug>.png, canonical 64×64 per ADR-0026, optical keylines ADR-0027) at --menu-icon-size.
@@ -1079,7 +1102,7 @@ h1 {
   background-color: #0f1b2b;
   background-image:
     linear-gradient(180deg, rgba(54, 72, 94, .24) 0%, rgba(8, 16, 28, 0) 46%, rgba(0, 0, 0, .42) 100%),
-    url("/assets/ui/surfaces/stone-slate-blue.png");
+    var(--menu-stone-surface, url("/assets/ui/surfaces/stone-slate-blue.png"));
   background-size: auto, 48px 48px;
   background-repeat: no-repeat, repeat;
   image-rendering: pixelated;
