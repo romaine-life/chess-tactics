@@ -24,7 +24,7 @@ const MODE_HREFS: Record<string, string> = {
 const DEMO_USER: AuthUser = {
   signed_in: true,
   name: 'Nelson',
-  email: 'fullnelsongrip@gmail.com',
+  email: 'nelson@romaine.life',
   // Retro (8-bit) Gravatar fallback — the default look for a user with no custom
   // avatar set; representative of what most players see (workshop demo only).
   avatar_url: 'https://www.gravatar.com/avatar/6b1b9282bc036370f9a6998fe9296233?d=retro&s=80&f=y',
@@ -105,7 +105,6 @@ export function MainMenu(): ReactElement {
             <div className="header-account-cluster" aria-label="Account">
               <AccountMenu
                 name={accountName}
-                email={effectiveMe!.email || ''}
                 avatarUrl={effectiveMe!.avatar_url ?? null}
                 onSignOut={signOut}
                 defaultOpen={menuOpen}

@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 
 // The signed-in account control for the trailing edge of the app chrome: an
-// icon-only avatar button (Gravatar) that opens a small kit-framed menu carrying
-// the user's name + email and the Sign Out action. This is the canonical
-// "account menu" pattern (GitHub / Google / Slack / Figma): the bar shows only
-// the avatar, the menu reveals identity at the moment of action. Pairs with the
+// icon-only avatar button (Gravatar) that opens a small kit-framed menu naming
+// the user and offering Sign Out. The canonical "account menu" pattern (GitHub /
+// Google / Slack): the avatar carries the identity in the bar, so the menu just
+// names who's signed in (no redundant second avatar) and acts. Pairs with the
 // Settings gear so the top-right reads as one "settings + user" cluster.
 
 interface AccountMenuProps {
   name: string;
-  email: string;
   avatarUrl: string | null;
   onSignOut: () => void;
   /** Render the menu open on mount (screenshot / demo harness only). */
@@ -18,7 +17,7 @@ interface AccountMenuProps {
 
 const initial = (name: string): string => (name.trim()[0] || '?').toUpperCase();
 
-export function AccountMenu({ name, email, avatarUrl, onSignOut, defaultOpen }: AccountMenuProps): ReactElement {
+export function AccountMenu({ name, avatarUrl, onSignOut, defaultOpen }: AccountMenuProps): ReactElement {
   const [open, setOpen] = useState(Boolean(defaultOpen));
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -51,13 +50,7 @@ export function AccountMenu({ name, email, avatarUrl, onSignOut, defaultOpen }: 
 
       {open && (
         <div className="account-menu" role="menu" aria-label="Account">
-          <div className="account-menu-head">
-            {avatar('account-menu-avatar')}
-            <span className="account-menu-id">
-              <strong>{name}</strong>
-              <em>{email}</em>
-            </span>
-          </div>
+          <p className="account-menu-name">{name}</p>
           <button type="button" className="account-menu-item" role="menuitem" onClick={onSignOut}>
             <img className="account-menu-glyph" src="/assets/ui/kit/icons/sign-out.png" alt="" aria-hidden="true" />
             <span>Sign Out</span>
