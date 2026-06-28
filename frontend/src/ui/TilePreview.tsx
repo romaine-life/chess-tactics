@@ -48,6 +48,7 @@ import {
   familyLabels,
   hasDirectionSprite,
   unitAssets,
+  UNIT_METHOD_OPTIONS,
   type Direction,
   type Faction,
   type PieceId,
@@ -533,6 +534,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Which item the Viewer is showing (independent of the catalog category).
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
+  const [selectedUnitMethods, setSelectedUnitMethods] = useState<string[]>(UNIT_METHOD_OPTIONS.map((m) => m.id));
   const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [zoom, setZoom] = useState(1);
@@ -868,12 +870,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     label: 'Units',
     assets: unitAssets,
     card: (u) => ({ img: u.preview, title: u.label, badge: u.badge, isUnit: true }),
-    sections: (visible) => [{ id: 'units', label: 'Production Units', assets: [...visible] }],
+    sections: (visible) => {
+      const prod = visible.filter((u) => !u.speculative);
+      const spec = visible.filter((u) => u.speculative);
+      const out: { id: string; label: string; assets: UnitAsset[] }[] = [];
+      if (prod.length) out.push({ id: 'production', label: 'Production Units', assets: prod });
+      if (spec.length) out.push({ id: 'speculative', label: 'Speculative — pixel-art candidate libraries (navy only)', assets: spec });
+      return out;
+    },
     query: {
       value: catalogQuery,
       set: setCatalogQuery,
-      placeholder: 'piece, read, status...',
-      match: (u, q) => [u.label, u.badge, u.family, u.read, u.status].join(' ').toLowerCase().includes(q),
+      placeholder: 'piece, library, read...',
+      match: (u, q) => [u.label, u.badge, u.family, u.read, u.status, u.method ?? '', u.speculative ? 'speculative' : 'production'].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
     filters: [
@@ -889,6 +898,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         toggle: (id) => setSelectedUnitFamilies((cur) => (cur.includes(id as PieceId) ? cur.filter((x) => x !== id) : [...cur, id as PieceId])),
         selectAll: () => setSelectedUnitFamilies(activeUnitFamilies),
         clear: () => setSelectedUnitFamilies([]),
+      },
+      {
+        id: 'method',
+        label: 'Library',
+        options: UNIT_METHOD_OPTIONS.map((m) => {
+          const n = unitAssets.filter((u) => (u.method ?? 'Codex Sheet') === m.id).length;
+          return { id: m.id, label: m.label, sub: `${m.sub} · ${n}` };
+        }),
+        memberOf: (u) => [u.method ?? 'Codex Sheet'],
+        selected: selectedUnitMethods,
+        toggle: (id) => setSelectedUnitMethods((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
+        selectAll: () => setSelectedUnitMethods(UNIT_METHOD_OPTIONS.map((m) => m.id)),
+        clear: () => setSelectedUnitMethods([]),
       },
     ],
     onSelect: (u) => selectUnitInCatalog(u.id),

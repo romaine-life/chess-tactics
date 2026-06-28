@@ -10512,8 +10512,35 @@ button.tileset-relationship-cell {
   place-items: center;
 }
 
-.unit-facing-cell.is-unavailable {
-  opacity: 0.5;
+.unit-facing-cell {
+  color: #aebfd2;
+  background: rgba(2, 8, 13, 0.45);
+  border: 1px solid rgba(67, 127, 179, 0.32);
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.unit-facing-cell:hover:not(:disabled) {
+  border-color: rgba(67, 127, 179, 0.6);
+  color: #d7e6f5;
+}
+
+.unit-facing-cell.is-active {
+  color: #f3fbff;
+  background: rgba(25, 94, 132, 0.95);
+  border-color: rgba(67, 127, 179, 0.6);
+}
+
+.unit-facing-cell.is-unavailable,
+.unit-facing-cell:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.unit-facing-rotate {
+  font-size: 19px;
+  color: #9ec7ff;
 }
 
 .unit-scene-empty {
