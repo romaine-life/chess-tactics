@@ -584,51 +584,6 @@ h1 {
 
 .menu-layer[hidden] { display: none; }
 
-.game-menu {
-  background:
-    linear-gradient(180deg, rgba(36, 28, 66, .97), rgba(18, 14, 34, .98));
-  border: 3px solid #7567ad;
-  box-shadow:
-    0 0 0 3px #0d0a1c,
-    inset 0 0 0 2px rgba(174, 230, 255, .14),
-    0 16px 0 rgba(0, 0, 0, .28);
-  display: grid;
-  gap: 12px;
-  max-width: min(520px, calc(100vw - 48px));
-  padding: 22px;
-  width: 100%;
-}
-
-.game-menu h2 {
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: clamp(1rem, 3vw, 1.55rem);
-  line-height: 1.3;
-  text-shadow: 0 3px 0 #0b0818;
-}
-
-.game-menu .eyebrow {
-  color: var(--power);
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .54rem;
-  line-height: 1.5;
-  text-transform: uppercase;
-}
-
-.game-menu button {
-  background: #211a3d;
-  border-color: #5f548d;
-  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .28);
-  min-height: 48px;
-  text-align: left;
-}
-
-.game-menu button:hover,
-.game-menu button:focus-visible,
-.game-menu button.active {
-  background: #15455a;
-  border-color: var(--move);
-}
-
 .menu-copy {
   color: var(--muted);
   font-size: 1.2rem;
@@ -826,238 +781,8 @@ h1 {
   image-rendering: pixelated;
 }
 
-.main-menu-left,
-.main-menu-right {
-  pointer-events: auto;
-  z-index: 3;
-}
-
-.main-menu-right {
-  align-self: start;
-  display: grid;
-  grid-column: 3;
-  grid-row: 1 / 3;
-  justify-self: end;
-  max-width: 540px;
-  min-width: 0;
-  width: 100%;
-}
-
-.main-menu-brand,
-.main-menu-actions {
-  grid-column: 1;
-  justify-self: stretch;
-  max-width: 370px;
-  min-width: 0;
-  pointer-events: auto;
-  z-index: 3;
-}
-
-.main-menu-left {
-  align-self: stretch;
-  display: contents;
-  grid-column: 1;
-  grid-row: 1 / 4;
-  grid-template-rows: auto auto 1fr;
-  gap: clamp(12px, 1.7vh, 18px);
-  max-width: 370px;
-  min-width: 0;
-}
-
-.main-menu-brand {
-  align-self: start;
-  grid-row: 1;
-}
-
-.main-menu-actions {
-  align-self: start;
-  grid-row: 2;
-}
-
 .shell.main-menu-active .board-scroll {
   display: none;
-}
-
-.main-menu-brand {
-  display: grid;
-  gap: 16px;
-}
-
-.main-menu-brand-live {
-  align-items: center;
-  display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
-  gap: 18px;
-  text-decoration: none;
-}
-
-.main-menu-brand-type {
-  display: grid;
-  min-width: 0;
-}
-
-.main-menu-brand-mark {
-  display: block;
-  width: 86px;
-  height: 116px;
-  object-fit: contain;
-  object-position: center;
-  pointer-events: none;
-}
-
-.main-menu-title-row {
-  align-items: center;
-  display: grid;
-  gap: 18px;
-  grid-template-columns: 70px minmax(0, 1fr);
-}
-
-.main-menu-brand h2,
-.main-menu-brand-type strong {
-  color: #f0eadb;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-display);
-  font-weight: 400;
-  line-height: 1.12;
-  text-shadow: 0 4px 0 #020507, 0 0 22px rgba(61, 150, 235, .14);
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.main-menu-brand p,
-.main-menu-brand-type > span:last-child {
-  color: #3d9bf1;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-sm);
-  line-height: 1.6;
-  text-transform: uppercase;
-}
-
-.main-menu-actions {
-  display: grid;
-  gap: 10px;
-}
-
-.main-menu-action {
-  align-items: center;
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 28px;
-  gap: 18px;
-  min-height: clamp(62px, 7.4vh, 78px);
-  padding: 10px 20px 10px 12px;
-  border-radius: 0;
-  border: 2px solid rgba(63, 95, 111, .78);
-  background:
-    linear-gradient(180deg, rgba(9, 29, 44, .92), rgba(4, 12, 19, .94));
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .62),
-    inset 0 1px 0 rgba(216, 240, 246, .05);
-  color: #f0eadb;
-  font-size: var(--ds-text-sm);
-  text-align: left;
-  text-transform: uppercase;
-}
-
-.main-menu-action.active,
-.main-menu-action:hover,
-.main-menu-action:focus-visible {
-  border-color: var(--menu-cyan);
-  background:
-    linear-gradient(180deg, rgba(12, 86, 139, .9), rgba(4, 31, 52, .94));
-  box-shadow:
-    0 0 0 2px rgba(0, 0, 0, .7),
-    inset 0 0 0 1px rgba(178, 232, 255, .22),
-    0 0 24px rgba(37, 199, 255, .15);
-}
-
-.main-menu-action i {
-  color: #d7e6ee;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-xl);
-  font-style: normal;
-  line-height: 1;
-  text-align: right;
-}
-
-.main-menu-actions-art {
-  aspect-ratio: 496 / 492;
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  position: relative;
-  width: min(100%, 492px);
-}
-
-.main-menu-actions-art img {
-  display: block;
-  height: auto;
-  image-rendering: auto;
-  left: -8.47%;
-  max-width: none;
-  object-fit: initial;
-  pointer-events: none;
-  position: absolute;
-  top: -50%;
-  width: 319.76%;
-}
-
-.main-menu-art-action {
-  --row-center: 9.35%;
-  align-items: center;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  display: flex;
-  height: 18%;
-  left: 0;
-  min-height: 0;
-  padding: 0;
-  position: absolute;
-  top: calc(var(--row-center) - 9%);
-  width: 100%;
-  z-index: 2;
-}
-
-.main-menu-art-action.active,
-.main-menu-art-action:hover,
-.main-menu-art-action:focus-visible,
-.main-menu-art-action.active:hover,
-.main-menu-art-action.active:focus-visible {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-}
-
-.main-menu-art-action:nth-of-type(1) { --row-center: 9.35%; }
-.main-menu-art-action:nth-of-type(2) { --row-center: 29.7%; }
-.main-menu-art-action:nth-of-type(3) { --row-center: 50.2%; }
-.main-menu-art-action:nth-of-type(4) { --row-center: 70.1%; }
-.main-menu-art-action:nth-of-type(5) { --row-center: 90%; }
-
-.main-menu-art-action span {
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
-
-.main-menu-art-action.active span,
-.main-menu-art-action:hover span,
-.main-menu-art-action:focus-visible span {
-  color: inherit;
-}
-
-.main-menu-art-action:hover,
-.main-menu-art-action:focus-visible {
-  background: rgba(37, 199, 255, .04);
-  outline: none;
-}
-
-.main-menu-art-action:focus-visible {
-  box-shadow: inset 0 0 0 2px rgba(255, 216, 122, .74);
 }
 
 /* Asset-backed mode button family, assembled from the asset catalog. The
@@ -4207,16 +3932,6 @@ h1 {
   border-color: rgba(101, 184, 255, .6);
 }
 
-#powerButton {
-  border-color: rgba(255, 189, 88, .54);
-}
-
-#powerButton:hover,
-#powerButton:focus-visible {
-  border-color: var(--power);
-  box-shadow: 0 0 0 2px rgba(255, 189, 88, .12);
-}
-
 #threatButton {
   border-color: rgba(255, 95, 73, .54);
 }
@@ -4240,39 +3955,6 @@ h1 {
 .roster {
   display: grid;
   gap: 7px;
-}
-
-.unit-row {
-  align-items: center;
-  background:
-    linear-gradient(180deg, rgba(18, 32, 41, .96), rgba(9, 18, 25, .96));
-  border: 1px solid rgba(57, 83, 97, .8);
-  border-radius: 4px;
-  display: grid;
-  gap: 9px;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  min-height: 48px;
-  padding: 7px;
-  text-align: left;
-  font-size: 1rem;
-}
-
-.unit-row.active {
-  border-color: var(--move);
-  box-shadow:
-    inset 3px 0 0 var(--move),
-    inset 0 0 0 1px rgba(101, 184, 255, .18),
-    0 0 0 2px rgba(47, 127, 232, .12);
-}
-
-.unit-row:hover,
-.unit-row:focus-visible {
-  background:
-    linear-gradient(180deg, rgba(24, 43, 55, .98), rgba(12, 24, 33, .98));
-}
-
-.unit-row:disabled {
-  opacity: .62;
 }
 
 .badge {
@@ -4312,42 +3994,6 @@ h1 {
 .roster-title:first-child {
   color: var(--cobalt-bright);
   margin-top: 0;
-}
-
-.unit-row strong, .unit-row span {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.unit-row strong {
-  color: var(--ink-strong);
-  font-size: 1.02rem;
-  line-height: 1;
-}
-
-.unit-row span {
-  color: var(--muted);
-  line-height: 1.08;
-}
-
-.unit-row > span:last-child {
-  align-self: stretch;
-  background: rgba(5, 12, 17, .62);
-  border: 1px solid rgba(71, 97, 113, .54);
-  border-radius: 3px;
-  color: #c5d5d9;
-  display: grid;
-  font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;
-  font-size: .95rem;
-  min-width: 42px;
-  place-items: center;
-}
-
-.unit-row .badge + span {
-  min-width: 0;
 }
 
 .legend {
@@ -5927,99 +5573,6 @@ h1 {
     -webkit-overflow-scrolling: touch;
   }
 
-  .main-menu-left,
-  .main-menu-brand,
-  .main-menu-actions,
-  .main-menu-right {
-    grid-column: 1;
-    grid-row: auto;
-    max-width: none;
-  }
-
-  .main-menu-left {
-    display: contents;
-  }
-
-  .main-menu-brand {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .main-menu-actions {
-    grid-column: 1;
-    grid-row: 2;
-    width: 100%;
-  }
-
-  .main-menu-right {
-    grid-row: 3;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .main-menu-actions-art {
-    aspect-ratio: auto;
-    display: grid;
-    gap: 8px;
-    overflow: visible;
-    width: 100%;
-  }
-
-  .main-menu-actions-art > img {
-    display: none;
-  }
-
-  .main-menu-art-action {
-    align-items: center;
-    background:
-      linear-gradient(180deg, rgba(9, 29, 44, .92), rgba(4, 12, 19, .94));
-    border: 2px solid rgba(63, 95, 111, .78);
-    box-shadow:
-      0 0 0 2px rgba(0, 0, 0, .62),
-      inset 0 1px 0 rgba(216, 240, 246, .05);
-    color: #f0eadb;
-    display: grid;
-    font-size: .72rem;
-    grid-template-columns: minmax(0, 1fr) 22px;
-    height: auto;
-    left: auto;
-    min-height: 58px;
-    padding: 9px 13px;
-    position: relative;
-    text-align: left;
-    top: auto;
-    width: 100%;
-  }
-
-  .main-menu-art-action.active,
-  .main-menu-art-action:hover,
-  .main-menu-art-action:focus-visible {
-    background:
-      linear-gradient(180deg, rgba(12, 86, 139, .9), rgba(4, 31, 52, .94));
-    border-color: var(--menu-cyan);
-    box-shadow:
-      0 0 0 2px rgba(0, 0, 0, .7),
-      inset 0 0 0 1px rgba(178, 232, 255, .22),
-      0 0 20px rgba(37, 199, 255, .14);
-  }
-
-  .main-menu-art-action::after {
-    color: #d7e6ee;
-    content: ">";
-    font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-    font-size: 1.1rem;
-    justify-self: end;
-  }
-
-  .main-menu-art-action span {
-    clip: auto;
-    clip-path: none;
-    height: auto;
-    overflow: visible;
-    position: static;
-    white-space: normal;
-    width: auto;
-  }
-
   .asset-reference-panel,
   .asset-artwork-panel,
   .portfolio-asset-list {
@@ -6074,10 +5627,6 @@ h1 {
   .panel-section { padding: 9px; }
   .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .actions button { font-size: .5rem; min-height: 38px; padding-inline: 6px; }
-  .unit-row {
-    grid-template-columns: 30px minmax(0, 1fr) 38px;
-    min-height: 44px;
-  }
   .badge {
     height: 30px;
     width: 30px;
@@ -6094,34 +5643,6 @@ h1 {
   .level-palette {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .game-menu { padding: 16px; }
-
-  .main-menu-screen {
-    gap: 12px;
-    padding: 12px;
-  }
-
-  .main-menu-title-row {
-    gap: 12px;
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  .main-menu-brand h2 {
-    font-size: clamp(1.4rem, 9vw, 2.15rem);
-  }
-
-  .main-menu-brand p {
-    font-size: .48rem;
-    line-height: 1.5;
-  }
-
-  .main-menu-action {
-    grid-template-columns: 46px minmax(0, 1fr) 20px;
-    gap: 10px;
-    min-height: 58px;
-    padding: 8px 10px;
-  }
-
 }
 
 .level-palette button.random-rock span,
