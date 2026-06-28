@@ -47,6 +47,9 @@ import {
   activeUnitFamilies,
   familyLabels,
   hasDirectionSprite,
+  directionCompassCells,
+  rookDirectionLabel,
+  rookDirections,
   unitAssets,
   UNIT_METHOD_OPTIONS,
   type Direction,
@@ -1249,7 +1252,6 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
   return cells;
 };
-const LE_FACING: Direction[] = ['south', 'east', 'north', 'west'];
 const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 
 export function LevelEditor(): ReactElement {
@@ -1300,6 +1302,24 @@ export function LevelEditor(): ReactElement {
   const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
   const unitFaction: Faction = LE_SIDE_FACTION[unitSide];
+  // Facing sets the brush direction AND rotates the unit selected on the board (in place).
+  const setUnitFacing = (dir: Direction): void => {
+    setUnitBrushDirection(dir);
+    setBoardUnits((prev) => {
+      const key = selectedCell ? `${selectedCell.x},${selectedCell.y}` : null;
+      if (!key || !prev[key]) return prev;
+      return { ...prev, [key]: { ...prev[key], direction: dir } };
+    });
+  };
+  // Center hub: spin one step clockwise (rookDirections is N→NE→E…→NW), skipping directions this unit lacks.
+  const rotateFacingCw = (): void => {
+    const n = rookDirections.length;
+    const start = rookDirections.indexOf(unitBrushDirection);
+    for (let step = 1; step <= n; step += 1) {
+      const next = rookDirections[(start + step) % n];
+      if (hasDirectionSprite(unitBrushAsset, next)) { setUnitFacing(next); return; }
+    }
+  };
   const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAsset(id);
   const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? DOODAD_ASSETS[0];
   // HARD terrain gate (mirrors the Studio): a doodad only lands on a tile of its home terrain.
@@ -1469,10 +1489,24 @@ export function LevelEditor(): ReactElement {
               <button type="button" className={`le-seg-btn ${unitSide === 'enemy' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('enemy')}>Enemy</button>
             </div>
             <h2 className="le-card-subhead">Facing</h2>
-            <div className="le-seg">
-              {LE_FACING.map((dir) => (
-                <button type="button" key={dir} className={`le-seg-btn ${unitBrushDirection === dir ? 'active' : ''}`.trim()} onClick={() => setUnitBrushDirection(dir)} title={dir}>{dir.charAt(0).toUpperCase()}</button>
-              ))}
+            <div className="unit-facing-compass" aria-label="Unit facing (8-way)">
+              {directionCompassCells.map((cell) =>
+                cell === 'center' ? (
+                  <button type="button" key="center" className="unit-facing-cell unit-facing-rotate" onClick={rotateFacingCw} title="Rotate clockwise" aria-label="Rotate unit clockwise">↻</button>
+                ) : (
+                  <button
+                    type="button"
+                    key={cell}
+                    className={`unit-facing-cell${unitBrushDirection === cell ? ' is-active' : ''}${hasDirectionSprite(unitBrushAsset, cell) ? '' : ' is-unavailable'}`}
+                    disabled={!hasDirectionSprite(unitBrushAsset, cell)}
+                    onClick={() => setUnitFacing(cell)}
+                    title={`Face ${cell}`}
+                    aria-label={`Face ${cell}`}
+                  >
+                    {rookDirectionLabel[cell]}
+                  </button>
+                ),
+              )}
             </div>
             <h2 className="le-card-subhead">Units</h2>
             <div className="le-swatches">
