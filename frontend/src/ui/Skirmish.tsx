@@ -6,7 +6,8 @@ import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
 import { useCampaigns } from '../campaign/store';
 import { loadWorkspace } from '../net/campaignWorkspace';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
-import { PALETTE_FOR_SIDE, isPlayablePieceType, portraitPath } from '../core/pieces';
+import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
+import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { preloadImages } from '../art/preload';
 
 const OBJECTIVE_COPY = {
@@ -35,12 +36,14 @@ export function Skirmish() {
 
   // Warm the portrait cache for the units actually on the board so the HUD bust
   // paints instantly on the first click instead of waiting for a fetch+decode at
-  // that moment. Scoped to the current roster (both sides are focusable).
+  // that moment. The HUD renders the bust live from the editor master render (via
+  // <UnitPortrait>), so preload THOSE — not the no-longer-used baked PNGs — plus
+  // the backdrop scene. Scoped to the current roster (both sides are focusable).
   useEffect(() => {
     const urls: string[] = [];
     for (const piece of game.pieces) {
       if (!isPlayablePieceType(piece.type)) continue;
-      urls.push(portraitPath(piece.type, PALETTE_FOR_SIDE[piece.side]));
+      urls.push(masterSrc(piece.type as PortraitPiece, PALETTE_FOR_SIDE[piece.side] as PortraitPalette));
       urls.push(DEFAULT_BACKGROUND_SET.portraits[piece.type]);
     }
     preloadImages(urls);
