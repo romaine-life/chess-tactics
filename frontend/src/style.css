@@ -11416,8 +11416,13 @@ button.tileset-relationship-cell {
   /* Flush to the app edges — full-bleed, like the Skirmish bar. Top app bars are
      conventionally edge-to-edge, not inset cards. */
   padding: 0;
-  transform: scale(var(--settings-ui-scale, 1));
-  transform-origin: center;
+  /* UI Scale is applied with `zoom`, NOT `transform: scale()`. A transform here would
+     make the baked surfaces (background-attachment: fixed on the title/tabs/rows)
+     anchor per-element — each region restarts the texture — instead of sampling one
+     continuous viewport sheet. zoom scales the screen identically but is not a
+     containing block for fixed backgrounds, so the surface stays unbroken across
+     regions at any scale. */
+  zoom: var(--settings-ui-scale, 1);
 }
 
 /* Shared frame primitive. One panel.png 9-slice with a SINGLE corner-size token,
@@ -12115,7 +12120,7 @@ button.tileset-relationship-cell {
   .settings-screen {
     inline-size: 100%;
     min-block-size: 100%;
-    transform: none;
+    zoom: 1;
   }
 
   .settings-header-frame {
