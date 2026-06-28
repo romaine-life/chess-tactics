@@ -18,7 +18,18 @@ export interface CampaignState {
   selectedCampaignId: string | null;
   selectedLevelId: string | null;
   counter: number;
+  // When true, authoring acts on the OFFICIAL tier: newCampaign/addLevel mint `off-`
+  // ids and the editor's Save targets the official endpoint. Admin-only.
+  officialMode: boolean;
   hydrate: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  // Tier-scoped replace: swap just the official slice (id-preserving, tagged
+  // readOnly), keeping the user slice — and vice versa. Used by the always-load-then-
+  // merge hydration so officials show for everyone and the user's own merge on top.
+  mergeOfficial: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  mergeUser: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  // Replace the whole store with the official set as EDITABLE (admin authoring); enters officialMode.
+  hydrateOfficialForEditing: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  setOfficialMode: (on: boolean) => void;
   importWorkspace: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
   newCampaign: () => void;
   duplicateCampaign: (id: string) => void;
@@ -68,9 +79,30 @@ const createStarterCampaignLevel = (id: string, name: string): Level => {
   };
 };
 
+// Official (global) tier ids are namespaced `off-` and DIGIT-FREE on purpose: the
+// per-user counter below derives from the numeric part of c/l ids, so a digit in an
+// official id would inflate/collide the user space. We belt-and-suspenders it by
+// also excluding `off-` ids from the counter scan.
+const OFFICIAL_PREFIX = 'off-';
+const isOfficialId = (id: string): boolean => String(id).startsWith(OFFICIAL_PREFIX);
+
+const slugify = (name: string): string => String(name || '').toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '') || 'item';
+// Counter → digit-free letters (1→a, 2→b, … 27→aa) so minted official ids stay unique without digits.
+const letters = (n: number): string => {
+  let x = Math.max(1, Math.floor(n));
+  let s = '';
+  while (x > 0) { x -= 1; s = String.fromCharCode(97 + (x % 26)) + s; x = Math.floor(x / 26); }
+  return s;
+};
+const officialId = (kind: 'c' | 'l', name: string, counter: number): string => `${OFFICIAL_PREFIX}${kind}-${slugify(name)}-${letters(counter)}`;
+
+const taggedOfficial = (campaign: Campaign): Campaign => ({ ...withCampaignDefaults(campaign), origin: 'official', readOnly: true, locked: true });
+const taggedMine = (campaign: Campaign): Campaign => ({ ...withCampaignDefaults(campaign), origin: 'mine', readOnly: false });
+
 const nextCounterFrom = (campaigns: Campaign[], levels: Record<string, Level>): number => {
   let max = 0;
-  for (const id of [...campaigns.map((c) => c.id), ...Object.keys(levels)]) {
+  const ids = [...campaigns.map((c) => c.id), ...Object.keys(levels)].filter((id) => !isOfficialId(id));
+  for (const id of ids) {
     const n = parseInt(String(id).replace(/[^0-9]/g, ''), 10);
     if (Number.isFinite(n) && n > max) max = n;
   }
@@ -89,6 +121,7 @@ export const useCampaigns = create<CampaignState>((set) => ({
   selectedCampaignId: null,
   selectedLevelId: null,
   counter: 1,
+  officialMode: false,
 
   hydrate: (ws) => set(() => {
     const imported = importableWorkspace(ws);
@@ -100,6 +133,41 @@ export const useCampaigns = create<CampaignState>((set) => ({
       selectedLevelId: null,
     };
   }),
+
+  mergeOfficial: (ws) => set((s) => {
+    const officialCampaigns = (ws.campaigns ?? []).map(taggedOfficial);
+    const userCampaigns = s.campaigns.filter((c) => c.origin !== 'official');
+    const officialLevels = Object.fromEntries(Object.entries(ws.levels ?? {}).map(([id, level]) => [id, withLevelDefaults(level)]));
+    const userLevels = Object.fromEntries(Object.entries(s.levels).filter(([id]) => !isOfficialId(id)));
+    const campaigns = [...officialCampaigns, ...userCampaigns];
+    const levels = { ...officialLevels, ...userLevels };
+    return { campaigns, levels, officialMode: false, counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)) };
+  }),
+
+  mergeUser: (ws) => set((s) => {
+    const userCampaigns = (ws.campaigns ?? []).map(taggedMine);
+    const officialCampaigns = s.campaigns.filter((c) => c.origin === 'official');
+    const userLevels = Object.fromEntries(Object.entries(ws.levels ?? {}).map(([id, level]) => [id, withLevelDefaults(level)]));
+    const officialLevels = Object.fromEntries(Object.entries(s.levels).filter(([id]) => isOfficialId(id)));
+    const campaigns = [...officialCampaigns, ...userCampaigns];
+    const levels = { ...officialLevels, ...userLevels };
+    return { campaigns, levels, officialMode: false, counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)) };
+  }),
+
+  hydrateOfficialForEditing: (ws) => set(() => {
+    const imported = importableWorkspace(ws);
+    const campaigns = imported.campaigns.map((c) => ({ ...c, origin: 'official' as const, readOnly: false, locked: false }));
+    return {
+      campaigns,
+      levels: imported.levels,
+      counter: imported.counter,
+      officialMode: true,
+      selectedCampaignId: campaigns[0] ? campaigns[0].id : null,
+      selectedLevelId: null,
+    };
+  }),
+
+  setOfficialMode: (on) => set({ officialMode: on }),
 
   importWorkspace: (ws) => set((s) => {
     const imported = importableWorkspace(ws);
@@ -130,7 +198,9 @@ export const useCampaigns = create<CampaignState>((set) => ({
 
   newCampaign: () => set((s) => {
     const n = s.counter;
-    const campaign: Campaign = { formatVersion: CAMPAIGN_FORMAT_VERSION, id: `c${n}`, name: `Campaign ${n}`, difficulty: 'normal', chapters: 1, favorite: false, locked: false, levels: [] };
+    const name = `Campaign ${n}`;
+    const id = s.officialMode ? officialId('c', name, n) : `c${n}`;
+    const campaign: Campaign = { formatVersion: CAMPAIGN_FORMAT_VERSION, id, name, difficulty: 'normal', chapters: 1, favorite: false, locked: false, levels: [], origin: s.officialMode ? 'official' : 'mine', readOnly: false };
     return { campaigns: [...s.campaigns, campaign], selectedCampaignId: campaign.id, selectedLevelId: null, counter: n + 1 };
   }),
 
@@ -155,6 +225,8 @@ export const useCampaigns = create<CampaignState>((set) => ({
       name: `${source.name} Copy`,
       levels: copiedRefs,
       locked: false,
+      origin: 'mine',
+      readOnly: false,
     };
     return {
       campaigns: [...s.campaigns, campaign],
@@ -187,8 +259,9 @@ export const useCampaigns = create<CampaignState>((set) => ({
     const camp = selected(s);
     if (!camp) return {};
     const n = s.counter;
-    const levelId = `l${n}`;
-    const level = createStarterCampaignLevel(levelId, `Level ${camp.levels.length + 1}`);
+    const levelName = `Level ${camp.levels.length + 1}`;
+    const levelId = s.officialMode ? officialId('l', levelName, n) : `l${n}`;
+    const level = createStarterCampaignLevel(levelId, levelName);
     const ref = { levelId, ordinal: camp.levels.length, objective: 'capture-all' as ObjectiveType };
     return {
       campaigns: s.campaigns.map((c) => (c.id === camp.id ? { ...c, levels: [...c.levels, ref] } : c)),

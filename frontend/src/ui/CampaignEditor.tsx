@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
-import { DEMO_SELECTED_CAMPAIGN_ID, DEMO_SELECTED_LEVEL_ID } from '../campaign/demoWorkspace';
-import { createDefaultWorkspace } from '../campaign/defaultWorkspace';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level, type ObjectiveType } from '../core/level';
-import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
+import { loadWorkspace, saveWorkspace, loadOfficialCampaigns, saveOfficialCampaigns, type Workspace } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
@@ -204,6 +202,7 @@ export function CampaignEditor() {
   const levels = useCampaigns((s) => s.levels);
   const selectedCampaignId = useCampaigns((s) => s.selectedCampaignId);
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
+  const officialMode = useCampaigns((s) => s.officialMode);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
   const [levelView, setLevelView] = useState<'board' | 'info'>('board');
@@ -213,15 +212,33 @@ export function CampaignEditor() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const dirty = currentSignature !== savedSignature;
 
-  const hydrateDemoWorkspace = (message?: string) => {
-    // The single-campaign default (DEMO_SELECTED_* still resolve to its first level).
-    const demo = createDefaultWorkspace();
-    const store = useCampaigns.getState();
-    store.hydrate(demo);
-    store.selectCampaign(DEMO_SELECTED_CAMPAIGN_ID);
-    store.selectLevel(DEMO_SELECTED_LEVEL_ID);
-    setSavedSignature(workspaceSignature(workspaceFromStore()));
-    if (message) setStatus(message);
+  // Strip the in-memory tier tags before any PUT, so persisted bodies stay identical
+  // to the canonical Workspace shape (ADR-0038).
+  const stripTiers = (list: Campaign[]): Campaign[] =>
+    list.map(({ origin: _origin, readOnly: _readOnly, ...rest }) => rest);
+
+  // The per-user save EXCLUDES officials (they share the store array) — this single
+  // filter is what keeps `off-` ids out of campaign_workspaces.
+  const userWorkspaceForSave = (): Workspace => {
+    const state = useCampaigns.getState();
+    return {
+      campaigns: stripTiers(state.campaigns.filter((c) => c.origin !== 'official')),
+      levels: Object.fromEntries(Object.entries(state.levels).filter(([id]) => !id.startsWith('off-'))),
+    };
+  };
+
+  const officialWorkspaceForSave = (): Workspace => {
+    const state = useCampaigns.getState();
+    return { campaigns: stripTiers(state.campaigns), levels: state.levels };
+  };
+
+  const selectFirstEditable = () => {
+    // Only auto-select an EDITABLE (own) campaign. Officials are locked in normal mode;
+    // leaving none selected shows "Select or create a campaign" rather than exposing
+    // live level controls on a read-only official.
+    const state = useCampaigns.getState();
+    const first = state.campaigns.find((c) => c.origin !== 'official');
+    if (first) state.selectCampaign(first.id);
   };
 
   useEffect(() => {
@@ -233,27 +250,40 @@ export function CampaignEditor() {
   useEffect(() => {
     let active = true;
     fetchMe().then((user) => { if (active) setMe(user); });
-    loadWorkspace()
-      .then((ws) => {
-        if (!active) return;
-        if (ws.campaigns.length) {
-          useCampaigns.getState().hydrate(ws);
-          setSavedSignature(workspaceSignature(workspaceFromStore()));
-        } else {
-          setSavedSignature(workspaceSignature(workspaceFromStore()));
-        }
-      })
-      .catch((e) => {
-        if (isUnauthorized(e)) {
-          hydrateDemoWorkspace('Demo workspace. Sign in to save.');
-          return;
-        }
-        if (useCampaigns.getState().campaigns.length === 0) {
-          hydrateDemoWorkspace('Demo workspace.');
-        }
-      });
+    (async () => {
+      const store = useCampaigns.getState();
+      // Officials always (for everyone), then the signed-in user's own on top.
+      store.mergeOfficial(await loadOfficialCampaigns());
+      if (!active) return;
+      try {
+        store.mergeUser(await loadWorkspace());
+      } catch (e) {
+        if (active && isUnauthorized(e)) setStatus('Official campaigns shown. Sign in to author your own.');
+      }
+      if (!active) return;
+      selectFirstEditable();
+      setSavedSignature(workspaceSignature(workspaceFromStore()));
+    })();
     return () => { active = false; };
   }, []);
+
+  const enterOfficialEditing = async () => {
+    if (dirty && !window.confirm('Discard unsaved changes and edit OFFICIAL campaigns?')) return;
+    useCampaigns.getState().hydrateOfficialForEditing(await loadOfficialCampaigns());
+    setSavedSignature(workspaceSignature(workspaceFromStore()));
+    setStatus('Editing OFFICIAL campaigns — Publish writes to every player.');
+  };
+
+  const exitOfficialEditing = async () => {
+    if (dirty && !window.confirm('Discard unpublished official changes?')) return;
+    const store = useCampaigns.getState();
+    store.setOfficialMode(false);
+    store.mergeOfficial(await loadOfficialCampaigns());
+    try { store.mergeUser(await loadWorkspace()); } catch { /* unauth ⇒ officials only */ }
+    selectFirstEditable();
+    setSavedSignature(workspaceSignature(workspaceFromStore()));
+    setStatus('');
+  };
 
   useEffect(() => {
     if (!dirty) return undefined;
@@ -267,11 +297,18 @@ export function CampaignEditor() {
 
   const saveWorkspaceNow = async () => {
     try {
-      await saveWorkspace({ campaigns: useCampaigns.getState().campaigns, levels: useCampaigns.getState().levels });
-      setSavedSignature(workspaceSignature(workspaceFromStore()));
-      setStatus('Saved to server');
+      if (useCampaigns.getState().officialMode) {
+        const { revision } = await saveOfficialCampaigns(officialWorkspaceForSave());
+        setSavedSignature(workspaceSignature(workspaceFromStore()));
+        setStatus(`Published official campaigns (revision ${revision}).`);
+      } else {
+        await saveWorkspace(userWorkspaceForSave());
+        setSavedSignature(workspaceSignature(workspaceFromStore()));
+        setStatus('Saved to server');
+      }
     } catch (e) {
       if (isUnauthorized(e)) { goSignIn(); return; }
+      if ((e as { status?: number }).status === 403) { setStatus('Admin access required to publish official campaigns.'); return; }
       setStatus(`Save failed: ${(e as Error).message}`);
     }
   };
@@ -339,10 +376,16 @@ export function CampaignEditor() {
       <header className="app-titlebar ce-topbar">
         <BrandLockup screenName="Campaign Editor" />
         <div className="ce-topbar-stats" aria-label="Campaign workspace stats">
+          {officialMode ? <span className="ce-save-state ce-official-badge">OFFICIAL</span> : null}
           <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
         </div>
         <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
-          <button type="button" data-testid="save-workspace" className="app-header-button app-header-button-active" onClick={saveWorkspaceNow}>Save</button>
+          {me?.is_admin ? (
+            officialMode
+              ? <button type="button" data-testid="exit-officials" className="app-header-button" onClick={() => void exitOfficialEditing()}>Exit Officials</button>
+              : <button type="button" data-testid="edit-officials" className="app-header-button" onClick={() => void enterOfficialEditing()}>Edit Officials</button>
+          ) : null}
+          <button type="button" data-testid="save-workspace" className="app-header-button app-header-button-active" onClick={saveWorkspaceNow}>{officialMode ? 'Publish' : 'Save'}</button>
           <a className="app-header-button" href="/settings">Settings</a>
         </nav>
       </header>
@@ -472,7 +515,7 @@ export function CampaignEditor() {
       </main>
 
       <footer className="ce-footer">
-        <AssetButton disabled={!camp} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
+        <AssetButton disabled={!camp || camp.origin === 'official'} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
         <AssetButton danger disabled={!camp} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
       </footer>

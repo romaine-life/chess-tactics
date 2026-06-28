@@ -5864,6 +5864,14 @@ h1 {
   text-shadow: 0 0 8px rgba(240, 189, 85, .28);
 }
 
+/* Admin "Edit Officials" mode marker — the editor is a dev/admin surface, so a
+   plain high-contrast tag is fine (out of scope for player chrome polish). */
+.ce-official-badge {
+  color: var(--ce-gold-bright);
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
 .ce-topbar-actions {
   gap: 10px;
 }
@@ -11474,6 +11482,18 @@ button.tileset-relationship-cell {
   gap: clamp(9px, .8vw, 13px);
   padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
 }
+
+/* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label
+   (text is exempt from the kit-surface rule, ADR-0032). */
+.campaign-rail-group {
+  margin: 4px 6px 0;
+  font-size: var(--ds-text-2xs, .72rem);
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
+}
+.campaign-rail-group:first-child { margin-top: 0; }
 
 /* Clean sidebar nav — icon + label rows; the SELECTED item is highlighted with a
    subtle fill + accent bar, the rest stay plain. No per-item frame (the rail panel

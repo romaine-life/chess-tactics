@@ -176,6 +176,10 @@ export function Campaign(): ReactElement {
   const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
   const activeId = campaigns.some((c) => c.id === selectedId) ? selectedId : campaigns[0]?.id ?? '';
   const activeCampaign = campaigns.find((c) => c.id === activeId) ?? null;
+  // Tier split (ADR-0038): official campaigns show for everyone; the user's own only
+  // when signed in. The store already orders officials first.
+  const officialCampaigns = campaigns.filter((c) => c.origin === 'official');
+  const myCampaigns = campaigns.filter((c) => c.origin !== 'official');
 
   return (
     <div className="menu-layer main-menu-layer is-ready" data-testid="campaign-menu">
@@ -198,9 +202,22 @@ export function Campaign(): ReactElement {
 
         <div className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Campaigns">
-            {campaigns.map((campaign) => (
-              <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} />
-            ))}
+            {officialCampaigns.length > 0 && (
+              <>
+                {myCampaigns.length > 0 && signedIn ? <p className="campaign-rail-group">Official</p> : null}
+                {officialCampaigns.map((campaign) => (
+                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} />
+                ))}
+              </>
+            )}
+            {signedIn && myCampaigns.length > 0 && (
+              <>
+                <p className="campaign-rail-group">Your Campaigns</p>
+                {myCampaigns.map((campaign) => (
+                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} />
+                ))}
+              </>
+            )}
           </aside>
 
           {activeCampaign && <LevelSelect campaign={activeCampaign} progress={progress} />}
