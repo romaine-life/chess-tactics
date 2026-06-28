@@ -4708,14 +4708,20 @@ h1 {
   background: transparent;
 }
 
-.skirmish-board-lab .tileset-view-stage {
+/* Strip the default .tileset-view-stage box (checkerboard fill + border + radius) on
+   both in-game boards: the live skirmish board AND the level editor. They share the
+   same world background, so they must read identically — the editor board floats on
+   the night sky too, not on the studio's transparency-checker stage (ADR-0032). */
+.skirmish-board-lab .tileset-view-stage,
+.level-editor-screen .tileset-view-stage {
   border: 0;
   border-radius: 0;
   padding: 0;
   background: transparent;
 }
 
-.skirmish-board-lab .tileset-view-stage:focus-within {
+.skirmish-board-lab .tileset-view-stage:focus-within,
+.level-editor-screen .tileset-view-stage:focus-within {
   outline: none;
 }
 
