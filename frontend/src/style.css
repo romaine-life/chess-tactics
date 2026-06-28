@@ -11985,24 +11985,26 @@ button.tileset-relationship-cell {
   min-inline-size: 72px;
 }
 
-/* Tracks sub-view: a pinned header bar above the soundtrack list. It sits in the main
-   frame's header row, OUTSIDE the KitScroll viewport, so ← Back never scrolls with the
-   list. The 18px end-gutter mirrors the scroll viewport's reserved rail space so the
-   inner column lines up with the rows below; the pill hugs its label (like the
-   row-control action pills) instead of the decreed 176px box. */
+/* Tracks sub-view: a pinned header above the soundtrack list. It sits in the main
+   frame's header row, OUTSIDE the KitScroll viewport, so ← Back AND the "Soundtrack"
+   eyebrow stay frozen while only the rows scroll. The 18px end-gutter mirrors the
+   scroll viewport's reserved rail space so the inner column lines up with the rows
+   below; the pill hugs its label (like the row-control action pills) not the 176px box. */
 .settings-tracks-bar {
   padding-block-end: clamp(8px, .8vw, 12px);
   padding-inline-end: 18px;
 }
 
 .settings-tracks-bar-col {
-  align-items: center;
   display: flex;
+  flex-direction: column;
+  gap: clamp(8px, .8vw, 12px);
   inline-size: min(100%, 880px);
   margin-inline: auto;
 }
 
 .settings-tracks-bar-col > .settings-chrome-button {
+  align-self: flex-start;
   inline-size: auto;
   min-inline-size: 72px;
 }

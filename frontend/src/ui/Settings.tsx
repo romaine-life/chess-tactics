@@ -507,8 +507,10 @@ export function Settings(): ReactElement {
   // Its own route (/settings/audio/tracks); the ← back (pinned outside the scroll
   // area, see the panel header below) returns to the Audio page.
   const renderTracks = () => (
-    <>
-      <SettingsSection title="Soundtrack">
+    // The "Soundtrack" eyebrow is pinned in the panel header above; here we render
+    // only the scrolling rows (reusing the section-rows chrome without its title).
+    <section className="settings-section">
+      <div className="settings-section-rows">
         {tracks === null ? (
           <SettingsRow title="Loading tracks…" description="Fetching the background music playlist." />
         ) : tracks.length === 0 ? (
@@ -539,8 +541,8 @@ export function Settings(): ReactElement {
             );
           })
         )}
-      </SettingsSection>
-    </>
+      </div>
+    </section>
   );
 
   const renderGameplay = () => (
@@ -615,6 +617,7 @@ export function Settings(): ReactElement {
               <div className="settings-tracks-bar">
                 <div className="settings-tracks-bar-col">
                   <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+                  <h3 className="settings-section-title">Soundtrack</h3>
                 </div>
               </div>
             ) : null}
