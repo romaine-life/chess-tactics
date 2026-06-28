@@ -181,13 +181,15 @@ export function Campaign(): ReactElement {
           <aside className="settings-frame settings-rail-frame" aria-label="Campaigns">
             {officialCampaigns.length > 0 && (
               <>
-                {myCampaigns.length > 0 && signedIn ? <p className="campaign-rail-group">Official</p> : null}
+                {/* Only label the tiers when the user actually has their own (myCampaigns
+                    is non-empty only when signed in — it comes from the authed merge). */}
+                {myCampaigns.length > 0 ? <p className="campaign-rail-group">Official</p> : null}
                 {officialCampaigns.map((campaign) => (
                   <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} />
                 ))}
               </>
             )}
-            {signedIn && myCampaigns.length > 0 && (
+            {myCampaigns.length > 0 && (
               <>
                 <p className="campaign-rail-group">Your Campaigns</p>
                 {myCampaigns.map((campaign) => (
