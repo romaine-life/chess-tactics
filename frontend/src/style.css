@@ -753,6 +753,11 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* The enlarged tab look (64px carved icon, even 22px padding, label nudged +18px, icon grown from a
+   fixed centre and clipped at the button edge) now lives on the shared .settings-tab base above, so
+   the main-menu, campaign, AND settings tabs all match. The Pages tuner (MainMenuViewer) still
+   overrides .main-menu-mode-tab live for further auditioning. */
+
 /* Ambience shared-world effect canvas. Sits over the menu's background art
    (the layer's CSS background) and under the menu UI (.main-menu-screen, z3).
    The sim only paints lit pixels, so the background scene shows through. */
@@ -853,6 +858,34 @@ h1 {
 .pages-menu-tweak.preview-hover.indent-hover .mode-button-stone { transform: translateX(6px); }
 .pages-menu-tweak.preview-hover.indent-hover-10 .mode-button-stone { transform: translateX(10px); }
 .pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
+/* A control + its permanent per-control reset, side by side. The widget flexes to fill, the ↺
+   sits to its right. Studio tooling chrome (out of scope for the player-facing kit). */
+.pages-ctl-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pages-ctl-row > input[type="range"],
+.pages-ctl-row > select,
+.pages-ctl-row > .tileset-tier-seg {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+.pages-mini-reset {
+  appearance: none;
+  flex: none;
+  align-self: stretch;
+  padding: 0 8px;
+  font-size: 14px;
+  line-height: 1;
+  color: #9fc4e6;
+  background: rgba(120, 160, 200, .12);
+  border: 1px solid rgba(120, 160, 200, .32);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pages-mini-reset:hover { color: #f4fbff; background: rgba(120, 160, 200, .24); }
 /* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
    sprites): a solid stone-ish plate with the page initial, centered by the base place-items. */
 .tileset-studio-card-image.pages-card-image {
@@ -11354,9 +11387,10 @@ button.tileset-relationship-cell {
    already carries the gold-bracket chrome). Mirrors the grouped-list content. */
 .settings-tab {
   --settings-tab-icon-slot: 40px;
-  --settings-tab-icon-size: 34px;
+  --settings-tab-icon-size: 64px;
   align-items: center;
   appearance: none;
+  overflow: hidden; /* clip the enlarged carved icon at the button edge */
   /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
      mode-button frame). Active swaps the marker, not the frame (below). ADR-0034. */
   border: 2px solid transparent;
@@ -11369,7 +11403,7 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
   image-rendering: pixelated;
   min-height: 56px;
-  padding: 17px 22px; /* frame-compensated inset so content clears the line frame */
+  padding: 22px; /* even inset — icon sits with equal margin on every side (was 17px/22px) */
   background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
   background-origin: padding-box;
   background-clip: padding-box;
@@ -11380,6 +11414,7 @@ button.tileset-relationship-cell {
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
+  transform: translateX(18px); /* nudge the label clear of the enlarged icon */
 }
 
 .settings-tab:not(.is-active):hover {
@@ -11397,7 +11432,8 @@ button.tileset-relationship-cell {
   display: grid;
   height: var(--settings-tab-icon-slot);
   justify-items: center;
-  overflow: hidden;
+  overflow: visible; /* let the enlarged icon spill its 40px slot; the tab clips it at the button edge */
+  position: relative;
   width: var(--settings-tab-icon-slot);
 }
 
@@ -11407,6 +11443,11 @@ button.tileset-relationship-cell {
   width: var(--settings-tab-icon-size);
   image-rendering: pixelated;
   object-fit: contain;
+  /* Grow from a FIXED centre at any size (margin:auto/grid would anchor an oversized glyph). */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .settings-tab strong {
