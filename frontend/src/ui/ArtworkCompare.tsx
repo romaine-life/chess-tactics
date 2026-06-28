@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { BrandLockup } from './shared/BrandLockup';
+import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 // A live design surface for matching screens to their accepted art direction.
 // Two side-by-side panes; each pane picks from a list of OPTIONS, where each
@@ -231,6 +233,10 @@ export function ArtworkCompare(): ReactElement {
   return (
     <section className="ac">
       <style>{AC_CSS}</style>
+      <header className="app-titlebar settings-header-frame">
+        <BrandLockup screenName="Artwork Compare" />
+        <HeaderAccountCluster />
+      </header>
 
       <div className="ac-panes">
         <ComparePane opts={opts} value={left.idx} css={left.css} onPick={pickLeft} onReload={reload} reloadKey={reloadKey} />

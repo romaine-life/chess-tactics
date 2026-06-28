@@ -2726,6 +2726,23 @@ h1 {
   width: 100%;
 }
 
+/* Lobbies/Party wear the standard bar as a settings-twin (ADR-0004/0023): the bar is
+   the settings-screen grid's top row; the centred .utility-screen body fills and
+   scrolls within the row below it (no longer the whole route, so it must scroll). */
+.utility-twin-screen > .utility-screen {
+  align-self: stretch;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Pick-progress / intro line relocated from the old utility-page-header subtitle. */
+.utility-lead {
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.25;
+  margin: 0 0 14px;
+}
+
 .utility-page-header,
 .utility-panel,
 .utility-lobby-card,
@@ -4168,6 +4185,23 @@ h1 {
 .shell.is-immersive + .bgm-control,
 .shell.is-immersive ~ .bgm-control { display: none; }
 
+/* Studio/dev editor & inspector surfaces (Portrait Editor, Doodad Editor, Surface Lab,
+   Artwork/Tile Compare) on the standard title bar (ADR-0004/0023): a full-bleed bar on
+   top, the existing tool body filling and scrolling in the row below it. The shell runs
+   .is-immersive so the global topbar is hidden and .app-root is full-bleed. */
+.dev-editor-screen {
+  background: #0b1016;
+  display: grid;
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.dev-editor-screen > :not(.app-titlebar) {
+  min-height: 0;
+  overflow: auto;
+}
+
 .skirmish-screen::before {
   background:
     radial-gradient(760px 440px at 42% 38%, rgba(21, 95, 137, .12), transparent 66%),
@@ -4192,18 +4226,19 @@ h1 {
 }
 
 .skirmish-topbar {
-  /* Frame + height come from .app-titlebar; this class is content layout only.
-     Spans both screen columns so the bar is full-bleed across the top (ADR-0004).
-     Three sections — brand left, status centered, counts+actions right — with the
-     content row vertically centered on the bar (align-content), per ADR-0010. */
+  /* The oak frame, height, gap, and padding come from .app-titlebar + .settings-header-frame
+     (ADR-0004/0023/0037) carried on the element — the in-game bar is the SAME standard bar as
+     the menus, keeping its live turn/objective status in the centre section. This rule only
+     places the bar across the top of the skirmish grid (full-bleed, ADR-0004). */
   grid-column: 1 / -1;
   grid-row: 1;
-  align-content: center;
-  align-items: center;
-  display: grid;
-  gap: clamp(10px, 1.4vw, 20px);
+}
+
+/* Higher specificity than .settings-header-frame so the in-game three-section centred
+   layout wins over the menu's 2-trailing grid: brand (left) · live status (centre) ·
+   account cluster (right). */
+.skirmish-screen .skirmish-topbar {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
 .skirmish-topbar-status {
@@ -4955,21 +4990,11 @@ h1 {
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
 
-/* Title bar = the app's editor pattern (ADR-0023; mirrors the campaign editor's
-   .ce-topbar): three sections — brand · save-state · labeled header buttons
-   (.app-header-button on the kit gold frame). Scoped under .level-editor-screen so it
-   overrides the LEGACY bare .le-topbar still in this file (the old /edit chrome) and
-   neutralizes its leaked background/shadow. */
-.level-editor-screen .le-topbar {
-  align-content: center;
-  align-items: center;
-  background: none;
-  box-shadow: none;
-  display: grid;
-  gap: clamp(10px, 1.4vw, 20px);
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 0 clamp(10px, 1.2vw, 18px);
-}
+/* Title bar = the standard app bar (ADR-0004/0023/0037): the oak frame, height, grid
+   columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
+   on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
+   stats/actions content below are scoped here — three sections: brand · save-state ·
+   labeled header buttons (.app-header-button on the kit gold frame). */
 .level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
 .level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
@@ -7507,6 +7532,35 @@ h1 {
   background: rgba(12, 31, 48, 0.42);
   border-color: transparent;
   cursor: not-allowed;
+}
+
+/* Studio on the standard title bar (ADR-0004/0023): brand left, location crumb in the
+   centre, account cluster right. The workspace switcher (Catalog/Lab/Viewer) + Settings
+   moved into the control panel (.tileset-mode-field below), so the bar carries no studio
+   buttons — only the shared brand + account chrome. */
+.tileset-studio-titlebar {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.tileset-studio-context {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The relocated workspace switcher, as a labelled field at the top of the control
+   panel (catalog rail + each Viewer lab's controls). */
+.tileset-mode-field {
+  display: grid;
+  gap: 5px;
+}
+
+.tileset-mode-field .tileset-control-label {
+  color: #72bde8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .tileset-context-tabs {
