@@ -2726,6 +2726,23 @@ h1 {
   width: 100%;
 }
 
+/* Lobbies/Party wear the standard bar as a settings-twin (ADR-0004/0023): the bar is
+   the settings-screen grid's top row; the centred .utility-screen body fills and
+   scrolls within the row below it (no longer the whole route, so it must scroll). */
+.utility-twin-screen > .utility-screen {
+  align-self: stretch;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Pick-progress / intro line relocated from the old utility-page-header subtitle. */
+.utility-lead {
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.25;
+  margin: 0 0 14px;
+}
+
 .utility-page-header,
 .utility-panel,
 .utility-lobby-card,
@@ -2795,8 +2812,8 @@ h1 {
 
 .utility-panel {
   background: transparent;
-  border: 24px solid transparent;
-  border-image: url("/assets/ui/utility/panel-frame.png") 24 fill / 24px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   min-width: 0;
   padding: 2px;
 }
@@ -2808,15 +2825,15 @@ h1 {
 
 .utility-lobby-card {
   background: transparent;
-  border: 24px solid transparent;
-  border-image: url("/assets/ui/utility/panel-frame.png") 24 fill / 24px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   display: grid;
   gap: 12px;
   padding: 2px;
 }
 
 .utility-lobby-card.is-current {
-  border-image-source: url("/assets/ui/utility/lobby-row-current.png");
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .utility-lobby-main,
@@ -2835,8 +2852,8 @@ h1 {
 
 .utility-lobby-row {
   background: transparent;
-  border: 20px solid transparent;
-  border-image: url("/assets/ui/utility/lobby-row.png") 20 fill / 20px stretch;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   min-height: 82px;
   padding: 0 2px;
@@ -2935,8 +2952,8 @@ h1 {
 
 .utility-empty-row {
   background: transparent;
-  border: 20px solid transparent;
-  border-image: url("/assets/ui/utility/lobby-row.png") 20 fill / 20px stretch;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   min-height: 72px;
   padding: 6px;
 }
@@ -2944,8 +2961,8 @@ h1 {
 .utility-button {
   align-items: center;
   background: transparent;
-  border: 18px solid transparent;
-  border-image: url("/assets/ui/utility/button-neutral.png") 18 fill / 18px stretch;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 12px round;
   color: #f8ecd3;
   cursor: pointer;
   display: inline-flex;
@@ -2967,11 +2984,11 @@ h1 {
 }
 
 .utility-button-primary {
-  border-image-source: url("/assets/ui/utility/button-primary.png");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 .utility-button-danger {
-  border-image-source: url("/assets/ui/utility/button-danger.png");
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 .utility-button:hover,
@@ -3003,8 +3020,8 @@ h1 {
 .utility-squad-card {
   align-content: center;
   background: transparent;
-  border: 22px solid transparent;
-  border-image: url("/assets/ui/utility/squad-card.png") 22 fill / 22px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   color: var(--ink);
   cursor: pointer;
   display: grid;
@@ -3017,7 +3034,7 @@ h1 {
 }
 
 .utility-squad-card.is-selected {
-  border-image-source: url("/assets/ui/utility/squad-card-selected.png");
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .utility-squad-card.is-locked {
@@ -3056,16 +3073,18 @@ h1 {
   width: 58px;
 }
 
-.icon-players { background-image: url("/assets/ui/utility/icon-players.png"); }
-.icon-start { background-image: url("/assets/ui/utility/icon-start.png"); }
-.icon-leave { background-image: url("/assets/ui/utility/icon-leave.png"); }
-.icon-refresh { background-image: url("/assets/ui/utility/icon-refresh.png"); }
-.icon-gear { background-image: url("/assets/ui/utility/icon-gear.png"); }
-.icon-speaker { background-image: url("/assets/ui/utility/icon-speaker.png"); }
-.icon-pawn { background-image: url("/assets/ui/utility/icon-pawn.png"); }
-.icon-knight { background-image: url("/assets/ui/utility/icon-knight.png"); }
-.icon-bishop { background-image: url("/assets/ui/utility/icon-bishop.png"); }
-.icon-rook { background-image: url("/assets/ui/utility/icon-rook.png"); }
+.icon-players { background-image: url("/assets/ui/kit/icons/players.png"); }
+.icon-start { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
+.icon-leave { background-image: url("/assets/ui/kit/icons/sign-out.png"); }
+.icon-refresh { background-image: url("/assets/ui/kit/icons/reset.png"); }
+.icon-gear { background-image: url("/assets/ui/kit/icons/gear.png"); }
+.icon-speaker { background-image: url("/assets/ui/kit/icons/speaker.png"); }
+.icon-pawn { background-image: url("/assets/ui/kit/icons/pawn.png"); }
+.icon-knight { background-image: url("/assets/ui/kit/icons/knight.png"); }
+.icon-bishop { background-image: url("/assets/ui/kit/icons/bishop.png"); }
+.icon-rook { background-image: url("/assets/ui/kit/icons/castle.png"); }
+.icon-queen { background-image: url("/assets/ui/kit/icons/queen.png"); }
+.icon-king { background-image: url("/assets/ui/kit/icons/king.png"); }
 
 .utility-settings-panel {
   max-width: 760px;
@@ -3094,8 +3113,8 @@ h1 {
 
 .utility-toggle {
   background: transparent;
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/utility/toggle-off.png") 16 fill / 16px stretch;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 12px round;
   color: #f8ecd3;
   cursor: pointer;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
@@ -3107,7 +3126,7 @@ h1 {
 }
 
 .utility-toggle.is-on {
-  border-image-source: url("/assets/ui/utility/toggle-on.png");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 @media (max-width: 760px) {
@@ -4168,6 +4187,23 @@ h1 {
 .shell.is-immersive + .bgm-control,
 .shell.is-immersive ~ .bgm-control { display: none; }
 
+/* Studio/dev editor & inspector surfaces (Portrait Editor, Doodad Editor, Surface Lab,
+   Artwork/Tile Compare) on the standard title bar (ADR-0004/0023): a full-bleed bar on
+   top, the existing tool body filling and scrolling in the row below it. The shell runs
+   .is-immersive so the global topbar is hidden and .app-root is full-bleed. */
+.dev-editor-screen {
+  background: #0b1016;
+  display: grid;
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.dev-editor-screen > :not(.app-titlebar) {
+  min-height: 0;
+  overflow: auto;
+}
+
 .skirmish-screen::before {
   background:
     radial-gradient(760px 440px at 42% 38%, rgba(21, 95, 137, .12), transparent 66%),
@@ -4192,18 +4228,19 @@ h1 {
 }
 
 .skirmish-topbar {
-  /* Frame + height come from .app-titlebar; this class is content layout only.
-     Spans both screen columns so the bar is full-bleed across the top (ADR-0004).
-     Three sections — brand left, status centered, counts+actions right — with the
-     content row vertically centered on the bar (align-content), per ADR-0010. */
+  /* The oak frame, height, gap, and padding come from .app-titlebar + .settings-header-frame
+     (ADR-0004/0023/0037) carried on the element — the in-game bar is the SAME standard bar as
+     the menus, keeping its live turn/objective status in the centre section. This rule only
+     places the bar across the top of the skirmish grid (full-bleed, ADR-0004). */
   grid-column: 1 / -1;
   grid-row: 1;
-  align-content: center;
-  align-items: center;
-  display: grid;
-  gap: clamp(10px, 1.4vw, 20px);
+}
+
+/* Higher specificity than .settings-header-frame so the in-game three-section centred
+   layout wins over the menu's 2-trailing grid: brand (left) · live status (centre) ·
+   account cluster (right). */
+.skirmish-screen .skirmish-topbar {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
 .skirmish-topbar-status {
@@ -4211,14 +4248,6 @@ h1 {
   display: flex;
   gap: 12px;
   justify-self: center;
-  min-width: 0;
-}
-
-.skirmish-topbar-right {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-self: end;
   min-width: 0;
 }
 
@@ -4270,54 +4299,9 @@ h1 {
   min-width: 0;
 }
 
-/* Header icon buttons on the kit gold mode-button frame — the same equal-height
-   bracket-frame family the settings header uses (ADR-0010 / kit ADR-0002). */
-/* Icon + visible label button on the kit gold mode-button frame — same equal-height
-   bracket-frame family as the settings header. Research is unanimous that header
-   controls must be labeled, not bare glyphs (NN/g icon usability; gear is not a
-   universal icon), so the glyph is decorative and the label carries the meaning. */
-.skirmish-header-button {
-  align-items: center;
-  block-size: 46px;
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
-  box-sizing: border-box;
-  color: var(--skirmish-ink);
-  display: inline-flex;
-  gap: 8px;
-  image-rendering: pixelated;
-  padding: 0 12px;
-  text-decoration: none;
-}
-
-.skirmish-header-button:hover {
-  color: #f4fbff;
-}
-
-.skirmish-header-button:focus-visible {
-  color: #f4fbff;
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-
-.skirmish-header-button .skirmish-icon {
-  height: 20px;
-  width: 20px;
-}
-
-.skirmish-header-button-label {
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: var(--ds-text-sm);
-  letter-spacing: .04em;
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
 .skirmish-brand,
 .skirmish-objective,
-.skirmish-count-pip,
-.skirmish-window-actions {
+.skirmish-count-pip {
   align-items: center;
   display: flex;
 }
@@ -4372,11 +4356,6 @@ h1 {
   justify-items: center;
   min-width: 0;
   text-align: center;
-}
-
-.skirmish-window-actions {
-  gap: 8px;
-  justify-content: end;
 }
 
 .skirmish-field {
@@ -4955,21 +4934,11 @@ h1 {
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
 
-/* Title bar = the app's editor pattern (ADR-0023; mirrors the campaign editor's
-   .ce-topbar): three sections — brand · save-state · labeled header buttons
-   (.app-header-button on the kit gold frame). Scoped under .level-editor-screen so it
-   overrides the LEGACY bare .le-topbar still in this file (the old /edit chrome) and
-   neutralizes its leaked background/shadow. */
-.level-editor-screen .le-topbar {
-  align-content: center;
-  align-items: center;
-  background: none;
-  box-shadow: none;
-  display: grid;
-  gap: clamp(10px, 1.4vw, 20px);
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 0 clamp(10px, 1.2vw, 18px);
-}
+/* Title bar = the standard app bar (ADR-0004/0023/0037): the oak frame, height, grid
+   columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
+   on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
+   stats/actions content below are scoped here — three sections: brand · save-state ·
+   labeled header buttons (.app-header-button on the kit gold frame). */
 .level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
 .level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
@@ -4986,11 +4955,12 @@ h1 {
   cursor: pointer;
   display: grid;
   font: inherit;
+  font-size: var(--ds-text-xs);
   gap: 5px;
   grid-auto-flow: column;
   line-height: 1;
-  min-height: 40px;
-  padding: 5px 4px;
+  min-height: 30px;
+  padding: 4px 6px;
   place-items: center;
   text-transform: uppercase;
 }
@@ -5010,26 +4980,26 @@ h1 {
 }
 
 /* active brush picker */
-.le-brush-pick { align-items: center; display: grid; gap: 10px; grid-template-columns: 60px minmax(0, 1fr); margin-top: 10px; }
+.le-brush-pick { align-items: center; display: grid; gap: 8px; grid-template-columns: 48px minmax(0, 1fr); margin-top: 6px; }
 .le-brush-thumb {
   background: radial-gradient(circle at 50% 40%, rgba(63, 148, 190, .18), transparent 64%), rgba(3, 12, 19, .74);
   border: 1px solid rgba(87, 153, 184, .4);
   border-radius: 5px;
   display: grid;
-  height: 60px;
+  height: 44px;
   overflow: hidden;
   place-items: center;
-  width: 60px;
+  width: 48px;
 }
-.le-brush-thumb img { height: 90%; image-rendering: pixelated; object-fit: contain; width: 90%; }
+/* Fit the brush preview INSIDE the thumb. The old height:90% mis-resolved against the
+   auto grid row, so portrait sprites (roads) overflowed to ~88px and clipped. */
+.le-brush-thumb img { display: block; max-width: 100%; max-height: 100%; image-rendering: pixelated; object-fit: contain; }
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
-/* palette (folded into the rail — variant B) */
-/* Tile-palette and unit-controls swap in/out of the same rail slot; pin both to one
-   fixed height so flipping layers can't wobble the panel (Tile was 350px, Unit 354px). */
 /* Brush palettes render at full height and let the ONE side-panel scrollbar (.le-hud-scroll,
-   ADR-0030) do the scrolling — no scroll-within-a-scroll. */
+   ADR-0030) do the scrolling — no scroll-within-a-scroll. (Supersedes the earlier per-palette
+   scroll region: the whole control column is the single scroll now.) */
 .le-brush-panel { display: flex; flex-direction: column; }
 /* The editor's control column scrolls as one (ADR-0030 KitScroll) so tall layers — e.g.
    Cover — never clip their bottom controls. Layer tabs stay fixed above it; this fills the
@@ -5092,12 +5062,20 @@ h1 {
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
 
+/* road connection editor — clickable diamond edges for the selected road tile */
+.le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
+.le-roadconn-edge.is-joined, .le-roadconn-edge.is-cut { cursor: pointer; }
+.le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
+.le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
+.le-roadconn-edge:focus-visible { outline: none; }
+.le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
+
 /* status line */
 .le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
 .le-statusline b { color: #9fe0ff; }
 
 /* editor rail icons */
-.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 24px; image-rendering: pixelated; width: 24px; }
+.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
 .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
 .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
 .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
@@ -5395,7 +5373,6 @@ h1 {
    the contact-sheet slices (ADR-0011/0032). menu + rook have no forged twin yet. */
 .skirmish-icon-flag { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
 .skirmish-icon-hourglass { background-image: url("/assets/ui/kit/icons/game/wait.png"); }
-.skirmish-icon-gear { background-image: url("/assets/ui/kit/icons/gear.png"); }
 .skirmish-icon-menu { background-image: url("/assets/ui/skirmish/icon-menu.png"); }
 .skirmish-icon-move { background-image: url("/assets/ui/kit/icons/game/move.png"); }
 .skirmish-icon-power { background-image: url("/assets/ui/kit/icons/game/power.png"); }
@@ -5528,11 +5505,6 @@ h1 {
   .skirmish-objective .skirmish-icon {
     height: 34px;
     width: 34px;
-  }
-
-  .skirmish-header-button {
-    block-size: 40px;
-    min-inline-size: 40px;
   }
 
   .skirmish-hud {
@@ -5867,6 +5839,14 @@ h1 {
 .ce-save-state.is-dirty {
   color: var(--ce-gold-bright);
   text-shadow: 0 0 8px rgba(240, 189, 85, .28);
+}
+
+/* Admin "Edit Officials" mode marker — the editor is a dev/admin surface, so a
+   plain high-contrast tag is fine (out of scope for player chrome polish). */
+.ce-official-badge {
+  color: var(--ce-gold-bright);
+  font-weight: 700;
+  letter-spacing: .08em;
 }
 
 .ce-topbar-actions {
@@ -7322,66 +7302,6 @@ h1 {
   font-family: var(--ds-font-sans, system-ui, sans-serif);
 }
 
-.tileset-studio-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  min-height: 0;
-  margin: 0;
-  width: 100%;
-}
-
-.tileset-studio-brand {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  min-width: 0;
-}
-
-.tileset-studio-product {
-  display: grid;
-  gap: 3px;
-  flex: none;
-  min-width: 250px;
-  padding: 8px 12px;
-  background: rgba(10, 28, 43, 0.72);
-  border: 1px solid rgba(67, 127, 179, 0.28);
-  border-radius: 6px;
-}
-
-.tileset-studio-product strong {
-  color: #f3f7fb;
-  font-family: var(--ds-font-display, var(--ds-font-sans, system-ui, sans-serif));
-  font-size: 20px;
-  line-height: 1;
-}
-
-.tileset-studio-product span {
-  color: #72bde8;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.tileset-studio-titleblock {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-/* Slim topbar: a quiet wordmark + a breadcrumb that carries location. No big
-   titleblock, so the topbar height is constant and nothing below it shifts. */
-.tileset-studio-wordmark {
-  flex: none;
-  color: #f3f7fb;
-  font-family: var(--ds-font-display, var(--ds-font-sans, system-ui, sans-serif));
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
 .tileset-crumb {
   display: flex;
   align-items: center;
@@ -7420,56 +7340,8 @@ h1 {
   text-overflow: ellipsis;
 }
 
-.tileset-studio-kicker {
-  margin: 0;
-  color: #72bde8;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.tileset-studio-header h1 {
-  margin: 0;
-  color: #f3f7fb;
-  font-family: var(--ds-font-display, var(--ds-font-sans, system-ui, sans-serif));
-  font-size: 26px;
-  line-height: 1;
-}
-
-.tileset-studio-subtitle {
-  margin: 0;
-  max-width: 820px;
-  color: #9eb1c5;
-  font-size: 13px;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tileset-studio-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-end;
-  white-space: nowrap;
-}
-
-/* Match the standalone Settings link's box height to the segmented tab groups
-   (which are taller because of their container padding), so the row aligns. */
-.tileset-studio-actions > a {
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 82px;
-}
-
-.tileset-studio-actions a,
 .tileset-mode-tabs button,
-.tileset-view-action,
-.tileset-studio-controls button {
+.tileset-view-action {
   min-height: 36px;
   padding: 9px 12px;
   color: #d8eaff;
@@ -7500,8 +7372,7 @@ h1 {
   border-color: transparent;
 }
 
-.tileset-mode-tabs button.is-active,
-.tileset-studio-controls button.is-active {
+.tileset-mode-tabs button.is-active {
   color: #f3fbff;
   background: rgba(25, 94, 132, 0.95);
   border-color: rgba(111, 210, 255, 0.76);
@@ -7512,6 +7383,35 @@ h1 {
   background: rgba(12, 31, 48, 0.42);
   border-color: transparent;
   cursor: not-allowed;
+}
+
+/* Studio on the standard title bar (ADR-0004/0023): brand left, location crumb in the
+   centre, account cluster right. The workspace switcher (Catalog/Lab/Viewer) + Settings
+   moved into the control panel (.tileset-mode-field below), so the bar carries no studio
+   buttons — only the shared brand + account chrome. */
+.tileset-studio-titlebar {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.tileset-studio-context {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The relocated workspace switcher, as a labelled field at the top of the control
+   panel (catalog rail + each Viewer lab's controls). */
+.tileset-mode-field {
+  display: grid;
+  gap: 5px;
+}
+
+.tileset-mode-field .tileset-control-label {
+  color: #72bde8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .tileset-context-tabs {
@@ -8924,12 +8824,6 @@ h1 {
   font: 800 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
-.tileset-studio-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 .tileset-catalog-controls {
   align-self: stretch;
 }
@@ -9177,20 +9071,6 @@ button.tileset-relationship-cell {
   align-content: stretch;
   gap: 8px;
   padding: 10px;
-}
-
-.tileset-studio-controls label {
-  display: grid;
-  gap: 4px;
-  min-width: 150px;
-  color: #9eb1c5;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.tileset-studio-controls input {
-  accent-color: #5bc8ff;
 }
 
 .tileset-inspector-tabs {
@@ -9796,6 +9676,13 @@ button.tileset-relationship-cell {
 }
 
 .tileset-generated-board-tile img {
+  /* ADR-0039: a tile may render as two stacked layers (SIDE under TOP). Both occupy the
+     same 96x180 frame via absolute positioning so they overlay 1:1 with zero offset; their
+     pixels are disjoint (diamond vs. cliff), so there is no overlap to blend. A single-layer
+     tile is just one image at the same origin — unchanged. */
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
   width: 96px;
   height: 180px;
@@ -9805,6 +9692,16 @@ button.tileset-relationship-cell {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Linear-feature overlay (road; rivers later): a transparent ribbon sprite stacked
+   directly over the base tile in the same 96x180 frame, so it aligns pixel-for-pixel.
+   The base <img> sits at top:0 of the tile box; this overrides its block flow to
+   occupy the identical box rather than stacking below it. */
+.tileset-generated-board-tile img.tileset-feature-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
 /* Units and doodads no longer render inside cells here — both boards seat them at grid
@@ -11234,9 +11131,11 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
 }
 
-/* Shared brand lockup — [shield] SCREEN NAME · chess tactics — the ONE top-left
-   mark used on every screen except the main-menu hero. Same mark/structure/spot
-   everywhere; only the screen name changes. Component: src/ui/shared/BrandLockup. */
+/* Shared brand lockup — [shield] CHESS TACTICS / screen name — the ONE top-left
+   mark on every screen. The game wordmark is the persistent header (the dominant
+   line); the screen name sits beneath it as the small subordinate line. Same
+   mark/structure/spot everywhere; only the screen name changes. DOM order is
+   brand-then-name, so no reordering is needed. Component: src/ui/shared/BrandLockup. */
 .brand-lockup {
   align-items: center;
   color: #eef8ff;
@@ -11261,9 +11160,11 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 
-.brand-lockup-copy strong {
+/* The game wordmark — the dominant, persistent header line. */
+.brand-lockup-copy em {
   color: #f0eadb;
   font-size: var(--ds-text-lg);
+  font-style: normal;
   font-weight: 600;
   line-height: 1.04;
   text-shadow: 0 2px 0 #02070b;
@@ -11271,10 +11172,11 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.brand-lockup-copy em {
+/* The screen name — the small subordinate line beneath the brand. */
+.brand-lockup-copy strong {
   color: #79d3ff;
   font-size: var(--ds-text-sm);
-  font-style: normal;
+  font-weight: 400;
   letter-spacing: .14em;
   line-height: 1.2;
   text-transform: uppercase;
@@ -11300,50 +11202,6 @@ button.tileset-relationship-cell {
   color: #9fc4d5;
   font-style: normal;
   line-height: 1.25;
-}
-
-.settings-header-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.settings-account {
-  align-items: center;
-  align-self: center;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  justify-content: flex-end;
-  min-width: 0;
-  padding: 0 4px 0 12px;
-}
-
-.settings-account span {
-  display: grid;
-  min-width: 0;
-  text-align: right;
-}
-
-.settings-account strong {
-  color: #f6fbff;
-  font-size: var(--ds-text-sm);
-  line-height: 1.05;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 2px 0 #02070b;
-  white-space: nowrap;
-}
-
-.settings-account em {
-  color: #79d3ff;
-  font-size: var(--ds-text-2xs);
-  font-style: normal;
-  line-height: 1.2;
-  text-transform: uppercase;
 }
 
 /* --- Trailing-edge "settings + user" cluster ----------------------------------
@@ -11498,6 +11356,18 @@ button.tileset-relationship-cell {
   gap: clamp(9px, .8vw, 13px);
   padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
 }
+
+/* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label
+   (text is exempt from the kit-surface rule, ADR-0032). */
+.campaign-rail-group {
+  margin: 4px 6px 0;
+  font-size: var(--ds-text-2xs, .72rem);
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
+}
+.campaign-rail-group:first-child { margin-top: 0; }
 
 /* Clean sidebar nav — icon + label rows; the SELECTED item is highlighted with a
    subtle fill + accent bar, the rest stay plain. No per-item frame (the rail panel
@@ -11861,35 +11731,6 @@ button.tileset-relationship-cell {
   min-inline-size: 72px;
 }
 
-/* Header buttons wear the SYMMETRIC panel.png frame (square source → equal corners
-   on all four sides), matching the design's gold corner-bracket language. The tall
-   tab art was the wrong source for a short button (it rendered lopsided). */
-.settings-header-button {
-  block-size: 40px; /* desktop default, matches the chrome buttons (not a touch floor) */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
-  flex: none;
-  image-rendering: pixelated;
-  inline-size: auto;
-  min-inline-size: 92px;
-  padding: 0 14px;
-}
-
-/* Sign In / Sign Out is the primary account action — the cyan-bracket mode-button
-   frame (same family as the nav active) marks it primary while Back/Menu stay
-   gold. Matches the concept's bracket buttons. */
-.settings-header-button-active {
-  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
-  border-width: 12px;
-}
-
-/* Header buttons (Back / Menu / Sign In) are ACTION buttons — they share the one
-   action-button label token with the panel pills below, even though they wear a
-   different frame (bracket vs flat fill). Skin doesn't drive label size (ADR-0021). */
-.settings-header-button span {
-  font-size: var(--settings-action-label);
-}
-
 .settings-stepper {
   align-items: center;
   display: grid;
@@ -12069,18 +11910,6 @@ button.tileset-relationship-cell {
   .settings-header-frame {
     align-items: start;
     flex-direction: column;
-  }
-
-  .settings-account {
-    margin-left: 0;
-  }
-
-  .settings-account span {
-    text-align: left;
-  }
-
-  .settings-header-actions {
-    justify-content: start;
   }
 
   .settings-shell {

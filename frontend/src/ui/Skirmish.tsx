@@ -2,6 +2,7 @@ import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { BrandLockup } from './shared/BrandLockup';
+import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -121,7 +122,7 @@ export function Skirmish() {
 
   return (
     <div data-testid="skirmish" className="skirmish-screen" style={screenStyle}>
-      <header className="app-titlebar skirmish-topbar" aria-label="Skirmish status">
+      <header className="app-titlebar settings-header-frame skirmish-topbar" aria-label="Skirmish status">
         <BrandLockup screenName="Skirmish" />
 
         <div className="skirmish-topbar-status">
@@ -138,14 +139,7 @@ export function Skirmish() {
           </div>
         </div>
 
-        <div className="skirmish-topbar-right">
-          <nav className="skirmish-window-actions" aria-label="Skirmish navigation">
-            <a className="skirmish-header-button" href="/settings">
-              <span className="skirmish-icon skirmish-icon-gear" aria-hidden="true" />
-              <span className="skirmish-header-button-label">Settings</span>
-            </a>
-          </nav>
-        </div>
+        <HeaderAccountCluster />
       </header>
 
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">

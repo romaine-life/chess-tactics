@@ -40,6 +40,11 @@ spec:
           image: {{ $imageRef | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            {{- if .Values.adminEmails }}
+            # ADR-0038: who may author/publish the global OFFICIAL campaign tier.
+            - name: ADMIN_EMAILS
+              value: {{ .Values.adminEmails | quote }}
+            {{- end }}
             {{- if .Values.bgm.baseUrl }}
             # Public blob base for the BGM playlist. The backend reads
             # <baseUrl>/index.json server-side and serves /api/bgm; no Azure

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
+import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { BoardSize, Move, Piece, TerrainType, Vec } from '../core/types';
@@ -85,6 +85,7 @@ function solveSkirmishBoard(
     columns: game.size.cols,
     rows: game.size.rows,
     familyAssets: tileFamilies,
+    edgeAssets: edgeTiles,
   });
   // Resolve ambient ground cover ONCE here (placement/build time), not per render.
   // Painted cover (level data) is authoritative; a level with NO cover painted at all
