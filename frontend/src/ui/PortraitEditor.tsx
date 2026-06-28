@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
 import COMMITTED_CROPS from '../art/portraitCrops.json';
+import { PORTRAIT_METHODS, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
 
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
 const PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald'] as const;
@@ -37,7 +38,7 @@ function clampCrop({ cx, cy, s }: Crop): Crop {
   return { s: ss, cx: clamp(cx, half, 1 - half), cy: clamp(cy, half, 1 - half) };
 }
 
-export const masterSrc = (piece: Piece, pal: Palette) => `/assets/portrait-editor/${piece}/${pal}.png`;
+export const masterSrc = (piece: Piece, pal: Palette, method: PortraitMethod = 'smooth') => portraitMasterSrc(piece, pal, method);
 
 // Render the cropped region of a square master to fill a frame, via an absolutely
 // positioned img (width 1/s of the frame, translated so the crop centre is centred).
@@ -60,24 +61,24 @@ export function CroppedView({ src, crop }: { src: string; crop: Crop }): ReactEl
 // roster slots, and these editor previews — renders through THIS, so the framing/fill/crop are
 // defined once (here + the `.unit-portrait` CSS) and never re-derived per surface. Size, backdrop,
 // and the selected highlight vary via `size`/`backdrop`/a `className` modifier; nothing else.
-export function UnitPortrait({ piece, palette, crop, backdrop, size, className }: {
-  piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string;
+export function UnitPortrait({ piece, palette, crop, backdrop, size, className, method }: {
+  piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string; method?: PortraitMethod;
 }): ReactElement {
   const style: CSSProperties = {};
   if (size != null) { style.width = size; style.height = size; }
   if (backdrop) (style as Record<string, string>)['--up-backdrop'] = `url("${backdrop}")`;
   return (
     <div className={`unit-portrait ${backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim()} style={style}>
-      <div className="unit-portrait__bust"><CroppedView src={masterSrc(piece, palette)} crop={crop} /></div>
+      <div className="unit-portrait__bust"><CroppedView src={masterSrc(piece, palette, method)} crop={crop} /></div>
     </div>
   );
 }
 
 // Editor preview = a labelled UnitPortrait, so the previews can't drift from the live HUD.
-function HudFrame({ piece, palette, crop, size, label }: { piece: Piece; palette: Palette; crop: Crop; size: number; label?: string }): ReactElement {
+function HudFrame({ piece, palette, crop, size, label, method }: { piece: Piece; palette: Palette; crop: Crop; size: number; label?: string; method?: PortraitMethod }): ReactElement {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <UnitPortrait piece={piece} palette={palette} crop={crop} size={size} className="unit-portrait--preview" />
+      <UnitPortrait piece={piece} palette={palette} crop={crop} size={size} className="unit-portrait--preview" method={method} />
       {label ? <span style={{ fontSize: 11, color: '#7fa8bd' }}>{label}</span> : null}
     </div>
   );
@@ -102,6 +103,7 @@ function usePortraitEditor() {
   const [crops, setCrops] = useState<Record<Piece, Crop>>(loadCrops);
   const [piece, setPiece] = useState<Piece>('pawn');
   const [palette, setPalette] = useState<Palette>('navy-blue');
+  const [method, setMethod] = useState<PortraitMethod>('smooth');
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; cx: number; cy: number } | null>(null);
 
@@ -153,7 +155,7 @@ function usePortraitEditor() {
   const resetPiece = () => setCrop({ ...(COMMITTED[piece] ?? DEFAULT_CROP) });
   const resetAll = () => setCrops(Object.fromEntries(PIECES.map((p) => [p, { ...(COMMITTED[p] ?? DEFAULT_CROP) }])) as Record<Piece, Crop>);
 
-  return { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll };
+  return { crops, piece, setPiece, palette, setPalette, method, setMethod, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll };
 }
 
 const overlayStyle = (crop: Crop): CSSProperties => ({
@@ -168,7 +170,7 @@ const checkerBg = 'repeating-conic-gradient(#15202b 0% 25%, #0e161e 0% 50%) 50% 
 // frame. `header` carries the Viewer's Asset|Artwork|Portrait kind selector.
 export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
   const ed = usePortraitEditor();
-  const { crops, piece, palette, crop } = ed;
+  const { crops, piece, palette, method, crop } = ed;
   const CANVAS = 360;
   return (
     <>
@@ -191,13 +193,29 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
           </div>
           <div style={{ display: 'grid', gap: 16 }}>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <HudFrame piece={piece} palette={palette} crop={crop} size={150} label={`${piece} · large`} />
-              <HudFrame piece={piece} palette={palette} crop={crop} size={86} label="actual HUD size" />
+              <HudFrame piece={piece} palette={palette} crop={crop} size={150} label={`${piece} · ${method}`} method={method} />
+              <HudFrame piece={piece} palette={palette} crop={crop} size={86} label="actual HUD size" method={method} />
             </div>
             <div>
-              <div style={{ fontSize: 12, color: '#7fa8bd', marginBottom: 6 }}>All units · {palette}</div>
+              <div style={{ fontSize: 12, color: '#7fa8bd', marginBottom: 6 }}>{piece} · all methods — click to select</div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {PIECES.map((p) => <HudFrame key={p} piece={p} palette={palette} crop={crops[p]} size={72} label={p} />)}
+                {PORTRAIT_METHODS.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => ed.setMethod(m.key)}
+                    title={m.sub}
+                    style={{ all: 'unset', cursor: 'pointer', borderRadius: 10, padding: 3, outline: m.key === method ? '2px solid #5fb0d6' : '2px solid transparent' }}
+                  >
+                    <HudFrame piece={piece} palette={palette} crop={crop} size={104} label={m.label} method={m.key} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: '#7fa8bd', marginBottom: 6 }}>All units · {method}</div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {PIECES.map((p) => <HudFrame key={p} piece={p} palette={palette} crop={crops[p]} size={72} label={p} method={method} />)}
               </div>
             </div>
           </div>
@@ -208,9 +226,14 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
+            <div className="tileset-tier-seg" aria-label="Method" style={{ flexWrap: 'wrap' }}>
+              {PORTRAIT_METHODS.map((m) => (
+                <button key={m.key} type="button" className={m.key === method ? 'is-active' : ''} onClick={() => ed.setMethod(m.key)} title={m.sub}>{m.label}</button>
+              ))}
+            </div>
             <div className="tileset-tier-seg" aria-label="Palette">
               {PALETTES.map((p) => (
-                <button key={p} type="button" className={p === palette ? 'is-active' : ''} onClick={() => ed.setPalette(p)} style={{ textTransform: 'capitalize' }}>{p.replace('-', ' ')}</button>
+                <button key={p} type="button" className={p === palette ? 'is-active' : ''} onClick={() => ed.setPalette(p)} style={{ textTransform: 'capitalize' }} disabled={method !== 'smooth'} title={method !== 'smooth' ? 'Candidates are navy-only' : undefined}>{p.replace('-', ' ')}</button>
               ))}
             </div>
             <label className="tileset-catalog-zoom"><span>Zoom</span>
