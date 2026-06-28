@@ -5028,9 +5028,9 @@ h1 {
 /* palette (folded into the rail — variant B) */
 /* Tile-palette and unit-controls swap in/out of the same rail slot; pin both to one
    fixed height so flipping layers can't wobble the panel (Tile was 350px, Unit 354px). */
-.le-brush-panel { display: flex; flex-direction: column; height: 360px; overflow: hidden; }
-.le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
-.le-palette-scroll { height: 300px; }
+/* Brush palettes render at full height and let the ONE side-panel scrollbar (.le-hud-scroll,
+   ADR-0030) do the scrolling — no scroll-within-a-scroll. */
+.le-brush-panel { display: flex; flex-direction: column; }
 /* The editor's control column scrolls as one (ADR-0030 KitScroll) so tall layers — e.g.
    Cover — never clip their bottom controls. Layer tabs stay fixed above it; this fills the
    remaining panel height and carries the same stack gap the sections had as aside children. */

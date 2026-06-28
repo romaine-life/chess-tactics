@@ -1591,7 +1591,6 @@ export function LevelEditor(): ReactElement {
 
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
-            <KitScroll className="le-palette-scroll">
             <h2>Side</h2>
             <div className="le-seg">
               <button type="button" className={`le-seg-btn ${unitSide === 'player' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('player')}>Player</button>
@@ -1619,12 +1618,10 @@ export function LevelEditor(): ReactElement {
                 </button>
               ))}
             </div>
-            </KitScroll>
           </section>
         ) : brushKind === 'doodad' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Doodads</h2>
-            <KitScroll className="le-palette-scroll">
               <div className="le-swatches">
                 {DOODAD_ASSETS.map((doodad) => (
                   <button
@@ -1639,13 +1636,11 @@ export function LevelEditor(): ReactElement {
                   </button>
                 ))}
               </div>
-            </KitScroll>
             <p className="le-board-note">Doodads only land on a tile of their home terrain.</p>
           </section>
         ) : (
           <section className="skirmish-card le-brush-panel">
             <h2>Palette</h2>
-            <KitScroll className="le-palette-scroll">
               {leTileGroups.map(({ family, tiles }) => (
                 <div className="le-pal-group" key={family.id}>
                   <span className="le-pal-grouplabel">{family.label}</span>
@@ -1665,7 +1660,6 @@ export function LevelEditor(): ReactElement {
                   </div>
                 </div>
               ))}
-            </KitScroll>
           </section>
         )}
 
