@@ -1,8 +1,8 @@
 {
-  "generated": "2026-06-25",
+  "generated": "2026-06-28",
   "summary": {
-    "total": 82,
-    "groups": 7
+    "total": 112,
+    "groups": 8
   },
   "groups": [
     {
@@ -332,6 +332,252 @@
           "w": 512,
           "h": 512,
           "sub": "team palette"
+        }
+      ]
+    },
+    {
+      "id": "portrait-candidates",
+      "label": "Portrait candidates",
+      "items": [
+        {
+          "id": "portrait-candidates/codex-concept/bishop/navy-blue",
+          "label": "Bishop · Codex · concept",
+          "url": "/assets/portrait-candidates/codex-concept/bishop/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "concept-art bust"
+        },
+        {
+          "id": "portrait-candidates/codex-concept/king/navy-blue",
+          "label": "King · Codex · concept",
+          "url": "/assets/portrait-candidates/codex-concept/king/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "concept-art bust"
+        },
+        {
+          "id": "portrait-candidates/codex-concept/knight/navy-blue",
+          "label": "Knight · Codex · concept",
+          "url": "/assets/portrait-candidates/codex-concept/knight/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "concept-art bust"
+        },
+        {
+          "id": "portrait-candidates/codex-concept/pawn/navy-blue",
+          "label": "Pawn · Codex · concept",
+          "url": "/assets/portrait-candidates/codex-concept/pawn/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "concept-art bust"
+        },
+        {
+          "id": "portrait-candidates/codex-concept/queen/navy-blue",
+          "label": "Queen · Codex · concept",
+          "url": "/assets/portrait-candidates/codex-concept/queen/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "concept-art bust"
+        },
+        {
+          "id": "portrait-candidates/codex-concept/rook/navy-blue",
+          "label": "Rook · Codex · concept",
+          "url": "/assets/portrait-candidates/codex-concept/rook/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "concept-art bust"
+        },
+        {
+          "id": "portrait-candidates/codex-stone/bishop/navy-blue",
+          "label": "Bishop · Codex · stone",
+          "url": "/assets/portrait-candidates/codex-stone/bishop/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "board navy-stone pixel"
+        },
+        {
+          "id": "portrait-candidates/codex-stone/king/navy-blue",
+          "label": "King · Codex · stone",
+          "url": "/assets/portrait-candidates/codex-stone/king/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "board navy-stone pixel"
+        },
+        {
+          "id": "portrait-candidates/codex-stone/knight/navy-blue",
+          "label": "Knight · Codex · stone",
+          "url": "/assets/portrait-candidates/codex-stone/knight/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "board navy-stone pixel"
+        },
+        {
+          "id": "portrait-candidates/codex-stone/pawn/navy-blue",
+          "label": "Pawn · Codex · stone",
+          "url": "/assets/portrait-candidates/codex-stone/pawn/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "board navy-stone pixel"
+        },
+        {
+          "id": "portrait-candidates/codex-stone/queen/navy-blue",
+          "label": "Queen · Codex · stone",
+          "url": "/assets/portrait-candidates/codex-stone/queen/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "board navy-stone pixel"
+        },
+        {
+          "id": "portrait-candidates/codex-stone/rook/navy-blue",
+          "label": "Rook · Codex · stone",
+          "url": "/assets/portrait-candidates/codex-stone/rook/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "board navy-stone pixel"
+        },
+        {
+          "id": "portrait-candidates/codexfilter/bishop/navy-blue",
+          "label": "Bishop · Codex→Filter",
+          "url": "/assets/portrait-candidates/codexfilter/bishop/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "restyle then filter"
+        },
+        {
+          "id": "portrait-candidates/codexfilter/king/navy-blue",
+          "label": "King · Codex→Filter",
+          "url": "/assets/portrait-candidates/codexfilter/king/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "restyle then filter"
+        },
+        {
+          "id": "portrait-candidates/codexfilter/knight/navy-blue",
+          "label": "Knight · Codex→Filter",
+          "url": "/assets/portrait-candidates/codexfilter/knight/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "restyle then filter"
+        },
+        {
+          "id": "portrait-candidates/codexfilter/pawn/navy-blue",
+          "label": "Pawn · Codex→Filter",
+          "url": "/assets/portrait-candidates/codexfilter/pawn/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "restyle then filter"
+        },
+        {
+          "id": "portrait-candidates/codexfilter/queen/navy-blue",
+          "label": "Queen · Codex→Filter",
+          "url": "/assets/portrait-candidates/codexfilter/queen/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "restyle then filter"
+        },
+        {
+          "id": "portrait-candidates/codexfilter/rook/navy-blue",
+          "label": "Rook · Codex→Filter",
+          "url": "/assets/portrait-candidates/codexfilter/rook/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "restyle then filter"
+        },
+        {
+          "id": "portrait-candidates/filter2/bishop/navy-blue",
+          "label": "Bishop · Filter ×2",
+          "url": "/assets/portrait-candidates/filter2/bishop/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter2/king/navy-blue",
+          "label": "King · Filter ×2",
+          "url": "/assets/portrait-candidates/filter2/king/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter2/knight/navy-blue",
+          "label": "Knight · Filter ×2",
+          "url": "/assets/portrait-candidates/filter2/knight/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter2/pawn/navy-blue",
+          "label": "Pawn · Filter ×2",
+          "url": "/assets/portrait-candidates/filter2/pawn/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter2/queen/navy-blue",
+          "label": "Queen · Filter ×2",
+          "url": "/assets/portrait-candidates/filter2/queen/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter2/rook/navy-blue",
+          "label": "Rook · Filter ×2",
+          "url": "/assets/portrait-candidates/filter2/rook/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter3/bishop/navy-blue",
+          "label": "Bishop · Filter ×3",
+          "url": "/assets/portrait-candidates/filter3/bishop/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter3/king/navy-blue",
+          "label": "King · Filter ×3",
+          "url": "/assets/portrait-candidates/filter3/king/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter3/knight/navy-blue",
+          "label": "Knight · Filter ×3",
+          "url": "/assets/portrait-candidates/filter3/knight/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter3/pawn/navy-blue",
+          "label": "Pawn · Filter ×3",
+          "url": "/assets/portrait-candidates/filter3/pawn/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter3/queen/navy-blue",
+          "label": "Queen · Filter ×3",
+          "url": "/assets/portrait-candidates/filter3/queen/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
+        },
+        {
+          "id": "portrait-candidates/filter3/rook/navy-blue",
+          "label": "Rook · Filter ×3",
+          "url": "/assets/portrait-candidates/filter3/rook/navy-blue.png",
+          "w": 768,
+          "h": 768,
+          "sub": "pixelate + quantize"
         }
       ]
     },
