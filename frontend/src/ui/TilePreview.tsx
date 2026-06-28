@@ -1763,20 +1763,24 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
 
-  // The Viewer's tier selector — the Asset|Artwork split, represented as a control
-  // like the Catalog's category tabs and the Lab's Board/Tile/Unit focus. One
-  // selector, injected into whichever Viewer surface is active.
-  const viewerKindTabs = (
-    <div className="tileset-tier-seg" aria-label="Viewer kind">
-      <button type="button" className={viewerKind === 'asset' ? 'is-active' : ''} onClick={() => setViewerKind('asset')} title="View the selected UI-kit asset.">Asset</button>
-      <button type="button" className={viewerKind === 'artwork' ? 'is-active' : ''} onClick={() => setViewerKind('artwork')} title="View the selected artwork.">Artwork</button>
-      <button type="button" className={viewerKind === 'portrait' ? 'is-active' : ''} onClick={() => setViewerKind('portrait')} title="Edit unit portrait headshot crops.">Portrait</button>
-      <button type="button" className={viewerKind === 'glossary' ? 'is-active' : ''} onClick={() => setViewerKind('glossary')} title="Read a glossary term in full.">Glossary</button>
-      <button type="button" className={viewerKind === 'surface' ? 'is-active' : ''} onClick={() => setViewerKind('surface')} title="View the selected background surface.">Surface</button>
-      <button type="button" className={viewerKind === 'scrollbar' ? 'is-active' : ''} onClick={() => setViewerKind('scrollbar')} title="View the selected scrollbar grip.">Scrollbar</button>
-      <button type="button" className={viewerKind === 'slider' ? 'is-active' : ''} onClick={() => setViewerKind('slider')} title="View the selected slide bar.">Slider</button>
-      <button type="button" className={viewerKind === 'page' ? 'is-active' : ''} onClick={() => setViewerKind('page')} title="View a live app page.">Page</button>
-    </div>
+  // The Viewer's kind selector — which item type the Viewer shows. A dropdown, not a button
+  // strip: eight kinds can't fit the 260px controls rail without clipping each label to its
+  // initials, and a <select> mirrors the Catalog's category control. Injected as each Viewer
+  // surface's header.
+  const viewerKindSelect = (
+    <label className="tileset-category-select" title="Which kind of item the Viewer shows.">
+      <span>Viewer</span>
+      <select value={viewerKind} onChange={(event) => setViewerKind(event.target.value as ViewerKind)} aria-label="Viewer kind">
+        <option value="asset">Asset</option>
+        <option value="artwork">Artwork</option>
+        <option value="portrait">Portrait</option>
+        <option value="glossary">Glossary</option>
+        <option value="surface">Surface</option>
+        <option value="scrollbar">Scrollbar</option>
+        <option value="slider">Slider</option>
+        <option value="page">Page</option>
+      </select>
+    </label>
   );
 
   return (
@@ -1833,20 +1837,20 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
         ) : studioMode === 'viewer' ? (
           viewerKind === 'portrait'
-            ? <PortraitLab header={viewerKindTabs} />
+            ? <PortraitLab header={viewerKindSelect} />
             : viewerKind === 'artwork'
-              ? <ArtworkLab name={selectedArtworkName} header={viewerKindTabs} />
+              ? <ArtworkLab name={selectedArtworkName} header={viewerKindSelect} />
               : viewerKind === 'glossary'
-                ? <GlossaryLab name={selectedGlossaryName} header={viewerKindTabs} />
+                ? <GlossaryLab name={selectedGlossaryName} header={viewerKindSelect} />
                 : viewerKind === 'surface'
-                  ? <SurfaceViewer name={selectedSurfaceName} header={viewerKindTabs} />
+                  ? <SurfaceViewer name={selectedSurfaceName} header={viewerKindSelect} />
                   : viewerKind === 'scrollbar'
-                    ? <ScrollbarViewer name={selectedScrollbarName} header={viewerKindTabs} />
+                    ? <ScrollbarViewer name={selectedScrollbarName} header={viewerKindSelect} />
                     : viewerKind === 'slider'
-                      ? <SliderViewer name={selectedSliderName} header={viewerKindTabs} />
+                      ? <SliderViewer name={selectedSliderName} header={viewerKindSelect} />
                       : viewerKind === 'page'
-                        ? <PagesViewer name={selectedPageName} header={viewerKindTabs} />
-                        : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
+                        ? <PagesViewer name={selectedPageName} header={viewerKindSelect} />
+                        : <AssetLab name={selectedAssetName} header={viewerKindSelect} />
         ) : studioMode === 'dressing' ? (
           <SurfaceDressingRoom seed={selectedSurfaceName} />
         ) : (
