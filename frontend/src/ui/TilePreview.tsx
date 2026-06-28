@@ -51,6 +51,7 @@ import { ViewPane } from './shared/ViewPane';
 import { BrandLockup } from './shared/BrandLockup';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { BoardSizePanel } from './shared/BoardSizePanel';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
@@ -2271,6 +2272,8 @@ const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(leSeedBoard);
+  const [boardCols, setBoardCols] = useState(LE_COLS);
+  const [boardRows, setBoardRows] = useState(LE_ROWS);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase'>('brush');
   const [brushId, setBrushId] = useState<string>(leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
@@ -2278,6 +2281,7 @@ export function LevelEditor(): ReactElement {
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [brushKind, setBrushKind] = useState<'tile' | 'unit'>('tile');
+  const [layer, setLayer] = useState<'board' | 'tile' | 'unit'>('tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
   const [unitBrushId, setUnitBrushId] = useState<string>(unitAssets[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -2316,7 +2320,7 @@ export function LevelEditor(): ReactElement {
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
-      for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) {
+      for (let y = 0; y < boardRows; y += 1) for (let x = 0; x < boardCols; x += 1) {
         const key = `${x},${y}`;
         if (mode === 'all' || !(key in next)) next[key] = brushAsset.id;
       }
@@ -2324,6 +2328,26 @@ export function LevelEditor(): ReactElement {
     });
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+  // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
+  // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
+  // bounds, so nothing keeps rendering or counting off the edge of the board.
+  const resizeBoard = (nextCols: number, nextRows: number): void => {
+    const within = (key: string): boolean => {
+      const [cx, cy] = key.split(',').map(Number);
+      return cx < nextCols && cy < nextRows;
+    };
+    const prune = <T,>(map: Record<string, T>): Record<string, T> => {
+      const next: Record<string, T> = {};
+      let dropped = false;
+      for (const key of Object.keys(map)) { if (within(key)) next[key] = map[key]; else dropped = true; }
+      return dropped ? next : map;
+    };
+    setBoardCells((prev) => prune(prev));
+    setBoardUnits((prev) => prune(prev));
+    setSelectedCell((sel) => (sel && (sel.x >= nextCols || sel.y >= nextRows) ? null : sel));
+    setBoardCols(nextCols);
+    setBoardRows(nextRows);
+  };
 
   const paintedCount = Object.keys(boardCells).length;
   const unitCount = Object.keys(boardUnits).length;
@@ -2353,8 +2377,8 @@ export function LevelEditor(): ReactElement {
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
               <div className="tileset-view-board-content is-board">
                 <StudioEditableBoard
-                  cols={LE_COLS}
-                  rows={LE_ROWS}
+                  cols={boardCols}
+                  rows={boardRows}
                   cells={boardCells}
                   units={boardUnits}
                   doodads={{}}
@@ -2380,12 +2404,20 @@ export function LevelEditor(): ReactElement {
         <section className="skirmish-card">
           <h2>Layer</h2>
           <div className="le-seg">
-            <button type="button" className="le-seg-btn" disabled>Board</button>
-            <button type="button" className={`le-seg-btn ${brushKind === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('tile'); setTool('brush'); }}>Tile</button>
-            <button type="button" className={`le-seg-btn ${brushKind === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('unit'); setTool('brush'); }}>Unit</button>
+            <button type="button" className={`le-seg-btn ${layer === 'board' ? 'active' : ''}`.trim()} onClick={() => { setLayer('board'); setTool('select'); }}>Board</button>
+            <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
+            <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
             <button type="button" className="le-seg-btn" disabled>Doodad</button>
           </div>
         </section>
+
+        {layer === 'board' ? (
+          <section className="skirmish-card">
+            <h2>Board</h2>
+            <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
+            <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
+          </section>
+        ) : (<>
 
         <section className="skirmish-card">
           <h2>Tool</h2>
@@ -2474,6 +2506,8 @@ export function LevelEditor(): ReactElement {
           </div>
         </section>
 
+        </>)}
+
         <section className="skirmish-card">
           <h2>View</h2>
           <div className="le-ctrlrow">
@@ -2516,7 +2550,7 @@ export function LevelEditor(): ReactElement {
         </section>
 
         <div className="le-statusline">
-          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · {LE_COLS}×{LE_ROWS}
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · {boardCols}×{boardRows}
         </div>
       </aside>
     </div>

@@ -6,12 +6,13 @@
 // Export the JSON and hand it back — it maps to camera framing for crisp finals.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
+import COMMITTED_CROPS from '../art/portraitCrops.json';
 
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
 const PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald'] as const;
-type Piece = (typeof PIECES)[number];
-type Palette = (typeof PALETTES)[number];
-type Crop = { cx: number; cy: number; s: number };
+export type Piece = (typeof PIECES)[number];
+export type Palette = (typeof PALETTES)[number];
+export type Crop = { cx: number; cy: number; s: number };
 
 // Master render framing (Tz·topZ, span·topZ) used per piece — emitted with the
 // JSON so the crop can be mapped back to camera framing exactly.
@@ -20,9 +21,12 @@ const MASTER_FRAMING: Record<Piece, { tz: number; span: number }> = {
   rook: { tz: 0.45, span: 1.75 }, queen: { tz: 0.5, span: 1.45 }, king: { tz: 0.5, span: 1.45 },
 };
 
-// A sensible starting headshot: centred, framed on the upper third with headroom.
+// Fallback headshot if a piece is somehow missing from the committed crops below.
 const DEFAULT_CROP: Crop = { cx: 0.5, cy: 0.30, s: 0.50 };
-const STORAGE_KEY = 'portrait-editor-crops-v2'; // v2: stale (head-cutting) v1 crops discarded
+// The committed, intentional per-piece framing (off-center lead room, zoom) — the single source
+// of truth the editor, the Skirmish HUD, and the roster all START from, so they never diverge.
+const COMMITTED = COMMITTED_CROPS as Record<Piece, Crop>;
+export const STORAGE_KEY = 'portrait-editor-crops-v3'; // v3: discard stale v2 (centered-default) crops
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 // Crop is only clamped to the image bounds — free to pan anywhere. Tightening is
@@ -33,11 +37,11 @@ function clampCrop({ cx, cy, s }: Crop): Crop {
   return { s: ss, cx: clamp(cx, half, 1 - half), cy: clamp(cy, half, 1 - half) };
 }
 
-const masterSrc = (piece: Piece, pal: Palette) => `/assets/portrait-editor/${piece}/${pal}.png`;
+export const masterSrc = (piece: Piece, pal: Palette) => `/assets/portrait-editor/${piece}/${pal}.png`;
 
 // Render the cropped region of a square master to fill a frame, via an absolutely
 // positioned img (width 1/s of the frame, translated so the crop centre is centred).
-function CroppedView({ src, crop }: { src: string; crop: Crop }): ReactElement {
+export function CroppedView({ src, crop }: { src: string; crop: Crop }): ReactElement {
   const { cx, cy, s } = crop;
   const imgStyle: CSSProperties = {
     position: 'absolute', width: `${100 / s}%`, height: 'auto',
@@ -51,21 +55,36 @@ function CroppedView({ src, crop }: { src: string; crop: Crop }): ReactElement {
   );
 }
 
-// The HUD's real portrait frame: a square frame the crop FILLS edge-to-edge (no
-// padding) — mirrors .skirmish-portrait-frame so the preview is faithful.
-function HudFrame({ src, crop, size, label }: { src: string; crop: Crop; size: number; label?: string }): ReactElement {
+// The ONE "unit portrait box": the shared CroppedView (master + crop) inside the standard
+// transparent line-frame with the fill boundary. Every surface — the Selected-Unit HUD, the
+// roster slots, and these editor previews — renders through THIS, so the framing/fill/crop are
+// defined once (here + the `.unit-portrait` CSS) and never re-derived per surface. Size, backdrop,
+// and the selected highlight vary via `size`/`backdrop`/a `className` modifier; nothing else.
+export function UnitPortrait({ piece, palette, crop, backdrop, size, className }: {
+  piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string;
+}): ReactElement {
+  const style: CSSProperties = {};
+  if (size != null) { style.width = size; style.height = size; }
+  if (backdrop) (style as Record<string, string>)['--up-backdrop'] = `url("${backdrop}")`;
+  return (
+    <div className={`unit-portrait ${backdrop ? 'has-backdrop' : ''} ${className ?? ''}`.trim()} style={style}>
+      <div className="unit-portrait__bust"><CroppedView src={masterSrc(piece, palette)} crop={crop} /></div>
+    </div>
+  );
+}
+
+// Editor preview = a labelled UnitPortrait, so the previews can't drift from the live HUD.
+function HudFrame({ piece, palette, crop, size, label }: { piece: Piece; palette: Palette; crop: Crop; size: number; label?: string }): ReactElement {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <div className="skirmish-portrait-frame" style={{ width: size, height: size, padding: 0, position: 'relative', overflow: 'hidden' }}>
-        <CroppedView src={src} crop={crop} />
-      </div>
+      <UnitPortrait piece={piece} palette={palette} crop={crop} size={size} className="unit-portrait--preview" />
       {label ? <span style={{ fontSize: 11, color: '#7fa8bd' }}>{label}</span> : null}
     </div>
   );
 }
 
-function loadCrops(): Record<Piece, Crop> {
-  const base = Object.fromEntries(PIECES.map((p) => [p, { ...DEFAULT_CROP }])) as Record<Piece, Crop>;
+export function loadCrops(): Record<Piece, Crop> {
+  const base = Object.fromEntries(PIECES.map((p) => [p, { ...(COMMITTED[p] ?? DEFAULT_CROP) }])) as Record<Piece, Crop>;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -131,8 +150,8 @@ function usePortraitEditor() {
   const copy = async () => {
     try { await navigator.clipboard.writeText(json); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
   };
-  const resetPiece = () => setCrop({ ...DEFAULT_CROP });
-  const resetAll = () => setCrops(Object.fromEntries(PIECES.map((p) => [p, { ...DEFAULT_CROP }])) as Record<Piece, Crop>);
+  const resetPiece = () => setCrop({ ...(COMMITTED[piece] ?? DEFAULT_CROP) });
+  const resetAll = () => setCrops(Object.fromEntries(PIECES.map((p) => [p, { ...(COMMITTED[p] ?? DEFAULT_CROP) }])) as Record<Piece, Crop>);
 
   return { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll };
 }
@@ -172,13 +191,13 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
           </div>
           <div style={{ display: 'grid', gap: 16 }}>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <HudFrame src={masterSrc(piece, palette)} crop={crop} size={150} label={`${piece} · large`} />
-              <HudFrame src={masterSrc(piece, palette)} crop={crop} size={86} label="actual HUD size" />
+              <HudFrame piece={piece} palette={palette} crop={crop} size={150} label={`${piece} · large`} />
+              <HudFrame piece={piece} palette={palette} crop={crop} size={86} label="actual HUD size" />
             </div>
             <div>
               <div style={{ fontSize: 12, color: '#7fa8bd', marginBottom: 6 }}>All units · {palette}</div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {PIECES.map((p) => <HudFrame key={p} src={masterSrc(p, palette)} crop={crops[p]} size={72} label={p} />)}
+                {PIECES.map((p) => <HudFrame key={p} piece={p} palette={palette} crop={crops[p]} size={72} label={p} />)}
               </div>
             </div>
           </div>
@@ -288,15 +307,15 @@ export function PortraitEditor(): ReactElement {
           </div>
 
           <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-            <HudFrame src={masterSrc(piece, palette)} crop={crop} size={200} label={`${piece} · large`} />
-            <HudFrame src={masterSrc(piece, palette)} crop={crop} size={86} label="actual HUD size" />
+            <HudFrame piece={piece} palette={palette} crop={crop} size={200} label={`${piece} · large`} />
+            <HudFrame piece={piece} palette={palette} crop={crop} size={86} label="actual HUD size" />
           </div>
 
           <div>
             <div style={{ fontSize: 12, color: '#7fa8bd', marginBottom: 6 }}>All units · {palette}</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {PIECES.map((p) => (
-                <HudFrame key={p} src={masterSrc(p, palette)} crop={crops[p]} size={86} label={p} />
+                <HudFrame key={p} piece={p} palette={palette} crop={crops[p]} size={86} label={p} />
               ))}
             </div>
           </div>
