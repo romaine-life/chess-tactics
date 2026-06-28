@@ -127,6 +127,7 @@ interface TilesetStudioRouteState {
   selectedAssetName?: string;
   selectedArtworkName?: string;
   selectedGlossaryName?: string;
+  selectedPageName?: string;
   viewerKind?: ViewerKind;
   labMode: LabMode;
   tileFilter: TileFilter;
@@ -265,6 +266,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const kit = params.get('kit');
   const art = params.get('art');
   const gloss = params.get('gloss');
+  const page = params.get('page');
   const vk = params.get('vk');
   const lab = params.get('lab');
   const view = params.get('view');
@@ -297,6 +299,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedAssetName: kit || undefined,
     selectedArtworkName: art || undefined,
     selectedGlossaryName: gloss || undefined,
+    selectedPageName: page || undefined,
     viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
@@ -342,6 +345,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.viewerKind === 'asset' && route.selectedAssetName) params.set('kit', route.selectedAssetName);
     else if (route.viewerKind === 'artwork' && route.selectedArtworkName) params.set('art', route.selectedArtworkName);
     else if (route.viewerKind === 'glossary' && route.selectedGlossaryName) params.set('gloss', route.selectedGlossaryName);
+    else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
   }
   if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', route.tileFilter);
@@ -761,7 +765,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [sliderSearch, setSliderSearch] = useState('');
   const [selectedSliderName, setSelectedSliderName] = useState<string | undefined>(undefined);
   const [pageSearch, setPageSearch] = useState('');
-  const [selectedPageName, setSelectedPageName] = useState<string | undefined>(undefined);
+  const [selectedPageName, setSelectedPageName] = useState<string | undefined>(initialRoute.selectedPageName);
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
@@ -1188,6 +1192,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedAssetName,
       selectedArtworkName,
       selectedGlossaryName,
+      selectedPageName,
       viewerKind,
       labMode,
       tileFilter,
@@ -1201,7 +1206,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
