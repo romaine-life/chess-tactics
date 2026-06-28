@@ -357,7 +357,7 @@ export function LevelEditor(): ReactElement {
 
   return (
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
-        <header className="app-titlebar le-topbar" aria-label="Level editor">
+        <header className="app-titlebar settings-header-frame le-topbar" aria-label="Level editor">
           <BrandLockup screenName="Level Editor" />
           <div className="le-topbar-stats" aria-label="Level status">
             <span className="le-level-name">Untitled level</span>

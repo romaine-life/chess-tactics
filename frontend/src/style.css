@@ -2759,6 +2759,23 @@ h1 {
   width: 100%;
 }
 
+/* Lobbies/Party wear the standard bar as a settings-twin (ADR-0004/0023): the bar is
+   the settings-screen grid's top row; the centred .utility-screen body fills and
+   scrolls within the row below it (no longer the whole route, so it must scroll). */
+.utility-twin-screen > .utility-screen {
+  align-self: stretch;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Pick-progress / intro line relocated from the old utility-page-header subtitle. */
+.utility-lead {
+  color: var(--muted);
+  font-size: 1.08rem;
+  line-height: 1.25;
+  margin: 0 0 14px;
+}
+
 .utility-page-header,
 .utility-panel,
 .utility-lobby-card,
@@ -2828,8 +2845,8 @@ h1 {
 
 .utility-panel {
   background: transparent;
-  border: 24px solid transparent;
-  border-image: url("/assets/ui/utility/panel-frame.png") 24 fill / 24px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   min-width: 0;
   padding: 2px;
 }
@@ -2841,15 +2858,15 @@ h1 {
 
 .utility-lobby-card {
   background: transparent;
-  border: 24px solid transparent;
-  border-image: url("/assets/ui/utility/panel-frame.png") 24 fill / 24px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   display: grid;
   gap: 12px;
   padding: 2px;
 }
 
 .utility-lobby-card.is-current {
-  border-image-source: url("/assets/ui/utility/lobby-row-current.png");
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .utility-lobby-main,
@@ -2868,8 +2885,8 @@ h1 {
 
 .utility-lobby-row {
   background: transparent;
-  border: 20px solid transparent;
-  border-image: url("/assets/ui/utility/lobby-row.png") 20 fill / 20px stretch;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   min-height: 82px;
   padding: 0 2px;
@@ -2968,8 +2985,8 @@ h1 {
 
 .utility-empty-row {
   background: transparent;
-  border: 20px solid transparent;
-  border-image: url("/assets/ui/utility/lobby-row.png") 20 fill / 20px stretch;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   min-height: 72px;
   padding: 6px;
 }
@@ -2977,8 +2994,8 @@ h1 {
 .utility-button {
   align-items: center;
   background: transparent;
-  border: 18px solid transparent;
-  border-image: url("/assets/ui/utility/button-neutral.png") 18 fill / 18px stretch;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 12px round;
   color: #f8ecd3;
   cursor: pointer;
   display: inline-flex;
@@ -3000,11 +3017,11 @@ h1 {
 }
 
 .utility-button-primary {
-  border-image-source: url("/assets/ui/utility/button-primary.png");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 .utility-button-danger {
-  border-image-source: url("/assets/ui/utility/button-danger.png");
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 .utility-button:hover,
@@ -3036,8 +3053,8 @@ h1 {
 .utility-squad-card {
   align-content: center;
   background: transparent;
-  border: 22px solid transparent;
-  border-image: url("/assets/ui/utility/squad-card.png") 22 fill / 22px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   color: var(--ink);
   cursor: pointer;
   display: grid;
@@ -3050,7 +3067,7 @@ h1 {
 }
 
 .utility-squad-card.is-selected {
-  border-image-source: url("/assets/ui/utility/squad-card-selected.png");
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .utility-squad-card.is-locked {
@@ -3089,16 +3106,18 @@ h1 {
   width: 58px;
 }
 
-.icon-players { background-image: url("/assets/ui/utility/icon-players.png"); }
-.icon-start { background-image: url("/assets/ui/utility/icon-start.png"); }
-.icon-leave { background-image: url("/assets/ui/utility/icon-leave.png"); }
-.icon-refresh { background-image: url("/assets/ui/utility/icon-refresh.png"); }
-.icon-gear { background-image: url("/assets/ui/utility/icon-gear.png"); }
-.icon-speaker { background-image: url("/assets/ui/utility/icon-speaker.png"); }
-.icon-pawn { background-image: url("/assets/ui/utility/icon-pawn.png"); }
-.icon-knight { background-image: url("/assets/ui/utility/icon-knight.png"); }
-.icon-bishop { background-image: url("/assets/ui/utility/icon-bishop.png"); }
-.icon-rook { background-image: url("/assets/ui/utility/icon-rook.png"); }
+.icon-players { background-image: url("/assets/ui/kit/icons/players.png"); }
+.icon-start { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
+.icon-leave { background-image: url("/assets/ui/kit/icons/sign-out.png"); }
+.icon-refresh { background-image: url("/assets/ui/kit/icons/reset.png"); }
+.icon-gear { background-image: url("/assets/ui/kit/icons/gear.png"); }
+.icon-speaker { background-image: url("/assets/ui/kit/icons/speaker.png"); }
+.icon-pawn { background-image: url("/assets/ui/kit/icons/pawn.png"); }
+.icon-knight { background-image: url("/assets/ui/kit/icons/knight.png"); }
+.icon-bishop { background-image: url("/assets/ui/kit/icons/bishop.png"); }
+.icon-rook { background-image: url("/assets/ui/kit/icons/castle.png"); }
+.icon-queen { background-image: url("/assets/ui/kit/icons/queen.png"); }
+.icon-king { background-image: url("/assets/ui/kit/icons/king.png"); }
 
 .utility-settings-panel {
   max-width: 760px;
@@ -3127,8 +3146,8 @@ h1 {
 
 .utility-toggle {
   background: transparent;
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/utility/toggle-off.png") 16 fill / 16px stretch;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 12px round;
   color: #f8ecd3;
   cursor: pointer;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
@@ -3140,7 +3159,7 @@ h1 {
 }
 
 .utility-toggle.is-on {
-  border-image-source: url("/assets/ui/utility/toggle-on.png");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 @media (max-width: 760px) {
@@ -4201,6 +4220,23 @@ h1 {
 .shell.is-immersive + .bgm-control,
 .shell.is-immersive ~ .bgm-control { display: none; }
 
+/* Studio/dev editor & inspector surfaces (Portrait Editor, Doodad Editor, Surface Lab,
+   Artwork/Tile Compare) on the standard title bar (ADR-0004/0023): a full-bleed bar on
+   top, the existing tool body filling and scrolling in the row below it. The shell runs
+   .is-immersive so the global topbar is hidden and .app-root is full-bleed. */
+.dev-editor-screen {
+  background: #0b1016;
+  display: grid;
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.dev-editor-screen > :not(.app-titlebar) {
+  min-height: 0;
+  overflow: auto;
+}
+
 .skirmish-screen::before {
   background:
     radial-gradient(760px 440px at 42% 38%, rgba(21, 95, 137, .12), transparent 66%),
@@ -4225,18 +4261,19 @@ h1 {
 }
 
 .skirmish-topbar {
-  /* Frame + height come from .app-titlebar; this class is content layout only.
-     Spans both screen columns so the bar is full-bleed across the top (ADR-0004).
-     Three sections — brand left, status centered, counts+actions right — with the
-     content row vertically centered on the bar (align-content), per ADR-0010. */
+  /* The oak frame, height, gap, and padding come from .app-titlebar + .settings-header-frame
+     (ADR-0004/0023/0037) carried on the element — the in-game bar is the SAME standard bar as
+     the menus, keeping its live turn/objective status in the centre section. This rule only
+     places the bar across the top of the skirmish grid (full-bleed, ADR-0004). */
   grid-column: 1 / -1;
   grid-row: 1;
-  align-content: center;
-  align-items: center;
-  display: grid;
-  gap: clamp(10px, 1.4vw, 20px);
+}
+
+/* Higher specificity than .settings-header-frame so the in-game three-section centred
+   layout wins over the menu's 2-trailing grid: brand (left) · live status (centre) ·
+   account cluster (right). */
+.skirmish-screen .skirmish-topbar {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
 .skirmish-topbar-status {
@@ -4988,21 +5025,11 @@ h1 {
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
 
-/* Title bar = the app's editor pattern (ADR-0023; mirrors the campaign editor's
-   .ce-topbar): three sections — brand · save-state · labeled header buttons
-   (.app-header-button on the kit gold frame). Scoped under .level-editor-screen so it
-   overrides the LEGACY bare .le-topbar still in this file (the old /edit chrome) and
-   neutralizes its leaked background/shadow. */
-.level-editor-screen .le-topbar {
-  align-content: center;
-  align-items: center;
-  background: none;
-  box-shadow: none;
-  display: grid;
-  gap: clamp(10px, 1.4vw, 20px);
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 0 clamp(10px, 1.2vw, 18px);
-}
+/* Title bar = the standard app bar (ADR-0004/0023/0037): the oak frame, height, grid
+   columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
+   on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
+   stats/actions content below are scoped here — three sections: brand · save-state ·
+   labeled header buttons (.app-header-button on the kit gold frame). */
 .level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
 .level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
@@ -7540,6 +7567,35 @@ h1 {
   background: rgba(12, 31, 48, 0.42);
   border-color: transparent;
   cursor: not-allowed;
+}
+
+/* Studio on the standard title bar (ADR-0004/0023): brand left, location crumb in the
+   centre, account cluster right. The workspace switcher (Catalog/Lab/Viewer) + Settings
+   moved into the control panel (.tileset-mode-field below), so the bar carries no studio
+   buttons — only the shared brand + account chrome. */
+.tileset-studio-titlebar {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.tileset-studio-context {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The relocated workspace switcher, as a labelled field at the top of the control
+   panel (catalog rail + each Viewer lab's controls). */
+.tileset-mode-field {
+  display: grid;
+  gap: 5px;
+}
+
+.tileset-mode-field .tileset-control-label {
+  color: #72bde8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .tileset-context-tabs {
@@ -11287,6 +11343,32 @@ button.tileset-relationship-cell {
   letter-spacing: .14em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+/* Home/entry route only (variant="brand-hero"): the entry screen IS the title
+   screen, so lead with the brand — the game title becomes the dominant line and
+   the screen name drops to the small subordinate slot. Same slots/structure as the
+   shared lockup; only the size/weight/colour ratio of the two lines is flipped
+   (and `order` restacks them so the brand sits on top). */
+.brand-lockup--brand-hero .brand-lockup-copy em {
+  color: #f0eadb;
+  font-size: var(--ds-text-lg);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.04;
+  order: 0;
+  text-shadow: 0 2px 0 #02070b;
+  white-space: nowrap;
+}
+
+.brand-lockup--brand-hero .brand-lockup-copy strong {
+  color: #79d3ff;
+  font-size: var(--ds-text-sm);
+  font-weight: 400;
+  letter-spacing: .14em;
+  line-height: 1.2;
+  order: 1;
+  text-shadow: none;
 }
 
 .settings-tab span,
