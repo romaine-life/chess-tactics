@@ -1079,8 +1079,10 @@ h1 {
   .pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: none; }
 }
 .pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
-.pages-card-image {
-  display: flex; align-items: center; justify-content: center;
+/* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
+   sprites): a solid stone-ish plate with the page initial, centered by the base place-items. */
+.tileset-studio-card-image.pages-card-image {
+  min-height: 96px;
   font-family: var(--ds-font-display); font-size: 1.9rem; color: #9db8da;
   background: linear-gradient(180deg, #16243a, #0b1422);
 }
@@ -9984,11 +9986,10 @@ button.tileset-relationship-cell {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 12px;
-}
-
-/* Surfaces are few (one short row), so the default grid stretch blows each card up
-   to fill the tall catalog pane. Pack the row to the top and size cards to content. */
-.tileset-studio-grid.surface-grid {
+  /* Pack rows to the top and size each card to its content. A grid with few items
+     otherwise STRETCHES its single row to fill the tall catalog pane, leaving a dead
+     gap under every card (ADR-0029: cards hug content, no pointless vertical space).
+     This is the DEFAULT for every category — not a per-grid opt-in. */
   align-content: start;
   align-items: start;
   grid-auto-rows: max-content;
