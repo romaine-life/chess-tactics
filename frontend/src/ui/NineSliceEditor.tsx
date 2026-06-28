@@ -57,6 +57,16 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 }
 
+// Content fingerprint (first 5 bytes of SHA-256, hex) of the EXACT tile bytes the
+// server hands this page — fetched with no-store so it reflects what's on the wire,
+// not a cached copy. This is what makes "the file I checked" and "the pixels you're
+// looking at" the same string: it hashes the same bytes the editor assembles from.
+async function tileFingerprint(url: string): Promise<string> {
+  const buf = await (await fetch(url, { cache: 'no-store' })).arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(digest)].slice(0, 5).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function toCanvas(src: CanvasImageSource, w: number, h: number): HTMLCanvasElement {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d')!; g.imageSmoothingEnabled = false; g.drawImage(src, 0, 0); return c;
@@ -173,13 +183,19 @@ export function NineSliceEditor(): ReactElement {
     return ASSETS.some((x) => x.id === a) ? a! : ASSETS[0].id;
   });
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // Fingerprints of the exact tile bytes this view is built from (corner/edge/fill),
+  // shown in the header so the asset on screen is identifiable and matchable to disk.
+  const [tileHashes, setTileHashes] = useState<{ corner?: string; edge?: string; fill?: string }>({});
   const [active, setActive] = useState<PieceKey>('bracket');
   const [showOuter, setShowOuter] = useState(true);
   const [showContent, setShowContent] = useState(false);
   const [showFill, setShowFill] = useState(false);
-  // Fill PREVIEW: paint a real surface clipped to the fill box, with the ornament (no-fill frame)
-  // on top — so you can judge the fill boundary against an actual fill, not just the guide line.
-  const [previewFill, setPreviewFill] = useState(false);
+  // What backs the ornament in the preview. The frame you edit IS the ornament (brackets +
+  // keyline); the body/fill is a separate backing the consumer supplies, so it's a chosen layer
+  // here, not a baked-in default. 'none' = ornament on the checkerboard (the honest default — and a
+  // stray fill-coloured pixel in the art can't hide against it); 'fill' = the asset's baked body;
+  // 'surface' = a real surface clipped to the fill box (audits the fill boundary).
+  const [backing, setBacking] = useState<'none' | 'fill' | 'surface'>('none');
   const [previewSurfaceName, setPreviewSurfaceName] = useState(SURFACE_ASSETS[0]?.name ?? '');
   const [surfaceImg, setSurfaceImg] = useState<HTMLImageElement | null>(null);
   // gap from each outer-box edge to the art's outermost opaque pixel. + = gap inside; − = beyond (overflow).
@@ -224,6 +240,19 @@ export function NineSliceEditor(): ReactElement {
   }, [asset]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
+
+  // Fingerprint the actual served bytes of this asset's tiles (no cache), so the
+  // header shows exactly which artwork the on-screen frame is assembled from.
+  useEffect(() => {
+    let live = true;
+    setTileHashes({});
+    (async () => {
+      const keys = ['corner', 'edge', 'fill'] as const;
+      const entries = await Promise.all(keys.map(async (k) => [k, await tileFingerprint(asset[k]).catch(() => 'err')] as const));
+      if (live) setTileHashes(Object.fromEntries(entries));
+    })();
+    return () => { live = false; };
+  }, [asset]);
 
   // Load the chosen preview surface (for the fill preview).
   useEffect(() => {
@@ -303,16 +332,17 @@ export function NineSliceEditor(): ReactElement {
     if (!loaded) return;
     const W = asset.frame.w, H = asset.frame.h;        // canvas = the asset footprint
     // keyline is inert (the border is continuous by construction) — always 0, matching the bake.
-    const off = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides);
-    const g = off.getContext('2d')!;
+    const off = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides);        // full frame (baked body)
+    const orn = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides, true);  // ornament only (no fill)
+    const g = off.getContext('2d')!; // status reads the full frame's opaque box
 
     const view = canvasRef.current; if (!view) return;
     view.width = W * Z; view.height = H * Z;
     const vg = view.getContext('2d')!; vg.imageSmoothingEnabled = false;
     for (let y = 0; y < view.height; y += 8) for (let x = 0; x < view.width; x += 8) { vg.fillStyle = ((x / 8 + y / 8) & 1) ? '#3a3f48' : '#2b2f37'; vg.fillRect(x, y, 8, 8); }
-    if (previewFill && surfaceImg) {
-      // Surface clipped to the FILL box, with the ornament-only frame on top — what a surface fill
-      // actually looks like. Outside the fill box (the checkerboard ring) is whatever sits behind.
+    if (backing === 'surface' && surfaceImg) {
+      // Surface clipped to the FILL box, ornament on top — audits the fill boundary against a real
+      // backing. Outside the fill box (the checkerboard ring) is whatever sits behind.
       const f = edit.fill;
       vg.save();
       vg.beginPath();
@@ -321,10 +351,11 @@ export function NineSliceEditor(): ReactElement {
       const tile = 16 * Z; // 16 footprint px per tile — enough texture to read
       for (let y = 0; y < view.height; y += tile) for (let x = 0; x < view.width; x += tile) vg.drawImage(surfaceImg, x, y, tile, tile);
       vg.restore();
-      const orn = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides, true);
       vg.drawImage(orn, 0, 0, W, H, 0, 0, W * Z, H * Z);
+    } else if (backing === 'fill') {
+      vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);   // the asset's baked body
     } else {
-      vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);
+      vg.drawImage(orn, 0, 0, W, H, 0, 0, W * Z, H * Z);   // 'none' — ornament on the checkerboard
     }
 
     // Guides are FIXED references at the asset footprint — you position the
@@ -354,7 +385,7 @@ export function NineSliceEditor(): ReactElement {
       if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
     }
     setStatus(maxX < 0 ? null : { top: minY, left: minX, right: (W - 1) - maxX, bottom: (H - 1) - maxY });
-  }, [loaded, edit, showOuter, showContent, showFill, previewFill, surfaceImg, asset]);
+  }, [loaded, edit, showOuter, showContent, showFill, backing, surfaceImg, asset]);
 
   // LIVE previews — the same builder rendered at actual size and stretched in-use,
   // so you can judge the real result here without an apply-and-screenshot round trip.
@@ -366,7 +397,7 @@ export function NineSliceEditor(): ReactElement {
       cvs.width = w * scale; cvs.height = h * scale;
       const g = cvs.getContext('2d')!; g.imageSmoothingEnabled = false;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      const f = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve, asset.flipSides);
+      const f = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve, asset.flipSides, backing !== 'fill');
       g.drawImage(f, 0, 0, w, h, 0, 0, w * scale, h * scale);
       if (label) {
         g.fillStyle = '#e8f0ff'; g.font = `${13 * scale}px system-ui, sans-serif`;
@@ -376,7 +407,7 @@ export function NineSliceEditor(): ReactElement {
     };
     draw(pvActualRef, fw, fh, 1, null);
     draw(pvUseRef, 150, 44, 2, 'Settings');
-  }, [loaded, edit.keyline, edit.bracket, asset]);
+  }, [loaded, edit.keyline, edit.bracket, asset, backing]);
 
   const exportJson = JSON.stringify({ asset: assetId, keyline: edit.keyline, bracket: edit.bracket, content: edit.content, fill: edit.fill }, null, 2);
   // Only the bracket is nudgeable. Keyline is inert (continuous border by construction);
@@ -416,6 +447,15 @@ export function NineSliceEditor(): ReactElement {
           </div>
         </div>
         <aside style={ST.panel}>
+          <div style={ST.fpBox}>
+            <div style={ST.fpHead}>Tiles in this view — served path · sha-256[:5]</div>
+            {(['corner', 'edge', 'fill'] as const).map((k) => (
+              <div key={k} style={ST.fpRow}>
+                <span style={ST.fpPath}>{asset[k]}</span>
+                <span style={ST.fp}>{tileHashes[k] ?? '…'}</span>
+              </div>
+            ))}
+          </div>
           <div style={ST.pieceRow}>
             {pieces.map((k) => (
               <button key={k} type="button" onClick={() => setActive(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{k}</button>
@@ -455,17 +495,22 @@ export function NineSliceEditor(): ReactElement {
               <button type="button" style={ST.sb} onClick={() => setFill(1)}>＋</button>
               <span style={ST.sizeLabel}>uniform on all sides</span>
             </div>
-            <label style={ST.toggle}>
-              <input type="checkbox" checked={previewFill} onChange={(e) => setPreviewFill(e.target.checked)} />
-              <span style={{ color: '#cfa' }}>▦</span> Preview fill — paint a real surface clipped to the fill box
-            </label>
-            {previewFill && (
+            <div style={ST.sizeRow}>
+              <span style={{ ...ST.sizeLabel, color: '#cfe3ff', minWidth: 52 }}>Backing</span>
+              <select value={backing} onChange={(e) => setBacking(e.target.value as 'none' | 'fill' | 'surface')} style={{ ...ST.select, fontSize: 13, flex: 1 }}>
+                <option value="none">None — ornament only</option>
+                <option value="fill">Default fill — baked body</option>
+                <option value="surface">Surface…</option>
+              </select>
+            </div>
+            {backing === 'surface' && (
               <div style={ST.sizeRow}>
                 <select value={previewSurfaceName} onChange={(e) => setPreviewSurfaceName(e.target.value)} style={{ ...ST.select, fontSize: 13, flex: 1 }}>
                   {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
                 </select>
               </div>
             )}
+            <span style={ST.sizeLabel}>Preview only — you're editing the ornament; the body is a backing the consumer supplies (Save still writes the asset as-is).</span>
           </div>
           {status && (status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0) && (
             <div style={{ ...ST.statusBox, borderColor: '#e0556a', color: '#ff9aa8' }}>
@@ -503,6 +548,11 @@ const ST: Record<string, CSSProperties> = {
   bar: { display: 'flex', alignItems: 'center', gap: 14, padding: '10px 14px', borderBottom: '1px solid #1b2740', background: '#0b1220' },
   select: { fontSize: 15, padding: '4px 8px', background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 4 },
   link: { marginLeft: 'auto', color: '#9fd8ff', textDecoration: 'none' },
+  fpBox: { display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 10px', background: '#0a0f1c', border: '1px solid #1b2740', borderRadius: 6 },
+  fpHead: { fontSize: 11, color: '#7f93ad', letterSpacing: 0.2 },
+  fpRow: { display: 'flex', flexWrap: 'wrap', gap: '0 10px', alignItems: 'baseline', justifyContent: 'space-between' },
+  fpPath: { fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#9fc4d5', wordBreak: 'break-all' },
+  fp: { fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#bfe3ff', fontWeight: 600, flex: 'none' },
   body: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 320px', minHeight: 0 },
   stage: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 26, overflow: 'auto', padding: 20 },
   previewStrip: { display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'center' },
@@ -526,7 +576,7 @@ const ST: Record<string, CSSProperties> = {
   statusBox: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, padding: '8px 10px', border: '1px solid', borderRadius: 6, background: '#0a0f1c' },
   statusGrid: { display: 'flex', gap: 14, fontFamily: 'ui-monospace, monospace', fontSize: 13 },
   offsets: { fontSize: 13, fontFamily: 'ui-monospace, monospace', color: '#dbe9ff', display: 'grid', gap: 2 },
-  export: { width: '100%', height: 110, background: '#0a0f1c', color: '#dbe9ff', border: '1px solid #2a3c5e', borderRadius: 4, fontFamily: 'ui-monospace, monospace', fontSize: 12, padding: 8, boxSizing: 'border-box' },
+  export: { width: '100%', minHeight: 130, flexShrink: 0, resize: 'vertical', background: '#0a0f1c', color: '#dbe9ff', border: '1px solid #2a3c5e', borderRadius: 4, fontFamily: 'ui-monospace, monospace', fontSize: 12, padding: 8, boxSizing: 'border-box' },
   save: { padding: '10px 0', background: '#15532f', color: '#dffbe8', border: '1px solid #43b06a', borderRadius: 4, cursor: 'pointer', fontWeight: 700 },
   copy: { padding: '8px 0', background: '#1d5f9e', color: '#fff', border: '1px solid #4fbdf0', borderRadius: 4, cursor: 'pointer' },
 };
