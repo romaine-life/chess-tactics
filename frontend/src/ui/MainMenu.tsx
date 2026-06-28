@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { AmbienceBackground } from './AmbienceBackground';
 import { BrandLockup } from './shared/BrandLockup';
-import { MENU_MODES, type MenuMode } from './design/catalogData';
+import { MENU_MODES } from './design/catalogData';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
 const BRAND_SHIELD = '/assets/ui/kit/icons/brand-shield.png';
@@ -15,18 +15,35 @@ const MODE_HREFS: Record<string, string> = {
   settings: '/settings',
 };
 
+interface MenuTab { slug: string; label: string; href: string; iconSlug: string }
+
+// The main-menu rail. The Campaign (play) mode is menu-only — not a design-catalog
+// widget — so it lives here rather than in MENU_MODES (the catalog's source of
+// truth). It leads the rail as the headline mode and sits apart from the Campaign
+// Editor so the shared placeholder icon doesn't read as a duplicate of an adjacent
+// tab. Temp icon: reuses the campaign-editor carving until a dedicated 'campaign'
+// carving is forged.
+const MENU_TABS: MenuTab[] = [
+  { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
+  ...MENU_MODES.map((mode) => ({
+    slug: mode.slug,
+    label: mode.label,
+    href: MODE_HREFS[mode.slug] || '/',
+    iconSlug: mode.slug,
+  })),
+];
+
 // A mode entry rendered as a settings-style rail tab (shared baked-skin frame —
 // line frame over the stone surface — carved icon + label). The same chrome the
 // Settings sidebar uses, so the menu and the rest of the app read as one family
 // (retires the bespoke stone slabs).
-function ModeTab({ mode }: { mode: MenuMode }): ReactElement {
-  const href = MODE_HREFS[mode.slug] || '/';
+function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
   return (
-    <a className="settings-tab main-menu-mode-tab" href={href}>
+    <a className="settings-tab main-menu-mode-tab" href={tab.href}>
       <span className="settings-tab-icon" aria-hidden="true">
-        <img src={`${ICONS}/${mode.slug}.png`} alt="" />
+        <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
-      <span><strong>{mode.label}</strong></span>
+      <span><strong>{tab.label}</strong></span>
     </a>
   );
 }
@@ -51,7 +68,7 @@ export function MainMenu(): ReactElement {
 
   useEffect(() => {
     const urls = new Set<string>([BRAND_SHIELD]);
-    for (const mode of MENU_MODES) urls.add(`${ICONS}/${mode.slug}.png`);
+    for (const tab of MENU_TABS) urls.add(`${ICONS}/${tab.iconSlug}.png`);
     let done = false;
     const reveal = () => { if (!done) { done = true; setReady(true); } };
     Promise.allSettled([...urls].map((src) => { const img = new Image(); img.src = src; return img.decode(); })).then(reveal);
@@ -89,7 +106,7 @@ export function MainMenu(): ReactElement {
 
         <div className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_MODES.map((mode) => <ModeTab key={mode.slug} mode={mode} />)}
+            {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
           </aside>
         </div>
       </div>

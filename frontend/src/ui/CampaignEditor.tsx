@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
-import { createDemoWorkspace, DEMO_SELECTED_CAMPAIGN_ID, DEMO_SELECTED_LEVEL_ID } from '../campaign/demoWorkspace';
+import { DEMO_SELECTED_CAMPAIGN_ID, DEMO_SELECTED_LEVEL_ID } from '../campaign/demoWorkspace';
+import { createDefaultWorkspace } from '../campaign/defaultWorkspace';
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level, type ObjectiveType } from '../core/level';
 import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
@@ -213,7 +214,8 @@ export function CampaignEditor() {
   const dirty = currentSignature !== savedSignature;
 
   const hydrateDemoWorkspace = (message?: string) => {
-    const demo = createDemoWorkspace();
+    // The single-campaign default (DEMO_SELECTED_* still resolve to its first level).
+    const demo = createDefaultWorkspace();
     const store = useCampaigns.getState();
     store.hydrate(demo);
     store.selectCampaign(DEMO_SELECTED_CAMPAIGN_ID);

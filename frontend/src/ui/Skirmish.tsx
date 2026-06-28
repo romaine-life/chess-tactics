@@ -4,10 +4,24 @@ import { SkirmishHud } from './SkirmishHud';
 import { BrandLockup } from './shared/BrandLockup';
 import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
 import { useCampaigns } from '../campaign/store';
-import { loadWorkspace } from '../net/campaignWorkspace';
+import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { PALETTE_FOR_SIDE, isPlayablePieceType, portraitPath } from '../core/pieces';
 import { preloadImages } from '../art/preload';
+import { livingPieces } from '../core/rules';
+import { computeStars, recordLevelWin } from '../campaign/progress';
+
+const STAR_ICON = '/assets/ui/kit/icons/star.png';
+
+function ResultStars({ count }: { count: number }) {
+  return (
+    <span className="campaign-result-stars" aria-label={`${count} of 3 stars`}>
+      {[0, 1, 2].map((i) => (
+        <img key={i} src={STAR_ICON} alt="" aria-hidden="true" style={{ width: 26, height: 26, opacity: i < count ? 1 : 0.22 }} />
+      ))}
+    </span>
+  );
+}
 
 const OBJECTIVE_COPY = {
   'capture-all': 'Capture all enemy pieces',
@@ -20,12 +34,33 @@ export function Skirmish() {
   const routeParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const routeCampaignId = routeParams.get('campaignId');
   const routeLevelId = routeParams.get('levelId');
+  const routeMode = routeParams.get('mode');
+  // Real campaign play (records progress + shows the result flow), as opposed to the
+  // editor's "Test Play" (mode=test) or a free skirmish (no campaign/level).
+  const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
   const [routeLevel, setRouteLevel] = useState(() => (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null));
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const game = useSkirmish((s) => s.game);
   const turnLabel = game.winner
     ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Player Turn' : 'Enemy Turn';
+
+  // Stars earned this clear (3 flawless, 2 light losses, 1 any win), from the level's
+  // authored player force vs. who's still standing.
+  const stars = useMemo(() => {
+    if (!routeLevel || game.winner !== 'player') return 0;
+    const initial = routeLevel.layers.units.filter((u) => u.side === 'player').length;
+    return computeStars(initial, livingPieces(game.pieces, 'player').length);
+  }, [routeLevel, game.winner, game.pieces]);
+
+  // Bank the win the moment a campaign battle is won (idempotent — keeps the best stars).
+  useEffect(() => {
+    if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id, stars);
+  }, [isCampaignPlay, routeLevel, game.winner, stars]);
+
+  const replayLevel = () => {
+    if (routeLevel) newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: routeLevel });
+  };
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -61,10 +96,12 @@ export function Skirmish() {
       return;
     }
     let active = true;
-    loadWorkspace()
-      .then((workspace) => {
+    // Hydrate the shared workspace the same way the menu does (server when reachable,
+    // else the bundled default) so a deep-link / reload of a campaign battle resolves
+    // its level offline too — not just when arriving from the level select.
+    ensureCampaignsHydrated()
+      .then(() => {
         if (!active) return;
-        useCampaigns.getState().hydrate(workspace);
         if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
         useCampaigns.getState().selectLevel(routeLevelId);
         const level = useCampaigns.getState().levels[routeLevelId] ?? null;
@@ -116,6 +153,24 @@ export function Skirmish() {
         </div>
       </section>
       <SkirmishHud />
+
+      {isCampaignPlay && routeLevel && game.winner && (
+        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
+          <div className="settings-frame campaign-result-panel">
+            <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Stalemate' : 'Defeat'}</h2>
+            {game.winner === 'player' && <ResultStars count={stars} />}
+            <p>{routeLevel.name} — {OBJECTIVE_COPY[routeLevel.objective]}</p>
+            <div className="campaign-result-actions">
+              <button type="button" className="app-header-button" onClick={replayLevel}>
+                {game.winner === 'player' ? 'Replay' : 'Retry'}
+              </button>
+              <a className="app-header-button app-header-button-active" href={`/campaign/${routeCampaignId}`}>
+                {game.winner === 'player' ? 'Continue' : 'Back to Campaign'}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
