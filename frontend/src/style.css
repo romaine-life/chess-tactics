@@ -11679,6 +11679,132 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* --- Trailing-edge "settings + user" cluster ----------------------------------
+   The signed-in chrome at the top-right: an icon-only Settings gear + the avatar
+   account button, framed identically so the pair reads as one matched unit
+   (Material-3 "few trailing items"; the avatar opens the account menu below). */
+.header-account-cluster {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Square icon-only button — the app's kit mode-button frame, made equal-sided. A
+   slightly thinner border than the labelled header button so the 32px opening
+   carries a glyph/avatar without the frame dominating. */
+.cluster-icon-button {
+  align-items: center;
+  block-size: 52px;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  image-rendering: pixelated;
+  inline-size: 52px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.cluster-icon-button:hover,
+.cluster-icon-button:focus-visible {
+  filter: brightness(1.14);
+  outline: none;
+}
+
+.cluster-icon-button > img {
+  block-size: 26px;
+  image-rendering: pixelated;
+  inline-size: 26px;
+  object-fit: contain;
+}
+
+/* The Gravatar fills the avatar button's opening, clipped square by the frame. */
+.account-avatar-button .account-avatar-img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+.account-avatar-fallback {
+  align-items: center;
+  background: #07111a;
+  color: var(--cobalt-bright);
+  display: grid;
+  font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;
+  place-items: center;
+}
+
+.account-menu-root {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+
+/* Account menu — small kit panel-framed popover anchored under the avatar. A
+   minimal one-line row: the username + the door (the door IS the sign-out, no
+   text label — the bar avatar already carries identity). */
+.account-menu {
+  align-items: center;
+  border: 18px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 18px round;
+  box-sizing: border-box;
+  display: flex;
+  gap: 14px;
+  image-rendering: pixelated;
+  inset-block-start: calc(100% + 12px);
+  inset-inline-end: 0;
+  justify-content: space-between;
+  padding: 4px 12px;
+  position: absolute;
+  white-space: nowrap;
+  z-index: 60;
+}
+
+.account-menu-name {
+  color: #f6fbff;
+  font-size: var(--ds-text-sm);
+  line-height: 1.1;
+  margin: 0;
+  text-shadow: 0 2px 0 #02070b;
+}
+
+/* The door is the action — a bare icon button (no fabricated surface), labelled
+   for screen readers + a hover tooltip, brightening on hover/focus. */
+.account-menu-exit {
+  align-items: center;
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px;
+}
+
+.account-menu-exit:hover {
+  filter: brightness(1.2);
+}
+
+.account-menu-exit:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.account-menu-glyph {
+  block-size: 32px;
+  flex: none;
+  /* 32px is an exact half of the 64px source, so nearest-neighbour (pixelated)
+     stays crisp (ADR-0026 guidance: integer divisor → pixelated). */
+  image-rendering: pixelated;
+  inline-size: 32px;
+  object-fit: contain;
+}
+
 .settings-shell {
   display: grid;
   grid-template-columns: minmax(244px, 304px) minmax(0, 1fr);

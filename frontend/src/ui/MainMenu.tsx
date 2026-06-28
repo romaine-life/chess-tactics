@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { AmbienceBackground } from './AmbienceBackground';
 import { BrandLockup } from './shared/BrandLockup';
+import { AccountMenu } from './shared/AccountMenu';
 import { MENU_MODES } from './design/catalogData';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -32,6 +33,18 @@ const MENU_TABS: MenuTab[] = [
     iconSlug: mode.slug,
   })),
 ];
+
+// Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
+// chrome can be previewed/screenshotted without a backend: ?demo=1 stubs this user,
+// ?menu=open renders the account menu open.
+const DEMO_USER: AuthUser = {
+  signed_in: true,
+  name: 'Nelson',
+  email: 'nelson@romaine.life',
+  // Retro (8-bit) Gravatar fallback — the default look for a user with no custom
+  // avatar set; representative of what most players see (demo only).
+  avatar_url: 'https://www.gravatar.com/avatar/6b1b9282bc036370f9a6998fe9296233?d=retro&s=80&f=y',
+};
 
 // A mode entry rendered as a settings-style rail tab (shared baked-skin frame —
 // line frame over the stone surface — carved icon + label). The same chrome the
@@ -81,9 +94,16 @@ export function MainMenu(): ReactElement {
     window.location.reload();
   };
 
-  const signedIn = Boolean(me?.signed_in);
-  const accountName = signedIn ? (me!.name || me!.email || 'Player') : 'Guest';
-  const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
+  // Dev-only harness so the signed-in chrome can be previewed/screenshotted with no
+  // backend: ?demo=1 stubs a signed-in user, ?menu=open renders the account menu open.
+  const params = new URLSearchParams(window.location.search);
+  const demo = import.meta.env.DEV && params.get('demo') === '1';
+  const menuOpen = import.meta.env.DEV && params.get('menu') === 'open';
+  const effectiveMe = demo ? DEMO_USER : me;
+
+  const signedIn = Boolean(effectiveMe?.signed_in);
+  const accountName = signedIn ? (effectiveMe!.name || effectiveMe!.email || 'Player') : 'Guest';
+  const accountStatus = signedIn ? 'Signed in' : effectiveMe === null ? 'Checking account' : 'Not signed in';
 
   return (
     <div className={`menu-layer main-menu-layer ${ready ? 'is-ready' : 'is-loading'}`} data-testid="main-menu-next">
@@ -93,15 +113,27 @@ export function MainMenu(): ReactElement {
       <div className="settings-screen main-menu-twin-screen">
         <header className="app-titlebar settings-header-frame main-menu-twin-header">
           <BrandLockup screenName="Main Menu" />
-          <div className="settings-account" aria-label="Account">
-            <span>
-              <strong>{accountName}</strong>
-              <em>{accountStatus}</em>
-            </span>
-            {signedIn
-              ? <button type="button" className="app-header-button app-header-button-active" onClick={signOut}>Sign Out</button>
-              : <a className="app-header-button app-header-button-active" href={signInHref('/')}>Sign In</a>}
-          </div>
+          {/* Trailing-edge account chrome: signed in → the avatar account menu (the
+              Settings gear joins this cluster when it moves out of the rail); signed
+              out → the name + Sign In. */}
+          {signedIn ? (
+            <div className="header-account-cluster" aria-label="Account">
+              <AccountMenu
+                name={accountName}
+                avatarUrl={effectiveMe!.avatar_url ?? null}
+                onSignOut={signOut}
+                defaultOpen={menuOpen}
+              />
+            </div>
+          ) : (
+            <div className="settings-account" aria-label="Account">
+              <span>
+                <strong>{accountName}</strong>
+                <em>{accountStatus}</em>
+              </span>
+              <a className="app-header-button app-header-button-active" href={signInHref('/')}>Sign In</a>
+            </div>
+          )}
         </header>
 
         <div className="settings-shell">
