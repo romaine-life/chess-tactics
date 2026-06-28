@@ -326,8 +326,11 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
 
   return (
     <>
-      <section className="al-lab-main pages-view-main" aria-label="Campaign Editor preview">
-        <iframe ref={iframeRef} className="pages-stub-frame" src={page.route} title="Live campaign editor preview" />
+      {/* surface-dressing-main is a stretch-grid (grid-template-rows: minmax(0,1fr)) so the iframe
+          gets a DEFINITE height — the campaign editor's .ce-screen/.app-root are height:100% and
+          collapse to header+footer in a content-sized container like .al-lab-main. */}
+      <section className="surface-dressing-main" aria-label="Campaign Editor preview">
+        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live campaign editor preview" />
       </section>
       <aside className="tileset-view-controls" aria-label="Campaign Editor button controls">
         <section className="tileset-inspector-section">
