@@ -60,13 +60,12 @@ import {
 
 type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
-// The studio has three persistent destinations (tier-1), all always reachable and
-// decoupled from the catalog category: 'catalog' browses a grid; 'lab' is the
-// board workbench (direct manipulation — tiles/units get placed there); 'viewer'
-// is the read-only stage for one finished, non-manipulable thing (an asset or an
-// artwork). Each remembers its own last state, so switching between them is free.
-// See docs/studio-control-architecture.md.
-type StudioMode = 'catalog' | 'lab' | 'viewer';
+// The studio has two persistent destinations (tier-1), both always reachable and
+// decoupled from the catalog category: 'catalog' browses a grid; 'viewer' is the
+// read-only stage for one finished, non-manipulable thing (an asset or an artwork).
+// Board editing lives in the standalone Level Editor (/level-editor), which the
+// catalog cards and the "Lab" tab route to. See docs/studio-control-architecture.md.
+type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
@@ -190,7 +189,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
-const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
+const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
 const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
@@ -224,8 +223,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const isNineSliceAlias = window.location.pathname === '/nine-slice-editor';
   const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
   // Destination is decoupled from category — any mode is valid with any category,
-  // so the URL is taken at face value (no normalization). 'view' is a legacy alias.
-  const studioMode = isNineSliceAlias ? 'viewer' : isStudioMode(mode) ? mode : mode === 'view' ? 'lab' : studioDefaults.studioMode;
+  // so the URL is taken at face value (no normalization).
+  const studioMode = isNineSliceAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
   const routeCategory = isNineSliceAlias ? 'assets' : isStudioCategory(cat) ? cat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
@@ -302,7 +301,6 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
     else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
   }
-  if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
   if (route.selectedSlotMask) params.set('slot', String(route.selectedSlotMask));
