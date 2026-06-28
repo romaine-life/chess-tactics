@@ -41,7 +41,6 @@ import { KitScroll } from './KitScroll';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { PAGE_ENTRIES } from './pagesCatalog';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
-import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { PortraitLab } from './PortraitEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
@@ -75,7 +74,7 @@ type StudioAssetKind = TileAssetKind;
 // is the read-only stage for one finished, non-manipulable thing (an asset or an
 // artwork). Each remembers its own last state, so switching between them is free.
 // See docs/studio-control-architecture.md.
-type StudioMode = 'catalog' | 'lab' | 'viewer' | 'dressing';
+type StudioMode = 'catalog' | 'lab' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
@@ -249,7 +248,7 @@ const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
 
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
-const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer' || value === 'dressing';
+const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
 const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
@@ -1358,9 +1357,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : category === 'surfaces' ? 'Surfaces' : category === 'scrollbars' ? 'Scrollbars' : category === 'sliders' ? 'Sliders' : category === 'pages' ? 'Pages' : 'Tiles']
       : studioMode === 'viewer'
         ? (viewerKind === 'portrait' ? ['Viewer', 'Portrait'] : ['Viewer', viewerKindLabel, viewerName || '—'])
-        : studioMode === 'dressing'
-          ? ['Dressing room', 'Settings']
-          : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
+        : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
   const visibleDoodads = normalizedCatalogQuery
     ? DOODAD_ASSETS.filter((d) => [d.label, d.status, ...d.terrains].join(' ').toLowerCase().includes(normalizedCatalogQuery))
     : DOODAD_ASSETS;
@@ -1387,9 +1384,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
       : studioMode === 'viewer'
         ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'glossary' ? 'definition + process doc' : viewerKind === 'surface' ? 'tiled surface preview' : viewerKind === 'scrollbar' ? 'live scroll test' : viewerKind === 'slider' ? 'live drag test' : viewerKind === 'page' ? 'live page preview' : 'preview on backdrops')
-        : studioMode === 'dressing'
-          ? 'live settings preview'
-          : viewSubtitle;
+        : viewSubtitle;
   const openCatalogMode = (): void => {
     if (tileFilter === 'board') setTileFilter('base');
     setStudioMode('catalog');
@@ -1397,9 +1392,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const openViewer = (kind: ViewerKind): void => {
     setViewerKind(kind);
     setStudioMode('viewer');
-  };
-  const openDressingRoom = (): void => {
-    setStudioMode('dressing');
   };
   const selectUnitInCatalog = (unitId: string): void => {
     setUnitBrushId(unitId);
@@ -1709,7 +1701,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('surface')}>View Selected</button>
-          <button type="button" className="tileset-view-action" onClick={openDressingRoom}>Open in Settings →</button>
         </>
       ),
     },
@@ -1806,9 +1797,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <button type="button" className={studioMode === 'viewer' ? 'is-active' : ''} onClick={() => setStudioMode('viewer')} title="View one finished asset or artwork.">
               Viewer
             </button>
-            <button type="button" className={studioMode === 'dressing' ? 'is-active' : ''} onClick={openDressingRoom} title="Dress the live Settings page with surfaces — pick what fills each region.">
-              Dressing
-            </button>
           </span>
           <a href="/settings">Settings</a>
         </nav>
@@ -1851,8 +1839,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       : viewerKind === 'page'
                         ? <PagesViewer name={selectedPageName} header={viewerKindSelect} />
                         : <AssetLab name={selectedAssetName} header={viewerKindSelect} />
-        ) : studioMode === 'dressing' ? (
-          <SurfaceDressingRoom seed={selectedSurfaceName} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
