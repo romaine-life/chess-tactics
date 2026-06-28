@@ -13,11 +13,13 @@ export function AppTitleBar({ path }: { path: string }): ReactElement | null {
   const config = titleBarConfig(path);
   if (!config) return null;
 
-  const columnClass = config.columns ? ` app-titlebar--${config.columns}` : '';
+  const barClass = config.barClass ? ` ${config.barClass}` : '';
   return (
-    <header className={`app-titlebar settings-header-frame app-shell-titlebar${columnClass}`}>
+    <header className={`app-titlebar settings-header-frame app-shell-titlebar${barClass}`}>
       <BrandLockup screenName={config.screenName} />
-      {config.showAccountCluster ? <HeaderAccountCluster signInReturnTo={config.signInReturnTo} /> : null}
+      {config.showAccountCluster ? (
+        <HeaderAccountCluster signInReturnTo={config.signInReturnTo} showSettingsGear={config.showSettingsGear} />
+      ) : null}
     </header>
   );
 }

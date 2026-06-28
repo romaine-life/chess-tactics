@@ -1,7 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -171,12 +169,7 @@ export function Campaign(): ReactElement {
       <AmbienceBackground />
       {/* Settings-twin layout, mirroring the main menu: shared app title bar + a rail
           of campaign tabs and a level-select panel over the ambience. */}
-      <div className="settings-screen main-menu-twin-screen">
-        <header className="app-titlebar settings-header-frame main-menu-twin-header">
-          <BrandLockup screenName="Campaign" />
-          <HeaderAccountCluster signInReturnTo="/campaign" />
-        </header>
-
+      <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <div className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Campaigns">
             {officialCampaigns.length > 0 && (

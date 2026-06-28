@@ -11059,12 +11059,12 @@ button.tileset-relationship-cell {
   inset: 0 0 auto 0;
   z-index: 10000;
 }
-.app-shell-bar-pad {
-  padding-block-start: var(--app-header-h);
-}
-/* Lobbies/Party root drops its header grid row once hoisted to the shell bar. */
-.utility-twin-screen.app-shell-bar-pad {
-  grid-template-rows: minmax(0, 1fr);
+/* A screen migrated to the shell bar KEEPS its grid header row intact (so the body
+   stays exactly where it was — same height, same gap) but renders nothing into it;
+   the fixed shell bar overlays that row. Pin the body to row 2 so it doesn't collapse
+   up into the now-empty header track. */
+.app-shell-bar-pad > :first-child {
+  grid-row: 2;
 }
 
 /* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
