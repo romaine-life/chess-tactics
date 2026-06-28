@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, useTransition, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactElement } from 'react';
 import { MainMenu } from './MainMenu';
 import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
@@ -95,8 +95,17 @@ export function App(): ReactElement {
   const [rightNode, setRightNode] = useState<HTMLElement | null>(null);
   const titleBarPortals = useMemo(() => ({ centerNode, rightNode }), [centerNode, rightNode]);
   const pendingTarget = useRef<string | null>(null);
+  // Set true once the cover phase has actually swapped the route. The reveal gate keys
+  // off THIS, not an exact path match — a destination that redirects to a sub-route on
+  // mount (e.g. /settings -> /settings/general) would otherwise never satisfy a path
+  // equality check and the veil would stay stuck covering.
+  const coverCommitted = useRef(false);
   const pathRef = useRef(path);
-  useEffect(() => { pathRef.current = path; }, [path]);
+  // Layout effect (not passive): a destination's on-mount redirect runs as a passive
+  // effect and dispatches a nav BEFORE a passive pathRef update would run, which made
+  // onNav read a stale (heavy) source and wrongly re-trigger the veil mid-transition.
+  // A layout effect lands the current path before any child's passive effect fires.
+  useLayoutEffect(() => { pathRef.current = path; }, [path]);
 
   // Navigation + prefetch wiring (delegated at the document, like the click router).
   useEffect(() => {
@@ -106,6 +115,7 @@ export function App(): ReactElement {
       // Dissolve if EITHER end is heavy — entering one, or leaving one for a light screen.
       if (isHeavyRoute(next) || isHeavyRoute(pathRef.current)) {
         pendingTarget.current = next; // hold the swap until the field is fully opaque
+        coverCommitted.current = false;
         setVeil('cover');
       } else {
         // Light hop: keep the current screen painted (no fallback flash), swap when ready.
@@ -154,15 +164,19 @@ export function App(): ReactElement {
     if (veil !== 'cover') return undefined;
     const timer = window.setTimeout(() => {
       const target = pendingTarget.current;
-      if (target != null) startRouteTransition(() => setPath(target));
+      if (target != null) {
+        coverCommitted.current = true;
+        startRouteTransition(() => setPath(target));
+      }
     }, VEIL_COVER_MS);
     return () => window.clearTimeout(timer);
   }, [veil]);
 
-  // Fade up only once the destination has committed AND its chunk is ready (no
-  // pending transition) — so the player never sees a half-composed screen surface.
+  // Fade up only once the cover phase has swapped the route AND nothing's still pending
+  // (the chunk's loaded / the screen settled, including any on-mount sub-route redirect)
+  // — so the player never sees a half-composed surface, and the veil never sticks.
   useEffect(() => {
-    if (veil === 'cover' && pendingTarget.current === path && !isPending) {
+    if (veil === 'cover' && coverCommitted.current && !isPending) {
       pendingTarget.current = null;
       setVeil('reveal');
     }
