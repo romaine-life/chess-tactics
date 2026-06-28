@@ -32,10 +32,10 @@
     <button data-mat="wood-oak">wood-oak</button>
     <button data-mat="wood-walnut">wood-walnut</button>
   </div>
-  <div class="grp"><span class="lbl">zoom</span>
-    <button data-zoom="cover">fit</button>
-    <button data-zoom="150%">1.5×</button>
-    <button data-zoom="220%">2.2×</button>
+  <div class="grp"><span class="lbl">tile px</span>
+    <button data-zoom="1024px">1024</button>
+    <button data-zoom="1536px">1536</button>
+    <button data-zoom="2048px">2048</button>
   </div>
   <div class="grp"><span class="lbl">frame</span>
     <button data-frame="line">corners + line</button>
@@ -54,7 +54,7 @@
     baseline: ['stone-blue','wood-oak'],
     D: ['stone-blue'],
   };
-  const state = { app:'B', mat:'stone-blue', zoom:'cover', frame:'line' };
+  const state = { app:'B', mat:'stone-blue', zoom:'1536px', frame:'line' };
   const frame = document.getElementById('app');
   const $ = (s)=>document.querySelectorAll(s);
 
@@ -66,7 +66,7 @@
     const frameRule = state.frame === 'original'
       ? `border-image-slice: 24 !important;`
       : `border-image: url("/assets/ui/explore/frames/panel-${state.frame}.png") 24 / 16px round !important;`;
-    const fill = `background:url("${tex}") center/${state.zoom} no-repeat !important;`
+    const fill = `background:url("${tex}") top left/${state.zoom} repeat !important;`
       + `background-origin:border-box !important; background-clip:border-box !important; image-rendering:pixelated !important;`;
     return `
       [data-testid="settings"] .settings-frame,

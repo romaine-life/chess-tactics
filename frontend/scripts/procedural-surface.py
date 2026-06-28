@@ -109,6 +109,17 @@ def image_value(path, w, h, contrast=1.35):
     v = np.asarray(im, dtype=np.float64) / 255.0
     return (v - v.min()) / (np.ptp(v) + 1e-9)
 
+def make_seamless(v):
+    # Offset + 2-pass edge blend so the tile wraps seamlessly, applied to the VALUE field
+    # (before palette/dither) so the output stays crisp pixel art. Near each pair of edges we
+    # cross-fade in a half-shifted copy — whose opposite edges already match — killing the seam.
+    h, w = v.shape
+    ax = (np.minimum(np.arange(w), w - np.arange(w)) / (w / 2.0))[None, :]   # 0 at L/R edges, 1 mid
+    v = ax * v + (1 - ax) * np.roll(v, w // 2, axis=1)
+    ay = (np.minimum(np.arange(h), h - np.arange(h)) / (h / 2.0))[:, None]
+    v = ay * v + (1 - ay) * np.roll(v, h // 2, axis=0)
+    return v
+
 def render(value, palette_hex):
     h, w = value.shape
     pal = np.stack([hex2rgb(c) for c in palette_hex])
@@ -126,6 +137,7 @@ def main():
     ap.add_argument('--size', default='460x300')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--from-image', default=None, help='hybrid mode: drive the value field from this image\'s luminance')
+    ap.add_argument('--seamless', action='store_true', help='make the tile wrap seamlessly for repeat-tiling')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     w, h = (int(x) for x in a.size.lower().split('x'))
@@ -134,6 +146,8 @@ def main():
         value = image_value(a.from_image, w, h)
     else:
         value = (wood_value if a.material.startswith('wood') else stone_value)(h, w, r)
+    if a.seamless:
+        value = make_seamless(value)
     render(value, PALETTES[a.material]).save(a.out)
     print(f'{a.out}  {w}x{h}  {a.material}  seed={a.seed}  ({len(PALETTES[a.material])}-color ramp, Bayer dither)')
 
