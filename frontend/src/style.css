@@ -4993,6 +4993,13 @@ h1 {
   text-transform: uppercase;
 }
 .le-seg-btn:disabled { cursor: default; opacity: .4; }
+.le-seg-btn:not(:disabled):hover {
+  color: #f4fbff;
+}
+.le-seg-btn:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
 .le-seg-btn.active {
   background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
   border-color: var(--skirmish-cyan);
@@ -5057,6 +5064,13 @@ h1 {
 .le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
 .le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
 .le-swatch.active { border-color: var(--skirmish-cyan); box-shadow: 0 0 0 1px rgba(56, 215, 255, .35); color: #eafaff; }
+.le-swatch:hover {
+  color: #f4fbff;
+}
+.le-swatch:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
 
 /* details inspector */
 .le-details dl { display: grid; gap: 6px; margin: 0; }
@@ -6771,7 +6785,8 @@ h1 {
 
 .bgm-control.is-playing {
   border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--gold-dim), 0 0 16px rgba(201, 164, 76, 0.45);
+  /* Playing = gold border + crisp hard ring, no blurred halo (no-glow rule). */
+  box-shadow: 0 0 0 1px var(--gold-dim);
 }
 
 .bgm-control.is-muted {
