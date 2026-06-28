@@ -5,9 +5,10 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent 
 // scrollable content and tracks the scroll position. Because it's DOM, the rail never vanishes on an
 // empty pane AND it screenshots like any other element (native ::-webkit skins don't render in
 // headless captures). Content still scrolls natively (wheel/keys); we only draw + drive the bar.
-export function KitScroll({ children, className, style }: {
+export function KitScroll({ children, className, contentClassName, style }: {
   children: ReactNode;
   className?: string;
+  contentClassName?: string;
   style?: CSSProperties;
 }): ReactElement {
   const content = useRef<HTMLDivElement>(null);
@@ -62,7 +63,7 @@ export function KitScroll({ children, className, style }: {
 
   return (
     <div className={`kit-scroll-wrap ${className ?? ''}`.trim()} style={style}>
-      <div className="kit-scroll-content" ref={content} onScroll={recompute}>
+      <div className={`kit-scroll-content ${contentClassName ?? ''}`.trim()} ref={content} onScroll={recompute}>
         {children}
       </div>
       <div className="kit-scroll-rail" aria-hidden="true">

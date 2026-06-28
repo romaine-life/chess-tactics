@@ -2293,6 +2293,7 @@ export function LevelEditor(): ReactElement {
         </div>
 
       <aside className="skirmish-hud" aria-label="Editor controls">
+        <KitScroll contentClassName="le-hud-cards">
         <section className="skirmish-card">
           <h2>Layer</h2>
           <div className="le-seg">
@@ -2355,7 +2356,7 @@ export function LevelEditor(): ReactElement {
         ) : (
           <section className="skirmish-card le-brush-panel">
             <h2>Palette</h2>
-            <KitScroll className="le-palette-scroll">
+            <div className="le-palette-list">
               {leTileGroups.map(({ family, tiles }) => (
                 <div className="le-pal-group" key={family.id}>
                   <span className="le-pal-grouplabel">{family.label}</span>
@@ -2375,7 +2376,7 @@ export function LevelEditor(): ReactElement {
                   </div>
                 </div>
               ))}
-            </KitScroll>
+            </div>
           </section>
         )}
 
@@ -2423,6 +2424,7 @@ export function LevelEditor(): ReactElement {
         <div className="le-statusline">
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · {LE_COLS}×{LE_ROWS}
         </div>
+        </KitScroll>
       </aside>
     </div>
   );
