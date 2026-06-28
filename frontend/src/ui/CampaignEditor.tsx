@@ -384,7 +384,7 @@ export function CampaignEditor() {
 
   return (
     <div className="ce-screen" data-testid="campaign-editor">
-      <header className="app-titlebar ce-topbar">
+      <header className="app-titlebar settings-header-frame ce-topbar">
         <BrandLockup screenName="Campaign Editor" />
         <div className="ce-topbar-stats" aria-label="Campaign workspace stats">
           {officialMode ? <span className="ce-save-state ce-official-badge">OFFICIAL</span> : null}

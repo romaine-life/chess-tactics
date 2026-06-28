@@ -7,6 +7,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
 import COMMITTED_CROPS from '../art/portraitCrops.json';
+import { BrandLockup } from './shared/BrandLockup';
+import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
 const PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald'] as const;
@@ -237,6 +239,12 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
 export function PortraitEditor(): ReactElement {
   const { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll } = usePortraitEditor();
 
+  useEffect(() => {
+    const shell = document.querySelector('.shell');
+    shell?.classList.add('is-immersive');
+    return () => shell?.classList.remove('is-immersive');
+  }, []);
+
   const CANVAS = 420;
   const overlay: CSSProperties = {
     position: 'absolute', boxSizing: 'border-box',
@@ -246,8 +254,12 @@ export function PortraitEditor(): ReactElement {
   };
 
   return (
-    <main style={{ minHeight: '100vh', background: '#0b1016', color: '#cfe3ee', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
-      <h1 style={{ margin: '0 0 4px', fontSize: 20 }}>Portrait Editor</h1>
+    <div className="dev-editor-screen">
+      <header className="app-titlebar settings-header-frame">
+        <BrandLockup screenName="Portrait Editor" />
+        <HeaderAccountCluster />
+      </header>
+      <main style={{ background: '#0b1016', color: '#cfe3ee', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
       <p style={{ margin: '0 0 18px', color: '#7fa8bd', fontSize: 13 }}>
         Drag the crop to pan · scroll or use the zoom slider · the crop is per-piece (shared across palettes).
         Tune each unit, then <strong>Copy JSON</strong> and paste it back in chat.
@@ -332,7 +344,8 @@ export function PortraitEditor(): ReactElement {
               borderRadius: 6, padding: 10, fontFamily: 'ui-monospace, monospace', fontSize: 11 }} />
         </div>
       </div>
-    </main>
+      </main>
+    </div>
   );
 }
 

@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
+import { BrandLockup } from './shared/BrandLockup';
+import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 // Before/after inspection surface for the PixelLab tile pipeline. Left = the RAW PixelLab
 // tile (native ~33deg, crisp). Right = what correct-iso-tile-angle.py produces (snapped to
@@ -74,6 +76,10 @@ export function TileCompare(): ReactElement {
   return (
     <section className="tc">
       <style>{TC_CSS}</style>
+      <header className="app-titlebar settings-header-frame">
+        <BrandLockup screenName="Tile Compare" />
+        <HeaderAccountCluster />
+      </header>
       <header className="tc-bar">
         <strong className="tc-name">{tile.label}</strong>
         <code className="tc-id">{tile.id}</code>
