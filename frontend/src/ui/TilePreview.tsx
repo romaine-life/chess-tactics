@@ -1545,6 +1545,7 @@ export function LevelEditor(): ReactElement {
           </div>
         </section>
 
+        <KitScroll className="le-hud-scroll">
         {layer === 'board' ? (
           <section className="skirmish-card">
             <h2>Board</h2>
@@ -1730,6 +1731,7 @@ export function LevelEditor(): ReactElement {
         <div className="le-statusline">
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · {boardCols}×{boardRows}
         </div>
+        </KitScroll>
       </aside>
     </div>
   );

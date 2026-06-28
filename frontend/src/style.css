@@ -5031,6 +5031,11 @@ h1 {
 .le-brush-panel { display: flex; flex-direction: column; height: 360px; overflow: hidden; }
 .le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
 .le-palette-scroll { height: 300px; }
+/* The editor's control column scrolls as one (ADR-0030 KitScroll) so tall layers — e.g.
+   Cover — never clip their bottom controls. Layer tabs stay fixed above it; this fills the
+   remaining panel height and carries the same stack gap the sections had as aside children. */
+.le-hud-scroll { flex: 1 1 auto; min-height: 0; }
+.le-hud-scroll > .kit-scroll-content { display: flex; flex-direction: column; gap: var(--ds-stack); }
 
 /* kit-scroll — the DRAWN scroll primitive (ADR-0030), rendered by <KitScroll>. The native bar is
    hidden; we draw an ALWAYS-PRESENT rail (a real DOM element the browser can't hide) + a grip thumb
