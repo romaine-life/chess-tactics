@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, useTransition, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, useTransition, type ReactElement } from 'react';
 import { MainMenu } from './MainMenu';
 import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
@@ -9,6 +9,7 @@ import { TileCompare } from './TileCompare';
 import { SurfaceLab } from './SurfaceLab';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
+import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
 import {
   APP_NAVIGATION_EVENT,
   getAppNavigationUrl,
@@ -87,6 +88,11 @@ export function App(): ReactElement {
   // hops skip the veil and swap instantly. Timings mirror VEIL_*_MS / style.css.
   const [veil, setVeil] = useState<'idle' | 'cover' | 'reveal'>('idle');
   const [isPending, startRouteTransition] = useTransition();
+  // The persistent bar's center/right portal targets, owned here so the routed screen
+  // (a sibling of AppTitleBar) can portal its dynamic bar content into them.
+  const [centerNode, setCenterNode] = useState<HTMLElement | null>(null);
+  const [rightNode, setRightNode] = useState<HTMLElement | null>(null);
+  const titleBarPortals = useMemo(() => ({ centerNode, rightNode }), [centerNode, rightNode]);
   const pendingTarget = useRef<string | null>(null);
   const pathRef = useRef(path);
   useEffect(() => { pathRef.current = path; }, [path]);
@@ -173,7 +179,7 @@ export function App(): ReactElement {
       {/* The single persistent title bar, rendered OUTSIDE the routed screen so it
           survives navigation (only its contents change). Renders nothing for routes
           that keep their own header (Studio/dev + not-yet-migrated screens). */}
-      <AppTitleBar path={path} />
+      <AppTitleBar path={path} onCenterNode={setCenterNode} onRightNode={setRightNode} />
       {/* ONE stable Suspense boundary above the router. Because the boundary
           persists across every route swap (rather than each route mounting its
           own), a transition navigation keeps the already-revealed screen painted
@@ -181,7 +187,9 @@ export function App(): ReactElement {
           longer blanks to "Loading…". The fallback only shows on a genuine cold
           load straight onto a lazy route, when this boundary has revealed nothing
           yet. Heavy entrances additionally ride the veil below. */}
-      <Suspense fallback={fallback}>{renderRoute(path)}</Suspense>
+      <TitleBarPortalContext.Provider value={titleBarPortals}>
+        <Suspense fallback={fallback}>{renderRoute(path)}</Suspense>
+      </TitleBarPortalContext.Provider>
       <div
         className={`route-veil${veil === 'cover' ? ' is-cover' : ''}${veil === 'reveal' ? ' is-reveal' : ''}`}
         aria-hidden="true"

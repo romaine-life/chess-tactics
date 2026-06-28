@@ -4955,9 +4955,11 @@ h1 {
   grid-template-areas:
     "titlebar titlebar"
     "board    rail";
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Row 1 (the titlebar area) stays sized for the persistent shell bar that overlays
+     it — the bar lives in the app shell now (no in-screen <header>), so an `auto` row
+     would collapse and the board/rail would slide up under the bar. */
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
 }
-.level-editor-screen .le-topbar { grid-area: titlebar; }
 .level-editor-screen .skirmish-field { grid-area: board; }
 /* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable
    gutter only reserved ~10px of dead space on the RIGHT — making the inner padding
@@ -4972,11 +4974,14 @@ h1 {
    on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
    stats/actions content below are scoped here — three sections: brand · save-state ·
    labeled header buttons (.app-header-button on the kit gold frame). */
-.level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
-.level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
-.level-editor-screen .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
-.level-editor-screen .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
+/* Bar-content rules are scoped to the bar class (.le-topbar), NOT the screen — the
+   bar now lives in the app shell, outside .level-editor-screen, so the stats/actions
+   (portaled into the bar via <TitleBarSlot>) are descendants of .le-topbar there. */
+.le-topbar .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
+.le-topbar .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.le-topbar .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
+.le-topbar .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+.le-topbar .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }

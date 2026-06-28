@@ -9,7 +9,7 @@ import { DoodadSprite } from '../render/BoardDoodad';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
-import { BrandLockup } from './shared/BrandLockup';
+import { TitleBarSlot } from './shell/TitleBarSlot';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
@@ -357,19 +357,22 @@ export function LevelEditor(): ReactElement {
 
   return (
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
-        <header className="app-titlebar settings-header-frame le-topbar" aria-label="Level editor">
-          <BrandLockup screenName="Level Editor" />
+        {/* The title bar lives in the app shell now; the editor paints its live
+            save-state + actions into it via portals (state stays in this component). */}
+        <TitleBarSlot region="center">
           <div className="le-topbar-stats" aria-label="Level status">
             <span className="le-level-name">Untitled level</span>
             <span className="le-save-state is-dirty">Unsaved</span>
           </div>
+        </TitleBarSlot>
+        <TitleBarSlot region="right">
           <nav className="le-topbar-actions" aria-label="Editor actions">
             {cameFromStudio ? <a className="app-header-button le-back-catalog" href="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</a> : null}
             <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
             <button type="button" className="app-header-button app-header-button-active" disabled title="Saving unlocks once the editor is hosted.">Save</button>
             <a className="app-header-button" href="/settings">Settings</a>
           </nav>
-        </header>
+        </TitleBarSlot>
 
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
