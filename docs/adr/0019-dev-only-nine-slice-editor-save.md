@@ -48,12 +48,18 @@ Chosen: **a dev-gated in-app editor backed by a serve-only Vite endpoint that ba
 through the shared kit**, because it removes the agent from per-pixel tuning while
 keeping one bake implementation and never reaching a production build.
 
-- **Editor** — `frontend/src/ui/NineSliceEditor.tsx`, routed at `/nine-slice-editor`
-  (lazy in `App.tsx`). It derives its asset list from the registry, so every
-  registered atom-built frame is editable with no per-frame code. The arrow keys
-  (and a d-pad) nudge the active piece 1px; offsets are clamped so a piece can't
-  leave the footprint. The catalog deep-links into it — `AssetLibraryStudio.tsx`
-  renders an "✎ Edit in 9-slice editor" link to `?asset=<id>`.
+- **Editor** — `frontend/src/ui/NineSliceEditor.tsx`, exported as `NineSliceLab` and
+  embedded as the Studio's `nineslice` Viewer kind (the frame twin of `PortraitLab`),
+  per `docs/studio-control-architecture.md` — it is NOT its own route. `/nine-slice-editor`
+  survives only as a deep-link **alias** into the Studio (like `/unit-studio`): the
+  Studio reads `?asset=<id>` off that path and canonicalises the URL to
+  `/tileset-studio?…&vk=nineslice&frame=<id>`. It derives its asset list from the
+  registry, so every registered atom-built frame is editable with no per-frame code.
+  The arrow keys (and a d-pad) nudge the active piece 1px; offsets are clamped so a
+  piece can't leave the footprint. The Asset Viewer deep-links into it —
+  `AssetLibraryStudio.tsx`'s `AssetLab` renders an "✎ Edit in 9-slice editor" button
+  that switches the Viewer kind in place (no route swap, no "Back to catalog" link;
+  the Catalog tab is back).
 - **Endpoint** — `frontend/scripts/vite-nine-slice-plugin.mjs`, exporting
   `nineSliceDevSave()` with **`apply: 'serve'`**, wired into
   `frontend/vite.config.js`'s `plugins`. `apply: 'serve'` means the middleware
@@ -114,8 +120,11 @@ files), so a change is detectable on the filesystem, not just in the browser.
 
 ## More Information
 
-- Editor: `frontend/src/ui/NineSliceEditor.tsx`; route in `frontend/src/ui/App.tsx`;
-  catalog edit-link in `frontend/src/ui/design/AssetLibraryStudio.tsx`.
+- Editor: `frontend/src/ui/NineSliceEditor.tsx` (`NineSliceLab`), embedded as the
+  Studio's `nineslice` Viewer kind in `frontend/src/ui/TilePreview.tsx`; the
+  `/nine-slice-editor` alias is handled in `frontend/src/ui/App.tsx` +
+  `readTilesetStudioRoute`/`writeTilesetStudioRoute`; the in-Viewer edit button is in
+  `frontend/src/ui/design/AssetLibraryStudio.tsx` (`AssetLab`).
 - Endpoint: `frontend/scripts/vite-nine-slice-plugin.mjs` (`apply: 'serve'`), wired
   in `frontend/vite.config.js`.
 - Shared bake: `frontend/scripts/nine-slice-kit.mjs` (`buildAsset`,

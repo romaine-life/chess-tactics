@@ -21,7 +21,6 @@ const TilesetStudio = lazy(() => import('./TilePreview').then((m) => ({ default:
 const LevelEditor = lazy(() => import('./TilePreview').then((m) => ({ default: m.LevelEditor })));
 const PortraitEditor = lazy(() => import('./PortraitEditor').then((m) => ({ default: m.PortraitEditor })));
 const DoodadEditor = lazy(() => import('./DoodadEditor').then((m) => ({ default: m.DoodadEditor })));
-const NineSliceEditor = lazy(() => import('./NineSliceEditor').then((m) => ({ default: m.NineSliceEditor })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 const split = (node: ReactElement): ReactElement => <Suspense fallback={fallback}>{node}</Suspense>;
@@ -73,7 +72,10 @@ function renderRoute(path: string): ReactElement {
   if (path === '/unit-studio') return split(<TilesetStudio initialCategory="units" />);
   if (path === '/portrait-editor') return split(<PortraitEditor />);
   if (path === '/doodad-editor') return split(<DoodadEditor />);
-  if (path === '/nine-slice-editor') return split(<NineSliceEditor />);
+  // /nine-slice-editor is a deep-link alias into the one Studio (like /unit-studio):
+  // the 9-slice editor is an embedded Viewer surface, not its own route. The studio
+  // reads ?asset=<frame> off this path and canonicalises the URL to /tileset-studio.
+  if (path === '/nine-slice-editor') return split(<TilesetStudio />);
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return split(<LevelEditor />);

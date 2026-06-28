@@ -42,6 +42,7 @@ import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { PAGE_ENTRIES } from './pagesCatalog';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
+import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
@@ -50,6 +51,7 @@ import { ViewPane } from './shared/ViewPane';
 import { BrandLockup } from './shared/BrandLockup';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
+import { BoardSizePanel } from './shared/BoardSizePanel';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
@@ -83,9 +85,10 @@ type StudioMode = 'catalog' | 'lab' | 'viewer';
 type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
-// 'portrait' is the embedded portrait crop editor; 'glossary' reads one term in
-// full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page';
+// 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
+// 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
+// in full (definition + any long-form process doc). This records the active kind.
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -129,6 +132,7 @@ interface TilesetStudioRouteState {
   selectedArtworkName?: string;
   selectedGlossaryName?: string;
   selectedPageName?: string;
+  selectedFrameName?: string;
   viewerKind?: ViewerKind;
   labMode: LabMode;
   tileFilter: TileFilter;
@@ -277,10 +281,16 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const unit = params.get('unit');
   const slot = Number(params.get('slot'));
   const seed = Number(params.get('seed'));
+  // /nine-slice-editor is a deep-link ALIAS into this one studio (like /unit-studio):
+  // it opens the embedded 9-slice surface (Assets category, Viewer mode, 'nineslice'
+  // kind) with ?asset=<frame>. The studio's own route writer then canonicalises the
+  // URL to /tileset-studio?…&frame=<frame>. No separate route, no page chrome.
+  const isNineSliceAlias = window.location.pathname === '/nine-slice-editor';
+  const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization). 'view' is a legacy alias.
-  const studioMode = isStudioMode(mode) ? mode : mode === 'view' ? 'lab' : studioDefaults.studioMode;
-  const routeCategory = isStudioCategory(cat) ? cat : undefined;
+  const studioMode = isNineSliceAlias ? 'viewer' : isStudioMode(mode) ? mode : mode === 'view' ? 'lab' : studioDefaults.studioMode;
+  const routeCategory = isNineSliceAlias ? 'assets' : isStudioCategory(cat) ? cat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -301,11 +311,13 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedArtworkName: art || undefined,
     selectedGlossaryName: gloss || undefined,
     selectedPageName: page || undefined,
-    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' ? vk : undefined,
+    selectedFrameName: frame || undefined,
+    viewerKind: isNineSliceAlias ? 'nineslice'
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
-    selectedAssetId: asset || undefined,
+    selectedAssetId: isNineSliceAlias ? undefined : asset || undefined,
     selectedSlotMask: Number.isInteger(slot) && slot >= 1 && slot <= 14 ? slot : undefined,
     boardMode: params.get('board') === 'concept' ? 'concept' : studioDefaults.boardMode,
     boardScope: params.get('scope') === 'mixed' ? 'mixed' : studioDefaults.boardScope,
@@ -316,8 +328,13 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   };
 };
 
+const STUDIO_PATH = '/tileset-studio';
+
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
-  if (window.location.pathname !== '/tileset-studio') return;
+  // Canonicalise to /tileset-studio even when entered via the /nine-slice-editor
+  // alias, so the alias is a pure entry point and all subsequent state rides the
+  // one studio URL (the embedded 9-slice surface is not its own route).
+  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/nine-slice-editor') return;
   if (route.studioMode === 'catalog') {
     // Tiles is the default, so it stays a clean bare URL; Units/Assets get a
     // ?cat= so the chosen catalog survives a reload and is directly linkable.
@@ -328,7 +345,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'artwork' && route.selectedArtworkName) catalogParams.set('art', route.selectedArtworkName);
     if (route.category === 'glossary' && route.selectedGlossaryName) catalogParams.set('gloss', route.selectedGlossaryName);
     const catalogQuery = catalogParams.toString();
-    const nextHref = catalogQuery ? `${window.location.pathname}?${catalogQuery}` : window.location.pathname;
+    const nextHref = catalogQuery ? `${STUDIO_PATH}?${catalogQuery}` : STUDIO_PATH;
     const currentHref = `${window.location.pathname}${window.location.search}`;
     if (nextHref !== currentHref) {
       window.history.replaceState({}, '', nextHref);
@@ -340,13 +357,14 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   params.set('mode', route.studioMode);
   if (route.category && route.category !== 'tiles') params.set('cat', route.category);
   if (route.studioMode === 'viewer') {
-    // The Viewer persists which kind it last held (asset/artwork/portrait) and,
-    // for the read-only kinds, the item name. Portrait state lives in localStorage.
+    // The Viewer persists which kind it last held and, for the named kinds, the item.
+    // Portrait state lives in localStorage; 'nineslice' persists the frame being edited.
     params.set('vk', route.viewerKind ?? 'artwork');
     if (route.viewerKind === 'asset' && route.selectedAssetName) params.set('kit', route.selectedAssetName);
     else if (route.viewerKind === 'artwork' && route.selectedArtworkName) params.set('art', route.selectedArtworkName);
     else if (route.viewerKind === 'glossary' && route.selectedGlossaryName) params.set('gloss', route.selectedGlossaryName);
     else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
+    else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
   }
   if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', route.tileFilter);
@@ -360,7 +378,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (route.brushKind === 'unit') params.set('brush', 'unit');
   else if (route.brushKind === 'doodad') params.set('brush', 'doodad');
   if (route.selectedUnitId) params.set('unit', route.selectedUnitId);
-  const nextHref = `${window.location.pathname}?${params.toString()}`;
+  const nextHref = `${STUDIO_PATH}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
   if (nextHref !== currentHref) {
     window.history.replaceState({}, '', nextHref);
@@ -773,6 +791,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedAssetName, setSelectedAssetName] = useState(initialRoute.selectedAssetName ?? 'gear');
   const [selectedArtworkName, setSelectedArtworkName] = useState(initialRoute.selectedArtworkName ?? FIRST_ARTWORK_ID);
   const [selectedGlossaryName, setSelectedGlossaryName] = useState(initialRoute.selectedGlossaryName ?? '9-slice');
+  // Which kit frame the embedded 9-slice editor (Viewer 'nineslice' kind) is aligning.
+  const [selectedFrameName, setSelectedFrameName] = useState(initialRoute.selectedFrameName ?? DEFAULT_NINE_SLICE_ASSET);
   // Which item the Viewer is showing (independent of the catalog category).
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
@@ -1130,6 +1150,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       if (route.selectedAssetName) setSelectedAssetName(route.selectedAssetName);
       if (route.selectedArtworkName) setSelectedArtworkName(route.selectedArtworkName);
       if (route.selectedGlossaryName) setSelectedGlossaryName(route.selectedGlossaryName);
+      if (route.selectedFrameName) setSelectedFrameName(route.selectedFrameName);
       if (route.viewerKind) setViewerKind(route.viewerKind);
       setViewHasTarget(Boolean(route.selectedAssetId || route.selectedSlotMask || route.tileFilter === 'board'));
       setTileFilter(route.tileFilter);
@@ -1194,6 +1215,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedArtworkName,
       selectedGlossaryName,
       selectedPageName,
+      selectedFrameName,
       viewerKind,
       labMode,
       tileFilter,
@@ -1207,7 +1229,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedFrameName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+
+  // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
+  // the card you came from — not the top of the grid. The selection is already kept
+  // (the card is highlighted); here we scroll that highlighted card into view inside
+  // the catalog's scroll pane. Fires when you (re)enter Catalog mode; the active
+  // category's grid is mounted by then. Not keyed on category, so a manual category
+  // switch while browsing doesn't yank the scroll.
+  useEffect(() => {
+    if (studioMode !== 'catalog') return;
+    const raf = window.requestAnimationFrame(() => {
+      const card = document.querySelector('.tileset-studio-shell .tileset-studio-tab-panel .tileset-studio-card.is-selected');
+      card?.scrollIntoView({ block: 'center', inline: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studioMode]);
 
   const toggleFamilyFilter = (nextFamilyId: StudioFamilyId) => {
     setSelectedFamilyIds((current) => {
@@ -1352,8 +1390,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
   // the header height constant (the Lab already shares this header — no second
   // row inside the board surface, which is what made the controls rail jump).
-  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'glossary' ? selectedGlossaryName : viewerKind === 'surface' ? (selectedSurfaceName ?? '') : viewerKind === 'scrollbar' ? (selectedScrollbarName ?? '') : viewerKind === 'slider' ? (selectedSliderName ?? '') : viewerKind === 'page' ? (selectedPageName ?? '') : '';
-  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : viewerKind === 'surface' ? 'Surface' : viewerKind === 'scrollbar' ? 'Scrollbar' : viewerKind === 'slider' ? 'Slider' : viewerKind === 'page' ? 'Page' : 'Asset';
+  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'nineslice' ? selectedFrameName : viewerKind === 'glossary' ? selectedGlossaryName : viewerKind === 'surface' ? (selectedSurfaceName ?? '') : viewerKind === 'scrollbar' ? (selectedScrollbarName ?? '') : viewerKind === 'slider' ? (selectedSliderName ?? '') : viewerKind === 'page' ? (selectedPageName ?? '') : '';
+  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'nineslice' ? '9-Slice' : viewerKind === 'glossary' ? 'Glossary' : viewerKind === 'surface' ? 'Surface' : viewerKind === 'scrollbar' ? 'Scrollbar' : viewerKind === 'slider' ? 'Slider' : viewerKind === 'page' ? 'Page' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
       ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : category === 'surfaces' ? 'Surfaces' : category === 'scrollbars' ? 'Scrollbars' : category === 'sliders' ? 'Sliders' : category === 'pages' ? 'Pages' : 'Tiles']
@@ -1385,7 +1423,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       ? `${PAGE_ENTRIES.length} pages`
                       : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
       : studioMode === 'viewer'
-        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'glossary' ? 'definition + process doc' : viewerKind === 'surface' ? 'tiled surface preview' : viewerKind === 'scrollbar' ? 'live scroll test' : viewerKind === 'slider' ? 'live drag test' : viewerKind === 'page' ? 'live page preview' : 'preview on backdrops')
+        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'nineslice' ? 'frame alignment editor' : viewerKind === 'glossary' ? 'definition + process doc' : viewerKind === 'surface' ? 'tiled surface preview' : viewerKind === 'scrollbar' ? 'live scroll test' : viewerKind === 'slider' ? 'live drag test' : viewerKind === 'page' ? 'live page preview' : 'preview on backdrops')
         : viewSubtitle;
   const openCatalogMode = (): void => {
     if (tileFilter === 'board') setTileFilter('base');
@@ -1767,6 +1805,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="asset">Asset</option>
         <option value="artwork">Artwork</option>
         <option value="portrait">Portrait</option>
+        <option value="nineslice">9-Slice</option>
         <option value="glossary">Glossary</option>
         <option value="surface">Surface</option>
         <option value="scrollbar">Scrollbar</option>
@@ -1828,6 +1867,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         ) : studioMode === 'viewer' ? (
           viewerKind === 'portrait'
             ? <PortraitLab header={viewerKindSelect} />
+            : viewerKind === 'nineslice'
+            ? <NineSliceLab assetId={selectedFrameName} onAssetId={setSelectedFrameName} header={viewerKindSelect} />
             : viewerKind === 'artwork'
               ? <ArtworkLab name={selectedArtworkName} header={viewerKindSelect} />
               : viewerKind === 'glossary'
@@ -1840,7 +1881,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                       ? <SliderViewer name={selectedSliderName} header={viewerKindSelect} />
                       : viewerKind === 'page'
                         ? <PagesViewer name={selectedPageName} header={viewerKindSelect} />
-                        : <AssetLab name={selectedAssetName} header={viewerKindSelect} />
+                        : <AssetLab name={selectedAssetName} header={viewerKindSelect} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
@@ -2231,6 +2272,8 @@ const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(leSeedBoard);
+  const [boardCols, setBoardCols] = useState(LE_COLS);
+  const [boardRows, setBoardRows] = useState(LE_ROWS);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase'>('brush');
   const [brushId, setBrushId] = useState<string>(leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
@@ -2238,6 +2281,7 @@ export function LevelEditor(): ReactElement {
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [brushKind, setBrushKind] = useState<'tile' | 'unit'>('tile');
+  const [layer, setLayer] = useState<'board' | 'tile' | 'unit'>('tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
   const [unitBrushId, setUnitBrushId] = useState<string>(unitAssets[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -2276,7 +2320,7 @@ export function LevelEditor(): ReactElement {
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
-      for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) {
+      for (let y = 0; y < boardRows; y += 1) for (let x = 0; x < boardCols; x += 1) {
         const key = `${x},${y}`;
         if (mode === 'all' || !(key in next)) next[key] = brushAsset.id;
       }
@@ -2284,6 +2328,26 @@ export function LevelEditor(): ReactElement {
     });
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+  // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
+  // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
+  // bounds, so nothing keeps rendering or counting off the edge of the board.
+  const resizeBoard = (nextCols: number, nextRows: number): void => {
+    const within = (key: string): boolean => {
+      const [cx, cy] = key.split(',').map(Number);
+      return cx < nextCols && cy < nextRows;
+    };
+    const prune = <T,>(map: Record<string, T>): Record<string, T> => {
+      const next: Record<string, T> = {};
+      let dropped = false;
+      for (const key of Object.keys(map)) { if (within(key)) next[key] = map[key]; else dropped = true; }
+      return dropped ? next : map;
+    };
+    setBoardCells((prev) => prune(prev));
+    setBoardUnits((prev) => prune(prev));
+    setSelectedCell((sel) => (sel && (sel.x >= nextCols || sel.y >= nextRows) ? null : sel));
+    setBoardCols(nextCols);
+    setBoardRows(nextRows);
+  };
 
   const paintedCount = Object.keys(boardCells).length;
   const unitCount = Object.keys(boardUnits).length;
@@ -2313,8 +2377,8 @@ export function LevelEditor(): ReactElement {
             <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
               <div className="tileset-view-board-content is-board">
                 <StudioEditableBoard
-                  cols={LE_COLS}
-                  rows={LE_ROWS}
+                  cols={boardCols}
+                  rows={boardRows}
                   cells={boardCells}
                   units={boardUnits}
                   doodads={{}}
@@ -2340,12 +2404,20 @@ export function LevelEditor(): ReactElement {
         <section className="skirmish-card">
           <h2>Layer</h2>
           <div className="le-seg">
-            <button type="button" className="le-seg-btn" disabled>Board</button>
-            <button type="button" className={`le-seg-btn ${brushKind === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('tile'); setTool('brush'); }}>Tile</button>
-            <button type="button" className={`le-seg-btn ${brushKind === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('unit'); setTool('brush'); }}>Unit</button>
+            <button type="button" className={`le-seg-btn ${layer === 'board' ? 'active' : ''}`.trim()} onClick={() => { setLayer('board'); setTool('select'); }}>Board</button>
+            <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
+            <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
             <button type="button" className="le-seg-btn" disabled>Doodad</button>
           </div>
         </section>
+
+        {layer === 'board' ? (
+          <section className="skirmish-card">
+            <h2>Board</h2>
+            <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
+            <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
+          </section>
+        ) : (<>
 
         <section className="skirmish-card">
           <h2>Tool</h2>
@@ -2434,6 +2506,8 @@ export function LevelEditor(): ReactElement {
           </div>
         </section>
 
+        </>)}
+
         <section className="skirmish-card">
           <h2>View</h2>
           <div className="le-ctrlrow">
@@ -2476,7 +2550,7 @@ export function LevelEditor(): ReactElement {
         </section>
 
         <div className="le-statusline">
-          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · {LE_COLS}×{LE_ROWS}
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · {boardCols}×{boardRows}
         </div>
       </aside>
     </div>
