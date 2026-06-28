@@ -73,26 +73,14 @@ const conceptArt = [
   join(PUB, 'assets/art/skirmish-style-target.png'),
 ].filter(exists).map((f) => ({ f, label: titleize(basename(f).replace(/\.\w+$/, '')), sub: 'concept' }));
 const inspiration = walk(join(PUB, 'assets/artwork/inspiration')).map((f) => ({ f, label: titleize(basename(f).replace(/\.\w+$/, '')), sub: 'ui-screen-concepts' }));
-// Portrait bake-off candidates (navy only): portrait-candidates/<method>/<piece>/navy-blue.png.
-// Labels mirror the PORTRAIT_METHODS registry in src/ui/portraitCandidates.ts.
-const PORTRAIT_METHOD = {
-  'codex-stone': { label: 'Codex · stone', sub: 'board navy-stone pixel' },
-  'codex-concept': { label: 'Codex · concept', sub: 'concept-art bust' },
-  filter2: { label: 'Filter ×2', sub: 'pixelate + quantize' },
-  filter3: { label: 'Filter ×3', sub: 'pixelate + quantize' },
-  codexfilter: { label: 'Codex→Filter', sub: 'restyle then filter' },
-};
-const portraitCandidates = subdirs(join(PUB, 'assets/portrait-candidates')).flatMap((methodDir) => {
-  const m = PORTRAIT_METHOD[basename(methodDir)] ?? { label: titleize(basename(methodDir)), sub: 'candidate' };
-  return subdirs(methodDir).flatMap((pieceDir) =>
-    walk(pieceDir).map((f) => ({ f, label: `${titleize(basename(pieceDir))} · ${m.label}`, sub: m.sub })));
-});
+// NOTE: the portrait bake-off candidates (assets/portrait-candidates) are NOT an artwork
+// group — they have their own top-level "Portraits" catalog category (built in code from
+// the PORTRAIT_METHODS registry), so they get dedicated Unit + Treatment filters.
 
 const rawGroups = [
   { id: 'world-scenes', label: 'World scenes', entries: worldScenes },
   { id: 'portrait-backgrounds', label: 'Portrait backgrounds', entries: portraitBgs },
   { id: 'unit-portraits', label: 'Unit portraits', entries: unitPortraits },
-  { id: 'portrait-candidates', label: 'Portrait candidates', entries: portraitCandidates },
   { id: 'portrait-editor', label: 'Portrait-editor sources', entries: portraitEditor },
   { id: 'brand-key-art', label: 'Brand & key art', entries: brandKeyArt },
   { id: 'concept-art', label: 'Concept art', entries: conceptArt },

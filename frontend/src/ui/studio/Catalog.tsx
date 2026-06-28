@@ -35,6 +35,8 @@ export interface CatalogType<A extends { id: string }> {
   query?: { value: string; set: (value: string) => void; match: (asset: A, normalized: string) => boolean; placeholder?: string };
   /** Present ⇒ a Zoom slider; cssVar is set on each card image. */
   zoom?: { value: number; set: (value: number) => void; min: number; max: number; step: number; cssVar: string };
+  /** Custom card media (e.g. a live-cropped portrait); when present it replaces the default <img>. */
+  cardMedia?: (asset: A) => ReactNode;
   /** Present ⇒ active-filter chips + a Filters dropdown. */
   filters?: CatalogFilterDim<A>[];
   /** Select a card (highlight) without leaving the catalog. */
@@ -92,7 +94,7 @@ function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogT
       aria-pressed={selected}
     >
       <span className={`tileset-studio-card-image ${model.isUnit ? 'unit-card-image' : ''}`.trim()} style={zoomStyle}>
-        <img src={model.img} alt="" draggable={false} loading="eager" decoding="sync" />
+        {type.cardMedia ? type.cardMedia(asset) : <img src={model.img} alt="" draggable={false} loading="eager" decoding="sync" />}
       </span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text">

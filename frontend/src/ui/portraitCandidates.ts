@@ -8,6 +8,9 @@ import type { Piece, Palette } from './PortraitEditor';
 
 export type PortraitMethod = 'smooth' | 'codex-stone' | 'codex-concept' | 'filter2' | 'filter3' | 'codexfilter';
 
+// The six pieces, for the Portraits catalog's Unit filter (single source of truth).
+export const PORTRAIT_PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const satisfies readonly Piece[];
+
 export const PORTRAIT_METHODS: { key: PortraitMethod; label: string; sub: string }[] = [
   { key: 'smooth', label: 'Smooth', sub: 'current render' },
   { key: 'codex-stone', label: 'Codex · stone', sub: 'board navy-stone pixel' },

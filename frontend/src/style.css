@@ -12231,7 +12231,7 @@ button.tileset-relationship-cell {
    authored illustrations not 64px glyphs). Zoom scales the thumbnail height. */
 .tileset-studio-card.is-artwork .tileset-studio-card-image { min-height: calc(168px * var(--tile-zoom, 1)); }
 /* Portrait-candidate cards show the accepted HUD crop (square), not the full-body master. */
-.artwork-portrait-crop {
+.studio-portrait-crop {
   position: relative;
   height: calc(168px * var(--tile-zoom, 1));
   aspect-ratio: 1 / 1;

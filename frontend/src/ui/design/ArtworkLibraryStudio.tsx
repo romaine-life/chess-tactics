@@ -7,7 +7,6 @@
 // here — these are authored artworks, not generated hard-alpha glyphs.
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react';
 import manifest from './artworkManifest.json';
-import { CroppedView, loadCrops, type Crop, type Piece as PortraitPiece } from '../PortraitEditor';
 
 interface ArtworkItem { id: string; label: string; url: string; w: number; h: number; sub: string }
 interface ArtworkGroup { id: string; label: string; items: ArtworkItem[] }
@@ -15,10 +14,6 @@ interface ArtworkManifest { generated: string; summary: { total: number; groups:
 
 const ART = manifest as ArtworkManifest;
 const PORTRAIT_GROUP = 'unit-portraits';
-// Bake-off candidates are full-body navy masters; show them through the SAME accepted
-// per-piece crop the HUD/Viewer use, so a card reads as the real portrait, not full body.
-const CANDIDATES_GROUP = 'portrait-candidates';
-const candidatePiece = (id: string): PortraitPiece => id.split('/')[2] as PortraitPiece;
 
 // The manifest groups, surfaced for the catalog's Group filter (the studio builds a
 // CatalogFilters dropdown from these). Kept here so the manifest is the one owner.
@@ -47,14 +42,12 @@ const EditIcon = (): ReactElement => (
   </svg>
 );
 
-function Card({ item, selected, onSelect, onView, onEdit, crop }: {
+function Card({ item, selected, onSelect, onView, onEdit }: {
   item: ArtworkItem;
   selected: boolean;
   onSelect: (id: string) => void;
   onView: (id: string) => void;
   onEdit?: (id: string) => void;
-  /** When set, the card image is the accepted portrait crop of this master, not full body. */
-  crop?: Crop;
 }): ReactElement {
   const dim = dimOf(item);
   return (
@@ -65,11 +58,7 @@ function Card({ item, selected, onSelect, onView, onEdit, crop }: {
       aria-pressed={selected}
       title={`Select ${item.label}`}
     >
-      <span className="tileset-studio-card-image">
-        {crop
-          ? <span className="artwork-portrait-crop"><CroppedView src={item.url} crop={crop} /></span>
-          : <img src={item.url} alt="" loading="lazy" draggable={false} />}
-      </span>
+      <span className="tileset-studio-card-image"><img src={item.url} alt="" loading="lazy" draggable={false} /></span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text"><strong>{item.label}</strong><em>{[item.sub, dim].filter(Boolean).join(' · ')}</em></span>
         <span className="tileset-card-actions">
@@ -98,7 +87,6 @@ export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView,
   groups?: readonly string[];
 }): ReactElement {
   const q = search.trim().toLowerCase();
-  const crops = loadCrops();
   const groupSet = groups ? new Set(groups) : null;
   const sections = ART.groups
     .filter((g) => !groupSet || groupSet.has(g.id))
@@ -124,7 +112,6 @@ export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView,
                     onSelect={onSelect}
                     onView={onView}
                     onEdit={s.id === PORTRAIT_GROUP ? onEditPortrait : undefined}
-                    crop={s.id === CANDIDATES_GROUP ? crops[candidatePiece(it.id)] : undefined}
                   />
                 ))}
               </div>
