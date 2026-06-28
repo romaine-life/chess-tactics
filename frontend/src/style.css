@@ -1045,6 +1045,23 @@ h1 {
   --menu-btn-h: 80px;
 }
 
+/* Comparison knob (?indent=hover|hover10): a deliberate slide-RIGHT on hover/focus —
+   the game "row leans toward the action" focus cue. NOT the old accidental shrink:
+   it's smooth (GPU transform only), paired with the iron-lip lift as a non-motion cue,
+   keyboard-reachable, and disabled under reduced-motion. Static indent is settled FLUSH
+   (the brand + buttons are siblings sharing one left edge), so it is not on the knob. */
+.main-menu-actions-assets.indent-hover .mode-button-stone {
+  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), border-color .1s ease, box-shadow .1s ease;
+}
+.main-menu-actions-assets.indent-hover .mode-button-stone:hover,
+.main-menu-actions-assets.indent-hover .mode-button-stone:focus-visible { transform: translateX(6px); }
+.main-menu-actions-assets.indent-hover-10 .mode-button-stone:hover,
+.main-menu-actions-assets.indent-hover-10 .mode-button-stone:focus-visible { transform: translateX(10px); }
+@media (prefers-reduced-motion: reduce) {
+  .main-menu-actions-assets.indent-hover .mode-button-stone:hover,
+  .main-menu-actions-assets.indent-hover .mode-button-stone:focus-visible { transform: none; }
+}
+
 /* ── Main-menu mode buttons — "Wet Stone & Cold Iron" (ADR-0025 register) ───────────
    A matte wet-stone slab with a thin forged-iron lip, carrying the forged carved-stone
    icon (icons-carved/<slug>.png, canonical 64×64 per ADR-0026, optical keylines ADR-0027) at --menu-icon-size.
