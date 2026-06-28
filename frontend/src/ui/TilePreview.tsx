@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { TILE_EDGE_ANGLE_DEGREES, TILE_TEMPLATE } from '../art/tileTemplate';
 import { tileFamilies } from '../art/tileset';
 import { buildTileCoverageReport } from '../core/tileCoverage';
-import { generateSocketBoard, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
+import { generateSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { createRng } from '../core/rng';
 import {
   socketEdges,
@@ -28,9 +28,6 @@ import {
   type TransitionPair,
   type TransitionSlot,
 } from '../core/tileSockets';
-import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, pieceSpritePath } from '../core/pieces';
-import type { PieceType, Side } from '../core/types';
-import { validateLevel, LEVEL_FORMAT_VERSION, type Level } from '../core/level';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
@@ -38,14 +35,18 @@ import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
 import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
+import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
+import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
+import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
+import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { PortraitLab } from './PortraitEditor';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
-import { useCampaigns } from '../campaign/store';
-import { loadWorkspace, saveWorkspace } from '../net/campaignWorkspace';
 import { navigateApp } from './navigation';
 import { ViewPane } from './shared/ViewPane';
+import { BrandLockup } from './shared/BrandLockup';
+import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
   activeUnitFamilies,
@@ -71,16 +72,16 @@ type StudioAssetKind = TileAssetKind;
 // is the read-only stage for one finished, non-manipulable thing (an asset or an
 // artwork). Each remembers its own last state, so switching between them is free.
 // See docs/studio-control-architecture.md.
-type StudioMode = 'catalog' | 'lab' | 'viewer';
+type StudioMode = 'catalog' | 'lab' | 'viewer' | 'dressing';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary';
+type StudioCategory = 'tiles' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor; 'glossary' reads one term in
 // full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'glossary' | 'surface' | 'scrollbar' | 'slider';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -244,8 +245,8 @@ const familyBaseAsset = (familyId: StudioFamilyId): StudioAsset =>
 
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
-const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary';
+const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer' || value === 'dressing';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -293,7 +294,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedAssetName: kit || undefined,
     selectedArtworkName: art || undefined,
     selectedGlossaryName: gloss || undefined,
-    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' ? vk : undefined,
+    viewerKind: vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -732,601 +733,6 @@ function StudioEditableBoard({
   );
 }
 
-// Units browser folded into the shared studio catalog. Unit data comes from
-// unitCatalog.ts so the catalog, lab brush, and standalone Unit Studio stay in sync.
-type LevelBrush = TileFamilyId | 'erase';
-const levelTerrainOrder: TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand', 'water'];
-const levelFamilySwatch: Record<TileFamilyId, string> = {
-  grass: '#5b8c3a',
-  stone: '#8c8c95',
-  water: '#3a6ea5',
-  dirt: '#6b513a',
-  pebble: '#7d7a70',
-  sand: '#b8a06a',
-};
-const levelSizes = {
-  small: { cols: 10, rows: 8 },
-  wide: { cols: 14, rows: 10 },
-} as const;
-
-type LevelUnitCell = { type: PieceType; side: Side };
-type LevelSnapshot = { t: Record<string, TileFamilyId>; u: Record<string, LevelUnitCell> };
-
-function levelTerrainToFamily(terrain: string): TileFamilyId {
-  if (terrain === 'water') return 'water';
-  if (terrain === 'stone' || terrain === 'road' || terrain === 'bridge' || terrain === 'rock' || terrain === 'cliff') return 'stone';
-  return 'grass';
-}
-
-function levelToEditorTerrain(level: Level | null): Record<string, TileFamilyId> {
-  if (!level) return {};
-  return Object.fromEntries(level.layers.terrain.map((cell) => [`${cell.x},${cell.y}`, levelTerrainToFamily(cell.terrain)]));
-}
-
-function levelToEditorUnits(level: Level | null): Record<string, LevelUnitCell> {
-  if (!level) return {};
-  return Object.fromEntries(level.layers.units.map((unit) => [`${unit.x},${unit.y}`, { type: unit.type, side: unit.side }]));
-}
-
-function levelToSizeKey(level: Level | null): 'small' | 'wide' {
-  if (!level) return 'small';
-  return level.board.cols === levelSizes.wide.cols && level.board.rows === levelSizes.wide.rows ? 'wide' : 'small';
-}
-const LE_ICON_ROOT = '/assets/ui/level-editor';
-const leIcon = (name: string, active = false): string => `${LE_ICON_ROOT}/icons/${name}${active ? '-active' : ''}.png`;
-const levelPieceTypes: PieceType[] = [...PLAYABLE_PIECE_TYPES];
-const levelSides: Side[] = ['player', 'enemy', 'neutral'];
-const pieceGlyph = PIECE_MARK;
-const pieceLabel = PIECE_LABEL;
-const sideLabel: Record<Side, string> = { player: 'Player', enemy: 'Enemy', neutral: 'Neutral' };
-const sideClass: Record<Side, string> = { player: 'is-player', enemy: 'is-enemy', neutral: 'is-neutral' };
-const levelPieceArt: Partial<Record<PieceType, string>> = Object.fromEntries(
-  PLAYABLE_PIECE_TYPES.map((piece) => [piece, pieceSpritePath(piece)]),
-) as Partial<Record<PieceType, string>>;
-
-// Fill every unpainted cell with its nearest painted family (multi-source BFS),
-// so a painted region's outer border meets matching terrain (clean base tiles)
-// and only adjacent *different* painted families produce socket transitions.
-function buildLevelTerrainMap(terrainCells: Record<string, TileFamilyId>, cols: number, rows: number): TileFamilyId[] {
-  const map = new Array<TileFamilyId>(cols * rows).fill('grass');
-  const idx = (x: number, y: number) => y * cols + x;
-  const visited = new Uint8Array(cols * rows);
-  const queue: number[] = [];
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < cols; x += 1) {
-      const family = terrainCells[`${x},${y}`];
-      if (family) {
-        const p = idx(x, y);
-        map[p] = family;
-        visited[p] = 1;
-        queue.push(p);
-      }
-    }
-  }
-  if (queue.length === 0) return map; // nothing painted yet: all grass, rendered as empty
-  let head = 0;
-  while (head < queue.length) {
-    const p = queue[head];
-    head += 1;
-    const x = p % cols;
-    const y = (p / cols) | 0;
-    const family = map[p];
-    const neighbours: Array<[number, number]> = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
-    for (const [nx, ny] of neighbours) {
-      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-      const np = idx(nx, ny);
-      if (visited[np]) continue;
-      visited[np] = 1;
-      map[np] = family;
-      queue.push(np);
-    }
-  }
-  return map;
-}
-
-function LeChromePanel({ title, className = '', children }: { title: string; className?: string; children: ReactNode }): ReactElement {
-  return (
-    <section className={`le-panel ${className}`.trim()}>
-      <h2>{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function LeIconButton({ label, icon, active = false, disabled = false, onClick }: { label: string; icon: string; active?: boolean; disabled?: boolean; onClick?: () => void }): ReactElement {
-  return (
-    <button type="button" className={`le-icon-button ${active ? 'is-active' : ''}`.trim()} title={label} aria-label={label} disabled={disabled} onClick={onClick}>
-      <img src={leIcon(icon, active)} alt="" aria-hidden="true" />
-    </button>
-  );
-}
-
-function LeActionButton({ label, icon, primary = false, disabled = false, title, onClick }: { label: string; icon?: string; primary?: boolean; disabled?: boolean; title?: string; onClick?: () => void }): ReactElement {
-  return (
-    <button type="button" className={`le-action-button ${primary ? 'is-primary' : ''}`.trim()} disabled={disabled} title={title ?? label} onClick={onClick}>
-      {icon ? <img src={leIcon(icon, primary)} alt="" aria-hidden="true" /> : null}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-// The level editor: the polished asset-backed `le-` chrome (top toolbar, side
-// rails, asset tray, status bar) wrapping the socket-legal board. Paint terrain
-// *families* and the solver lays down the legal tile per cell (base inside a
-// region, transitions where families meet); place chess-piece units on top.
-// This replaces the old Pixi EditorBoard surface while keeping its chrome/art.
-export function LevelEditorPage(): ReactElement {
-  const routeParams = useMemo(() => new URLSearchParams(window.location.search), []);
-  const routeCampaignId = routeParams.get('campaignId');
-  const routeLevelId = routeParams.get('levelId');
-  const returnTo = routeParams.get('returnTo') ?? '/campaigns-next';
-  const routeLevel = routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null;
-  const [terrainCells, setTerrainCells] = useState<Record<string, TileFamilyId>>(() => levelToEditorTerrain(routeLevel));
-  const [unitCells, setUnitCells] = useState<Record<string, LevelUnitCell>>(() => levelToEditorUnits(routeLevel));
-  const [layer, setLayer] = useState<'terrain' | 'units'>('terrain');
-  const [brush, setBrush] = useState<LevelBrush>('grass');
-  const [unitType, setUnitType] = useState<PieceType>('pawn');
-  const [unitSide, setUnitSide] = useState<Side>('player');
-  const [unitErase, setUnitErase] = useState(false);
-  const [sizeKey, setSizeKey] = useState<'small' | 'wide'>(() => levelToSizeKey(routeLevel));
-  const [viewZoom, setViewZoom] = useState(0.95);
-  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [showGrid, setShowGrid] = useState(true);
-  const [past, setPast] = useState<LevelSnapshot[]>([]);
-  const [future, setFuture] = useState<LevelSnapshot[]>([]);
-  const [status, setStatus] = useState(routeLevel ? `Editing ${routeLevel.name}` : 'Ready');
-  const { cols, rows } = levelSizes[sizeKey];
-  const animationFrame = useAnimationClock(true, 8, 150);
-
-  useEffect(() => {
-    const shell = document.querySelector('.shell');
-    shell?.classList.add('level-editor-active');
-    return () => shell?.classList.remove('level-editor-active');
-  }, []);
-
-  useEffect(() => {
-    if (!routeLevelId || useCampaigns.getState().levels[routeLevelId]) return;
-    let active = true;
-    loadWorkspace()
-      .then((workspace) => {
-        if (!active) return;
-        useCampaigns.getState().hydrate(workspace);
-        const level = useCampaigns.getState().levels[routeLevelId];
-        if (!level) {
-          setStatus(`Level ${routeLevelId} was not found in the campaign workspace`);
-          return;
-        }
-        setTerrainCells(levelToEditorTerrain(level));
-        setUnitCells(levelToEditorUnits(level));
-        setSizeKey(levelToSizeKey(level));
-        if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
-        useCampaigns.getState().selectLevel(routeLevelId);
-        setStatus(`Editing ${level.name}`);
-      })
-      .catch((error) => setStatus(`Load failed: ${(error as Error).message}`));
-    return () => { active = false; };
-  }, [routeCampaignId, routeLevelId]);
-
-  const levelAssets = useMemo(
-    () => [...studioFamilies.flatMap((family) => family.assets.filter((asset) => asset.kind === 'tile')), ...transitionAssets],
-    [],
-  );
-  const assetById = useMemo(() => new Map(levelAssets.map((asset) => [asset.id, asset])), [levelAssets]);
-
-  const solved = useMemo(
-    () => solveSocketBoard({ assets: levelAssets, terrainMap: buildLevelTerrainMap(terrainCells, cols, rows), seed: 7, columns: cols, rows, familyAssets: studioFamilyAssets }),
-    [terrainCells, cols, rows, levelAssets],
-  );
-
-  // Only painted cells render. Map each to its solved asset id (StudioEditableBoard
-  // shows empty for unresolved/missing cells — those are surfaced in the status line).
-  const renderedCells = useMemo(() => {
-    const out: Record<string, string> = {};
-    for (const cell of solved.cells) {
-      const key = `${cell.x},${cell.y}`;
-      if (terrainCells[key] && cell.asset) out[key] = cell.asset.id;
-    }
-    return out;
-  }, [solved, terrainCells]);
-
-  const paintedCount = Object.keys(terrainCells).length;
-  const unitCount = Object.keys(unitCells).length;
-  const missingCount = solved.cells.filter((cell) => terrainCells[`${cell.x},${cell.y}`] && cell.missing).length;
-
-  // Undo/redo. Painting a stroke snapshots on pointer-down (capture phase, before
-  // the cell handler stops propagation) and commits on pointer-up if it changed;
-  // discrete actions snapshot up front via recordHistory().
-  const terrainRef = useRef(terrainCells);
-  terrainRef.current = terrainCells;
-  const unitRef = useRef(unitCells);
-  unitRef.current = unitCells;
-  const strokeRef = useRef<LevelSnapshot | null>(null);
-  const snapshot = (): LevelSnapshot => ({ t: terrainRef.current, u: unitRef.current });
-  const recordHistory = () => {
-    setPast((prev) => [...prev.slice(-49), snapshot()]);
-    setFuture([]);
-  };
-  const beginStroke = () => { strokeRef.current = snapshot(); };
-  const endStroke = () => {
-    const start = strokeRef.current;
-    strokeRef.current = null;
-    if (start && (start.t !== terrainRef.current || start.u !== unitRef.current)) {
-      setPast((prev) => [...prev.slice(-49), start]);
-      setFuture([]);
-    }
-  };
-  const undo = () => {
-    if (!past.length) return;
-    const prev = past[past.length - 1];
-    setFuture((f) => [...f, snapshot()]);
-    setPast((p) => p.slice(0, -1));
-    setTerrainCells(prev.t);
-    setUnitCells(prev.u);
-  };
-  const redo = () => {
-    if (!future.length) return;
-    const next = future[future.length - 1];
-    setPast((p) => [...p, snapshot()]);
-    setFuture((f) => f.slice(0, -1));
-    setTerrainCells(next.t);
-    setUnitCells(next.u);
-  };
-
-  const paintTerrain = (x: number, y: number) => {
-    if (brush === 'erase') return;
-    const family = brush;
-    setTerrainCells((prev) => (prev[`${x},${y}`] === family ? prev : { ...prev, [`${x},${y}`]: family }));
-  };
-  const eraseTerrain = (x: number, y: number) => {
-    const key = `${x},${y}`;
-    setTerrainCells((prev) => {
-      if (!(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-    // A unit can't stand on void — drop it when its tile is erased.
-    setUnitCells((prev) => {
-      if (!(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
-  const placeUnit = (x: number, y: number) => {
-    const key = `${x},${y}`;
-    if (!terrainCells[key]) return; // units stand on painted terrain only
-    setUnitCells((prev) => (prev[key]?.type === unitType && prev[key]?.side === unitSide ? prev : { ...prev, [key]: { type: unitType, side: unitSide } }));
-  };
-  const eraseUnit = (x: number, y: number) =>
-    setUnitCells((prev) => {
-      const key = `${x},${y}`;
-      if (!(key in prev)) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  const clearLevel = () => {
-    recordHistory();
-    setTerrainCells({});
-    setUnitCells({});
-    setStatus('Cleared');
-  };
-  const clearUnits = () => {
-    recordHistory();
-    setUnitCells({});
-  };
-  const fillLevel = () => {
-    if (brush === 'erase') return;
-    recordHistory();
-    const family = brush;
-    const next: Record<string, TileFamilyId> = {};
-    for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) next[`${x},${y}`] = family;
-    setTerrainCells(next);
-  };
-  // Random fill restricted to tiles that actually exist: the generator only
-  // emits socket-legal placements, so reading back each cell's terrain gives a
-  // legal, paintable map.
-  const randomizeTerrain = () => {
-    recordHistory();
-    const board = generateSocketBoard({ assets: levelAssets, seed: Math.floor(Math.random() * 999999) + 1, columns: cols, rows, familyAssets: studioFamilyAssets });
-    const next: Record<string, TileFamilyId> = {};
-    for (const cell of board.cells) next[`${cell.x},${cell.y}`] = cell.terrain;
-    setTerrainCells(next);
-    setUnitCells({});
-  };
-  const changeSize = (key: 'small' | 'wide') => {
-    if (key === sizeKey) return;
-    recordHistory();
-    setSizeKey(key);
-  };
-
-  // Build the durable Level doc from the painted board so we can validate now and
-  // save to the server once the editor is hosted. Family ids are valid TerrainTypes.
-  const buildLevel = (): Level => {
-    const sourceLevel = routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null;
-    const terrain = Object.entries(terrainCells).map(([key, family]) => {
-      const [x, y] = key.split(',').map(Number);
-      return { x, y, terrain: family, elevation: 0 };
-    });
-    const units = Object.entries(unitCells).map(([key, unit]) => {
-      const [x, y] = key.split(',').map(Number);
-      return { x, y, type: unit.type, side: unit.side };
-    });
-    return {
-      formatVersion: LEVEL_FORMAT_VERSION,
-      id: sourceLevel?.id ?? routeLevelId ?? 'draft',
-      name: sourceLevel?.name ?? 'Untitled',
-      notes: sourceLevel?.notes ?? '',
-      board: { cols, rows, heightLevels: 1 },
-      objective: sourceLevel?.objective ?? 'capture-all',
-      difficulty: sourceLevel?.difficulty ?? 'normal',
-      economy: sourceLevel?.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
-      theme: sourceLevel?.theme ?? 'grassland',
-      layers: { terrain, decals: [], zones: [], units },
-    };
-  };
-  const validate = () => {
-    const result = validateLevel(buildLevel());
-    setStatus(result.ok ? `Valid · ${unitCount} units · ${cols} × ${rows}` : `Invalid: ${result.errors[0]}`);
-  };
-  const saveCampaignLevel = () => {
-    const level = buildLevel();
-    const result = validateLevel(level);
-    if (!result.ok) {
-      setStatus(`Invalid: ${result.errors[0]}`);
-      return;
-    }
-    useCampaigns.getState().replaceLevel(result.level);
-    if (routeCampaignId) useCampaigns.getState().selectCampaign(routeCampaignId);
-    useCampaigns.getState().selectLevel(result.level.id);
-    setStatus(`Saved ${result.level.name} to campaign workspace`);
-    if (routeCampaignId) {
-      void saveWorkspace({ campaigns: useCampaigns.getState().campaigns, levels: useCampaigns.getState().levels })
-        .then(() => setStatus(`Saved ${result.level.name} to campaign workspace`))
-        .catch((error) => setStatus(`Saved locally; server save failed: ${(error as Error).message}`));
-    }
-  };
-
-  const setTerrainBrush = (family: TileFamilyId) => { setBrush(family); setLayer('terrain'); };
-  const setUnitBrush = (type: PieceType, side: Side) => { setUnitType(type); setUnitSide(side); setUnitErase(false); setLayer('units'); };
-  const onBoardPaint = layer === 'terrain' ? paintTerrain : placeUnit;
-  const onBoardErase = layer === 'terrain' ? eraseTerrain : eraseUnit;
-  const boardTool: 'select' | 'brush' | 'erase' =
-    layer === 'terrain' ? (brush === 'erase' ? 'erase' : 'brush') : unitErase ? 'erase' : 'brush';
-  const eraseActive = (layer === 'terrain' && brush === 'erase') || (layer === 'units' && unitErase);
-
-  const toolTabs: Array<{ id: string; label: string; icon: string; active: boolean; onClick: () => void }> = [
-    { id: 'terrain', label: 'Terrain', icon: 'brush', active: layer === 'terrain' && brush !== 'erase', onClick: () => { setLayer('terrain'); if (brush === 'erase') setBrush('grass'); } },
-    { id: 'units', label: 'Units', icon: 'zone', active: layer === 'units' && !unitErase, onClick: () => { setLayer('units'); setUnitErase(false); } },
-    { id: 'erase', label: 'Erase', icon: 'eraser', active: eraseActive, onClick: () => { if (layer === 'terrain') setBrush('erase'); else setUnitErase(true); } },
-    { id: 'grid', label: showGrid ? 'Grid On' : 'Grid Off', icon: 'grid', active: showGrid, onClick: () => setShowGrid((value) => !value) },
-  ];
-
-  const layerRows: Array<{ id: string; label: string; locked: boolean }> = [
-    { id: 'terrain', label: 'Terrain', locked: false },
-    { id: 'units', label: 'Units', locked: false },
-    { id: 'zones', label: 'Zones', locked: true },
-    { id: 'decals', label: 'Decals', locked: true },
-  ];
-
-  const unitOverlay = (
-    <div className="level-unit-layer">
-      {Object.entries(unitCells).map(([key, unit]) => {
-        const [x, y] = key.split(',').map(Number);
-        const left = (x - y) * TILE_TEMPLATE.stepX;
-        const top = (x + y) * TILE_TEMPLATE.stepY;
-        const art = levelPieceArt[unit.type];
-        return (
-          <div key={key} className={`level-unit ${sideClass[unit.side]}`} style={{ left, top, zIndex: 500 + x + y }} title={`${sideLabel[unit.side]} ${pieceLabel[unit.type]}`}>
-            {art ? <img src={art} alt="" draggable={false} /> : <span className="level-unit-chip">{pieceGlyph[unit.type]}</span>}
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  return (
-    <div className="level-editor-shell" data-testid="level-editor">
-      <header className="le-topbar" aria-label="Level editor toolbar">
-        <a className="le-brand" href="/">
-          <img className="le-brand-crest" src="/assets/ui/main-menu/icon-scroll.png" alt="" aria-hidden="true" />
-          <span>
-            <picture className="le-brand-title">
-              <source srcSet="/assets/ui/main-menu-brand-title-only-v1.avif" type="image/avif" />
-              <source srcSet="/assets/ui/main-menu-brand-title-only-v1.webp" type="image/webp" />
-              <img src="/assets/ui/main-menu-brand-title-only-v1.png" alt="Chess Tactics" />
-            </picture>
-            <strong>Level Editor</strong>
-          </span>
-        </a>
-        <nav className="le-tool-tabs" aria-label="Editor tools">
-          {toolTabs.map((tab) => (
-            <button key={tab.id} type="button" data-testid={`tool-${tab.id}`} className={`le-tool-tab ${tab.active ? 'is-active' : ''}`.trim()} onClick={tab.onClick}>
-              <img src={leIcon(tab.icon, tab.active)} alt="" aria-hidden="true" />
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="le-history" aria-label="Edit history">
-          <LeIconButton label="Undo" icon="undo" disabled={!past.length} onClick={undo} />
-          <LeIconButton label="Redo" icon="redo" disabled={!future.length} onClick={redo} />
-        </div>
-        <div className="le-save-actions">
-          <LeActionButton label="Test" icon="play" onClick={validate} />
-          <LeActionButton label="Save" icon="save" primary onClick={saveCampaignLevel} />
-          <a className="le-menu-link" href={returnTo} aria-label="Return">
-            <img src={leIcon('menu')} alt="" aria-hidden="true" />
-          </a>
-        </div>
-      </header>
-
-      <main className="le-workspace">
-        <aside className="le-left-rail" aria-label="Board controls">
-          <LeChromePanel title="Board Settings">
-            <label className="le-field">
-              <span>Size</span>
-              <select value={sizeKey} onChange={(event) => changeSize(event.target.value as 'small' | 'wide')}>
-                <option value="small">{levelSizes.small.cols} x {levelSizes.small.rows}</option>
-                <option value="wide">{levelSizes.wide.cols} x {levelSizes.wide.rows}</option>
-              </select>
-            </label>
-            <label className="le-field"><span>Theme</span><select value="Grassland" onChange={() => undefined}><option>Grassland</option></select></label>
-            <label className="le-check"><input type="checkbox" checked={showGrid} onChange={() => setShowGrid((value) => !value)} /> Isometric Grid</label>
-            <button type="button" className="le-action-button" onClick={randomizeTerrain} title="Generate a random, socket-legal terrain layout.">
-              <img src={leIcon('grid')} alt="" aria-hidden="true" />
-              <span>Randomize</span>
-            </button>
-          </LeChromePanel>
-
-          <LeChromePanel title="Layers" className="le-layers-panel">
-            {layerRows.map((row) => {
-              const active = !row.locked && layer === row.id;
-              return (
-                <button key={row.id} type="button" className={`le-layer-row ${active ? 'is-selected' : ''}`.trim()} disabled={row.locked} onClick={() => !row.locked && setLayer(row.id as 'terrain' | 'units')}>
-                  <img src={leIcon('eye', active)} alt="" aria-hidden="true" />
-                  <span>{row.label}</span>
-                  <img src={leIcon(row.locked ? 'lock' : 'grid', active)} alt="" aria-hidden="true" />
-                </button>
-              );
-            })}
-          </LeChromePanel>
-
-          <LeChromePanel title="Map Preview" className="le-minimap-panel">
-            <div className="le-minimap" aria-hidden="true"><span /></div>
-          </LeChromePanel>
-
-          <LeChromePanel title="Legality" className="le-camera-panel">
-            <div className="le-legality-readout">
-              <strong>{paintedCount}</strong> tiles · <strong>{unitCount}</strong> units
-            </div>
-            <div className={`le-legality-status ${missingCount > 0 ? 'is-warning' : paintedCount > 0 ? 'is-ok' : ''}`.trim()}>
-              {missingCount > 0
-                ? `${missingCount} unsupported junction${missingCount === 1 ? '' : 's'}`
-                : paintedCount > 0
-                  ? 'All edges legal'
-                  : 'Paint terrain to begin.'}
-            </div>
-          </LeChromePanel>
-        </aside>
-
-        <section className="le-board-stage" aria-label="Editable board" onPointerDownCapture={beginStroke} onPointerUpCapture={endStroke}>
-          <div className="le-board-frame le-board-live">
-            <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
-              <div className="tileset-view-board-content is-board">
-                <StudioEditableBoard
-                  cols={cols}
-                  rows={rows}
-                  cells={renderedCells}
-                  units={{}}
-                  doodads={{}}
-                  resolveAsset={(id) => assetById.get(id)}
-                  resolveUnit={() => undefined}
-                  resolveDoodad={() => undefined}
-                  tool={boardTool}
-                  selectedCell={null}
-                  showFootprint={showGrid}
-                  boardZoom={viewZoom}
-                  boardPan={viewPan}
-                  animationFrame={animationFrame}
-                  onPaint={onBoardPaint}
-                  onErase={onBoardErase}
-                  onSelect={() => {}}
-                  overlay={unitOverlay}
-                />
-              </div>
-            </ViewPane>
-          </div>
-        </section>
-
-        <aside className="le-right-rail" aria-label="Palette controls">
-          <LeChromePanel title="Tile Palette" className="le-palette-panel">
-            <div className="le-palette-grid">
-              {levelTerrainOrder.map((family) => (
-                <button key={family} type="button" title={terrainLabels[family]} className={layer === 'terrain' && brush === family ? 'is-active' : ''} onClick={() => setTerrainBrush(family)}>
-                  <i style={{ background: levelFamilySwatch[family] }} />
-                  <span>{terrainLabels[family]}</span>
-                </button>
-              ))}
-              <button type="button" title="Erase terrain" className={layer === 'terrain' && brush === 'erase' ? 'is-active' : ''} onClick={() => { setBrush('erase'); setLayer('terrain'); }}>
-                <i style={{ background: 'repeating-linear-gradient(45deg, #36202a, #36202a 4px, #6a2030 4px, #6a2030 8px)' }} />
-                <span>Erase</span>
-              </button>
-            </div>
-          </LeChromePanel>
-
-          <LeChromePanel title="Units">
-            <div className="le-unit-groups">
-              {levelSides.map((side) => (
-                <div key={side} className={`le-unit-side is-${side}`}>
-                  <span>{sideLabel[side]}</span>
-                  <div>
-                    {levelPieceTypes.map((piece) => (
-                      <button key={piece} type="button" title={`${sideLabel[side]} ${pieceLabel[piece]}`} className={layer === 'units' && !unitErase && unitType === piece && unitSide === side ? 'is-active' : ''} onClick={() => setUnitBrush(piece, side)}>
-                        {pieceGlyph[piece]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <button type="button" className={`le-action-button ${layer === 'units' && unitErase ? 'is-primary' : ''}`.trim()} onClick={() => { setUnitErase(true); setLayer('units'); }} title="Erase units (right-click also erases).">
-                <img src={leIcon('eraser', layer === 'units' && unitErase)} alt="" aria-hidden="true" />
-                <span>Erase Units</span>
-              </button>
-            </div>
-          </LeChromePanel>
-
-          <LeChromePanel title="Brush">
-            <div className="le-brush-tools">
-              <LeIconButton label="Paint" icon="brush" active={!eraseActive} onClick={() => { if (layer === 'terrain' && brush === 'erase') setBrush('grass'); setUnitErase(false); }} />
-              <LeIconButton label="Erase" icon="eraser" active={eraseActive} onClick={() => { if (layer === 'terrain') setBrush('erase'); else setUnitErase(true); }} />
-              <LeIconButton label="Grid" icon="grid" active={showGrid} onClick={() => setShowGrid((value) => !value)} />
-              <LeIconButton label="Clear" icon="eraser" onClick={clearLevel} />
-            </div>
-            <label className="le-field">
-              <span>Zoom</span>
-              <input type="range" min="0.4" max="4" step="0.05" value={viewZoom} onChange={(event) => setViewZoom(Number(event.target.value))} />
-            </label>
-          </LeChromePanel>
-        </aside>
-      </main>
-
-      <footer className="le-bottom-tray" aria-label="Asset tray">
-        <div className="le-tray-assets">
-          {levelSides.flatMap((side) =>
-            levelPieceTypes.map((piece) => (
-              <button key={`${side}-${piece}`} type="button" className={layer === 'units' && !unitErase && unitType === piece && unitSide === side ? 'is-active' : ''} onClick={() => setUnitBrush(piece, side)} title={`${sideLabel[side]} ${pieceLabel[piece]}`}>
-                <span className={`le-tray-glyph ${sideClass[side]}`}>{pieceGlyph[piece]}</span>
-                <span>{pieceLabel[piece]}</span>
-              </button>
-            )),
-          )}
-          {levelTerrainOrder.map((family) => (
-            <button key={`tray-${family}`} type="button" className={layer === 'terrain' && brush === family ? 'is-active' : ''} onClick={() => setTerrainBrush(family)} title={terrainLabels[family]}>
-              <i style={{ background: levelFamilySwatch[family] }} />
-              <span>{terrainLabels[family]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="le-tray-controls">
-          <span>Layer</span>
-          <LeIconButton label="Terrain" icon="brush" active={layer === 'terrain'} onClick={() => setLayer('terrain')} />
-          <LeIconButton label="Units" icon="zone" active={layer === 'units'} onClick={() => setLayer('units')} />
-        </div>
-      </footer>
-
-      <div className="le-status" data-testid="editor-status">
-        <span className="le-status-dot" />
-        <span>{status}</span>
-        <span>Board: {cols} x {rows}</span>
-        <span>Tiles: {paintedCount}</span>
-        <span>Units: {unitCount}</span>
-        <span>{missingCount > 0 ? `${missingCount} junction warning${missingCount === 1 ? '' : 's'}` : 'Legal'}</span>
-      </div>
-    </div>
-  );
-}
-
 export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?: StudioCategory } = {}): ReactElement {
   const initialRoute = useMemo(() => readTilesetStudioRoute(), []);
   const initialHasViewTarget = Boolean(initialRoute.selectedAssetId || initialRoute.selectedSlotMask || initialRoute.tileFilter === 'board');
@@ -1345,6 +751,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [assetFilters, setAssetFilters] = useState<AssetFilters>({ type: 'all', prov: 'all', gate: 'all' });
   const [assetSearch, setAssetSearch] = useState('');
   const [artworkSearch, setArtworkSearch] = useState('');
+  const [surfaceSearch, setSurfaceSearch] = useState('');
+  const [scrollbarSearch, setScrollbarSearch] = useState('');
+  const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
+  const [sliderSearch, setSliderSearch] = useState('');
+  const [selectedSliderName, setSelectedSliderName] = useState<string | undefined>(undefined);
+  const [selectedSurfaceName, setSelectedSurfaceName] = useState<string | undefined>(undefined);
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
@@ -1929,14 +1341,16 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
   // the header height constant (the Lab already shares this header — no second
   // row inside the board surface, which is what made the controls rail jump).
-  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'glossary' ? selectedGlossaryName : '';
-  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : 'Asset';
+  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'glossary' ? selectedGlossaryName : viewerKind === 'surface' ? (selectedSurfaceName ?? '') : viewerKind === 'scrollbar' ? (selectedScrollbarName ?? '') : viewerKind === 'slider' ? (selectedSliderName ?? '') : '';
+  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'glossary' ? 'Glossary' : viewerKind === 'surface' ? 'Surface' : viewerKind === 'scrollbar' ? 'Scrollbar' : viewerKind === 'slider' ? 'Slider' : 'Asset';
   const crumbTrail =
     studioMode === 'catalog'
-      ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : 'Tiles']
+      ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : category === 'surfaces' ? 'Surfaces' : category === 'scrollbars' ? 'Scrollbars' : category === 'sliders' ? 'Sliders' : 'Tiles']
       : studioMode === 'viewer'
         ? (viewerKind === 'portrait' ? ['Viewer', 'Portrait'] : ['Viewer', viewerKindLabel, viewerName || '—'])
-        : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
+        : studioMode === 'dressing'
+          ? ['Dressing room', 'Settings']
+          : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
   const visibleDoodads = normalizedCatalogQuery
     ? DOODAD_ASSETS.filter((d) => [d.label, d.status, ...d.terrains].join(' ').toLowerCase().includes(normalizedCatalogQuery))
     : DOODAD_ASSETS;
@@ -1952,10 +1366,18 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? `${artworkManifest.summary.total} artworks`
             : category === 'glossary'
               ? 'reference & process docs'
-              : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
+              : category === 'surfaces'
+                ? 'background surfaces'
+                : category === 'scrollbars'
+                  ? 'scrollbar grips'
+                  : category === 'sliders'
+                    ? 'slide bars'
+                    : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
       : studioMode === 'viewer'
-        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'glossary' ? 'definition + process doc' : 'preview on backdrops')
-        : viewSubtitle;
+        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'glossary' ? 'definition + process doc' : viewerKind === 'surface' ? 'tiled surface preview' : viewerKind === 'scrollbar' ? 'live scroll test' : viewerKind === 'slider' ? 'live drag test' : 'preview on backdrops')
+        : studioMode === 'dressing'
+          ? 'live settings preview'
+          : viewSubtitle;
   const openCatalogMode = (): void => {
     if (tileFilter === 'board') setTileFilter('base');
     setStudioMode('catalog');
@@ -1963,6 +1385,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const openViewer = (kind: ViewerKind): void => {
     setViewerKind(kind);
     setStudioMode('viewer');
+  };
+  const openDressingRoom = (): void => {
+    setStudioMode('dressing');
   };
   const selectUnitInCatalog = (unitId: string): void => {
     setUnitBrushId(unitId);
@@ -2181,8 +1606,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
           <div className="tileset-filter-field">
-            <span>Type</span>
-            <div className="tileset-tier-seg" aria-label="Filter by type">
+            <span>Screen</span>
+            <div className="tileset-tier-seg" aria-label="Filter by screen">
               {ASSET_TYPE_FACETS.map((opt) => (
                 <button key={opt.value} type="button" className={assetFilters.type === opt.value ? 'is-active' : ''} onClick={() => setAssetFilters((s) => ({ ...s, type: opt.value }))}>{opt.label}</button>
               ))}
@@ -2258,6 +1683,58 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
       ),
     },
+    {
+      id: 'surfaces', label: 'Surfaces', hint: 'Browse accepted background surfaces — seamless, tileable pixel-art tiles.',
+      main: <SurfaceLibraryStudio search={surfaceSearch} zoom={zoom} selected={selectedSurfaceName} onSelect={setSelectedSurfaceName} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={surfaceSearch} onChange={(event) => setSurfaceSearch(event.target.value)} placeholder="surface, material…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('surface')}>View Selected</button>
+          <button type="button" className="tileset-view-action" onClick={openDressingRoom}>Open in Settings →</button>
+        </>
+      ),
+    },
+    {
+      id: 'scrollbars', label: 'Scrollbars', hint: 'Scrollbar-grip candidates — carved wooden elements. PixelLab is the current preferred default.',
+      main: <ScrollbarLibraryStudio search={scrollbarSearch} zoom={zoom} selected={selectedScrollbarName} onSelect={setSelectedScrollbarName} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={scrollbarSearch} onChange={(event) => setScrollbarSearch(event.target.value)} placeholder="scrollbar, approach…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('scrollbar')}>View Selected</button>
+        </>
+      ),
+    },
+    {
+      id: 'sliders', label: 'Sliders', hint: 'Slide-bar candidates — CSS-skinned native sliders. Bronze/stone (ADR-0025) is the current default; forged stone/wood material is pending.',
+      main: <SliderLibraryStudio search={sliderSearch} zoom={zoom} selected={selectedSliderName} onSelect={setSelectedSliderName} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={sliderSearch} onChange={(event) => setSliderSearch(event.target.value)} placeholder="slider, material…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('slider')}>View Selected</button>
+        </>
+      ),
+    },
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
 
@@ -2270,6 +1747,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <button type="button" className={viewerKind === 'artwork' ? 'is-active' : ''} onClick={() => setViewerKind('artwork')} title="View the selected artwork.">Artwork</button>
       <button type="button" className={viewerKind === 'portrait' ? 'is-active' : ''} onClick={() => setViewerKind('portrait')} title="Edit unit portrait headshot crops.">Portrait</button>
       <button type="button" className={viewerKind === 'glossary' ? 'is-active' : ''} onClick={() => setViewerKind('glossary')} title="Read a glossary term in full.">Glossary</button>
+      <button type="button" className={viewerKind === 'surface' ? 'is-active' : ''} onClick={() => setViewerKind('surface')} title="View the selected background surface.">Surface</button>
+      <button type="button" className={viewerKind === 'scrollbar' ? 'is-active' : ''} onClick={() => setViewerKind('scrollbar')} title="View the selected scrollbar grip.">Scrollbar</button>
+      <button type="button" className={viewerKind === 'slider' ? 'is-active' : ''} onClick={() => setViewerKind('slider')} title="View the selected slide bar.">Slider</button>
     </div>
   );
 
@@ -2296,6 +1776,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <button type="button" className={studioMode === 'viewer' ? 'is-active' : ''} onClick={() => setStudioMode('viewer')} title="View one finished asset or artwork.">
               Viewer
             </button>
+            <button type="button" className={studioMode === 'dressing' ? 'is-active' : ''} onClick={openDressingRoom} title="Dress the live Settings page with surfaces — pick what fills each region.">
+              Dressing
+            </button>
           </span>
           <a href="/settings">Settings</a>
         </nav>
@@ -2309,19 +1792,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
-              <div className="tileset-tier-seg" aria-label="Catalog asset type">
-                {catalogCategories.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    className={category === entry.id ? 'is-active' : ''}
-                    onClick={() => setCategory(entry.id)}
-                    title={entry.hint}
-                  >
-                    {entry.label}
-                  </button>
-                ))}
-              </div>
+              <label className="tileset-category-select" title={activeCatalog.hint}>
+                <span>Category</span>
+                <select value={category} onChange={(event) => setCategory(event.target.value as StudioCategory)} aria-label="Catalog category">
+                  {catalogCategories.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.label}</option>
+                  ))}
+                </select>
+              </label>
               {activeCatalog.controls}
             </div>
           </section>
@@ -2334,7 +1812,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
               ? <ArtworkLab name={selectedArtworkName} header={viewerKindTabs} />
               : viewerKind === 'glossary'
                 ? <GlossaryLab name={selectedGlossaryName} header={viewerKindTabs} />
-                : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
+                : viewerKind === 'surface'
+                  ? <SurfaceViewer name={selectedSurfaceName} header={viewerKindTabs} />
+                  : viewerKind === 'scrollbar'
+                    ? <ScrollbarViewer name={selectedScrollbarName} header={viewerKindTabs} />
+                    : viewerKind === 'slider'
+                      ? <SliderViewer name={selectedSliderName} header={viewerKindTabs} />
+                      : <AssetLab name={selectedAssetName} header={viewerKindTabs} />
+        ) : studioMode === 'dressing' ? (
+          <SurfaceDressingRoom seed={selectedSurfaceName} />
         ) : (
           <>
             <section className="tileset-lab-stage" aria-label="Lab board surface">
@@ -2694,5 +2180,274 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         )}
       </section>
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Level Editor (front-of-house). The functional Studio Lab board, re-dressed as
+// a literal sibling of the Skirmish page: it reuses the real .skirmish-screen /
+// .skirmish-war-room / .skirmish-field / .skirmish-board-frame / .skirmish-hud /
+// .skirmish-card chrome (so it IS the same game), with the proven
+// StudioEditableBoard inside, and the editor controls in .skirmish-card rail
+// sections. M1 = the shell + tile painting; units/doodads/persistence land in
+// later milestones. The Studio Lab (TilesetStudio) is untouched — this duplicates
+// its board logic for now; a shared hook will dedupe them once it has settled.
+// ---------------------------------------------------------------------------
+const LE_COLS = 10;
+const LE_ROWS = 10;
+const leGrassFamily = studioFamilies.find((family) => family.id === 'grass') ?? studioFamilies[0];
+const leDefaultTile = leGrassFamily.assets.find((asset) => asset.kind === 'tile') ?? leGrassFamily.assets[0];
+const leTileGroups = studioFamilies.map((family) => ({ family, tiles: family.assets.filter((asset) => asset.kind === 'tile') }));
+const leAllTiles = studioFamilies.flatMap((family) => family.assets);
+const leFamilyOfTile = (id: string): StudioFamily | undefined => studioFamilies.find((family) => family.assets.some((asset) => asset.id === id));
+const leSeedBoard = (): Record<string, string> => {
+  const cells: Record<string, string> = {};
+  for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
+  return cells;
+};
+const LE_FACING: Direction[] = ['south', 'east', 'north', 'west'];
+const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
+
+export function LevelEditor(): ReactElement {
+  const animationFrame = useAnimationClock(true, 8, 150);
+  const [boardCells, setBoardCells] = useState<Record<string, string>>(leSeedBoard);
+  const [tool, setTool] = useState<'select' | 'brush' | 'erase'>('brush');
+  const [brushId, setBrushId] = useState<string>(leDefaultTile.id);
+  const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
+  const [showFootprint, setShowFootprint] = useState(true);
+  const [viewZoom, setViewZoom] = useState(1);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit'>('tile');
+  const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
+  const [unitBrushId, setUnitBrushId] = useState<string>(unitAssets[0].id);
+  const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
+  const [unitSide, setUnitSide] = useState<'player' | 'enemy'>('player');
+
+  // Go full-bleed like Skirmish: hide the static global .topbar (index.html) so the
+  // editor shows only its OWN title bar, not stacked under the app's global header.
+  useEffect(() => {
+    const shell = document.querySelector('.shell');
+    shell?.classList.add('is-immersive');
+    return () => shell?.classList.remove('is-immersive');
+  }, []);
+
+  const resolveAsset = (id: string): StudioAsset | undefined => leAllTiles.find((asset) => asset.id === id);
+  const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
+  const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
+  const unitFaction: Faction = LE_SIDE_FACTION[unitSide];
+
+  const eraseKey = <T,>(setter: (updater: (prev: Record<string, T>) => Record<string, T>) => void, key: string): void =>
+    setter((prev) => { if (!(key in prev)) return prev; const next = { ...prev }; delete next[key]; return next; });
+  const paintCell = (x: number, y: number): void => {
+    const key = `${x},${y}`;
+    if (brushKind === 'unit') {
+      setBoardUnits((prev) => ({ ...prev, [key]: { unitId: unitBrushAsset.id, direction: unitBrushDirection, faction: unitFaction } }));
+      return;
+    }
+    setBoardCells((prev) => ({ ...prev, [key]: brushAsset.id }));
+  };
+  const eraseCell = (x: number, y: number): void => {
+    const key = `${x},${y}`;
+    if (brushKind === 'unit') return eraseKey(setBoardUnits, key);
+    eraseKey(setBoardCells, key);
+  };
+  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setSelectedCell(null); };
+  const fillBoard = (mode: 'empty' | 'all'): void =>
+    setBoardCells((prev) => {
+      const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
+      for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) {
+        const key = `${x},${y}`;
+        if (mode === 'all' || !(key in next)) next[key] = brushAsset.id;
+      }
+      return next;
+    });
+  const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
+  const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
+
+  const paintedCount = Object.keys(boardCells).length;
+  const unitCount = Object.keys(boardUnits).length;
+  const selectedTileId = selectedCell ? boardCells[`${selectedCell.x},${selectedCell.y}`] : undefined;
+  const selectedAsset = selectedTileId ? resolveAsset(selectedTileId) : undefined;
+  const selectedUnit = selectedCell ? boardUnits[`${selectedCell.x},${selectedCell.y}`] : undefined;
+  const selectedUnitAsset = selectedUnit ? resolveUnitAsset(selectedUnit.unitId) : undefined;
+  const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
+
+  return (
+    <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
+        <header className="app-titlebar le-topbar" aria-label="Level editor">
+          <BrandLockup screenName="Level Editor" />
+          <div className="le-topbar-stats" aria-label="Level status">
+            <span className="le-level-name">Untitled level</span>
+            <span className="le-save-state is-dirty">Unsaved</span>
+          </div>
+          <nav className="le-topbar-actions" aria-label="Editor actions">
+            <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
+            <button type="button" className="app-header-button app-header-button-active" disabled title="Saving unlocks once the editor is hosted.">Save</button>
+            <a className="app-header-button" href="/settings">Settings</a>
+          </nav>
+        </header>
+
+        <div className="skirmish-field">
+          <div className="skirmish-board-frame">
+            <ViewPane kind="board" ariaLabel="Level editor board" zoom={viewZoom} pan={viewPan} minZoom={0.4} maxZoom={4} onZoomChange={setViewZoom} onPanChange={setViewPan}>
+              <div className="tileset-view-board-content is-board">
+                <StudioEditableBoard
+                  cols={LE_COLS}
+                  rows={LE_ROWS}
+                  cells={boardCells}
+                  units={boardUnits}
+                  doodads={{}}
+                  resolveAsset={resolveAsset}
+                  resolveUnit={resolveUnitAsset}
+                  resolveDoodad={() => undefined}
+                  tool={tool}
+                  selectedCell={selectedCell}
+                  showFootprint={showFootprint}
+                  boardZoom={viewZoom}
+                  boardPan={viewPan}
+                  animationFrame={animationFrame}
+                  onPaint={paintCell}
+                  onErase={eraseCell}
+                  onSelect={selectCell}
+                />
+              </div>
+            </ViewPane>
+          </div>
+        </div>
+
+      <aside className="skirmish-hud" aria-label="Editor controls">
+        <section className="skirmish-card">
+          <h2>Layer</h2>
+          <div className="le-seg">
+            <button type="button" className="le-seg-btn" disabled>Board</button>
+            <button type="button" className={`le-seg-btn ${brushKind === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('tile'); setTool('brush'); }}>Tile</button>
+            <button type="button" className={`le-seg-btn ${brushKind === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setBrushKind('unit'); setTool('brush'); }}>Unit</button>
+            <button type="button" className="le-seg-btn" disabled>Doodad</button>
+          </div>
+        </section>
+
+        <section className="skirmish-card">
+          <h2>Tool</h2>
+          <div className="le-seg">
+            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')}><span className="le-ico ic-eyedropper" aria-hidden="true" />Select</button>
+            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')}><span className="le-ico ic-brush" aria-hidden="true" />Brush</button>
+            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')}><span className="le-ico ic-eraser" aria-hidden="true" />Erase</button>
+          </div>
+          <div className="le-brush-pick">
+            <span className="le-brush-thumb">
+              {brushKind === 'unit'
+                ? <img src={unitBrushAsset.sprite(unitFaction, 'south')} alt="" draggable={false} />
+                : <img src={brushAsset.src} alt="" draggable={false} />}
+            </span>
+            <span className="le-brush-meta">
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : 'tile'}</span>
+            </span>
+          </div>
+        </section>
+
+        {brushKind === 'unit' ? (
+          <section className="skirmish-card le-brush-panel">
+            <h2>Side</h2>
+            <div className="le-seg">
+              <button type="button" className={`le-seg-btn ${unitSide === 'player' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('player')}>Player</button>
+              <button type="button" className={`le-seg-btn ${unitSide === 'enemy' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('enemy')}>Enemy</button>
+            </div>
+            <h2 className="le-card-subhead">Facing</h2>
+            <div className="le-seg">
+              {LE_FACING.map((dir) => (
+                <button type="button" key={dir} className={`le-seg-btn ${unitBrushDirection === dir ? 'active' : ''}`.trim()} onClick={() => setUnitBrushDirection(dir)} title={dir}>{dir.charAt(0).toUpperCase()}</button>
+              ))}
+            </div>
+            <h2 className="le-card-subhead">Units</h2>
+            <div className="le-swatches">
+              {unitAssets.map((unit) => (
+                <button
+                  type="button"
+                  key={unit.id}
+                  className={`le-swatch ${unitBrushId === unit.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  title={unit.label}
+                  onClick={() => { setUnitBrushId(unit.id); setBrushKind('unit'); setTool('brush'); }}
+                >
+                  <img src={unit.sprite(unitFaction, 'south')} alt="" draggable={false} />
+                  <small>{unit.label}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className="skirmish-card le-brush-panel">
+            <h2>Palette</h2>
+            <div className="le-palette-scroll kit-scroll">
+              {leTileGroups.map(({ family, tiles }) => (
+                <div className="le-pal-group" key={family.id}>
+                  <span className="le-pal-grouplabel">{family.label}</span>
+                  <div className="le-swatches">
+                    {tiles.map((tile) => (
+                      <button
+                        type="button"
+                        key={tile.id}
+                        className={`le-swatch ${brushId === tile.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        title={tile.label}
+                        onClick={() => { setBrushId(tile.id); setTool('brush'); }}
+                      >
+                        <img src={tile.src} alt="" draggable={false} />
+                        <small>{tile.label}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="skirmish-card">
+          <h2>Fill</h2>
+          <div className="le-seg">
+            <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank cells with the current brush.">Empty</button>
+            <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole board with the current brush.">Whole</button>
+            <button type="button" className="le-seg-btn" onClick={clearBoard} title="Remove every tile from the board.">Clear</button>
+          </div>
+        </section>
+
+        <section className="skirmish-card">
+          <h2>View</h2>
+          <button type="button" className={`le-toggle ${showFootprint ? 'on' : ''}`.trim()} onClick={() => setShowFootprint((value) => !value)}><span className="pip" aria-hidden="true" />Footprint</button>
+          <div className="le-zoom">
+            <button type="button" className="le-iconbtn" title="Zoom out" onClick={() => adjustZoom(-0.2)}><span className="le-ico ic-down" aria-hidden="true" /></button>
+            <span className="le-zoom-read">Zoom {Math.round(viewZoom * 100)}%</span>
+            <button type="button" className="le-iconbtn" title="Zoom in" onClick={() => adjustZoom(0.2)}><span className="le-ico ic-up" aria-hidden="true" /></button>
+          </div>
+        </section>
+
+        <section className="skirmish-card le-details">
+          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedAsset ? 'Tile' : selectedCell ? 'Cell' : 'Board'}</h2>
+          {selectedUnitAsset && selectedUnit ? (
+            <dl>
+              <div><dt>Piece</dt><dd>{selectedUnitAsset.label}</dd></div>
+              <div><dt>Side</dt><dd>{selectedUnit.faction === 'crimson' ? 'Enemy' : 'Player'}</dd></div>
+              <div><dt>Facing</dt><dd>{selectedUnit.direction}</dd></div>
+            </dl>
+          ) : selectedAsset ? (
+            <dl>
+              <div><dt>Type</dt><dd>{leFamilyOfTile(selectedAsset.id)?.label ?? '—'}</dd></div>
+              <div><dt>Source</dt><dd>{selectedAsset.id}</dd></div>
+              <div><dt>Cell</dt><dd>{selectedCell?.x}, {selectedCell?.y}</dd></div>
+            </dl>
+          ) : (
+            <dl>
+              <div><dt>Tiles</dt><dd>{paintedCount}</dd></div>
+              <div><dt>Units</dt><dd>{unitCount}</dd></div>
+            </dl>
+          )}
+        </section>
+
+        <div className="le-statusline">
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · {LE_COLS}×{LE_ROWS}
+        </div>
+      </aside>
+    </div>
   );
 }

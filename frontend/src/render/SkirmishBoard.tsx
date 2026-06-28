@@ -9,7 +9,6 @@ import type { TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
-import { DoodadSprite, type Doodad } from './BoardDoodad';
 import { ViewPane } from '../ui/shared/ViewPane';
 
 const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
@@ -252,16 +251,6 @@ export function SkirmishBoard() {
     }
   };
 
-  // STEP 1 demo: a single real grass-tuft doodad seeded under the most central player unit
-  // (so it's clearly visible), to prove back/front embedding on the live board. Real
-  // placements move to the decals layer next.
-  const centroidX = livePieces.reduce((sum, piece) => sum + piece.x, 0) / Math.max(1, livePieces.length);
-  const centroidY = livePieces.reduce((sum, piece) => sum + piece.y, 0) / Math.max(1, livePieces.length);
-  const doodadAnchor = livePieces
-    .filter((piece) => piece.side === 'player')
-    .sort((a, b) => Math.hypot(a.x - centroidX, a.y - centroidY) - Math.hypot(b.x - centroidX, b.y - centroidY))[0];
-  const doodads: Doodad[] = doodadAnchor ? [{ x: doodadAnchor.x, y: doodadAnchor.y, type: 'grass-tuft' }] : [];
-
   return (
     <div data-testid="skirmish-board" className="skirmish-board-lab">
       <ViewPane
@@ -301,9 +290,6 @@ export function SkirmishBoard() {
             );
           }}
         >
-          {doodads.map((doodad, index) => (
-            <DoodadSprite key={`doodad-${index}`} doodad={doodad} />
-          ))}
           {livePieces.map((piece) => (
             <UnitPiece
               key={piece.id}

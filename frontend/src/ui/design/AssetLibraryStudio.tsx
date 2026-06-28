@@ -7,6 +7,7 @@
 import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import manifest from './kitManifest.json';
 import provenance from './kitProvenance.json';
+import usage from './kitUsage.json';
 import nineSliceRegistry from '../../../config/nine-slice-registry.json';
 
 // Every asset card carries three filterable properties: its TYPE (which shelf it
@@ -19,24 +20,28 @@ export type AssetProvFacet = 'all' | 'forged' | 'original';
 export type AssetGateFacet = 'all' | 'pass' | 'fail';
 export interface AssetFilters { type: AssetTypeFacet; prov: AssetProvFacet; gate: AssetGateFacet }
 
-// The selectable type shelves, paired with their display label (group id -> label).
+// The shelves, labelled by the SCREEN each asset appears on (group id -> screen):
+// settings icons -> Settings, game HUD -> Skirmish, faction shields -> Campaign
+// editor, 9-slice frames -> shared Chrome. This is the catalog's "filter by screen".
 export const ASSET_TYPE_FACETS: { value: AssetTypeFacet; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'settings', label: 'Icons' },
-  { value: 'game', label: 'Game' },
-  { value: 'shields', label: 'Shields' },
-  { value: 'frames', label: 'Frames' },
+  { value: 'settings', label: 'Settings' },
+  { value: 'game', label: 'Skirmish' },
+  { value: 'shields', label: 'Campaign' },
+  { value: 'frames', label: 'Chrome' },
 ];
 
 interface Glyph { name: string; url: string; w: number; h: number; magenta: number; semiPct: number; edge: number; pass: boolean; fails: string[] }
 interface Group { id: string; label: string; items: Glyph[] }
 interface Frame { name: string; url: string; w: number; h: number }
 interface Manifest { summary: { pass: number; total: number; frames: number }; groups: Group[]; frames: Frame[] }
-interface Provenance { assets: Record<string, { forged: string; tries: number }> }
+interface Provenance { assets: Record<string, { forged: string; tries?: number; method?: string; canvas?: string; gate?: string; group?: string }> }
 
 const KIT = manifest as Manifest;
 const PROV = provenance as Provenance;
 const forged = (name: string): boolean => Object.prototype.hasOwnProperty.call(PROV.assets, name);
+// Assets referenced by no live screen (manually audited — see kitUsage.json).
+const ORPHANS = new Set((usage as { orphans: string[] }).orphans);
 
 // Editable frames, derived from the SINGLE registry (config/nine-slice-registry.json)
 // — every composed output (incl. -active variants) maps back to its editable asset
@@ -44,7 +49,7 @@ const forged = (name: string): boolean => Object.prototype.hasOwnProperty.call(P
 const REG_ASSETS = (nineSliceRegistry as { assets: Record<string, { variants: { out: string }[] }> }).assets;
 const EDITOR_ASSET: Record<string, string> = {};
 for (const [id, a] of Object.entries(REG_ASSETS)) for (const v of a.variants) EDITOR_ASSET[v.out.replace(/\.png$/, '')] = id;
-const GROUP_LABEL: Record<string, string> = { settings: 'Icons', game: 'Game', shields: 'Shields' };
+const GROUP_LABEL: Record<string, string> = { settings: 'Settings', game: 'Skirmish', shields: 'Campaign' };
 
 function Card({ name, url, sub, gate, selected, onSelect }: { name: string; url: string; sub: string; gate?: 'pass' | 'fail'; selected: boolean; onSelect: (name: string) => void }): ReactElement {
   return (
@@ -59,6 +64,7 @@ function Card({ name, url, sub, gate, selected, onSelect }: { name: string; url:
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text"><strong>{name}</strong><em>{sub}</em></span>
         <span className="asset-card-chips">
+          {ORPHANS.has(name) ? <span className="asset-orphan" title="Not used on any live screen">orphan</span> : null}
           {gate ? <span className={`asset-gate is-${gate}`}>{gate}</span> : null}
           <span className={`asset-prov ${forged(name) ? 'is-forged' : 'is-original'}`}>{forged(name) ? 'forged' : 'original'}</span>
         </span>
@@ -91,7 +97,7 @@ export function AssetLibraryStudio({ filters, search, zoom, selected, onSelect }
 
   // Frames aren't gated, so they only appear when the gate facet isn't narrowing to pass/fail.
   const frameSection = (filters.type === 'all' || filters.type === 'frames') && filters.gate === 'all'
-    ? [{ key: 'frames', label: 'Frames', items: KIT.frames.filter((f) => provOk(f.name) && searchOk(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `${f.w}×${f.h}`, gate: undefined as 'pass' | 'fail' | undefined })) }]
+    ? [{ key: 'frames', label: 'Chrome', items: KIT.frames.filter((f) => provOk(f.name) && searchOk(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `${f.w}×${f.h}`, gate: undefined as 'pass' | 'fail' | undefined })) }]
     : [];
 
   const sections = [...groupSections, ...frameSection].filter((s) => s.items.length);
@@ -181,7 +187,7 @@ export function AssetLab({ name, header }: { name: string; header?: ReactNode })
             {found && item ? (
               <dl className="al-meta">
                 <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h}</dd></div>
-                <div><dt>Process</dt><dd className={prov ? 'al-ok' : ''}>{prov ? `forged ${prov.forged} (${prov.tries} tr)` : 'original (pre-forge)'}</dd></div>
+                <div><dt>Process</dt><dd className={prov ? 'al-ok' : ''}>{prov ? `forged ${prov.forged}${prov.tries ? ` (${prov.tries} tr)` : ''}` : 'original (pre-forge)'}</dd></div>
                 {glyph ? <div><dt>Gate</dt><dd className={glyph.pass ? 'al-ok' : 'al-no'}>{glyph.pass ? 'PASS' : glyph.fails.join(' · ')}</dd></div> : null}
                 {glyph ? <div><dt>Magenta</dt><dd>{glyph.magenta}</dd></div> : null}
                 {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}

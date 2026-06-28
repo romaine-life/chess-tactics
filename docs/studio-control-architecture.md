@@ -26,7 +26,10 @@ read-only* things — UI-kit assets, authored artwork — that you inspect but n
 edit. They have no workbench, so they don't belong in the Lab. They get the
 **Viewer**: a read-only destination that shows one item big, with a Details
 readout instead of a Controls cascade. The Lab is for things you *change*; the
-Viewer is for things you only *look at*. (This corrects an earlier draft that
+Viewer is for things you *look at and test but don't edit* — read-only means
+non-editable, not lifeless: the Viewer stage presents the asset at **optimal
+interactivity** (you scroll a real scrollbar; a surface tiles in context), never a
+dead still image. (This corrects an earlier draft that
 called the asset stage a "surface you work on" and parked it in the Lab — assets
 fail the direct-manipulation test exactly as artwork does.)
 

@@ -740,11 +740,7 @@ h1 {
   --menu-panel: rgba(5, 15, 23, .88);
   --menu-panel-strong: rgba(7, 20, 30, .94);
   --menu-line: rgba(80, 129, 151, .58);
-  --menu-type-action: clamp(24px, 2.25vw, 34px);
-  --menu-type-panel-primary: 20px;
-  --menu-type-panel-secondary: 14px;
-  --menu-type-micro: 12px;
-  --menu-type-title: clamp(35px, 3.72vw, 62px);
+  /* Type tokens retired into the --ds-text-* scale (ADR-0016). */
   position: relative;
   display: grid;
   grid-template-columns: minmax(300px, 370px) minmax(0, 1fr) minmax(440px, 540px);
@@ -868,10 +864,6 @@ h1 {
   min-width: 0;
 }
 
-.main-menu-brand-live::after {
-  content: none;
-}
-
 .main-menu-brand-mark {
   display: block;
   width: 86px;
@@ -881,15 +873,6 @@ h1 {
   pointer-events: none;
 }
 
-.main-menu-eyebrow {
-  color: #3c9bf7;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.48rem, .72vw, .72rem);
-  line-height: 1.45;
-  text-transform: uppercase;
-  text-shadow: 0 2px 0 #020507;
-}
-
 .main-menu-title-row {
   align-items: center;
   display: grid;
@@ -897,29 +880,11 @@ h1 {
   grid-template-columns: 70px minmax(0, 1fr);
 }
 
-.main-menu-crest {
-  display: grid;
-  place-items: center;
-  width: 70px;
-  height: 88px;
-  background:
-    linear-gradient(180deg, #1558a7, #0b2d5a);
-  border: 3px solid #54b8ff;
-  box-shadow:
-    0 0 0 3px #06111a,
-    inset 0 -8px 0 rgba(0, 0, 0, .24),
-    0 0 22px rgba(37, 199, 255, .2);
-  color: #d7ecff;
-  font-family: "Advance Wars 2 GBA", Georgia, serif;
-  font-size: 2.6rem;
-  line-height: 1;
-}
-
 .main-menu-brand h2,
 .main-menu-brand-type strong {
   color: #f0eadb;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: var(--menu-type-title);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-display);
   font-weight: 400;
   line-height: 1.12;
   text-shadow: 0 4px 0 #020507, 0 0 22px rgba(61, 150, 235, .14);
@@ -930,22 +895,10 @@ h1 {
 .main-menu-brand p,
 .main-menu-brand-type > span:last-child {
   color: #3d9bf1;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: var(--menu-type-panel-secondary);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
   line-height: 1.6;
   text-transform: uppercase;
-}
-
-.main-menu-brand::after {
-  content: "";
-  display: block;
-  width: min(92%, 560px);
-  height: 10px;
-  background:
-    linear-gradient(90deg, rgba(85, 114, 130, .66), rgba(85, 114, 130, .2)),
-    linear-gradient(#172832, #172832) 50% 50% / 8px 8px no-repeat;
-  clip-path: polygon(0 45%, 49% 45%, 50% 0, 51% 45%, 100% 45%, 100% 60%, 51% 60%, 50% 100%, 49% 60%, 0 60%);
-  opacity: .72;
 }
 
 .main-menu-actions {
@@ -968,7 +921,7 @@ h1 {
     0 0 0 2px rgba(0, 0, 0, .62),
     inset 0 1px 0 rgba(216, 240, 246, .05);
   color: #f0eadb;
-  font-size: clamp(.62rem, .95vw, .94rem);
+  font-size: var(--ds-text-sm);
   text-align: left;
   text-transform: uppercase;
 }
@@ -985,35 +938,10 @@ h1 {
     0 0 24px rgba(37, 199, 255, .15);
 }
 
-.main-menu-action-icon {
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  border: 2px solid rgba(159, 184, 195, .42);
-  background: #08131b;
-  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .24);
-  font-family: "Advance Wars 2 GBA", Georgia, serif;
-  font-size: 1.55rem;
-  line-height: 1;
-}
-
-.main-menu-action-icon.green,
-.main-menu-action-icon.slate {
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .72rem;
-}
-
-.main-menu-action-icon.blue { background: linear-gradient(180deg, #1469c7, #0a315f); color: #dff3ff; border-color: #57bdff; }
-.main-menu-action-icon.gold { background: linear-gradient(180deg, #916926, #342511); color: #ffe6a2; border-color: #e9b85c; }
-.main-menu-action-icon.green { background: linear-gradient(180deg, #415b27, #162611); color: #d7f2a5; border-color: #86c861; }
-.main-menu-action-icon.violet { background: linear-gradient(180deg, #493181, #1d153d); color: #decfff; border-color: #9372e6; }
-.main-menu-action-icon.slate { background: linear-gradient(180deg, #354756, #111a22); color: #dce7eb; border-color: #8399a7; }
-
 .main-menu-action i {
   color: #d7e6ee;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: 1.7rem;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xl);
   font-style: normal;
   line-height: 1;
   text-align: right;
@@ -1107,9 +1035,80 @@ h1 {
 .main-menu-actions-assets {
   display: flex;
   flex-direction: column;
-  gap: clamp(6px, .9vh, 8px);
+  gap: clamp(8px, 1.1vh, 11px);
   width: min(100%, 370px);
   max-width: 100%;
+  /* ADR-0027: one role token governs icon display size; never re-sized per icon. */
+  --menu-icon-size: 30px;
+}
+
+/* ── Main-menu mode buttons — "Wet Stone & Cold Iron" (ADR-0025 register) ───────────
+   A matte wet-stone slab with a thin forged-iron lip, carrying the forged carved-stone
+   icon (icons-carved/<slug>.png, canonical 64×64 per ADR-0026, optical keylines ADR-0027) at --menu-icon-size.
+   Hover lifts the iron lip (no glow); active = a contained cobalt hairline (the board's
+   move-overlay tongue). NOTE: the slab surface is still CSS — forging its 9-slice frame
+   is the remaining chrome step (ADR-0002/0012); the icons are forged. */
+.mode-button-stone {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  height: 50px;
+  padding: 0 16px;
+  text-decoration: none;
+  color: #cdd6e2;
+  background-color: #0f1b2b;
+  background-image: linear-gradient(180deg, rgba(40, 56, 74, .35) 0%, rgba(8, 16, 28, 0) 38%, rgba(0, 0, 0, .30) 100%);
+  border: 2px solid #1c2836;
+  border-top-color: #2a3a4c;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 1px 0 rgba(160, 191, 230, .07),
+    inset 0 0 0 1px rgba(0, 0, 0, .40),
+    0 1px 3px rgba(0, 0, 0, .55);
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .1s ease, box-shadow .1s ease;
+}
+
+.mode-button-stone-icon {
+  flex: none;
+  width: var(--menu-icon-size, 30px);
+  height: var(--menu-icon-size, 30px);
+  image-rendering: pixelated;
+}
+
+.mode-button-stone-label {
+  font-family: var(--ds-font-display);
+  font-weight: 400;
+  font-size: var(--ds-text-md);
+  letter-spacing: .02em;
+  line-height: 1;
+  color: #cdd6e2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+  white-space: nowrap;
+}
+
+.mode-button-stone:hover,
+.mode-button-stone:focus-visible {
+  border-color: #2c3c4e;
+  border-top-color: #4a607c;
+  box-shadow:
+    inset 0 1px 0 rgba(160, 191, 230, .26),
+    inset 0 0 0 1px rgba(0, 0, 0, .40),
+    0 1px 3px rgba(0, 0, 0, .55);
+}
+
+.mode-button-stone.is-active {
+  border-color: #2c3c4e;
+  border-top-color: #4a607c;
+  box-shadow:
+    inset 0 0 0 1.5px #3a6ea5,
+    inset 0 1px 0 rgba(160, 191, 230, .18),
+    0 1px 3px rgba(0, 0, 0, .55);
+}
+
+.mode-button-stone:focus-visible {
+  outline: 2px solid rgba(58, 110, 165, .85);
+  outline-offset: -3px;
 }
 
 .mode-button {
@@ -1156,14 +1155,37 @@ h1 {
   opacity: 0;
 }
 
+/* buttons-v2 rendered as a HORIZONTAL 3-slice: fixed left (icon) + right (arrow)
+   caps, a stretchable middle, height LOCKED to a fixed value so the art flexes
+   horizontally and never distorts vertically. Source = the per-mode normal/active
+   sprites (var(--btn-normal/active)); slice 0 95 0 165 for the 636x164 art. */
+.mode-button.uses-row-art {
+  /* Fixed height so the border-width caps (below) stay uniformly scaled with the
+     source — a flexible height would desync the caps from the art and stretch the
+     icon. The art (636x164) renders at 88px tall: scale 0.537 → caps 88/51px. */
+  aspect-ratio: auto;
+  height: 88px;
+}
+
+.mode-button.uses-row-art .mode-button-art-normal {
+  background: none;
+  border-style: solid;
+  border-width: 0 51px 0 88px;
+  border-image: var(--btn-normal) 0 95 0 165 fill / 0 51px 0 88px stretch;
+  image-rendering: auto;
+}
+
+/* Hover/active: a blue brighten + glow on the SAME frame — no sprite swap (the
+   -active glow art is authored inset/lower, so swapping made the button visibly
+   shrink downward). Pure color/glow, zero geometry change. */
 .mode-button.uses-row-art:hover .mode-button-art-normal,
 .mode-button.uses-row-art:focus-visible .mode-button-art-normal,
 .mode-button.uses-row-art.is-active .mode-button-art-normal {
-  filter: brightness(1.14) saturate(1.08);
+  filter: brightness(1.28) saturate(1.7) drop-shadow(0 0 7px rgba(90, 196, 255, .6));
 }
 
 .mode-button.uses-row-art:active .mode-button-art-normal {
-  filter: brightness(.96) saturate(1.08);
+  filter: brightness(1.12) saturate(1.5);
 }
 
 /* .mode-button-icon is positioned by inline left/top/width/height (icon slot). */
@@ -1189,9 +1211,9 @@ h1 {
   display: flex;
   align-items: center;
   margin: 0;
-  font-family: "Advance Wars 2 GBA", "Newsreader", Georgia, serif;
-  font-weight: 500;
-  font-size: clamp(13px, 1.4vw, 21px);
+  font-family: var(--ds-font-serif);
+  font-weight: var(--ds-weight-medium);
+  font-size: var(--ds-text-lg);
   letter-spacing: .03em;
   color: #f4ead6;
   text-shadow: 0 1px 3px rgba(0, 0, 0, .65);
@@ -1204,8 +1226,8 @@ h1 {
 .mode-button.uses-row-art .mode-button-label {
   align-items: center;
   color: #f7ecd6;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: clamp(24px, 2.25vw, 34px);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xl);
   font-weight: 400;
   letter-spacing: .035em;
   line-height: 1;
@@ -1262,8 +1284,11 @@ h1 {
 
 .menu-panel::before,
 .profile-bar::before {
+  /* Shared kit panel frame — the same atom-assembled gold-bracket frame the
+     settings panels use (.settings-frame), converging the profile bar off its
+     one-off stretched profile-panel.png crop. */
   border: 16px solid transparent;
-  border-image: url("/assets/ui/main-menu/panel-9slice.png") 16 fill / 16px stretch;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   content: "";
   image-rendering: pixelated;
   inset: 0;
@@ -1300,17 +1325,14 @@ h1 {
   position: relative;
 }
 
-.profile-bar::before {
-  background: url("/assets/ui/main-menu/secondary/profile-panel.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-image: none;
-}
-
 /* Crest: transparent PNG cropped from the approved render by normalize-main-menu-profile.mjs. */
 .profile-crest {
   flex: none;
-  width: 78px;
-  height: 80px;
+  /* Sized to clear the kit panel's 16px frame on both sides — at 80px it filled the
+     entire inner height and the shield's flat top jammed against the frame, reading
+     as "cut off". A smaller box centres it with breathing room. */
+  width: 64px;
+  height: 66px;
   background: url("/assets/ui/main-menu/profile-crest.png") center / contain no-repeat;
   image-rendering: pixelated;
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .72));
@@ -1325,8 +1347,8 @@ h1 {
 
 .profile-name strong {
   color: var(--ink-strong);
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: var(--menu-type-panel-primary);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1336,8 +1358,8 @@ h1 {
 .profile-name small {
   margin-top: 8px;
   color: var(--cobalt-bright);
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: var(--menu-type-panel-secondary);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
   letter-spacing: .04em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1359,8 +1381,8 @@ h1 {
   border: 2px solid var(--menu-line);
   background: var(--panel-inset, #0a131b);
   color: var(--ink);
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: var(--menu-type-panel-secondary);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
   letter-spacing: .04em;
   text-transform: uppercase;
   cursor: pointer;
@@ -1371,8 +1393,8 @@ h1 {
 
 .profile-status {
   color: var(--cobalt-bright);
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: var(--menu-type-panel-secondary);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
   letter-spacing: .04em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1444,41 +1466,6 @@ h1 {
   width: min(520px, 92vw);
 }
 
-.main-menu-brand-art {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  overflow: hidden;
-  position: relative;
-}
-
-.main-menu-brand-art img {
-  display: block;
-  height: 100%;
-  inset: 0;
-  object-fit: cover;
-  object-position: center;
-  pointer-events: none;
-  position: absolute;
-  width: 100%;
-  z-index: 0;
-}
-
-.main-menu-brand-art {
-  height: clamp(136px, 15vh, 168px);
-  min-height: 0;
-  padding: 0;
-}
-
-.main-menu-brand-art::after {
-  content: none;
-}
-
-.main-menu-brand-art.accepted-brand-crop img {
-  object-fit: contain;
-  object-position: left top;
-}
-
 .main-menu-brand-copy {
   display: grid;
   gap: 7px;
@@ -1489,34 +1476,12 @@ h1 {
   z-index: 1;
 }
 
-.main-menu-brand-art .main-menu-eyebrow {
-  color: #5bbaff;
-  margin: 0;
-}
-
-.main-menu-brand-art h2 {
-  font-size: clamp(1.12rem, 1.82vw, 1.86rem);
-  line-height: 1.08;
-  white-space: nowrap;
-}
-
-.main-menu-brand-art p:last-child {
-  color: #d0e2e8;
-  font-size: clamp(.48rem, .74vw, .7rem);
-  line-height: 1.55;
-  margin: 0;
-}
-
 .main-menu-left {
   grid-template-rows: auto auto auto;
 }
 
 .main-menu-right {
   grid-template-rows: auto minmax(0, 1fr);
-}
-
-.main-menu-skeleton-screen .main-menu-brand-art {
-  outline: 0 !important;
 }
 
 .main-menu-skeleton-screen::before {
@@ -1609,6 +1574,12 @@ h1 {
   --ds-font-sans: "Advance Wars 2 GBA", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
   --ds-font-display: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
   --ds-font-pixel: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
+  --ds-font-mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  /* Deprecated aliases (ADR-0016): --font-sans/--font-serif were used 12x but never
+     defined, silently falling back to the browser default. Defined here as aliases of
+     the --ds-* tokens so the dead path resolves; do NOT add new uses. */
+  --font-sans: var(--ds-font-sans);
+  --font-serif: var(--ds-font-serif);
   /* Type scale — one modular ramp (~1.2 ratio), responsive via clamp so every
      surface scales together instead of each role inventing its own clamp triplet.
      Map text ROLES onto these steps; don't hand-pick font-sizes per element.
@@ -1620,6 +1591,15 @@ h1 {
   --ds-text-md:  clamp(.95rem, 1.1vw, 1.1rem);
   --ds-text-lg:  clamp(1.18rem, 1.55vw, 1.6rem);
   --ds-text-xl:  clamp(1.5rem, 2.1vw, 2.3rem);
+  --ds-text-display: clamp(2.2rem, 3.72vw, 3.9rem); /* menu title — folds in --menu-type-title (ADR-0016) */
+  /* Weights (ADR-0016): pixel faces are 400-only; serif uses these three, strong (600)
+     is reserved for the brand lockup (ADR-0008). */
+  --ds-weight-regular: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-strong: 600;
+  /* Tracking (ADR-0016): two roles — labels vs eyebrows/brand descriptor. */
+  --ds-tracking-tight: .01em;
+  --ds-tracking-wide: .14em;
   /* space — the 8px base + 4px half-step scale (ADR-0031). Map spatial ROLES onto
      these steps; don't hand-pick px per element. */
   --ds-space-1: 4px;
@@ -2808,79 +2788,6 @@ h1 {
   width: 100%;
 }
 
-.main-menu-hotspot {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  cursor: pointer;
-  min-height: 0;
-  padding: 0;
-  position: absolute;
-  text-indent: -9999px;
-}
-
-.main-menu-hotspot:hover,
-.main-menu-hotspot:focus-visible {
-  background: rgba(37, 199, 255, .08);
-  box-shadow:
-    inset 0 0 0 2px rgba(37, 199, 255, .9),
-    0 0 18px rgba(37, 199, 255, .28);
-  outline: none;
-}
-
-.main-menu-hotspot::after,
-.screen-hotspot::after {
-  background: rgba(2, 7, 11, .92);
-  border: 1px solid rgba(37, 199, 255, .92);
-  box-shadow: 0 0 16px rgba(37, 199, 255, .24);
-  color: #e7f8ff;
-  content: attr(data-label);
-  display: none;
-  font-family: "Advance Wars 2 GBA", "VT323", monospace;
-  font-size: 14px;
-  left: 0;
-  line-height: 1;
-  padding: 4px 6px;
-  pointer-events: none;
-  position: absolute;
-  text-indent: 0;
-  top: 0;
-  transform: translateY(-100%);
-  white-space: nowrap;
-  z-index: 3;
-}
-
-.shell.show-art-hotspots .main-menu-hotspot,
-.shell.show-art-hotspots .screen-hotspot {
-  background:
-    linear-gradient(135deg, rgba(37, 199, 255, .24), rgba(255, 216, 122, .10)),
-    rgba(37, 199, 255, .08);
-  box-shadow:
-    inset 0 0 0 2px rgba(37, 199, 255, .9),
-    0 0 18px rgba(37, 199, 255, .22);
-  overflow: visible;
-  text-indent: 0;
-}
-
-.shell.show-art-hotspots .main-menu-hotspot::after,
-.shell.show-art-hotspots .screen-hotspot::after {
-  display: block;
-}
-
-.main-menu-hotspot.solo { left: 2.75%; top: 24.7%; width: 30.6%; height: 9%; }
-.main-menu-hotspot.campaigns { left: 2.75%; top: 34.8%; width: 30.6%; height: 8.9%; }
-.main-menu-hotspot.editor { left: 2.75%; top: 44.8%; width: 30.6%; height: 8.9%; }
-.main-menu-hotspot.lobbies { left: 2.75%; top: 54.7%; width: 30.6%; height: 8.9%; }
-.main-menu-hotspot.settings { left: 2.75%; top: 64.6%; width: 30.6%; height: 8.9%; }
-.main-menu-hotspot.signin { left: 88.35%; top: 4.25%; width: 6.55%; height: 5.05%; }
-.main-menu-hotspot.account-settings { left: 95.08%; top: 4.25%; width: 3.1%; height: 5.05%; }
-.main-menu-hotspot.dock-achievements { left: 35.3%; top: 85.7%; width: 5.4%; height: 8.2%; }
-.main-menu-hotspot.dock-campaigns { left: 41.6%; top: 85.7%; width: 5.4%; height: 8.2%; }
-.main-menu-hotspot.dock-lobbies { left: 48.05%; top: 85.7%; width: 5.4%; height: 8.2%; }
-.main-menu-hotspot.dock-collection { left: 54.55%; top: 85.7%; width: 5.4%; height: 8.2%; }
-
 .shell.concept-screen-active {
   grid-template-columns: 1fr;
   gap: 0;
@@ -2933,28 +2840,6 @@ h1 {
   height: 100%;
   image-rendering: auto;
   width: 100%;
-}
-
-.screen-hotspot {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  cursor: pointer;
-  min-height: 0;
-  padding: 0;
-  position: absolute;
-  text-indent: -9999px;
-}
-
-.screen-hotspot:hover,
-.screen-hotspot:focus-visible {
-  background: rgba(37, 199, 255, .08);
-  box-shadow:
-    inset 0 0 0 2px rgba(37, 199, 255, .88),
-    0 0 18px rgba(37, 199, 255, .24);
-  outline: none;
 }
 
 .campaign-home { left: 0.4%; top: 0.5%; width: 24.5%; height: 7.2%; }
@@ -3832,1073 +3717,6 @@ h1 {
   text-align: center;
 }
 
-.menu-layer.level-editor-layer {
-  align-items: start;
-  justify-content: start;
-  pointer-events: none;
-}
-
-.level-editor-hud {
-  background:
-    linear-gradient(180deg, rgba(36, 28, 66, .97), rgba(18, 14, 34, .98));
-  border: 3px solid #7567ad;
-  box-shadow:
-    0 0 0 3px #0d0a1c,
-    inset 0 0 0 2px rgba(174, 230, 255, .14),
-    0 16px 0 rgba(0, 0, 0, .28);
-  display: grid;
-  gap: 10px;
-  max-width: min(720px, calc(100vw - 58px));
-  padding: 14px;
-  pointer-events: auto;
-  width: 100%;
-}
-
-.level-editor-hud h2 {
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: clamp(.85rem, 2vw, 1.2rem);
-  line-height: 1.3;
-}
-
-.level-editor-hud.collapsed {
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, auto);
-  max-width: min(640px, calc(100vw - 58px));
-  padding: 10px;
-}
-
-.level-editor-title {
-  min-width: 0;
-}
-
-.level-editor-hud.collapsed .level-editor-title h2 {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.level-editor-actions {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.level-editor-hud.collapsed .level-editor-actions {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.level-editor-actions button {
-  min-height: 38px;
-  text-align: center;
-}
-
-.shell.level-editor-active {
-  gap: 0;
-  padding: 0;
-}
-
-.shell.level-editor-active > .topbar {
-  display: none;
-}
-
-/* Asset-backed Level Editor chrome. The central Pixi board remains owned by
-   EditorBoard; these rules only skin the surrounding live controls. */
-.level-editor-shell {
-  --le-cyan: #25d7ff;
-  --le-cyan-soft: rgba(37, 215, 255, .18);
-  --le-gold: #d4aa4f;
-  --le-ink: #ecf7fb;
-  --le-muted: #9fb3bd;
-  --le-bg: rgba(4, 13, 20, .94);
-  color: var(--le-ink);
-  display: grid;
-  gap: 6px;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 6px;
-  pointer-events: auto;
-  position: relative;
-  z-index: 5;
-}
-
-.level-editor-shell::before {
-  background:
-    radial-gradient(720px 460px at 50% 8%, rgba(42, 112, 146, .23), transparent 64%),
-    linear-gradient(180deg, rgba(2, 8, 12, .2), rgba(1, 4, 7, .7));
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-  z-index: -1;
-}
-
-.le-topbar {
-  align-items: stretch;
-  background: var(--le-bg);
-  border: 1px solid rgba(101, 184, 255, .22);
-  box-shadow: inset 0 0 0 1px rgba(212, 170, 79, .18), 0 12px 28px rgba(0, 0, 0, .3);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.2fr) auto minmax(360px, auto);
-  min-height: 74px;
-  padding: 7px;
-}
-
-.le-brand {
-  align-items: center;
-  color: var(--le-ink);
-  display: flex;
-  gap: 12px;
-  min-width: 0;
-  padding: 5px 10px;
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
-.le-brand-crest {
-  height: 50px;
-  image-rendering: pixelated;
-  width: 50px;
-}
-
-.le-brand span {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.le-brand small,
-.le-panel h2,
-.le-status,
-.le-tray-controls,
-.le-field span,
-.le-check {
-  color: #ffc95f;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.le-brand strong {
-  color: #fff;
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: clamp(23px, 2.3vw, 32px);
-  letter-spacing: 0.01em;
-  line-height: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 2px 0 #02070a, 0 0 14px rgba(37, 215, 255, .34);
-  white-space: nowrap;
-}
-
-/* The "Chess Tactics" wordmark is the shared bitmap (not type), small as a kicker
-   above the "Level Editor" line — the 03 corner lockup. */
-.le-brand-title {
-  display: block;
-  line-height: 0;
-}
-
-.le-brand-title img {
-  display: block;
-  height: 32px;
-  width: auto;
-}
-
-.le-tool-tabs {
-  background: url("/assets/ui/level-editor/toolbar-tabs-normal.png") center / 100% 100% no-repeat;
-  display: grid;
-  gap: 2px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  min-width: 0;
-  padding: 6px;
-}
-
-.le-tool-tab {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  color: var(--le-muted);
-  display: grid;
-  gap: 2px;
-  justify-items: center;
-  min-height: 0;
-  padding: 3px;
-  text-transform: uppercase;
-}
-
-.le-tool-tab.is-active {
-  background: url("/assets/ui/level-editor/button-active.png") center / 100% 100% no-repeat;
-  color: #dff8ff;
-  text-shadow: 0 0 9px rgba(37, 215, 255, .7);
-}
-
-.le-tool-tab img {
-  height: 28px;
-  image-rendering: pixelated;
-  width: 28px;
-}
-
-.le-tool-tab span,
-.le-action-button span,
-.le-menu-link,
-.le-library-list button,
-.le-layer-row span,
-.le-palette-grid button span,
-.le-unit-side,
-.le-tray-assets button span {
-  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  font-size: 14px;
-  letter-spacing: 0.02em;
-  line-height: 1.1;
-  text-transform: uppercase;
-}
-
-.le-history,
-.le-save-actions {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  justify-content: end;
-}
-
-.le-save-actions {
-  min-width: 0;
-}
-
-.le-icon-button,
-.le-menu-link {
-  align-items: center;
-  background: url("/assets/ui/level-editor/icon-button-normal.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-radius: 0;
-  display: inline-grid;
-  height: 54px;
-  justify-items: center;
-  min-height: 0;
-  padding: 0;
-  place-items: center;
-  width: 54px;
-}
-
-.le-icon-button.is-active,
-.le-icon-button:hover,
-.le-icon-button:focus-visible,
-.le-menu-link:hover,
-.le-menu-link:focus-visible {
-  background-image: url("/assets/ui/level-editor/icon-button-active.png");
-}
-
-.le-icon-button img,
-.le-menu-link img {
-  height: 31px;
-  image-rendering: pixelated;
-  width: 31px;
-}
-
-.le-action-button {
-  align-items: center;
-  background: url("/assets/ui/level-editor/button-normal.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-radius: 0;
-  color: var(--le-ink);
-  display: inline-flex;
-  gap: 8px;
-  justify-content: center;
-  min-height: 54px;
-  min-width: 116px;
-  padding: 8px 14px;
-}
-
-.le-action-button.is-primary,
-.le-action-button:hover,
-.le-action-button:focus-visible {
-  background-image: url("/assets/ui/level-editor/button-active.png");
-}
-
-.le-action-button img {
-  height: 27px;
-  image-rendering: pixelated;
-  width: 27px;
-}
-
-.le-workspace {
-  display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr) minmax(230px, 330px);
-  min-height: 0;
-  overflow: hidden;
-}
-
-.le-left-rail,
-.le-right-rail {
-  display: grid;
-  gap: 6px;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-color: var(--le-cyan) #071018;
-  scrollbar-width: thin;
-}
-
-.le-panel {
-  background: rgba(5, 17, 25, .9);
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/level-editor/panel-frame.png") 32 fill / 16px stretch;
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-  padding: 3px;
-}
-
-.le-panel h2 {
-  margin: 0 0 2px;
-}
-
-.le-field {
-  align-items: center;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(62px, .45fr) minmax(0, 1fr);
-}
-
-.le-field select {
-  background: rgba(2, 10, 15, .78);
-  border: 1px solid rgba(101, 184, 255, .34);
-  color: var(--le-ink);
-  font: 16px/1 "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  min-height: 32px;
-  padding: 4px 8px;
-  width: 100%;
-}
-
-.le-check {
-  align-items: center;
-  color: var(--le-ink);
-  display: flex;
-  gap: 8px;
-  line-height: 1.4;
-}
-
-.le-check input {
-  accent-color: #0c8cff;
-}
-
-.le-layer-row {
-  align-items: center;
-  background: url("/assets/ui/level-editor/layer-row-normal.png") center / 100% 100% no-repeat;
-  border: 0;
-  border-radius: 0;
-  color: var(--le-ink);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 30px minmax(0, 1fr) 28px;
-  min-height: 43px;
-  padding: 4px 13px;
-  text-align: left;
-}
-
-.le-layer-row.is-selected,
-.le-layer-row:hover,
-.le-layer-row:focus-visible {
-  background-image: url("/assets/ui/level-editor/layer-row-selected.png");
-  color: #e5fbff;
-}
-
-.le-layer-row img {
-  height: 24px;
-  image-rendering: pixelated;
-  width: 24px;
-}
-
-.le-board-stage {
-  /* The painted night scene from the main menu sits behind the board, dimmed by a
-     dark overlay so painted tiles stay readable — the 03 concept backdrop. */
-  background:
-    radial-gradient(760px 460px at 50% 16%, rgba(19, 67, 98, .32), transparent 72%),
-    linear-gradient(180deg, rgba(4, 12, 20, .52), rgba(2, 8, 13, .8)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center top / cover no-repeat,
-    #02080d;
-  border: 1px solid rgba(101, 184, 255, .26);
-  box-shadow: inset 0 0 0 1px rgba(212, 170, 79, .14);
-  display: grid;
-  min-height: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.le-board-stage::before {
-  background-image:
-    linear-gradient(rgba(37, 215, 255, .07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(37, 215, 255, .07) 1px, transparent 1px);
-  background-size: 54px 54px;
-  content: "";
-  inset: 0;
-  opacity: .35;
-  pointer-events: none;
-  position: absolute;
-}
-
-.le-board-frame {
-  display: grid;
-  min-height: 0;
-  overflow: auto;
-  place-items: center;
-  position: relative;
-  z-index: 1;
-}
-
-.le-board-frame canvas {
-  border: 1px solid rgba(37, 215, 255, .25);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .34), 0 0 0 3px rgba(2, 8, 12, .8);
-  image-rendering: pixelated;
-}
-
-.le-palette-panel {
-  border-image-source: url("/assets/ui/level-editor/palette-frame.png");
-  min-height: 276px;
-}
-
-.le-palette-grid {
-  display: grid;
-  gap: 5px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.le-palette-grid button,
-.le-unit-side button,
-.le-tray-assets button {
-  background: rgba(4, 14, 21, .84);
-  border: 1px solid rgba(101, 184, 255, .2);
-  border-radius: 0;
-  color: var(--le-muted);
-  min-height: 0;
-}
-
-.le-palette-grid button {
-  align-items: center;
-  aspect-ratio: 1;
-  display: grid;
-  gap: 3px;
-  justify-items: center;
-  padding: 5px;
-}
-
-.le-palette-grid button.is-active,
-.le-palette-grid button:hover,
-.le-unit-side button.is-active,
-.le-unit-side button:hover,
-.le-tray-assets button.is-active,
-.le-tray-assets button:hover {
-  border-color: var(--le-cyan);
-  box-shadow: inset 0 0 0 1px rgba(37, 215, 255, .24), 0 0 12px rgba(37, 215, 255, .16);
-  color: #e5fbff;
-}
-
-.le-palette-grid i,
-.le-tray-assets i {
-  border: 1px solid rgba(255, 255, 255, .22);
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .08), 0 2px 0 #02070a;
-  display: block;
-  height: 24px;
-  width: 30px;
-}
-
-.le-brush-tools {
-  display: grid;
-  gap: 7px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.le-unit-groups {
-  display: grid;
-  gap: 10px;
-}
-
-.le-unit-side {
-  color: var(--le-muted);
-  display: grid;
-  gap: 6px;
-}
-
-.le-unit-side.is-player > span {
-  color: #77bfff;
-}
-
-.le-unit-side.is-enemy > span {
-  color: #ff9a7d;
-}
-
-.le-unit-side div {
-  display: grid;
-  gap: 5px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.le-unit-side button {
-  color: var(--le-ink);
-  font: 20px/1 "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
-  min-height: 38px;
-  padding: 4px;
-}
-
-.le-library-head {
-  align-items: center;
-  color: var(--le-muted);
-  display: flex;
-  font-size: 1rem;
-  gap: 8px;
-  justify-content: space-between;
-}
-
-.le-library-head button,
-.le-sign-in {
-  background: rgba(8, 28, 41, .84);
-  border: 1px solid rgba(37, 215, 255, .44);
-  color: var(--le-ink);
-  font-size: .55rem;
-  min-height: 30px;
-  padding: 5px 8px;
-  text-decoration: none;
-}
-
-.le-library-list {
-  display: grid;
-  gap: 5px;
-  max-height: 178px;
-  overflow: auto;
-}
-
-.le-library-list button {
-  align-items: center;
-  background: rgba(3, 12, 18, .8);
-  border: 1px solid rgba(101, 184, 255, .2);
-  color: var(--le-ink);
-  display: grid;
-  gap: 3px;
-  justify-items: start;
-  min-height: 36px;
-  padding: 6px 8px;
-  text-align: left;
-}
-
-.le-library-list small,
-.le-muted {
-  color: var(--le-muted);
-  font-size: .95rem;
-}
-
-.le-bottom-tray {
-  align-items: center;
-  background: url("/assets/ui/level-editor/bottom-tray.png") center / 100% 100% no-repeat;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 104px;
-  padding: 18px 22px;
-}
-
-.le-tray-assets {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.le-tray-assets button {
-  align-items: center;
-  display: grid;
-  gap: 2px;
-  justify-items: center;
-  min-width: 70px;
-  padding: 5px;
-}
-
-.le-tray-assets img {
-  height: 34px;
-  image-rendering: pixelated;
-  width: 34px;
-}
-
-.le-tray-controls {
-  align-items: center;
-  color: var(--le-ink);
-  display: flex;
-  gap: 8px;
-}
-
-.le-status {
-  align-items: center;
-  background: rgba(4, 14, 21, .94);
-  border: 1px solid rgba(101, 184, 255, .24);
-  color: var(--le-muted);
-  display: flex;
-  gap: 22px;
-  min-height: 30px;
-  overflow: hidden;
-  padding: 6px 12px;
-  white-space: nowrap;
-}
-
-.le-status-dot {
-  background: #76d65f;
-  border-radius: 50%;
-  box-shadow: 0 0 10px rgba(118, 214, 95, .64);
-  flex: 0 0 auto;
-  height: 12px;
-  width: 12px;
-}
-
-/* Desktop concept pass: keep the editor chrome restrained and technical.
-   The board and placeable asset art remain intentionally placeholder quality. */
-@media (min-width: 1181px) {
-  .level-editor-shell {
-    --le-cyan: #21d7ff;
-    --le-gold: #ffbf3e;
-    --le-panel-line: rgba(74, 111, 128, .64);
-    gap: 4px;
-    padding: 4px;
-  }
-
-  .le-topbar {
-    background:
-      linear-gradient(180deg, rgba(5, 14, 21, .98), rgba(2, 8, 13, .98));
-    border-color: var(--le-panel-line);
-    box-shadow: inset 0 -1px 0 rgba(33, 215, 255, .1);
-    gap: 4px;
-    grid-template-columns: 390px minmax(450px, 1fr) 130px 360px;
-    min-height: 70px;
-    padding: 4px;
-  }
-
-  .le-brand {
-    border-right: 1px solid rgba(74, 111, 128, .64);
-    gap: 12px;
-    padding-inline: 18px;
-  }
-
-  .le-brand img {
-    height: 45px;
-    width: 45px;
-  }
-
-  .le-brand small {
-    color: #f5f8f4;
-    font-size: .52rem;
-  }
-
-  .le-brand strong {
-    font-size: 1.2rem;
-    overflow: visible;
-    text-overflow: clip;
-  }
-
-  .le-tool-tabs {
-    background: none;
-    gap: 0;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    padding: 0;
-  }
-
-  .le-tool-tab {
-    background:
-      linear-gradient(180deg, rgba(8, 20, 29, .96), rgba(5, 13, 20, .96));
-    border: 1px solid rgba(74, 111, 128, .5);
-    color: #b8c8cf;
-    min-height: 62px;
-  }
-
-  .le-tool-tab.is-active {
-    background:
-      linear-gradient(180deg, rgba(8, 35, 48, .98), rgba(5, 22, 32, .98));
-    border-color: var(--le-cyan);
-    box-shadow: inset 0 0 0 1px rgba(33, 215, 255, .42);
-  }
-
-  .le-tool-tab:disabled {
-    opacity: .52;
-  }
-
-  .le-tool-tab img {
-    height: 26px;
-    width: 26px;
-  }
-
-  .le-history {
-    border-left: 1px solid rgba(74, 111, 128, .42);
-    justify-content: center;
-  }
-
-  .le-save-actions {
-    justify-content: end;
-  }
-
-  .le-icon-button,
-  .le-menu-link,
-  .le-action-button {
-    background:
-      linear-gradient(180deg, rgba(10, 24, 34, .96), rgba(5, 12, 18, .96));
-    border: 1px solid rgba(74, 111, 128, .58);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .03);
-  }
-
-  .le-icon-button,
-  .le-menu-link {
-    height: 50px;
-    width: 50px;
-  }
-
-  .le-icon-button.is-active,
-  .le-icon-button:hover,
-  .le-icon-button:focus-visible,
-  .le-menu-link:hover,
-  .le-menu-link:focus-visible,
-  .le-action-button.is-primary,
-  .le-action-button:hover,
-  .le-action-button:focus-visible {
-    background:
-      linear-gradient(180deg, rgba(10, 60, 103, .98), rgba(6, 38, 70, .98));
-    border-color: var(--le-cyan);
-    box-shadow: inset 0 0 0 1px rgba(33, 215, 255, .34);
-  }
-
-  .le-action-button {
-    min-height: 50px;
-    min-width: 118px;
-  }
-
-  .le-workspace {
-    gap: 4px;
-    grid-template-columns: 256px minmax(0, 1fr) 350px;
-  }
-
-  .le-panel {
-    background:
-      linear-gradient(180deg, rgba(7, 20, 28, .96), rgba(4, 13, 19, .96));
-    border: 1px solid var(--le-panel-line);
-    border-image: none;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025);
-    gap: 10px;
-    padding: 14px;
-  }
-
-  .le-panel h2 {
-    border-bottom: 1px solid rgba(74, 111, 128, .35);
-    color: var(--le-gold);
-    padding-bottom: 8px;
-  }
-
-  .le-left-rail,
-  .le-right-rail {
-    gap: 4px;
-  }
-
-  .le-field {
-    grid-template-columns: 88px minmax(0, 1fr);
-  }
-
-  .le-field select {
-    background: rgba(3, 12, 18, .92);
-    border-color: rgba(118, 157, 176, .46);
-    min-height: 28px;
-  }
-
-  .le-layers-panel {
-    gap: 4px;
-  }
-
-  .le-layer-row {
-    background: rgba(5, 16, 24, .9);
-    border: 1px solid rgba(74, 111, 128, .32);
-    grid-template-columns: 28px minmax(0, 1fr) 54px;
-    min-height: 38px;
-    padding: 6px 10px;
-  }
-
-  .le-layer-row.is-selected,
-  .le-layer-row:hover,
-  .le-layer-row:focus-visible {
-    background: rgba(13, 71, 137, .72);
-    border-color: var(--le-cyan);
-  }
-
-  .le-layer-row img {
-    height: 18px;
-    width: 18px;
-  }
-
-  .le-minimap-panel,
-  .le-camera-panel,
-  .le-library-panel {
-    min-height: 0;
-  }
-
-  .le-minimap {
-    aspect-ratio: 1.3;
-    background:
-      linear-gradient(135deg, rgba(78, 127, 65, .9) 0 40%, rgba(42, 95, 137, .88) 40% 55%, rgba(105, 102, 80, .88) 55% 100%);
-    border: 1px solid rgba(118, 157, 176, .48);
-    display: grid;
-    place-items: center;
-    position: relative;
-  }
-
-  .le-minimap::before {
-    background-image:
-      linear-gradient(rgba(255, 255, 255, .2) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, .2) 1px, transparent 1px);
-    background-size: 16px 16px;
-    content: "";
-    inset: 12px;
-    position: absolute;
-  }
-
-  .le-minimap span {
-    border: 2px solid rgba(255, 255, 255, .82);
-    height: 58%;
-    width: 58%;
-    z-index: 1;
-  }
-
-  .le-camera-modes {
-    display: grid;
-    gap: 8px;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .le-camera-modes .le-icon-button {
-    width: 100%;
-  }
-
-  .le-camera-slider {
-    align-items: center;
-    display: grid;
-    gap: 10px;
-    grid-template-columns: 24px 1fr;
-  }
-
-  .le-camera-slider span {
-    background: url("/assets/ui/level-editor/icons/undo.png") center / contain no-repeat;
-    height: 22px;
-    image-rendering: pixelated;
-    width: 22px;
-  }
-
-  .le-camera-slider i {
-    background: linear-gradient(90deg, rgba(255, 255, 255, .28), #03090d 76%);
-    display: block;
-    height: 5px;
-    position: relative;
-  }
-
-  .le-camera-slider i::after {
-    background: #d9e9ee;
-    border-radius: 50%;
-    content: "";
-    height: 13px;
-    left: 48%;
-    position: absolute;
-    top: -4px;
-    width: 13px;
-  }
-
-  .le-library-panel {
-    display: none;
-  }
-
-  .le-palette-panel {
-    border-image: none;
-    min-height: 0;
-  }
-
-  .le-palette-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-
-  .le-palette-grid button {
-    min-height: 52px;
-    padding: 4px;
-  }
-
-  .le-palette-grid button span {
-    display: none;
-  }
-
-  .le-palette-grid i,
-  .le-tray-assets i {
-    height: 28px;
-    transform: rotateX(58deg) rotateZ(45deg);
-    width: 28px;
-  }
-
-  .le-brush-tools,
-  .le-zone-tools {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .le-brush-tools {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .le-brush-tools .le-icon-button,
-  .le-zone-tools .le-icon-button {
-    width: 100%;
-  }
-
-  .le-range {
-    align-items: center;
-    color: var(--le-ink);
-    display: grid;
-    gap: 8px;
-    grid-template-columns: 88px minmax(0, 1fr) 42px;
-  }
-
-  .le-range span,
-  .le-range b {
-    color: #c8dce4;
-    font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-    font-size: .48rem;
-    font-weight: 400;
-    text-transform: uppercase;
-  }
-
-  .le-range input {
-    accent-color: var(--le-cyan);
-    width: 100%;
-  }
-
-  .le-bottom-tray {
-    background:
-      linear-gradient(180deg, rgba(7, 20, 28, .98), rgba(4, 13, 19, .98));
-    border: 1px solid var(--le-panel-line);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025);
-    min-height: 92px;
-    padding: 12px 14px;
-  }
-
-  .le-tray-assets {
-    gap: 10px;
-  }
-
-  .le-tray-assets button {
-    background: transparent;
-    border: 0;
-    min-width: 58px;
-  }
-
-  .le-tray-assets img {
-    height: 38px;
-    width: 38px;
-  }
-
-  .le-status {
-    background: rgba(3, 12, 18, .96);
-    min-height: 28px;
-    padding-block: 5px;
-  }
-}
-
-@media (max-width: 1180px) {
-  .le-topbar {
-    grid-template-columns: minmax(180px, .8fr) minmax(280px, 1.2fr) auto;
-  }
-
-  .le-save-actions {
-    grid-column: 1 / -1;
-    justify-content: stretch;
-  }
-
-  .le-save-actions .le-action-button {
-    flex: 1;
-  }
-
-  .le-workspace {
-    grid-template-columns: minmax(188px, 220px) minmax(0, 1fr);
-  }
-
-  .le-right-rail {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    overflow: visible;
-  }
-
-  .le-bottom-tray {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .level-editor-shell {
-    height: auto;
-    min-height: 100%;
-    overflow: auto;
-  }
-
-  .le-topbar,
-  .le-workspace,
-  .le-right-rail {
-    grid-template-columns: 1fr;
-  }
-
-  .le-brand strong {
-    white-space: normal;
-  }
-
-  .le-tool-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .le-history,
-  .le-save-actions {
-    justify-content: start;
-    overflow: visible;
-  }
-
-  .le-save-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) 54px;
-  }
-
-  .le-save-actions .le-action-button {
-    min-width: 0;
-    padding-inline: 6px;
-    width: 100%;
-  }
-
-  .le-action-button img {
-    height: 22px;
-    width: 22px;
-  }
-
-  .le-left-rail,
-  .le-right-rail,
-  .le-board-frame {
-    overflow: visible;
-  }
-
-  .le-board-stage {
-    min-height: 360px;
-    overflow: auto;
-  }
-
-  .le-bottom-tray {
-    background-size: auto 100%;
-    padding-inline: 16px;
-  }
-
-  .le-status {
-    flex-wrap: wrap;
-    gap: 8px 14px;
-    white-space: normal;
-  }
-}
-
 .canvas-palette {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -5346,7 +4164,7 @@ h1 {
   border-radius: 3px;
   display: grid;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", monospace;
-  font-size: .66rem;
+  font-size: var(--ds-text-lg);
   height: 32px;
   place-items: center;
   width: 32px;
@@ -5561,17 +4379,24 @@ h1 {
   z-index: 5;
 }
 
-.shell.skirmish-active {
+/* Immersive / full-bleed screens hide the static global .topbar (index.html) and let
+   .app-root own the whole viewport, so the screen shows only its OWN title bar instead
+   of stacking under the global one. Skirmish uses `.skirmish-active`; screen-agnostic
+   surfaces (the level editor) use `.is-immersive` — same behaviour, neutral name. */
+.shell.skirmish-active,
+.shell.is-immersive {
   gap: 0;
   grid-template-rows: minmax(0, 1fr);
   padding: 0;
 }
 
-.shell.skirmish-active .topbar {
+.shell.skirmish-active .topbar,
+.shell.is-immersive .topbar {
   display: none;
 }
 
-.shell.skirmish-active .app-root {
+.shell.skirmish-active .app-root,
+.shell.is-immersive .app-root {
   grid-row: 1;
   height: 100%;
   min-height: 0;
@@ -5579,7 +4404,9 @@ h1 {
 }
 
 .shell.skirmish-active + .bgm-control,
-.shell.skirmish-active ~ .bgm-control { display: none; }
+.shell.skirmish-active ~ .bgm-control,
+.shell.is-immersive + .bgm-control,
+.shell.is-immersive ~ .bgm-control { display: none; }
 
 .skirmish-screen::before {
   background:
@@ -5782,7 +4609,6 @@ h1 {
   min-width: 0;
   text-align: center;
 }
-
 
 .skirmish-window-actions {
   gap: 8px;
@@ -6327,6 +5153,178 @@ h1 {
   gap: 4px;
   min-width: 56px;
 }
+
+/* ============================================================
+   LEVEL EDITOR — Skirmish-sibling rail helpers.
+   The /edit shell reuses the real .skirmish-screen / .skirmish-war-room /
+   .skirmish-field / .skirmish-board-frame / .skirmish-hud / .skirmish-card
+   chrome (so it IS the same game). These .le-* classes only add the
+   editor-specific controls; nothing here restyles the Skirmish page itself.
+   ============================================================ */
+/* Full-bleed title row across the top (ADR-0004), board + rail below it. The editor is
+   NOT the battle HUD, so it takes the standard full-width title bar rather than Skirmish's
+   board-column placement. Columns, CSS vars, and the night-sky ::before still come from
+   .skirmish-screen; we only re-grid into a title row + a board|rail row. */
+.level-editor-screen {
+  grid-template-areas:
+    "titlebar titlebar"
+    "board    rail";
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.level-editor-screen .le-topbar { grid-area: titlebar; }
+.level-editor-screen .skirmish-field { grid-area: board; }
+.level-editor-screen .skirmish-hud { grid-area: rail; scrollbar-gutter: stable; }
+
+.level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
+.level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
+
+/* Title bar = the app's editor pattern (ADR-0023; mirrors the campaign editor's
+   .ce-topbar): three sections — brand · save-state · labeled header buttons
+   (.app-header-button on the kit gold frame). Scoped under .level-editor-screen so it
+   overrides the LEGACY bare .le-topbar still in this file (the old /edit chrome) and
+   neutralizes its leaked background/shadow. */
+.level-editor-screen .le-topbar {
+  align-content: center;
+  align-items: center;
+  background: none;
+  box-shadow: none;
+  display: grid;
+  gap: clamp(10px, 1.4vw, 20px);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0 clamp(10px, 1.2vw, 18px);
+}
+.level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
+.level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
+.level-editor-screen .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+.level-editor-screen .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
+
+/* rail zoom icon button (NOT a title-bar button — stays a small chrome control) */
+.le-iconbtn {
+  background: url("/assets/ui/level-editor/icon-button-normal.png") center/100% 100% no-repeat;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  height: 44px;
+  place-items: center;
+  width: 44px;
+}
+.le-iconbtn:disabled { cursor: default; opacity: .4; }
+
+/* segmented switch (layer / tool / fill) */
+.le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
+.le-seg-btn {
+  background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94));
+  border: 1px solid rgba(82, 142, 170, .34);
+  border-radius: 5px;
+  color: #cfe6f1;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 5px;
+  grid-auto-flow: column;
+  line-height: 1;
+  min-height: 40px;
+  padding: 5px 4px;
+  place-items: center;
+  text-transform: uppercase;
+}
+.le-seg-btn:disabled { cursor: default; opacity: .4; }
+.le-seg-btn.active {
+  background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
+  border-color: var(--skirmish-cyan);
+  box-shadow: 0 0 0 1px rgba(56, 215, 255, .3);
+  color: #eafaff;
+}
+
+/* active brush picker */
+.le-brush-pick { align-items: center; display: grid; gap: 10px; grid-template-columns: 60px minmax(0, 1fr); margin-top: 10px; }
+.le-brush-thumb {
+  background: radial-gradient(circle at 50% 40%, rgba(63, 148, 190, .18), transparent 64%), rgba(3, 12, 19, .74);
+  border: 1px solid rgba(87, 153, 184, .4);
+  border-radius: 5px;
+  display: grid;
+  height: 60px;
+  overflow: hidden;
+  place-items: center;
+  width: 60px;
+}
+.le-brush-thumb img { height: 90%; image-rendering: pixelated; object-fit: contain; width: 90%; }
+.le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
+.le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
+
+/* palette (folded into the rail — variant B) */
+/* Tile-palette and unit-controls swap in/out of the same rail slot; pin both to one
+   fixed height so flipping layers can't wobble the panel (Tile was 350px, Unit 354px). */
+.le-brush-panel { display: flex; flex-direction: column; height: 360px; overflow: hidden; }
+.le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
+.le-palette-scroll { height: 300px; padding-right: 4px; }
+
+/* kit-scroll — the shared scroll primitive. An always-visible bare rail whose thumb is skinned
+   with the chosen grip (PixelLab oak — the Scrollbars catalog's preferred), via ::-webkit-scrollbar
+   (Chrome-only). A non-auto scrollbar-color/width — even INHERITED from a parent rail like
+   .skirmish-hud — makes Chrome drop the whole webkit skin, so we reset both to `auto` here to
+   neutralize the inheritance; Firefox falls back via @supports. Put it on a rounded container that
+   clips (overflow:hidden) so the bar can't square off the corner. */
+.kit-scroll { overflow-y: scroll; overflow-x: hidden; scrollbar-gutter: stable; scrollbar-color: auto; scrollbar-width: auto; }
+.kit-scroll::-webkit-scrollbar { width: 16px; }
+/* The bare rail must always READ as a scrollbar even with no thumb — never vanish. A clearly
+   recessed groove: a faint lit edge + an inner shadow, distinct from the panel behind it. */
+.kit-scroll::-webkit-scrollbar-track { background: #050f1a; border-radius: 2px; margin: 2px; box-shadow: inset 0 0 0 1px rgba(120, 160, 205, 0.22), inset 1px 1px 3px rgba(0, 0, 0, 0.55); }
+.kit-scroll::-webkit-scrollbar-thumb { background: url("/assets/ui/scrollbars/oak-pixellab.png") center / 100% 100% no-repeat; image-rendering: pixelated; }
+@supports not selector(::-webkit-scrollbar) { .kit-scroll { scrollbar-width: thin; scrollbar-color: #6e4a2f #06121f; } }
+.le-pal-group { margin: 0 0 4px; }
+.le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
+.le-pal-grouplabel:first-child { margin-top: 0; }
+.le-swatches { display: grid; gap: 6px; grid-template-columns: repeat(4, 1fr); }
+.le-swatch {
+  background: radial-gradient(circle at 50% 36%, rgba(63, 148, 190, .13), transparent 66%), rgba(4, 13, 20, .7);
+  border: 1px solid rgba(82, 142, 170, .3);
+  border-radius: 5px;
+  color: var(--skirmish-muted);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  padding: 5px 2px;
+}
+.le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
+.le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
+.le-swatch.active { border-color: var(--skirmish-cyan); box-shadow: 0 0 0 1px rgba(56, 215, 255, .35); color: #eafaff; }
+
+/* details inspector */
+.le-details dl { display: grid; gap: 6px; margin: 0; }
+.le-details div { align-items: center; display: grid; gap: 8px; grid-template-columns: 72px minmax(0, 1fr); }
+.le-details dt { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
+.le-details dd { color: #f3ead8; font-size: var(--ds-text-sm); margin: 0; word-break: break-word; }
+
+/* view / zoom / footprint toggle */
+.le-zoom { align-items: center; display: grid; gap: 8px; grid-template-columns: auto 1fr auto; margin-top: 8px; }
+.le-zoom .le-iconbtn { background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94)); border: 1px solid rgba(82, 142, 170, .34); border-radius: 5px; height: 36px; width: 36px; }
+.le-zoom-read { background: rgba(8, 23, 35, .6); border: 1px solid rgba(64, 115, 147, .45); border-radius: 4px; color: #f3ead8; font-size: var(--ds-text-sm); padding: 7px 0; text-align: center; }
+.le-toggle { align-items: center; background: none; border: 0; color: #d6ecf5; cursor: pointer; display: flex; font: inherit; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 0; text-transform: uppercase; }
+.le-toggle .pip { background: rgba(8, 23, 35, .8); border: 1px solid rgba(82, 142, 170, .5); border-radius: 9px; flex: none; height: 18px; position: relative; width: 34px; }
+.le-toggle.on .pip { background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95)); border-color: var(--skirmish-cyan); }
+.le-toggle .pip::after { background: #bfe6f4; border-radius: 50%; content: ""; height: 12px; left: 2px; position: absolute; top: 2px; transition: .1s; width: 12px; }
+.le-toggle.on .pip::after { background: #eafaff; left: 18px; }
+
+/* status line */
+.le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
+.le-statusline b { color: #9fe0ff; }
+
+/* editor rail icons */
+.le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 24px; image-rendering: pixelated; width: 24px; }
+.ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
+.ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
+.ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
+.ic-grid { background-image: url("/assets/ui/level-editor/icons/grid.png"); }
+.ic-zone { background-image: url("/assets/ui/level-editor/icons/zone.png"); }
+.ic-undo { background-image: url("/assets/ui/level-editor/icons/undo.png"); }
+.ic-redo { background-image: url("/assets/ui/level-editor/icons/redo.png"); }
+.ic-save { background-image: url("/assets/ui/level-editor/icons/save.png"); }
+.ic-play { background-image: url("/assets/ui/level-editor/icons/play.png"); }
+.ic-up { background-image: url("/assets/ui/level-editor/icons/height-up.png"); }
+.ic-down { background-image: url("/assets/ui/level-editor/icons/height-down.png"); }
 
 .skirmish-count-pip strong {
   font-size: .72rem;
@@ -6972,15 +5970,6 @@ h1 {
   .level-palette {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .level-editor-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .level-editor-hud.collapsed {
-    grid-template-columns: 1fr;
-  }
-  .level-editor-hud.collapsed .level-editor-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
   .game-menu { padding: 16px; }
 
   .main-menu-screen {
@@ -6991,12 +5980,6 @@ h1 {
   .main-menu-title-row {
     gap: 12px;
     grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  .main-menu-crest {
-    height: 66px;
-    width: 52px;
-    font-size: 2rem;
   }
 
   .main-menu-brand h2 {
@@ -7013,17 +5996,6 @@ h1 {
     gap: 10px;
     min-height: 58px;
     padding: 8px 10px;
-  }
-
-  .main-menu-action-icon {
-    height: 40px;
-    width: 40px;
-    font-size: 1.2rem;
-  }
-
-  .main-menu-action-icon.green,
-  .main-menu-action-icon.slate {
-    font-size: .52rem;
   }
 
 }
@@ -7116,13 +6088,20 @@ h1 {
   --ce-ink: #f4ead6;
   --ce-muted: #9eb3be;
   --ce-panel-edge: rgba(83, 136, 160, .58);
+  --ce-ally: #6fc0f4;
+  --ce-enemy: #ef8a6c;
+  --ce-label: #73d7ff;
+  --ce-cyan-bright: #8ee7ff;
+  --ce-slate: #b7cad4;
+  --ce-gold-bright: #f5bb45;
+  --ce-eyebrow: #c9a877;
   background:
     radial-gradient(720px 460px at 74% 24%, rgba(28, 106, 149, .24), transparent 62%),
     radial-gradient(520px 320px at 34% 68%, rgba(64, 89, 59, .16), transparent 68%),
     linear-gradient(180deg, #07131d 0%, #04080d 100%);
   color: var(--ce-ink);
   display: grid;
-  font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;
+  font-family: var(--ds-font-pixel);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
@@ -7161,68 +6140,33 @@ h1 {
   padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
-.ce-brand,
 .ce-topbar-stats,
 .ce-topbar-actions {
   align-items: center;
   display: flex;
 }
 
-.ce-brand {
-  color: var(--ce-ink);
-  gap: 12px;
-  min-width: 0;
-  text-decoration: none;
-}
-
-.ce-brand img,
 .ce-topbar-stats img {
   image-rendering: pixelated;
 }
 
-.ce-brand img {
-  height: 42px;
-  width: 42px;
-}
-
-.ce-brand span {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-
-.ce-brand strong,
 .ce-panel h2,
 .ce-selected-head h2,
-.ce-setting-card > span,
-.ce-notes-card > span,
 .ce-section-title h2,
 .ce-levels-head h2 {
-  color: var(--ce-ink);
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .66rem;
+  color: var(--ce-eyebrow);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
   font-weight: 400;
-  letter-spacing: 0;
+  letter-spacing: .14em;
   line-height: 1.55;
   margin: 0;
   text-transform: uppercase;
   text-shadow: 0 2px 0 #010508, 0 0 10px rgba(0, 0, 0, .75);
 }
 
-.ce-brand strong {
-  font-size: clamp(.86rem, 1.45vw, 1.15rem);
-  line-height: 1.25;
-}
-
-.ce-brand small {
-  color: #d0c4ac;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .48rem;
-  text-transform: uppercase;
-}
-
 .ce-topbar-stats {
-  color: #d6e8f2;
+  color: var(--ce-slate);
   gap: 16px;
   justify-content: end;
 }
@@ -7231,8 +6175,8 @@ h1 {
   align-items: center;
   display: flex;
   gap: 7px;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .5rem;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
   text-transform: uppercase;
 }
 
@@ -7243,18 +6187,18 @@ h1 {
 
 .ce-topbar-stats strong {
   color: var(--ce-ink);
-  font-size: .72rem;
+  font-size: var(--ds-text-sm);
   font-weight: 400;
 }
 
 .ce-save-state {
-  border-left: 1px solid rgba(149, 216, 234, .22);
-  color: rgba(149, 216, 234, .88);
+  border-left: 1px solid var(--ce-panel-edge);
+  color: var(--ce-slate);
   padding-left: 14px;
 }
 
 .ce-save-state.is-dirty {
-  color: #f0bd55;
+  color: var(--ce-gold-bright);
   text-shadow: 0 0 8px rgba(240, 189, 85, .28);
 }
 
@@ -7264,24 +6208,21 @@ h1 {
 
 .ce-icon-button {
   align-items: center;
-  aspect-ratio: 1;
-  background: var(--ce-asset-button-icon) center / 100% 100% no-repeat;
-  border: 0;
-  color: #f2e5c8;
+  background: transparent;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: var(--ce-ink);
+  image-rendering: pixelated;
   display: grid;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .9rem;
-  justify-content: center;
+  flex: none;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  height: 38px;
+  place-items: center;
   min-height: 0;
   padding: 0;
   text-decoration: none;
-  width: 46px;
-}
-
-.ce-icon-button {
-  flex: none;
-  font-size: .66rem;
-  height: 38px;
   width: 38px;
 }
 
@@ -7295,23 +6236,26 @@ h1 {
   width: auto;
 }
 
+/* In the 38px row buttons the content box is only ~18px (frame border), so cap
+   the glyph to fit fully inside the frame and center cleanly. */
+.ce-icon-button .ce-icon-img {
+  max-height: 16px;
+  max-width: 16px;
+}
+
 .ce-icon-button.is-selected,
-.ce-topbar-actions a:hover,
-.ce-topbar-actions a:focus-visible,
-.ce-topbar-actions button:hover,
-.ce-topbar-actions button:focus-visible,
 .ce-icon-button:hover,
 .ce-icon-button:focus-visible {
-  background-image: var(--ce-asset-button-icon-selected);
-  color: #dff8ff;
+  border-image-source: url("/assets/ui/kit/panel.png");
+  color: var(--ce-cyan-bright);
   outline: none;
 }
 
 .ce-icon-button.is-danger,
 .ce-icon-button.is-danger:hover,
 .ce-icon-button.is-danger:focus-visible {
-  background-image: var(--ce-asset-button-icon-danger);
-  color: #ffe2d8;
+  border-image-source: url("/assets/ui/kit/panel.png");
+  color: var(--ce-enemy);
 }
 
 .ce-layout {
@@ -7324,9 +6268,7 @@ h1 {
 }
 
 .ce-panel {
-  background: linear-gradient(180deg, rgba(7, 20, 30, .9), rgba(4, 10, 16, .94));
-  border: 1px solid var(--ce-panel-edge);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .74), 0 20px 36px rgba(0, 0, 0, .18);
+  background: transparent;
   display: grid;
   min-height: 0;
   min-width: 0;
@@ -7335,29 +6277,14 @@ h1 {
 }
 
 .ce-panel::before {
-  background: var(--ce-asset-panel-large) center / 100% 100% no-repeat;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   content: "";
   image-rendering: pixelated;
   inset: 0;
-  opacity: .72;
   pointer-events: none;
   position: absolute;
   z-index: 0;
-}
-
-.ce-panel::after {
-  background: var(--ce-asset-panel-crest) center / contain no-repeat;
-  content: "";
-  height: 54px;
-  image-rendering: pixelated;
-  left: 50%;
-  opacity: .78;
-  pointer-events: none;
-  position: absolute;
-  top: 7px;
-  transform: translateX(-50%);
-  width: 50px;
-  z-index: 1;
 }
 
 .ce-panel > * {
@@ -7374,7 +6301,7 @@ h1 {
 }
 
 .ce-level-panel {
-  grid-template-rows: auto minmax(190px, .62fr) auto auto auto minmax(118px, .22fr);
+  grid-template-rows: auto minmax(220px, 1fr) auto;
 }
 
 .ce-panel-head,
@@ -7382,7 +6309,8 @@ h1 {
 .ce-selected-head,
 .ce-section-title {
   align-items: center;
-  border-bottom: 1px solid rgba(69, 111, 132, .5);
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(201, 168, 119, .5), rgba(201, 168, 119, .05)) 1;
   display: flex;
   justify-content: space-between;
   min-height: 32px;
@@ -7391,9 +6319,9 @@ h1 {
 
 .ce-panel-head span,
 .ce-selected-head span {
-  color: #b7d8e8;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .52rem;
+  color: var(--ce-slate);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
 }
 
 .ce-asset-button,
@@ -7402,12 +6330,12 @@ h1 {
   align-items: center;
   background: transparent;
   border: 12px solid transparent;
-  border-image: var(--ce-slice-button-primary) 18 fill / 12px stretch;
+  border-image: url("/assets/ui/kit/button-primary.png") 24 fill / 12px round;
   box-sizing: border-box;
-  color: #f6ead2;
+  color: var(--ce-ink);
   display: inline-grid;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .56rem;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
   justify-content: center;
   line-height: 1.35;
   min-height: 40px;
@@ -7429,7 +6357,7 @@ h1 {
 }
 
 .ce-asset-button.is-danger {
-  border-image-source: var(--ce-slice-button-danger);
+  border-image-source: url("/assets/ui/kit/button-danger.png");
   color: #ffe1d8;
 }
 
@@ -7452,13 +6380,13 @@ h1 {
 .ce-sign-in,
 .ce-empty {
   color: var(--ce-muted);
-  font-size: .98rem;
+  font-size: var(--ds-text-md);
   line-height: 1.3;
   margin: 2px 8px 7px;
 }
 
 .ce-sign-in {
-  color: #bbeeff;
+  color: var(--ce-cyan-bright);
   text-decoration: none;
 }
 
@@ -7498,13 +6426,13 @@ h1 {
   align-items: center;
   background: transparent;
   border: 14px solid transparent;
-  border-image: var(--ce-slice-row-panel) 18 fill / 14px stretch;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   box-sizing: border-box;
   color: var(--ce-ink);
   cursor: pointer;
   display: grid;
   gap: 9px;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 72px;
   padding: 0 2px 0 0;
   position: relative;
@@ -7512,10 +6440,14 @@ h1 {
   width: 100%;
 }
 
-.ce-campaign-row.is-selected,
-.ce-campaign-row:hover,
-.ce-campaign-row:focus-visible {
-  border-image-source: var(--ce-slice-row-panel-selected);
+.ce-campaign-row.is-selected {
+  border-image-source: url("/assets/ui/kit/row-active.png");
+  outline: none;
+}
+
+.ce-campaign-row:hover:not(.is-locked):not(.is-selected),
+.ce-campaign-row:focus-visible:not(.is-selected) {
+  filter: brightness(1.1);
   outline: none;
 }
 
@@ -7525,11 +6457,6 @@ h1 {
   opacity: .78;
 }
 
-.ce-campaign-row.is-locked:hover,
-.ce-campaign-row.is-locked:focus-visible {
-  border-image-source: var(--ce-slice-row-panel);
-}
-
 .ce-level-row {
   gap: 8px;
   grid-template-columns: 76px minmax(0, 1fr) auto auto;
@@ -7537,35 +6464,16 @@ h1 {
   padding-block: 4px;
 }
 
-.ce-level-row.is-selected,
-.ce-level-row:hover,
-.ce-level-row:focus-visible {
-  border-image-source: var(--ce-slice-row-panel-selected);
+.ce-level-row.is-selected {
+  border-image-source: url("/assets/ui/kit/row-active.png");
   outline: none;
 }
 
-.ce-shield {
-  aspect-ratio: 88 / 116;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  display: block;
-  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, .45));
-  height: 56px;
-  image-rendering: pixelated;
-  width: auto;
+.ce-level-row:hover:not(.is-selected),
+.ce-level-row:focus-visible:not(.is-selected) {
+  filter: brightness(1.1);
+  outline: none;
 }
-
-.ce-shield.is-active {
-  filter: drop-shadow(0 0 9px rgba(48, 214, 255, .42)) drop-shadow(0 3px 0 rgba(0, 0, 0, .45));
-}
-
-.ce-shield-lion { background-image: var(--ce-asset-shield-lion); }
-.ce-shield-rook { background-image: var(--ce-asset-shield-rook); }
-.ce-shield-crescent { background-image: var(--ce-asset-shield-crescent); }
-.ce-shield-snow { background-image: var(--ce-asset-shield-snow); }
-.ce-shield-flame { background-image: var(--ce-asset-shield-flame); }
-.ce-shield-crown { background-image: var(--ce-asset-shield-crown); }
 
 .ce-row-copy {
   display: grid;
@@ -7575,8 +6483,8 @@ h1 {
 
 .ce-row-copy strong {
   color: var(--ce-ink);
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .58rem;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-md);
   font-weight: 400;
   line-height: 1.35;
   overflow: hidden;
@@ -7586,8 +6494,8 @@ h1 {
 }
 
 .ce-row-copy small {
-  color: #c0d2d9;
-  font-size: .96rem;
+  color: var(--ce-slate);
+  font-size: var(--ds-text-sm);
   line-height: 1.05;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7597,9 +6505,9 @@ h1 {
 .ce-row-favorite,
 .ce-row-lock,
 .ce-stars {
-  color: #f5bb45;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .7rem;
+  color: var(--ce-gold-bright);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-sm);
   text-shadow: 0 2px 0 #271503;
 }
 
@@ -7639,25 +6547,30 @@ h1 {
   white-space: nowrap;
 }
 
-.ce-stars span:not(.is-filled) {
-  color: rgba(208, 219, 222, .4);
+.ce-star {
+  height: 14px;
+  image-rendering: pixelated;
+  width: 14px;
+}
+
+.ce-stars .ce-star:not(.is-filled) {
+  opacity: .32;
 }
 
 .ce-level-thumb {
-  border: 1px solid rgba(231, 186, 91, .58);
-  background: rgba(5, 15, 23, .8);
-  box-shadow: inset 0 -7px 0 rgba(0, 0, 0, .24), 0 0 0 2px rgba(0, 0, 0, .38);
+  background: transparent;
+  border: 6px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 18 fill / 6px stretch;
+  box-sizing: border-box;
   display: block;
   height: 44px;
   overflow: hidden;
-  transform: skewY(-12deg);
   width: 58px;
 }
 
 .ce-level-thumb .level-preview-board,
 .ce-level-thumb .level-preview-empty {
   height: 100%;
-  transform: skewY(12deg);
   width: 100%;
 }
 
@@ -7670,13 +6583,8 @@ h1 {
   align-items: center;
   display: grid;
   gap: 10px 14px;
-  grid-template-columns: 74px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   padding: 12px 12px 12px;
-}
-
-.ce-campaign-summary .ce-shield {
-  height: 78px;
-  width: auto;
 }
 
 .ce-name-field {
@@ -7685,20 +6593,20 @@ h1 {
   min-width: 0;
 }
 
-.ce-name-field span,
-.ce-setting-card > span,
-.ce-notes-card > span {
-  color: #73d7ff;
-  font-size: .54rem;
+.ce-name-field span {
+  color: var(--ce-label);
+  font-size: var(--ds-text-2xs);
 }
 
-.ce-name-field input,
-.ce-setting-card input,
-.ce-setting-card select {
-  background: var(--ce-asset-field-input) center / 100% 100% no-repeat;
-  border: 0;
+.ce-name-field input {
+  background: transparent;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 8px stretch;
+  box-sizing: border-box;
   color: var(--ce-ink);
-  font: 1.15rem "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;
+  image-rendering: pixelated;
+  font-family: var(--ds-font-pixel);
+  font-size: var(--ds-text-md);
   min-height: 42px;
   min-width: 0;
   outline: none;
@@ -7706,50 +6614,44 @@ h1 {
   width: 100%;
 }
 
-.ce-setting-card input,
-.ce-setting-card select {
-  font-size: 1.02rem;
-  min-height: 38px;
-  padding: 6px 10px;
-}
-
-.ce-setting-card select {
-  appearance: none;
-  background-image: var(--ce-asset-field-select);
-  min-height: 40px;
-}
-
-.ce-name-field input:focus,
-.ce-setting-card input:focus,
-.ce-setting-card select:focus {
+.ce-name-field input:focus {
   filter: brightness(1.2) drop-shadow(0 0 7px rgba(48, 214, 255, .2));
 }
 
-.ce-campaign-summary dl {
+/* Stats as kit rows (settings-row pattern): each label/value pair sits in the
+   atom-assembled row.png frame instead of the old raw border-left dividers. */
+.ce-stat-rows {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 0;
 }
 
-.ce-campaign-summary div {
-  border-left: 1px solid rgba(83, 136, 160, .5);
-  padding-left: 12px;
+.ce-stat-row {
+  align-items: center;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
+  box-sizing: border-box;
+  display: flex;
+  gap: 16px;
+  image-rendering: pixelated;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 2px 16px;
 }
 
-.ce-campaign-summary dt {
-  color: #73d7ff;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .5rem;
-  line-height: 1.4;
+.ce-stat-row dt {
+  color: var(--ce-label);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
   text-transform: uppercase;
 }
 
-.ce-campaign-summary dd {
+.ce-stat-row dd {
   color: var(--ce-ink);
-  font-size: 1.3rem;
-  margin: 4px 0 0;
+  font-size: var(--ds-text-sm);
+  margin: 0;
+  text-align: right;
 }
 
 .ce-levels-head {
@@ -7762,35 +6664,210 @@ h1 {
   padding: 0 8px;
 }
 
-.ce-mid-actions {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 52px 52px minmax(0, 1fr);
-  padding: 8px 4px 0;
-}
-
-.ce-mid-actions .ce-icon-button {
-  height: 48px;
-  width: 48px;
-}
-
-.ce-selected-head {
-  border-bottom: 1px solid rgba(48, 214, 255, .35);
-}
-
 .ce-selected-head h2 {
-  color: #8ee7ff;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Force composition for the selected level — the allies/enemies counts read off
+   the level's board, so they live with the level, not the global title bar. */
+.ce-force-readout {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 14px;
+}
+
+.ce-force {
+  align-items: center;
+  display: flex;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.ce-force img {
+  height: 22px;
+  image-rendering: pixelated;
+  width: 22px;
+}
+
+.ce-force strong {
+  color: var(--ce-ink);
+  font-size: var(--ds-text-sm);
+  font-weight: 400;
+}
+
+.ce-force-ally { color: var(--ce-ally); }
+.ce-force-enemy { color: var(--ce-enemy); }
+
+/* ===== Compact Level Info — toggles into the level preview slot ===== */
+/* View toggle = kit button frames (neutral; active swaps to the blue primary),
+   NOT hand-rolled bg/border (ADR-0002/0011/0012/0014); label on the type scale
+   (ADR-0024) — no raw font-size/family. */
+.ce-level-view-toggle {
+  display: inline-flex;
+  gap: 4px;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 3;
+}
+
+.ce-level-view-toggle button {
+  background: transparent;
+  border: 9px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 9px round;
+  color: var(--ce-slate);
+  cursor: pointer;
+  font-family: var(--ds-font-pixel);
+  font-size: var(--ds-text-2xs);
+  image-rendering: pixelated;
+  min-height: 30px;
+  padding: 0 8px;
+  text-transform: uppercase;
+}
+
+.ce-level-view-toggle button.is-active {
+  border-image-source: url("/assets/ui/kit/panel.png");
+  color: var(--ce-cyan-bright);
+}
+
+.ce-level-info {
+  align-content: start;
+  column-gap: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 8px 6px;
+  row-gap: 12px;
+}
+
+.ce-level-info section {
+  align-content: start;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ce-li-zones-row {
+  align-items: baseline;
+  gap: 10px;
+  grid-column: 1 / -1;
+  grid-template-columns: auto 1fr;
+}
+
+.ce-li-title {
+  color: var(--ce-label);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.ce-li-stat {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.ce-li-stat span {
+  color: var(--ce-slate);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
+  text-transform: uppercase;
+}
+
+.ce-li-stat strong {
+  color: var(--ce-ink);
+  font-size: var(--ds-text-sm);
+  font-weight: 400;
+}
+
+.ce-li-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.ce-li-chip {
+  align-items: center;
+  background: transparent;
+  border: 6px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 6px stretch;
+  color: var(--ce-slate);
+  display: inline-flex;
+  font-size: var(--ds-text-xs);
+  gap: 5px;
+  padding: 2px 6px;
+}
+
+.ce-li-chip b { color: var(--ce-ink); font-weight: 400; }
+
+.ce-li-swatch {
+  display: inline-block;
+  height: 9px;
+  outline: 1px solid rgba(0, 0, 0, .5);
+  width: 9px;
+}
+
+.ce-li-rosters {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.ce-li-roster-head {
+  align-items: center;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(201, 168, 119, .5), rgba(201, 168, 119, .05)) 1;
+  display: flex;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xs);
+  gap: 6px;
+  margin-bottom: 5px;
+  padding-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.ce-li-roster-head.is-ally { color: var(--ce-ally); }
+.ce-li-roster-head.is-enemy { color: var(--ce-enemy); }
+.ce-li-roster-head strong { color: var(--ce-ink); font-size: var(--ds-text-sm); font-weight: 400; margin-left: auto; }
+
+.ce-li-roster ul { display: grid; gap: 3px; list-style: none; margin: 0; padding: 0; }
+.ce-li-roster li { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.ce-li-roster li span { color: var(--ce-slate); font-size: var(--ds-text-sm); }
+.ce-li-roster li b { color: var(--ce-ink); font-size: var(--ds-text-sm); font-weight: 400; }
+.ce-li-none { color: var(--ce-muted); font-size: var(--ds-text-xs); }
+
+.ce-li-zones { color: var(--ce-slate); font-size: var(--ds-text-sm); }
+
+.terrain-grass { background: #6a9b3f; }
+.terrain-water { background: #3a78c8; }
+.terrain-bridge { background: #b08750; }
+.terrain-road { background: #9a8b6a; }
+.terrain-stone { background: #8aa0ab; }
+.terrain-rock { background: #7c8a96; }
+.terrain-cliff { background: #5b6b76; }
+.terrain-dirt { background: #7d6a4a; }
+.terrain-pebble { background: #9aa6ad; }
+.terrain-sand { background: #c8b87e; }
+/* ===== end Compact Level Info ===== */
+
 .ce-preview-frame {
-  background: var(--ce-asset-preview-frame) center / 100% 100% no-repeat;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 18 fill / 14px stretch;
+  image-rendering: pixelated;
   margin: 8px 4px 6px;
   min-height: 0;
-  padding: 12px;
+  padding: 2px;
 }
 
 .level-preview-board,
@@ -7815,8 +6892,8 @@ h1 {
 }
 
 .level-preview-empty {
-  color: #c0d2d9;
-  font-size: 1rem;
+  color: var(--ce-slate);
+  font-size: var(--ds-text-md);
   place-items: center;
 }
 
@@ -7860,8 +6937,9 @@ h1 {
 }
 
 .level-preview-unit span {
-  background: rgba(3, 9, 14, .9);
-  border: 1px solid rgba(231, 186, 91, .72);
+  background: transparent;
+  border: 5px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 5px stretch;
   color: #f4ead6;
   display: grid;
   min-height: 20px;
@@ -7872,12 +6950,8 @@ h1 {
 .ce-preview-actions {
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) 48px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   padding: 0 4px 8px;
-}
-
-.ce-level-name-field {
-  padding: 7px 4px 5px;
 }
 
 .ce-preview-actions .ce-link-button {
@@ -7885,88 +6959,25 @@ h1 {
 }
 
 .ce-link-button-ghost {
-  border-image-source: var(--ce-slice-button-primary);
-  filter: saturate(.66) brightness(.82);
-}
-
-.ce-settings-grid {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 4px;
-}
-
-.ce-setting-card,
-.ce-notes-card {
-  background: var(--ce-asset-panel-card) center / 100% 100% no-repeat;
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 10px 12px;
-}
-
-.ce-notes-card {
-  grid-template-rows: auto minmax(0, 1fr);
-  margin: 8px 4px 0;
-  min-height: 0;
-  overflow: hidden;
-  padding-bottom: 14px;
-}
-
-.ce-notes-card p,
-.ce-notes-card textarea {
-  background: transparent;
-  border: 0;
-  color: #d6dde0;
-  font-size: .96rem;
-  line-height: 1.36;
-  margin: 0;
-  height: 100%;
-  min-height: 0;
-  outline: none;
-  overflow: auto;
-  resize: none;
-  scrollbar-color: rgba(130, 156, 166, .75) rgba(4, 11, 17, .8);
-  scrollbar-width: thin;
-  width: 100%;
-}
-
-.ce-notes-card textarea::placeholder {
-  color: rgba(214, 221, 224, .62);
+  border-image-source: url("/assets/ui/kit/button-neutral.png");
 }
 
 .ce-footer {
   align-items: center;
-  background: var(--ce-asset-footer-bar) center / 100% 100% no-repeat;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 18 fill / 14px stretch;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(170px, 1fr) minmax(150px, .82fr) minmax(140px, .72fr) minmax(170px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  image-rendering: pixelated;
   min-height: 58px;
-  padding: 8px 14px;
+  padding: 4px 10px;
 }
 
-.ce-footer-link {
-  border-image-source: var(--ce-slice-button-primary);
-}
-
-.ce-footer .ce-asset-button:nth-child(1) {
-  border-image-source: var(--ce-slice-button-primary);
-}
-
-.ce-footer .ce-asset-button:nth-child(2) {
-  border-image-source: var(--ce-slice-button-primary);
-}
-
-.ce-footer .ce-asset-button:nth-child(3) {
-  border-image-source: var(--ce-slice-button-primary);
-}
-
-.ce-footer .ce-asset-button.is-danger {
-  border-image-source: var(--ce-slice-button-danger);
-}
-
-.ce-mid-actions .ce-asset-button.is-danger {
-  border-image-source: var(--ce-slice-button-danger);
+/* Footer = campaign actions: Duplicate + Export neutral, Delete Campaign danger (base .is-danger). */
+.ce-import-campaign,
+.ce-footer .ce-asset-button:not(.is-danger) {
+  border-image-source: url("/assets/ui/kit/button-neutral.png");
 }
 
 @media (max-width: 1180px) {
@@ -8008,10 +7019,8 @@ h1 {
 
   .ce-layout,
   .ce-footer,
-  .ce-settings-grid,
   .ce-preview-actions,
-  .ce-campaign-summary,
-  .ce-campaign-summary dl {
+  .ce-campaign-summary {
     grid-template-columns: 1fr;
   }
 
@@ -8846,12 +7855,9 @@ h1 {
    so the rail and pane hold their position — only their contents swap. */
 .tileset-studio-shell.is-catalog,
 .tileset-studio-shell.is-lab,
-.tileset-studio-shell.is-viewer {
+.tileset-studio-shell.is-viewer,
+.tileset-studio-shell.is-dressing {
   grid-template-columns: minmax(0, 1fr) 260px;
-}
-
-.tileset-studio-shell.is-view {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Lab uses the SAME 2-column frame as Catalog — same main, same 260px Controls
@@ -9980,6 +8986,151 @@ h1 {
   box-shadow: 0 0 0 2px rgba(42, 166, 255, 0.18);
 }
 
+/* Catalog category selector — a compact dropdown (the category list outgrew a segmented row). */
+.tileset-category-select {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tileset-category-select select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  color: #f3fbff;
+  background: rgba(12, 31, 48, 0.92);
+  border: 1px solid rgba(91, 157, 216, 0.42);
+  border-radius: 4px;
+  font: 700 13px/1 var(--ds-font-sans, system-ui, sans-serif);
+  outline: none;
+  cursor: pointer;
+}
+
+.tileset-category-select select:focus {
+  border-color: rgba(111, 210, 255, 0.82);
+  box-shadow: 0 0 0 2px rgba(42, 166, 255, 0.18);
+}
+
+/* Surface catalog swatch — the texture tiled, the way it fills a panel behind chrome. */
+.surface-swatch {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background-repeat: repeat;
+  background-position: center;
+  image-rendering: pixelated;
+}
+
+/* Surface viewer — one surface in isolation, centered, framed or bare, manually resizable. */
+.surface-view-main {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.surface-view-stage {
+  width: 640px;
+  height: 420px;
+  max-width: 100%;
+  resize: both;
+  overflow: hidden;
+  background-repeat: repeat;
+  background-position: center;
+  image-rendering: pixelated;
+  border-radius: 6px;
+}
+
+.surface-view-stage.is-panel {
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round;
+  background-origin: border-box;
+  background-clip: border-box;
+}
+
+/* Dressing room — the live /settings iframe fills the main pane full-bleed; the per-region
+   controls live in the standard tileset-view-controls aside. */
+.surface-dressing-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: rgba(5, 16, 25, 0.92);
+  border: 1px solid rgba(67, 127, 179, 0.28);
+  border-radius: 6px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+
+.surface-dressing-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 5px;
+  background: #05080c;
+}
+
+.surface-region-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(10, 28, 43, 0.55);
+  border: 1px solid rgba(67, 127, 179, 0.24);
+  border-radius: 6px;
+}
+
+.surface-region-card.is-empty {
+  opacity: 0.74;
+}
+
+.surface-region-card > strong {
+  color: #cfe4f8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.surface-region-reset {
+  justify-self: start;
+  padding: 5px 9px;
+  color: #9ec7ea;
+  background: rgba(12, 31, 48, 0.6);
+  border: 1px solid rgba(91, 157, 216, 0.32);
+  border-radius: 4px;
+  cursor: pointer;
+  font: 700 11px/1 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.surface-region-reset:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.surface-box-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #b9d2ea;
+  cursor: pointer;
+  font: 600 12px/1.2 var(--ds-font-sans, system-ui, sans-serif);
+}
+
+.surface-box-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #5b9dd8;
+  cursor: pointer;
+}
+
 .tileset-catalog-zoom {
   display: flex;
   gap: 7px;
@@ -10660,6 +9811,14 @@ button.tileset-relationship-cell {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 12px;
+}
+
+/* Surfaces are few (one short row), so the default grid stretch blows each card up
+   to fill the tall catalog pane. Pack the row to the top and size cards to content. */
+.tileset-studio-grid.surface-grid {
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
 }
 
 .tileset-studio-card {
@@ -12144,15 +11303,38 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
+  /* Same art-directed backdrop as the main menu (.main-menu-layer, ~line 712) so the
+     settings frames sit over the menu scene + the synced rain. Keep the two in sync.
+     First declaration = PNG fallback for engines without image-set()/type(). */
   background:
-    radial-gradient(920px 620px at 52% 16%, rgba(49, 81, 91, .22), transparent 64%),
-    #02070b;
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat #02070b;
   display: grid;
   height: 100%;
   justify-items: center;
   min-height: 0;
   overflow: hidden;
+  position: relative;
   width: 100%;
+}
+
+/* The "drops cross in front" overlay reads far heavier on settings than on the
+   menu: the dense frames give those front-drops a large surface to cross, while
+   the menu's sparse UI is crossed by only a few. Dim the FRONT layer on settings
+   so the in-front rain matches the menu's restraint. The field rain behind the
+   frames is untouched, and the menu overlay is unaffected (scoped via the
+   re-parented overlay living under .settings-art-route only while on settings). */
+.settings-art-route .ambience-overlay {
+  opacity: 0.3;
 }
 
 .settings-screen {
@@ -12171,6 +11353,10 @@ button.tileset-relationship-cell {
   inline-size: 100%;
   max-inline-size: none;
   min-block-size: 0;
+  /* Above the rain field (z-index 2), below the overlay drops (z-index 5) — mirrors
+     .main-menu-screen so the frames sit over the scene + rain, a few drops in front. */
+  position: relative;
+  z-index: 3;
   /* Flush to the app edges — full-bleed, like the Skirmish bar. Top app bars are
      conventionally edge-to-edge, not inset cards. */
   padding: 0;
@@ -12217,10 +11403,10 @@ button.tileset-relationship-cell {
   display: inline-flex;
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
-  gap: var(--ds-inline);
+  gap: 8px;
   image-rendering: pixelated;
   letter-spacing: .04em;
-  padding: 0 var(--ds-space-4);
+  padding: 0 16px;
   text-decoration: none;
   text-transform: uppercase;
   white-space: nowrap;
@@ -12295,6 +11481,7 @@ button.tileset-relationship-cell {
 .settings-tab span,
 .settings-row-copy {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -12444,13 +11631,12 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab strong {
-  /* Nav rail is subordinate chrome: its tab label sits at the content row-title
-     tier (md), never above it. Nav/tab labels are body-sized across M3/Carbon/
-     Polaris/Apple; lg would tie the "SETTINGS" brand title and overshoot the md
-     rows the tab navigates to (inversion). Active tab is marked by the frame fill
-     swap + color, not size. Governed separately from action buttons (ADR-0022).
-     Supersedes the undocumented 1.25rem from PR #148; its letter-spacing is kept. */
-  font-size: var(--ds-text-md);
+  /* Tab label sits at the content row-title tier and FOLLOWS it (ADR-0022, amended
+     2026-06-27): both moved md -> lg when the row text was enlarged. lg now ties
+     the "SETTINGS" brand title in SIZE; the brand keeps its lead by weight +
+     position (settings-only bump — the shared brand stays lg to avoid resizing
+     every screen). Active tab is marked by the frame fill swap + color, not size. */
+  font-size: var(--ds-text-lg);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -12527,16 +11713,12 @@ button.tileset-relationship-cell {
 }
 
 /* Layout container only. Each row carries its own atom-assembled frame
-   (ADR-0012/0014), so there is no CSS border/radius/background wrapping the rows. */
-/* Grouped list: one subtle container per section, rows separated by hairline
-   dividers — not an ornate frame around every row. The gold-bracket chrome stays
-   on the outer panels; the content list reads clean and scannable. */
+   (ADR-0012/0014), so there is NO CSS border/radius/background wrapping the rows.
+   (A merge re-introduced the old grouped-list "bubble" here — a navy fill + an
+   8px-radius border around each section's rows; removed so only the per-row atom
+   frame shows.) */
 .settings-section-rows {
-  background: rgba(8, 22, 34, 0.55);
-  border: 1px solid rgba(67, 127, 179, 0.26);
-  border-radius: 8px;
   display: grid;
-  overflow: hidden;
 }
 
 .settings-row {
@@ -12549,9 +11731,12 @@ button.tileset-relationship-cell {
   border: 14px solid transparent;
   border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
   image-rendering: pixelated;
-  display: grid;
+  /* Flex, not grid: a row carries an OPTIONAL value and/or control, so a fixed
+     column count strands an empty track + gap when one is absent — the lopsiding
+     ADR-0028 fixes. copy fills; value/control hug the end; side inset stays the
+     symmetric 16px (--ds-space-4) padding both sides. */
+  display: flex;
   gap: 16px;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
   min-height: 60px;
   padding: 6px 16px;
 }
@@ -12562,35 +11747,25 @@ button.tileset-relationship-cell {
   padding: 12px 16px;
 }
 
-.settings-row + .settings-row {
-  border-top: 1px solid rgba(67, 127, 179, 0.16);
-}
 
 .settings-row-tall {
   min-height: 80px;
 }
 
-.settings-row-icon {
-  display: block;
-  height: 36px;
-  image-rendering: pixelated;
-  object-fit: contain;
-  width: 36px;
-}
-
 .settings-row h4 {
-  font-size: var(--ds-text-md);
+  font-size: var(--ds-text-lg);
   text-transform: uppercase;
 }
 
 .settings-row p {
-  font-size: var(--ds-text-xs);
+  font-size: var(--ds-text-md);
   margin-top: 3px;
 }
 
 .settings-row-value {
+  flex: none;
   color: #eaf7ff;
-  font-size: var(--ds-text-sm);
+  font-size: var(--ds-text-md);
   min-width: 74px;
   text-align: right;
   text-transform: uppercase;
@@ -12598,6 +11773,7 @@ button.tileset-relationship-cell {
 }
 
 .settings-row-control {
+  flex: none;
   align-items: center;
   display: flex;
   gap: clamp(10px, 1vw, 16px);
@@ -12608,9 +11784,8 @@ button.tileset-relationship-cell {
 .settings-chrome-button {
   align-items: center;
   appearance: none;
-  border: 9px solid transparent;
-  border-width: 9px 16px;
-  border-image: url("/assets/ui/kit/button-neutral.png") 9 16 fill / 9px 16px stretch;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
   box-sizing: border-box;
   color: #eff9ff;
   display: inline-flex;
@@ -12703,14 +11878,41 @@ button.tileset-relationship-cell {
 }
 
 .settings-stepper .settings-chrome-button {
-  background: rgba(12, 31, 48, 0.92);
-  border: 1px solid rgba(91, 157, 216, 0.5);
-  border-image: none;
-  border-radius: 6px;
+  /* Use the forged button frame (inherited from .settings-chrome-button), shrunk
+     to a 32px square stepper key — NOT a raw CSS border/fill (ADR-0011/0014). */
   block-size: 32px;
   inline-size: 32px;
   min-width: 32px;
+  border-width: 8px;
+  border-image-width: 8px;
   padding: 0;
+}
+
+/* +/- drawn as bold geometric marks: simple utilitarian chrome -> DOM/CSS
+   (ui-art-direction render-accuracy rule). Crisp, icon-weight, inherits the button
+   color. The pixel font is weight-400 only, so a CSS mark reads far stronger than a
+   thin text "-"/"+". minus = the horizontal bar; plus = bar + vertical cross. */
+.stepper-glyph {
+  display: inline-block;
+  position: relative;
+  block-size: 14px;
+  inline-size: 14px;
+}
+.stepper-glyph::before {
+  background: currentColor;
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: calc(50% - 1.5px);
+  block-size: 3px;
+}
+.stepper-plus::after {
+  background: currentColor;
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(50% - 1.5px);
+  inline-size: 3px;
 }
 
 .settings-stepper output {
@@ -12723,8 +11925,11 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
-/* Volume slider — thin track that fills blue up to a square thumb (via --val),
-   plus the live percentage. Matches the concept's mixing rows. */
+/* Volume slider — ADR-0025 natural palette, NOT a forced UI-blue: a dark STONE
+   channel that fills warm BRONZE up to a beveled bronze handle (the kit gold/bronze
+   ramp — the same warm material as the brackets and the bell). Flat CSS for now;
+   the real stone/wood MATERIAL texture comes from the forged chrome (another branch)
+   that re-skins this. No cyan, no glow, no rounded radius. */
 .settings-slider {
   align-items: center;
   display: flex;
@@ -12741,36 +11946,32 @@ button.tileset-relationship-cell {
 }
 
 .settings-slider input[type="range"]::-webkit-slider-runnable-track {
-  background: linear-gradient(90deg, #2f8fe6 var(--val, 0%), #0a1a26 var(--val, 0%));
-  border: 1px solid rgba(67, 127, 179, .5);
-  border-radius: 2px;
-  height: 8px;
+  background: linear-gradient(90deg, #c79b55 var(--val, 0%), #26231e var(--val, 0%));
+  border: 1px solid #5a5248;
+  height: 10px;
 }
 .settings-slider input[type="range"]::-moz-range-track {
-  background: linear-gradient(90deg, #2f8fe6 var(--val, 0%), #0a1a26 var(--val, 0%));
-  border: 1px solid rgba(67, 127, 179, .5);
-  border-radius: 2px;
-  height: 8px;
+  background: linear-gradient(90deg, #c79b55 var(--val, 0%), #26231e var(--val, 0%));
+  border: 1px solid #5a5248;
+  height: 10px;
 }
 
 .settings-slider input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  background: #3aa0ff;
-  border: 1px solid #cfe9ff;
-  border-radius: 2px;
+  background: #b88a45;
+  border: 3px solid;
+  border-color: #f0dba8 #5b4124 #5b4124 #f0dba8;
   block-size: 20px;
-  box-shadow: 0 0 8px rgba(58, 160, 255, .6);
-  inline-size: 16px;
+  inline-size: 14px;
   margin-top: -7px;
 }
 .settings-slider input[type="range"]::-moz-range-thumb {
-  background: #3aa0ff;
-  border: 1px solid #cfe9ff;
-  border-radius: 2px;
+  background: #b88a45;
+  border: 3px solid;
+  border-color: #f0dba8 #5b4124 #5b4124 #f0dba8;
   block-size: 20px;
-  box-shadow: 0 0 8px rgba(58, 160, 255, .6);
-  inline-size: 16px;
+  inline-size: 14px;
 }
 
 .settings-slider input[type="range"]:focus-visible {
@@ -12786,51 +11987,44 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
-/* Clean pill switch — a rounded track that fills blue when on, with a sliding
-   white knob. The row title labels the control; the On/Off word is kept for
-   screen readers only. Replaces the heavy bracketed pixel-art track + knob. */
+/* Interim text toggle — the forged stone/wood track lands later (another branch).
+   Two live words; the current state is "lit" (warm wood-light on, cool stone-light
+   off) and the other dims. No raw-CSS chrome to throw away. */
 .settings-toggle {
   align-items: center;
   appearance: none;
-  background: rgba(70, 104, 132, 0.55);
-  border: 1px solid rgba(67, 127, 179, 0.45);
-  border-radius: 999px;
+  background: transparent;
+  /* The forged button frame (shared button-neutral 9-slice) — when the stone/wood
+     chrome re-skins that frame, this toggle inherits it for free. */
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
   box-sizing: border-box;
   cursor: pointer;
-  display: flex;
-  inline-size: 52px;
-  block-size: 28px;
-  justify-content: flex-start;
-  padding: 3px;
-  transition: background .16s ease, border-color .16s ease;
+  display: inline-flex;
+  gap: 12px;
+  image-rendering: pixelated;
+  block-size: 40px;
+  padding: 0 10px;
 }
 
-.settings-toggle.is-on {
-  background: #2f8fe6;
-  border-color: #7cd1ff;
+.settings-toggle-opt {
+  color: #46586a;
+  font-size: var(--ds-text-sm);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  transition: color .18s ease, text-shadow .18s ease;
 }
 
-.settings-toggle-label {
-  block-size: 1px;
-  clip: rect(0 0 0 0);
-  inline-size: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
+/* OFF active — cool stone-light */
+.settings-toggle.is-off .settings-toggle-opt[data-state="off"] {
+  color: #bcd2e2;
+  text-shadow: 0 0 9px rgba(150, 190, 220, 0.55);
 }
 
-.settings-toggle-knob {
-  background: #f3fbff;
-  border-radius: 999px;
-  block-size: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-  flex: none;
-  inline-size: 20px;
-  transition: transform .16s ease;
-}
-
-.settings-toggle.is-on .settings-toggle-knob {
-  transform: translateX(24px);
+/* ON active — warm wood-light */
+.settings-toggle.is-on .settings-toggle-opt[data-state="on"] {
+  color: #f0c48a;
+  text-shadow: 0 0 9px rgba(224, 170, 90, 0.6);
 }
 
 .settings-tab:focus-visible,
@@ -12898,16 +12092,13 @@ button.tileset-relationship-cell {
   }
 
   .settings-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-row-icon {
-    display: none;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .settings-row-value,
   .settings-row-control {
-    grid-column: auto;
+    text-align: left;
   }
 
   .settings-stepper {
@@ -13118,7 +12309,9 @@ button.tileset-relationship-cell {
 /* Per-asset property chips (gate + provenance) stacked at the card's trailing edge. */
 .asset-card-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 .asset-prov,
+.asset-orphan,
 .asset-gate { border-radius: 999px; font-family: ui-monospace, "Cascadia Mono", monospace; font-size: .56rem; padding: 2px 7px; white-space: nowrap; text-transform: uppercase; }
+.asset-orphan { background: rgba(214, 138, 90, .16); border: 1px solid rgba(214, 138, 90, .5); color: #f0a06a; }
 .asset-prov.is-forged { background: rgba(95, 184, 255, .14); border: 1px solid rgba(95, 184, 255, .4); color: #79d3ff; }
 .asset-prov.is-unverified { background: rgba(214, 170, 90, .12); border: 1px solid rgba(214, 170, 90, .4); color: #d8b364; }
 .asset-prov.is-original { background: rgba(158, 177, 197, .12); border: 1px solid rgba(158, 177, 197, .34); color: #9eb1c5; }
