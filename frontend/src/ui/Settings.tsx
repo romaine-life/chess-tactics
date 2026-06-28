@@ -504,12 +504,10 @@ export function Settings(): ReactElement {
   );
 
   // Dedicated soundtrack list, reached from the Music section's "View Tracks" pill.
-  // Its own route (/settings/audio/tracks); the ← back returns to the Audio page.
+  // Its own route (/settings/audio/tracks); the ← back (pinned outside the scroll
+  // area, see the panel header below) returns to the Audio page.
   const renderTracks = () => (
     <>
-      <div className="settings-tracks-bar">
-        <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
-      </div>
       <SettingsSection title="Soundtrack">
         {tracks === null ? (
           <SettingsRow title="Loading tracks…" description="Fetching the background music playlist." />
@@ -613,6 +611,13 @@ export function Settings(): ReactElement {
                 nav button; a visible panel heading just duplicated them. Keep an
                 accessible heading for screen-reader structure. */}
             <h2 className="sr-only">{active.label}</h2>
+            {showTracks ? (
+              <div className="settings-tracks-bar">
+                <div className="settings-tracks-bar-col">
+                  <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+                </div>
+              </div>
+            ) : null}
             <KitScroll className="settings-scroll">
               <div className="settings-panel-content">
                 {activeTab === 'general' ? renderGeneral() : null}

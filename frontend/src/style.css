@@ -11779,7 +11779,9 @@ button.tileset-relationship-cell {
 
 .settings-main-frame {
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  /* Row 1 (auto) is an optional pinned header — e.g. the tracks sub-view ← Back bar,
+     which must stay put while row 2 scrolls. It collapses to 0 when there's no header. */
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
 }
@@ -11817,10 +11819,11 @@ button.tileset-relationship-cell {
   padding-block-end: 4px;
 }
 
-/* The settings panel's scroll viewport fills the main frame's single grid row so the
-   ADR-0030 rail spans the full panel height. */
+/* The settings panel's scroll viewport always occupies the main frame's second (1fr)
+   row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
 .settings-scroll {
   block-size: 100%;
+  grid-row: 2;
   min-height: 0;
 }
 
@@ -11982,15 +11985,24 @@ button.tileset-relationship-cell {
   min-inline-size: 72px;
 }
 
-/* Tracks sub-view: a back bar above the soundtrack list. The list reuses the
-   standard section/row chrome; only this bar needs layout. The back pill hugs its
-   label (like the row-control action pills) instead of the decreed 176px box. */
+/* Tracks sub-view: a pinned header bar above the soundtrack list. It sits in the main
+   frame's header row, OUTSIDE the KitScroll viewport, so ← Back never scrolls with the
+   list. The 18px end-gutter mirrors the scroll viewport's reserved rail space so the
+   inner column lines up with the rows below; the pill hugs its label (like the
+   row-control action pills) instead of the decreed 176px box. */
 .settings-tracks-bar {
-  align-items: center;
-  display: flex;
+  padding-block-end: clamp(8px, .8vw, 12px);
+  padding-inline-end: 18px;
 }
 
-.settings-tracks-bar > .settings-chrome-button {
+.settings-tracks-bar-col {
+  align-items: center;
+  display: flex;
+  inline-size: min(100%, 880px);
+  margin-inline: auto;
+}
+
+.settings-tracks-bar-col > .settings-chrome-button {
   inline-size: auto;
   min-inline-size: 72px;
 }
