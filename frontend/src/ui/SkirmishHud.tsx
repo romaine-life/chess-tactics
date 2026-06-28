@@ -5,8 +5,14 @@ import { livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PALETTE_FOR_SIDE, isPlayablePieceType, pieceSpritePath, portraitPath } from '../core/pieces';
 import type { Piece, PieceType, Side } from '../core/types';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
+import panelCfg from '../../config/nine-slice/panel.json';
 
 const TYPE_LABEL = PIECE_LABEL;
+
+// Where the portrait backdrop art stops, in px from the footprint edge — the panel frame's Fill
+// box (set by eye in the 9-slice editor, stored in config/nine-slice/panel.json). Driven into CSS
+// via the `--portrait-fill` var so the framing stays the user's call, never hardcoded here.
+const PORTRAIT_FILL_PX = (panelCfg as { fill?: number }).fill ?? 0;
 
 const ROLE: Record<PieceType, string> = {
   pawn: 'Forward footman',
@@ -100,9 +106,10 @@ export function SkirmishHud() {
   const enemyPieces = livingPieces(game.pieces, 'enemy');
   const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins — capture the enemy King.'];
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
-  const portraitFrameStyle = focusedPortraitBackdrop
-    ? { '--skirmish-portrait-bg': `url("${focusedPortraitBackdrop}")` } as CSSProperties
-    : undefined;
+  const portraitFrameStyle = {
+    '--portrait-fill': `${PORTRAIT_FILL_PX}px`,
+    ...(focusedPortraitBackdrop ? { '--skirmish-portrait-bg': `url("${focusedPortraitBackdrop}")` } : {}),
+  } as CSSProperties;
   const turnLabel = game.winner
     ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Your turn' : 'Enemy turn';

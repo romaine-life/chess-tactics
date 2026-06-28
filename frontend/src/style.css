@@ -5391,25 +5391,35 @@ h1 {
 }
 
 .skirmish-portrait-frame {
+  /* Fill inset (px) from the footprint to where the backdrop art stops — set by eye in the
+     9-slice editor's Fill box (config/nine-slice/panel.json `fill`) and passed in as an inline
+     var by SkirmishHud. 0 = art fills to the footprint edge. */
+  --portrait-fill: 0px;
   align-items: center;
-  /* Kit panel frame (ADR-0032) — no `fill`, so the portrait backdrop shows through the
-     center; the bust crop fills the content box edge-to-edge. Not a raw-CSS box. */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 / 12px round;
+  /* Transparent-interior panel LINE frame (ADR-0034) so the backdrop art shows BEHIND the bracket
+     ornament — the standard "frame + fill it with a background" the rest of the chrome uses
+     (.surface-view-stage.is-panel, the settings dressing room), not a bespoke opaque-panel hack.
+     border-width = the fill inset (where the art stops); border-image stays 12px so the brackets
+     keep full size and bleed over the art; padding makes up the difference so the bust box is
+     unchanged. Not a raw-CSS box. */
+  background-color: rgba(3, 12, 19, .74);
+  background-clip: padding-box;
+  background-origin: padding-box;
+  border: var(--portrait-fill) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round;
   box-sizing: border-box;
   display: grid;
   image-rendering: pixelated;
   min-height: 86px;
-  padding: 0;
+  padding: calc(12px - var(--portrait-fill));
   place-items: center;
   overflow: hidden;
 }
 
 .skirmish-portrait-frame.has-backdrop {
-  background:
+  background-image:
     linear-gradient(180deg, rgba(2, 8, 13, .1), rgba(2, 8, 13, .34)),
-    var(--skirmish-portrait-bg),
-    rgba(3, 12, 19, .74);
+    var(--skirmish-portrait-bg);
   background-position: center;
   background-size: cover;
   /* Bottom vignette grounds the bust (image treatment, not a fabricated frame edge). */
