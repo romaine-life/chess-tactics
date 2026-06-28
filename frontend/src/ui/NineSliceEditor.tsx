@@ -199,6 +199,9 @@ export function NineSliceEditor(): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pvActualRef = useRef<HTMLCanvasElement>(null);
   const pvUseRef = useRef<HTMLCanvasElement>(null);
+  // Where the editor was opened from (the catalog passes ?return=<its url>). Captured on mount,
+  // before the asset-URL sync rewrites the query — so "Back to catalog" lands exactly there.
+  const returnUrl = useRef(new URLSearchParams(window.location.search).get('return') || '/tileset-studio');
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId)!, [assetId]);
   const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, content: DEFAULT_CONTENT, fill: DEFAULT_FILL };
   const stored = edits[assetId];
@@ -402,19 +405,7 @@ export function NineSliceEditor(): ReactElement {
         <select value={assetId} onChange={(e) => setAssetId(e.target.value)} style={ST.select}>
           {ASSETS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
         </select>
-        <a
-          href="/tileset-studio"
-          style={ST.link}
-          onClick={(e) => {
-            // Return to exactly where you opened the editor from (the catalog asset/category),
-            // not the catalog landing. The catalog opens the editor same-tab, so history.back()
-            // restores its full URL state. Fall back to the href on a direct / cross-site load.
-            try {
-              const fromStudio = document.referrer && new URL(document.referrer).pathname === '/tileset-studio';
-              if (fromStudio && window.history.length > 1) { e.preventDefault(); window.history.back(); }
-            } catch { /* malformed referrer — let the href fallback run */ }
-          }}
-        >← Back to catalog</a>
+        <a href={returnUrl.current} style={ST.link}>← Back to catalog</a>
       </header>
       <div style={ST.body}>
         <div style={ST.stage}>
