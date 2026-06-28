@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
-import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { AmbienceBackground } from './AmbienceBackground';
 import { BrandLockup } from './shared/BrandLockup';
+import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -115,7 +115,6 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
 // campaigns (the editor at /campaigns-next authors them; this plays them) and the
 // panel is the selected campaign's level select. Click the brand lockup to go home.
 export function Campaign(): ReactElement {
-  const [me, setMe] = useState<AuthUser | null>(null);
   const [selectedId, setSelectedId] = useState<string>(() => campaignIdFromPath(window.location.pathname));
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const campaigns = useCampaigns((s) => s.campaigns);
@@ -160,20 +159,6 @@ export function Campaign(): ReactElement {
     }
   }, [campaigns, selectedId]);
 
-  useEffect(() => {
-    let active = true;
-    fetchMe().then((user) => { if (active) setMe(user); });
-    return () => { active = false; };
-  }, []);
-
-  const signOut = async (): Promise<void> => {
-    try { await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }); } catch { /* ignore */ }
-    window.location.reload();
-  };
-
-  const signedIn = Boolean(me?.signed_in);
-  const accountName = signedIn ? (me!.name || me!.email || 'Player') : 'Guest';
-  const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
   const activeId = campaigns.some((c) => c.id === selectedId) ? selectedId : campaigns[0]?.id ?? '';
   const activeCampaign = campaigns.find((c) => c.id === activeId) ?? null;
 
@@ -185,15 +170,7 @@ export function Campaign(): ReactElement {
       <div className="settings-screen main-menu-twin-screen">
         <header className="app-titlebar settings-header-frame main-menu-twin-header">
           <BrandLockup screenName="Campaign" />
-          <div className="settings-account" aria-label="Account">
-            <span>
-              <strong>{accountName}</strong>
-              <em>{accountStatus}</em>
-            </span>
-            {signedIn
-              ? <button type="button" className="app-header-button app-header-button-active" onClick={signOut}>Sign Out</button>
-              : <a className="app-header-button app-header-button-active" href={signInHref('/campaign')}>Sign In</a>}
-          </div>
+          <HeaderAccountCluster signInReturnTo="/campaign" />
         </header>
 
         <div className="settings-shell">
