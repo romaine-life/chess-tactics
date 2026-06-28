@@ -848,6 +848,8 @@ app.get('/api/bgm', async (_req, res) => {
       .filter((track) => track && typeof track.file === 'string' && track.file)
       .map((track) => ({
         title: typeof track.title === 'string' && track.title ? track.title : track.file,
+        ...(typeof track.artist === 'string' && track.artist ? { artist: track.artist } : {}),
+        ...(typeof track.album === 'string' && track.album ? { album: track.album } : {}),
         url: `${bgmBaseUrl}/${encodeURIComponent(track.file)}`,
       }));
     bgmCache = { tracks, expiry: now + BGM_CACHE_TTL_MS };

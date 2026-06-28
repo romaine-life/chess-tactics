@@ -1469,8 +1469,10 @@ h1 {
   --ds-control-h: 34px;
   /* Shared top-bar height — the ONE standard header height across pages.
      Material's normal app bar is ~48-56dp; the tall 96-128dp "prominent" bar is
-     only for hero moments. This sits just above normal for the ornate frame. */
-  --app-header-h: clamp(64px, 5vw, 72px);
+     only for hero moments. Sized to seat the ~54px content with an ADR-0031
+     --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
+     + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
+  --app-header-h: clamp(84px, 5vw, 88px);
 }
 
 .main-assets-header .eyebrow {
@@ -6765,25 +6767,32 @@ h1 {
 /* ── Background music toggle ─────────────────────────────────────────────── */
 /* Self-contained floating control appended by bgm.js. Themed to the cobalt/gold
    chrome palette; glows gently while a track is playing. */
+/* Floating BGM control — kit chrome (the symmetric mode-button frame) holding the
+   music glyph, so it reads as part of the art instead of a raw rounded button. The
+   active frame marks "playing"; the icon dims when muted / silent. */
 .bgm-control {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 50;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   padding: 0;
-  font-size: 20px;
-  line-height: 1;
   cursor: pointer;
-  color: var(--ink);
-  background: var(--panel-2);
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-  transition: border-color 0.15s ease, box-shadow 0.3s ease, transform 0.1s ease, opacity 0.2s ease;
+  appearance: none;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  image-rendering: pixelated;
+  transition: transform 0.1s ease, opacity 0.2s ease;
+}
+
+.bgm-control-icon {
+  width: 22px;
+  height: 22px;
+  image-rendering: pixelated;
+  pointer-events: none;
 }
 
 .bgm-control:focus-visible {
@@ -6792,14 +6801,13 @@ h1 {
 }
 
 .bgm-control.is-playing {
-  border-color: var(--gold);
-  /* Playing = gold border + crisp hard ring, no blurred halo (no-glow rule). */
-  box-shadow: 0 0 0 1px var(--gold-dim);
+  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. */
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
-.bgm-control.is-muted {
-  opacity: 0.6;
-  color: var(--muted);
+.bgm-control.is-muted .bgm-control-icon {
+  opacity: 0.4;
+  filter: grayscale(0.7);
 }
 
 .shell.main-menu-active ~ .bgm-control,
@@ -7701,6 +7709,50 @@ h1 {
   font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+/* Per-group sub-header row: label on the left, a small select-all/clear on the right. */
+.tileset-filter-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tileset-filter-group-actions {
+  display: flex;
+  gap: 4px;
+  padding-right: 4px;
+  flex: none;
+}
+
+/* Higher specificity than `.tileset-control-stack button` (which forces min-height:34/padding:8-10),
+   so these stay tiny icon buttons that fit inside the h3's natural height instead of growing it. */
+.tileset-filter-group-head .tileset-filter-group-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  min-height: 0;
+  padding: 1px 0;
+  color: #aacbeb;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.92;
+}
+
+.tileset-filter-group-head .tileset-filter-group-actions button:hover {
+  color: #d8eaff;
+  background: rgba(91, 157, 216, 0.16);
+  opacity: 1;
+}
+
+.tileset-filter-group-actions svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
 }
 
 .tileset-filter-dropdown {
@@ -8828,6 +8880,18 @@ h1 {
   accent-color: #5bc8ff;
 }
 
+/* Units-catalog facing compass in the rail: an uppercase label + the 8-way compass. */
+.tileset-catalog-facing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .tileset-active-filters {
   display: flex;
   gap: 6px;
@@ -9757,7 +9821,9 @@ button.tileset-relationship-cell {
   display: block;
   width: 96px;
   height: 180px;
-  image-rendering: auto;
+  /* Pixel-art tiles: render crisp (nearest-neighbor), not bilinear-smoothed. The old
+     `auto` was a holdover from the smooth 3D-render tiles and blurred the pixel art. */
+  image-rendering: pixelated;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
@@ -10072,8 +10138,35 @@ button.tileset-relationship-cell {
   place-items: center;
 }
 
-.unit-facing-cell.is-unavailable {
-  opacity: 0.5;
+.unit-facing-cell {
+  color: #aebfd2;
+  background: rgba(2, 8, 13, 0.45);
+  border: 1px solid rgba(67, 127, 179, 0.32);
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.unit-facing-cell:hover:not(:disabled) {
+  border-color: rgba(67, 127, 179, 0.6);
+  color: #d7e6f5;
+}
+
+.unit-facing-cell.is-active {
+  color: #f3fbff;
+  background: rgba(25, 94, 132, 0.95);
+  border-color: rgba(67, 127, 179, 0.6);
+}
+
+.unit-facing-cell.is-unavailable,
+.unit-facing-cell:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.unit-facing-rotate {
+  font-size: 19px;
+  color: #9ec7ff;
 }
 
 .unit-scene-empty {
@@ -11128,11 +11221,18 @@ button.tileset-relationship-cell {
      gap (the original defect). The rule + stud are generated low-fi atoms in
      /assets/ui/titlebar/ (ADR-0011/0014); the wood stays a fixed surface so it lines up
      with the rest of the app's wood. */
+  /* The forged rule occupies the bottom band, so the content's bottom boundary is the
+     rule's TOP, not the bar edge. Content gets an ADR-0031 inset (--ds-space-2 = 8px)
+     off the top edge AND above the rule's top line; the bottom padding adds the rule
+     height (a chrome metric, exempt from the spacing scale) on top of that inset.
+     --app-header-h is sized so this inset fits (content + rule + 2×inset). */
+  --titlebar-rule-h: 14px;
+  --ds-titlebar-inset: var(--ds-space-2);
   border: 0;
-  padding: 0 32px;
+  padding: var(--ds-titlebar-inset) var(--ds-space-6) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
   background:
     url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat,
-    url("/assets/ui/titlebar/band-studded.png") left bottom / auto 14px repeat-x,
+    url("/assets/ui/titlebar/band-studded.png") left bottom / auto var(--titlebar-rule-h) repeat-x,
     url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
   image-rendering: pixelated;
 }
@@ -11476,7 +11576,9 @@ button.tileset-relationship-cell {
 
 .settings-main-frame {
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  /* Row 1 (auto) is an optional pinned header — e.g. the tracks sub-view ← Back bar,
+     which must stay put while row 2 scrolls. It collapses to 0 when there's no header. */
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
 }
@@ -11505,15 +11607,21 @@ button.tileset-relationship-cell {
   display: grid;
   /* Inter-section spacing — looser than the row gap so groups read as distinct. */
   gap: clamp(14px, 1.3vw, 22px);
-  /* Contain the row column to a comfortable reading width and centre it, so rows
-     don't stretch the full bleed and leave values floating at the far edge. */
+  /* Contain the row column to a comfortable reading width and centre it inside the
+     scroll viewport, so rows don't stretch the full bleed. Scrolling + the always-on
+     drawn rail (ADR-0030) are owned by the wrapping <KitScroll>, not this element. */
   inline-size: min(100%, 880px);
-  justify-self: center;
+  margin-inline: auto;
   min-height: 0;
-  overflow: auto;
-  padding-right: 4px;
-  scrollbar-color: #58bce8 #07121c;
-  scrollbar-width: thin;
+  padding-block-end: 4px;
+}
+
+/* The settings panel's scroll viewport always occupies the main frame's second (1fr)
+   row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
+.settings-scroll {
+  block-size: 100%;
+  grid-row: 2;
+  min-height: 0;
 }
 
 /* Labeled row groups: an uppercase eyebrow over a tight cluster of rows. */
@@ -11595,6 +11703,56 @@ button.tileset-relationship-cell {
   margin-top: 3px;
 }
 
+/* Small secondary line above a row title — the track's artist / where it's from. */
+.settings-row-eyebrow {
+  color: #8fb0c2;
+  display: block;
+  font-size: var(--ds-text-2xs);
+  letter-spacing: .06em;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+/* Permanent now-playing status row, pinned in the tracks header. The gold label keys
+   it as the live readout; artist sits above the track title, "Nothing" when idle. */
+.settings-nowplaying-label {
+  color: #c9a877;
+  display: block;
+  font-size: var(--ds-text-2xs);
+  letter-spacing: .12em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+/* Locked height (sized for label + artist + title) + single-line clamps so the row
+   never jerks when it flips between "Nothing" and a playing track. */
+.settings-nowplaying-row {
+  min-height: 96px;
+}
+
+.settings-nowplaying-row .settings-row-copy {
+  min-width: 0;
+}
+
+.settings-nowplaying-row h4 {
+  color: #f1dca6;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-nowplaying-row .settings-row-eyebrow {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-nowplaying-row h4.settings-nowplaying-empty {
+  color: #6f8597;
+}
+
 .settings-row-value {
   flex: none;
   color: #eaf7ff;
@@ -11670,6 +11828,38 @@ button.tileset-relationship-cell {
 .settings-row-control > .settings-chrome-button {
   /* Box HUGS its label + padding (Carbon/M2: button width = label + padding), not a
      decreed 176px the label floats in. Touch-min floors short words; longer grow. */
+  inline-size: auto;
+  min-inline-size: 72px;
+}
+
+/* Tracks sub-view: a pinned header above the soundtrack list. It sits in the main
+   frame's header row, OUTSIDE the KitScroll viewport, so ← Back AND the "Soundtrack"
+   eyebrow stay frozen while only the rows scroll. The 18px end-gutter mirrors the
+   scroll viewport's reserved rail space so the inner column lines up with the rows
+   below; the pill hugs its label (like the row-control action pills) not the 176px box. */
+.settings-tracks-bar {
+  padding-block-end: clamp(8px, .8vw, 12px);
+  padding-inline-end: 18px;
+}
+
+.settings-tracks-bar-col {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, .8vw, 12px);
+  inline-size: min(100%, 880px);
+  margin-inline: auto;
+}
+
+/* ← Back and ⇄ Shuffle sit side by side on one line, hugging the left, above the
+   "Soundtrack" eyebrow; each pill hugs its label instead of the decreed 176px box. */
+.settings-tracks-bar-actions {
+  align-items: center;
+  align-self: flex-start;
+  display: flex;
+  gap: clamp(8px, .7vw, 12px);
+}
+
+.settings-tracks-bar-actions > .settings-chrome-button {
   inline-size: auto;
   min-inline-size: 72px;
 }

@@ -6,6 +6,7 @@
 // `category === '…'` branch.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileFamilies } from '../art/tileset';
+import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
   terrainLabels,
   transitionPairs,
@@ -47,7 +48,11 @@ import {
   activeUnitFamilies,
   familyLabels,
   hasDirectionSprite,
+  directionCompassCells,
+  rookDirectionLabel,
+  rookDirections,
   unitAssets,
+  UNIT_METHOD_OPTIONS,
   type Direction,
   type Faction,
   type PieceId,
@@ -60,13 +65,12 @@ import {
 
 type StudioFamilyId = TileFamilyId;
 type StudioAssetKind = TileAssetKind;
-// The studio has three persistent destinations (tier-1), all always reachable and
-// decoupled from the catalog category: 'catalog' browses a grid; 'lab' is the
-// board workbench (direct manipulation — tiles/units get placed there); 'viewer'
-// is the read-only stage for one finished, non-manipulable thing (an asset or an
-// artwork). Each remembers its own last state, so switching between them is free.
-// See docs/studio-control-architecture.md.
-type StudioMode = 'catalog' | 'lab' | 'viewer';
+// The studio has two persistent destinations (tier-1), both always reachable and
+// decoupled from the catalog category: 'catalog' browses a grid; 'viewer' is the
+// read-only stage for one finished, non-manipulable thing (an asset or an artwork).
+// Board editing lives in the standalone Level Editor (/level-editor), which the
+// catalog cards and the "Lab" tab route to. See docs/studio-control-architecture.md.
+type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
@@ -101,6 +105,10 @@ interface StudioAsset extends TileSocketAsset {
   source: string;
   probability: number;
   notes: string;
+  /** Non-production reference tile (held out of the board/game); shown in the catalog only. */
+  speculative?: boolean;
+  /** How a tile was produced, e.g. "Codex → Filter", "Textured". */
+  method?: string;
 }
 
 interface StudioFamily {
@@ -178,6 +186,11 @@ const studioFamilies: StudioFamily[] = (Object.keys(tileFamilies) as TileFamilyI
   assets: tileFamilies[id].map((asset): StudioAsset => ({ ...asset })),
 }));
 
+// Non-production reference tiles (legacy textured, codex→filter, rejected bake-off methods).
+// Injected into the Tiles CATALOG only (below) — deliberately NOT in studioFamilies, so they
+// never reach board generation or the Level Editor brush. See art/nonProductionTiles.ts.
+const nonProductionStudioTiles: StudioAsset[] = nonProductionTileAssets.map((asset): StudioAsset => ({ ...asset }));
+
 const familyCounts = (family: StudioFamily): string => {
   const variants = family.assets.filter((asset) => asset.kind === 'tile').length;
   return `${variants} ${variants === 1 ? 'tile' : 'tiles'}`;
@@ -190,7 +203,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
-const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'lab' || value === 'viewer';
+const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
 const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
@@ -224,8 +237,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const isNineSliceAlias = window.location.pathname === '/nine-slice-editor';
   const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
   // Destination is decoupled from category — any mode is valid with any category,
-  // so the URL is taken at face value (no normalization). 'view' is a legacy alias.
-  const studioMode = isNineSliceAlias ? 'viewer' : isStudioMode(mode) ? mode : mode === 'view' ? 'lab' : studioDefaults.studioMode;
+  // so the URL is taken at face value (no normalization).
+  const studioMode = isNineSliceAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
   const routeCategory = isNineSliceAlias ? 'assets' : isStudioCategory(cat) ? cat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
@@ -302,7 +315,6 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
     else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
   }
-  if (route.studioMode === 'lab') params.set('lab', route.labMode);
   params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
   if (route.selectedSlotMask) params.set('slot', String(route.selectedSlotMask));
@@ -345,6 +357,38 @@ function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 150): num
   }, [frameCount]);
 
   return animationFrame;
+}
+
+// The 8-way facing compass (iso 3×3 grid + a center ↻ rotate hub). Shared by the
+// Level Editor (rotates the selected unit) and the Units catalog (rotates the card
+// preview). `available` greys out directions a unit lacks; omit to enable all 8.
+function FacingCompass({ direction, onSelect, onRotate, available }: {
+  direction: Direction;
+  onSelect: (dir: Direction) => void;
+  onRotate: () => void;
+  available?: (dir: Direction) => boolean;
+}): ReactElement {
+  return (
+    <div className="unit-facing-compass" aria-label="Unit facing (8-way)">
+      {directionCompassCells.map((cell) =>
+        cell === 'center' ? (
+          <button key="center" type="button" className="unit-facing-cell unit-facing-rotate" onClick={onRotate} title="Rotate clockwise" aria-label="Rotate clockwise">↻</button>
+        ) : (
+          <button
+            key={cell}
+            type="button"
+            className={`unit-facing-cell${direction === cell ? ' is-active' : ''}${available && !available(cell) ? ' is-unavailable' : ''}`}
+            disabled={available ? !available(cell) : false}
+            onClick={() => onSelect(cell)}
+            title={`Face ${cell}`}
+            aria-label={`Face ${cell}`}
+          >
+            {rookDirectionLabel[cell]}
+          </button>
+        ),
+      )}
+    </div>
+  );
 }
 
 // Unified editable board: every Studio view renders through this. It's a full
@@ -535,6 +579,13 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Which item the Viewer is showing (independent of the catalog category).
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
+  const [selectedUnitMethods, setSelectedUnitMethods] = useState<string[]>(UNIT_METHOD_OPTIONS.map((m) => m.id));
+  // Facing for the Units catalog preview — the compass in the rail rotates every unit card.
+  const [catalogFacing, setCatalogFacing] = useState<Direction>('south');
+  const rotateCatalogFacingCw = (): void => {
+    const i = rookDirections.indexOf(catalogFacing);
+    setCatalogFacing(rookDirections[(i + 1) % rookDirections.length] ?? 'south');
+  };
   const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [zoom, setZoom] = useState(1);
@@ -834,17 +885,26 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // render either of these; a new asset type is just another descriptor.
   const tileFamilyOf = new Map<string, StudioFamilyId>();
   for (const fam of studioFamilies) for (const a of fam.assets) tileFamilyOf.set(a.id, fam.id);
+  for (const a of nonProductionStudioTiles) tileFamilyOf.set(a.id, nonProductionTileFamilyOf.get(a.id) ?? 'grass');
   const tilesCatalogType: CatalogType<StudioAsset> = {
     id: 'tiles',
     label: 'Tiles',
-    assets: studioFamilies.flatMap((fam) => fam.assets),
+    assets: [...studioFamilies.flatMap((fam) => fam.assets), ...nonProductionStudioTiles],
     card: (a) => ({ img: assetFrameSrc(a, animationFrame), title: a.label, badge: a.role }),
-    sections: (visible) => [{ id: 'base', label: 'Base Tiles', assets: visible.filter((a) => a.kind === 'tile') }],
+    sections: (visible) => {
+      const tiles = visible.filter((a) => a.kind === 'tile');
+      const prod = tiles.filter((a) => !a.speculative);
+      const spec = tiles.filter((a) => a.speculative);
+      const out: { id: string; label: string; assets: StudioAsset[] }[] = [];
+      if (prod.length) out.push({ id: 'base', label: 'Base Tiles', assets: prod });
+      if (spec.length) out.push({ id: 'non-production', label: 'Non-production — reference & rejected bake-off methods', assets: spec });
+      return out;
+    },
     query: {
       value: catalogQuery,
       set: setCatalogQuery,
       placeholder: 'label, source, socket...',
-      match: (a, q) => [a.label, a.role, a.source, a.notes, ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
+      match: (a, q) => [a.label, a.role, a.source, a.notes, a.method ?? '', a.speculative ? 'non-production speculative' : '', ...(a.terrains ?? [])].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
     filters: [
@@ -869,13 +929,20 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'units',
     label: 'Units',
     assets: unitAssets,
-    card: (u) => ({ img: u.preview, title: u.label, badge: u.badge, isUnit: true }),
-    sections: (visible) => [{ id: 'units', label: 'Production Units', assets: [...visible] }],
+    card: (u) => ({ img: hasDirectionSprite(u, catalogFacing) ? u.sprite('navy-blue', catalogFacing) : u.preview, title: u.label, badge: u.badge, isUnit: true }),
+    sections: (visible) => {
+      const prod = visible.filter((u) => !u.speculative);
+      const spec = visible.filter((u) => u.speculative);
+      const out: { id: string; label: string; assets: UnitAsset[] }[] = [];
+      if (prod.length) out.push({ id: 'production', label: 'Production Units', assets: prod });
+      if (spec.length) out.push({ id: 'speculative', label: 'Speculative — pixel-art candidate libraries (navy only)', assets: spec });
+      return out;
+    },
     query: {
       value: catalogQuery,
       set: setCatalogQuery,
-      placeholder: 'piece, read, status...',
-      match: (u, q) => [u.label, u.badge, u.family, u.read, u.status].join(' ').toLowerCase().includes(q),
+      placeholder: 'piece, library, read...',
+      match: (u, q) => [u.label, u.badge, u.family, u.read, u.status, u.method ?? '', u.speculative ? 'speculative' : 'production'].join(' ').toLowerCase().includes(q),
     },
     zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
     filters: [
@@ -892,11 +959,30 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         selectAll: () => setSelectedUnitFamilies(activeUnitFamilies),
         clear: () => setSelectedUnitFamilies([]),
       },
+      {
+        id: 'method',
+        label: 'Library',
+        options: UNIT_METHOD_OPTIONS.map((m) => {
+          const n = unitAssets.filter((u) => (u.method ?? 'Production') === m.id).length;
+          return { id: m.id, label: m.label, sub: `${m.sub} · ${n}` };
+        }),
+        memberOf: (u) => [u.method ?? 'Production'],
+        selected: selectedUnitMethods,
+        toggle: (id) => setSelectedUnitMethods((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
+        selectAll: () => setSelectedUnitMethods(UNIT_METHOD_OPTIONS.map((m) => m.id)),
+        clear: () => setSelectedUnitMethods([]),
+      },
     ],
     onSelect: (u) => selectUnitInCatalog(u.id),
     onView: (u) => openInLevelEditor('unit', u.id),
     onArm: (u) => openInLevelEditor('unit', u.id),
     selectedId: unitBrushId,
+    extra: (
+      <div className="tileset-catalog-facing">
+        <span>Facing</span>
+        <FacingCompass direction={catalogFacing} onSelect={setCatalogFacing} onRotate={rotateCatalogFacingCw} />
+      </div>
+    ),
     note: 'Select a unit card to place it in the shared lab board.',
   };
   const doodadsCatalogType: CatalogType<DoodadAsset> = {
@@ -1229,7 +1315,6 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
   return cells;
 };
-const LE_FACING: Direction[] = ['south', 'east', 'north', 'west'];
 const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 
 export function LevelEditor(): ReactElement {
@@ -1280,6 +1365,24 @@ export function LevelEditor(): ReactElement {
   const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
   const unitFaction: Faction = LE_SIDE_FACTION[unitSide];
+  // Facing sets the brush direction AND rotates the unit selected on the board (in place).
+  const setUnitFacing = (dir: Direction): void => {
+    setUnitBrushDirection(dir);
+    setBoardUnits((prev) => {
+      const key = selectedCell ? `${selectedCell.x},${selectedCell.y}` : null;
+      if (!key || !prev[key]) return prev;
+      return { ...prev, [key]: { ...prev[key], direction: dir } };
+    });
+  };
+  // Center hub: spin one step clockwise (rookDirections is N→NE→E…→NW), skipping directions this unit lacks.
+  const rotateFacingCw = (): void => {
+    const n = rookDirections.length;
+    const start = rookDirections.indexOf(unitBrushDirection);
+    for (let step = 1; step <= n; step += 1) {
+      const next = rookDirections[(start + step) % n];
+      if (hasDirectionSprite(unitBrushAsset, next)) { setUnitFacing(next); return; }
+    }
+  };
   const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAsset(id);
   const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? DOODAD_ASSETS[0];
   // HARD terrain gate (mirrors the Studio): a doodad only lands on a tile of its home terrain.
@@ -1449,11 +1552,12 @@ export function LevelEditor(): ReactElement {
               <button type="button" className={`le-seg-btn ${unitSide === 'enemy' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('enemy')}>Enemy</button>
             </div>
             <h2 className="le-card-subhead">Facing</h2>
-            <div className="le-seg">
-              {LE_FACING.map((dir) => (
-                <button type="button" key={dir} className={`le-seg-btn ${unitBrushDirection === dir ? 'active' : ''}`.trim()} onClick={() => setUnitBrushDirection(dir)} title={dir}>{dir.charAt(0).toUpperCase()}</button>
-              ))}
-            </div>
+            <FacingCompass
+              direction={unitBrushDirection}
+              onSelect={setUnitFacing}
+              onRotate={rotateFacingCw}
+              available={(d) => hasDirectionSprite(unitBrushAsset, d)}
+            />
             <h2 className="le-card-subhead">Units</h2>
             <div className="le-swatches">
               {unitAssets.map((unit) => (
