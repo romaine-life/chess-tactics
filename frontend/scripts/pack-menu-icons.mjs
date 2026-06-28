@@ -29,7 +29,7 @@ const ICONS = [
   { slug: 'campaign-editor', cls: 'full',         axis: 'long', target: 52, nudgeY: 0 }, // route-map: full/square
   { slug: 'level-editor',    cls: 'upright',      axis: 'h',    target: 48, nudgeY: 0 }, // scroll: blocky, held back
   { slug: 'lobbies',         cls: 'wide',         axis: 'w',    target: 48, nudgeY: 0 }, // pawns: wide cluster, held back
-  { slug: 'settings',        cls: 'tall',         axis: 'h',    target: 54, nudgeY: 0 }, // keys: tall-thin, gains height
+  { slug: 'settings',        cls: 'round',        axis: 'long', target: 52, nudgeY: 0 }, // gear: round/full, equal optical mass
 ];
 
 const PYSRC = `

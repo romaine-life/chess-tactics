@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { BrandLockup } from './shared/BrandLockup';
+import { Stepper } from './shared/Stepper';
+import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -81,6 +83,37 @@ function asset(file: string): string {
   return `/assets/ui/kit/icons/${file.replace(/^icon-/, '').replace(/-generated/, '')}`;
 }
 
+// Build / server provenance, stamped by vite.config buildInfo, surfaced in About so
+// "which server/build am I actually on?" is summonable from one place — dev or prod.
+// In dev it names the WORKTREE + commit + live port (a server from the wrong worktree
+// reports its own name, so being on the wrong one is a glance, not a 2-hour hunt).
+declare const __BUILD_INFO__:
+  | { mode: 'dev'; worktree: string; commit: string; dirty: boolean; startedAt: number }
+  | { mode: 'prod'; commit: string; dirty: boolean }
+  | undefined;
+
+// The deployed entry-chunk hash (empty in dev) — the live asset-bundle id for prod.
+function bootedEntryHash(): string {
+  const el = document.querySelector('script[type="module"][src*="/assets/index-"]') as HTMLScriptElement | null;
+  return (el?.src || '').match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/)?.[1] || '';
+}
+
+function buildSummary(): { headline: string; detail: string } {
+  const info = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
+  if (info && info.mode === 'dev') {
+    const port = window.location.port || 'default';
+    return {
+      headline: `${info.worktree} · ${info.commit}${info.dirty ? '*' : ''}`,
+      detail: `Local dev server · :${port} · started ${new Date(info.startedAt).toLocaleTimeString()}`,
+    };
+  }
+  const hash = bootedEntryHash();
+  return {
+    headline: `${info?.commit ?? '(unknown)'}${info?.dirty ? '*' : ''}${hash ? ` · ${hash}` : ''}`,
+    detail: 'Production build',
+  };
+}
+
 function readMuted(): boolean {
   try { return localStorage.getItem(MUTE_KEY) === 'true'; } catch { return false; }
 }
@@ -156,34 +189,6 @@ function displayAccountName(user: AuthUser | null): string {
   return user.name || user.email || 'Player';
 }
 
-function SettingsToggle({
-  checked,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  onChange: (checked: boolean) => void;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      className={`settings-toggle ${checked ? 'is-on' : 'is-off'}`}
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-    >
-      {/* Interim text toggle: two live words; the current state lights up (warm =
-          on, cool = off), the other dims. No chrome-material dependency, so the
-          stone/wood chrome (forged on another branch) can re-skin it later without
-          touching this logic. */}
-      <span className="settings-toggle-opt" data-state="off">Off</span>
-      <span className="settings-toggle-opt" data-state="on">On</span>
-    </button>
-  );
-}
-
 function SettingsRow({
   title,
   description,
@@ -224,30 +229,6 @@ function SettingsSection({
       <h3 className="settings-section-title">{title}</h3>
       <div className="settings-section-rows">{children}</div>
     </section>
-  );
-}
-
-function Stepper({
-  value,
-  suffix,
-  decreaseLabel,
-  increaseLabel,
-  onDecrease,
-  onIncrease,
-}: {
-  value: number;
-  suffix: string;
-  decreaseLabel: string;
-  increaseLabel: string;
-  onDecrease: () => void;
-  onIncrease: () => void;
-}): ReactElement {
-  return (
-    <div className="settings-stepper">
-      <SettingsButton ariaLabel={decreaseLabel} onClick={onDecrease}><span className="stepper-glyph stepper-minus" aria-hidden="true" /></SettingsButton>
-      <output>{value}{suffix}</output>
-      <SettingsButton ariaLabel={increaseLabel} onClick={onIncrease}><span className="stepper-glyph stepper-plus" aria-hidden="true" /></SettingsButton>
-    </div>
   );
 }
 
@@ -391,6 +372,7 @@ export function Settings(): ReactElement {
   const signedIn = Boolean(me?.signed_in);
   const accountName = displayAccountName(me);
   const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
+  const build = buildSummary();
 
   const renderGeneral = () => (
     <>
@@ -425,6 +407,13 @@ export function Settings(): ReactElement {
           <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
         </SettingsRow>
       </SettingsSection>
+      <SettingsSection title="About">
+        <SettingsRow
+          title="Build"
+          description={build.detail}
+          value={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{build.headline}</span>}
+        />
+      </SettingsSection>
     </>
   );
 
@@ -432,12 +421,12 @@ export function Settings(): ReactElement {
     <>
       <SettingsSection title="Master">
         <SettingsRow title="Master Audio" description="Mute or restore all browser audio for Chess Tactics.">
-          <SettingsToggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} />
+          <Toggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Music">
         <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
-          <SettingsToggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
+          <Toggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
         </SettingsRow>
         <SettingsRow title="Music Volume" description="Set the target music mix for this browser.">
           <Slider
@@ -459,7 +448,7 @@ export function Settings(): ReactElement {
           />
         </SettingsRow>
         <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
-          <SettingsToggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
+          <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Notes">

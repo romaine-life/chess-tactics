@@ -2,7 +2,31 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
+import { execSync } from 'node:child_process';
 import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
+
+// Stamp build/server provenance into the bundle so Settings → About can always
+// say exactly what's serving this page. In dev that's the WORKTREE + commit (the
+// thing that would have made "you're on the wrong worktree's server" a glance
+// instead of a two-hour hunt — a server from another worktree injects its own
+// name). In a production build it's just the commit. Always defined, so the
+// reader never hits an undefined global.
+function buildInfo() {
+  return {
+    name: 'build-info',
+    config(_config, { command }) {
+      const sh = (c) => { try { return execSync(c, { cwd: process.cwd() }).toString().trim(); } catch { return ''; } };
+      const commit = sh('git rev-parse --short HEAD') || '(no-git)';
+      const dirty = sh('git status --porcelain').length > 0;
+      if (command !== 'serve') {
+        return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'prod', commit, dirty }) } };
+      }
+      const cwd = process.cwd();
+      const worktree = cwd.replace(/[\\/]frontend[\\/]?$/, '').split(/[\\/]/).pop() || cwd;
+      return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'dev', worktree, commit, dirty, startedAt: Date.now() }) } };
+    },
+  };
+}
 
 // The legacy vanilla entry (index.html -> /src/app.js) is unchanged; the React
 // plugin only adds JSX/TSX handling for the new surfaces we migrate onto.
@@ -43,5 +67,5 @@ function doodadCompositionSave() {
 }
 
 export default defineConfig({
-  plugins: [react(), doodadCompositionSave(), nineSliceDevSave()],
+  plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave()],
 });

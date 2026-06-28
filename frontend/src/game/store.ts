@@ -85,11 +85,30 @@ export interface SkirmishState {
   log: string[];
   /** Win condition for this game. A free skirmish defaults to capture-king. */
   objective: ObjectiveType;
+  /** True once newSkirmish has built a real game (vs the module-load placeholder). */
+  started: boolean;
+  /** Level this game is testing (null = free skirmish). Lets the screen tell
+   * "resume the same board" from "launch a different level". */
+  levelId: string | null;
   newSkirmish: (opts: SkirmishOptions) => void;
   select: (id: string | null) => void;
   focus: (id: string | null) => void;
   movesForSelected: () => Move[];
   tryMoveTo: (x: number, y: number) => void;
+}
+
+/**
+ * Decide whether entering the skirmish screen should build a fresh game or
+ * resume the one already in the store. The store is a module singleton that
+ * survives route changes, so navigating to the menu and back must NOT restart a
+ * live board. Start fresh only when there is nothing worth resuming: no game has
+ * been started, the last one already finished, or a different level is opened.
+ */
+export function shouldStartFreshSkirmish(
+  state: Pick<SkirmishState, 'started' | 'game' | 'levelId'>,
+  requestedLevelId: string | null,
+): boolean {
+  return !state.started || state.game.winner !== null || state.levelId !== requestedLevelId;
 }
 
 const INITIAL_GAME = createSkirmish({ seed: 1 });
@@ -129,6 +148,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   tick: 0,
   log: [`Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`],
   objective: 'capture-king',
+  started: false,
+  levelId: null,
 
   newSkirmish: (opts) => {
     const created = createSkirmish(opts);
@@ -140,7 +161,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       ? `Test play begins — objective: ${OBJECTIVE_LOG_COPY[opts.level.objective]}.`
       : `Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`;
     const selectedId = firstPlayerId(game);
-    set({ game, env, seed: opts.seed, tick: 0, selectedId, focusedId: selectedId, log: [intro], objective });
+    set({ game, env, seed: opts.seed, tick: 0, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null });
   },
 
   select: (id) => {

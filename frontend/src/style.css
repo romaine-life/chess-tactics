@@ -743,7 +743,10 @@ h1 {
   /* Type tokens retired into the --ds-text-* scale (ADR-0016). */
   position: relative;
   display: grid;
-  grid-template-columns: minmax(300px, 370px) minmax(0, 1fr) minmax(440px, 540px);
+  /* Column 1 holds the brand + button stack. Its max grows with --menu-btn-w (the Pages
+     editor's "Button length") so longer buttons stay contained instead of overflowing into
+     the centre / profile column; at the 370px default this is identical to minmax(300,370). */
+  grid-template-columns: minmax(300px, max(370px, var(--menu-btn-w, 370px))) minmax(0, 1fr) minmax(440px, 540px);
   grid-template-rows: auto 1fr auto;
   gap: 12px 18px;
   height: 100%;
@@ -763,6 +766,31 @@ h1 {
   background:
     linear-gradient(90deg, rgba(2, 7, 11, .9) 0%, rgba(2, 7, 11, .68) 32%, rgba(2, 7, 11, .08) 52%, rgba(2, 7, 11, .68) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .46));
+}
+
+/* ── Settings-twin main menu (ADR-0003 superseded) ──────────────────────────────────
+   The home screen reuses the SAME baked-skin chrome as /settings — app title bar
+   (line frame over wood-oak) + the account slot, and a rail of stone-surface mode tabs
+   (.settings-tab) floating on the ambience — instead of the retired bespoke "Chess
+   Tactics" hero + stone slabs. Only the screen grid is menu-specific; the frames, tabs,
+   and surfaces are the shared settings skin. */
+.main-menu-twin-screen {
+  position: relative;
+  z-index: 3;
+  block-size: 100%;
+  inline-size: 100%;
+  display: grid;
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  gap: clamp(6px, .72vw, 12px);
+  min-block-size: 0;
+  /* .menu-layer.main-menu-layer is pointer-events:none (so the rain stays click-through);
+     the old menu re-enabled interaction on .main-menu-left/right. Re-enable it for the whole
+     twin UI, or every click falls through to the app root and the tabs do nothing. */
+  pointer-events: auto;
+}
+/* Home has no Back/Menu actions, so the bar is just brand | account. */
+.main-menu-twin-header {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 /* Ambience shared-world effect canvas. Sits over the menu's background art
@@ -1036,11 +1064,15 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: clamp(8px, 1.1vh, 11px);
-  width: min(100%, 370px);
-  max-width: 100%;
-  /* --menu-icon-size / --menu-btn-h defaults live on :root (above any viewer tweak
-     wrapper) — declaring them HERE would shadow the Pages Main-Menu editor's override.
-     See :root + ADR-0027 (icon size) / ADR-0021 (button height). */
+  /* Button length + stack indent are driven by :root tokens the Pages editor overrides
+     (--menu-btn-w / --menu-btn-indent). max-width:none lets the width token govern past the
+     370px brand-column cap (.main-menu-actions); the indent is one uniform offset on the whole
+     stack so all five buttons keep one identical left edge (NN/g vertical-nav guidance).
+     --menu-icon-size / --menu-btn-h defaults likewise live on :root, not here, so declaring
+     them locally won't shadow the editor's override. ADR-0027 (icon) / ADR-0021 (height). */
+  width: min(calc(100% - var(--menu-btn-indent, 0px)), var(--menu-btn-w, 370px));
+  max-width: none;
+  margin-left: var(--menu-btn-indent, 0px);
 }
 
 /* Comparison knob (?indent=hover|hover10): a deliberate slide-RIGHT on hover/focus —
@@ -1076,6 +1108,20 @@ h1 {
   .pages-menu-tweak.indent-hover .mode-button-stone:hover,
   .pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: none; }
 }
+/* "Preview hover state" (editor only): freeze every button in its pointed-at look —
+   the iron-lip lift plus, if a slide amount is selected, the slide offset — so the
+   hover micro-interaction is visible without a mouse (otherwise the control does nothing
+   until you physically hover a single button). */
+.pages-menu-tweak.preview-hover .mode-button-stone {
+  border-color: #2c3c4e;
+  border-top-color: #4a607c;
+  box-shadow:
+    inset 0 1px 0 rgba(160, 191, 230, .26),
+    inset 0 0 0 1px rgba(0, 0, 0, .40),
+    0 1px 3px rgba(0, 0, 0, .55);
+}
+.pages-menu-tweak.preview-hover.indent-hover .mode-button-stone { transform: translateX(6px); }
+.pages-menu-tweak.preview-hover.indent-hover-10 .mode-button-stone { transform: translateX(10px); }
 .pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
 /* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
    sprites): a solid stone-ish plate with the page initial, centered by the base place-items. */
@@ -1351,6 +1397,13 @@ h1 {
   z-index: 1;
 }
 
+/* User-box (logged-in profile bar) background toggle: --profile-bar-frame flips the kit
+   panel frame + fill on/off. Defaults to the framed look; the Pages editor sets it to
+   `none` to preview the bar with no background (crest + name + actions floating). */
+.profile-bar::before {
+  display: var(--profile-bar-frame, block);
+}
+
 /* Element 03 - hybrid (render-accuracy + text rule, docs/ui-art-direction.md):
    art-crop the painterly lion crest from main-menu-aspirational.png; clean SVG cog/rook
    silhouettes; all copy + counts are live DOM text. Two stacked bars matching the concept. */
@@ -1593,6 +1646,12 @@ h1 {
      Main-Menu editor can override them on its wrapper. ADR-0027 (icon) / ADR-0021 (height). */
   --menu-icon-size: 64px;
   --menu-btn-h: 80px;
+  /* Button length (the stone slab's width) and the static indent of the whole button
+     stack relative to the brand above it. The live menu ships flush (indent 0); design
+     research recommends a 16px (1em) indent — the Pages editor opens at that value so the
+     recommendation renders, but the live default stays 0 until it's deliberately adopted. */
+  --menu-btn-w: 370px;
+  --menu-btn-indent: 0px;
   /* color */
   --ds-canvas: #1B1814;
   --ds-surface: #262119;
@@ -4708,14 +4767,20 @@ h1 {
   background: transparent;
 }
 
-.skirmish-board-lab .tileset-view-stage {
+/* Strip the default .tileset-view-stage box (checkerboard fill + border + radius) on
+   both in-game boards: the live skirmish board AND the level editor. They share the
+   same world background, so they must read identically — the editor board floats on
+   the night sky too, not on the studio's transparency-checker stage (ADR-0032). */
+.skirmish-board-lab .tileset-view-stage,
+.level-editor-screen .tileset-view-stage {
   border: 0;
   border-radius: 0;
   padding: 0;
   background: transparent;
 }
 
-.skirmish-board-lab .tileset-view-stage:focus-within {
+.skirmish-board-lab .tileset-view-stage:focus-within,
+.level-editor-screen .tileset-view-stage:focus-within {
   outline: none;
 }
 
@@ -5225,7 +5290,10 @@ h1 {
 }
 .level-editor-screen .le-topbar { grid-area: titlebar; }
 .level-editor-screen .skirmish-field { grid-area: board; }
-.level-editor-screen .skirmish-hud { grid-area: rail; scrollbar-gutter: stable; }
+/* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable
+   gutter only reserved ~10px of dead space on the RIGHT — making the inner padding
+   lopsided (14px frame on the left, 14px + 10px gutter on the right). */
+.level-editor-screen .skirmish-hud { grid-area: rail; }
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
 .level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
@@ -5250,18 +5318,6 @@ h1 {
 .level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
 .level-editor-screen .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
 .level-editor-screen .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
-
-/* rail zoom icon button (NOT a title-bar button — stays a small chrome control) */
-.le-iconbtn {
-  background: url("/assets/ui/level-editor/icon-button-normal.png") center/100% 100% no-repeat;
-  border: 0;
-  cursor: pointer;
-  display: grid;
-  height: 44px;
-  place-items: center;
-  width: 44px;
-}
-.le-iconbtn:disabled { cursor: default; opacity: .4; }
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
@@ -5321,7 +5377,12 @@ h1 {
 .kit-scroll-content { height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: 18px; scrollbar-width: none; }
 .kit-scroll-content::-webkit-scrollbar { width: 0; height: 0; }
 .kit-scroll-rail { position: absolute; top: 0; right: 2px; bottom: 0; width: 14px; border-radius: 3px; background: linear-gradient(180deg, #060d16, #091523); box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.72), inset -1px -1px 1px rgba(130, 170, 215, 0.2), 0 0 0 1px rgba(118, 158, 203, 0.22); pointer-events: none; }
-.kit-scroll-thumb { position: absolute; left: 1px; right: 1px; top: 0; min-height: 24px; border-radius: 2px; background: url("/assets/ui/scrollbars/oak-pixellab.png") center / 100% 100% no-repeat; image-rendering: pixelated; cursor: grab; pointer-events: auto; }
+/* Carved oak grip as a 9-slice (ADR-0030): the capital (top) and base (bottom) keep a
+   FIXED height so they never elongate; only the fluted shaft between them stretches to the
+   thumb's length. Painting the sprite with background-size:100% 100% (the old way) scaled
+   the WHOLE column with the thumb, so a tall thumb — the Unit palette has little to scroll,
+   so its grip is nearly full-height — smeared the caps and the central motif vertically. */
+.kit-scroll-thumb { position: absolute; left: 1px; right: 1px; top: 0; min-height: 24px; border-style: solid; border-color: transparent; border-width: 18px 0 20px 0; border-image: url("/assets/ui/scrollbars/oak-pixellab.png") 21 0 24 0 fill / 18px 0 20px 0 / 0 stretch; image-rendering: pixelated; cursor: grab; pointer-events: auto; }
 .kit-scroll-thumb:active { cursor: grabbing; }
 .le-pal-group { margin: 0 0 4px; }
 .le-pal-grouplabel { color: #8fb6c6; display: block; font-size: var(--ds-text-xs); letter-spacing: .06em; margin: 8px 0 5px; text-transform: uppercase; }
@@ -5348,15 +5409,12 @@ h1 {
 .le-details dt { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
 .le-details dd { color: #f3ead8; font-size: var(--ds-text-sm); margin: 0; word-break: break-word; }
 
-/* view / zoom / footprint toggle */
-.le-zoom { align-items: center; display: grid; gap: 8px; grid-template-columns: auto 1fr auto; margin-top: 8px; }
-.le-zoom .le-iconbtn { background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94)); border: 1px solid rgba(82, 142, 170, .34); border-radius: 5px; height: 36px; width: 36px; }
-.le-zoom-read { background: rgba(8, 23, 35, .6); border: 1px solid rgba(64, 115, 147, .45); border-radius: 4px; color: #f3ead8; font-size: var(--ds-text-sm); padding: 7px 0; text-align: center; }
-.le-toggle { align-items: center; background: none; border: 0; color: #d6ecf5; cursor: pointer; display: flex; font: inherit; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 0; text-transform: uppercase; }
-.le-toggle .pip { background: rgba(8, 23, 35, .8); border: 1px solid rgba(82, 142, 170, .5); border-radius: 9px; flex: none; height: 18px; position: relative; width: 34px; }
-.le-toggle.on .pip { background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95)); border-color: var(--skirmish-cyan); }
-.le-toggle .pip::after { background: #bfe6f4; border-radius: 50%; content: ""; height: 12px; left: 2px; position: absolute; top: 2px; transition: .1s; width: 12px; }
-.le-toggle.on .pip::after { background: #eafaff; left: 18px; }
+/* View card controls: a label on the left, the shared kit control on the right. Footprint uses
+   the shared <Toggle> and Zoom the shared <Stepper> (.settings-toggle / .settings-stepper) so
+   they read the same everywhere; we only lay out the label + control row. */
+.le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
+.le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
+.le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
 
 /* status line */
 .le-statusline { align-items: center; color: var(--skirmish-muted); display: flex; font-size: var(--ds-text-sm); gap: 8px; padding: 2px 2px 6px; }
@@ -7908,8 +7966,7 @@ h1 {
    so the rail and pane hold their position — only their contents swap. */
 .tileset-studio-shell.is-catalog,
 .tileset-studio-shell.is-lab,
-.tileset-studio-shell.is-viewer,
-.tileset-studio-shell.is-dressing {
+.tileset-studio-shell.is-viewer {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
 
@@ -11420,8 +11477,13 @@ button.tileset-relationship-cell {
   /* Flush to the app edges — full-bleed, like the Skirmish bar. Top app bars are
      conventionally edge-to-edge, not inset cards. */
   padding: 0;
-  transform: scale(var(--settings-ui-scale, 1));
-  transform-origin: center;
+  /* UI Scale is applied with `zoom`, NOT `transform: scale()`. A transform here would
+     make the baked surfaces (background-attachment: fixed on the title/tabs/rows)
+     anchor per-element — each region restarts the texture — instead of sampling one
+     continuous viewport sheet. zoom scales the screen identically but is not a
+     containing block for fixed backgrounds, so the surface stays unbroken across
+     regions at any scale. */
+  zoom: var(--settings-ui-scale, 1);
 }
 
 /* Shared frame primitive. One panel.png 9-slice with a SINGLE corner-size token,
@@ -11431,9 +11493,11 @@ button.tileset-relationship-cell {
    corners desync again (which is exactly the bug this replaces: header/rail/main
    each set their own 9/18/24px border, scaling the shared 36px corner three ways). */
 .settings-frame {
+  /* Baked: the rail and main containers float — no frame, transparent — so the
+     framed tabs/rows sit directly on the page (the dressing-room "disable box").
+     The transparent border is kept only as the inset that positions their content. */
   --settings-frame-corner: 16px;
   border: var(--settings-frame-corner) solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 fill / var(--settings-frame-corner) round;
   box-sizing: border-box;
 }
 
@@ -11489,7 +11553,18 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
   grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 0 clamp(12px, 1.3vw, 20px);
+  /* Baked surface skin (the accepted dressing-room preview): the panel-LINE frame
+     (transparent interior) over a fixed wood surface, instead of .app-titlebar's
+     filled panel. border-width = the fill inset (2px) so the surface clips to the
+     frame's interior; border-image-width (16px) renders the frame at full thickness;
+     padding compensates so content clears the frame art (ADR-0034). */
+  border: 2px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round;
+  padding: 14px 32px;
+  background: url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
+  background-origin: padding-box;
+  background-clip: padding-box;
+  image-rendering: pixelated;
 }
 
 /* Shared brand lockup — [shield] SCREEN NAME · chess tactics — the ONE top-left
@@ -11638,11 +11713,10 @@ button.tileset-relationship-cell {
   --settings-tab-icon-size: 34px;
   align-items: center;
   appearance: none;
-  background: transparent;
-  /* Mode-button frame: atom-assembled (symmetric by construction), gold brackets;
-     active swaps to the cyan-bracket frame. Built by scripts/generate-mode-button.mjs. */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
+     mode-button frame). Active swaps the marker, not the frame (below). ADR-0034. */
+  border: 2px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round;
   border-radius: 0;
   box-sizing: border-box;
   color: #c4d6e6;
@@ -11651,10 +11725,13 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
   image-rendering: pixelated;
   min-height: 56px;
-  padding: 7px 12px; /* tuned tab inset; the content-var automation was retired — content stays a saved editor guide */
+  padding: 17px 22px; /* frame-compensated inset so content clears the line frame */
+  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  background-origin: padding-box;
+  background-clip: padding-box;
   text-align: left;
   text-decoration: none;
-  transition: color .14s ease;
+  transition: color .14s ease, filter .14s ease;
 }
 
 .settings-tab > span:not(.settings-tab-icon) {
@@ -11662,14 +11739,16 @@ button.tileset-relationship-cell {
 }
 
 .settings-tab:not(.is-active):hover {
-  background: rgba(47, 143, 230, 0.1);
+  /* Brighten the surface on hover instead of painting over it (a background here
+     would clobber the baked stone). */
+  filter: brightness(1.12);
   color: #eaf4ff;
 }
 
 .settings-tab.is-active {
-  background: transparent;
-  border-image-source: url("/assets/ui/kit/mode-button-active.png");
-  box-shadow: none;
+  /* Keep the stone surface + line frame; mark selection with a cyan inset ring +
+     glow (replaces the old cyan-bracket frame, which clashed with the line frame). */
+  box-shadow: inset 0 0 0 2px rgba(101, 184, 255, 0.78), inset 0 0 16px rgba(101, 184, 255, 0.22);
   color: #f3fbff;
 }
 
@@ -11784,27 +11863,28 @@ button.tileset-relationship-cell {
 .settings-row {
   align-items: center;
   box-sizing: border-box;
-  /* Atom-assembled low-fi steel row frame (ADR-0012/0014): row.png is built by
-     scripts/generate-row.mjs from the forged row-corner atom (mirrored) + derived
-     edge/fill. image-rendering: pixelated keeps the low-fi pixels crisp when the
-     border-image scales. Slice 16 captures the rail+notch in the corner's outer band. */
-  border: 14px solid transparent;
-  border-image: url("/assets/ui/kit/row.png") 20 fill / 14px stretch;
+  /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
+     steel row.png frame). border-width = the fill inset; border-image-width renders
+     the frame full; padding compensates so content clears it (ADR-0034). */
+  border: 2px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round;
+  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  background-origin: padding-box;
+  background-clip: padding-box;
   image-rendering: pixelated;
   /* Flex, not grid: a row carries an OPTIONAL value and/or control, so a fixed
      column count strands an empty track + gap when one is absent — the lopsiding
-     ADR-0028 fixes. copy fills; value/control hug the end; side inset stays the
-     symmetric 16px (--ds-space-4) padding both sides. */
+     ADR-0028 fixes. copy fills; value/control hug the end. */
   display: flex;
   gap: 16px;
   min-height: 60px;
-  padding: 6px 16px;
+  padding: 18px 28px;
 }
 
 .settings-row + .settings-row {
   margin-top: 10px;
   min-height: 56px;
-  padding: 12px 16px;
+  padding: 18px 28px;
 }
 
 
@@ -12101,7 +12181,7 @@ button.tileset-relationship-cell {
   .settings-screen {
     inline-size: 100%;
     min-block-size: 100%;
-    transform: none;
+    zoom: 1;
   }
 
   .settings-header-frame {
