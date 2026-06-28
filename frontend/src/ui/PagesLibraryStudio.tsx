@@ -56,25 +56,42 @@ const STONE_SURFACES = [
 // The wrapper is positioned so the menu's absolute .menu-layer fills the viewer stage.
 function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
   const [btnH, setBtnH] = useState(80);
+  const [btnW, setBtnW] = useState(370);
   const [iconSize, setIconSize] = useState(64);
+  // Static indent of the whole button stack. Opens at 16px — the design-research
+  // recommendation (1em, "clearly nested under the brand") — even though the live menu
+  // still ships flush (0). Slider snaps to the 8px grid (0/8/16/24/32).
+  const [indent, setIndent] = useState(16);
   const [hoverSlide, setHoverSlide] = useState<'off' | '6' | '10'>('off');
+  // Editor-only aid: freeze the buttons in their hovered look so the hover slide + lift
+  // are visible without a mouse (the slide otherwise only fires on a live pointer hover).
+  const [previewHover, setPreviewHover] = useState(false);
+  const [profileBg, setProfileBg] = useState(true);
   const [stone, setStone] = useState('stone-slate-blue');
   const resetDefaults = (): void => {
     setBtnH(80);
+    setBtnW(370);
     setIconSize(64);
+    setIndent(16);
     setHoverSlide('off');
+    setPreviewHover(false);
+    setProfileBg(true);
     setStone('stone-slate-blue');
   };
   const wrapStyle = {
     '--menu-btn-h': `${btnH}px`,
+    '--menu-btn-w': `${btnW}px`,
     '--menu-icon-size': `${iconSize}px`,
+    '--menu-btn-indent': `${indent}px`,
     '--menu-stone-surface': `url("/assets/ui/surfaces/${stone}.png")`,
+    '--profile-bar-frame': profileBg ? 'block' : 'none',
   } as CSSProperties;
   const slideClass = hoverSlide === '6' ? 'indent-hover' : hoverSlide === '10' ? 'indent-hover indent-hover-10' : '';
+  const wrapClass = `pages-menu-tweak ${slideClass} ${previewHover ? 'preview-hover' : ''}`.replace(/\s+/g, ' ').trim();
   return (
     <>
       <section className="al-lab-main pages-view-main" aria-label="Main Menu preview">
-        <div className={`pages-menu-tweak ${slideClass}`.trim()} style={wrapStyle}>
+        <div className={wrapClass} style={wrapStyle}>
           <MainMenu />
         </div>
       </section>
@@ -88,6 +105,15 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
               <input type="range" min="56" max="120" step="1" value={btnH} onChange={(e) => setBtnH(Number(e.target.value))} />
             </label>
             <label className="tileset-catalog-zoom">
+              <span>Button length · {btnW}px</span>
+              <input type="range" min="240" max="460" step="2" value={btnW} onChange={(e) => setBtnW(Number(e.target.value))} />
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Button indent · {indent}px{indent === 16 ? ' · recommended' : ''}</span>
+              <input type="range" min="0" max="32" step="8" value={indent} onChange={(e) => setIndent(Number(e.target.value))} />
+            </label>
+            <p className="tileset-catalog-note">Indent offsets the whole stack right of the brand. Research: ~16px (1em) reads as “nested under the brand”; the live menu still ships flush (0).</p>
+            <label className="tileset-catalog-zoom">
               <span>Icon size · {iconSize}px</span>
               <input type="range" min="32" max="96" step="1" value={iconSize} onChange={(e) => setIconSize(Number(e.target.value))} />
             </label>
@@ -97,6 +123,21 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
                 <button type="button" className={hoverSlide === 'off' ? 'is-active' : ''} onClick={() => setHoverSlide('off')}>Off</button>
                 <button type="button" className={hoverSlide === '6' ? 'is-active' : ''} onClick={() => setHoverSlide('6')}>6px</button>
                 <button type="button" className={hoverSlide === '10' ? 'is-active' : ''} onClick={() => setHoverSlide('10')}>10px</button>
+              </div>
+            </div>
+            <div className="tileset-filter-field">
+              <span>Preview hover state</span>
+              <div className="tileset-tier-seg" aria-label="Preview hover state">
+                <button type="button" className={!previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(false)}>Off</button>
+                <button type="button" className={previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(true)}>On</button>
+              </div>
+            </div>
+            <p className="tileset-catalog-note">Buttons lean right and the iron lip lifts when you point at them. Flip this On to freeze that look (and feel the slide distance) without a mouse.</p>
+            <div className="tileset-filter-field">
+              <span>User box background</span>
+              <div className="tileset-tier-seg" aria-label="User box background">
+                <button type="button" className={profileBg ? 'is-active' : ''} onClick={() => setProfileBg(true)}>On</button>
+                <button type="button" className={!profileBg ? 'is-active' : ''} onClick={() => setProfileBg(false)}>Off</button>
               </div>
             </div>
             <label className="tileset-category-select">
