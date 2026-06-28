@@ -9,6 +9,15 @@ export interface TileAsset extends TileSocketAsset {
   source: string;
   probability: number;
   notes: string;
+  /**
+   * Tentative tiles that exist for in-studio evaluation only. They show up in the
+   * catalog and can be painted onto the Lab board, but are deliberately kept OUT of
+   * board generation, coverage, and the shipped tileset. Grouped so a whole speculative
+   * set can be described and removed at once (see frontend/src/art/speculativeTiles.ts).
+   */
+  speculative?: boolean;
+  /** Human label for how a speculative tile was produced (e.g. "Codex → Filter"). */
+  method?: string;
 }
 
 // Textured iso tiles (Blender-rendered from real PBR texture packs, calibrated to the
