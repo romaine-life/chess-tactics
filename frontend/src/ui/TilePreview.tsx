@@ -571,7 +571,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [studioMode, setStudioMode] = useState<StudioMode>(initialRoute.studioMode);
   const [category, setCategory] = useState<StudioCategory>(initialRoute.category ?? initialCategory);
   const [labMode, setLabMode] = useState<LabMode>(initialRoute.labMode);
-  const [doodadBrushId, setDoodadBrushId] = useState<string>('grass-tuft');
+  const [doodadBrushId, setDoodadBrushId] = useState<string>(DOODAD_ASSETS[0].id);
   const [viewHasTarget, setViewHasTarget] = useState(initialHasViewTarget);
   const [tileFilter, setTileFilter] = useState<TileFilter>(initialRoute.tileFilter);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
