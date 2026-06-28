@@ -2812,8 +2812,8 @@ h1 {
 
 .utility-panel {
   background: transparent;
-  border: 24px solid transparent;
-  border-image: url("/assets/ui/utility/panel-frame.png") 24 fill / 24px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   min-width: 0;
   padding: 2px;
 }
@@ -2825,15 +2825,15 @@ h1 {
 
 .utility-lobby-card {
   background: transparent;
-  border: 24px solid transparent;
-  border-image: url("/assets/ui/utility/panel-frame.png") 24 fill / 24px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   display: grid;
   gap: 12px;
   padding: 2px;
 }
 
 .utility-lobby-card.is-current {
-  border-image-source: url("/assets/ui/utility/lobby-row-current.png");
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .utility-lobby-main,
@@ -2852,8 +2852,8 @@ h1 {
 
 .utility-lobby-row {
   background: transparent;
-  border: 20px solid transparent;
-  border-image: url("/assets/ui/utility/lobby-row.png") 20 fill / 20px stretch;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   min-height: 82px;
   padding: 0 2px;
@@ -2952,8 +2952,8 @@ h1 {
 
 .utility-empty-row {
   background: transparent;
-  border: 20px solid transparent;
-  border-image: url("/assets/ui/utility/lobby-row.png") 20 fill / 20px stretch;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
   min-height: 72px;
   padding: 6px;
 }
@@ -2961,8 +2961,8 @@ h1 {
 .utility-button {
   align-items: center;
   background: transparent;
-  border: 18px solid transparent;
-  border-image: url("/assets/ui/utility/button-neutral.png") 18 fill / 18px stretch;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 12px round;
   color: #f8ecd3;
   cursor: pointer;
   display: inline-flex;
@@ -2984,11 +2984,11 @@ h1 {
 }
 
 .utility-button-primary {
-  border-image-source: url("/assets/ui/utility/button-primary.png");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 .utility-button-danger {
-  border-image-source: url("/assets/ui/utility/button-danger.png");
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 .utility-button:hover,
@@ -3020,8 +3020,8 @@ h1 {
 .utility-squad-card {
   align-content: center;
   background: transparent;
-  border: 22px solid transparent;
-  border-image: url("/assets/ui/utility/squad-card.png") 22 fill / 22px stretch;
+  border: 16px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 16px round;
   color: var(--ink);
   cursor: pointer;
   display: grid;
@@ -3034,7 +3034,7 @@ h1 {
 }
 
 .utility-squad-card.is-selected {
-  border-image-source: url("/assets/ui/utility/squad-card-selected.png");
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .utility-squad-card.is-locked {
@@ -3073,16 +3073,18 @@ h1 {
   width: 58px;
 }
 
-.icon-players { background-image: url("/assets/ui/utility/icon-players.png"); }
-.icon-start { background-image: url("/assets/ui/utility/icon-start.png"); }
-.icon-leave { background-image: url("/assets/ui/utility/icon-leave.png"); }
-.icon-refresh { background-image: url("/assets/ui/utility/icon-refresh.png"); }
-.icon-gear { background-image: url("/assets/ui/utility/icon-gear.png"); }
-.icon-speaker { background-image: url("/assets/ui/utility/icon-speaker.png"); }
-.icon-pawn { background-image: url("/assets/ui/utility/icon-pawn.png"); }
-.icon-knight { background-image: url("/assets/ui/utility/icon-knight.png"); }
-.icon-bishop { background-image: url("/assets/ui/utility/icon-bishop.png"); }
-.icon-rook { background-image: url("/assets/ui/utility/icon-rook.png"); }
+.icon-players { background-image: url("/assets/ui/kit/icons/players.png"); }
+.icon-start { background-image: url("/assets/ui/kit/icons/game/objective.png"); }
+.icon-leave { background-image: url("/assets/ui/kit/icons/sign-out.png"); }
+.icon-refresh { background-image: url("/assets/ui/kit/icons/reset.png"); }
+.icon-gear { background-image: url("/assets/ui/kit/icons/gear.png"); }
+.icon-speaker { background-image: url("/assets/ui/kit/icons/speaker.png"); }
+.icon-pawn { background-image: url("/assets/ui/kit/icons/pawn.png"); }
+.icon-knight { background-image: url("/assets/ui/kit/icons/knight.png"); }
+.icon-bishop { background-image: url("/assets/ui/kit/icons/bishop.png"); }
+.icon-rook { background-image: url("/assets/ui/kit/icons/castle.png"); }
+.icon-queen { background-image: url("/assets/ui/kit/icons/queen.png"); }
+.icon-king { background-image: url("/assets/ui/kit/icons/king.png"); }
 
 .utility-settings-panel {
   max-width: 760px;
@@ -3111,8 +3113,8 @@ h1 {
 
 .utility-toggle {
   background: transparent;
-  border: 16px solid transparent;
-  border-image: url("/assets/ui/utility/toggle-off.png") 16 fill / 16px stretch;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 12px round;
   color: #f8ecd3;
   cursor: pointer;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
@@ -3124,7 +3126,7 @@ h1 {
 }
 
 .utility-toggle.is-on {
-  border-image-source: url("/assets/ui/utility/toggle-on.png");
+  border-image-source: url("/assets/ui/kit/button-primary.png");
 }
 
 @media (max-width: 760px) {
