@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
-import { readDisabledUrls, writeDisabledUrls, setBgmSuspended } from '../bgmPrefs.js';
+import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { BrandLockup } from './shared/BrandLockup';
 import { KitScroll } from './KitScroll';
@@ -254,8 +254,9 @@ export function Settings(): ReactElement {
   // Mirrors disabledUrls so back-to-back toggles read the latest set, not a stale
   // render snapshot (otherwise rapid toggles clobber each other before re-render).
   const disabledRef = useRef<string[]>(disabledUrls);
-  const [playingUrl, setPlayingUrl] = useState<string | null>(null);
-  const previewRef = useRef<HTMLAudioElement | null>(null);
+  // The single BGM player owns playback; we just reflect its broadcast transport
+  // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
+  const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null }>({ playing: false, currentUrl: null });
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   useEffect(() => {
@@ -332,18 +333,14 @@ export function Settings(): ReactElement {
     return () => { active = false; };
   }, [showTracks]);
 
-  // Stop any in-progress preview when leaving the tracks view, and on unmount, so
-  // the background music can resume and no audio is orphaned.
+  // Reflect the BGM player's transport state so the playing row shows ■ Stop.
   useEffect(() => {
-    if (showTracks) return;
-    previewRef.current?.pause();
-    setPlayingUrl(null);
-    setBgmSuspended(false);
-  }, [showTracks]);
-
-  useEffect(() => () => {
-    previewRef.current?.pause();
-    setBgmSuspended(false);
+    const onState = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { playing?: boolean; currentUrl?: string | null };
+      setNowPlaying({ playing: Boolean(detail.playing), currentUrl: detail.currentUrl ?? null });
+    };
+    window.addEventListener(BGM_STATE_EVENT, onState);
+    return () => window.removeEventListener(BGM_STATE_EVENT, onState);
   }, []);
 
   const active = useMemo(() => tabs.find((tab) => tab.id === activeTab) || tabs[0], [activeTab]);
@@ -374,31 +371,6 @@ export function Settings(): ReactElement {
     setMuted(false);
     writeMuted(false);
     setConfirmingReset(false);
-  };
-
-  const stopPreview = () => {
-    previewRef.current?.pause();
-    setPlayingUrl(null);
-    setBgmSuspended(false); // let the background shuffle resume
-  };
-
-  const togglePreview = (track: BgmTrack) => {
-    if (playingUrl === track.url) { stopPreview(); return; }
-    let el = previewRef.current;
-    if (!el) {
-      el = new Audio();
-      el.preload = 'none';
-      el.addEventListener('ended', stopPreview);
-      el.addEventListener('error', stopPreview);
-      previewRef.current = el;
-    }
-    el.src = track.url;
-    el.muted = !settings.masterAudio; // master audio off silences everything
-    el.volume = clamp(settings.musicVolume, 0, 100, DEFAULT_SETTINGS.musicVolume) / 100;
-    setBgmSuspended(true); // park the background music while auditioning
-    setPlayingUrl(track.url);
-    const attempt = el.play();
-    if (attempt && typeof attempt.catch === 'function') attempt.catch(stopPreview);
   };
 
   const setTrackEnabled = (track: BgmTrack, enabled: boolean) => {
@@ -521,7 +493,7 @@ export function Settings(): ReactElement {
         ) : (
           tracks.map((track) => {
             const enabled = !disabledUrls.includes(track.url);
-            const playing = playingUrl === track.url;
+            const playing = nowPlaying.playing && nowPlaying.currentUrl === track.url;
             return (
               <SettingsRow
                 key={track.url}
@@ -529,8 +501,8 @@ export function Settings(): ReactElement {
                 description={enabled ? undefined : 'Off — excluded from background music.'}
               >
                 <SettingsButton
-                  onClick={() => togglePreview(track)}
-                  ariaLabel={playing ? `Stop preview of ${track.title}` : `Preview ${track.title}`}
+                  onClick={() => sendBgmCommand(playing ? 'stop' : 'play', playing ? undefined : track.url)}
+                  ariaLabel={playing ? `Stop ${track.title}` : `Play ${track.title}`}
                 >{playing ? '■ Stop' : '▶ Play'}</SettingsButton>
                 <Toggle
                   checked={enabled}
@@ -616,7 +588,10 @@ export function Settings(): ReactElement {
             {showTracks ? (
               <div className="settings-tracks-bar">
                 <div className="settings-tracks-bar-col">
-                  <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+                  <div className="settings-tracks-bar-actions">
+                    <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+                    <SettingsButton onClick={() => sendBgmCommand('shuffle')} ariaLabel="Shuffle and play the soundtrack">⇄ Shuffle</SettingsButton>
+                  </div>
                   <h3 className="settings-section-title">Soundtrack</h3>
                 </div>
               </div>

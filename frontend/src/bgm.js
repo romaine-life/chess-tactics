@@ -16,7 +16,7 @@
 //   - User control: a persisted mute toggle; muting pauses (no silent
 //     background streaming) and unmuting resumes.
 
-import { readDisabledUrls, BGM_DISABLED_KEY, BGM_DISABLED_CHANGE_EVENT, BGM_SUSPEND_EVENT } from './bgmPrefs.js';
+import { readDisabledUrls, BGM_DISABLED_KEY, BGM_DISABLED_CHANGE_EVENT, BGM_COMMAND_EVENT, BGM_STATE_EVENT } from './bgmPrefs.js';
 
 const BGM_API_URL = '/api/bgm';
 const MUTE_STORAGE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -83,7 +83,8 @@ export function initBgm() {
     currentTitle: '',
     currentUrl: '',
     muted: readMuted(),
-    suspended: false,  // parked for an in-app preview (does not touch mute pref)
+    single: null,      // url of an explicitly-played single track (vs shuffle), else null
+    stopped: false,    // user pressed Stop — stay silent until an explicit Play/Shuffle
     started: false,    // playback has begun at least once
     ready: false,      // playlist loaded with at least one enabled track
     loaded: false,     // /api/bgm fetch settled (success or failure)
@@ -106,6 +107,7 @@ export function initBgm() {
 
   function playNext() {
     if (!state.tracks.length) return;
+    state.single = null; // advancing the shuffle, not a single audition
     if (!state.queue.length) refreshQueue();
     const index = state.queue.shift();
     state.lastIndex = index;
@@ -126,7 +128,7 @@ export function initBgm() {
   }
 
   function beginPlayback() {
-    if (!state.ready || state.muted || state.suspended) return;
+    if (!state.ready || state.muted || state.stopped) return;
     if (audio.src) {
       // A track is already cued (possibly from a blocked autoplay attempt) —
       // resume/retry it. Do NOT gate on state.started: a blocked autoplay
@@ -140,6 +142,41 @@ export function initBgm() {
       playNext();
     }
     updateControl();
+  }
+
+  // Play one specific track on demand (the Settings soundtrack list's ▶ Play).
+  // Auditions any track — even one excluded from the shuffle rotation.
+  function playUrl(url) {
+    const track = state.all.find((t) => t.url === url);
+    if (!track) return;
+    state.stopped = false;
+    state.single = url;
+    state.currentTitle = track.title;
+    state.currentUrl = url;
+    audio.src = url;
+    state.started = true;
+    const attempt = audio.play();
+    if (attempt && typeof attempt.catch === 'function') attempt.catch(() => { state.started = false; });
+    updateControl();
+  }
+
+  // Hard stop — silence everything and stay silent (no auto-resume) until the user
+  // explicitly starts playback again with ▶ Play or ⇄ Shuffle.
+  function stopPlayback() {
+    state.stopped = true;
+    state.single = null;
+    audio.pause();
+    updateControl();
+  }
+
+  // (Re)start the shuffled rotation from a fresh cycle. Shuffles the PLAY order only —
+  // the displayed list keeps its catalog order.
+  function shufflePlay() {
+    state.stopped = false;
+    state.single = null;
+    state.lastIndex = -1;
+    refreshQueue();
+    playNext();
   }
 
   function setMuted(muted, options = {}) {
@@ -169,11 +206,30 @@ export function initBgm() {
   // ---- audio element events ------------------------------------------------
   audio.addEventListener('ended', () => {
     state.errorStreak = 0;
-    if (state.muted || state.suspended) return;
+    if (state.single) {
+      // A single audition finished — go silent rather than rolling into the shuffle;
+      // an explicit Play/Shuffle is required to start again.
+      state.single = null;
+      state.stopped = true;
+      state.currentUrl = '';
+      state.currentTitle = '';
+      updateControl();
+      return;
+    }
+    if (state.muted || state.stopped) return;
     playNext();
   });
   audio.addEventListener('error', () => {
     if (state.muted) return;
+    if (state.single) {
+      // A single audition failed to load — go silent instead of falling into shuffle.
+      state.single = null;
+      state.stopped = true;
+      state.currentUrl = '';
+      state.currentTitle = '';
+      updateControl();
+      return;
+    }
     state.errorStreak += 1;
     // If a whole shuffle cycle's worth of tracks fails in a row (e.g. the blob
     // container isn't populated yet), stop retrying so we don't churn endless
@@ -224,30 +280,24 @@ export function initBgm() {
     applyEnabled();
     state.lastIndex = -1; // indices point into state.tracks, which just changed
     refreshQueue();
-    if (!state.tracks.length) {
-      audio.pause();
-      updateControl();
-      return;
-    }
+    updateControl();
+    // Only the shuffle rotation reacts to the on/off set: a single audition keeps
+    // playing (you can audition an excluded track) and a stopped/muted player stays put.
+    if (state.single || state.stopped || state.muted) return;
+    if (!state.tracks.length) { audio.pause(); updateControl(); return; }
     const stillEnabled = wasPlaying && state.tracks.some((track) => track.url === wasPlaying);
-    if (!stillEnabled && !state.muted && !state.suspended) {
-      playNext();
-    } else {
-      updateControl();
-    }
+    if (!stillEnabled) playNext();
   }
   window.addEventListener(BGM_DISABLED_CHANGE_EVENT, onDisabledChange);
 
-  // Preview suspend: park/resume the background shuffle while a track preview
-  // plays in the UI, without disturbing the persisted mute preference.
-  window.addEventListener(BGM_SUSPEND_EVENT, (event) => {
-    state.suspended = Boolean(event && event.detail && event.detail.suspended);
-    if (state.suspended) {
-      audio.pause();
-    } else {
-      beginPlayback();
-    }
-    updateControl();
+  // Transport commands from the UI (the Settings soundtrack list). The list drives
+  // this single audio stream rather than owning its own element, so Stop truly
+  // silences everything and there is never a second song playing underneath.
+  window.addEventListener(BGM_COMMAND_EVENT, (event) => {
+    const detail = (event && event.detail) || {};
+    if (detail.action === 'play' && detail.url) playUrl(detail.url);
+    else if (detail.action === 'stop') stopPlayback();
+    else if (detail.action === 'shuffle') shufflePlay();
   });
 
   window.addEventListener('storage', (event) => {
@@ -275,7 +325,20 @@ export function initBgm() {
     return { el };
   }
 
+  // Tell the UI (the Settings soundtrack list) what's playing so it can show ■ Stop
+  // on the current row and ▶ Play on the rest.
+  function broadcast() {
+    window.dispatchEvent(new CustomEvent(BGM_STATE_EVENT, {
+      detail: { playing: !audio.paused, currentUrl: state.currentUrl || null, single: Boolean(state.single) },
+    }));
+  }
+
   function updateControl() {
+    renderControl();
+    broadcast();
+  }
+
+  function renderControl() {
     const el = control.el;
     if (state.loaded && !state.tracks.length) {
       // No BGM configured for this environment — don't show a dead control.
@@ -334,6 +397,9 @@ export function initBgm() {
     setMuted,
     isMuted: () => state.muted,
     nowPlaying: () => state.currentTitle,
+    playUrl,
+    stop: stopPlayback,
+    shuffle: shufflePlay,
     // exposed for debugging / tests
     _state: state,
   };

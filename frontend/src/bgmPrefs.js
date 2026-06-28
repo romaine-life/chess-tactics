@@ -11,10 +11,14 @@ export const BGM_DISABLED_KEY = 'chess-tactics-bgm-disabled-v1';
 // running player can re-filter its rotation live, without a reload.
 export const BGM_DISABLED_CHANGE_EVENT = 'chess-tactics:bgm-disabled-change';
 
-// Transient pause/resume used while auditioning a track preview. Does NOT touch the
-// persisted mute preference — it just parks the background shuffle so the two don't
-// play over each other. detail.suspended: boolean.
-export const BGM_SUSPEND_EVENT = 'chess-tactics:bgm-suspend';
+// Transport commands from the UI to the single BGM player (the Settings soundtrack
+// list drives the one music stream rather than owning its own audio element, so Stop
+// truly silences everything). detail: { action: 'play'|'stop'|'shuffle', url?: string }.
+export const BGM_COMMAND_EVENT = 'chess-tactics:bgm-command';
+
+// The player broadcasts its transport state back so the UI can light the right row.
+// detail: { playing: boolean, currentUrl: string|null, single: boolean }.
+export const BGM_STATE_EVENT = 'chess-tactics:bgm-state';
 
 // The set is stored as the list of track urls that are turned OFF (excluded). A
 // track is in the rotation unless its url is present here, so newly-added tracks
@@ -36,6 +40,7 @@ export function writeDisabledUrls(urls) {
   return list;
 }
 
-export function setBgmSuspended(suspended) {
-  window.dispatchEvent(new CustomEvent(BGM_SUSPEND_EVENT, { detail: { suspended: Boolean(suspended) } }));
+// action: 'play' (needs url) | 'stop' | 'shuffle'.
+export function sendBgmCommand(action, url) {
+  window.dispatchEvent(new CustomEvent(BGM_COMMAND_EVENT, { detail: { action, url } }));
 }
