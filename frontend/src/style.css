@@ -743,7 +743,10 @@ h1 {
   /* Type tokens retired into the --ds-text-* scale (ADR-0016). */
   position: relative;
   display: grid;
-  grid-template-columns: minmax(300px, 370px) minmax(0, 1fr) minmax(440px, 540px);
+  /* Column 1 holds the brand + button stack. Its max grows with --menu-btn-w (the Pages
+     editor's "Button length") so longer buttons stay contained instead of overflowing into
+     the centre / profile column; at the 370px default this is identical to minmax(300,370). */
+  grid-template-columns: minmax(300px, max(370px, var(--menu-btn-w, 370px))) minmax(0, 1fr) minmax(440px, 540px);
   grid-template-rows: auto 1fr auto;
   gap: 12px 18px;
   height: 100%;
@@ -763,6 +766,31 @@ h1 {
   background:
     linear-gradient(90deg, rgba(2, 7, 11, .9) 0%, rgba(2, 7, 11, .68) 32%, rgba(2, 7, 11, .08) 52%, rgba(2, 7, 11, .68) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .46));
+}
+
+/* ── Settings-twin main menu (ADR-0003 superseded) ──────────────────────────────────
+   The home screen reuses the SAME baked-skin chrome as /settings — app title bar
+   (line frame over wood-oak) + the account slot, and a rail of stone-surface mode tabs
+   (.settings-tab) floating on the ambience — instead of the retired bespoke "Chess
+   Tactics" hero + stone slabs. Only the screen grid is menu-specific; the frames, tabs,
+   and surfaces are the shared settings skin. */
+.main-menu-twin-screen {
+  position: relative;
+  z-index: 3;
+  block-size: 100%;
+  inline-size: 100%;
+  display: grid;
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  gap: clamp(6px, .72vw, 12px);
+  min-block-size: 0;
+  /* .menu-layer.main-menu-layer is pointer-events:none (so the rain stays click-through);
+     the old menu re-enabled interaction on .main-menu-left/right. Re-enable it for the whole
+     twin UI, or every click falls through to the app root and the tabs do nothing. */
+  pointer-events: auto;
+}
+/* Home has no Back/Menu actions, so the bar is just brand | account. */
+.main-menu-twin-header {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 /* Ambience shared-world effect canvas. Sits over the menu's background art
@@ -1036,11 +1064,15 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: clamp(8px, 1.1vh, 11px);
-  width: min(100%, 370px);
-  max-width: 100%;
-  /* --menu-icon-size / --menu-btn-h defaults live on :root (above any viewer tweak
-     wrapper) — declaring them HERE would shadow the Pages Main-Menu editor's override.
-     See :root + ADR-0027 (icon size) / ADR-0021 (button height). */
+  /* Button length + stack indent are driven by :root tokens the Pages editor overrides
+     (--menu-btn-w / --menu-btn-indent). max-width:none lets the width token govern past the
+     370px brand-column cap (.main-menu-actions); the indent is one uniform offset on the whole
+     stack so all five buttons keep one identical left edge (NN/g vertical-nav guidance).
+     --menu-icon-size / --menu-btn-h defaults likewise live on :root, not here, so declaring
+     them locally won't shadow the editor's override. ADR-0027 (icon) / ADR-0021 (height). */
+  width: min(calc(100% - var(--menu-btn-indent, 0px)), var(--menu-btn-w, 370px));
+  max-width: none;
+  margin-left: var(--menu-btn-indent, 0px);
 }
 
 /* Comparison knob (?indent=hover|hover10): a deliberate slide-RIGHT on hover/focus —
@@ -1076,6 +1108,20 @@ h1 {
   .pages-menu-tweak.indent-hover .mode-button-stone:hover,
   .pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: none; }
 }
+/* "Preview hover state" (editor only): freeze every button in its pointed-at look —
+   the iron-lip lift plus, if a slide amount is selected, the slide offset — so the
+   hover micro-interaction is visible without a mouse (otherwise the control does nothing
+   until you physically hover a single button). */
+.pages-menu-tweak.preview-hover .mode-button-stone {
+  border-color: #2c3c4e;
+  border-top-color: #4a607c;
+  box-shadow:
+    inset 0 1px 0 rgba(160, 191, 230, .26),
+    inset 0 0 0 1px rgba(0, 0, 0, .40),
+    0 1px 3px rgba(0, 0, 0, .55);
+}
+.pages-menu-tweak.preview-hover.indent-hover .mode-button-stone { transform: translateX(6px); }
+.pages-menu-tweak.preview-hover.indent-hover-10 .mode-button-stone { transform: translateX(10px); }
 .pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
 /* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
    sprites): a solid stone-ish plate with the page initial, centered by the base place-items. */
@@ -1351,6 +1397,13 @@ h1 {
   z-index: 1;
 }
 
+/* User-box (logged-in profile bar) background toggle: --profile-bar-frame flips the kit
+   panel frame + fill on/off. Defaults to the framed look; the Pages editor sets it to
+   `none` to preview the bar with no background (crest + name + actions floating). */
+.profile-bar::before {
+  display: var(--profile-bar-frame, block);
+}
+
 /* Element 03 - hybrid (render-accuracy + text rule, docs/ui-art-direction.md):
    art-crop the painterly lion crest from main-menu-aspirational.png; clean SVG cog/rook
    silhouettes; all copy + counts are live DOM text. Two stacked bars matching the concept. */
@@ -1593,6 +1646,12 @@ h1 {
      Main-Menu editor can override them on its wrapper. ADR-0027 (icon) / ADR-0021 (height). */
   --menu-icon-size: 64px;
   --menu-btn-h: 80px;
+  /* Button length (the stone slab's width) and the static indent of the whole button
+     stack relative to the brand above it. The live menu ships flush (indent 0); design
+     research recommends a 16px (1em) indent — the Pages editor opens at that value so the
+     recommendation renders, but the live default stays 0 until it's deliberately adopted. */
+  --menu-btn-w: 370px;
+  --menu-btn-indent: 0px;
   /* color */
   --ds-canvas: #1B1814;
   --ds-surface: #262119;
