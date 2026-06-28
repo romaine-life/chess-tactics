@@ -13,6 +13,12 @@
       "0f181f": "152f4c",
       "0d151c": "122a46"
     },
+    "danger": {
+      "faefbb": "ffd9b8",
+      "c79b55": "e07a3c",
+      "a7793d": "c0532a",
+      "5b4124": "6e2c18"
+    },
     "row-active": {
       "142234": "183452",
       "142334": "183452",
@@ -97,6 +103,31 @@
           "out": "mode-button-active.png",
           "swap": "active",
           "inspect": "corner-cyan"
+        }
+      ]
+    },
+    "button": {
+      "label": "Action button (settings / studio) — neutral / primary / danger",
+      "atoms": {
+        "corner": "corner",
+        "edge": "edge",
+        "fill": "fill"
+      },
+      "frame": {
+        "w": 72,
+        "h": 72
+      },
+      "variants": [
+        {
+          "out": "button-neutral.png"
+        },
+        {
+          "out": "button-primary.png",
+          "swap": "active"
+        },
+        {
+          "out": "button-danger.png",
+          "swap": "danger"
         }
       ]
     },

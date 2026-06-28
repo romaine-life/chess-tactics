@@ -24,7 +24,7 @@ export function Skirmish() {
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const game = useSkirmish((s) => s.game);
   const turnLabel = game.winner
-    ? game.winner === 'player' ? 'Victory' : 'Defeat'
+    ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Player Turn' : 'Enemy Turn';
 
   useEffect(() => {
