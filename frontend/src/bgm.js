@@ -16,9 +16,16 @@
 //   - User control: a persisted mute toggle; muting pauses (no silent
 //     background streaming) and unmuting resumes.
 
+import { readDisabledUrls, BGM_DISABLED_KEY, BGM_DISABLED_CHANGE_EVENT, BGM_COMMAND_EVENT, BGM_STATE_EVENT } from './bgmPrefs.js';
+
 const BGM_API_URL = '/api/bgm';
 const MUTE_STORAGE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
+// Cross-tab single-owner coordination: exactly one tab holds the Web Lock and is the
+// only one that plays; the BroadcastChannel announces ownership + what's playing so
+// other tabs can show "Playing in another tab".
+const BGM_OWNER_LOCK = 'chess-tactics-bgm-owner';
+const BGM_CHANNEL_NAME = 'chess-tactics-bgm';
 const DEFAULT_VOLUME = 0.5;
 // If a track 404s or fails to decode, wait briefly then skip to the next one so
 // a single bad asset can never wedge the playlist.
@@ -73,20 +80,110 @@ export function initBgm() {
   audio.setAttribute('aria-hidden', 'true');
 
   const state = {
-    tracks: [],        // [{ title, url }]
+    all: [],           // full playlist from /api/bgm [{ title, url }]
+    tracks: [],        // enabled subset actually in rotation [{ title, url }]
+    disabled: new Set(readDisabledUrls()), // urls the user excluded in Settings
     queue: [],         // remaining indices for this shuffle cycle
     lastIndex: -1,     // last index played (to avoid back-to-back repeats)
     currentTitle: '',
+    currentUrl: '',
     muted: readMuted(),
+    single: null,      // url of an explicitly-played single track (vs shuffle), else null
+    stopped: false,    // user pressed Stop — stay silent until an explicit Play/Shuffle
     started: false,    // playback has begun at least once
-    ready: false,      // playlist loaded with at least one track
+    ready: false,      // playlist loaded with at least one enabled track
     loaded: false,     // /api/bgm fetch settled (success or failure)
     errorStreak: 0,    // consecutive load/decode failures
     unavailable: false, // whole library unreachable — stop retrying
+    owner: false,      // this tab holds the audio-owner lock (only the owner plays)
+    otherTitle: '',    // what the owner tab is playing (for "Playing in another tab")
+    otherPlaying: false, // another tab owns and is actively playing
   };
 
   const control = buildControl();
   document.body.appendChild(control.el);
+
+  // ---- single-owner cross-tab coordination --------------------------------
+  // Web Locks elect one owner (auto-released when its tab closes → a follower takes
+  // over); the BroadcastChannel announces ownership and now-playing. If neither API
+  // exists, fall back to the legacy behaviour where every tab plays on its own.
+  const locksSupported = !!(navigator.locks && navigator.locks.request);
+  const channel = ('BroadcastChannel' in window) ? new BroadcastChannel(BGM_CHANNEL_NAME) : null;
+  const tabId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  let releaseHeldLock = null; // resolve() to release the held owner lock
+  let queueAbort = null;      // aborts the queued (waiting-to-own) lock request
+  let pendingAction = null;   // a transport action to run once ownership is grabbed
+  if (!locksSupported) state.owner = true;
+
+  function announce(type) {
+    if (channel) channel.postMessage({ type, id: tabId, url: state.currentUrl, title: state.currentTitle, playing: !audio.paused });
+  }
+
+  function onBecomeOwner() {
+    state.owner = true;
+    state.otherPlaying = false;
+    announce('owner');
+    if (pendingAction) { const run = pendingAction; pendingAction = null; run(); }
+    else if (state.ready && !state.muted && !state.stopped) beginPlayback(); // resume on failover
+    updateControl();
+  }
+
+  function onLoseOwner() {
+    state.owner = false;
+    audio.pause();
+    updateControl();
+    queueForOwnership(); // re-queue so we can reclaim if the new owner closes
+  }
+
+  // Wait in line for the lock; granted only when no tab holds it (first load, or the
+  // owner closed). Holding the returned promise keeps the lock until release/close.
+  function queueForOwnership() {
+    if (!locksSupported) return;
+    if (queueAbort) queueAbort.abort();
+    queueAbort = new AbortController();
+    navigator.locks.request(BGM_OWNER_LOCK, { mode: 'exclusive', signal: queueAbort.signal },
+      () => new Promise((resolve) => { releaseHeldLock = resolve; onBecomeOwner(); }))
+      .catch(() => {}); // AbortError when we cancel the wait to steal instead
+  }
+
+  // Take over immediately (a transport action in a follower tab). Steals the lock from
+  // the current owner; that owner hears our 'owner' broadcast and steps down.
+  function takeOwnership() {
+    if (!locksSupported) { onBecomeOwner(); return; }
+    if (state.owner) return;
+    if (queueAbort) { queueAbort.abort(); queueAbort = null; }
+    navigator.locks.request(BGM_OWNER_LOCK, { mode: 'exclusive', steal: true },
+      () => new Promise((resolve) => { releaseHeldLock = resolve; onBecomeOwner(); }))
+      .catch(() => {});
+  }
+
+  if (channel) channel.onmessage = (event) => {
+    const msg = event.data || {};
+    if (msg.id === tabId) return;
+    if (msg.type === 'query') {
+      // A newly-opened tab is asking who's playing — the owner answers so it can show
+      // "Playing in another tab" (BroadcastChannel doesn't replay past announcements).
+      if (state.owner) announce('np');
+      return;
+    }
+    if (msg.type === 'owner' && state.owner) {
+      // Another tab stole ownership — release ours and become a follower.
+      if (releaseHeldLock) { releaseHeldLock(); releaseHeldLock = null; }
+      onLoseOwner();
+    }
+    if (msg.type === 'owner' || msg.type === 'np') {
+      state.otherTitle = msg.title || '';
+      state.otherPlaying = !state.owner && Boolean(msg.playing);
+      updateControl();
+    }
+  };
+  if (channel) channel.postMessage({ type: 'query', id: tabId }); // learn the current owner on open
+
+  // Derive the in-rotation list from the full list minus the user's off-set.
+  function applyEnabled() {
+    state.tracks = state.all.filter((track) => !state.disabled.has(track.url));
+    state.ready = state.tracks.length > 0;
+  }
 
   function refreshQueue() {
     state.queue = planShuffleCycle(state.tracks.length, state.lastIndex);
@@ -94,11 +191,13 @@ export function initBgm() {
 
   function playNext() {
     if (!state.tracks.length) return;
+    state.single = null; // advancing the shuffle, not a single audition
     if (!state.queue.length) refreshQueue();
     const index = state.queue.shift();
     state.lastIndex = index;
     const track = state.tracks[index];
     state.currentTitle = track.title;
+    state.currentUrl = track.url;
     audio.src = track.url;
     state.started = true;
     const attempt = audio.play();
@@ -113,7 +212,7 @@ export function initBgm() {
   }
 
   function beginPlayback() {
-    if (!state.ready || state.muted) return;
+    if (!state.owner || !state.ready || state.muted || state.stopped) return;
     if (audio.src) {
       // A track is already cued (possibly from a blocked autoplay attempt) —
       // resume/retry it. Do NOT gate on state.started: a blocked autoplay
@@ -129,6 +228,47 @@ export function initBgm() {
     updateControl();
   }
 
+  // Play one specific track on demand (the Settings soundtrack list's ▶ Play).
+  // Auditions any track — even one excluded from the shuffle rotation.
+  function playUrl(url) {
+    const track = state.all.find((t) => t.url === url);
+    if (!track) return;
+    // Any explicit transport action means the user is driving playback now, so retire
+    // the autoplay-arming gesture listener — otherwise a later click's pointerdown can
+    // re-arm playback and fight a Stop (the autoplay-blocked-on-load case).
+    disarmGesture();
+    state.stopped = false;
+    state.single = url;
+    state.currentTitle = track.title;
+    state.currentUrl = url;
+    audio.src = url;
+    state.started = true;
+    const attempt = audio.play();
+    if (attempt && typeof attempt.catch === 'function') attempt.catch(() => { state.started = false; });
+    updateControl();
+  }
+
+  // Hard stop — silence everything and stay silent (no auto-resume) until the user
+  // explicitly starts playback again with ▶ Play or ⇄ Shuffle.
+  function stopPlayback() {
+    disarmGesture(); // a stop is final until an explicit Play/Shuffle — no gesture revival
+    state.stopped = true;
+    state.single = null;
+    audio.pause();
+    updateControl();
+  }
+
+  // (Re)start the shuffled rotation from a fresh cycle. Shuffles the PLAY order only —
+  // the displayed list keeps its catalog order.
+  function shufflePlay() {
+    disarmGesture();
+    state.stopped = false;
+    state.single = null;
+    state.lastIndex = -1;
+    refreshQueue();
+    playNext();
+  }
+
   function setMuted(muted, options = {}) {
     const { persist = true, notify = true } = options;
     const next = Boolean(muted);
@@ -138,9 +278,11 @@ export function initBgm() {
     if (state.muted) {
       audio.pause();
     } else {
-      // Unmuting is also the "retry" affordance if the library was unreachable.
+      // Unmuting is also the "retry" affordance if the library was unreachable, and
+      // it clears a prior hard-stop so turning audio back on actually resumes.
       state.unavailable = false;
       state.errorStreak = 0;
+      state.stopped = false;
       beginPlayback();
     }
     updateControl();
@@ -156,11 +298,30 @@ export function initBgm() {
   // ---- audio element events ------------------------------------------------
   audio.addEventListener('ended', () => {
     state.errorStreak = 0;
-    if (state.muted) return;
+    if (state.single) {
+      // A single audition finished — go silent rather than rolling into the shuffle;
+      // an explicit Play/Shuffle is required to start again.
+      state.single = null;
+      state.stopped = true;
+      state.currentUrl = '';
+      state.currentTitle = '';
+      updateControl();
+      return;
+    }
+    if (state.muted || state.stopped) return;
     playNext();
   });
   audio.addEventListener('error', () => {
     if (state.muted) return;
+    if (state.single) {
+      // A single audition failed to load — go silent instead of falling into shuffle.
+      state.single = null;
+      state.stopped = true;
+      state.currentUrl = '';
+      state.currentTitle = '';
+      updateControl();
+      return;
+    }
     state.errorStreak += 1;
     // If a whole shuffle cycle's worth of tracks fails in a row (e.g. the blob
     // container isn't populated yet), stop retrying so we don't churn endless
@@ -201,8 +362,45 @@ export function initBgm() {
   window.addEventListener(MUTE_CHANGE_EVENT, (event) => {
     setMuted(Boolean(event && event.detail && event.detail.muted), { persist: false, notify: false });
   });
+
+  // Live updates to the user's track on/off set (from the Settings soundtrack
+  // manager). Re-filter the rotation; if the playing track was just turned off,
+  // skip to an enabled one; if nothing is left enabled, stop.
+  function onDisabledChange() {
+    const wasPlaying = state.currentUrl;
+    state.disabled = new Set(readDisabledUrls());
+    applyEnabled();
+    state.lastIndex = -1; // indices point into state.tracks, which just changed
+    refreshQueue();
+    updateControl();
+    // Only the shuffle rotation reacts to the on/off set: a single audition keeps
+    // playing (you can audition an excluded track) and a stopped/muted player stays put.
+    if (state.single || state.stopped || state.muted) return;
+    if (!state.tracks.length) { audio.pause(); updateControl(); return; }
+    const stillEnabled = wasPlaying && state.tracks.some((track) => track.url === wasPlaying);
+    if (!stillEnabled) playNext();
+  }
+  window.addEventListener(BGM_DISABLED_CHANGE_EVENT, onDisabledChange);
+
+  // Transport commands from the UI (the Settings soundtrack list). The list drives
+  // this single audio stream rather than owning its own element, so Stop truly
+  // silences everything and there is never a second song playing underneath.
+  window.addEventListener(BGM_COMMAND_EVENT, (event) => {
+    const detail = (event && event.detail) || {};
+    const run = () => {
+      if (detail.action === 'play' && detail.url) playUrl(detail.url);
+      else if (detail.action === 'stop') stopPlayback();
+      else if (detail.action === 'shuffle') shufflePlay();
+    };
+    // Acting in a follower tab takes over playback (becomes the owner), so control
+    // follows wherever the user is actually clicking.
+    if (state.owner) run();
+    else { pendingAction = run; takeOwnership(); }
+  });
+
   window.addEventListener('storage', (event) => {
     if (event.key === MUTE_STORAGE_KEY) setMuted(readMuted(), { persist: false });
+    if (event.key === BGM_DISABLED_KEY) onDisabledChange();
   });
 
   // ---- mute control UI -----------------------------------------------------
@@ -210,9 +408,19 @@ export function initBgm() {
     const el = document.createElement('button');
     el.type = 'button';
     el.className = 'bgm-control';
+    const icon = document.createElement('img');
+    icon.className = 'bgm-control-icon';
+    icon.src = '/assets/ui/kit/icons/music.png';
+    icon.alt = '';
+    icon.setAttribute('aria-hidden', 'true');
+    el.appendChild(icon);
     el.addEventListener('click', (event) => {
       event.preventDefault();
-      if (state.unavailable && !state.muted) {
+      if (!state.owner) {
+        // A follower tab — clicking takes playback over to this tab.
+        pendingAction = null;
+        takeOwnership();
+      } else if (state.unavailable && !state.muted) {
         // In the unavailable state the button is a retry affordance.
         state.unavailable = false;
         state.errorStreak = 0;
@@ -225,7 +433,27 @@ export function initBgm() {
     return { el };
   }
 
+  // Tell the UI (the Settings soundtrack list) what's playing so it can show ■ Stop
+  // on the current row and ▶ Play on the rest.
+  function broadcast() {
+    window.dispatchEvent(new CustomEvent(BGM_STATE_EVENT, {
+      detail: {
+        playing: !audio.paused && state.owner,
+        currentUrl: state.currentUrl || null,
+        single: Boolean(state.single),
+        otherTab: !state.owner && state.otherPlaying,
+        otherTitle: state.otherTitle || null,
+      },
+    }));
+  }
+
   function updateControl() {
+    renderControl();
+    broadcast();
+    if (state.owner) announce('np'); // keep follower tabs' "now playing" in sync
+  }
+
+  function renderControl() {
     const el = control.el;
     if (state.loaded && !state.tracks.length) {
       // No BGM configured for this environment — don't show a dead control.
@@ -233,10 +461,18 @@ export function initBgm() {
       return;
     }
     el.style.display = '';
+    if (!state.owner && state.otherPlaying) {
+      // Another tab owns playback; this one is a silent follower.
+      el.classList.remove('is-playing');
+      el.classList.add('is-muted');
+      const other = state.otherTitle ? `Playing in another tab — ${state.otherTitle}` : 'Playing in another tab';
+      el.setAttribute('aria-label', `${other} — click to play here`);
+      el.title = `${other} — click to play here`;
+      return;
+    }
     if (state.unavailable && !state.muted) {
       el.classList.remove('is-playing');
       el.classList.add('is-muted');
-      el.textContent = '🔈';
       el.setAttribute('aria-label', 'Background music unavailable — click to retry');
       el.title = 'Background music unavailable — click to retry';
       return;
@@ -244,7 +480,6 @@ export function initBgm() {
     const playing = !audio.paused && state.started && !state.muted;
     el.classList.toggle('is-muted', state.muted);
     el.classList.toggle('is-playing', playing);
-    el.textContent = state.muted ? '🔇' : '🔊';
     const now = state.currentTitle ? `♪ ${state.currentTitle}` : 'Background music';
     el.setAttribute('aria-label', state.muted ? 'Unmute background music' : `Mute background music (${now})`);
     el.title = state.muted
@@ -260,10 +495,10 @@ export function initBgm() {
     })
     .then((payload) => {
       const list = Array.isArray(payload && payload.tracks) ? payload.tracks : [];
-      state.tracks = list
+      state.all = list
         .filter((t) => t && t.url)
         .map((t) => ({ title: t.title || t.url, url: t.url }));
-      state.ready = state.tracks.length > 0;
+      applyEnabled();
       state.loaded = true;
       refreshQueue();
       updateControl();
@@ -278,12 +513,17 @@ export function initBgm() {
     });
 
   updateControl();
+  queueForOwnership(); // claim the audio-owner lock (granted now if no other tab holds it)
 
   return {
     toggleMute,
     setMuted,
     isMuted: () => state.muted,
+    isOwner: () => state.owner,
     nowPlaying: () => state.currentTitle,
+    playUrl,
+    stop: stopPlayback,
+    shuffle: shufflePlay,
     // exposed for debugging / tests
     _state: state,
   };

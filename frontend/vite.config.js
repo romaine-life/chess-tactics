@@ -4,6 +4,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
 import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
+import { fetchId3 } from '../tools/bgm/id3.mjs';
 
 // Stamp build/server provenance into the bundle so Settings → About can always
 // say exactly what's serving this page. In dev that's the WORKTREE + commit (the
@@ -66,6 +67,65 @@ function doodadCompositionSave() {
   };
 }
 
+// Dev-only stand-in for the backend's /api/bgm. Local dev has no backend process,
+// so this fetches the REAL public BGM playlist (index.json) straight from the blob
+// container and serves it in the same {tracks:[{title,url}]} shape the backend
+// produces (backend/server.js) — track urls are the absolute public blob urls, so
+// the soundtrack manager and player run against the real tracks. Opt in with
+// BGM_DEV_TRACKS=1; override the source container with BGM_BASE_URL.
+function bgmDevMock() {
+  const enabled = process.env.BGM_DEV_TRACKS === '1';
+  const baseUrl = (process.env.BGM_BASE_URL
+    || 'https://chesstacticsmedia.blob.core.windows.net/bgm').replace(/\/+$/, '');
+  const TTL = 5 * 60 * 1000;
+  let cache = { tracks: null, expiry: 0 };
+  async function loadTracks() {
+    const now = Date.now();
+    if (cache.tracks && cache.expiry > now) return cache.tracks;
+    const res = await fetch(`${baseUrl}/index.json`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`index ${res.status}`);
+    const index = await res.json();
+    const list = Array.isArray(index && index.tracks) ? index.tracks : [];
+    // Enrich each track with its mp3 ID3 tags (clean title + artist + album) so the
+    // soundtrack manager shows real metadata locally, ahead of the generator baking
+    // it into index.json. Best-effort and parallel; falls back to the index title.
+    const tracks = await Promise.all(
+      list
+        .filter((t) => t && typeof t.file === 'string' && t.file)
+        .map(async (t) => {
+          const url = `${baseUrl}/${encodeURIComponent(t.file)}`;
+          const fallbackTitle = typeof t.title === 'string' && t.title ? t.title : t.file;
+          const tags = await fetchId3(url);
+          return {
+            title: tags.title || fallbackTitle,
+            artist: tags.artist || undefined,
+            album: tags.album || undefined,
+            url,
+          };
+        }),
+    );
+    cache = { tracks, expiry: now + TTL };
+    return tracks;
+  }
+  return {
+    name: 'bgm-dev-mock',
+    apply: 'serve',
+    configureServer(server) {
+      if (!enabled) return;
+      server.middlewares.use('/api/bgm', async (_req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = 200;
+        try {
+          res.end(JSON.stringify({ tracks: await loadTracks() }));
+        } catch (err) {
+          server.config.logger.warn(`[bgm-dev-mock] could not load ${baseUrl}/index.json: ${err.message}`);
+          res.end(JSON.stringify({ tracks: [] }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave()],
+  plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave(), bgmDevMock()],
 });
