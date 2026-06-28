@@ -6408,6 +6408,14 @@ h1 {
   color: var(--ce-cyan-bright);
 }
 
+.ce-level-view-toggle button:not(.is-active):hover {
+  color: #f4fbff;
+}
+.ce-level-view-toggle button:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
 .ce-level-info {
   align-content: start;
   column-gap: 18px;
