@@ -2,6 +2,49 @@
   "process": "forge-atom clean pipeline (codex img2img on a chroma plate -> despill -> low-fi -> trim glyph -> pad to the ADR-0026 64x64 canvas -> dimension assert), method-verified via the codex rollout (image_generation_call), NOT code-drawn",
   "lastRun": "2026-06-28",
   "assets": {
+    "pawn": {
+      "group": "settings",
+      "forged": "2026-06-28",
+      "tries": 2,
+      "method": "image-generator (verified)",
+      "gate": "pass"
+    },
+    "bishop": {
+      "group": "settings",
+      "forged": "2026-06-28",
+      "tries": 1,
+      "method": "image-generator (verified)",
+      "gate": "pass"
+    },
+    "castle": {
+      "group": "settings",
+      "forged": "2026-06-28",
+      "tries": 1,
+      "method": "image-generator (verified)",
+      "gate": "pass",
+      "note": "Flat chess-rook PIECE for the Party squad picker / lobby rows. Named 'castle' (not 'rook') because provenance + the forge name-filter key by bare name and the shields/rook heraldic emblem already owns 'rook'. CSS .icon-rook -> kit/icons/castle.png."
+    },
+    "queen": {
+      "group": "settings",
+      "forged": "2026-06-28",
+      "tries": 1,
+      "method": "image-generator (verified)",
+      "gate": "pass"
+    },
+    "king": {
+      "group": "settings",
+      "forged": "2026-06-28",
+      "tries": 1,
+      "method": "image-generator (verified)",
+      "gate": "pass"
+    },
+    "players": {
+      "group": "settings",
+      "forged": "2026-06-28",
+      "tries": 2,
+      "method": "image-generator (verified)",
+      "gate": "pass"
+    },
     "gear": {
       "group": "settings",
       "forged": "2026-06-27",

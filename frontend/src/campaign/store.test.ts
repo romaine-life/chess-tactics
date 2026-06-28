@@ -3,8 +3,23 @@ import { useCampaigns } from './store';
 import { validateLevel } from '../core/level';
 
 function reset() {
-  useCampaigns.setState({ campaigns: [], levels: {}, selectedCampaignId: null, selectedLevelId: null, counter: 1 });
+  useCampaigns.setState({ campaigns: [], levels: {}, selectedCampaignId: null, selectedLevelId: null, counter: 1, officialMode: false });
 }
+
+const OFFICIAL_ID = /^off-[a-z]+(-[a-z]+)*$/; // backend validateOfficialWorkspaceIds contract
+
+function makeLevel(id: string, name = 'L') {
+  return {
+    formatVersion: 1, id, name, notes: '',
+    board: { cols: 8, rows: 8, heightLevels: 1 }, objective: 'capture-all' as const, difficulty: 'normal',
+    economy: { startingFunds: 1000, incomePerTurn: 100 }, theme: 'grassland',
+    layers: { terrain: [], decals: [], zones: [], units: [] },
+  };
+}
+const officialWs = {
+  campaigns: [{ formatVersion: 1, id: 'off-c-crown', name: 'Crown', difficulty: 'normal', chapters: 1, levels: [{ levelId: 'off-l-break', ordinal: 0, objective: 'capture-all' as const }] }],
+  levels: { 'off-l-break': makeLevel('off-l-break', 'Break') },
+};
 
 describe('campaign store', () => {
   beforeEach(reset);
@@ -116,5 +131,69 @@ describe('campaign store', () => {
     expect(state.campaigns).toHaveLength(2);
     expect(state.campaigns[1].levels[0].levelId).not.toBe(existingLevelId);
     expect(state.levels[existingLevelId].name).not.toBe('Imported Level');
+  });
+});
+
+describe('tiered campaigns (ADR-0038)', () => {
+  beforeEach(reset);
+
+  it('merges officials (tagged, first) then the user tier on top, both coexisting', () => {
+    useCampaigns.getState().mergeOfficial(officialWs);
+    useCampaigns.getState().mergeUser({ campaigns: [{ formatVersion: 1, id: 'c5', name: 'Mine', difficulty: 'normal', chapters: 1, levels: [] }], levels: {} });
+    const s = useCampaigns.getState();
+    expect(s.campaigns.map((c) => c.id)).toEqual(['off-c-crown', 'c5']);
+    expect(s.campaigns[0]).toMatchObject({ origin: 'official', readOnly: true });
+    expect(s.campaigns[1]).toMatchObject({ origin: 'mine' });
+  });
+
+  it('keeps the user counter free of official ids so user ids never collide', () => {
+    useCampaigns.getState().mergeOfficial(officialWs); // off- ids must NOT bump the counter
+    useCampaigns.getState().newCampaign();
+    expect(useCampaigns.getState().campaigns.find((c) => c.origin !== 'official')!.id).toBe('c1');
+  });
+
+  it('mints digit-free off- ids that do NOT collide across editing sessions', () => {
+    // Session 1: author one default-named campaign + level into an empty official set.
+    useCampaigns.getState().hydrateOfficialForEditing({ campaigns: [], levels: {} });
+    expect(useCampaigns.getState().officialMode).toBe(true);
+    useCampaigns.getState().newCampaign();
+    useCampaigns.getState().addLevel();
+    const s1 = useCampaigns.getState();
+    const c1 = s1.campaigns[0];
+    const l1 = c1.levels[0].levelId;
+    expect(c1.id).toMatch(OFFICIAL_ID);
+    expect(l1).toMatch(OFFICIAL_ID);
+    const published = { campaigns: s1.campaigns, levels: s1.levels };
+
+    // Session 2: re-enter editing on the published set; default-named adds must get
+    // FRESH ids, not re-mint the existing ones (the counter-reset collision bug).
+    useCampaigns.getState().hydrateOfficialForEditing(published);
+    useCampaigns.getState().newCampaign();
+    const s2 = useCampaigns.getState();
+    const c2 = s2.campaigns.find((c) => c.id !== c1.id)!;
+    expect(c2.id).toMatch(OFFICIAL_ID);
+    expect(c2.id).not.toBe(c1.id);
+    useCampaigns.getState().selectCampaign(c2.id);
+    useCampaigns.getState().addLevel();
+    const l2 = useCampaigns.getState().campaigns.find((c) => c.id === c2.id)!.levels[0].levelId;
+    expect(l2).not.toBe(l1);
+    // No id appears twice across campaigns or levels.
+    const ids = [c1.id, c2.id, ...Object.keys(useCampaigns.getState().levels)];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('strips the official tag on import so a re-imported official is saved as the user\'s own', () => {
+    useCampaigns.getState().importWorkspace({
+      campaigns: [{ formatVersion: 1, id: 'off-c-crown', name: 'Crown', difficulty: 'normal', chapters: 1, levels: [], origin: 'official', readOnly: true }],
+      levels: {},
+    });
+    expect(useCampaigns.getState().campaigns[0]).toMatchObject({ origin: 'mine', readOnly: false });
+  });
+
+  it('clears a stale selection when a merge removes the selected campaign', () => {
+    useCampaigns.getState().mergeOfficial(officialWs);
+    useCampaigns.getState().selectCampaign('off-c-crown');
+    useCampaigns.getState().mergeOfficial({ campaigns: [], levels: {} }); // crown gone
+    expect(useCampaigns.getState().selectedCampaignId).toBeNull();
   });
 });

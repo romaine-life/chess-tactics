@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import { DOODAD_ASSETS } from './doodadCatalog';
+import { BrandLockup } from './shared/BrandLockup';
+import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 // Hands-on doodad composer: arm a doodad from the shelf, click the tile to drop it where you
 // click, then move/resize/flip it and tag it front (in front of the unit) or back (behind).
@@ -150,8 +152,19 @@ export function DoodadEditor(): ReactElement {
   // Shin line: ~22% of unit height above the foot (ADR-0015 "cover feet, not above the shins").
   const shinY = (ANCHOR_Y - 86 * 0.22) * ZOOM;
 
+  useEffect(() => {
+    const shellEl = document.querySelector('.shell');
+    shellEl?.classList.add('is-immersive');
+    return () => shellEl?.classList.remove('is-immersive');
+  }, []);
+
   return (
-    <div style={shell}>
+    <div className="dev-editor-screen">
+      <header className="app-titlebar settings-header-frame">
+        <BrandLockup screenName="Doodad Editor" />
+        <HeaderAccountCluster />
+      </header>
+      <div style={shell}>
       <aside style={panel}>
         <h2 style={h2}>Doodads</h2>
         <p style={hint}>{armed ? 'Click the tile to drop. Esc to stop.' : 'Click to arm, then click the tile.'}</p>
@@ -226,6 +239,7 @@ export function DoodadEditor(): ReactElement {
         <button type="button" style={{ ...seg, flex: 'none' }} onClick={download}>Download JSON</button>
         {status ? <p style={{ ...hint, color: status.startsWith('error') || status.startsWith('not found') ? '#f0a0a0' : '#8fd0a0' }}>{status}</p> : null}
       </aside>
+      </div>
     </div>
   );
 }
@@ -233,7 +247,7 @@ export function DoodadEditor(): ReactElement {
 const imgFill: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'auto' };
 const layerBox: CSSProperties = { position: 'absolute', left: ANCHOR_X * ZOOM, top: ANCHOR_Y * ZOOM, width: FRAME_W * ZOOM, height: FRAME_H * ZOOM, transform: 'translate(-50%,-38.333%)', pointerEvents: 'none' };
 const imgAnchored: CSSProperties = { width: '100%', height: '100%' };
-const shell: CSSProperties = { display: 'grid', gridTemplateColumns: '210px minmax(0,1fr) 250px', gap: 12, height: '100dvh', padding: 14, boxSizing: 'border-box', background: '#071019', color: '#d9e7f7', fontFamily: 'system-ui, sans-serif', overflow: 'hidden' };
+const shell: CSSProperties = { display: 'grid', gridTemplateColumns: '210px minmax(0,1fr) 250px', gap: 12, height: '100%', padding: 14, boxSizing: 'border-box', background: '#071019', color: '#d9e7f7', fontFamily: 'system-ui, sans-serif', overflow: 'hidden' };
 const panel: CSSProperties = { background: 'rgba(5,16,25,0.92)', border: '1px solid rgba(67,127,179,0.28)', borderRadius: 8, padding: 12, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 };
 const stageWrap: CSSProperties = { display: 'grid', placeItems: 'center', overflow: 'auto', background: 'rgba(5,16,25,0.6)', border: '1px solid rgba(67,127,179,0.2)', borderRadius: 8 };
 const stage: CSSProperties = { position: 'relative', backgroundColor: '#0a1622', backgroundImage: 'linear-gradient(45deg,rgba(120,170,214,0.08) 25%,transparent 25%,transparent 75%,rgba(120,170,214,0.08) 75%),linear-gradient(45deg,rgba(120,170,214,0.08) 25%,transparent 25%,transparent 75%,rgba(120,170,214,0.08) 75%)', backgroundSize: '24px 24px', backgroundPosition: '0 0,12px 12px', borderRadius: 6 };

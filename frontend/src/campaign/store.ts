@@ -18,7 +18,18 @@ export interface CampaignState {
   selectedCampaignId: string | null;
   selectedLevelId: string | null;
   counter: number;
+  // When true, authoring acts on the OFFICIAL tier: newCampaign/addLevel mint `off-`
+  // ids and the editor's Save targets the official endpoint. Admin-only.
+  officialMode: boolean;
   hydrate: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  // Tier-scoped replace: swap just the official slice (id-preserving, tagged
+  // readOnly), keeping the user slice — and vice versa. Used by the always-load-then-
+  // merge hydration so officials show for everyone and the user's own merge on top.
+  mergeOfficial: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  mergeUser: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  // Replace the whole store with the official set as EDITABLE (admin authoring); enters officialMode.
+  hydrateOfficialForEditing: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
+  setOfficialMode: (on: boolean) => void;
   importWorkspace: (ws: { campaigns: Campaign[]; levels: Record<string, Level> }) => void;
   newCampaign: () => void;
   duplicateCampaign: (id: string) => void;
@@ -68,9 +79,51 @@ const createStarterCampaignLevel = (id: string, name: string): Level => {
   };
 };
 
+// Official (global) tier ids are namespaced `off-` and DIGIT-FREE on purpose: the
+// per-user counter below derives from the numeric part of c/l ids, so a digit in an
+// official id would inflate/collide the user space. We belt-and-suspenders it by
+// also excluding `off-` ids from the counter scan.
+const OFFICIAL_PREFIX = 'off-';
+const isOfficialId = (id: string): boolean => String(id).startsWith(OFFICIAL_PREFIX);
+
+const slugify = (name: string): string => String(name || '').toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '') || 'item';
+// n → digit-free letters (1→a, 2→b, … 27→aa) so disambiguating suffixes stay digit-free.
+const letters = (n: number): string => {
+  let x = Math.max(1, Math.floor(n));
+  let s = '';
+  while (x > 0) { x -= 1; s = String.fromCharCode(97 + (x % 26)) + s; x = Math.floor(x / 26); }
+  return s;
+};
+// Mint an `off-` id that is unique against the ids ALREADY in the store, not a session
+// counter — the per-user counter resets across official-editing sessions (nextCounterFrom
+// excludes off- ids), so a counter-derived id would collide with previously-published
+// officials. Digit-free by construction (slug is [a-z-], suffix is [a-z]).
+const uniqueOfficialId = (kind: 'c' | 'l', name: string, taken: Set<string>): string => {
+  const base = `${OFFICIAL_PREFIX}${kind}-${slugify(name)}`;
+  if (!taken.has(base)) return base;
+  let k = 1;
+  while (taken.has(`${base}-${letters(k)}`)) k += 1;
+  return `${base}-${letters(k)}`;
+};
+
+const taggedOfficial = (campaign: Campaign): Campaign => ({ ...withCampaignDefaults(campaign), origin: 'official', readOnly: true, locked: true });
+const taggedMine = (campaign: Campaign): Campaign => ({ ...withCampaignDefaults(campaign), origin: 'mine', readOnly: false });
+
+// After a tier merge, drop a selection that no longer resolves to a present campaign/
+// level (a re-merge can remove or retag the slice the selection pointed at).
+const reconcileSelection = (
+  s: { selectedCampaignId: string | null; selectedLevelId: string | null },
+  campaigns: Campaign[],
+  levels: Record<string, Level>,
+): { selectedCampaignId: string | null; selectedLevelId: string | null } => ({
+  selectedCampaignId: campaigns.some((c) => c.id === s.selectedCampaignId) ? s.selectedCampaignId : null,
+  selectedLevelId: s.selectedLevelId && levels[s.selectedLevelId] ? s.selectedLevelId : null,
+});
+
 const nextCounterFrom = (campaigns: Campaign[], levels: Record<string, Level>): number => {
   let max = 0;
-  for (const id of [...campaigns.map((c) => c.id), ...Object.keys(levels)]) {
+  const ids = [...campaigns.map((c) => c.id), ...Object.keys(levels)].filter((id) => !isOfficialId(id));
+  for (const id of ids) {
     const n = parseInt(String(id).replace(/[^0-9]/g, ''), 10);
     if (Number.isFinite(n) && n > max) max = n;
   }
@@ -89,6 +142,7 @@ export const useCampaigns = create<CampaignState>((set) => ({
   selectedCampaignId: null,
   selectedLevelId: null,
   counter: 1,
+  officialMode: false,
 
   hydrate: (ws) => set(() => {
     const imported = importableWorkspace(ws);
@@ -100,6 +154,41 @@ export const useCampaigns = create<CampaignState>((set) => ({
       selectedLevelId: null,
     };
   }),
+
+  mergeOfficial: (ws) => set((s) => {
+    const officialCampaigns = (ws.campaigns ?? []).map(taggedOfficial);
+    const userCampaigns = s.campaigns.filter((c) => c.origin !== 'official');
+    const officialLevels = Object.fromEntries(Object.entries(ws.levels ?? {}).map(([id, level]) => [id, withLevelDefaults(level)]));
+    const userLevels = Object.fromEntries(Object.entries(s.levels).filter(([id]) => !isOfficialId(id)));
+    const campaigns = [...officialCampaigns, ...userCampaigns];
+    const levels = { ...officialLevels, ...userLevels };
+    return { campaigns, levels, officialMode: false, counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)), ...reconcileSelection(s, campaigns, levels) };
+  }),
+
+  mergeUser: (ws) => set((s) => {
+    const userCampaigns = (ws.campaigns ?? []).map(taggedMine);
+    const officialCampaigns = s.campaigns.filter((c) => c.origin === 'official');
+    const userLevels = Object.fromEntries(Object.entries(ws.levels ?? {}).map(([id, level]) => [id, withLevelDefaults(level)]));
+    const officialLevels = Object.fromEntries(Object.entries(s.levels).filter(([id]) => isOfficialId(id)));
+    const campaigns = [...officialCampaigns, ...userCampaigns];
+    const levels = { ...officialLevels, ...userLevels };
+    return { campaigns, levels, officialMode: false, counter: Math.max(s.counter, nextCounterFrom(campaigns, levels)), ...reconcileSelection(s, campaigns, levels) };
+  }),
+
+  hydrateOfficialForEditing: (ws) => set(() => {
+    const imported = importableWorkspace(ws);
+    const campaigns = imported.campaigns.map((c) => ({ ...c, origin: 'official' as const, readOnly: false, locked: false }));
+    return {
+      campaigns,
+      levels: imported.levels,
+      counter: imported.counter,
+      officialMode: true,
+      selectedCampaignId: campaigns[0] ? campaigns[0].id : null,
+      selectedLevelId: null,
+    };
+  }),
+
+  setOfficialMode: (on) => set({ officialMode: on }),
 
   importWorkspace: (ws) => set((s) => {
     const imported = importableWorkspace(ws);
@@ -117,7 +206,10 @@ export const useCampaigns = create<CampaignState>((set) => ({
       });
       const nextCampaignId = `c${counter}`;
       counter += 1;
-      return { ...campaign, id: nextCampaignId, levels: refs };
+      // Imported campaigns are always the user's own — strip any official/readOnly tag
+      // that rode along in the file (e.g. an exported workspace), else userWorkspaceForSave
+      // would silently drop them on save.
+      return { ...campaign, id: nextCampaignId, levels: refs, origin: 'mine' as const, readOnly: false };
     });
     return {
       campaigns: [...s.campaigns, ...campaigns],
@@ -130,7 +222,9 @@ export const useCampaigns = create<CampaignState>((set) => ({
 
   newCampaign: () => set((s) => {
     const n = s.counter;
-    const campaign: Campaign = { formatVersion: CAMPAIGN_FORMAT_VERSION, id: `c${n}`, name: `Campaign ${n}`, difficulty: 'normal', chapters: 1, favorite: false, locked: false, levels: [] };
+    const name = `Campaign ${n}`;
+    const id = s.officialMode ? uniqueOfficialId('c', name, new Set(s.campaigns.map((c) => c.id))) : `c${n}`;
+    const campaign: Campaign = { formatVersion: CAMPAIGN_FORMAT_VERSION, id, name, difficulty: 'normal', chapters: 1, favorite: false, locked: false, levels: [], origin: s.officialMode ? 'official' : 'mine', readOnly: false };
     return { campaigns: [...s.campaigns, campaign], selectedCampaignId: campaign.id, selectedLevelId: null, counter: n + 1 };
   }),
 
@@ -155,6 +249,8 @@ export const useCampaigns = create<CampaignState>((set) => ({
       name: `${source.name} Copy`,
       levels: copiedRefs,
       locked: false,
+      origin: 'mine',
+      readOnly: false,
     };
     return {
       campaigns: [...s.campaigns, campaign],
@@ -168,13 +264,17 @@ export const useCampaigns = create<CampaignState>((set) => ({
   deleteCampaign: (id) => set((s) => {
     const removed = s.campaigns.find((c) => c.id === id);
     const campaigns = s.campaigns.filter((c) => c.id !== id);
-    if (!removed) return { campaigns, selectedCampaignId: campaigns[0]?.id ?? null, selectedLevelId: null };
+    // Auto-select an EDITABLE campaign, never a locked official (which would expose
+    // read-only official content in the editable details panel). In officialMode every
+    // campaign is editable, so fall back to the first remaining campaign.
+    const nextSelected = (campaigns.find((c) => s.officialMode || c.origin !== 'official') ?? null)?.id ?? null;
+    if (!removed) return { campaigns, selectedCampaignId: nextSelected, selectedLevelId: null };
     const stillReferenced = new Set(campaigns.flatMap((campaign) => campaign.levels.map((ref) => ref.levelId)));
     const levels = { ...s.levels };
     for (const ref of removed.levels) {
       if (!stillReferenced.has(ref.levelId)) delete levels[ref.levelId];
     }
-    return { campaigns, levels, selectedCampaignId: campaigns[0]?.id ?? null, selectedLevelId: null };
+    return { campaigns, levels, selectedCampaignId: nextSelected, selectedLevelId: null };
   }),
 
   renameCampaign: (id, name) => set((s) => ({ campaigns: s.campaigns.map((c) => (c.id === id ? { ...c, name } : c)) })),
@@ -187,8 +287,9 @@ export const useCampaigns = create<CampaignState>((set) => ({
     const camp = selected(s);
     if (!camp) return {};
     const n = s.counter;
-    const levelId = `l${n}`;
-    const level = createStarterCampaignLevel(levelId, `Level ${camp.levels.length + 1}`);
+    const levelName = `Level ${camp.levels.length + 1}`;
+    const levelId = s.officialMode ? uniqueOfficialId('l', levelName, new Set(Object.keys(s.levels))) : `l${n}`;
+    const level = createStarterCampaignLevel(levelId, levelName);
     const ref = { levelId, ordinal: camp.levels.length, objective: 'capture-all' as ObjectiveType };
     return {
       campaigns: s.campaigns.map((c) => (c.id === camp.id ? { ...c, levels: [...c.levels, ref] } : c)),
