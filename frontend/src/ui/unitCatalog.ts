@@ -229,8 +229,11 @@ const productionUnits: UnitAsset[] = [
 // a `method` + `speculative` flag so they can be filtered and culled later. Navy palette
 // only (factionMode 'fixed') until a library is promoted to production. Sprites are framed
 // onto the same 512 canvas as the Blender source, so the per-piece footprints below seat them.
-export type PixelLibraryKey = 'codexfilter' | 'filter2' | 'filter3';
+export type PixelLibraryKey = 'codexsheet' | 'codexfilter' | 'filter2' | 'filter3';
 export const PIXEL_LIBRARIES: { key: PixelLibraryKey; label: string; dirs: Direction[] }[] = [
+  // Codex Sheet: the whole 8-direction rotation drawn in ONE cohesive Codex pass from the
+  // real Blender angles, anchored to the concept-art style (rook uses the ruinwall design).
+  { key: 'codexsheet', label: 'Codex Sheet', dirs: rookDirections },
   { key: 'codexfilter', label: 'Codex→Filter', dirs: rookDirections },
   { key: 'filter2', label: 'Filter ×2', dirs: rookDirections },
   { key: 'filter3', label: 'Filter ×3', dirs: rookDirections },
