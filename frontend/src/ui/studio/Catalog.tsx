@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 
 // One catalog, any asset type. A `CatalogType<A>` descriptor binds an asset type's
 // data + actions to the host studio; <CatalogGrid> and <CatalogControls> render it
@@ -112,12 +112,33 @@ function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogT
   );
 }
 
+// Remember each catalog's scroll position. The catalog surface unmounts when the Studio
+// switches to the Lab/Viewer (TilePreview studioMode), so leaving to inspect a tile and
+// clicking "Catalog" to return would otherwise drop you back at the top. Keyed by catalog
+// id and module-level so the value survives the unmount — UI-memory, per the studio's
+// "each destination remembers its own last state" contract (docs/studio-control-architecture.md).
+const catalogScrollMemory = new Map<string, number>();
+
 export function CatalogGrid<A extends { id: string }>({ type }: { type: CatalogType<A> }): ReactElement {
-  const sections = type.sections(catalogVisibleAssets(type));
-  const empty = sections.every((section) => section.assets.length === 0);
+  const allSections = type.sections(catalogVisibleAssets(type));
+  // Drop empty sections so a filtered catalog (e.g. "Base Tiles" with all production
+  // filtered out) doesn't render a bare header and read as if nothing is filtered.
+  const sections = allSections.filter((section) => section.assets.length > 0);
+  const empty = sections.length === 0;
+  const scrollRef = useRef<HTMLElement>(null);
+  // Restore the saved position on (re)mount and when switching catalog category.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const saved = catalogScrollMemory.get(type.id);
+    if (el && saved != null) el.scrollTop = saved;
+  }, [type.id]);
   return (
     <section className="tileset-studio-main">
-      <section className="tileset-studio-tab-panel">
+      <section
+        className="tileset-studio-tab-panel"
+        ref={scrollRef}
+        onScroll={(event) => catalogScrollMemory.set(type.id, event.currentTarget.scrollTop)}
+      >
         <div className="tileset-asset-sections">
           {sections.map((section) => (
             <section key={section.id} className="tileset-asset-section" aria-label={section.label}>
