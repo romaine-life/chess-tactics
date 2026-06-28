@@ -23,8 +23,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
+import { CODEX } from './codex-imagegen.mjs'; // resolves codex.exe dynamically (CODEX_BIN / newest build / PATH) — the bin/<hash>/ dir changes every update
 
-const CODEX = 'C:/Users/Nelson/AppData/Local/OpenAI/Codex/bin/38dff8711e296435/codex.exe';
 const PY = 'D:/automation/python312/python.exe';
 const REMOVE = 'C:/Users/Nelson/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py';
 const SESSIONS = 'C:/Users/Nelson/.codex/sessions';
