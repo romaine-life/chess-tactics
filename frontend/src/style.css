@@ -765,6 +765,31 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .46));
 }
 
+/* ── Settings-twin main menu (ADR-0003 superseded) ──────────────────────────────────
+   The home screen reuses the SAME baked-skin chrome as /settings — app title bar
+   (line frame over wood-oak) + the account slot, and a rail of stone-surface mode tabs
+   (.settings-tab) floating on the ambience — instead of the retired bespoke "Chess
+   Tactics" hero + stone slabs. Only the screen grid is menu-specific; the frames, tabs,
+   and surfaces are the shared settings skin. */
+.main-menu-twin-screen {
+  position: relative;
+  z-index: 3;
+  block-size: 100%;
+  inline-size: 100%;
+  display: grid;
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+  gap: clamp(6px, .72vw, 12px);
+  min-block-size: 0;
+  /* .menu-layer.main-menu-layer is pointer-events:none (so the rain stays click-through);
+     the old menu re-enabled interaction on .main-menu-left/right. Re-enable it for the whole
+     twin UI, or every click falls through to the app root and the tabs do nothing. */
+  pointer-events: auto;
+}
+/* Home has no Back/Menu actions, so the bar is just brand | account. */
+.main-menu-twin-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 /* Ambience shared-world effect canvas. Sits over the menu's background art
    (the layer's CSS background) and under the menu UI (.main-menu-screen, z3).
    The sim only paints lit pixels, so the background scene shows through. */
