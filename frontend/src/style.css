@@ -1368,6 +1368,39 @@ h1 {
   opacity: 0;
 }
 
+/* Cross-route veil (App.tsx) — an atmospheric field that fades OVER the current
+   screen, lets a heavy destination load + compose underneath while opaque, then
+   fades UP into it: one calm dissolve instead of a "Loading…" snap. Only heavy
+   entrances trigger it (skirmish / level editor / campaign editor); light hops
+   swap instantly. Timings mirror VEIL_COVER_MS / VEIL_REVEAL_MS in App.tsx.
+   Retune the field + timing here — it's meant to be tuned by feel. */
+:root {
+  --route-veil-cover-ms: 260ms;
+  --route-veil-reveal-ms: 340ms;
+  /* cold, rainy dark — never white (white is what reads as "browser loading") */
+  --route-veil-field: radial-gradient(130% 130% at 50% 34%, #151c29 0%, #0a0d13 62%, #05070b 100%);
+}
+.route-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--route-veil-field);
+  transition: opacity var(--route-veil-reveal-ms) ease;
+  will-change: opacity;
+}
+.route-veil.is-cover {
+  opacity: 1;
+  pointer-events: auto; /* swallow clicks mid-transition */
+  transition-duration: var(--route-veil-cover-ms);
+}
+.route-veil.is-reveal {
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: var(--route-veil-reveal-ms);
+}
+
 /* "New version available" prompt — quiet, fixed, non-blocking. Shown only after
    a newer build is detected (src/net/appUpdate.ts). */
 .app-update-banner {
@@ -4271,8 +4304,9 @@ h1 {
 
 /* Higher specificity than .settings-header-frame so the in-game three-section centred
    layout wins over the menu's 2-trailing grid: brand (left) · live status (centre) ·
-   account cluster (right). */
-.skirmish-screen .skirmish-topbar {
+   account cluster (right). Scoped to the bar element (it lives in the app shell now,
+   outside .skirmish-screen) — two classes still out-rank the single .settings-header-frame. */
+.app-shell-titlebar.skirmish-topbar {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
@@ -4955,9 +4989,11 @@ h1 {
   grid-template-areas:
     "titlebar titlebar"
     "board    rail";
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Row 1 (the titlebar area) stays sized for the persistent shell bar that overlays
+     it — the bar lives in the app shell now (no in-screen <header>), so an `auto` row
+     would collapse and the board/rail would slide up under the bar. */
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
 }
-.level-editor-screen .le-topbar { grid-area: titlebar; }
 .level-editor-screen .skirmish-field { grid-area: board; }
 /* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable
    gutter only reserved ~10px of dead space on the RIGHT — making the inner padding
@@ -4972,11 +5008,14 @@ h1 {
    on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
    stats/actions content below are scoped here — three sections: brand · save-state ·
    labeled header buttons (.app-header-button on the kit gold frame). */
-.level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
-.level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
-.level-editor-screen .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
-.level-editor-screen .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
+/* Bar-content rules are scoped to the bar class (.le-topbar), NOT the screen — the
+   bar now lives in the app shell, outside .level-editor-screen, so the stats/actions
+   (portaled into the bar via <TitleBarSlot>) are descendants of .le-topbar there. */
+.le-topbar .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
+.le-topbar .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.le-topbar .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
+.le-topbar .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+.le-topbar .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
@@ -5800,6 +5839,14 @@ h1 {
   position: relative;
   z-index: 1;
 }
+
+/* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
+   the fixed bar overlay and pin the layout + footer to rows 2/3 (3-row grid). */
+.ce-screen.app-shell-bar-pad {
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr) auto;
+}
+.ce-screen.app-shell-bar-pad > .ce-layout { grid-row: 2; }
+.ce-screen.app-shell-bar-pad > .ce-footer { grid-row: 3; }
 
 .ce-topbar {
   /* Frame + height come from .app-titlebar (ADR-0004); this is the shared
@@ -11095,6 +11142,26 @@ button.tileset-relationship-cell {
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
   box-sizing: border-box;
   min-block-size: var(--app-header-h);
+}
+
+/* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered ONCE in App,
+   outside the routed screen, so the bar survives navigation. Fixed at the top, above
+   the route-veil (z 9999) so it stays LIT while the body dissolves through a heavy-
+   route transition. It carries .app-titlebar + .settings-header-frame for the shared
+   oak look; only position + stacking are set here. A migrated screen adds
+   .app-shell-bar-pad to its body root to reserve the header height the fixed bar now
+   overlays (the per-screen <header> is gone — the bar lives in the shell). */
+.app-shell-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 10000;
+}
+/* A screen migrated to the shell bar KEEPS its grid header row intact (so the body
+   stays exactly where it was — same height, same gap) but renders nothing into it;
+   the fixed shell bar overlays that row. Pin the body to row 2 so it doesn't collapse
+   up into the now-empty header track. */
+.app-shell-bar-pad > :first-child {
+  grid-row: 2;
 }
 
 /* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
