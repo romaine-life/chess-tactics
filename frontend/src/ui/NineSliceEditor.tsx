@@ -18,6 +18,7 @@
 // (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import nineSliceRegistry from '../../config/nine-slice-registry.json';
+import { SURFACE_ASSETS } from './surfaceCatalog';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
@@ -135,12 +136,13 @@ type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: b
 // Assemble the 9-slice at an arbitrary W×H (no margin) with the keyline/bracket
 // offsets baked in. This is the single source of truth for both the editor canvas
 // and the live previews, so a preview can never diverge from what you're editing.
-function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false, flipSides = false): HTMLCanvasElement {
+function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false, flipSides = false, noFill = false): HTMLCanvasElement {
   const { cw, ch, ew, eh } = L;
   const W = Math.max(2 * cw, w), H = Math.max(2 * ch, h);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d')!; g.imageSmoothingEnabled = false;
-  tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
+  // noFill = ornament only (transparent interior) — the "line" frame a surface shows through.
+  if (!noFill) tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
   const topS = toCanvas(L.edge, ew, eh);
   const botS = flip(topS, ew, eh, false, true);
   // Side edges via rot90; flipSides swaps L/R for beveled rails (row) so the bevel
@@ -175,6 +177,11 @@ export function NineSliceEditor(): ReactElement {
   const [showOuter, setShowOuter] = useState(true);
   const [showContent, setShowContent] = useState(false);
   const [showFill, setShowFill] = useState(false);
+  // Fill PREVIEW: paint a real surface clipped to the fill box, with the ornament (no-fill frame)
+  // on top — so you can judge the fill boundary against an actual fill, not just the guide line.
+  const [previewFill, setPreviewFill] = useState(false);
+  const [previewSurfaceName, setPreviewSurfaceName] = useState(SURFACE_ASSETS[0]?.name ?? '');
+  const [surfaceImg, setSurfaceImg] = useState<HTMLImageElement | null>(null);
   // gap from each outer-box edge to the art's outermost opaque pixel. + = gap inside; − = beyond (overflow).
   const [status, setStatus] = useState<{ top: number; right: number; bottom: number; left: number } | null>(null);
   const [edits, setEdits] = useState<Record<string, EditState>>(() => {
@@ -214,6 +221,15 @@ export function NineSliceEditor(): ReactElement {
   }, [asset]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
+
+  // Load the chosen preview surface (for the fill preview).
+  useEffect(() => {
+    const s = SURFACE_ASSETS.find((a) => a.name === previewSurfaceName);
+    if (!s) { setSurfaceImg(null); return; }
+    let live = true;
+    loadImage(s.file).then((img) => { if (live) setSurfaceImg(img); }).catch(() => { if (live) setSurfaceImg(null); });
+    return () => { live = false; };
+  }, [previewSurfaceName]);
 
   // Hydrate from the on-disk config (dev) the first time each asset is opened, so the
   // editor reflects what's actually baked — not stale localStorage or defaults. This
@@ -291,7 +307,22 @@ export function NineSliceEditor(): ReactElement {
     view.width = W * Z; view.height = H * Z;
     const vg = view.getContext('2d')!; vg.imageSmoothingEnabled = false;
     for (let y = 0; y < view.height; y += 8) for (let x = 0; x < view.width; x += 8) { vg.fillStyle = ((x / 8 + y / 8) & 1) ? '#3a3f48' : '#2b2f37'; vg.fillRect(x, y, 8, 8); }
-    vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);
+    if (previewFill && surfaceImg) {
+      // Surface clipped to the FILL box, with the ornament-only frame on top — what a surface fill
+      // actually looks like. Outside the fill box (the checkerboard ring) is whatever sits behind.
+      const f = edit.fill;
+      vg.save();
+      vg.beginPath();
+      vg.rect(f * Z, f * Z, (W - 2 * f) * Z, (H - 2 * f) * Z);
+      vg.clip();
+      const tile = 16 * Z; // 16 footprint px per tile — enough texture to read
+      for (let y = 0; y < view.height; y += tile) for (let x = 0; x < view.width; x += tile) vg.drawImage(surfaceImg, x, y, tile, tile);
+      vg.restore();
+      const orn = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides, true);
+      vg.drawImage(orn, 0, 0, W, H, 0, 0, W * Z, H * Z);
+    } else {
+      vg.drawImage(off, 0, 0, W, H, 0, 0, W * Z, H * Z);
+    }
 
     // Guides are FIXED references at the asset footprint — you position the
     // keyline/bracket RELATIVE to them; they do NOT follow the art.
@@ -320,7 +351,7 @@ export function NineSliceEditor(): ReactElement {
       if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
     }
     setStatus(maxX < 0 ? null : { top: minY, left: minX, right: (W - 1) - maxX, bottom: (H - 1) - maxY });
-  }, [loaded, edit, showOuter, showContent, showFill, asset]);
+  }, [loaded, edit, showOuter, showContent, showFill, previewFill, surfaceImg, asset]);
 
   // LIVE previews — the same builder rendered at actual size and stretched in-use,
   // so you can judge the real result here without an apply-and-screenshot round trip.
@@ -421,6 +452,17 @@ export function NineSliceEditor(): ReactElement {
               <button type="button" style={ST.sb} onClick={() => setFill(1)}>＋</button>
               <span style={ST.sizeLabel}>uniform on all sides</span>
             </div>
+            <label style={ST.toggle}>
+              <input type="checkbox" checked={previewFill} onChange={(e) => setPreviewFill(e.target.checked)} />
+              <span style={{ color: '#cfa' }}>▦</span> Preview fill — paint a real surface clipped to the fill box
+            </label>
+            {previewFill && (
+              <div style={ST.sizeRow}>
+                <select value={previewSurfaceName} onChange={(e) => setPreviewSurfaceName(e.target.value)} style={{ ...ST.select, fontSize: 13, flex: 1 }}>
+                  {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                </select>
+              </div>
+            )}
           </div>
           {status && (status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0) && (
             <div style={{ ...ST.statusBox, borderColor: '#e0556a', color: '#ff9aa8' }}>
