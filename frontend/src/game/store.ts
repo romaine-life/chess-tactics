@@ -3,9 +3,9 @@
 // new state out). The renderer and HUD subscribe to it; neither mutates state.
 
 import { create } from 'zustand';
-import type { GameEvent, GameState, Move } from '../core/types';
+import type { GameEvent, GameState, Move, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
-import { evaluateObjective } from '../core/objectives';
+import { evaluateObjective, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType } from '../core/level';
 import { buildTerrainIndex } from '../core/terrain';
 import { createRng } from '../core/rng';
@@ -22,6 +22,17 @@ const OBJECTIVE_LOG_COPY = {
   survive: 'survive the assault',
   reach: 'reach the objective',
 } as const;
+
+/** The log line announcing a decided objective. */
+function objectiveOutcomeCopy(objective: ObjectiveType, winner: Winner): string {
+  if (winner !== 'player') return 'Defeat — your force has fallen.';
+  switch (objective) {
+    case 'capture-king': return 'Victory — the enemy King is captured.';
+    case 'survive': return 'Victory — you held the line.';
+    case 'reach': return 'Victory — the objective is reached.';
+    default: return 'Victory — the enemy is routed.';
+  }
+}
 
 /** Movement environment for a state: indexes its terrain layer (if authored). */
 function envFor(game: GameState): MoveEnv {
@@ -85,6 +96,11 @@ export interface SkirmishState {
   log: string[];
   /** Win condition for this game. A free skirmish defaults to capture-king. */
   objective: ObjectiveType;
+  /** Static objective context for the current level — the survive clock target
+   * and the reach destination cells (empty for capture objectives / skirmish). */
+  objectiveCtx: ObjectiveContext;
+  /** Completed player→enemy rounds — the clock the `survive` objective counts. */
+  turnsElapsed: number;
   /** True once newSkirmish has built a real game (vs the module-load placeholder). */
   started: boolean;
   /** Level this game is testing (null = free skirmish). Lets the screen tell
@@ -126,12 +142,24 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
       // With no manual End Turn, a player handed the turn with no legal move would
       // soft-lock — resolve that as a loss (you can't pass in chess).
-      const { game, stuck } = resolveIfPlayerStuck(enemyRes.game, envFor(enemyRes.game));
-      if (stuck) msgs.push('Stalemate — no legal moves remain. The skirmish is a draw.');
+      const stuckRes = resolveIfPlayerStuck(enemyRes.game, envFor(enemyRes.game));
+      let game = stuckRes.game;
+      if (stuckRes.stuck) msgs.push('Stalemate — no legal moves remain. The skirmish is a draw.');
+      // A full player→enemy round just elapsed: advance the survive clock, then
+      // re-check the objective — survive reached, or a player wipe = defeat.
+      const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
+      if (!game.winner) {
+        const winner = evaluateObjective(game, cur.objective, { ...(cur.objectiveCtx ?? {}), turnsElapsed });
+        if (winner) {
+          game = { ...game, winner, turn: 'done' };
+          msgs.push(objectiveOutcomeCopy(cur.objective, winner));
+        }
+      }
       set({
         game,
         env: envFor(game),
         tick: enemyRes.tick,
+        turnsElapsed,
         selectedId: firstPlayerId(game),
         focusedId: firstPlayerId(game),
         log: [...msgs.reverse(), ...cur.log].slice(0, 12),
@@ -148,6 +176,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   tick: 0,
   log: [`Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`],
   objective: 'capture-king',
+  objectiveCtx: {},
+  turnsElapsed: 0,
   started: false,
   levelId: null,
 
@@ -157,11 +187,12 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // Safety net: a degenerate start with no player move resolves rather than locks.
     const { game } = resolveIfPlayerStuck(created, env);
     const objective: ObjectiveType = opts.level?.objective ?? 'capture-king';
+    const objectiveCtx = opts.level ? objectiveContextForLevel(opts.level) : {};
     const intro = opts.level
       ? `Test play begins — objective: ${OBJECTIVE_LOG_COPY[opts.level.objective]}.`
       : `Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`;
     const selectedId = firstPlayerId(game);
-    set({ game, env, seed: opts.seed, tick: 0, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null });
   },
 
   select: (id) => {
@@ -194,18 +225,15 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const playerRes = applyMove(s.game, p.id, mv);
     let game = playerRes.state;
     const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
-    // Objective win: capturing the enemy King ends the game immediately, even with
-    // other enemy pieces still on the board — this is what makes the displayed
-    // "capture the enemy King" objective honest. (capture-all already equals
-    // applyMove's last-standing rule; survive/reach need extra context and aren't
-    // wired here, so they fall back to last-standing.)
-    if (!game.winner && (s.objective === 'capture-king' || s.objective === 'capture-all')) {
-      const winner = evaluateObjective(game, s.objective);
+    // Objective win on the player's move: capturing the enemy King, routing the
+    // last enemy, or stepping a piece onto a reach tile ends the game immediately —
+    // what makes the displayed objective honest. (survive can only be decided once
+    // a round elapses, so it's checked after the enemy reply, not here.)
+    if (!game.winner) {
+      const winner = evaluateObjective(game, s.objective, { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 });
       if (winner) {
         game = { ...game, winner, turn: 'done' };
-        msgs.push(winner === 'player'
-          ? (s.objective === 'capture-king' ? 'Victory — the enemy King is captured.' : 'Victory — the enemy is routed.')
-          : 'Defeat — your force has fallen.');
+        msgs.push(objectiveOutcomeCopy(s.objective, winner));
       }
     }
     // Beat 1: commit the player's move on its own so it animates and the board

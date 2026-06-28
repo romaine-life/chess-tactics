@@ -1,13 +1,14 @@
 {
   "process": "forge-atom clean pipeline (codex img2img on a chroma plate -> despill -> low-fi -> trim glyph -> pad to the ADR-0026 64x64 canvas -> dimension assert), method-verified via the codex rollout (image_generation_call), NOT code-drawn",
-  "lastRun": "2026-06-27",
+  "lastRun": "2026-06-28",
   "assets": {
     "gear": {
       "group": "settings",
       "forged": "2026-06-27",
-      "method": "image-generator (verified)",
+      "method": "carved main-menu gear (codex img2img, rollout-verified) adopted as the shared settings gear",
       "canvas": "64x64",
-      "gate": "pass"
+      "gate": "soft-alpha (menu hero register — NOT the forge-atom hard-alpha gate)",
+      "note": "Replaced the forge-atom gear so the whole game shares ONE settings gear. Source: icons-carved/settings-smooth.png packed via pack-menu-icons.mjs. Same bytes ship to kit/icons/gear.png (Settings rail + Skirmish HUD) and the menu row (icons-carved/settings.png); the account cog is the same art at 37x37."
     },
     "speaker": {
       "group": "settings",
@@ -153,6 +154,13 @@
       "group": "settings",
       "forged": "2026-06-27",
       "tries": 2,
+      "method": "image-generator (verified)",
+      "gate": "pass"
+    },
+    "sign-out": {
+      "group": "settings",
+      "forged": "2026-06-28",
+      "tries": 1,
       "method": "image-generator (verified)",
       "gate": "pass"
     }

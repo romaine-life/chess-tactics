@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
+import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { BrandLockup } from './shared/BrandLockup';
+import { KitScroll } from './KitScroll';
+import { Stepper } from './shared/Stepper';
+import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -23,6 +27,8 @@ interface LocalSettings {
 interface BgmTrack {
   title: string;
   url: string;
+  artist?: string;
+  album?: string;
 }
 
 interface TabDefinition {
@@ -63,9 +69,19 @@ const TAB_PATHS: Record<SettingsTab, string> = {
 };
 
 function tabFromPath(pathname: string): SettingsTab {
-  const id = normalizeRoutePath(pathname).match(/^\/settings\/(.+)$/)?.[1];
+  // Match only the leading section segment, so deeper routes (e.g.
+  // /settings/audio/tracks) still resolve to their owning tab and keep it lit.
+  const id = normalizeRoutePath(pathname).match(/^\/settings\/([^/]+)/)?.[1];
   if (id === 'audio' || id === 'gameplay' || id === 'creator-tools' || id === 'general') return id;
   return 'general';
+}
+
+// The Audio tab has one sub-view: the soundtrack list at /settings/audio/tracks.
+// It's its own route so the ← back button, reload, and browser back all work.
+const TRACKS_PATH = '/settings/audio/tracks';
+
+function isTracksView(pathname: string): boolean {
+  return normalizeRoutePath(pathname) === TRACKS_PATH;
 }
 
 // One creator-tools entry — the studio is the single workspace: tiles, units,
@@ -79,6 +95,37 @@ const creatorTools: CreatorTool[] = [
 function asset(file: string): string {
   // Use the shared UI kit's generated glyphs: icon-gear-generated.png -> kit/icons/gear.png
   return `/assets/ui/kit/icons/${file.replace(/^icon-/, '').replace(/-generated/, '')}`;
+}
+
+// Build / server provenance, stamped by vite.config buildInfo, surfaced in About so
+// "which server/build am I actually on?" is summonable from one place — dev or prod.
+// In dev it names the WORKTREE + commit + live port (a server from the wrong worktree
+// reports its own name, so being on the wrong one is a glance, not a 2-hour hunt).
+declare const __BUILD_INFO__:
+  | { mode: 'dev'; worktree: string; commit: string; dirty: boolean; startedAt: number }
+  | { mode: 'prod'; commit: string; dirty: boolean }
+  | undefined;
+
+// The deployed entry-chunk hash (empty in dev) — the live asset-bundle id for prod.
+function bootedEntryHash(): string {
+  const el = document.querySelector('script[type="module"][src*="/assets/index-"]') as HTMLScriptElement | null;
+  return (el?.src || '').match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/)?.[1] || '';
+}
+
+function buildSummary(): { headline: string; detail: string } {
+  const info = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
+  if (info && info.mode === 'dev') {
+    const port = window.location.port || 'default';
+    return {
+      headline: `${info.worktree} · ${info.commit}${info.dirty ? '*' : ''}`,
+      detail: `Local dev server · :${port} · started ${new Date(info.startedAt).toLocaleTimeString()}`,
+    };
+  }
+  const hash = bootedEntryHash();
+  return {
+    headline: `${info?.commit ?? '(unknown)'}${info?.dirty ? '*' : ''}${hash ? ` · ${hash}` : ''}`,
+    detail: 'Production build',
+  };
 }
 
 function readMuted(): boolean {
@@ -156,42 +203,16 @@ function displayAccountName(user: AuthUser | null): string {
   return user.name || user.email || 'Player';
 }
 
-function SettingsToggle({
-  checked,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  onChange: (checked: boolean) => void;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      className={`settings-toggle ${checked ? 'is-on' : 'is-off'}`}
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-    >
-      {/* Interim text toggle: two live words; the current state lights up (warm =
-          on, cool = off), the other dims. No chrome-material dependency, so the
-          stone/wood chrome (forged on another branch) can re-skin it later without
-          touching this logic. */}
-      <span className="settings-toggle-opt" data-state="off">Off</span>
-      <span className="settings-toggle-opt" data-state="on">On</span>
-    </button>
-  );
-}
-
 function SettingsRow({
   title,
+  eyebrow,
   description,
   value,
   tall = false,
   children,
 }: {
   title: string;
+  eyebrow?: string;
   description?: string;
   value?: ReactNode;
   tall?: boolean;
@@ -200,6 +221,7 @@ function SettingsRow({
   return (
     <section className={`settings-row ${tall ? 'settings-row-tall' : ''}`}>
       <div className="settings-row-copy">
+        {eyebrow ? <span className="settings-row-eyebrow">{eyebrow}</span> : null}
         <h4>{title}</h4>
         {description ? <p>{description}</p> : null}
       </div>
@@ -224,30 +246,6 @@ function SettingsSection({
       <h3 className="settings-section-title">{title}</h3>
       <div className="settings-section-rows">{children}</div>
     </section>
-  );
-}
-
-function Stepper({
-  value,
-  suffix,
-  decreaseLabel,
-  increaseLabel,
-  onDecrease,
-  onIncrease,
-}: {
-  value: number;
-  suffix: string;
-  decreaseLabel: string;
-  increaseLabel: string;
-  onDecrease: () => void;
-  onIncrease: () => void;
-}): ReactElement {
-  return (
-    <div className="settings-stepper">
-      <SettingsButton ariaLabel={decreaseLabel} onClick={onDecrease}><span className="stepper-glyph stepper-minus" aria-hidden="true" /></SettingsButton>
-      <output>{value}{suffix}</output>
-      <SettingsButton ariaLabel={increaseLabel} onClick={onIncrease}><span className="stepper-glyph stepper-plus" aria-hidden="true" /></SettingsButton>
-    </div>
   );
 }
 
@@ -282,11 +280,19 @@ function Slider({
 
 export function Settings(): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
+  const [showTracks, setShowTracks] = useState<boolean>(() => isTracksView(window.location.pathname));
   const [me, setMe] = useState<AuthUser | null>(null);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
   const [tracksStatus, setTracksStatus] = useState('');
+  const [disabledUrls, setDisabledUrls] = useState<string[]>(() => readDisabledUrls());
+  // Mirrors disabledUrls so back-to-back toggles read the latest set, not a stale
+  // render snapshot (otherwise rapid toggles clobber each other before re-render).
+  const disabledRef = useRef<string[]>(disabledUrls);
+  // The single BGM player owns playback; we just reflect its broadcast transport
+  // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
+  const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   useEffect(() => {
@@ -300,7 +306,10 @@ export function Settings(): ReactElement {
     if (normalizeRoutePath(window.location.pathname) === '/settings') {
       navigateApp(TAB_PATHS.general, { replace: true, scroll: false });
     }
-    const sync = () => setActiveTab(tabFromPath(window.location.pathname));
+    const sync = () => {
+      setActiveTab(tabFromPath(window.location.pathname));
+      setShowTracks(isTracksView(window.location.pathname));
+    };
     window.addEventListener('popstate', sync);
     window.addEventListener(APP_NAVIGATION_EVENT, sync);
     return () => {
@@ -329,6 +338,56 @@ export function Settings(): ReactElement {
     saveLocalSettings(settings);
     applyUiScale(settings.uiScale);
   }, [settings]);
+
+  // Load the soundtrack list whenever the dedicated tracks view is opened. A fresh
+  // fetch each entry (the backend caches for 5 min); `tracks === null` is the loading
+  // state, an empty array means none / unavailable (disambiguated by tracksStatus).
+  useEffect(() => {
+    if (!showTracks) return;
+    let active = true;
+    setTracks(null);
+    setTracksStatus('Loading tracks...');
+    (async () => {
+      try {
+        const response = await fetch('/api/bgm');
+        if (!response.ok) throw new Error(`bgm ${response.status}`);
+        const payload = await response.json() as { tracks?: Array<Partial<BgmTrack>> };
+        const nextTracks = Array.isArray(payload.tracks)
+          ? payload.tracks
+              .filter((track): track is BgmTrack => typeof track.title === 'string' && typeof track.url === 'string')
+              .map((track) => ({
+                title: track.title,
+                url: track.url,
+                artist: typeof track.artist === 'string' ? track.artist : undefined,
+                album: typeof track.album === 'string' ? track.album : undefined,
+              }))
+          : [];
+        if (!active) return;
+        setTracks(nextTracks);
+        setTracksStatus(nextTracks.length ? `${nextTracks.length} tracks loaded.` : 'No tracks are available.');
+      } catch {
+        if (!active) return;
+        setTracks([]);
+        setTracksStatus('Tracks are unavailable right now.');
+      }
+    })();
+    return () => { active = false; };
+  }, [showTracks]);
+
+  // Reflect the BGM player's transport state so the playing row shows ■ Stop.
+  useEffect(() => {
+    const onState = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { playing?: boolean; currentUrl?: string | null; otherTab?: boolean; otherTitle?: string | null };
+      setNowPlaying({
+        playing: Boolean(detail.playing),
+        currentUrl: detail.currentUrl ?? null,
+        otherTab: Boolean(detail.otherTab),
+        otherTitle: detail.otherTitle ?? null,
+      });
+    };
+    window.addEventListener(BGM_STATE_EVENT, onState);
+    return () => window.removeEventListener(BGM_STATE_EVENT, onState);
+  }, []);
 
   const active = useMemo(() => tabs.find((tab) => tab.id === activeTab) || tabs[0], [activeTab]);
 
@@ -360,23 +419,32 @@ export function Settings(): ReactElement {
     setConfirmingReset(false);
   };
 
-  const viewTracks = async () => {
-    setTracksStatus('Loading tracks...');
-    try {
-      const response = await fetch('/api/bgm');
-      if (!response.ok) throw new Error(`bgm ${response.status}`);
-      const payload = await response.json() as { tracks?: Array<Partial<BgmTrack>> };
-      const nextTracks = Array.isArray(payload.tracks)
-        ? payload.tracks
-            .filter((track): track is BgmTrack => typeof track.title === 'string' && typeof track.url === 'string')
-            .map((track) => ({ title: track.title, url: track.url }))
-        : [];
-      setTracks(nextTracks);
-      setTracksStatus(nextTracks.length ? `${nextTracks.length} tracks loaded.` : 'No tracks are available.');
-    } catch {
-      setTracks([]);
-      setTracksStatus('Tracks are unavailable right now.');
-    }
+  const setTrackEnabled = (track: BgmTrack, enabled: boolean) => {
+    const base = disabledRef.current;
+    const next = enabled
+      ? base.filter((url) => url !== track.url)
+      : Array.from(new Set([...base, track.url]));
+    disabledRef.current = next;
+    setDisabledUrls(next);
+    writeDisabledUrls(next); // persist + notify the running player
+  };
+
+  // Play/Shuffle start audio even when it was muted; reflect that in the controls so
+  // they don't lie — turn Background Music (and Master Audio) back on to match.
+  const restoreAudibleControls = () => {
+    if (muted) { setMuted(false); writeMuted(false); }
+    if (!settings.masterAudio) updateSetting('masterAudio', true);
+  };
+
+  const playTrack = (track: BgmTrack, playing: boolean) => {
+    if (playing) { sendBgmCommand('stop'); return; }
+    sendBgmCommand('play', track.url);
+    restoreAudibleControls();
+  };
+
+  const shuffleTracks = () => {
+    sendBgmCommand('shuffle');
+    restoreAudibleControls();
   };
 
   const signOut = async () => {
@@ -391,6 +459,13 @@ export function Settings(): ReactElement {
   const signedIn = Boolean(me?.signed_in);
   const accountName = displayAccountName(me);
   const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
+  const build = buildSummary();
+
+  // The track currently coming out of the speakers, looked up in the loaded list by
+  // the player's broadcast url — drives the permanent "Now Playing" row.
+  const nowPlayingTrack = nowPlaying.playing && tracks
+    ? tracks.find((track) => track.url === nowPlaying.currentUrl) ?? null
+    : null;
 
   const renderGeneral = () => (
     <>
@@ -425,6 +500,13 @@ export function Settings(): ReactElement {
           <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
         </SettingsRow>
       </SettingsSection>
+      <SettingsSection title="About">
+        <SettingsRow
+          title="Build"
+          description={build.detail}
+          value={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{build.headline}</span>}
+        />
+      </SettingsSection>
     </>
   );
 
@@ -432,12 +514,12 @@ export function Settings(): ReactElement {
     <>
       <SettingsSection title="Master">
         <SettingsRow title="Master Audio" description="Mute or restore all browser audio for Chess Tactics.">
-          <SettingsToggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} />
+          <Toggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Music">
         <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
-          <SettingsToggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
+          <Toggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
         </SettingsRow>
         <SettingsRow title="Music Volume" description="Set the target music mix for this browser.">
           <Slider
@@ -446,7 +528,7 @@ export function Settings(): ReactElement {
             label="Music Volume"
             onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.musicVolume))}
           />
-          <SettingsButton onClick={viewTracks}>View Tracks</SettingsButton>
+          <SettingsButton href={TRACKS_PATH} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Effects">
@@ -459,16 +541,58 @@ export function Settings(): ReactElement {
           />
         </SettingsRow>
         <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
-          <SettingsToggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
+          <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Notes">
         <SettingsRow
           title="Local Settings"
-          description={tracksStatus || 'Audio settings are saved on this device.'}
+          description="Audio settings are saved on this device."
         />
       </SettingsSection>
     </>
+  );
+
+  // Dedicated soundtrack list, reached from the Music section's "View Tracks" pill.
+  // Its own route (/settings/audio/tracks); the ← back (pinned outside the scroll
+  // area, see the panel header below) returns to the Audio page.
+  const renderTracks = () => (
+    // The "Soundtrack" eyebrow is pinned in the panel header above; here we render
+    // only the scrolling rows (reusing the section-rows chrome without its title).
+    <section className="settings-section">
+      <div className="settings-section-rows">
+        {tracks === null ? (
+          <SettingsRow title="Loading tracks…" description="Fetching the background music playlist." />
+        ) : tracks.length === 0 ? (
+          <SettingsRow
+            title="No tracks to show"
+            description={tracksStatus || 'No background music is configured for this environment.'}
+          />
+        ) : (
+          tracks.map((track) => {
+            const enabled = !disabledUrls.includes(track.url);
+            const playing = nowPlaying.playing && nowPlaying.currentUrl === track.url;
+            return (
+              <SettingsRow
+                key={track.url}
+                eyebrow={track.artist}
+                title={track.title}
+              >
+                <SettingsButton
+                  onClick={() => playTrack(track, playing)}
+                  ariaLabel={playing ? `Stop ${track.title}` : `Play ${track.title}`}
+                >{playing ? '■ Stop' : '▶ Play'}</SettingsButton>
+                <Toggle
+                  checked={enabled}
+                  label={`Include ${track.title} in background music`}
+                  onChange={(value) => setTrackEnabled(track, value)}
+                />
+              </SettingsRow>
+            );
+          })
+        )}
+      </div>
+    </section>
   );
 
   const renderGameplay = () => (
@@ -539,12 +663,43 @@ export function Settings(): ReactElement {
                 nav button; a visible panel heading just duplicated them. Keep an
                 accessible heading for screen-reader structure. */}
             <h2 className="sr-only">{active.label}</h2>
-            <div className="settings-panel-content">
-              {activeTab === 'general' ? renderGeneral() : null}
-              {activeTab === 'audio' ? renderAudio() : null}
-              {activeTab === 'gameplay' ? renderGameplay() : null}
-              {activeTab === 'creator-tools' ? renderCreatorTools() : null}
-            </div>
+            {showTracks ? (
+              <div className="settings-tracks-bar">
+                <div className="settings-tracks-bar-col">
+                  <div className="settings-tracks-bar-actions">
+                    <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+                    <SettingsButton onClick={shuffleTracks} ariaLabel="Shuffle and play the soundtrack">⇄ Shuffle</SettingsButton>
+                  </div>
+                  <section className="settings-row settings-nowplaying-row" aria-label="Now playing">
+                    <div className="settings-row-copy">
+                      <span className="settings-nowplaying-label">Now Playing</span>
+                      {nowPlaying.otherTab ? (
+                        <>
+                          <span className="settings-row-eyebrow">Playing in another tab</span>
+                          <h4 className="settings-nowplaying-empty">{nowPlaying.otherTitle ?? '—'}</h4>
+                        </>
+                      ) : nowPlayingTrack ? (
+                        <>
+                          {nowPlayingTrack.artist ? <span className="settings-row-eyebrow">{nowPlayingTrack.artist}</span> : null}
+                          <h4>{nowPlayingTrack.title}</h4>
+                        </>
+                      ) : (
+                        <h4 className="settings-nowplaying-empty">Nothing</h4>
+                      )}
+                    </div>
+                  </section>
+                  <h3 className="settings-section-title">Soundtrack</h3>
+                </div>
+              </div>
+            ) : null}
+            <KitScroll className="settings-scroll">
+              <div className="settings-panel-content">
+                {activeTab === 'general' ? renderGeneral() : null}
+                {activeTab === 'audio' ? (showTracks ? renderTracks() : renderAudio()) : null}
+                {activeTab === 'gameplay' ? renderGameplay() : null}
+                {activeTab === 'creator-tools' ? renderCreatorTools() : null}
+              </div>
+            </KitScroll>
           </main>
         </div>
       </div>

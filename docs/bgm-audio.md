@@ -35,10 +35,12 @@ browser ── GET /api/bgm ──▶ chess-tactics backend ── GET <bgm>/ind
   `localStorage` (`chess-tactics-bgm-muted-v1`). It hides itself when `/api/bgm`
   returns no tracks (BGM not provisioned).
 
-`tools/bgm/generate.mjs` is the single source of truth that derives blob names,
-`index.json` `file` entries, and display titles from the raw filenames — so the
-three can never drift. `npm run check` (frontend) runs
-`scripts/check-bgm-shuffle.mjs`, which guards the shuffle invariants.
+`tools/bgm/generate.mjs` is the single source of truth that derives blob names and
+`index.json` entries from the source tracks — so they can never drift. It reads each
+mp3's **ID3 tags** (via `frontend/scripts/id3.mjs`) for a clean title plus `artist`
+and `album`, falling back to a filename-derived title when a tag is missing or junk.
+`npm run check` (frontend) runs `scripts/check-bgm-shuffle.mjs`, which guards the
+shuffle invariants.
 
 ## Where the audio lives
 
@@ -47,8 +49,9 @@ committed manifest). It all lives in a public-read Azure Blob container,
 provisioned by this repo's own OpenTofu (`tofu/storage.tf`):
 
 - storage account: `chesstacticsmedia`, container: `bgm` (anonymous blob read)
-- `index.json` — the playlist (`{tracks:[{title,file}]}`), written by the upload
-  pipeline alongside the tracks
+- `index.json` — the playlist (`schemaVersion: 2`,
+  `{tracks:[{title, artist?, album?, file}]}`), written by the upload pipeline
+  alongside the tracks
 - the backend's `BGM_BASE_URL` (`k8s/values.yaml`) points at this container
 
 Adding a song = drop it on `nelson/songs` and re-run the upload workflow. It

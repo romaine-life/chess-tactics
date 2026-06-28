@@ -100,6 +100,10 @@ const SPECS = [
   ['settings', 'chevron-down', ref.general, 'a single downward chevron / caret (an inverted ^), pale steel blue, flat low-fi'],
   ['settings', 'delete', ref.general, 'a red X delete mark: two crossed diagonal strokes, flat low-fi'],
   ['settings', 'lock', ref.general, 'a closed gold padlock, flat low-fi'],
+  // sign-out: a world-object icon, not a stock "exit" arrow — a stripped cloister
+  // door that outlives its institution (ADR-0035; anchored to the Dissolution of
+  // the Monasteries). Wood + stone material per ADR-0025 (like lyre/bell).
+  ['settings', 'sign-out', ref.campaign, 'a weathered medieval wooden plank door standing slightly ajar in a worn gray stone archway, with a dark gap where it opens outward and a worn stone threshold slab at its foot; warm brown timber and cool gray stone, flat low-fi pixel style, no people'],
 ].map(([group, name, r, desc]) => {
   const dir = group === 'settings' ? 'icons' : `icons/${group}`;
   const [w, h] = group === 'shields' ? [64, 80] : [64, 64];

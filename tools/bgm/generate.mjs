@@ -21,6 +21,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { parseId3 } from '../../frontend/scripts/id3.mjs';
+
+// Read enough of an mp3 to cover its ID3v2 tag, then parse it. Text frames sit at
+// the very start of the file; 256 KB clears them for this library (any miss just
+// yields empty fields, and the caller falls back to the filename title).
+function readTags(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const size = Math.min(fs.fstatSync(fd).size, 262144);
+    const buf = Buffer.alloc(size);
+    fs.readSync(fd, buf, 0, size, 0);
+    return parseId3(buf);
+  } catch {
+    return { title: '', artist: '', album: '' };
+  } finally {
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch { /* ignore */ } }
+  }
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -44,8 +63,11 @@ function buildTracks(srcDir) {
     let slug = `${base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.mp3`;
     while (seen.has(slug)) slug = slug.replace(/\.mp3$/, '-x.mp3');
     seen.add(slug);
-    const title = titleCase(base.replace(/^\d+\s*[-.\s]\s*/, '').replace(/\s+/g, ' ').trim());
-    return { src: f, title, file: slug };
+    // Prefer the mp3's own ID3 title (cleaner than the filename); artist + album come
+    // straight from the tag (junk values already filtered out by parseId3).
+    const tags = readTags(path.join(srcDir, f));
+    const filenameTitle = titleCase(base.replace(/^\d+\s*[-.\s]\s*/, '').replace(/\s+/g, ' ').trim());
+    return { src: f, title: tags.title || filenameTitle, artist: tags.artist || '', album: tags.album || '', file: slug };
   });
 }
 
@@ -56,7 +78,15 @@ function main() {
     process.exit(2);
   }
   const entries = buildTracks(args.src);
-  const index = { schemaVersion: 1, tracks: entries.map(({ title, file }) => ({ title, file })) };
+  const index = {
+    schemaVersion: 2,
+    tracks: entries.map(({ title, artist, album, file }) => ({
+      title,
+      ...(artist ? { artist } : {}),
+      ...(album ? { album } : {}),
+      file,
+    })),
+  };
   const json = `${JSON.stringify(index, null, 2)}\n`;
 
   if (args.out) {

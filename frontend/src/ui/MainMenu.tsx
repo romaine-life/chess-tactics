@@ -1,17 +1,12 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { fetchMe, signInHref, type AuthUser } from '../net/auth';
 import { AmbienceBackground } from './AmbienceBackground';
-import { MENU_MODES, bestImageUrl, type MenuMode } from './design/catalogData';
+import { BrandLockup } from './shared/BrandLockup';
+import { AccountMenu } from './shared/AccountMenu';
+import { MENU_MODES } from './design/catalogData';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
-
-// Temporary comparison knob: `?indent=hover` (6px slide) or `?indent=hover10` (10px)
-// to FEEL the deliberate hover slide on the REAL menu. Remove once the call is made.
-function indentClass(): string {
-  const v = new URLSearchParams(window.location.search).get('indent');
-  return v === 'hover' ? ' indent-hover'
-    : v === 'hover10' ? ' indent-hover indent-hover-10' : '';
-}
+const BRAND_SHIELD = '/assets/ui/kit/icons/brand-shield.png';
 
 const MODE_HREFS: Record<string, string> = {
   'solo-skirmish': '/play',
@@ -21,66 +16,64 @@ const MODE_HREFS: Record<string, string> = {
   settings: '/settings',
 };
 
-function ModeMenuLink({ mode, active = false }: { mode: MenuMode; active?: boolean }): ReactElement {
-  const href = MODE_HREFS[mode.slug] || '/';
-  // "Wet Stone & Cold Iron" mode button (ADR-0025 register): a matte stone slab with
-  // a thin forged-iron lip carrying the forged carved-stone icon (canonical 64×64
-  // canvas per ADR-0026, optical keylines per ADR-0027) at --menu-icon-size. Hover
-  // lifts the lip; active = a contained cobalt
-  // hairline. NOTE: the slab surface is still CSS — forging its 9-slice frame is the
-  // remaining chrome step; the icons themselves are forged.
+interface MenuTab { slug: string; label: string; href: string; iconSlug: string }
+
+// The main-menu rail. The Campaign (play) mode is menu-only — not a design-catalog
+// widget — so it lives here rather than in MENU_MODES (the catalog's source of
+// truth). It leads the rail as the headline mode and sits apart from the Campaign
+// Editor so the shared placeholder icon doesn't read as a duplicate of an adjacent
+// tab. Temp icon: reuses the campaign-editor carving until a dedicated 'campaign'
+// carving is forged.
+const MENU_TABS: MenuTab[] = [
+  { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
+  // Settings is excluded from the rail — it now lives in the trailing "settings +
+  // user" chrome cluster (the gear beside the account control), not as a mode tab.
+  ...MENU_MODES
+    .filter((mode) => mode.slug !== 'settings')
+    .map((mode) => ({
+      slug: mode.slug,
+      label: mode.label,
+      href: MODE_HREFS[mode.slug] || '/',
+      iconSlug: mode.slug,
+    })),
+];
+
+// The trailing-edge Settings control (carved gear) — moved out of the rail into the
+// account cluster (ADR-0036). Lives next to the avatar so the top-right reads as one
+// "settings + user" unit.
+const SETTINGS_ICON = `${ICONS}/settings.png`;
+
+// Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
+// chrome can be previewed/screenshotted without a backend: ?demo=1 stubs this user,
+// ?menu=open renders the account menu open.
+const DEMO_USER: AuthUser = {
+  signed_in: true,
+  name: 'Nelson',
+  email: 'nelson@romaine.life',
+  // Retro (8-bit) Gravatar fallback — the default look for a user with no custom
+  // avatar set; representative of what most players see (demo only).
+  avatar_url: 'https://www.gravatar.com/avatar/6b1b9282bc036370f9a6998fe9296233?d=retro&s=80&f=y',
+};
+
+// A mode entry rendered as a settings-style rail tab (shared baked-skin frame —
+// line frame over the stone surface — carved icon + label). The same chrome the
+// Settings sidebar uses, so the menu and the rest of the app read as one family
+// (retires the bespoke stone slabs).
+function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
   return (
-    <a
-      className={`mode-button-stone ${active ? 'is-active' : ''}`.trim()}
-      href={href}
-      aria-current={active ? 'page' : undefined}
-    >
-      <img className="mode-button-stone-icon" src={`${ICONS}/${mode.slug}.png`} alt="" aria-hidden="true" />
-      <span className="mode-button-stone-label">{mode.label}</span>
+    <a className="settings-tab main-menu-mode-tab" href={tab.href}>
+      <span className="settings-tab-icon" aria-hidden="true">
+        <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
+      </span>
+      <span><strong>{tab.label}</strong></span>
     </a>
   );
 }
 
-function ProfilePanel(): ReactElement {
-  const [me, setMe] = useState<AuthUser | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    fetchMe().then((user) => { if (active) setMe(user); });
-    return () => { active = false; };
-  }, []);
-
-  const signedIn = me?.signed_in;
-  const displayName = signedIn ? (me.name || me.email || 'Player') : 'Guest';
-  const status = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
-
-  return (
-    <section className="profile-panel" aria-label="Account">
-      <div className="profile-bar">
-        <span className="profile-crest" aria-hidden="true" />
-        <span className="profile-name" title={displayName}>
-          <strong>{displayName}</strong>
-          <small>{status}</small>
-        </span>
-        <span className="profile-actions">
-          {signedIn
-            ? <span className="profile-status">Ready</span>
-            : <a className="profile-auth" href={signInHref('/')}>Sign In</a>}
-          <a className="profile-gear" href="/settings" aria-label="Settings">
-            <img className="profile-icon-img" src="/assets/ui/main-menu/profile-cog.png" alt="" />
-          </a>
-        </span>
-      </div>
-    </section>
-  );
-}
-
 export function MainMenu(): ReactElement {
-  // Coordinated reveal: hold the menu content until its sprites are decoded, then
-  // fade the whole screen in at once — instead of letting each button / icon /
-  // brand mark pop in independently as it streams in on a cold first boot. The
-  // rain (AmbienceBackground) is intentionally NOT gated; it fades in on its own
-  // whenever the ambience runtime is ready.
+  const [me, setMe] = useState<AuthUser | null>(null);
+  // Coordinated reveal: hold the menu until its sprites decode, then fade the whole
+  // screen in at once instead of letting each frame/icon pop in on a cold first boot.
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -90,14 +83,14 @@ export function MainMenu(): ReactElement {
   }, []);
 
   useEffect(() => {
-    const urls = new Set<string>();
-    const want = (image?: string) => { if (image) urls.add(bestImageUrl(image)); };
-    for (const mode of MENU_MODES) {
-      urls.add(`${ICONS}/${mode.slug}.png`);
-    }
-    want('/assets/ui/main-menu-brand-rook-mark-v1.png');
-    want('/assets/ui/main-menu/profile-cog.png');
+    let active = true;
+    fetchMe().then((user) => { if (active) setMe(user); });
+    return () => { active = false; };
+  }, []);
 
+  useEffect(() => {
+    const urls = new Set<string>([BRAND_SHIELD, SETTINGS_ICON]);
+    for (const tab of MENU_TABS) urls.add(`${ICONS}/${tab.iconSlug}.png`);
     let done = false;
     const reveal = () => { if (!done) { done = true; setReady(true); } };
     Promise.allSettled([...urls].map((src) => { const img = new Image(); img.src = src; return img.decode(); })).then(reveal);
@@ -105,28 +98,54 @@ export function MainMenu(): ReactElement {
     return () => window.clearTimeout(fallback);
   }, []);
 
+  const signOut = async (): Promise<void> => {
+    try { await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }); } catch { /* ignore */ }
+    window.location.reload();
+  };
+
+  // Dev-only harness so the signed-in chrome can be previewed/screenshotted with no
+  // backend: ?demo=1 stubs a signed-in user, ?menu=open renders the account menu open.
+  const params = new URLSearchParams(window.location.search);
+  const demo = import.meta.env.DEV && params.get('demo') === '1';
+  const menuOpen = import.meta.env.DEV && params.get('menu') === 'open';
+  const effectiveMe = demo ? DEMO_USER : me;
+
+  const signedIn = Boolean(effectiveMe?.signed_in);
+  const accountName = signedIn ? (effectiveMe!.name || effectiveMe!.email || 'Player') : 'Guest';
+
   return (
     <div className={`menu-layer main-menu-layer ${ready ? 'is-ready' : 'is-loading'}`} data-testid="main-menu-next">
       <AmbienceBackground />
-      <section className="main-menu-screen main-menu-skeleton-screen" aria-label="Chess Tactics main menu">
-        <div className="main-menu-left">
-          <a className="main-menu-brand main-menu-brand-live" href="/" aria-label="Chess Tactics">
-            <img className="main-menu-brand-mark" src="/assets/ui/main-menu-brand-rook-mark-v1.png" alt="" />
-            <span className="main-menu-brand-type">
-              <strong>Chess Tactics</strong>
-            </span>
-          </a>
-          <nav className={`main-menu-actions main-menu-actions-assets${indentClass()}`} aria-label="Game modes">
-            {MENU_MODES.map((mode) => (
-              <ModeMenuLink key={mode.slug} mode={mode} />
-            ))}
-          </nav>
-        </div>
+      {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
+          mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
+      <div className="settings-screen main-menu-twin-screen">
+        <header className="app-titlebar settings-header-frame main-menu-twin-header">
+          <BrandLockup screenName="Main Menu" />
+          {/* Trailing "settings + user" cluster (ADR-0036): the Settings gear, then
+              the account control — the avatar menu when signed in, Sign In when not. */}
+          <div className="header-account-cluster" aria-label="Settings and account">
+            <a className="cluster-icon-button" href="/settings" aria-label="Settings" title="Settings">
+              <img src={SETTINGS_ICON} alt="" />
+            </a>
+            {signedIn ? (
+              <AccountMenu
+                name={accountName}
+                avatarUrl={effectiveMe!.avatar_url ?? null}
+                onSignOut={signOut}
+                defaultOpen={menuOpen}
+              />
+            ) : (
+              <a className="app-header-button app-header-button-active" href={signInHref('/')}>Sign In</a>
+            )}
+          </div>
+        </header>
 
-        <aside className="main-menu-right" aria-label="Main menu status">
-          <ProfilePanel />
-        </aside>
-      </section>
+        <div className="settings-shell">
+          <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
+            {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }
