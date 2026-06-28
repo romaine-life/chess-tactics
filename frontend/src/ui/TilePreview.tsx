@@ -349,6 +349,38 @@ function useAnimationClock(isPlaying = true, frameCount = 9, frameMs = 150): num
   return animationFrame;
 }
 
+// The 8-way facing compass (iso 3×3 grid + a center ↻ rotate hub). Shared by the
+// Level Editor (rotates the selected unit) and the Units catalog (rotates the card
+// preview). `available` greys out directions a unit lacks; omit to enable all 8.
+function FacingCompass({ direction, onSelect, onRotate, available }: {
+  direction: Direction;
+  onSelect: (dir: Direction) => void;
+  onRotate: () => void;
+  available?: (dir: Direction) => boolean;
+}): ReactElement {
+  return (
+    <div className="unit-facing-compass" aria-label="Unit facing (8-way)">
+      {directionCompassCells.map((cell) =>
+        cell === 'center' ? (
+          <button key="center" type="button" className="unit-facing-cell unit-facing-rotate" onClick={onRotate} title="Rotate clockwise" aria-label="Rotate clockwise">↻</button>
+        ) : (
+          <button
+            key={cell}
+            type="button"
+            className={`unit-facing-cell${direction === cell ? ' is-active' : ''}${available && !available(cell) ? ' is-unavailable' : ''}`}
+            disabled={available ? !available(cell) : false}
+            onClick={() => onSelect(cell)}
+            title={`Face ${cell}`}
+            aria-label={`Face ${cell}`}
+          >
+            {rookDirectionLabel[cell]}
+          </button>
+        ),
+      )}
+    </div>
+  );
+}
+
 // Unified editable board: every Studio view renders through this. It's a full
 // clickable grid seeded from whatever was loaded (a tile, a transition, a
 // generated board). The `tool` decides what a click does — select (highlight),
@@ -538,6 +570,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
   const [selectedUnitMethods, setSelectedUnitMethods] = useState<string[]>(UNIT_METHOD_OPTIONS.map((m) => m.id));
+  // Facing for the Units catalog preview — the compass in the rail rotates every unit card.
+  const [catalogFacing, setCatalogFacing] = useState<Direction>('south');
+  const rotateCatalogFacingCw = (): void => {
+    const i = rookDirections.indexOf(catalogFacing);
+    setCatalogFacing(rookDirections[(i + 1) % rookDirections.length] ?? 'south');
+  };
   const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [zoom, setZoom] = useState(1);
@@ -872,7 +910,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'units',
     label: 'Units',
     assets: unitAssets,
-    card: (u) => ({ img: u.preview, title: u.label, badge: u.badge, isUnit: true }),
+    card: (u) => ({ img: hasDirectionSprite(u, catalogFacing) ? u.sprite('navy-blue', catalogFacing) : u.preview, title: u.label, badge: u.badge, isUnit: true }),
     sections: (visible) => {
       const prod = visible.filter((u) => !u.speculative);
       const spec = visible.filter((u) => u.speculative);
@@ -906,10 +944,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         id: 'method',
         label: 'Library',
         options: UNIT_METHOD_OPTIONS.map((m) => {
-          const n = unitAssets.filter((u) => (u.method ?? 'Codex Sheet') === m.id).length;
+          const n = unitAssets.filter((u) => (u.method ?? 'Production') === m.id).length;
           return { id: m.id, label: m.label, sub: `${m.sub} · ${n}` };
         }),
-        memberOf: (u) => [u.method ?? 'Codex Sheet'],
+        memberOf: (u) => [u.method ?? 'Production'],
         selected: selectedUnitMethods,
         toggle: (id) => setSelectedUnitMethods((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
         selectAll: () => setSelectedUnitMethods(UNIT_METHOD_OPTIONS.map((m) => m.id)),
@@ -920,6 +958,12 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     onView: (u) => openInLevelEditor('unit', u.id),
     onArm: (u) => openInLevelEditor('unit', u.id),
     selectedId: unitBrushId,
+    extra: (
+      <div className="tileset-catalog-facing">
+        <span>Facing</span>
+        <FacingCompass direction={catalogFacing} onSelect={setCatalogFacing} onRotate={rotateCatalogFacingCw} />
+      </div>
+    ),
     note: 'Select a unit card to place it in the shared lab board.',
   };
   const doodadsCatalogType: CatalogType<DoodadAsset> = {
@@ -1489,25 +1533,12 @@ export function LevelEditor(): ReactElement {
               <button type="button" className={`le-seg-btn ${unitSide === 'enemy' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('enemy')}>Enemy</button>
             </div>
             <h2 className="le-card-subhead">Facing</h2>
-            <div className="unit-facing-compass" aria-label="Unit facing (8-way)">
-              {directionCompassCells.map((cell) =>
-                cell === 'center' ? (
-                  <button type="button" key="center" className="unit-facing-cell unit-facing-rotate" onClick={rotateFacingCw} title="Rotate clockwise" aria-label="Rotate unit clockwise">↻</button>
-                ) : (
-                  <button
-                    type="button"
-                    key={cell}
-                    className={`unit-facing-cell${unitBrushDirection === cell ? ' is-active' : ''}${hasDirectionSprite(unitBrushAsset, cell) ? '' : ' is-unavailable'}`}
-                    disabled={!hasDirectionSprite(unitBrushAsset, cell)}
-                    onClick={() => setUnitFacing(cell)}
-                    title={`Face ${cell}`}
-                    aria-label={`Face ${cell}`}
-                  >
-                    {rookDirectionLabel[cell]}
-                  </button>
-                ),
-              )}
-            </div>
+            <FacingCompass
+              direction={unitBrushDirection}
+              onSelect={setUnitFacing}
+              onRotate={rotateFacingCw}
+              available={(d) => hasDirectionSprite(unitBrushAsset, d)}
+            />
             <h2 className="le-card-subhead">Units</h2>
             <div className="le-swatches">
               {unitAssets.map((unit) => (

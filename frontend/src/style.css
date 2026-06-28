@@ -8145,6 +8145,50 @@ h1 {
   text-transform: uppercase;
 }
 
+/* Per-group sub-header row: label on the left, a small select-all/clear on the right. */
+.tileset-filter-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tileset-filter-group-actions {
+  display: flex;
+  gap: 4px;
+  padding-right: 4px;
+  flex: none;
+}
+
+/* Higher specificity than `.tileset-control-stack button` (which forces min-height:34/padding:8-10),
+   so these stay tiny icon buttons that fit inside the h3's natural height instead of growing it. */
+.tileset-filter-group-head .tileset-filter-group-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  min-height: 0;
+  padding: 1px 0;
+  color: #aacbeb;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.92;
+}
+
+.tileset-filter-group-head .tileset-filter-group-actions button:hover {
+  color: #d8eaff;
+  background: rgba(91, 157, 216, 0.16);
+  opacity: 1;
+}
+
+.tileset-filter-group-actions svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
 .tileset-filter-dropdown {
   position: relative;
   z-index: 20;
@@ -9268,6 +9312,18 @@ h1 {
   min-width: 0;
   width: 100%;
   accent-color: #5bc8ff;
+}
+
+/* Units-catalog facing compass in the rail: an uppercase label + the 8-way compass. */
+.tileset-catalog-facing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  color: #9eb1c5;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .tileset-active-filters {
