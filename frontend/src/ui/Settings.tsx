@@ -27,6 +27,8 @@ interface LocalSettings {
 interface BgmTrack {
   title: string;
   url: string;
+  artist?: string;
+  album?: string;
 }
 
 interface TabDefinition {
@@ -172,12 +174,14 @@ function displayAccountName(user: AuthUser | null): string {
 
 function SettingsRow({
   title,
+  eyebrow,
   description,
   value,
   tall = false,
   children,
 }: {
   title: string;
+  eyebrow?: string;
   description?: string;
   value?: ReactNode;
   tall?: boolean;
@@ -186,6 +190,7 @@ function SettingsRow({
   return (
     <section className={`settings-row ${tall ? 'settings-row-tall' : ''}`}>
       <div className="settings-row-copy">
+        {eyebrow ? <span className="settings-row-eyebrow">{eyebrow}</span> : null}
         <h4>{title}</h4>
         {description ? <p>{description}</p> : null}
       </div>
@@ -319,7 +324,12 @@ export function Settings(): ReactElement {
         const nextTracks = Array.isArray(payload.tracks)
           ? payload.tracks
               .filter((track): track is BgmTrack => typeof track.title === 'string' && typeof track.url === 'string')
-              .map((track) => ({ title: track.title, url: track.url }))
+              .map((track) => ({
+                title: track.title,
+                url: track.url,
+                artist: typeof track.artist === 'string' ? track.artist : undefined,
+                album: typeof track.album === 'string' ? track.album : undefined,
+              }))
           : [];
         if (!active) return;
         setTracks(nextTracks);
@@ -413,6 +423,12 @@ export function Settings(): ReactElement {
   const signedIn = Boolean(me?.signed_in);
   const accountName = displayAccountName(me);
   const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
+
+  // The track currently coming out of the speakers, looked up in the loaded list by
+  // the player's broadcast url — drives the permanent "Now Playing" row.
+  const nowPlayingTrack = nowPlaying.playing && tracks
+    ? tracks.find((track) => track.url === nowPlaying.currentUrl) ?? null
+    : null;
 
   const renderGeneral = () => (
     <>
@@ -515,6 +531,7 @@ export function Settings(): ReactElement {
             return (
               <SettingsRow
                 key={track.url}
+                eyebrow={track.artist}
                 title={track.title}
                 description={enabled ? undefined : 'Off — excluded from background music.'}
               >
@@ -610,6 +627,19 @@ export function Settings(): ReactElement {
                     <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
                     <SettingsButton onClick={shuffleTracks} ariaLabel="Shuffle and play the soundtrack">⇄ Shuffle</SettingsButton>
                   </div>
+                  <section className="settings-row settings-nowplaying-row" aria-label="Now playing">
+                    <div className="settings-row-copy">
+                      <span className="settings-nowplaying-label">Now Playing</span>
+                      {nowPlayingTrack ? (
+                        <>
+                          {nowPlayingTrack.artist ? <span className="settings-row-eyebrow">{nowPlayingTrack.artist}</span> : null}
+                          <h4>{nowPlayingTrack.title}</h4>
+                        </>
+                      ) : (
+                        <h4 className="settings-nowplaying-empty">Nothing</h4>
+                      )}
+                    </div>
+                  </section>
                   <h3 className="settings-section-title">Soundtrack</h3>
                 </div>
               </div>

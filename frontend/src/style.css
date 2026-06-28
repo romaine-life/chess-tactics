@@ -11906,6 +11906,35 @@ button.tileset-relationship-cell {
   margin-top: 3px;
 }
 
+/* Small secondary line above a row title — the track's artist / where it's from. */
+.settings-row-eyebrow {
+  color: #8fb0c2;
+  display: block;
+  font-size: var(--ds-text-2xs);
+  letter-spacing: .06em;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+/* Permanent now-playing status row, pinned in the tracks header. The gold label keys
+   it as the live readout; artist sits above the track title, "Nothing" when idle. */
+.settings-nowplaying-label {
+  color: #c9a877;
+  display: block;
+  font-size: var(--ds-text-2xs);
+  letter-spacing: .12em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.settings-nowplaying-row h4 {
+  color: #f1dca6;
+}
+
+.settings-nowplaying-row h4.settings-nowplaying-empty {
+  color: #6f8597;
+}
+
 .settings-row-value {
   flex: none;
   color: #eaf7ff;

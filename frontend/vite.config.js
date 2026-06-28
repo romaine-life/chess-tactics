@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
+import { fetchId3 } from '../tools/bgm/id3.mjs';
 
 // The legacy vanilla entry (index.html -> /src/app.js) is unchanged; the React
 // plugin only adds JSX/TSX handling for the new surfaces we migrate onto.
@@ -61,12 +62,24 @@ function bgmDevMock() {
     if (!res.ok) throw new Error(`index ${res.status}`);
     const index = await res.json();
     const list = Array.isArray(index && index.tracks) ? index.tracks : [];
-    const tracks = list
-      .filter((t) => t && typeof t.file === 'string' && t.file)
-      .map((t) => ({
-        title: typeof t.title === 'string' && t.title ? t.title : t.file,
-        url: `${baseUrl}/${encodeURIComponent(t.file)}`,
-      }));
+    // Enrich each track with its mp3 ID3 tags (clean title + artist + album) so the
+    // soundtrack manager shows real metadata locally, ahead of the generator baking
+    // it into index.json. Best-effort and parallel; falls back to the index title.
+    const tracks = await Promise.all(
+      list
+        .filter((t) => t && typeof t.file === 'string' && t.file)
+        .map(async (t) => {
+          const url = `${baseUrl}/${encodeURIComponent(t.file)}`;
+          const fallbackTitle = typeof t.title === 'string' && t.title ? t.title : t.file;
+          const tags = await fetchId3(url);
+          return {
+            title: tags.title || fallbackTitle,
+            artist: tags.artist || undefined,
+            album: tags.album || undefined,
+            url,
+          };
+        }),
+    );
     cache = { tracks, expiry: now + TTL };
     return tracks;
   }
