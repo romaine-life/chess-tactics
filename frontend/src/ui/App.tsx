@@ -63,12 +63,13 @@ function prefetchRoute(path: string): void {
   void thunk();
 }
 
-// Heavy destinations get the cross-route veil on entry — the screens weighty enough
-// that a plain swap feels abrupt (skirmish, level editor, campaign editor). Light
-// hops (menu, settings, lobbies, party) swap instantly; a fade there would just add
-// friction. Tune membership here.
+// Heavy screens ride the cross-route veil — they're weighty enough that a plain swap
+// feels abrupt (skirmish, level editor, campaign editor). The dissolve plays BOTH
+// ways: entering a heavy screen (masks its load) AND leaving one (smooths the big
+// board->menu visual jump). A hop between two light screens (menu <-> settings) stays
+// instant; a fade there would just add friction. Tune membership here.
 const HEAVY_ROUTES = new Set(['/play', '/skirmish', '/edit', '/level-editor', '/campaigns-next', '/campaigns']);
-const isHeavyDestination = (path: string): boolean => HEAVY_ROUTES.has(path);
+const isHeavyRoute = (path: string): boolean => HEAVY_ROUTES.has(path);
 
 // Veil timings — keep in lockstep with --route-veil-cover-ms / --route-veil-reveal-ms
 // in style.css (JS drives the route swap; CSS drives the opacity fade).
@@ -102,7 +103,8 @@ export function App(): ReactElement {
     const onNav = () => {
       const next = normalizeRoutePath(window.location.pathname);
       if (next === pathRef.current) return;
-      if (isHeavyDestination(next)) {
+      // Dissolve if EITHER end is heavy — entering one, or leaving one for a light screen.
+      if (isHeavyRoute(next) || isHeavyRoute(pathRef.current)) {
         pendingTarget.current = next; // hold the swap until the field is fully opaque
         setVeil('cover');
       } else {
