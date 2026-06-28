@@ -104,6 +104,24 @@ function buildCss(config: DressingConfig, geom: Map<RegionId, number[]>): string
       continue;
     }
     const name = config.surfaces[region.id];
+    if (region.id === 'title') {
+      // The title bar is no longer a frame+fill region (ADR-0037): it's a full-bleed surface
+      // + a forged stud strip + a centred stud. Mirror that here so dressing it swaps the
+      // SURFACE under the real nailhead chrome, instead of wrapping it in the retired frame —
+      // keeping the dressing room honest with what actually ships. No surface = no override, so
+      // the default shows the live bar; CLEAR keeps the chrome but drops the surface.
+      const studded = 'url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat, url("/assets/ui/titlebar/band-studded.png") left bottom / auto var(--titlebar-rule-h, 14px) repeat-x';
+      if (name === CLEAR) {
+        parts.push(`${sel} { border: 0 !important; border-image: none !important; background: ${studded} !important; image-rendering: pixelated !important; }`);
+      } else if (name) {
+        const asset = SURFACE_ASSETS.find((s) => s.name === name);
+        if (asset) {
+          const surfaceBg = `url("${asset.file}") ${offsetX}px ${offsetY}px / ${tilePx}px repeat fixed`;
+          parts.push(`${sel} { border: 0 !important; border-image: none !important; background: ${studded}, ${surfaceBg} !important; image-rendering: pixelated !important; }`);
+        }
+      }
+      continue;
+    }
     if (name === CLEAR) {
       // Keep the element's frame art but drop the baked `fill` so the interior is transparent —
       // whatever is behind (the box's surface for buttons/rows; the page for the title) shows
