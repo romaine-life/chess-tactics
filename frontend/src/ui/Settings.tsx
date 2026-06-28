@@ -533,7 +533,6 @@ export function Settings(): ReactElement {
                 key={track.url}
                 eyebrow={track.artist}
                 title={track.title}
-                description={enabled ? undefined : 'Off — excluded from background music.'}
               >
                 <SettingsButton
                   onClick={() => playTrack(track, playing)}

@@ -149,6 +149,10 @@ export function initBgm() {
   function playUrl(url) {
     const track = state.all.find((t) => t.url === url);
     if (!track) return;
+    // Any explicit transport action means the user is driving playback now, so retire
+    // the autoplay-arming gesture listener — otherwise a later click's pointerdown can
+    // re-arm playback and fight a Stop (the autoplay-blocked-on-load case).
+    disarmGesture();
     state.stopped = false;
     state.single = url;
     state.currentTitle = track.title;
@@ -163,6 +167,7 @@ export function initBgm() {
   // Hard stop — silence everything and stay silent (no auto-resume) until the user
   // explicitly starts playback again with ▶ Play or ⇄ Shuffle.
   function stopPlayback() {
+    disarmGesture(); // a stop is final until an explicit Play/Shuffle — no gesture revival
     state.stopped = true;
     state.single = null;
     audio.pause();
@@ -172,6 +177,7 @@ export function initBgm() {
   // (Re)start the shuffled rotation from a fresh cycle. Shuffles the PLAY order only —
   // the displayed list keeps its catalog order.
   function shufflePlay() {
+    disarmGesture();
     state.stopped = false;
     state.single = null;
     state.lastIndex = -1;

@@ -11927,8 +11927,29 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* Locked height (sized for label + artist + title) + single-line clamps so the row
+   never jerks when it flips between "Nothing" and a playing track. */
+.settings-nowplaying-row {
+  min-height: 96px;
+}
+
+.settings-nowplaying-row .settings-row-copy {
+  min-width: 0;
+}
+
 .settings-nowplaying-row h4 {
   color: #f1dca6;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-nowplaying-row .settings-row-eyebrow {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-nowplaying-row h4.settings-nowplaying-empty {
