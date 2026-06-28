@@ -239,13 +239,12 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   rows: number;
   familyAssets: Record<TileFamilyId, readonly TAsset[]>;
   /**
-   * Optional per-family edge tiles. When supplied, any cell on a FRONT screen edge
-   * (`x === columns - 1` or `y === rows - 1` — the void-facing rows in `x+y` paint order)
-   * gets the family's edge tile as its independent SIDE layer (ADR-0039), so the outer ring
-   * frays while keeping its own top variant. The top (`asset`) and sockets are untouched, so
-   * terrain and adjacency are unchanged — only the cliff face changes.
+   * Optional per-family edge tile VARIANTS. When supplied, any cell on a FRONT screen edge
+   * (`x === columns - 1` or `y === rows - 1` — the void-facing rows in `x+y` paint order) gets
+   * ONE variant (weighted, anti-adjacent) as its independent SIDE layer (ADR-0039), so the
+   * outer ring is rich AND non-repeating while keeping its own top. Top/sockets are untouched.
    */
-  edgeAssets?: Partial<Record<TileFamilyId, TAsset>>;
+  edgeAssets?: Partial<Record<TileFamilyId, TAsset[]>>;
 }
 
 /**
@@ -294,15 +293,29 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     }
   }
 
-  // Give front-edge cells the family's frayed SIDE layer (ADR-0039), keeping each cell's own
-  // top variant and sockets — so legality and the stats below are unaffected. Only the
-  // void-facing rows in `x+y` paint order.
+  // Give front-edge cells a rich SIDE variant (ADR-0039) — weighted pick on a dedicated RNG
+  // (decorrelated from the top), with anti-adjacency so no two identical sides touch along the
+  // run. Keeps each cell's own top + sockets, so legality and the stats below are unaffected.
   if (edgeAssets) {
+    const edgeRng = createRng(seed + 271);
+    const sideById = new Map<string, string>();
     for (const cell of cells) {
-      if (cell.asset && (cell.x === columns - 1 || cell.y === rows - 1)) {
-        const edge = edgeAssets[cell.terrain];
-        if (edge) cell.sideAsset = edge;
+      if (!cell.asset || !(cell.x === columns - 1 || cell.y === rows - 1)) continue;
+      const variants = edgeAssets[cell.terrain];
+      if (!variants || variants.length === 0) continue;
+      const neighborIds = [
+        sideById.get(`${cell.x - 1}-${cell.y}`),
+        sideById.get(`${cell.x}-${cell.y - 1}`),
+        sideById.get(`${cell.x + 1}-${cell.y}`),
+        sideById.get(`${cell.x}-${cell.y + 1}`),
+      ];
+      let pick = pickWeightedAsset(variants, edgeRng.next);
+      if (variants.length > 1 && neighborIds.includes(pick.id)) {
+        pick = pickWeightedAsset(variants, edgeRng.next); // re-roll once…
+        if (neighborIds.includes(pick.id)) pick = variants.find((v) => !neighborIds.includes(v.id)) ?? pick; // …then force a different one
       }
+      cell.sideAsset = pick;
+      sideById.set(`${cell.x}-${cell.y}`, pick.id);
     }
   }
 

@@ -174,10 +174,11 @@ const assetFrameSrc = (asset: StudioAsset, animationFrame: number): string =>
 // model the game's BoardLabBoard uses). On a void-facing cell — no painted neighbor toward
 // the front (+x or +y) — the side becomes the family's frayed edge, so the editor previews
 // the real dropping board edge instead of a clean cut.
-function tileLayerImages(asset: StudioAsset, voidFacing: boolean, animationFrame: number): ReactNode {
+function tileLayerImages(asset: StudioAsset, voidFacing: boolean, animationFrame: number, variantSeed = 0): ReactNode {
   const topBase = assetFrameSrc(asset, animationFrame);
   const family = asset.id.split('-')[0] as TileFamilyId;
-  const edge = voidFacing ? edgeTiles[family] : undefined;
+  const edges = edgeTiles[family];
+  const edge = voidFacing && edges && edges.length ? edges[Math.abs(variantSeed) % edges.length] : undefined;
   const sideBase = edge ? edge.src : topBase;
   return (
     <>
@@ -489,7 +490,7 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {asset && !hidden?.tile ? tileLayerImages(asset, voidFacing, animationFrame) : null}
+            {asset && !hidden?.tile ? tileLayerImages(asset, voidFacing, animationFrame, x * 31 + y) : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"

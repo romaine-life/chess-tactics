@@ -74,31 +74,31 @@ export const tileFamilies: Record<TileFamilyId, readonly TileAsset[]> = {
 // No transition tiles in the hard-edge tileset; kept exported (empty) for back-compat.
 export const transitionAssets: readonly TileAsset[] = [];
 
-// Frayed perimeter EDGE tiles. Same top diamond as the family base (so the surface seams
-// invisibly with interior tiles), but the cliff face is recolored to torn earth/rock with
-// an irregular broken bottom that fades into shadow — the diorama "tearaway base" so the
-// board reads as a chunk of land, not a machine cut. Held OUT of tileFamilies and random
-// placement (no probability); the board solver injects them ONLY on the front screen edges
-// by position. Built by frontend/scripts/build-edge-tiles.py.
-const edgeTile = (family: TileFamilyId): TileAsset => ({
-  id: `${family}-edge`,
-  label: `${terrainLabels[family]} · Edge`,
-  src: `/assets/tiles/surface/${family}-edge.png`,
+// Rich perimeter EDGE tiles (ADR-0039). The cliff side is authored GEOLOGY — a codex
+// material slab (turf+roots / strata / mossy bedrock …) projected onto the two iso faces and
+// masked to the frayed silhouette — composed under the cell's own top. Several DISTINCT
+// variants per family so a long board edge reads rich AND non-repeating; the solver picks one
+// per void-facing cell (weighted, anti-adjacent). Built by frontend/scripts/build-rich-edges.py.
+const EDGE_VARIANTS = 3;
+const edgeVariant = (family: TileFamilyId, v: number): TileAsset => ({
+  id: `${family}-edge-${v}`,
+  label: `${terrainLabels[family]} · Edge ${v + 1}`,
+  src: `/assets/tiles/surface/${family}-edge-${v}.png`,
   role: 'edge',
   kind: 'tile',
   source: 'pixel:surface',
-  method: 'Edge (frayed cliff)',
-  probability: 0,
-  notes: `${terrainLabels[family]} — frayed perimeter edge (torn land cross-section).`,
+  method: 'Edge (rich cliff)',
+  probability: v === 0 ? 1 : 0.7, // variant 0 slightly commoner; rest punctuate the run
+  notes: `${terrainLabels[family]} — rich perimeter cliff (variant ${v + 1}).`,
   terrains: [family],
 });
 
-// Families with a generated frayed edge. Water is intentionally excluded — its edge is the
-// (animated) waterfall, gated on river types; a static frayed water lip reads as clip-art.
+// Families with rich edges. Water is intentionally excluded — its edge is the (animated)
+// waterfall, gated on river types; a static frayed water lip reads as clip-art.
 const EDGE_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand'];
-export const edgeTiles: Partial<Record<TileFamilyId, TileAsset>> = Object.fromEntries(
-  EDGE_FAMILIES.map((family) => [family, edgeTile(family)]),
-) as Partial<Record<TileFamilyId, TileAsset>>;
+export const edgeTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.fromEntries(
+  EDGE_FAMILIES.map((family) => [family, Array.from({ length: EDGE_VARIANTS }, (_, v) => edgeVariant(family, v))]),
+) as Partial<Record<TileFamilyId, TileAsset[]>>;
 
 export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 
