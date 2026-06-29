@@ -18,9 +18,11 @@ import {
   type TileSocketAsset,
   type TerrainPairId,
 } from '../core/tileSockets';
-import { CatalogGrid, CatalogControls, type CatalogType } from './studio/Catalog';
+import { CatalogGrid, CatalogControls, CatalogFilters, type CatalogType, type CatalogFilterDim } from './studio/Catalog';
 import { AssetLibraryStudio, AssetLab, ASSET_TYPE_FACETS, type AssetFilters } from './design/AssetLibraryStudio';
-import { ArtworkLibraryStudio, ArtworkLab } from './design/ArtworkLibraryStudio';
+import { ArtworkLibraryStudio, ArtworkLab, ARTWORK_GROUPS } from './design/ArtworkLibraryStudio';
+import { CroppedView, loadCrops, type Piece as PortraitPiece } from './PortraitEditor';
+import { PORTRAIT_METHODS, PORTRAIT_PIECES, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
 import { TileSidesViewer } from './TileSidesViewer';
@@ -69,7 +71,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'assets' | 'artwork' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
@@ -80,6 +82,13 @@ type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'glossary' | 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
 const FIRST_ARTWORK_ID: string = artworkManifest.groups[0]?.items[0]?.id ?? '';
+
+// The Portraits catalog's assets: every piece × every bake-off method (navy only). A
+// dedicated top-level category so portraits get their own Unit + Treatment filters,
+// rendered through the accepted per-piece crop. Method labels come from the registry.
+type PortraitCandidateAsset = { id: string; piece: PortraitPiece; method: PortraitMethod; methodLabel: string; methodSub: string };
+const PORTRAIT_CANDIDATE_ASSETS: PortraitCandidateAsset[] = PORTRAIT_PIECES.flatMap((piece) =>
+  PORTRAIT_METHODS.map((m) => ({ id: `${piece}-${m.key}`, piece, method: m.key, methodLabel: m.label, methodSub: m.sub })));
 type TileFilter = 'base' | 'board';
 type LabMode = 'board' | 'tile' | 'unit' | 'doodad';
 type CollectionFilter = Exclude<TileFilter, 'board'>;
@@ -147,7 +156,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -311,6 +320,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [assetFilters, setAssetFilters] = useState<AssetFilters>({ type: 'all', prov: 'all', gate: 'all' });
   const [assetSearch, setAssetSearch] = useState('');
   const [artworkSearch, setArtworkSearch] = useState('');
+  const [selectedArtworkGroups, setSelectedArtworkGroups] = useState<string[]>(ARTWORK_GROUPS.map((g) => g.id));
+  const [selectedPortraitPieces, setSelectedPortraitPieces] = useState<PortraitPiece[]>([...PORTRAIT_PIECES]);
+  const [selectedPortraitMethods, setSelectedPortraitMethods] = useState<PortraitMethod[]>(PORTRAIT_METHODS.map((m) => m.key));
+  const [selectedPortraitId, setSelectedPortraitId] = useState<string | undefined>(undefined);
   const [surfaceSearch, setSurfaceSearch] = useState('');
   const [scrollbarSearch, setScrollbarSearch] = useState('');
   const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
@@ -738,6 +751,72 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     note: 'Doodads place only on their home terrain. Pick one to arm the brush, then paint a matching tile.',
   };
 
+  // Artwork browses via a bespoke library component (not a CatalogType), so it wires the
+  // shared Filters dropdown directly: one dimension, the manifest Group. memberOf is unused
+  // here (CatalogFilters only reads options/selected/toggle); the grid filters in the component.
+  const artworkGroupFilter: CatalogFilterDim<{ id: string }> = {
+    id: 'group',
+    label: 'Group',
+    options: ARTWORK_GROUPS.map((g) => ({ id: g.id, label: g.label, sub: `${g.count} ${g.count === 1 ? 'piece' : 'pieces'}` })),
+    memberOf: () => [],
+    selected: selectedArtworkGroups,
+    toggle: (id) => setSelectedArtworkGroups((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
+    selectAll: () => setSelectedArtworkGroups(ARTWORK_GROUPS.map((g) => g.id)),
+    clear: () => setSelectedArtworkGroups([]),
+  };
+
+  // Portraits — the bake-off as its own catalog category, so portraits get their own
+  // Unit (piece) and Treatment (method) filters. Cards render through the accepted
+  // per-piece crop (loadCrops + CroppedView via cardMedia), navy-only, held out of game.
+  const portraitCatalogCrops = loadCrops();
+  const portraitsCatalogType: CatalogType<PortraitCandidateAsset> = {
+    id: 'portraits',
+    label: 'Portraits',
+    assets: PORTRAIT_CANDIDATE_ASSETS,
+    card: (a) => ({ img: portraitMasterSrc(a.piece, 'navy-blue', a.method), title: a.methodLabel, badge: a.methodSub }),
+    cardMedia: (a) => (
+      <span className="studio-portrait-crop">
+        <CroppedView src={portraitMasterSrc(a.piece, 'navy-blue', a.method)} crop={portraitCatalogCrops[a.piece]} />
+      </span>
+    ),
+    sections: (visible) => PORTRAIT_PIECES
+      .map((piece) => ({ id: piece, label: familyLabels[piece], assets: visible.filter((a) => a.piece === piece) }))
+      .filter((s) => s.assets.length),
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'piece, treatment...',
+      match: (a, q) => [familyLabels[a.piece], a.methodLabel, a.methodSub, a.method].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    filters: [
+      {
+        id: 'piece',
+        label: 'Unit',
+        options: PORTRAIT_PIECES.map((piece) => ({ id: piece, label: familyLabels[piece], sub: `${PORTRAIT_METHODS.length} treatments` })),
+        memberOf: (a) => [a.piece],
+        selected: selectedPortraitPieces,
+        toggle: (id) => setSelectedPortraitPieces((cur) => (cur.includes(id as PortraitPiece) ? cur.filter((x) => x !== id) : [...cur, id as PortraitPiece])),
+        selectAll: () => setSelectedPortraitPieces([...PORTRAIT_PIECES]),
+        clear: () => setSelectedPortraitPieces([]),
+      },
+      {
+        id: 'method',
+        label: 'Treatment',
+        options: PORTRAIT_METHODS.map((m) => ({ id: m.key, label: m.label, sub: m.sub })),
+        memberOf: (a) => [a.method],
+        selected: selectedPortraitMethods,
+        toggle: (id) => setSelectedPortraitMethods((cur) => (cur.includes(id as PortraitMethod) ? cur.filter((x) => x !== id) : [...cur, id as PortraitMethod])),
+        selectAll: () => setSelectedPortraitMethods(PORTRAIT_METHODS.map((m) => m.key)),
+        clear: () => setSelectedPortraitMethods([]),
+      },
+    ],
+    onSelect: (a) => setSelectedPortraitId(a.id),
+    onView: () => openViewer('portrait'),
+    selectedId: selectedPortraitId,
+    note: 'Navy-only bake-off. The compare-at-HUD-framing grid is in Viewer › Portrait.',
+  };
+
   // The catalog is one registry, not a chain of `category === …` branches: every
   // category supplies its grid (`main`) and its rail body (`controls`), and the
   // selector tabs / main pane / controls are rendered by mapping or reading the
@@ -857,6 +936,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <ArtworkLibraryStudio
           search={artworkSearch}
           zoom={zoom}
+          groups={selectedArtworkGroups}
           selected={selectedArtworkName}
           onSelect={setSelectedArtworkName}
           onView={(id) => { setSelectedArtworkName(id); openViewer('artwork'); }}
@@ -873,9 +953,15 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <span>Zoom</span>
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
+          <CatalogFilters filters={[artworkGroupFilter]} />
           <button type="button" className="tileset-view-action" onClick={() => openViewer('artwork')}>View Selected</button>
         </>
       ),
+    },
+    {
+      id: 'portraits', label: 'Portraits', hint: 'Browse the unit portrait bake-off — filter by unit and treatment.',
+      main: <CatalogGrid type={portraitsCatalogType} />,
+      controls: <CatalogControls type={portraitsCatalogType} />,
     },
     {
       id: 'glossary', label: 'Glossary', hint: 'Vocabulary + the agreed process docs (how chrome renders, etc.).',

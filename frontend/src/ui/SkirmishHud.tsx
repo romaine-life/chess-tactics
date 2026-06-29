@@ -9,6 +9,7 @@ import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 // portrait AND the roster slots both render through it, so framing/fill/crop are defined once and
 // never re-derived per surface. See docs/portrait-contract.md.
 import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
+import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -164,6 +165,7 @@ export function SkirmishHud() {
                   crop={portraitCrops[focused.type as PortraitPiece]}
                   backdrop={focusedPortraitBackdrop}
                   className="unit-portrait--hud"
+                  method={PRODUCTION_PORTRAIT_METHOD}
                 />
               ) : (
                 <div className="unit-portrait unit-portrait--hud" style={{ display: 'grid', placeItems: 'center' }}>
@@ -220,6 +222,7 @@ export function SkirmishHud() {
                           palette={PALETTE_FOR_SIDE[piece.side] as PortraitPalette}
                           crop={portraitCrops[piece.type as PortraitPiece]}
                           className="unit-portrait--roster"
+                          method={PRODUCTION_PORTRAIT_METHOD}
                         />
                       ) : (
                         <UnitBadge piece={piece} />
