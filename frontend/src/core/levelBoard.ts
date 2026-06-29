@@ -130,7 +130,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     };
   }
 
-  return { cols, rows, cells, units, doodads: {}, cover, features: {}, featureCuts: {} };
+  return { cols, rows, cells, units, doodads: {}, cover, features: {}, featureCuts: {}, featureExits: {} };
 }
 
 // Serialize the painted board into a valid `Level`. `boardCode` is stamped for a lossless
