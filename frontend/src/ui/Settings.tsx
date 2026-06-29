@@ -432,12 +432,6 @@ export function Settings(): ReactElement {
     setSettings((current) => ({ ...current, [key]: value }));
   };
 
-  const setBackgroundMusic = (enabled: boolean) => {
-    setConfirmingReset(false);
-    setMuted(!enabled);
-    writeMuted(!enabled);
-  };
-
   const setMasterAudio = (enabled: boolean) => {
     updateSetting('masterAudio', enabled);
     setMuted(!enabled);
@@ -532,9 +526,9 @@ export function Settings(): ReactElement {
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Music">
-        <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
-          <Toggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
-        </SettingsRow>
+        {/* Background-music on/off lives on the persistent title-bar mute control now
+            (ADR-0044) — it drove the same MUTE_KEY as this row, so the row was a dup.
+            Master Audio above is the all-sound master; this section keeps mix + tracks. */}
         <SettingsRow title="Music Volume" description="Set the target music mix for this browser.">
           <Slider
             value={settings.musicVolume}
