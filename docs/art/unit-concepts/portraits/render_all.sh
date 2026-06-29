@@ -38,7 +38,7 @@ YAW=30
 declare -A BLEND=(
   [pawn]="$ROOT/docs/art/archive/units/pawn/pawn_helmet.blend"
   [bishop]="$BU/bishop-mitre/bishop_mitre.blend"
-  [rook]="$BU/rook-badass-keep/rook_badass_keep.blend"
+  [rook]="$BU/rook-claude/units/rook-ruinwall/model.blend"  # accepted ruinwall keep (NOT the retired badass-keep)
   [queen]="$BU/queen-tiara/queen_tiara.blend"
   [king]="$BU/king-crown/king_crown.blend"
 )

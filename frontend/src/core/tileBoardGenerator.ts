@@ -16,6 +16,8 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
    * independently of the top. Unset ⇒ the side comes from `asset` itself (the normal cube).
    */
   sideAsset?: TAsset;
+  /** Phase 2: set when this cell's side is part of a multi-tile story feature (fossil, ruins). */
+  edgeFeatureId?: string;
   sockets: EdgeSockets;
   terrain: TileFamilyId;
   /** Ambient vegetation resolved at board build (see core/groundCover). Not per-render. */
@@ -241,6 +243,19 @@ function missingForSockets(sockets: EdgeSockets): SocketBoardCell['missing'] {
   return { kind: 'missing-art', label: `${pair.label} ${mask.toString(2).padStart(4, '0')}`, pairId: pair.id, mask, families };
 }
 
+/**
+ * A multi-tile STORY FEATURE (Phase 2): a set-piece (dino fossil, buried ruins) baked as one
+ * wide cliff image and sliced into ordered side `pieces` (head→tail). The solver lays it along
+ * a straight board edge and substitutes `cap` (a clean terminator) for the piece that would
+ * otherwise clip at the corner / board end. `families` restricts which terrains it suits.
+ */
+export interface EdgeFeatureSpec<TAsset extends TileSocketAsset = TileSocketAsset> {
+  id: string;
+  pieces: TAsset[];
+  cap: TAsset;
+  families?: TileFamilyId[];
+}
+
 export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   assets: readonly TAsset[];
   /** Painted terrain family per cell, row-major (length must be columns * rows). */
@@ -262,7 +277,20 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
    * frays while keeping its own top variant. The top (`asset`) and sockets are untouched, so
    * terrain and adjacency are unchanged — only the cliff face changes.
    */
-  edgeAssets?: Partial<Record<TileFamilyId, TAsset>>;
+  edgeAssets?: Partial<Record<TileFamilyId, TAsset[]>>;
+  /**
+   * Optional per-family ORDERED continuity-mural windows (ADR-0039). When a family is present
+   * here, its void-facing edge cells get a SEQUENTIAL window by run-position instead of the
+   * random `edgeAssets` variant — so the cliff FLOWS continuously across adjacent tiles. The
+   * run wraps the bottom corner: the right edge (p = y) continues into the bottom edge. A
+   * family absent here falls back to `edgeAssets`. Index order == window order.
+   */
+  muralEdges?: Partial<Record<TileFamilyId, TAsset[]>>;
+  /**
+   * Optional multi-tile STORY FEATURES (Phase 2). Sparse set-pieces laid head→tail along the
+   * straight board edges, OVERRIDING the mural side, with a clean terminator when they'd clip.
+   */
+  edgeFeatures?: EdgeFeatureSpec<TAsset>[];
 }
 
 /**
@@ -281,6 +309,8 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   familyAssets,
   featureMap,
   edgeAssets,
+  muralEdges,
+  edgeFeatures,
 }: SolveSocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
   const boardAssets = usableAssets.length > 0 ? usableAssets : assets.filter((asset) => asset.kind === 'tile');
@@ -330,14 +360,75 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     }
   }
 
-  // Give front-edge cells the family's frayed SIDE layer (ADR-0039), keeping each cell's own
-  // top variant and sockets — so legality and the stats below are unaffected. Only the
-  // void-facing rows in `x+y` paint order.
-  if (edgeAssets) {
+  // Give front-edge cells a rich SIDE layer (ADR-0039). Two strategies, per family:
+  //  • CONTINUITY MURAL (muralEdges): consecutive cells get consecutive ORDERED windows of one
+  //    wide cliff, so the geology FLOWS across tiles. Run-position wraps the bottom corner —
+  //    the right edge (p = y, top→bottom corner) continues into the bottom edge
+  //    (p = rows-1 + (columns-1 - x), bottom corner→left corner) as one unbroken count.
+  //  • RANDOM VARIANT (edgeAssets): a weighted, anti-adjacent pick — rich but non-continuous.
+  // Either keeps each cell's own top + sockets, so legality and the stats below are unaffected.
+  if (edgeAssets || muralEdges) {
+    const edgeRng = createRng(seed + 271);
+    const sideById = new Map<string, string>();
     for (const cell of cells) {
-      if (cell.asset && (cell.x === columns - 1 || cell.y === rows - 1)) {
-        const edge = edgeAssets[cell.terrain];
-        if (edge) cell.sideAsset = edge;
+      if (!cell.asset || !(cell.x === columns - 1 || cell.y === rows - 1)) continue;
+
+      const mural = muralEdges?.[cell.terrain];
+      if (mural && mural.length > 0) {
+        const p = cell.x === columns - 1
+          ? cell.y                                    // right edge (incl. bottom corner)
+          : (rows - 1) + (columns - 1 - cell.x);      // bottom edge, continuing past the corner
+        const pick = mural[((p % mural.length) + mural.length) % mural.length];
+        cell.sideAsset = pick;
+        sideById.set(`${cell.x}-${cell.y}`, pick.id);
+        continue;
+      }
+
+      const variants = edgeAssets?.[cell.terrain];
+      if (!variants || variants.length === 0) continue;
+      const neighborIds = [
+        sideById.get(`${cell.x - 1}-${cell.y}`),
+        sideById.get(`${cell.x}-${cell.y - 1}`),
+        sideById.get(`${cell.x + 1}-${cell.y}`),
+        sideById.get(`${cell.x}-${cell.y + 1}`),
+      ];
+      let pick = pickWeightedAsset(variants, edgeRng.next);
+      if (variants.length > 1 && neighborIds.includes(pick.id)) {
+        pick = pickWeightedAsset(variants, edgeRng.next); // re-roll once…
+        if (neighborIds.includes(pick.id)) pick = variants.find((v) => !neighborIds.includes(v.id)) ?? pick; // …then force a different one
+      }
+      cell.sideAsset = pick;
+      sideById.set(`${cell.x}-${cell.y}`, pick.id);
+    }
+  }
+
+  // Phase 2 — STORY FEATURES (ADR-0039). Sparse multi-tile set-pieces (fossil, ruins) laid
+  // head→tail along a STRAIGHT board edge, OVERRIDING the mural side. The corner is never
+  // crossed (a rigid skeleton can't bend it), and when a feature would run off the edge before
+  // it completes we swap its clipping piece for the `cap` terminator — never a sliced neck.
+  if (edgeFeatures && edgeFeatures.length > 0) {
+    const fRng = createRng(seed + 613);
+    const cellAt = new Map(cells.map((c) => [`${c.x}-${c.y}`, c] as const));
+    const at = (x: number, y: number) => cellAt.get(`${x}-${y}`);
+    const isEdgeCell = (c: SocketBoardCell<TAsset> | undefined): c is SocketBoardCell<TAsset> => !!c?.asset;
+    // Two straight runs in lay order. The bottom corner belongs to the right run, so the
+    // bottom run starts one cell in from it (no double-placement, no bending).
+    const rightRun = Array.from({ length: rows }, (_, y) => at(columns - 1, y)).filter(isEdgeCell);
+    const bottomRun = Array.from({ length: columns - 1 }, (_, k) => at(columns - 2 - k, rows - 1)).filter(isEdgeCell);
+    for (const run of [rightRun, bottomRun]) {
+      let p = 1 + Math.floor(fRng.next() * 3); // a gap before the first feature
+      while (p < run.length) {
+        const eligible = edgeFeatures.filter((f) => !f.families || f.families.includes(run[p].terrain));
+        const avail = run.length - p;
+        if (eligible.length === 0 || avail < 2) break; // need head + at least a cap
+        const feat = eligible[Math.floor(fRng.next() * eligible.length)];
+        const span = Math.min(feat.pieces.length, avail);
+        for (let i = 0; i < span; i += 1) {
+          const truncated = i === span - 1 && span < feat.pieces.length;
+          run[p + i].sideAsset = truncated ? feat.cap : feat.pieces[i];
+          run[p + i].edgeFeatureId = feat.id;
+        }
+        p += span + 2 + Math.floor(fRng.next() * 4); // feature + a gap before the next
       }
     }
   }

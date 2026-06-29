@@ -73,6 +73,9 @@ const conceptArt = [
   join(PUB, 'assets/art/skirmish-style-target.png'),
 ].filter(exists).map((f) => ({ f, label: titleize(basename(f).replace(/\.\w+$/, '')), sub: 'concept' }));
 const inspiration = walk(join(PUB, 'assets/artwork/inspiration')).map((f) => ({ f, label: titleize(basename(f).replace(/\.\w+$/, '')), sub: 'ui-screen-concepts' }));
+// NOTE: the portrait bake-off candidates (assets/portrait-candidates) are NOT an artwork
+// group — they have their own top-level "Portraits" catalog category (built in code from
+// the PORTRAIT_METHODS registry), so they get dedicated Unit + Treatment filters.
 
 const rawGroups = [
   { id: 'world-scenes', label: 'World scenes', entries: worldScenes },

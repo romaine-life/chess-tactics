@@ -21,7 +21,7 @@ mkdir -p "$TMP"
 declare -A BLEND=(
   [pawn]="$ROOT/docs/art/archive/units/pawn/pawn_helmet.blend"
   [bishop]="$BU/bishop-mitre/bishop_mitre.blend"
-  [rook]="$BU/rook-badass-keep/rook_badass_keep.blend"
+  [rook]="$BU/rook-claude/units/rook-ruinwall/model.blend"  # accepted ruinwall keep (NOT the retired badass-keep)
   [queen]="$BU/queen-tiara/queen_tiara.blend"
   [king]="$BU/king-crown/king_crown.blend"
 )
@@ -30,7 +30,7 @@ pal_args(){ case $1 in
   crimson)   echo "0.2925 0.0483 0.0509 keep";;
   golden)    echo "0.566 0.392 0.088 iron 0.6 0.30";;
   emerald)   echo "0.0332 0.1570 0.0808 keep";; esac; }
-fram(){ case $1 in rook) echo "0.45 1.75";; *) echo "0.50 1.45";; esac; }
+fram(){ case $1 in rook) echo "0.50 1.15";; *) echo "0.50 1.45";; esac; }  # rook=ruinwall (squat keep) needs a tighter span than the old tall tower
 
 for piece in pawn bishop rook queen king; do
   read tz sp < <(fram "$piece")

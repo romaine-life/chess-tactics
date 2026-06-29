@@ -22,9 +22,8 @@ const surfaceItems: TileSideItem[] = (Object.keys(tileFamilies) as TileFamilyId[
     .map((asset) => ({ id: asset.id, label: asset.label, src: asset.src, family, role: asset.role })),
 );
 
-const edgeItems: TileSideItem[] = (Object.entries(edgeTiles) as [TileFamilyId, TileAsset | undefined][])
-  .filter((entry): entry is [TileFamilyId, TileAsset] => Boolean(entry[1]))
-  .map(([family, asset]) => ({ id: asset.id, label: asset.label, src: asset.src, family, role: asset.role }));
+const edgeItems: TileSideItem[] = (Object.entries(edgeTiles) as [TileFamilyId, TileAsset[] | undefined][])
+  .flatMap(([family, assets]) => (assets ?? []).map((asset) => ({ id: asset.id, label: asset.label, src: asset.src, family, role: asset.role })));
 
 export const TILE_SIDE_ITEMS: TileSideItem[] = [...surfaceItems, ...edgeItems];
 

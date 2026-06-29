@@ -6353,42 +6353,11 @@ body { font-size: 17px; }
   font-family: var(--ds-font-sans, system-ui, sans-serif);
 }
 
-.tileset-crumb {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  font-family: ui-monospace, "Cascadia Mono", monospace;
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tileset-crumb span {
-  color: #6f87a0;
-}
-
-.tileset-crumb span.is-current {
-  color: #cfe4f7;
-}
-
-.tileset-crumb span + span::before {
-  content: '›';
-  margin: 0 7px;
-  color: #3f5366;
-}
-
-/* The quiet count/context relocated from the old per-pane heading. */
-.tileset-crumb-meta {
-  flex: none;
-  padding-left: 14px;
-  border-left: 1px solid rgba(67, 127, 179, 0.22);
-  color: #6f87a0;
-  font-family: ui-monospace, "Cascadia Mono", monospace;
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Migrated to the shell bar: the in-page <header> is gone, so reserve row 1 at the
+   fixed bar's height (an `auto` row would collapse and slide the studio under the
+   bar) — .app-shell-bar-pad then pins the body to row 2. */
+.tileset-studio-page.app-shell-bar-pad {
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
 }
 
 .tileset-mode-tabs button,
@@ -6434,20 +6403,6 @@ body { font-size: 17px; }
   background: rgba(12, 31, 48, 0.42);
   border-color: transparent;
   cursor: not-allowed;
-}
-
-/* Studio on the standard title bar (ADR-0004/0023): brand left, location crumb in the
-   centre, account cluster right. The workspace switcher (Catalog/Lab/Viewer) + Settings
-   moved into the control panel (.tileset-mode-field below), so the bar carries no studio
-   buttons — only the shared brand + account chrome. */
-.tileset-studio-titlebar {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-}
-
-.tileset-studio-context {
-  display: flex;
-  align-items: center;
-  min-width: 0;
 }
 
 /* The relocated workspace switcher, as a labelled field at the top of the control
@@ -11090,6 +11045,15 @@ button.tileset-relationship-cell {
 /* Artwork cards — large landscape thumbnails, smooth (NOT pixelated, these are
    authored illustrations not 64px glyphs). Zoom scales the thumbnail height. */
 .tileset-studio-card.is-artwork .tileset-studio-card-image { min-height: calc(168px * var(--tile-zoom, 1)); }
+/* Portrait-candidate cards show the accepted HUD crop (square), not the full-body master. */
+.studio-portrait-crop {
+  position: relative;
+  height: calc(168px * var(--tile-zoom, 1));
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 4px;
+}
 .tileset-studio-card.is-artwork .tileset-studio-card-image img {
   box-sizing: border-box;
   height: 100%;

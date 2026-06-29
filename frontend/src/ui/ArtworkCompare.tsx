@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 // A live design surface for matching screens to their accepted art direction.
 // Two side-by-side panes; each pane picks from a list of OPTIONS, where each
@@ -233,10 +231,6 @@ export function ArtworkCompare(): ReactElement {
   return (
     <section className="ac">
       <style>{AC_CSS}</style>
-      <header className="app-titlebar settings-header-frame">
-        <BrandLockup screenName="Artwork Compare" />
-        <HeaderAccountCluster />
-      </header>
 
       <div className="ac-panes">
         <ComparePane opts={opts} value={left.idx} css={left.css} onPick={pickLeft} onReload={reload} reloadKey={reloadKey} />
@@ -260,7 +254,7 @@ export function ArtworkCompare(): ReactElement {
 }
 
 const AC_CSS = `
-.ac { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column;
+.ac { position: fixed; inset: var(--app-header-h) 0 0 0; z-index: 5; display: flex; flex-direction: column;
   background: #06080d; color: #cfe3ff; font-family: var(--ds-font-sans, system-ui, sans-serif); }
 .ac-panes { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
 .ac-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid #1b2740; }

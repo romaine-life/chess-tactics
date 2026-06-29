@@ -1,6 +1,7 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
 import { terrainLabels } from '../core/tileSockets';
 import type { FeatureKind, FeatureMaterial } from '../core/featureAutotile';
+import type { EdgeFeatureSpec } from '../core/tileBoardGenerator';
 
 export interface TileAsset extends TileSocketAsset {
   id: string;
@@ -75,31 +76,84 @@ export const tileFamilies: Record<TileFamilyId, readonly TileAsset[]> = {
 // No transition tiles in the hard-edge tileset; kept exported (empty) for back-compat.
 export const transitionAssets: readonly TileAsset[] = [];
 
-// Frayed perimeter EDGE tiles. Same top diamond as the family base (so the surface seams
-// invisibly with interior tiles), but the cliff face is recolored to torn earth/rock with
-// an irregular broken bottom that fades into shadow — the diorama "tearaway base" so the
-// board reads as a chunk of land, not a machine cut. Held OUT of tileFamilies and random
-// placement (no probability); the board solver injects them ONLY on the front screen edges
-// by position. Built by frontend/scripts/build-edge-tiles.py.
-const edgeTile = (family: TileFamilyId): TileAsset => ({
-  id: `${family}-edge`,
-  label: `${terrainLabels[family]} · Edge`,
-  src: `/assets/tiles/surface/${family}-edge.png`,
+// Rich perimeter EDGE tiles (ADR-0039). The cliff side is authored GEOLOGY — a codex
+// material slab (turf+roots / strata / mossy bedrock …) projected onto the two iso faces and
+// masked to the frayed silhouette — composed under the cell's own top. Several DISTINCT
+// variants per family so a long board edge reads rich AND non-repeating; the solver picks one
+// per void-facing cell (weighted, anti-adjacent). Built by frontend/scripts/build-rich-edges.py.
+const EDGE_VARIANTS = 3;
+const edgeVariant = (family: TileFamilyId, v: number): TileAsset => ({
+  id: `${family}-edge-${v}`,
+  label: `${terrainLabels[family]} · Edge ${v + 1}`,
+  src: `/assets/tiles/surface/${family}-edge-${v}.png`,
   role: 'edge',
   kind: 'tile',
   source: 'pixel:surface',
-  method: 'Edge (frayed cliff)',
-  probability: 0,
-  notes: `${terrainLabels[family]} — frayed perimeter edge (torn land cross-section).`,
+  method: 'Edge (rich cliff)',
+  probability: v === 0 ? 1 : 0.7, // variant 0 slightly commoner; rest punctuate the run
+  notes: `${terrainLabels[family]} — rich perimeter cliff (variant ${v + 1}).`,
   terrains: [family],
 });
 
-// Families with a generated frayed edge. Water is intentionally excluded — its edge is the
-// (animated) waterfall, gated on river types; a static frayed water lip reads as clip-art.
+// Families with rich edges. Water is intentionally excluded — its edge is the (animated)
+// waterfall, gated on river types; a static frayed water lip reads as clip-art.
 const EDGE_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'pebble', 'sand'];
-export const edgeTiles: Partial<Record<TileFamilyId, TileAsset>> = Object.fromEntries(
-  EDGE_FAMILIES.map((family) => [family, edgeTile(family)]),
-) as Partial<Record<TileFamilyId, TileAsset>>;
+export const edgeTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.fromEntries(
+  EDGE_FAMILIES.map((family) => [family, Array.from({ length: EDGE_VARIANTS }, (_, v) => edgeVariant(family, v))]),
+) as Partial<Record<TileFamilyId, TileAsset[]>>;
+
+// CONTINUITY murals (ADR-0039). One WIDE codex cliff mural per family, sliced into
+// MURAL_WINDOWS ORDERED windows (build-mural-edges.py): consecutive windows are adjacent
+// columns of the same mural, so when the solver hands consecutive void-facing edge cells
+// consecutive windows the cliff FLOWS across tiles instead of each tile re-starting at a
+// random variant. The index IS the window order; `probability` is unused (the solver picks
+// sequentially by run-position, not weighted). Supersedes the random `edgeTiles` pick for any
+// family present here; families absent here fall back to `edgeTiles`.
+// 48 = three codex murals (16 windows each) pooled into ONE ordered bank: every generated
+// mural is used, and the bank is long enough that no realistic board edge repeats a window.
+export const MURAL_WINDOWS = 48;
+const muralVariant = (family: TileFamilyId, i: number): TileAsset => ({
+  id: `${family}-mural-${i}`,
+  label: `${terrainLabels[family]} · Mural ${i + 1}`,
+  src: `/assets/tiles/surface/${family}-mural-${i}.png`,
+  role: 'edge',
+  kind: 'tile',
+  source: 'pixel:surface',
+  method: 'Edge mural (continuous cliff)',
+  probability: 1,
+  notes: `${terrainLabels[family]} — continuous cliff mural, window ${i + 1} of ${MURAL_WINDOWS}.`,
+  terrains: [family],
+});
+// Families with a baked continuity mural (water excluded — its edge is the waterfall).
+const MURAL_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'sand', 'pebble'];
+export const muralTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.fromEntries(
+  MURAL_FAMILIES.map((family) => [family, Array.from({ length: MURAL_WINDOWS }, (_, i) => muralVariant(family, i))]),
+) as Partial<Record<TileFamilyId, TileAsset[]>>;
+
+// Phase 2 — STORY FEATURES (ADR-0039). A feature is a multi-tile set-piece (dino fossil,
+// buried ruins) baked as one wide cliff image, sliced into ordered side `pieces` + a clean
+// `cap` terminator (build-mural-edges.py + forge-feature.mjs). The solver lays it head→tail
+// along a straight board edge and caps it where it would clip. Soil families only for now.
+const FEATURE_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt'];
+const featurePiece = (feature: string, key: string): TileAsset => ({
+  id: `${feature}-${key}`,
+  label: `${feature} · ${key}`,
+  src: `/assets/tiles/surface/${feature}-${key}.png`,
+  role: 'edge',
+  kind: 'tile',
+  source: 'pixel:surface',
+  method: 'Edge feature (story set-piece)',
+  probability: 1,
+  notes: `${feature} story feature (${key}).`,
+  terrains: [...FEATURE_FAMILIES],
+});
+const FEATURE_PIECE_COUNT: Record<string, number> = { fossil: 6, ruins: 5 };
+export const edgeFeatures: EdgeFeatureSpec<TileAsset>[] = Object.entries(FEATURE_PIECE_COUNT).map(([feature, count]) => ({
+  id: feature,
+  pieces: Array.from({ length: count }, (_, i) => featurePiece(feature, String(i))),
+  cap: featurePiece(feature, 'cap'),
+  families: [...FEATURE_FAMILIES],
+}));
 
 export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 

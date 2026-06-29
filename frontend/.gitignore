@@ -9,3 +9,4 @@ tmp/
 
 # Local append-only audit trail of nine-slice bakes (scripts/nine-slice-kit.mjs)
 config/nine-slice/save-log.jsonl
+scripts/__pycache__/
