@@ -6,7 +6,7 @@ import type { TerrainCell } from './types';
 // A blank board (no painted cells) derives every cell to grass — enough to exercise the
 // save-time projection without depending on specific Studio tile / unit ids.
 const emptyBoard = (cols: number, rows: number): EditorBoard => ({
-  cols, rows, cells: {}, units: {}, doodads: {}, cover: {}, features: {}, featureCuts: {},
+  cols, rows, cells: {}, units: {}, doodads: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {},
 });
 
 describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {

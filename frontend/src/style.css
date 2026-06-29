@@ -4331,9 +4331,12 @@ h1 {
 
 /* road connection editor — clickable diamond edges for the selected road tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
-.le-roadconn-edge.is-joined, .le-roadconn-edge.is-cut { cursor: pointer; }
+.le-roadconn-edge { cursor: pointer; }
 .le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
 .le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
+.le-roadconn-edge.is-exit:hover line:last-child { stroke: #9bf0bb; }
+/* No same-kind neighbour: dim until hovered, where it previews the green "run off this edge" stub. */
+.le-roadconn-edge.is-none:hover line:last-child { stroke: #67d98a; }
 .le-roadconn-edge:focus-visible { outline: none; }
 .le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
 

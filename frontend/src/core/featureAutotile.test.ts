@@ -123,6 +123,35 @@ describe('featureMaskAt with severed edges', () => {
   });
 });
 
+describe('featureMaskAt with forced exits', () => {
+  it('sets an outward bit on an edge that has no neighbour (a board-edge stub)', () => {
+    const present = setOf('2,2'); // lone tile, no neighbours
+    const exitSouth = (e: string) => e === roadEdgeKey(2, 2, 2, 3);
+    expect(featureMaskAt(present, 2, 2, undefined, exitSouth)).toBe(0b0100); // S only (dead-end pointing S)
+  });
+
+  it('combines an inland neighbour with an outward exit into a through-piece', () => {
+    const present = setOf('2,2', '2,1'); // N neighbour inland
+    const exitSouth = (e: string) => e === roadEdgeKey(2, 2, 2, 3);
+    // N (neighbour) + S (exit) = a straight that runs off the south edge.
+    expect(featureMaskAt(present, 2, 2, undefined, exitSouth)).toBe(0b0101);
+  });
+
+  it('ignores an exit on an edge that actually has a neighbour (the real connection wins)', () => {
+    const present = setOf('2,2', '2,1'); // N neighbour present
+    const exitNorth = (e: string) => e === roadEdgeKey(2, 2, 2, 1);
+    expect(featureMaskAt(present, 2, 2, undefined, exitNorth)).toBe(0b0001); // just N, not double-counted
+  });
+
+  it('lets a cut win over an exit on the same edge (severed neighbour never re-opens)', () => {
+    const present = setOf('2,2', '2,1'); // N neighbour present...
+    const edge = roadEdgeKey(2, 2, 2, 1);
+    const isCut = (e: string) => e === edge; // ...but cut...
+    const isExit = (e: string) => e === edge; // ...and an exit set on the same edge
+    expect(featureMaskAt(present, 2, 2, isCut, isExit)).toBe(0); // stays severed
+  });
+});
+
 describe('featureDirtySet', () => {
   it('includes the changed cell and its four neighbours', () => {
     const dirty = featureDirtySet(['2,2']);
