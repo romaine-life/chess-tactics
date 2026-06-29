@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
+import { useScreenEntrance } from './shell/useScreenEntrance';
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -71,6 +72,10 @@ export function MainMenu(): ReactElement {
   // layers off the director's stage; the director owns the ordering and the background
   // probe. On any non-cold load the store is already fully revealed, so this is inert.
   const reveal = useSyncExternalStore(subscribe, getSnapshot);
+  // Shared screen-entrance fade (ADR-0046): fades the chrome in when you navigate TO the menu
+  // (e.g. back from settings), leaving the ambience rain continuous. No-ops on the cold load,
+  // where the reveal director above owns the first paint.
+  const entranceClass = useScreenEntrance();
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -123,7 +128,7 @@ export function MainMenu(): ReactElement {
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
-        <div className="settings-shell">
+        <div className={`settings-shell ${entranceClass}`.trim()}>
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
           </aside>

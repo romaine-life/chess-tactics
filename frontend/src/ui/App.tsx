@@ -12,6 +12,7 @@ import { SurfaceLab } from './SurfaceLab';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
+import { markScreenNavigation } from './shell/useScreenEntrance';
 import {
   APP_NAVIGATION_EVENT,
   getAppNavigationUrl,
@@ -132,6 +133,10 @@ export function App(): ReactElement {
     const onNav = () => {
       const next = normalizeRoutePath(window.location.pathname);
       if (next === pathRef.current) return;
+      // Mark that we've navigated, so the destination screen plays its entrance fade
+      // (ADR-0046). The very first cold page load never sets this, so the cold-load reveal
+      // owns the initial paint without a competing fade.
+      markScreenNavigation();
       // Dissolve if EITHER end is heavy — entering one, or leaving one for a light screen.
       if (isHeavyRoute(next) || isHeavyRoute(pathRef.current)) {
         pendingTarget.current = next; // hold the swap until the field is fully opaque
