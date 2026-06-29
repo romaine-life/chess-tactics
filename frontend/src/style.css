@@ -3817,6 +3817,43 @@ h1 {
   100% { transform: translateY(0) scale(1); }       /* settle */
 }
 
+/* Deploy arrival (render/SkirmishBoard). On board start each unit MATERIALIZES a short
+   distance above its own square and FALLS into the seat with an ease-out settle + a tiny
+   rebound — "setting the pieces on the board." Staggered per unit via --arrival-delay
+   (player wave, then the enemy answers; see computeArrivalDelays). `both` fill holds the
+   unit hidden at the 0% frame until its delay elapses, so it waits its turn instead of
+   flashing then dropping. Same motion family as the move-hop (ADR-0043); the per-tile
+   landing effect + sound cue hook in at the settle. */
+/* The deploy drop plays by DEFAULT, even under OS prefers-reduced-motion: this machine (and
+   many players' — Windows "Animation effects" off) reports reduce FALSELY, and gating on it
+   would hide the deploy from the very people it's for. Hence !important, to clear the global
+   `* { animation: none }` OS-reduce reset (style.css ~6036). Reduced motion is instead an
+   EXPLICIT in-game choice: `:root.reduce-motion` swaps the fall for a calm staggered fade
+   (below). A Settings toggle that sets that class is the remaining follow-up (see ADR). This
+   mirrors the repo's existing "a pure fade isn't gated on the OS query" precedent. */
+.skirmish-board-unit.is-arriving img {
+  animation: unit-arrival var(--arrival-anim, 620ms) linear var(--arrival-delay, 0ms) both !important;
+  transform-origin: center bottom; /* the impact squash compresses onto the feet, not the center */
+}
+:root.reduce-motion .skirmish-board-unit.is-arriving img {
+  animation: unit-arrival-soft 280ms ease var(--arrival-delay, 0ms) both !important;
+}
+
+/* The unit SPAWNS high above its square and hangs there MOTIONLESS, then drops under gravity
+   (ease-in builds speed over enough height to feel weighty) and hits the ground with a THUD:
+   a quick impact squash that recovers, no pre-jiggle and no upward bounce. Per-unit
+   --arrival-delay staggers the whole spawn→drop into a wave. The impact is ~85% of the
+   duration (≈ --arrival-delay + 525ms) — the hook point for the landing sound cue + the
+   per-tile dust/splash effect (wired later). */
+@keyframes unit-arrival {
+  0%   { opacity: 0; transform: translateY(-60px); animation-timing-function: ease-out; }     /* spawn high above, fading in */
+  26%  { opacity: 1; transform: translateY(-60px); animation-timing-function: linear; }        /* materialized, hanging still */
+  46%  { opacity: 1; transform: translateY(-60px); animation-timing-function: cubic-bezier(.55, 0, .9, .2); } /* release: fall, building speed */
+  82%  { transform: translateY(0) scaleX(1) scaleY(1); animation-timing-function: cubic-bezier(.3, 0, .2, 1); } /* contact */
+  88%  { transform: translateY(0) scaleX(1.16) scaleY(.82); animation-timing-function: ease-out; } /* THUD: impact squash */
+  100% { transform: translateY(0) scaleX(1) scaleY(1); }                                        /* recover */
+}
+
 .skirmish-board-unit img {
   position: relative;
   z-index: 1;
@@ -3886,12 +3923,20 @@ h1 {
   .skirmish-board-unit.is-enemy.is-moving img {
     animation: unit-move-hop-soft var(--move-duration) ease-in-out !important;
   }
+  /* NOTE: the deploy arrival is deliberately NOT swapped here on the OS query — it keys off
+     the explicit `:root.reduce-motion` class instead (see the .is-arriving rules above), so
+     a falsely-reported OS reduce never hides the drop from the maintainer/most players. */
 }
 
 @keyframes unit-move-hop-soft {
   0% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
   100% { transform: translateY(0); }
+}
+
+@keyframes unit-arrival-soft {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 .skirmish-left-panel {
