@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { HttpError } from '../net/http';
 import { AmbienceBackground } from './AmbienceBackground';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 interface LobbyUser { name?: string; email?: string; avatar_url?: string | null }
 interface Lobby {
@@ -69,12 +67,7 @@ export function Lobbies() {
   return (
     <section className="settings-art-route" aria-label="Lobbies" data-testid="lobbies">
       <AmbienceBackground />
-      <div className="settings-screen utility-twin-screen">
-        <header className="app-titlebar settings-header-frame">
-          <BrandLockup screenName="Lobbies" />
-          <HeaderAccountCluster signInReturnTo="/lobbies" />
-        </header>
-
+      <div className="settings-screen utility-twin-screen app-shell-bar-pad">
         <div className="utility-screen utility-lobbies">
           {me && !me.signed_in ? (
             <section className="utility-panel utility-empty-panel">

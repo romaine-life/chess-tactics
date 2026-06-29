@@ -3,6 +3,7 @@ import { boardLabCellPosition } from './boardProjection';
 import { TileGrid } from './TileGrid';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
+import { featureFrameSrc } from '../art/tileset';
 
 // Re-export the projection so existing importers (SkirmishBoard, LevelPreviewBoard,
 // TilePreview) keep working; the math itself now lives in one place: boardProjection.
@@ -47,7 +48,8 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
     // cell's one z-band. The TOP comes from `asset`; the SIDE comes from `sideAsset` when set
     // (the frayed edge / future river-waterfall), else from `asset` itself. Each layer is the
     // baked tile's `-top`/`-side` half; top ∪ side == the original cube, so a plain cell is
-    // unchanged and an edge cell keeps its own top with a frayed side.
+    // unchanged and an edge cell keeps its own top with a frayed side. A linear-feature
+    // overlay (road) composites OVER the top, on the walkable surface.
     const topSrc = cell.asset ? assetFrameSrc(cell.asset) : undefined;
     const sideSrc = cell.sideAsset ? assetFrameSrc(cell.sideAsset) : topSrc;
     return {
@@ -66,6 +68,14 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
         <>
           <img className="tile-layer-side" src={(sideSrc ?? topSrc).replace(/\.png$/, '-side.png')} alt="" draggable={false} />
           <img className="tile-layer-top" src={topSrc.replace(/\.png$/, '-top.png')} alt="" draggable={false} />
+          {cell.feature ? (
+            <img
+              className="tileset-feature-overlay"
+              src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask)}
+              alt=""
+              draggable={false}
+            />
+          ) : null}
         </>
       ) : (
         <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>

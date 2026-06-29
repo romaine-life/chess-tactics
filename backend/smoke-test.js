@@ -239,8 +239,12 @@ async function main() {
   if (root.statusCode !== 200 || !root.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected root response: ${root.statusCode}`);
   }
-  if (!root.body.includes('Guest') || root.body.includes('Sign in to play')) {
-    throw new Error('Root shell should offer optional sign-in without blocking guest play');
+  // The shell is the React SPA mount (#root). Account state + optional sign-in render
+  // client-side in the app-shell title bar (HeaderAccountCluster) — there is no static
+  // account chrome (the old static topbar was retired). The invariant is unchanged: the
+  // shell serves the app to anonymous users and never gates guest play behind a sign-in.
+  if (!root.body.includes('id="root"') || root.body.includes('Sign in to play')) {
+    throw new Error('Root shell should load the app for guests without a blocking sign-in gate');
   }
   const fallback = await get('/squad/unknown');
   if (fallback.statusCode !== 200 || !fallback.body.includes('Chess Tactics')) {

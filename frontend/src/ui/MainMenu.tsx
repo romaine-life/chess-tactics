@@ -1,7 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 import { MENU_MODES } from './design/catalogData';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -83,14 +81,7 @@ export function MainMenu(): ReactElement {
       <AmbienceBackground />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
-      <div className="settings-screen main-menu-twin-screen">
-        <header className="app-titlebar settings-header-frame main-menu-twin-header">
-          <BrandLockup screenName="Main Menu" />
-          {/* Trailing "settings + user" cluster (ADR-0036): the Settings gear, then
-              the account control — the avatar menu when signed in, Sign In when not. */}
-          <HeaderAccountCluster signInReturnTo="/" />
-        </header>
-
+      <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <div className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}

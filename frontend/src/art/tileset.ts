@@ -1,5 +1,6 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
 import { terrainLabels } from '../core/tileSockets';
+import type { FeatureKind, FeatureMaterial } from '../core/featureAutotile';
 
 export interface TileAsset extends TileSocketAsset {
   id: string;
@@ -131,3 +132,16 @@ export const muralTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.fro
 export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 
 export const tileFrameSrc = (asset: TileAsset): string => asset.src;
+
+// Linear-feature overlays (roads, rivers) live in their OWN registry,
+// deliberately apart from the socket base tiles above: a feature is a transparent
+// ribbon composited OVER any base tile, keyed by its material and 4-bit connection
+// mask (0–15), not selected by the socket solver. Baked by scripts/build-feature-tiles.py.
+export const featureFrameSrc = (kind: FeatureKind, material: FeatureMaterial, mask: number): string =>
+  `/assets/tiles/feature/${kind}-${material}-${mask}.png`;
+
+// A square, pre-centered preview icon for editor palettes/brush (the board sprites
+// are tall 96x180 frames with the art only in the top diamond, so they don't center
+// in a small box — this is cropped + squared at bake time). See build-feature-tiles.py.
+export const featureThumbSrc = (kind: FeatureKind, material: FeatureMaterial): string =>
+  `/assets/tiles/feature/${kind}-${material}-thumb.png`;
