@@ -57,6 +57,23 @@ export function shuffled(items) {
   return out;
 }
 
+// Re-home the persistent mute control into the title bar's trailing cluster slot
+// (ADR-0044). initBgm() runs (main.tsx) BEFORE React mounts the title bar, so the slot
+// may not exist yet — keep the button DETACHED and observe for the slot, placing it the
+// instant it appears (so it never flashes at a temporary body-docked position). The
+// persistent title bar renders the cluster on every route, so the slot always arrives.
+function mountControl(el) {
+  const SLOT = '.cluster-bgm-slot';
+  const place = () => {
+    const slot = document.querySelector(SLOT);
+    if (slot) { slot.appendChild(el); return true; }
+    return false;
+  };
+  if (place()) return;
+  const observer = new MutationObserver(() => { if (place()) observer.disconnect(); });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
 // Build one shuffle cycle of indices [0..length-1], ensuring the first index is
 // not `lastIndex` so the same track never plays twice across a cycle boundary.
 // Pure and exported for unit testing.
@@ -101,7 +118,7 @@ export function initBgm() {
   };
 
   const control = buildControl();
-  document.body.appendChild(control.el);
+  mountControl(control.el);
 
   // ---- single-owner cross-tab coordination --------------------------------
   // Web Locks elect one owner (auto-released when its tab closes → a follower takes
