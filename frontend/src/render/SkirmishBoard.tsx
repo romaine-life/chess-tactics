@@ -298,7 +298,13 @@ export function SkirmishBoard() {
                 type="button"
                 className={`skirmish-board-cell-hit ${state}`}
                 aria-label={`Tile ${cell.x},${cell.y}`}
-                onPointerDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => {
+                  // Right-click-and-hold always pans the board — navigation matters more than
+                  // any per-cell action, so never swallow it even when the press lands on a unit.
+                  // Left-click stays on the cell: stop it bubbling so ViewPane doesn't start a pan.
+                  if (event.button === 2) return;
+                  event.stopPropagation();
+                }}
                 onClick={() => handleTile(cell.x, cell.y)}
               />
             );
