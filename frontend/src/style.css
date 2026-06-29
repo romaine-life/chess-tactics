@@ -3437,6 +3437,14 @@ h1 {
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
+  /* The board is a free-panned canvas the chrome floats over: it's no longer clipped
+     to this box (see the overflow:visible block below), so it can bleed behind the
+     HUD and title bar. Trap it in its OWN stacking context here (position + z-index)
+     so the board's very high per-tile z-indexes can't punch up through the HUD — the
+     whole war-room sits at z:0, the HUD at z:1, so the panel always covers the board
+     where they overlap. Cut only at the screen edge (.skirmish-screen: overflow hidden). */
+  position: relative;
+  z-index: 0;
 }
 
 .skirmish-topbar {
@@ -3613,6 +3621,22 @@ h1 {
   overflow: hidden;
   position: relative;
   width: 100%;
+}
+
+/* Full-bleed board: the board is a free-panned canvas, not a framed thumbnail, so it
+   must NOT be sliced where it's bigger than its box — that hard mid-screen cut under
+   the title bar is the bug. Drop the overflow clip on the board's OWN nested containers
+   so the board bleeds past them, behind the (opaque, floating) title bar + HUD, and is
+   cut only at the screen edge (.skirmish-screen keeps overflow:hidden).
+   Scoped to the REAL skirmish via :not(.level-editor-screen): the level editor shares
+   the .skirmish-screen chrome (its root carries BOTH classes) but is a framed authoring
+   tool, so it — and the Studio viewers — keep their clip. */
+.skirmish-screen:not(.level-editor-screen) .skirmish-field,
+.skirmish-screen:not(.level-editor-screen) .skirmish-board-frame,
+.skirmish-screen:not(.level-editor-screen) .skirmish-board-frame [data-testid="skirmish-board"],
+.skirmish-screen:not(.level-editor-screen) .tileset-view-stage,
+.skirmish-screen:not(.level-editor-screen) .tileset-view-art-layer {
+  overflow: visible;
 }
 
 /* No board box: the board container paints NO background — the board art floats on
@@ -3984,6 +4008,10 @@ h1 {
   padding: 0;
   scrollbar-color: #315160 #071017;
   scrollbar-width: thin;
+  /* Sit above the full-bleed board (which renders in the .skirmish-war-room z:0 stacking
+     context) so the board bleeds BEHIND this panel — the opaque kit frame covers it. */
+  position: relative;
+  z-index: 1;
 }
 
 /* Tabbed HUD (ADR-0006 in-game density): one section visible at a time so the
