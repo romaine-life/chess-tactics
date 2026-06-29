@@ -1,6 +1,7 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
 import { terrainLabels } from '../core/tileSockets';
 import type { FeatureKind, FeatureMaterial } from '../core/featureAutotile';
+import type { EdgeFeatureSpec } from '../core/tileBoardGenerator';
 
 export interface TileAsset extends TileSocketAsset {
   id: string;
@@ -123,11 +124,36 @@ const muralVariant = (family: TileFamilyId, i: number): TileAsset => ({
   notes: `${terrainLabels[family]} — continuous cliff mural, window ${i + 1} of ${MURAL_WINDOWS}.`,
   terrains: [family],
 });
-// Families with a baked continuity mural. Rolling out one at a time; the rest keep edgeTiles.
-const MURAL_FAMILIES: readonly TileFamilyId[] = ['grass'];
+// Families with a baked continuity mural (water excluded — its edge is the waterfall).
+const MURAL_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt', 'stone', 'sand', 'pebble'];
 export const muralTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.fromEntries(
   MURAL_FAMILIES.map((family) => [family, Array.from({ length: MURAL_WINDOWS }, (_, i) => muralVariant(family, i))]),
 ) as Partial<Record<TileFamilyId, TileAsset[]>>;
+
+// Phase 2 — STORY FEATURES (ADR-0039). A feature is a multi-tile set-piece (dino fossil,
+// buried ruins) baked as one wide cliff image, sliced into ordered side `pieces` + a clean
+// `cap` terminator (build-mural-edges.py + forge-feature.mjs). The solver lays it head→tail
+// along a straight board edge and caps it where it would clip. Soil families only for now.
+const FEATURE_FAMILIES: readonly TileFamilyId[] = ['grass', 'dirt'];
+const featurePiece = (feature: string, key: string): TileAsset => ({
+  id: `${feature}-${key}`,
+  label: `${feature} · ${key}`,
+  src: `/assets/tiles/surface/${feature}-${key}.png`,
+  role: 'edge',
+  kind: 'tile',
+  source: 'pixel:surface',
+  method: 'Edge feature (story set-piece)',
+  probability: 1,
+  notes: `${feature} story feature (${key}).`,
+  terrains: [...FEATURE_FAMILIES],
+});
+const FEATURE_PIECE_COUNT: Record<string, number> = { fossil: 6, ruins: 5 };
+export const edgeFeatures: EdgeFeatureSpec<TileAsset>[] = Object.entries(FEATURE_PIECE_COUNT).map(([feature, count]) => ({
+  id: feature,
+  pieces: Array.from({ length: count }, (_, i) => featurePiece(feature, String(i))),
+  cap: featurePiece(feature, 'cap'),
+  families: [...FEATURE_FAMILIES],
+}));
 
 export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 

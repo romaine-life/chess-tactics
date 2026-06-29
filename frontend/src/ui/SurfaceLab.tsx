@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { tileAssets, tileFamilies, edgeTiles, muralTiles, type TileAsset } from '../art/tileset';
+import { tileAssets, tileFamilies, edgeTiles, muralTiles, edgeFeatures, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
 
@@ -42,15 +42,22 @@ export function SurfaceLab(): ReactElement {
     const f = params.get('family') as Family;
     return FAMILIES.includes(f) ? f : 'grass';
   });
-  const [seed, setSeed] = useState(7);
+  const [seed, setSeed] = useState(() => {
+    const s = parseInt(params.get('seed') ?? '', 10);
+    return Number.isFinite(s) ? s : 7;
+  });
   const [zoom, setZoom] = useState(1.1);
   const [crisp, setCrisp] = useState(() => params.get('render') !== 'smooth');
+  // Story features are PARKED (the per-tile fossil doesn't read continuous across the iso
+  // step — see ADR-0041); default OFF so the board shows the continuity mural, opt in via ?story=on.
+  const [story, setStory] = useState(() => params.get('story') === 'on');
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     p.set('view', view); p.set('family', family); p.set('render', crisp ? 'crisp' : 'smooth');
+    p.set('story', story ? 'on' : 'off'); p.set('seed', String(seed));
     window.history.replaceState(window.history.state, '', `${window.location.pathname}?${p.toString()}`);
-  }, [view, family, crisp]);
+  }, [view, family, crisp, story, seed]);
 
   // All-of-one-family board (the selected family) WITH the frayed perimeter edge layer
   // (ADR-0039), so the chosen family's tiles AND its dropping edge read on a real board.
@@ -66,8 +73,9 @@ export function SurfaceLab(): ReactElement {
       familyAssets: tileFamilies,
       edgeAssets: edgeTiles,
       muralEdges: muralTiles,
+      edgeFeatures: story ? edgeFeatures : undefined,
     }),
-    [family, seed],
+    [family, seed, story],
   );
 
   return (
@@ -91,6 +99,7 @@ export function SurfaceLab(): ReactElement {
             <span className="sl-treat-label" style={{ marginLeft: 8 }}>render:</span>
             <button type="button" className={`sl-tab ${!crisp ? 'is-active' : ''}`} onClick={() => setCrisp(false)}>Smooth</button>
             <button type="button" className={`sl-tab ${crisp ? 'is-active' : ''}`} onClick={() => setCrisp(true)}>Crisp</button>
+            <button type="button" className={`sl-tab ${story ? 'is-active' : ''}`} style={{ marginLeft: 8 }} onClick={() => setStory((s) => !s)}>Story</button>
           </div>
         ) : null}
       </header>
