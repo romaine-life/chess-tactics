@@ -29,7 +29,9 @@ export function PagesLibraryStudio({
           aria-pressed={p.name === selected}
           title={`${p.label} — ${p.route}`}
         >
-          <span className="tileset-studio-card-image pages-card-image" aria-hidden="true">{p.label.slice(0, 1)}</span>
+          <span className="tileset-studio-card-image pages-card-image" aria-hidden="true">
+            <img src={p.thumb} alt="" loading="lazy" />
+          </span>
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">
               <strong>{p.label}</strong>
