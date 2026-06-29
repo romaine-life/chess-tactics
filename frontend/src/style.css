@@ -10553,10 +10553,17 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-/* Locked height (sized for label + artist + title) + single-line clamps so the row
-   never jerks when it flips between "Nothing" and a playing track. */
+/* No box: the words float. This readout is pinned in the header and never moves, so
+   it needs no surface to sit on — drop the per-row LINE frame + stone fill that
+   .settings-row bakes in, and the padding that cleared the frame. The locked height
+   stays as an invisible reserve (sized for label + artist + title) so the soundtrack
+   list below never jerks when the title flips between "Nothing" and a playing track. */
 .settings-nowplaying-row {
+  background: none;
+  border: 0;
+  border-image: none;
   min-height: 96px;
+  padding: 0 0 0 6px;
 }
 
 .settings-nowplaying-row .settings-row-copy {
