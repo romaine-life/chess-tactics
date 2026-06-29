@@ -6180,8 +6180,12 @@ body { font-size: 17px; }
   outline-offset: 2px;
 }
 
-.bgm-control.is-playing {
-  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. */
+.bgm-control.is-playing,
+.bgm-control.is-othertab {
+  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. is-othertab is
+     a follower tab: same lit frame (music IS playing, elsewhere), but its icon stays
+     dimmed via is-muted, so it reads as "on, not here" — distinct from the base-frame
+     muted state it used to be pixel-identical to. */
   border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 

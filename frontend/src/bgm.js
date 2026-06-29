@@ -509,9 +509,14 @@ export function initBgm() {
       return;
     }
     el.style.display = '';
+    el.classList.remove('is-othertab'); // only the follower state below re-adds it
     if (!state.owner && state.otherPlaying) {
-      // Another tab owns playback; this one is a silent follower.
+      // Another tab owns playback; this one is a silent follower. Wear the LIT (active)
+      // frame so it's visibly distinct from a muted control — which uses the base frame
+      // and is otherwise pixel-identical — because music IS playing, just not here. The
+      // icon stays dimmed (is-muted) to mark that this tab is silent.
       el.classList.remove('is-playing');
+      el.classList.add('is-othertab');
       el.classList.add('is-muted');
       const other = state.otherTitle ? `Playing in another tab — ${state.otherTitle}` : 'Playing in another tab';
       el.setAttribute('aria-label', `${other} — click to play here`);
