@@ -333,8 +333,8 @@ export function LevelEditor(): ReactElement {
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
   const [unitSide, setUnitSide] = useState<'player' | 'enemy'>('player');
 
-  // Go full-bleed like Skirmish: hide the static global .topbar (index.html) so the
-  // editor shows only its OWN title bar, not stacked under the app's global header.
+  // Go full-bleed like Skirmish (is-immersive): #root owns the whole viewport so the
+  // editor sits under only the persistent app-shell title bar, with no inset/gap.
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('is-immersive');

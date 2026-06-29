@@ -46,7 +46,11 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true, rightSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
-    return { screenName: 'Settings', showAccountCluster: true, showSettingsGear: false, signInReturnTo: '/settings' };
+    // The Settings body scales with the UI-Scale setting (zoom: --settings-ui-scale on
+    // .settings-screen). The bar lives outside that element, so tag it to ride the same
+    // (global, on documentElement) var — the persistent bar drops this class on the next
+    // screen, so only Settings scales.
+    return { screenName: 'Settings', showAccountCluster: true, showSettingsGear: false, signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
   }
   if (path === '/campaign' || path.startsWith('/campaign/')) {
     return { screenName: 'Campaign', showAccountCluster: true, signInReturnTo: '/campaign', barClass: 'main-menu-twin-header' };
