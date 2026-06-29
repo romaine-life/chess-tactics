@@ -258,12 +258,8 @@ body {
 
 h1, h2, p { margin: 0; }
 
-.pixel,
 h1,
-.meters span,
-button,
-.legend,
-#selectedName {
+button {
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
 }
 
@@ -334,167 +330,11 @@ button:disabled {
   overflow: auto;
 }
 
-.game {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-
 h1 {
   color: var(--ink-strong);
   font-size: clamp(.88rem, 1.8vw, 1.34rem);
   line-height: 1.15;
   text-shadow: 0 2px 0 #020507, 0 0 18px rgba(101, 184, 255, .18);
-}
-
-.meters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.meters span {
-  border: 1px solid rgba(71, 97, 113, .76);
-  border-radius: 4px;
-  background:
-    linear-gradient(180deg, rgba(24, 42, 53, .94), rgba(10, 20, 28, .94));
-  color: var(--ink);
-  padding: 8px 10px;
-  white-space: nowrap;
-  font-size: .52rem;
-}
-
-.meters span:first-child {
-  border-color: rgba(101, 184, 255, .66);
-  color: #cae7ff;
-}
-
-.meters span:last-child {
-  border-color: rgba(255, 95, 73, .64);
-  color: #ffc1b5;
-}
-
-/* ---------------- Diorama scene ---------------- */
-
-.board-wrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 0;
-  overflow: hidden;
-  padding: 8px;
-  perspective: 1600px;
-  perspective-origin: 50% 42%;
-  touch-action: none;
-  background:
-    radial-gradient(760px 420px at 50% 36%, rgba(48, 88, 103, .26), rgba(6, 13, 18, .08) 58%, rgba(2, 5, 8, .42) 100%);
-  border: 1px solid rgba(37, 58, 69, .66);
-  border-radius: 6px;
-}
-
-.skyline {
-  position: absolute;
-  left: 50%;
-  bottom: 8%;
-  width: 130%;
-  height: 62%;
-  transform: translateX(-50%);
-  opacity: .88;
-  pointer-events: none;
-  z-index: 0;
-  filter: drop-shadow(0 0 36px rgba(72, 137, 153, .16));
-}
-
-.board-stage {
-  position: relative;
-  z-index: 1;
-  width: min(64vmin, 560px);
-  aspect-ratio: 1;
-  transform: rotateX(var(--tilt)) rotateZ(var(--twist));
-  transform-style: preserve-3d;
-}
-
-/* Floating island: grass top with an earth underside for thickness. */
-.island-floor {
-  position: absolute;
-  inset: -9%;
-  border-radius: 8px;
-  background:
-    radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, .08), transparent 60%),
-    linear-gradient(135deg, var(--grass-a), var(--grass-b));
-  transform: translateZ(-2px);
-  box-shadow:
-    0 0 0 3px #3c5230,
-    0 0 0 7px #2c3a22;
-}
-
-.island-floor::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--earth), var(--earth-d));
-  transform: translateZ(-40px);
-  box-shadow: 0 60px 70px rgba(0, 0, 0, .6);
-}
-
-.board-scroll {
-  display: grid;
-  max-height: 100%;
-  max-width: 100%;
-  min-height: 0;
-  min-width: 0;
-  place-items: center;
-  position: relative;
-  width: 100%;
-  z-index: 1;
-}
-
-.board-scroll.level-editor-scroll {
-  align-content: start;
-  height: 100%;
-  justify-items: center;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: #7567ad #100d22;
-  scrollbar-width: thin;
-  touch-action: pan-y;
-}
-
-.board-scroll.level-editor-scroll::-webkit-scrollbar {
-  width: 12px;
-}
-
-.board-scroll.level-editor-scroll::-webkit-scrollbar-track {
-  background: #100d22;
-}
-
-.board-scroll.level-editor-scroll::-webkit-scrollbar-thumb {
-  background: #7567ad;
-  border: 2px solid #100d22;
-  border-radius: 0;
-}
-
-.board {
-  position: relative;
-  z-index: 1;
-  display: block;
-  max-height: 100%;
-  max-width: 100%;
-  width: auto;
-  height: auto;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-}
-
-.board-scroll.level-editor-scroll .board {
-  margin-block: 340px 320px;
-  max-height: none;
 }
 
 .menu-layer {
@@ -514,7 +354,7 @@ h1 {
   line-height: 1.35;
 }
 
-/* ---------------- Main menu concept screen ---------------- */
+/* ---------------- Main menu shell ---------------- */
 
 .shell.main-menu-active {
   grid-template-columns: 1fr;
@@ -529,66 +369,6 @@ h1 {
   min-height: 0;
   overflow: hidden;
   position: relative;
-}
-
-.shell.main-menu-active .game {
-  gap: 0;
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.shell.main-menu-active .panel {
-  display: none;
-}
-
-.shell.main-menu-active .board-wrap {
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  perspective: none;
-  background: #02070b;
-  overflow: hidden;
-}
-
-.shell.main-menu-active .board-wrap::before {
-  content: none;
-}
-
-.shell.main-menu-active .board-wrap::after {
-  content: "";
-  position: absolute;
-  inset: 14px;
-  z-index: 4;
-  pointer-events: none;
-  border: 2px solid rgba(75, 111, 130, .56);
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, .78),
-    0 0 0 1px rgba(0, 0, 0, .7);
-}
-
-.shell.main-menu-active .skyline {
-  display: none;
-}
-
-.shell.main-menu-active .board-scroll {
-  position: absolute;
-  z-index: 1;
-  width: min(52vw, 790px);
-  height: min(76vh, 720px);
-  left: 50%;
-  top: clamp(126px, 16vh, 184px);
-  transform: translateX(-50%);
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  filter:
-    drop-shadow(0 36px 24px rgba(0, 0, 0, .46))
-    drop-shadow(0 0 38px rgba(28, 171, 229, .13));
-}
-
-.shell.main-menu-active .board {
-  width: min(48vw, 730px);
-  max-height: none;
-  max-width: none;
 }
 
 .menu-layer.main-menu-layer {
@@ -707,10 +487,6 @@ h1 {
   z-index: 5;
   pointer-events: none;
   image-rendering: pixelated;
-}
-
-.shell.main-menu-active .board-scroll {
-  display: none;
 }
 
 /* Asset-backed mode button family, assembled from the asset catalog. The
@@ -1354,7 +1130,6 @@ h1 {
 }
 .app-update-banner button:hover { color: #f4fbff; }
 
-
 /* ── Design-system token layer ────────────────────────────────────────────
    Single source of truth for the design surfaces (catalog, glossary, widgets)
    and future Shadow-DOM components, which inherit these from :root. The warm
@@ -1576,14 +1351,6 @@ h1 {
   background: var(--c-reject);
   border-color: var(--c-reject);
   color: #1B1814;
-}
-
-.design-back--art {
-  box-shadow: 0 8px 24px -10px rgba(0, 0, 0, .7);
-  left: 18px;
-  position: fixed;
-  top: 18px;
-  z-index: 60;
 }
 
 .portfolio-asset-list {
@@ -2349,9 +2116,6 @@ h1 {
 /* Catalog is a two-pane tool: tighter than the article-style design pages, and
    the header aligns to the grid (same width/left edge) instead of centering
    narrow above a wide grid. */
-/* Full-bleed: the Asset Library route drops the global shell gutter so the tool
-   reaches the viewport edge (the topbar stays as the only chrome above it). */
-.shell.design-fullbleed { gap: 0; padding: 0; }
 
 /* Minimal tool header: just ← Menu + title on one slim line — no editorial
    sub-header, no big chrome. */
@@ -2589,7 +2353,6 @@ h1 {
   }
 }
 
-
 .main-menu-art-screen {
   display: grid;
   grid-template-columns: 1fr;
@@ -2613,59 +2376,6 @@ h1 {
 }
 
 .main-menu-artboard img {
-  display: block;
-  height: 100%;
-  image-rendering: auto;
-  width: 100%;
-}
-
-.shell.concept-screen-active {
-  grid-template-columns: 1fr;
-  gap: 0;
-  padding: 0;
-}
-
-.shell.concept-screen-active .game {
-  gap: 0;
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.shell.concept-screen-active .panel,
-.shell.concept-screen-active .board-scroll,
-.shell.concept-screen-active .skyline {
-  display: none;
-}
-
-.shell.concept-screen-active .board-wrap {
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  background: #02070b;
-}
-
-.menu-layer.concept-screen-layer {
-  align-items: stretch;
-  inset: 0;
-  justify-content: stretch;
-  pointer-events: auto;
-}
-
-.screen-concept {
-  display: grid;
-  min-height: 100%;
-  place-items: center;
-  width: 100%;
-}
-
-.screen-concept-artboard {
-  aspect-ratio: 16 / 10;
-  max-height: 100vh;
-  max-width: 100vw;
-  position: relative;
-  width: min(100vw, 160vh);
-}
-
-.screen-concept-artboard img {
   display: block;
   height: 100%;
   image-rendering: auto;
@@ -3682,433 +3392,6 @@ h1 {
   font-size: .48rem;
   line-height: 1.35;
   text-transform: uppercase;
-}
-
-.locked-piece {
-  align-items: center;
-  background: #17132b;
-  border: 2px solid var(--line);
-  display: flex;
-  gap: 10px;
-  min-height: 48px;
-  padding: 8px;
-}
-
-.piece-picker,
-.menu-row {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.menu-row { grid-template-columns: 1fr 1fr; }
-
-.piece-picker button {
-  align-items: center;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 28px 1fr;
-  min-width: 0;
-}
-
-.piece-picker button span {
-  background: #dceaf2;
-  color: #101522;
-  display: grid;
-  font-size: .6rem;
-  height: 28px;
-  place-items: center;
-  width: 28px;
-}
-
-.cell {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  transform-style: preserve-3d;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12);
-}
-
-.cell.light { background: linear-gradient(135deg, #8cb267, #7ea35b); }
-.cell.dark { background: linear-gradient(135deg, #739a54, #688f4b); }
-.cell:hover { filter: brightness(1.1); }
-
-/* ---------------- Ground decals (flat on the iso tile) ---------------- */
-
-.decal {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.move-decal {
-  inset: 8%;
-  border: 2px solid var(--move);
-  border-radius: 3px;
-  background: rgba(174, 230, 255, .16);
-  box-shadow: inset 0 0 12px rgba(174, 230, 255, .4);
-}
-
-.power-decal {
-  inset: 8%;
-  border: 2px solid var(--power);
-  border-radius: 3px;
-  background: rgba(255, 210, 74, .18);
-  box-shadow: inset 0 0 12px rgba(255, 210, 74, .45);
-}
-
-.threat-decal {
-  background:
-    repeating-linear-gradient(45deg,
-      rgba(255, 106, 82, .42) 0 8px,
-      rgba(255, 106, 82, .16) 8px 16px);
-  box-shadow: inset 0 0 0 2px var(--threat);
-  animation: threat-pulse 1.1s ease-in-out infinite;
-}
-
-.threat-decal::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 40%;
-  height: 40%;
-  transform: translate(-50%, -50%) rotate(var(--angle, 0deg));
-  background: var(--threat);
-  clip-path: polygon(0 20%, 56% 20%, 56% 0, 100% 50%, 56% 100%, 56% 80%, 0 80%);
-  filter: drop-shadow(0 0 4px rgba(255, 106, 82, .9));
-}
-
-.spawn-decal {
-  inset: 16%;
-  border: 2px dashed rgba(255, 255, 255, .55);
-  border-radius: 3px;
-  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .14), transparent 70%);
-}
-
-.water-decal {
-  inset: 0;
-  background:
-    repeating-linear-gradient(135deg, #2f6f86 0 6px, #2a6076 6px 12px);
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, .35);
-  z-index: 0;
-}
-
-.reticle {
-  inset: 5%;
-  border: 2px dashed var(--move);
-  border-radius: 4px;
-  box-shadow: 0 0 14px rgba(174, 230, 255, .55), inset 0 0 12px rgba(174, 230, 255, .3);
-  animation: reticle-glow 1.5s ease-in-out infinite;
-}
-
-/* ---------------- Billboarded sprites (units, buildings, terrain) ---------------- */
-
-.token {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  padding-bottom: 16%;
-  pointer-events: none;
-  z-index: 5;
-  transform-origin: 50% 84%;
-  transform: rotateZ(calc(-1 * var(--twist))) rotateX(calc(-1 * var(--tilt)));
-}
-
-.sprite-wrap {
-  width: 78%;
-  display: flex;
-  justify-content: center;
-  filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .5));
-}
-
-.token.building .sprite-wrap { width: 64%; }
-.token.terrain .sprite-wrap { width: 70%; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .45)); }
-
-.sprite {
-  width: 100%;
-  height: auto;
-  display: block;
-  shape-rendering: crispEdges;
-  image-rendering: pixelated;
-}
-
-.hpbar {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  margin-bottom: 4px;
-  background: #0c0a18;
-  border: 1px solid #000;
-  border-radius: 2px;
-}
-
-.seg {
-  width: 7px;
-  height: 7px;
-  background: var(--hp);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35);
-}
-
-.seg.empty { background: #43314a; }
-
-/* ---------------- Side panel ---------------- */
-
-.panel {
-  align-self: stretch;
-  background:
-    linear-gradient(180deg, rgba(14, 26, 35, .98), rgba(7, 14, 20, .98));
-  border: 1px solid rgba(85, 114, 130, .72);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 1px 0 rgba(199, 226, 232, .06),
-    -12px 0 30px rgba(0, 0, 0, .16);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 100%;
-  min-height: 0;
-  min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 10px;
-  scrollbar-color: #315160 #071017;
-  scrollbar-width: thin;
-}
-
-.panel-section {
-  background:
-    linear-gradient(180deg, rgba(20, 36, 47, .92), rgba(12, 22, 30, .96));
-  border: 1px solid rgba(57, 83, 97, .84);
-  border-radius: 4px;
-  box-shadow: inset 0 1px 0 rgba(237, 243, 244, .04);
-  padding: 11px;
-}
-
-.game-panel {
-  min-height: 0;
-}
-
-.selected-unit {
-  border-color: rgba(101, 184, 255, .56);
-  box-shadow:
-    inset 3px 0 0 var(--cobalt),
-    inset 0 1px 0 rgba(237, 243, 244, .05),
-    0 0 0 1px rgba(47, 127, 232, .08);
-  padding-left: 14px;
-}
-
-#selectedName {
-  color: var(--ink-strong);
-  font-size: .76rem;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  text-shadow: 0 2px 0 #020507;
-}
-
-#selectedMeta {
-  color: #b8c7cc;
-  font-size: 1rem;
-  line-height: 1.22;
-  margin-top: 7px;
-}
-
-.actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
-  margin-top: 12px;
-}
-
-/* #endButton { grid-column: 1 / -1; } */
-
-.actions button {
-  min-height: 40px;
-}
-
-#moveButton {
-  border-color: rgba(101, 184, 255, .6);
-}
-
-#threatButton {
-  border-color: rgba(255, 95, 73, .54);
-}
-
-#threatButton.active {
-  background:
-    linear-gradient(180deg, #723026 0%, #421a17 100%);
-  border-color: var(--threat-hot);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 176, 157, .15),
-    0 0 0 2px rgba(255, 95, 73, .12);
-}
-
-#endButton {
-  background:
-    linear-gradient(180deg, #27343b 0%, #151f25 100%);
-  border-color: rgba(159, 176, 183, .5);
-  color: #d9e3e5;
-}
-
-.roster {
-  display: grid;
-  gap: 7px;
-}
-
-.badge {
-  border-radius: 3px;
-  display: grid;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", monospace;
-  font-size: var(--ds-text-lg);
-  height: 32px;
-  place-items: center;
-  width: 32px;
-}
-
-.badge.player {
-  background: linear-gradient(160deg, #f1f5ef 0%, #9ec8df 48%, #2f7fe8 100%);
-  color: #16242e;
-  border: 1px solid #78c5ff;
-  box-shadow: 0 0 0 1px rgba(6, 14, 20, .9);
-}
-
-.badge.enemy {
-  background: linear-gradient(160deg, #2c3031 0%, #773329 52%, #ff7a42 100%);
-  color: #ffe5dc;
-  border: 1px solid #ff8f60;
-  box-shadow: 0 0 0 1px rgba(6, 14, 20, .9);
-}
-
-.roster-title {
-  color: #d4e7ef;
-  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", monospace;
-  font-size: .49rem;
-  line-height: 1.4;
-  margin-top: 5px;
-  padding: 3px 0 1px;
-  text-transform: uppercase;
-}
-
-.roster-title:first-child {
-  color: var(--cobalt-bright);
-  margin-top: 0;
-}
-
-.legend {
-  color: #b1c0c6;
-  display: grid;
-  font-size: .48rem;
-  gap: 8px;
-  line-height: 1.5;
-}
-
-.legend div {
-  align-items: center;
-  background: rgba(5, 12, 17, .28);
-  border: 1px solid rgba(57, 83, 97, .38);
-  border-radius: 3px;
-  display: grid;
-  gap: 9px;
-  grid-template-columns: 16px minmax(0, 1fr);
-  min-height: 28px;
-  padding: 5px 6px;
-}
-
-.legend span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.legend i {
-  border-radius: 3px;
-  height: 14px;
-  width: 14px;
-}
-
-.legend .k-move-dot {
-  background: #0b1720;
-  border: 1px solid rgba(101, 184, 255, .45);
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.legend .k-move-dot::after {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cobalt-bright);
-  box-shadow: 0 0 5px var(--cobalt);
-}
-.legend .k-attack-dash {
-  background: transparent;
-  border: 2px dashed var(--ember);
-}
-.legend .k-threat {
-  background: repeating-linear-gradient(45deg, rgba(255, 95, 73, .58) 0 4px, rgba(255, 95, 73, .16) 4px 8px);
-  border: 2px solid var(--threat);
-}
-.legend .k-danger {
-  background: rgba(255, 95, 73, 0.20);
-  border: 2px solid rgba(255, 95, 73, 0.78);
-}
-.legend .k-spawn {
-  border: 2px dashed rgba(202, 231, 255, .7);
-}
-
-.log {
-  flex: 1;
-  font-size: .98rem;
-  line-height: 1.25;
-  max-height: 150px;
-  min-height: 92px;
-  overflow: auto;
-  scrollbar-color: #315160 #071017;
-  scrollbar-width: thin;
-}
-
-.log p {
-  border-bottom: 1px solid rgba(57, 83, 97, .28);
-  color: #c7d3d7;
-  margin: 0;
-  padding: 5px 0;
-}
-
-.log p:first-child {
-  color: var(--ink-strong);
-}
-
-.log p:last-child {
-  border-bottom: 0;
-}
-
-.victory { color: var(--good); }
-.danger { color: var(--danger); }
-
-/* ---------------- Animations ---------------- */
-
-@keyframes threat-pulse {
-  0%, 100% { opacity: .72; }
-  50% { opacity: 1; }
-}
-
-@keyframes reticle-glow {
-  0%, 100% { box-shadow: 0 0 10px rgba(174, 230, 255, .4), inset 0 0 8px rgba(174, 230, 255, .2); }
-  50% { box-shadow: 0 0 20px rgba(174, 230, 255, .7), inset 0 0 16px rgba(174, 230, 255, .35); }
-}
-
-.badge svg,
-.piece-picker button span svg {
-  width: 100%;
-  height: 100%;
 }
 
 /* ---------------- Asset-backed skirmish screen ---------------- */
@@ -5367,7 +4650,6 @@ h1 {
 .skirmish-icon-sword { background-image: url("/assets/ui/kit/icons/game/attack.png"); }
 .skirmish-icon-crossed-swords { background-image: url("/assets/ui/kit/icons/game/capture.png"); }
 
-
 .skirmish-unit-badge {
   align-items: center;
   background: transparent;
@@ -5531,15 +4813,9 @@ h1 {
     padding: 12px;
   }
 
-  .board-stage { width: min(82vmin, 520px); }
+  
 
-  .panel {
-    box-shadow:
-      inset 0 1px 0 rgba(199, 226, 232, .06),
-      0 -12px 26px rgba(0, 0, 0, .18);
-  }
-
-  .shell.main-menu-active {
+.shell.main-menu-active {
     grid-template-rows: minmax(0, 1fr);
   }
 
@@ -5589,23 +4865,14 @@ h1 {
     padding: 10px;
   }
 
-
   .account { justify-content: space-between; width: 100%; }
-  .meters { justify-content: flex-start; }
-  .meters span { font-size: .48rem; padding: 7px 8px; }
-  body { font-size: 17px; }
+  
+
+body { font-size: 17px; }
   h1 { font-size: .82rem; }
-  .panel { padding: 8px; }
-  .panel-section { padding: 9px; }
-  .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .actions button { font-size: .5rem; min-height: 38px; padding-inline: 6px; }
-  .badge {
-    height: 30px;
-    width: 30px;
-  }
-  .legend { font-size: .45rem; }
-  .piece-picker { grid-template-columns: 1fr; }
-  .lobby-seats { grid-template-columns: 1fr; }
+  
+
+.lobby-seats { grid-template-columns: 1fr; }
   .campaign-shell,
   .editor-grid,
   .editor-grid.two,
@@ -6701,7 +5968,6 @@ h1 {
   }
 }
 
-
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; }
 }
@@ -7028,21 +6294,6 @@ h1 {
   text-align: center;
 }
 
-.tile-review-page {
-  min-height: 100vh;
-  padding: 18px;
-  color: #d9e7f7;
-  background: #070d14;
-  font-family: var(--ds-font-sans, system-ui, sans-serif);
-  overflow: hidden;
-}
-
-.shell.tile-review-active {
-  height: 100vh;
-  overflow: hidden;
-  background: #070d14;
-}
-
 .shell.tileset-studio-active {
   height: 100vh;
   height: 100dvh;
@@ -7052,127 +6303,14 @@ h1 {
   background: #071019;
 }
 
-.shell.tile-review-active > .panel,
-.shell.tileset-studio-active > .panel {
-  display: none;
-}
-
-.shell.tile-review-active .app-root,
 .shell.tileset-studio-active .app-root {
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
-.shell.tile-review-active + .bgm-control,
 .shell.tileset-studio-active + .bgm-control {
   display: none;
-}
-
-.tile-review-stage {
-  display: grid;
-  grid-template-columns: minmax(420px, 0.9fr) minmax(620px, 1.1fr) 280px;
-  gap: 16px;
-  width: 100%;
-  height: calc(100vh - 36px);
-}
-
-.tile-review-reference-frame {
-  min-height: 0;
-  overflow: hidden;
-  background: #03070d;
-  border: 1px solid rgba(67, 127, 179, 0.32);
-  border-radius: 6px;
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
-}
-
-.tile-review-reference-frame img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 35% 50%;
-  image-rendering: pixelated;
-}
-
-.tile-review-board-shell {
-  position: relative;
-  min-height: 0;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(4, 11, 18, 0.28), rgba(2, 5, 9, 0.78)),
-    url("/assets/ui/main-menu/hero-background.png") center / cover no-repeat;
-  border: 1px solid rgba(67, 127, 179, 0.32);
-  border-radius: 6px;
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.52);
-}
-
-.tile-review-aside {
-  display: grid;
-  grid-template-rows: auto auto auto auto 1fr;
-  align-content: start;
-  gap: 12px;
-  min-height: 0;
-  padding: 14px;
-  background: rgba(6, 15, 24, 0.92);
-  border: 1px solid rgba(67, 127, 179, 0.28);
-  border-radius: 6px;
-}
-
-.tile-review-aside h1 {
-  margin: 0;
-  color: #f3f7fb;
-  font-family: var(--ds-font-display, var(--ds-font-sans, system-ui, sans-serif));
-  font-size: 20px;
-  line-height: 1.1;
-}
-
-.tile-review-aside p {
-  margin: 0;
-  color: #a9bdd2;
-  font-size: 14px;
-  line-height: 1.45;
-}
-
-.tile-review-toggle {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.tile-review-toggle button {
-  min-height: 34px;
-  color: #9eb1c5;
-  background: rgba(10, 28, 43, 0.72);
-  border: 1px solid rgba(67, 127, 179, 0.28);
-  border-radius: 4px;
-  font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
-  cursor: pointer;
-}
-
-.tile-review-toggle button.is-active {
-  color: #f3f7fb;
-  background: rgba(29, 91, 139, 0.78);
-  border-color: rgba(104, 198, 255, 0.68);
-  box-shadow: 0 0 16px rgba(42, 166, 255, 0.2);
-}
-
-.tile-review-aside ul {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tile-review-aside li {
-  color: #d9e7f7;
-  padding: 8px 10px;
-  background: rgba(10, 28, 43, 0.72);
-  border: 1px solid rgba(67, 127, 179, 0.24);
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1.25;
 }
 
 .tile-template-guides {
@@ -7194,73 +6332,6 @@ h1 {
   height: auto;
   image-rendering: pixelated;
   filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.48));
-}
-
-.concept-board-reconstruction {
-  position: absolute;
-  inset: 0;
-  image-rendering: pixelated;
-}
-
-.concept-board-tile {
-  position: absolute;
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-canvas-height);
-  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
-}
-
-.concept-board-tile img {
-  display: block;
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-canvas-height);
-  image-rendering: pixelated;
-  pointer-events: none;
-}
-
-.concept-board-selection {
-  position: absolute;
-  z-index: 40;
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  pointer-events: none;
-}
-
-.concept-board-overlay {
-  position: absolute;
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  transform: translate(calc(-1 * var(--iso-tile-step-x)), calc(-1 * var(--iso-tile-step-y)));
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  pointer-events: none;
-}
-
-.concept-board-overlay.is-move {
-  background: rgba(24, 205, 232, 0.24);
-  border: 1px solid rgba(74, 226, 255, 0.82);
-  box-shadow: inset 0 0 18px rgba(55, 217, 255, 0.22), 0 0 12px rgba(36, 197, 255, 0.28);
-}
-
-.concept-board-overlay.is-danger {
-  background: rgba(255, 92, 31, 0.14);
-  border: 1px solid rgba(255, 112, 46, 0.88);
-  box-shadow: inset 0 0 16px rgba(255, 91, 24, 0.18), 0 0 10px rgba(255, 83, 19, 0.18);
-}
-
-.concept-board-selection.is-blue {
-  border: 2px solid #54d7ff;
-  box-shadow: 0 0 16px rgba(73, 216, 255, 0.72), inset 0 0 18px rgba(73, 216, 255, 0.22);
-}
-
-.concept-board-selection.is-cyan {
-  background: rgba(28, 206, 232, 0.22);
-  border: 1px solid rgba(80, 229, 255, 0.72);
-}
-
-.concept-board-selection.is-red {
-  border: 1px solid rgba(255, 112, 46, 0.86);
-  box-shadow: inset 0 0 16px rgba(255, 102, 35, 0.18);
 }
 
 .tileset-studio-page {
@@ -9610,21 +8681,6 @@ button.tileset-relationship-cell {
   cursor: grabbing;
 }
 
-.tileset-studio-board-window .concept-board-reconstruction {
-  left: -152px;
-  top: -8px;
-  transform: translate(var(--board-pan-x, 0), var(--board-pan-y, 0)) scale(calc(0.72 * var(--board-zoom, 1)));
-  transform-origin: top left;
-}
-
-.tileset-concept-board-zoom {
-  position: absolute;
-  inset: 0;
-  --board-zoom: 1;
-  --board-pan-x: 0px;
-  --board-pan-y: 0px;
-}
-
 .tileset-generated-board {
   position: absolute;
   inset: 0;
@@ -10239,24 +9295,6 @@ button.tileset-relationship-cell {
 }
 
 /* ---------------- Unit Studio ---------------- */
-.shell.unit-studio-active {
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-.shell.unit-studio-active > .panel,
-.shell.unit-studio-active + .bgm-control {
-  display: none;
-}
-
-.shell.unit-studio-active .app-root {
-  height: 100%;
-  min-height: 0;
-  padding: 0;
-}
 
 .unit-studio-page {
   display: grid;
@@ -10290,8 +9328,7 @@ button.tileset-relationship-cell {
 .unit-studio-main,
 .unit-studio-art-frame,
 .unit-studio-detail,
-.unit-studio-rook-comparison,
-.unit-studio-concept-reference {
+.unit-studio-rook-comparison {
   border: 1px solid rgba(67, 127, 179, 0.32);
   background: rgba(5, 16, 25, 0.92);
   box-shadow: inset 0 0 0 1px rgba(16, 58, 83, 0.34);
@@ -10889,27 +9926,6 @@ button.tileset-relationship-cell {
   color: #dcecff;
 }
 
-.unit-studio-concept-reference {
-  display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-  border-radius: 6px;
-  color: #b8c9dc;
-}
-
-.unit-studio-concept-reference img {
-  width: 84px;
-  height: 84px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
-.unit-studio-concept-reference p {
-  margin: 0;
-}
-
 /* ---------------- Asset-backed settings screen ---------------- */
 
 .shell.settings-art-active {
@@ -10919,13 +9935,7 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-.shell.settings-art-active .panel {
-  display: none;
-}
-
-.shell.settings-art-active .app-root,
-.shell.settings-art-active .game,
-.shell.settings-art-active .board-wrap {
+.shell.settings-art-active .app-root {
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -10933,19 +9943,6 @@ button.tileset-relationship-cell {
 
 .shell.settings-art-active .app-root {
   grid-row: 1;
-}
-
-.shell.settings-art-active .game {
-  gap: 0;
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.shell.settings-art-active .board-wrap {
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  perspective: none;
-  background: #02070b;
 }
 
 .settings-art-route {
@@ -11452,7 +10449,6 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-
 .settings-main-frame {
   display: grid;
   /* Row 1 (auto) is an optional pinned header — e.g. the tracks sub-view ← Back bar,
@@ -11566,7 +10562,6 @@ button.tileset-relationship-cell {
   min-height: 56px;
   padding: 18px 28px;
 }
-
 
 .settings-row-tall {
   min-height: 80px;
