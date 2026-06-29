@@ -140,16 +140,17 @@ image with the image_generation tool; do not write or move files."""
         time.sleep(2)
     if not imgs:
         sys.exit(f"NO_IMAGE in {tdir}")
-    # Codex may still be writing the PNG when it first appears — wait for the size to
-    # stop growing before keying, else remove_chroma_key reads a partial file and fails.
+    # Codex may still be writing the PNG when it first appears. A size plateau isn't
+    # enough (it can pause mid-write), so verify the file fully DECODES before keying —
+    # a truncated PNG raises, and remove_chroma_key would otherwise choke on it.
     raw = imgs[-1]
-    prev = -1
-    for _ in range(20):
-        sz = os.path.getsize(raw)
-        if sz > 0 and sz == prev:
+    for _ in range(40):
+        try:
+            with Image.open(raw) as _im:
+                _im.load()
             break
-        prev = sz
-        time.sleep(0.4)
+        except Exception:
+            time.sleep(0.4)
     keyed = work / f"{piece}-{style}-keyed.png"
     subprocess.run([sys.executable, rck, "--input", raw, "--out", str(keyed), "--auto-key", "border",
                     "--soft-matte", "--transparent-threshold", "12", "--opaque-threshold", "220", "--despill"], check=True)
