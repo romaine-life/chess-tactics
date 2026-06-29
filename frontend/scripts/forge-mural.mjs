@@ -33,6 +33,16 @@ const SPECS = {
     palette: 'cool stone greys (#3a4045, #4a5258, #5b636a), moss green #4a6b30, shadow brown in cracks, cream highlight #8a9298',
     vertical: 'branching fissures, damp vertical drip streaks, moss runners',
   },
+  sand: {
+    body: 'a sandstone cliff cross-section: horizontal wind-eroded shelves stacked vertically, each catching a thin warm highlight on its top lip with a soft shadow beneath, gentle overhangs, smooth low-contrast sandy grain getting a touch darker toward the bottom',
+    palette: 'pale gold #cdb074, tan #a8854f, warm shadow #6e5230; soft, warm, low-contrast',
+    vertical: 'gentle overhang lips, a little loose sand trickling, faint scour lines',
+  },
+  pebble: {
+    body: 'a riverstone cobble bank cross-section: tightly packed rounded pebbles of varied sizes getting smaller toward the bottom, each lit from upper-left with dark gaps between them, and a little moss and soil filling the lowest crevices',
+    palette: 'mixed cool and warm greys (#4a4f55, #6a6f76, #868c92) with two warm accent stones, deep dark gap shadows',
+    vertical: 'trickling gaps between cobbles, moss runners in the crevices',
+  },
 };
 
 function prompt(spec, prior) {

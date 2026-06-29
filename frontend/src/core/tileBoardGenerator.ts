@@ -16,6 +16,8 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
    * independently of the top. Unset ⇒ the side comes from `asset` itself (the normal cube).
    */
   sideAsset?: TAsset;
+  /** Phase 2: set when this cell's side is part of a multi-tile story feature (fossil, ruins). */
+  edgeFeatureId?: string;
   sockets: EdgeSockets;
   terrain: TileFamilyId;
   /** Ambient vegetation resolved at board build (see core/groundCover). Not per-render. */
@@ -241,6 +243,19 @@ function missingForSockets(sockets: EdgeSockets): SocketBoardCell['missing'] {
   return { kind: 'missing-art', label: `${pair.label} ${mask.toString(2).padStart(4, '0')}`, pairId: pair.id, mask, families };
 }
 
+/**
+ * A multi-tile STORY FEATURE (Phase 2): a set-piece (dino fossil, buried ruins) baked as one
+ * wide cliff image and sliced into ordered side `pieces` (head→tail). The solver lays it along
+ * a straight board edge and substitutes `cap` (a clean terminator) for the piece that would
+ * otherwise clip at the corner / board end. `families` restricts which terrains it suits.
+ */
+export interface EdgeFeatureSpec<TAsset extends TileSocketAsset = TileSocketAsset> {
+  id: string;
+  pieces: TAsset[];
+  cap: TAsset;
+  families?: TileFamilyId[];
+}
+
 export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   assets: readonly TAsset[];
   /** Painted terrain family per cell, row-major (length must be columns * rows). */
@@ -271,6 +286,11 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
    * family absent here falls back to `edgeAssets`. Index order == window order.
    */
   muralEdges?: Partial<Record<TileFamilyId, TAsset[]>>;
+  /**
+   * Optional multi-tile STORY FEATURES (Phase 2). Sparse set-pieces laid head→tail along the
+   * straight board edges, OVERRIDING the mural side, with a clean terminator when they'd clip.
+   */
+  edgeFeatures?: EdgeFeatureSpec<TAsset>[];
 }
 
 /**
@@ -290,6 +310,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   featureMap,
   edgeAssets,
   muralEdges,
+  edgeFeatures,
 }: SolveSocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
   const boardAssets = usableAssets.length > 0 ? usableAssets : assets.filter((asset) => asset.kind === 'tile');
@@ -378,6 +399,37 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
       }
       cell.sideAsset = pick;
       sideById.set(`${cell.x}-${cell.y}`, pick.id);
+    }
+  }
+
+  // Phase 2 — STORY FEATURES (ADR-0039). Sparse multi-tile set-pieces (fossil, ruins) laid
+  // head→tail along a STRAIGHT board edge, OVERRIDING the mural side. The corner is never
+  // crossed (a rigid skeleton can't bend it), and when a feature would run off the edge before
+  // it completes we swap its clipping piece for the `cap` terminator — never a sliced neck.
+  if (edgeFeatures && edgeFeatures.length > 0) {
+    const fRng = createRng(seed + 613);
+    const cellAt = new Map(cells.map((c) => [`${c.x}-${c.y}`, c] as const));
+    const at = (x: number, y: number) => cellAt.get(`${x}-${y}`);
+    const isEdgeCell = (c: SocketBoardCell<TAsset> | undefined): c is SocketBoardCell<TAsset> => !!c?.asset;
+    // Two straight runs in lay order. The bottom corner belongs to the right run, so the
+    // bottom run starts one cell in from it (no double-placement, no bending).
+    const rightRun = Array.from({ length: rows }, (_, y) => at(columns - 1, y)).filter(isEdgeCell);
+    const bottomRun = Array.from({ length: columns - 1 }, (_, k) => at(columns - 2 - k, rows - 1)).filter(isEdgeCell);
+    for (const run of [rightRun, bottomRun]) {
+      let p = 1 + Math.floor(fRng.next() * 3); // a gap before the first feature
+      while (p < run.length) {
+        const eligible = edgeFeatures.filter((f) => !f.families || f.families.includes(run[p].terrain));
+        const avail = run.length - p;
+        if (eligible.length === 0 || avail < 2) break; // need head + at least a cap
+        const feat = eligible[Math.floor(fRng.next() * eligible.length)];
+        const span = Math.min(feat.pieces.length, avail);
+        for (let i = 0; i < span; i += 1) {
+          const truncated = i === span - 1 && span < feat.pieces.length;
+          run[p + i].sideAsset = truncated ? feat.cap : feat.pieces[i];
+          run[p + i].edgeFeatureId = feat.id;
+        }
+        p += span + 2 + Math.floor(fRng.next() * 4); // feature + a gap before the next
+      }
     }
   }
 

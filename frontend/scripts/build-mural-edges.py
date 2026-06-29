@@ -85,8 +85,8 @@ def main():
         x0 = i * ww
         win = mural.crop((x0, 0, (x0 + ww) if i < N - 1 else W, H))
         idx = start + i
-        Image.fromarray(rich_side(win, side), 'RGBA').save(os.path.join(out_dir, f"{prefix}-mural-{idx}-side.png"))
-    print(f"wrote windows {start}..{start + N - 1} ({ww}px each) -> {out_dir}/{prefix}-mural-*-side.png")
+        Image.fromarray(rich_side(win, side), 'RGBA').save(os.path.join(out_dir, f"{prefix}-{idx}-side.png"))
+    print(f"wrote windows {start}..{start + N - 1} ({ww}px each) -> {out_dir}/{prefix}-*-side.png")
 
 
 if __name__ == '__main__':
