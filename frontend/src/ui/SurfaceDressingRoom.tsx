@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { SURFACE_ASSETS } from './surfaceCatalog';
+import { useWindowScaledPreview } from './useWindowScaledPreview';
 import panelCfg from '../../config/nine-slice/panel.json';
 import modeButtonCfg from '../../config/nine-slice/mode-button.json';
 
@@ -184,6 +185,10 @@ function buildCss(config: DressingConfig, geom: Map<RegionId, number[]>): string
 // viewers. Omitted when it runs as the standalone Dressing studio mode.
 export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // True-to-window miniature: /settings centres its body under a viewport-relative cap (the same
+  // .settings-shell as the menu), so a panel-sized iframe would re-proportion the rail/rows. Scaling
+  // the iframe ELEMENT doesn't disturb the in-iframe background-attachment:fixed surface continuity.
+  const { hostRef, frameStyle } = useWindowScaledPreview();
   const [config, setConfig] = useState<DressingConfig>(() => loadConfig(seed));
   const [copied, setCopied] = useState(false);
 
@@ -286,8 +291,8 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
 
   return (
     <>
-      <section className="surface-dressing-main" aria-label="Settings preview">
-        <iframe ref={iframeRef} className="surface-dressing-frame" src="/settings" title="Live settings preview" />
+      <section className="surface-dressing-main is-window-scaled" aria-label="Settings preview" ref={hostRef}>
+        <iframe ref={iframeRef} className="surface-dressing-frame" src="/settings" title="Live settings preview" style={frameStyle} />
       </section>
       <aside className="tileset-view-controls" aria-label="Surface placement controls">
         <section className="tileset-inspector-section">
