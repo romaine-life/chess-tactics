@@ -5907,7 +5907,6 @@ body { font-size: 17px; }
   padding: 2px;
 }
 
-.level-preview-board,
 .level-preview-empty {
   align-items: center;
   background:
@@ -5923,7 +5922,6 @@ body { font-size: 17px; }
   position: relative;
 }
 
-.level-preview-board.is-compact,
 .level-preview-empty.is-compact {
   min-height: 0;
 }
@@ -5952,56 +5950,6 @@ body { font-size: 17px; }
 .level-preview-empty {
   color: var(--ce-slate);
   font-size: var(--ds-text-md);
-  place-items: center;
-}
-
-.level-preview-board-surface {
-  height: 100%;
-  min-height: inherit;
-  pointer-events: none;
-  width: 100%;
-}
-
-.level-preview-board-surface .tileset-generated-board-tile {
-  cursor: default;
-}
-
-.level-preview-unit {
-  align-items: end;
-  display: grid;
-  height: 70px;
-  justify-items: center;
-  pointer-events: none;
-  position: absolute;
-  transform: translate(-50%, -76%);
-  width: 58px;
-}
-
-.level-preview-unit img {
-  display: block;
-  image-rendering: pixelated;
-  max-height: 64px;
-  max-width: 64px;
-}
-
-.level-preview-unit.is-compact {
-  height: 44px;
-  width: 38px;
-}
-
-.level-preview-unit.is-compact img {
-  max-height: 34px;
-  max-width: 34px;
-}
-
-.level-preview-unit span {
-  background: transparent;
-  border: 5px solid transparent;
-  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 5px stretch;
-  color: #f4ead6;
-  display: grid;
-  min-height: 20px;
-  min-width: 20px;
   place-items: center;
 }
 
