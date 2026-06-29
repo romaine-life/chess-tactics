@@ -24,8 +24,9 @@ pieces **must tessellate seam-perfect** across the isometric grid — a corner i
 one tile has to meet its neighbour's stub exactly on the shared diamond edge.
 
 That tessellation requirement is real and it pushed the first implementation into
-the wrong place: the 16 road sprites were **code-drawn** — flat hardcoded-RGB
-polygons filled in PIL (`scripts/build-road-tiles.py`). That was waved past
+the wrong place: the 16 road sprites were first **code-drawn** — flat hardcoded-RGB
+polygons filled in PIL (the script later renamed `scripts/build-feature-tiles.py`).
+That was waved past
 ADR-0011 by arguing 0011 is "chrome-scoped." It is — but the project's *standing
 bar* is properly generated/sourced art (ADR-0011 retired procedural/code redraw
 "with NO exceptions"; ADR-0032 generalized "every surface is generated/kit, no
@@ -78,10 +79,9 @@ does generated art?* Code may decide **where** art goes; generated art decides
 - Good: seam-perfect **and** on the art bar; one rule covers every future feature
   tileset; the gap that let a code-drawn road ship is closed and discoverable.
 - Cost: a feature tileset needs a real material-generation pass, not just a script
-  run. **The currently-shipped road art is code-drawn and therefore interim/
-  non-production** — `scripts/build-road-tiles.py` must be reworked to composite a
-  generated material into its (correct) computed masks before the road is
-  considered production. The connection geometry it computes is compliant and stays.
+  run. (Resolved: `scripts/build-feature-tiles.py` now composites a GENERATED surface
+  into the computed masks for both roads and rivers — the initial code-drawn road was
+  replaced, the connection geometry stayed.)
 
 ## Pros and Cons of the Options
 
@@ -114,4 +114,4 @@ does generated art?* Code may decide **where** art goes; generated art decides
   `frontend/scripts/build-surface-tiles.py`, `frontend/scripts/project-tile-surface.py`;
   geometry contract: [tile-ruleset.md](../tile-ruleset.md).
 - Feature implementation: `frontend/src/core/featureAutotile.ts`,
-  `frontend/scripts/build-road-tiles.py` (to be reworked per the Cost above).
+  `frontend/scripts/build-feature-tiles.py` (bakes roads + rivers).
