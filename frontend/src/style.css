@@ -10587,10 +10587,17 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-/* Locked height (sized for label + artist + title) + single-line clamps so the row
-   never jerks when it flips between "Nothing" and a playing track. */
+/* No box: the words float. This readout is pinned in the header and never moves, so
+   it needs no surface to sit on — drop the per-row LINE frame + stone fill that
+   .settings-row bakes in, and the padding that cleared the frame. The locked height
+   stays as an invisible reserve (sized for label + artist + title) so the soundtrack
+   list below never jerks when the title flips between "Nothing" and a playing track. */
 .settings-nowplaying-row {
+  background: none;
+  border: 0;
+  border-image: none;
   min-height: 96px;
+  padding: 0 0 0 6px;
 }
 
 .settings-nowplaying-row .settings-row-copy {
@@ -11079,6 +11086,15 @@ button.tileset-relationship-cell {
 /* Artwork cards — large landscape thumbnails, smooth (NOT pixelated, these are
    authored illustrations not 64px glyphs). Zoom scales the thumbnail height. */
 .tileset-studio-card.is-artwork .tileset-studio-card-image { min-height: calc(168px * var(--tile-zoom, 1)); }
+/* Portrait-candidate cards show the accepted HUD crop (square), not the full-body master. */
+.studio-portrait-crop {
+  position: relative;
+  height: calc(168px * var(--tile-zoom, 1));
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 4px;
+}
 .tileset-studio-card.is-artwork .tileset-studio-card-image img {
   box-sizing: border-box;
   height: 100%;

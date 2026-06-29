@@ -14,6 +14,10 @@ interface ArtworkManifest { generated: string; summary: { total: number; groups:
 
 const ART = manifest as ArtworkManifest;
 const PORTRAIT_GROUP = 'unit-portraits';
+
+// The manifest groups, surfaced for the catalog's Group filter (the studio builds a
+// CatalogFilters dropdown from these). Kept here so the manifest is the one owner.
+export const ARTWORK_GROUPS: { id: string; label: string; count: number }[] = ART.groups.map((g) => ({ id: g.id, label: g.label, count: g.items.length }));
 const dimOf = (it: ArtworkItem): string => (it.w && it.h ? `${it.w}×${it.h}` : '');
 
 // Stop a card-action icon's click from also triggering the card's select.
@@ -72,16 +76,20 @@ function Card({ item, selected, onSelect, onView, onEdit }: {
   );
 }
 
-export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView, onEditPortrait }: {
+export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView, onEditPortrait, groups }: {
   search: string;
   zoom: number;
   selected: string;
   onSelect: (id: string) => void;
   onView: (id: string) => void;
   onEditPortrait: (id: string) => void;
+  /** Selected group ids (from the catalog's Group filter); undefined ⇒ all groups. */
+  groups?: readonly string[];
 }): ReactElement {
   const q = search.trim().toLowerCase();
+  const groupSet = groups ? new Set(groups) : null;
   const sections = ART.groups
+    .filter((g) => !groupSet || groupSet.has(g.id))
     .map((g) => ({
       ...g,
       items: g.items.filter((it) => !q || it.label.toLowerCase().includes(q) || g.label.toLowerCase().includes(q) || it.sub.toLowerCase().includes(q)),
@@ -109,7 +117,7 @@ export function ArtworkLibraryStudio({ search, zoom, selected, onSelect, onView,
               </div>
             </section>
           ))}
-          {!sections.length ? <p className="tileset-catalog-note">No artwork matches this search.</p> : null}
+          {!sections.length ? <p className="tileset-catalog-note">No artwork matches the current search and filters.</p> : null}
         </div>
       </section>
     </section>

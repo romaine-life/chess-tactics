@@ -35,6 +35,8 @@ export interface CatalogType<A extends { id: string }> {
   query?: { value: string; set: (value: string) => void; match: (asset: A, normalized: string) => boolean; placeholder?: string };
   /** Present ⇒ a Zoom slider; cssVar is set on each card image. */
   zoom?: { value: number; set: (value: number) => void; min: number; max: number; step: number; cssVar: string };
+  /** Custom card media (e.g. a live-cropped portrait); when present it replaces the default <img>. */
+  cardMedia?: (asset: A) => ReactNode;
   /** Present ⇒ active-filter chips + a Filters dropdown. */
   filters?: CatalogFilterDim<A>[];
   /** Select a card (highlight) without leaving the catalog. */
@@ -92,7 +94,7 @@ function CatalogCard<A extends { id: string }>({ type, asset }: { type: CatalogT
       aria-pressed={selected}
     >
       <span className={`tileset-studio-card-image ${model.isUnit ? 'unit-card-image' : ''}`.trim()} style={zoomStyle}>
-        <img src={model.img} alt="" draggable={false} loading="eager" decoding="sync" />
+        {type.cardMedia ? type.cardMedia(asset) : <img src={model.img} alt="" draggable={false} loading="eager" decoding="sync" />}
       </span>
       <span className="tileset-studio-card-meta">
         <span className="tileset-studio-card-text">
@@ -170,6 +172,11 @@ export function CatalogGrid<A extends { id: string }>({ type }: { type: CatalogT
 export function CatalogFilters<A extends { id: string }>({ filters }: { filters: readonly CatalogFilterDim<A>[] }): ReactElement | null {
   const [filterOpen, setFilterOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  // Popover sizing: cap the menu to the real space below the trigger and flip it
+  // upward when that space is short, so a long filter list can never run off the
+  // bottom of the viewport (the old fixed `calc(100vh - 170px)` cap ignored how far
+  // down the trigger sat). Recomputed on open and on resize.
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   useEffect(() => {
     if (!filterOpen) return;
     const onPointer = (event: PointerEvent) => {
@@ -181,6 +188,23 @@ export function CatalogFilters<A extends { id: string }>({ filters }: { filters:
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
   }, [filterOpen]);
+  useLayoutEffect(() => {
+    if (!filterOpen) return;
+    const place = () => {
+      const trigger = dropdownRef.current?.getBoundingClientRect();
+      if (!trigger) return;
+      const margin = 12;
+      const gap = 8;
+      const below = window.innerHeight - trigger.bottom - margin;
+      const above = trigger.top - margin;
+      const flipUp = below < 240 && above > below;
+      const maxHeight = Math.max(120, Math.min(420, Math.floor((flipUp ? above : below) - gap)));
+      setMenuStyle(flipUp ? { top: 'auto', bottom: 'calc(100% + 8px)', maxHeight } : { maxHeight });
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [filterOpen]);
   if (filters.length === 0) return null;
   return (
     <>
@@ -189,7 +213,7 @@ export function CatalogFilters<A extends { id: string }>({ filters }: { filters:
           Filters
         </button>
         {filterOpen ? (
-          <div className="tileset-filter-menu" role="dialog" aria-label="Filters">
+          <div className="tileset-filter-menu" role="dialog" aria-label="Filters" style={menuStyle}>
             <div className="tileset-filter-menu-header">
               <strong>Filters</strong>
               <span>
