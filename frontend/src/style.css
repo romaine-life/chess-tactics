@@ -3508,6 +3508,15 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
+/* Editor bars (level + campaign editor) carry a 4th, trailing column for the always-on
+   account/settings cluster (ADR-0042): brand · live save-state · editor actions ·
+   cluster. Two classes out-rank the base .settings-header-frame grid (same trick the
+   skirmish override uses), so the cluster gets its own track instead of overflowing. */
+.app-shell-titlebar.le-topbar,
+.app-shell-titlebar.ce-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
 .skirmish-topbar-status {
   align-items: center;
   display: flex;
@@ -5018,13 +5027,15 @@ body { font-size: 17px; }
 .ce-screen.app-shell-bar-pad > .ce-footer { grid-row: 3; }
 
 .ce-topbar {
-  /* Frame + height come from .app-titlebar (ADR-0004); this is the shared
-     three-section content layout — brand / stats / controls — centered (ADR-0016). */
+  /* Frame + height come from .app-titlebar (ADR-0004); this is the shared content
+     layout — brand / stats / actions / account-cluster — centered (ADR-0016). The
+     4th column (the always-on cluster) is enforced at higher specificity below; this
+     value matches so the rule reads true even where base bar grid would shadow it. */
   align-content: center;
   align-items: center;
   display: grid;
   gap: clamp(10px, 1.4vw, 20px);
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
