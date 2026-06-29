@@ -5,6 +5,7 @@ import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -95,6 +96,7 @@ function isTracksView(pathname: string): boolean {
 const creatorTools: CreatorTool[] = [
   { label: 'Studio', href: '/tileset-studio', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
   { label: 'Artwork Compare', href: '/artwork-compare', description: 'Two-panel view — the accepted concept art beside the live screen, for matching the art direction.' },
+  { label: 'Terrain SFX Lab', href: '/sfx-lab', description: 'Audition the procedural terrain footstep / landing sound effects — one button per material, plus play-all, for tuning the kit.' },
   { label: 'Broadcast Monitor', href: 'https://ambience.romaine.life/?world=chess', description: 'Inspect the live menu-rain broadcast on ambience — the current scene, what is queued up next, and the event log. Opens in a new tab.', external: true },
 ];
 
@@ -355,6 +357,10 @@ export function Settings(): ReactElement {
   useEffect(() => {
     saveLocalSettings(settings);
     applyUiScale(settings.uiScale);
+    // Let the running SFX service pick up master-audio / effects-volume changes live
+    // (it re-reads localStorage on this event), so the Effects slider takes effect
+    // without a reload — the SFX analogue of the BGM mute-change event.
+    window.dispatchEvent(new CustomEvent(SFX_SETTINGS_CHANGE_EVENT));
   }, [settings]);
 
   // Load the soundtrack list whenever the dedicated tracks view is opened. A fresh
@@ -551,6 +557,7 @@ export function Settings(): ReactElement {
             label="Effects Volume"
             onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
           />
+          <SettingsButton onClick={() => previewTerrain('stone')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
         </SettingsRow>
         <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
           <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
