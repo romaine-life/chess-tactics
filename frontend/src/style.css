@@ -3587,6 +3587,12 @@ h1 {
 .skirmish-turn-plate {
   /* Frame/height come from .skirmish-status-chip; this is inner layout only. */
   display: grid;
+  /* Reset the chip's inline gap (var(--ds-inline) ≈ 12px): on this column grid it
+     becomes a ROW gap that shoves the second line ("Live Board") out the bottom
+     frame. The two lines must sit tight inside the 30px content box (46px − 2×8px
+     frame). align-content centers the compact stack within the fixed-height chip. */
+  align-content: center;
+  gap: 0;
   justify-items: center;
   min-width: 0;
   text-align: center;
