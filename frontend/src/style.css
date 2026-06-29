@@ -7624,6 +7624,21 @@ body { font-size: 17px; }
   background: #05080c;
 }
 
+/* Main Menu viewer: the iframe is a true-to-window miniature. It carries the live window's
+   pixel size (set inline from the measured fit) so the menu's vw-based, centred layout
+   resolves exactly as it ships, then scales down to fit the panel. Absolute + centred (the
+   inline transform is translate(-50%,-50%) scale(s)) so its full-size layout box never
+   stretches the grid track; the panel's overflow:hidden clips the scaled-down result. */
+.surface-dressing-main.is-window-scaled {
+  position: relative;
+}
+.surface-dressing-main.is-window-scaled > .surface-dressing-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+}
+
 .surface-region-card {
   display: grid;
   gap: 8px;

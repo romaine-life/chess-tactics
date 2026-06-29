@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { SURFACE_ASSETS } from './surfaceCatalog';
@@ -94,9 +94,20 @@ const MM_LIVE = { btnH: 56, railW: 304, gap: 11, icon: 64, textX: 18 } as const;
 // !important guards to beat the shipped chrome. "Copy menu CSS" still exports the bake-form rules.
 function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const hostRef = useRef<HTMLElement | null>(null);
+  // The preview iframe is a true-to-window MINIATURE. The menu body is centred under a
+  // viewport-relative cap (.settings-shell: max-inline-size: clamp(900px, 88vw, 1240px);
+  // justify-self: center), and `vw` inside an iframe resolves against the IFRAME's own
+  // viewport — so a panel-sized iframe would centre the rail at a different indent than the
+  // full-window menu actually ships at. Fix: give the iframe the LIVE window's pixel size
+  // (its vw basis then matches the real page) and scale it down to fit the panel. `fit` holds
+  // that window size + the contain-scale; remeasured whenever the panel or window resizes.
+  const [fit, setFit] = useState<{ w: number; h: number; scale: number }>({ w: 0, h: 0, scale: 1 });
   const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // tab min-height
   const [railW, setRailW] = useState<number>(MM_LIVE.railW); // rail (button) width
   const [tabGap, setTabGap] = useState<number>(MM_LIVE.gap); // space between tabs
+  const [btnX, setBtnX] = useState(0); // move the whole button group left/right (px; 0 = shipped)
+  const [btnY, setBtnY] = useState(0); // ...and up/down
   const [textX, setTextX] = useState<number>(MM_LIVE.textX); // horizontal nudge of the label (px)
   const [iconSize, setIconSize] = useState<number>(MM_LIVE.icon); // live 34px in a 40px slot
   const [iconX, setIconX] = useState(0); // horizontal nudge of the icon (px; 0 = centred in slot)
@@ -110,6 +121,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     setBtnH(MM_LIVE.btnH);
     setRailW(MM_LIVE.railW);
     setTabGap(MM_LIVE.gap);
+    setBtnX(0);
+    setBtnY(0);
     setTextX(MM_LIVE.textX);
     setIconSize(MM_LIVE.icon);
     setIconX(0);
@@ -151,6 +164,12 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   add(tabGap !== MM_LIVE.gap,
     `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
     `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
+  // Move the WHOLE button group: transform the rail frame (not the tabs) so it nudges without
+  // reflow and is clipped by the roomy .settings-shell, not the tight rail box. X = left/right,
+  // Y = up/down. Composes with the hover-slide (which transforms the tabs, a different element).
+  add(btnX !== 0 || btnY !== 0,
+    `.pages-menu-tweak .settings-rail-frame { transform: translate(${btnX}px, ${btnY}px) !important; }`,
+    `.main-menu-twin-screen .settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
   // Horizontal nudge of the label span (the second grid cell; transform doesn't reflow the layout).
   add(textX !== MM_LIVE.textX,
     `.pages-menu-tweak .main-menu-mode-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
@@ -220,6 +239,31 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     };
   }, [inject]);
 
+  // Fit the full-window menu into the panel: size the iframe to the live window (so its vw
+  // basis matches the shipped page) and contain-scale it. useLayoutEffect so the size lands
+  // before paint; ResizeObserver tracks the panel, the resize listener tracks the window
+  // (the vw basis itself), so the miniature stays true at any panel/window size.
+  useLayoutEffect(() => {
+    const measure = (): void => {
+      const host = hostRef.current;
+      if (!host) return;
+      const rect = host.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      if (!rect.width || !rect.height || !vw || !vh) return;
+      setFit({ w: vw, h: vh, scale: Math.min(rect.width / vw, rect.height / vh) });
+    };
+    measure();
+    const host = hostRef.current;
+    const ro = typeof ResizeObserver !== 'undefined' && host ? new ResizeObserver(measure) : null;
+    if (host && ro) ro.observe(host);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
   const copyMenuCss = async (): Promise<void> => {
     if (!bakeCss) return;
     try {
@@ -239,9 +283,17 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     <>
       {/* Iframe the REAL "/" route so the preview carries the full app shell — the shared title bar
           included — exactly as it ships; the tweak controls inject into it (see inject() above).
-          .surface-dressing-main is a stretch-grid that gives the full-page iframe a definite height. */}
-      <section className="surface-dressing-main" aria-label="Main Menu preview">
-        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live main menu preview" />
+          The iframe is sized to the LIVE window and scaled to fit (see the fit measure above), so
+          the menu's vw-based, centred layout reads at true proportions — the rail indent matches
+          what ships, not a panel-sized re-centre. is-window-scaled abs-centres it in the panel. */}
+      <section className="surface-dressing-main is-window-scaled" aria-label="Main Menu preview" ref={hostRef}>
+        <iframe
+          ref={iframeRef}
+          className="surface-dressing-frame"
+          src={page.route}
+          title="Live main menu preview"
+          style={{ width: `${fit.w}px`, height: `${fit.h}px`, transform: `translate(-50%, -50%) scale(${fit.scale})` }}
+        />
       </section>
       <aside className="tileset-view-controls" aria-label="Main Menu controls">
         <section className="tileset-inspector-section">
@@ -268,6 +320,20 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
               <div className="pages-ctl-row">
                 <input type="range" min="4" max="28" step="1" value={tabGap} onChange={(e) => setTabGap(Number(e.target.value))} />
                 {ctlReset(() => setTabGap(MM_LIVE.gap))}
+              </div>
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === 0 ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="-200" max="400" step="2" value={btnX} onChange={(e) => setBtnX(Number(e.target.value))} />
+                {ctlReset(() => setBtnX(0))}
+              </div>
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === 0 ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="-200" max="500" step="2" value={btnY} onChange={(e) => setBtnY(Number(e.target.value))} />
+                {ctlReset(() => setBtnY(0))}
               </div>
             </label>
             <label className="tileset-catalog-zoom">
