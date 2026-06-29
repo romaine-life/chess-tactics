@@ -9,6 +9,8 @@
 
 import type { TileFamilyId } from './tileSockets';
 import grassManifest from '../art/groundcover/grass.generated';
+import waterManifest from '../art/groundcover/water.generated';
+import sandManifest from '../art/groundcover/sand.generated';
 
 export type GroundCoverDensity = 'sparse' | 'filled';
 
@@ -40,12 +42,19 @@ export interface CoverSet {
   frameCount: number;
   basePath: string;
   variants: CoverVariantMeta[];
+  /** Only place on a tile that borders a DIFFERENT terrain (e.g. reeds at the water's edge). */
+  edgeOnly?: boolean;
+  /** Instances per tile by density. Defaults to grass's {sparse:3, filled:7}; pebble/reed
+   *  CLUSTERS each already hold several rocks/stalks, so they need far fewer than grass blades. */
+  count?: Record<GroundCoverDensity, number>;
 }
 
 // Registry keyed by terrain family. Grass is the first set; add stone/water/etc.
 // by committing sources + re-running the bake and registering the manifest here.
 const SETS: Partial<Record<TileFamilyId, CoverSet>> = {
   grass: { ...grassManifest, basePath: '/assets/groundcover/grass' } as unknown as CoverSet,
+  water: { ...waterManifest, basePath: '/assets/groundcover/water', edgeOnly: true, count: { sparse: 2, filled: 3 } } as unknown as CoverSet,
+  sand: { ...sandManifest, basePath: '/assets/groundcover/sand', count: { sparse: 2, filled: 4 } } as unknown as CoverSet,
 };
 
 export function groundCoverSet(terrain: TileFamilyId): CoverSet | undefined {
@@ -85,7 +94,7 @@ export function rollGroundCover(
   const set = SETS[terrain];
   if (!set || set.variants.length === 0) return [];
   const rnd = mulberry((Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(seed, 83492791)) >>> 0);
-  const target = COUNT[density];
+  const target = (set.count ?? COUNT)[density];
   const minD = MIN_DIST[density];
   const tufts: TuftInstance[] = [];
   for (let tries = 0; tufts.length < target && tries < target * 14; tries += 1) {
@@ -150,8 +159,17 @@ export function resolveGroundCover<T extends CoverCell>(
   seed: number,
   densityFor: (cell: T) => GroundCoverDensity | null,
 ): void {
+  const terrainAt = new Map(cells.map((c) => [`${c.x},${c.y}`, c.terrain]));
+  const bordersOther = (c: T): boolean =>
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
+      const n = terrainAt.get(`${c.x + dx},${c.y + dy}`);
+      return n !== undefined && n !== c.terrain;
+    });
   for (const cell of cells) {
-    if (!SETS[cell.terrain]) continue;
+    const set = SETS[cell.terrain];
+    if (!set) continue;
+    // Edge-only cover (reeds) sits at the shoreline, not in open water.
+    if (set.edgeOnly && !bordersOther(cell)) { cell.groundCover = undefined; continue; }
     const density = densityFor(cell);
     if (!density) { cell.groundCover = undefined; continue; }
     cell.groundCover = { density, tufts: rollGroundCover(cell.terrain, cell.x, cell.y, seed, density) };
