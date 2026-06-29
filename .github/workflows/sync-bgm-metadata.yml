@@ -1,0 +1,58 @@
+name: Sync BGM metadata
+
+# Mirror each BGM track's ID3 tag onto its blob as metadata (title/artist/album)
+# so the backend's live container listing (GET /api/bgm) shows clean titles.
+#
+# The container is the single source of truth: add or remove tracks in it directly
+# (Azure portal / Storage Explorer). Run this manually after a batch of uploads to
+# seed titles from the mp3 tags. It is non-clobbering — titles you hand-edit in the
+# portal are preserved (use the `force` input to overwrite). Nothing in the serving
+# path depends on this workflow; it is convenience only.
+#
+# Account + container are derived from k8s/values.yaml (bgm.baseUrl) so this and the
+# backend never drift. tools/bgm/sync-metadata.mjs does the work, authenticating
+# with the same CI service principal (Storage Blob Data Contributor, tofu).
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Overwrite titles even where blob metadata is already set'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install tool deps
+        run: npm --prefix tools/bgm install --no-audit --no-fund
+
+      - name: Derive container base from values.yaml
+        id: target
+        run: |
+          BASE=$(sed -nE 's/^[[:space:]]*baseUrl:[[:space:]]*"?([^"[:space:]]+)"?.*$/\1/p' k8s/values.yaml | head -1)
+          BASE=${BASE%/}
+          if [ -z "$BASE" ]; then echo "could not read bgm.baseUrl from k8s/values.yaml" >&2; exit 1; fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Sync metadata from ID3 tags
+        run: node tools/bgm/sync-metadata.mjs --base "${{ steps.target.outputs.base }}" ${{ inputs.force && '--force' || '' }}

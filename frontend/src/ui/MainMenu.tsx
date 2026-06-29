@@ -1,5 +1,6 @@
-import { useEffect, useSyncExternalStore, type ReactElement } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
+import { useScreenEntrance } from './shell/useScreenEntrance';
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -71,11 +72,30 @@ export function MainMenu(): ReactElement {
   // layers off the director's stage; the director owns the ordering and the background
   // probe. On any non-cold load the store is already fully revealed, so this is inert.
   const reveal = useSyncExternalStore(subscribe, getSnapshot);
+  // Shared screen-entrance fade (ADR-0046): fades the chrome in when you navigate TO the menu
+  // (e.g. back from settings), leaving the ambience rain continuous. No-ops on the cold load,
+  // where the reveal director above owns the first paint.
+  const entranceClass = useScreenEntrance();
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
+  }, []);
+
+  // Soft-nav arrival fade: on a later navigation INTO the menu (e.g. campaign editor ->
+  // menu) the reveal store is already fully revealed, so the buttons would otherwise snap
+  // in. Withhold data-reveal-buttons for one frame after mount (then flip `entered`) so the
+  // existing .main-menu-twin-screen opacity transition runs as an arrival fade — matching
+  // the editor's entrance so the hop dissolves the chrome both ways over the steady
+  // backdrop. On a COLD load this is harmless: the director hasn't opened `buttons` yet, so
+  // the gate already holds them hidden and `entered` flips long before that stage opens. The
+  // timeout backstops a throttled rAF (backgrounded tab) so the menu can never strand blank.
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    const t = window.setTimeout(() => setEntered(true), 120);
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
   }, []);
 
   useEffect(() => {
@@ -102,13 +122,13 @@ export function MainMenu(): ReactElement {
       className="menu-layer main-menu-layer"
       data-testid="main-menu-next"
       data-reveal-bg={reveal.has('bg') ? '' : undefined}
-      data-reveal-buttons={reveal.has('buttons') ? '' : undefined}
+      data-reveal-buttons={reveal.has('buttons') && entered ? '' : undefined}
     >
       <AmbienceBackground />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
-        <div className="settings-shell">
+        <div className={`settings-shell ${entranceClass}`.trim()}>
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
           </aside>

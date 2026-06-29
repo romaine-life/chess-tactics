@@ -30,13 +30,13 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
   sand: 'sand',
 };
 
-// The terrain materials the editor's tile brushes can actually express (the 6 families above).
-// Terrain TYPES outside this set — road, bridge, cliff, rock — have no paintable tile family, so
-// a board derived from `layers` renders them as a grass placeholder. On save we must NOT coerce
-// those cells to grass (that flattens road/bridge/rock terrain for every player, an INV7
-// round-trip / data-loss regression on legacy officials that have no boardCode); instead we
-// preserve the original cell's terrain wherever the editor only ever had a grass placeholder.
-const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>(Object.values(FAMILY_TO_TERRAIN));
+// Terrain the editor can REPRESENT (and thus round-trip), so the save-time guard need not
+// preserve it from the pre-save level: the six tile families above, PLUS `road` — which the
+// editor expresses through its feature-overlay layer (not a tile brush), mapped both ways in
+// the converters below. Terrain with neither a tile family nor a feature — bridge, cliff, rock —
+// stays outside this set: it renders as a grass placeholder and is preserved on save rather than
+// flattened (an INV7 data-loss on legacy officials that predate boardCode).
+const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road']);
 
 // Side ↔ faction (team palette). The editor paints a faction; the level stores a side.
 const SIDE_TO_FACTION: Record<'player' | 'enemy', Faction> = { player: 'navy-blue', enemy: 'crimson' };
@@ -106,12 +106,16 @@ export function levelToEditorBoard(level: Level): EditorBoard {
 
   const cells: EditorBoard['cells'] = {};
   const cover: EditorBoard['cover'] = {};
+  const features: EditorBoard['features'] = {};
   const fallbackTile = defaultTileOfFamily('grass');
   for (const cell of level.layers.terrain) {
     if (cell.x < 0 || cell.x >= cols || cell.y < 0 || cell.y >= rows) continue;
     const key = `${cell.x},${cell.y}`;
     cells[key] = tileIdForTerrain(cell.terrain) ?? fallbackTile ?? '';
     if (cell.cover) cover[key] = cell.cover.density;
+    // `road` is a game TerrainType but, in the editor, a feature overlay sitting on a (grass)
+    // tile — surface it as a road feature so a legacy official's roads don't vanish into grass.
+    if (cell.terrain === 'road') features[key] = { kind: 'road', material: 'cobble' };
   }
   // Fill any unauthored cell with grass so the whole board is paintable.
   if (fallbackTile) for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) {
@@ -139,7 +143,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     props[`${p.x},${p.y}`] = { propId: p.propId };
   }
 
-  return { cols, rows, cells, units, doodads: {}, props, cover, features: {}, featureCuts: {} };
+  return { cols, rows, cells, units, doodads: {}, props, cover, features, featureCuts: {}, featureExits: {} };
 }
 
 // Serialize the painted board into a valid `Level`. `boardCode` is stamped for a lossless
@@ -166,12 +170,17 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
       const family = tileId ? familyOfTile(tileId) : undefined;
       // Decorative / unknown families fall back to grass (a playable material).
       let cellTerrain: TerrainType = family ? FAMILY_TO_TERRAIN[family] ?? 'grass' : 'grass';
-      // Preserve non-editor-expressible terrain. The painted family can only ever produce one of
-      // the six expressible materials; a road/bridge/cliff/rock cell from a legacy level is shown
-      // as a grass placeholder, so if the derived material is grass but the original was a type
-      // the editor can't paint, keep the original. Painting a real stone/water/dirt/pebble/sand
-      // tile yields a non-grass derived material and correctly overrides (admin intent wins).
-      if (cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) cellTerrain = prev.terrain;
+      // A road feature overlay IS the cell's terrain in the game's schema — project it back to
+      // `road` so roads painted (or loaded) in the editor reach layers.terrain, which the game
+      // reads. Erasing the overlay leaves no road feature, so the cell reverts to its tile
+      // (grass) — i.e. an admin can actually remove a road.
+      if (board.features[key]?.kind === 'road') {
+        cellTerrain = 'road';
+      } else if (cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) {
+        // Preserve terrain the editor can neither paint nor feature-map (bridge/cliff/rock) so a
+        // republished legacy official keeps those surfaces instead of flattening them to grass.
+        cellTerrain = prev.terrain;
+      }
       // The editor has no elevation tool, so it can never change height — carry the prior cell's
       // elevation through unchanged rather than flattening every cell to 0 for all players.
       const elevation = prev?.elevation ?? 0;

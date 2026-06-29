@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { encodeBoard, decodeBoard, type EditorBoard } from './boardCode';
 
 const base = (over: Partial<EditorBoard> = {}): EditorBoard => ({
-  cols: 6, rows: 6, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, ...over,
+  cols: 6, rows: 6, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, ...over,
 });
 
 describe('boardCode — props wire key (p)', () => {

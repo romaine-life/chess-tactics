@@ -5,8 +5,8 @@ import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenera
 import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
 
-// Re-export the projection so existing importers (SkirmishBoard, LevelPreviewBoard,
-// TilePreview) keep working; the math itself now lives in one place: boardProjection.
+// Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
+// thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
 export { boardLabCellPosition, boardLabMetrics } from './boardProjection';
 
 export interface BoardLabBoardOverlayContext<TAsset extends TileSocketAsset> {

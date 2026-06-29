@@ -46,9 +46,10 @@ spec:
               value: {{ .Values.adminEmails | quote }}
             {{- end }}
             {{- if .Values.bgm.baseUrl }}
-            # Public blob base for the BGM playlist. The backend reads
-            # <baseUrl>/index.json server-side and serves /api/bgm; no Azure
-            # credentials. Empty value disables BGM.
+            # Public blob base for BGM track streaming. The backend also LISTS this
+            # container (each blob's metadata -> title/artist/album) to build
+            # /api/bgm, authenticating with the pod's workload identity (Storage
+            # Blob Data Reader, tofu). Empty value disables BGM.
             - name: BGM_BASE_URL
               value: {{ .Values.bgm.baseUrl | quote }}
             {{- end }}

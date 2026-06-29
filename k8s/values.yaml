@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-3c8b7a521aa38250bf449445f1527fbdf74a7bc60ea6fc92eedf618cddaeac07"
+  tag: "app-fe79275bf057fca25b16a8d8d4c410eb44ca01c358118931cb48d0def3943534"
   pullPolicy: IfNotPresent
 
 name: chess-tactics
@@ -75,7 +75,8 @@ livePreview:
 # azure.workload.identity/client-id annotation (serviceAccountClientId below) so
 # the backend can authenticate to Azure Database for PostgreSQL passwordless via
 # a federated token. Test slots use an ephemeral in-cluster Postgres and do not
-# federate. (The BGM index/tracks are still public-read over plain HTTPS.)
+# federate. (BGM tracks stay public-read; the playlist listing reuses this same
+# workload identity — Storage Blob Data Reader on the media account.)
 serviceAccount: chess-tactics
 
 # Workload-identity client id of the chess-tactics-identity UAMI (tofu output
@@ -107,9 +108,9 @@ postgres:
     database: chess_tactics
 
 # Background music: public blob container base URL provisioned by tofu/
-# (storage account `chesstacticsmedia`, container `bgm`). The backend reads
-# <baseUrl>/index.json and serves the playlist at /api/bgm; tracks stream from
-# <baseUrl>/<file>. Empty disables BGM (e.g. before the container is populated).
+# (storage account `chesstacticsmedia`, container `bgm`). The backend LISTS this
+# container (each blob's metadata -> title/artist/album) to serve /api/bgm; tracks
+# stream from <baseUrl>/<file>. Empty disables BGM (e.g. before it is populated).
 bgm:
   baseUrl: "https://chesstacticsmedia.blob.core.windows.net/bgm"
 

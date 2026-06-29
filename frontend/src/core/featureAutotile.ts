@@ -88,8 +88,10 @@ export const featureKey = (x: number, y: number): string => `${x},${y}`;
 
 /**
  * Canonical key for the EDGE between two adjacent cells (order-independent), used to
- * record a manually SEVERED connection. A cut is a property of the shared edge, so
- * severing from either tile cuts it for both — `roadEdgeKey(a,b) === roadEdgeKey(b,a)`.
+ * record a manually SEVERED connection (a cut) or a forced outward stub (an exit). Both
+ * are properties of the shared edge, so toggling from either tile applies to both —
+ * `roadEdgeKey(a,b) === roadEdgeKey(b,a)`. An exit's "neighbour" may be off-board (a
+ * negative or out-of-range coord); the string key handles that fine.
  */
 export const roadEdgeKey = (ax: number, ay: number, bx: number, by: number): string => {
   const a = featureKey(ax, ay);
@@ -102,20 +104,31 @@ export const roadEdgeKey = (ax: number, ay: number, bx: number, by: number): str
  * A neighbour contributes its bit only if it carries the feature AND the shared edge
  * isn't severed — so `isSevered` lets an author cut a connection that would otherwise
  * auto-join. Omit `isSevered` for pure auto-connect.
+ *
+ * `isExit` is the mirror image: it FORCES a bit on an edge that has NO same-kind
+ * neighbour (a board boundary, or an adjacent non-feature tile), so the ribbon runs to
+ * the diamond's edge — "off the board" — instead of capping. Severing always wins over
+ * an exit: an edge with a present-but-cut neighbour stays cut (exit is never consulted
+ * there). Like a cut, an exit is keyed by `roadEdgeKey` on the shared (off-board) edge.
  */
 export function featureMaskAt(
   present: ReadonlySet<string>,
   x: number,
   y: number,
   isSevered?: (edgeKey: string) => boolean,
+  isExit?: (edgeKey: string) => boolean,
 ): number {
   let mask = 0;
   for (const dir of FEATURE_DIRS) {
     const nx = x + dir.dx;
     const ny = y + dir.dy;
-    if (!present.has(featureKey(nx, ny))) continue;
-    if (isSevered?.(roadEdgeKey(x, y, nx, ny))) continue;
-    mask |= dir.bit;
+    const edgeKey = roadEdgeKey(x, y, nx, ny);
+    if (present.has(featureKey(nx, ny))) {
+      if (isSevered?.(edgeKey)) continue; // a real neighbour, but the author cut the join
+      mask |= dir.bit;
+    } else if (isExit?.(edgeKey)) {
+      mask |= dir.bit; // no neighbour, but the author forced an outward stub off this edge
+    }
   }
   return mask;
 }
@@ -124,11 +137,12 @@ export function featureMaskAt(
 export function featureMaskMap(
   present: ReadonlySet<string>,
   isSevered?: (edgeKey: string) => boolean,
+  isExit?: (edgeKey: string) => boolean,
 ): Map<string, number> {
   const masks = new Map<string, number>();
   for (const key of present) {
     const [x, y] = key.split(',').map(Number);
-    masks.set(key, featureMaskAt(present, x, y, isSevered));
+    masks.set(key, featureMaskAt(present, x, y, isSevered, isExit));
   }
   return masks;
 }

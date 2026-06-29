@@ -5,7 +5,7 @@ import { decodeBoard } from '../ui/boardCode';
 import { createBlankLevel } from './level';
 
 const board = (over: Partial<EditorBoard> = {}): EditorBoard => ({
-  cols: 6, rows: 6, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, ...over,
+  cols: 6, rows: 6, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, ...over,
 });
 
 describe('levelBoard — props dual-write + round-trip', () => {

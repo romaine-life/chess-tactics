@@ -1,97 +1,121 @@
 # Background music (BGM)
 
 The game plays a continuously **shuffled** soundtrack. This doc covers the
-architecture and the one-time provisioning to make it live in production.
+architecture and how to change the soundtrack.
 
 ## Architecture
 
-The **blob container is the single source of truth.** Audio and the playlist
-both live there; nothing music-related is committed to git or the frontend. The
-frontend talks only to the backend's own contract, never to Azure directly —
-the same way it consumes `/api/lobbies`, `/api/campaigns`, etc. (*borrow
-primitives, not boundaries*).
+The **blob container is the single source of truth.** The soundtrack *is* whatever
+mp3s are in the container — add or remove a track there and the game follows it,
+with no manifest to regenerate and no redeploy. The frontend talks only to the
+backend's own contract, never to Azure directly (*borrow primitives, not
+boundaries*).
 
 ```
-browser ── GET /api/bgm ──▶ chess-tactics backend ── GET <bgm>/index.json ──▶ Azure Blob (public)
-   └────────── <audio> streams tracks directly from <bgm>/<file> (no-cors) ──────────┘
+browser ── GET /api/bgm ──▶ chess-tactics backend ── List Blobs (+metadata) ──▶ Azure Blob (bgm container)
+   └────────── <audio> streams tracks directly from <bgm>/<file> (no-cors, public-read) ──────────┘
 ```
 
-- **Backend** (`GET /api/bgm`, `backend/server.js`) reads `index.json` from the
-  blob container over plain HTTPS (no Azure credentials — the container is
-  public-read), caches it briefly (5 min TTL), and returns
-  `{tracks:[{title,url}]}` with absolute track URLs. It never 500s: on error it
-  serves the last good list, then an empty playlist. The container stays
-  public-*read* but not public-*list*; nothing enumerates it.
-- **Player** (`frontend/src/bgm.js`, `initBgm()` wired in `app.js`) fetches
+- **Backend** (`GET /api/bgm`, `backend/server.js`) **lists** the container and
+  reads each blob's `title`/`artist`/`album` **metadata**, returning
+  `{tracks:[{title, artist?, album?, url}]}` with absolute track URLs. It
+  authenticates with the pod's **workload identity** — the same federated token
+  used for passwordless Postgres — authorized by a `Storage Blob Data Reader`
+  role on the media account (`tofu/storage.tf`). The list is cached briefly (5 min
+  TTL). It never 500s: on error it serves the last good list, then an empty
+  playlist. The container is public-*read* (browsers stream tracks) but **not**
+  public-*list* — enumeration is the backend's authenticated job.
+- **Titles** live in **blob metadata**, which is the editable source of truth: set
+  it in the Azure portal / Storage Explorer, or seed it from each mp3's ID3 tag
+  with the sync tool below. A blob with no `title` metadata falls back to a
+  readable title derived from its filename.
+- **Player** (`frontend/src/bgm.js`, `initBgm()` wired in `main.tsx`) fetches
   `/api/bgm`, builds a Fisher-Yates shuffle, and plays through it with one
   `<audio preload="none">` element, reshuffling each cycle and never repeating a
   track back-to-back across the boundary.
 - **On-demand streaming** — only the *currently playing* track is fetched, one at
-  a time, via HTTP range requests. A 150 MB library costs a listener only the
-  song they're hearing. Nothing is preloaded or bundled.
+  a time, via HTTP range requests. A large library costs a listener only the song
+  they're hearing. Nothing is preloaded or bundled.
 - **Autoplay-safe** — browsers block audible autoplay until a user gesture, so
   playback is armed on the first `pointerdown`/`keydown`/`touchstart`.
-- **Mute control** — a floating button (bottom-right) toggles mute, persisted in
-  `localStorage` (`chess-tactics-bgm-muted-v1`). It hides itself when `/api/bgm`
-  returns no tracks (BGM not provisioned).
+- **Mute control** — a persistent title-bar control toggles mute (persisted in
+  `localStorage`). It hides itself when `/api/bgm` returns no tracks.
 
-`tools/bgm/generate.mjs` is the single source of truth that derives blob names and
-`index.json` entries from the source tracks — so they can never drift. It reads each
-mp3's **ID3 tags** (via `frontend/scripts/id3.mjs`) for a clean title plus `artist`
-and `album`, falling back to a filename-derived title when a tag is missing or junk.
 `npm run check` (frontend) runs `scripts/check-bgm-shuffle.mjs`, which guards the
 shuffle invariants.
 
+## Changing the soundtrack
+
+Everything happens in the **`bgm` container** (storage account `chesstacticsmedia`).
+No git, no build, no redeploy.
+
+- **Add a song** — upload the `.mp3` to the container (portal / Storage Explorer).
+  It joins the shuffle within the cache TTL. To give it a clean title without
+  typing, run **Sync BGM metadata** (below) — it reads the mp3's ID3 tag and writes
+  the `title`/`artist`/`album` metadata. Or set that metadata by hand.
+- **Remove a song** — delete the blob. It leaves the shuffle within the cache TTL.
+- **Rename a title** — edit the blob's `title` metadata in the portal. That's the
+  source of truth; the sync tool won't overwrite a title you've set.
+
+### Sync BGM metadata (titles from ID3 tags)
+
+`tools/bgm/sync-metadata.mjs` mirrors each mp3's embedded ID3 tag onto its blob as
+metadata. It is **optional convenience** — nothing in the serving path depends on
+it — and **non-clobbering**: it only fills blobs whose `title` metadata is empty
+(use `--force` to overwrite).
+
+- **From CI (one click):** run the **Sync BGM metadata** workflow
+  (`.github/workflows/sync-bgm-metadata.yml`, `workflow_dispatch`). It authenticates
+  with the CI service principal (`Storage Blob Data Contributor`).
+- **Locally:** `az login`, then
+  `npm --prefix tools/bgm install && node tools/bgm/sync-metadata.mjs [--force] [--dry-run]`.
+
 ## Where the audio lives
 
-Nothing audio-related is in git or the image (`*.mp3` is git-ignored; there is no
-committed manifest). It all lives in a public-read Azure Blob container,
-provisioned by this repo's own OpenTofu (`tofu/storage.tf`):
+Nothing audio-related is in git or the app image (`*.mp3` is git-ignored; there is
+no committed manifest). It all lives in a public-read Azure Blob container,
+provisioned by this repo's OpenTofu (`tofu/storage.tf`):
 
-- storage account: `chesstacticsmedia`, container: `bgm` (anonymous blob read)
-- `index.json` — the playlist (`schemaVersion: 2`,
-  `{tracks:[{title, artist?, album?, file}]}`), written by the upload pipeline
-  alongside the tracks
-- the backend's `BGM_BASE_URL` (`k8s/values.yaml`) points at this container
+- storage account: `chesstacticsmedia`, container: `bgm` (anonymous blob *read*,
+  not list)
+- role assignments: the app's workload identity gets `Storage Blob Data Reader`
+  (list + read, for `/api/bgm`); the CI service principal gets
+  `Storage Blob Data Contributor` (for the metadata-sync workflow)
+- the backend's `BGM_BASE_URL` (`k8s/values.yaml`) is this container's public base
 
-Adding a song = drop it on `nelson/songs` and re-run the upload workflow. It
-regenerates `index.json`, the backend picks it up within the cache TTL, and the
-new track joins the shuffle — no code change, no redeploy.
+> Historical note: the soundtrack mp3s were originally uploaded from a long-lived
+> `nelson/songs` git branch via an `upload-bgm` pipeline that also wrote an
+> `index.json` manifest. That branch + pipeline + manifest are retired — the
+> container is now self-describing. The branch may be kept as a cold backstop, but
+> nothing reads from it.
 
 ## Provisioning runbook (one time)
 
-The raw tracks live on the `nelson/songs` branch under `songs/`. CI lives in
-`.github/workflows/`: `tofu.yaml` (plan/apply) and `upload-bgm.yml` (upload).
+CI lives in `.github/workflows/`: `tofu.yaml` (plan/apply) and `sync-bgm-metadata.yml`.
 
 1. **Enable app-owned tofu** (infra-bootstrap, one line): add `chess-tactics` to
    `local.runs_own_tofu_apps` in `tofu/main.tf`. Merging grants this repo's CI
-   service principal state access + Contributor + RBAC-admin and sets the
-   `TFSTATE_STORAGE_ACCOUNT` repo variable.
+   service principal state access + the roles it needs.
 2. **Apply this repo's tofu** — the `Infrastructure` workflow plans on PR and
-   applies on merge to `main`, creating the storage account, the `bgm`
-   container, and the CI SP's `Storage Blob Data Contributor` role.
-3. **Upload the tracks** — run the **Upload BGM** workflow (`workflow_dispatch`).
-   It slugs the raw tracks, writes `index.json`, and uploads both into the `bgm`
-   container.
+   applies on merge to `main`, creating the storage account, the `bgm` container,
+   the app identity's `Storage Blob Data Reader` role, and CI's
+   `Storage Blob Data Contributor` role.
+3. **Add the tracks** — upload `.mp3`s into the `bgm` container (portal / Storage
+   Explorer), then run **Sync BGM metadata** to seed titles from their ID3 tags.
 
-Until step 3, BGM is dormant in prod: `/api/bgm` returns an empty playlist (the
-backend's index fetch 404s) and the control hides itself — no errors, no churn.
-Test slots stage audio same-origin (below), so the shuffle UX is fully testable
-before provisioning.
+Until step 3, BGM is dormant: `/api/bgm` returns an empty playlist (an empty
+container lists nothing) and the control hides itself — no errors, no churn.
 
-## Testing in a Glimmung slot
+## Testing without Azure
 
-The real `/api/bgm` code path runs in the slot, pointed at a same-origin fixture
-instead of the blob (the env split is configuration, not a second code path):
+The backend supports a credential-free static-index path for environments with no
+Azure container, selected by setting **`BGM_READ_URL`** (it reads
+`<BGM_READ_URL>/index.json` instead of listing):
 
-```sh
-cd frontend && npm ci && npm run build
-node tools/bgm/generate.mjs --src <raw songs dir> --out frontend/public/assets/audio
-# Push the ref, wait for the CI image, then deploy it to the slot with
-# Glimmung deploy_image_to_test_slot.
-#    BGM_READ_URL = http://localhost:3000/assets/audio
-#    BGM_BASE_URL = https://chess-tactics-N.tank.dev.romaine.life/assets/audio
-```
+- **Smoke test** (`backend/smoke-test.js`) points `BGM_READ_URL` at a same-origin
+  mock serving a tiny `index.json`, exercising the playlist contract end to end.
+- **Local dev** (`frontend/vite.config.js`, opt in with `BGM_DEV_TRACKS=1`) has no
+  backend, so its dev mock proxies the **deployed** backend's `/api/bgm` (override
+  with `BGM_API_URL`) — real tracks, real metadata, no credentials.
 
-In production only `BGM_BASE_URL` is set (the blob container), and the backend
-reads and serves from the same place.
+In production no `BGM_READ_URL` is set, so the backend lists the live container.
