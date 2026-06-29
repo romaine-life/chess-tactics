@@ -12,7 +12,7 @@ import type { EditorBoard } from '../ui/boardCode';
 // asserted here.
 
 const blank = (cols = 4, rows = 4): EditorBoard => ({
-  cols, rows, cells: {}, units: {}, doodads: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {},
+  cols, rows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {},
 });
 
 // Real registry ids so boardDrawOps actually emits ops (tile family `grass-surf-0`, a

@@ -290,15 +290,16 @@ function Slider({
 export function Settings(): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
   const [showTracks, setShowTracks] = useState<boolean>(() => isTracksView(window.location.pathname));
-  // What the panel body is currently rendering. It lags the URL-derived
-  // activeTab/showTracks by one fade so the outgoing menu's controls fade out, swap
-  // at zero opacity, then the incoming ones fade in. The rail highlight still tracks
-  // activeTab directly, so clicking a tab lights it instantly while the body crossfades.
+  // The INCOMING/target panel (switches immediately on a tab change). `previous` holds the
+  // OUTGOING panel only during a crossfade, rendered stacked under `display` so the two
+  // overlap-fade (old 1->0 while new 0->1) in one --ds-duration-fade pass (ADR-0046). The
+  // rail highlight tracks activeTab directly, so the clicked tab lights instantly.
   const [display, setDisplay] = useState<{ tab: SettingsTab; tracks: boolean }>(() => ({
     tab: tabFromPath(window.location.pathname),
     tracks: isTracksView(window.location.pathname),
   }));
-  const [panelPhase, setPanelPhase] = useState<'in' | 'out'>('in');
+  const [previous, setPrevious] = useState<{ tab: SettingsTab; tracks: boolean } | null>(null);
+  const [xfade, setXfade] = useState<'idle' | 'enter' | 'active'>('idle');
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
@@ -408,21 +409,32 @@ export function Settings(): ReactElement {
     return () => window.removeEventListener(BGM_STATE_EVENT, onState);
   }, []);
 
-  // Crossfade the panel body when the target menu changes: fade the current controls
-  // out, swap in the next menu's controls at zero opacity, then fade them in. The data
-  // fetch keys off showTracks (not display), so the soundtrack list is already loading
-  // while the fade-out plays. This is a pure opacity fade (no movement), which is safe
-  // under prefers-reduced-motion, so it runs for everyone — including the common case of
-  // Windows "Animation effects" off, which makes Chrome report reduced-motion.
+  // Start a crossfade when the target menu changes: keep the current panel as `previous`,
+  // swap `display` to the new one, and render both stacked. The data fetch keys off
+  // showTracks, so the soundtrack list loads during the fade. Pure opacity = reduced-motion
+  // safe (runs even with Windows animations off → Chrome `reduce`).
   useEffect(() => {
     if (display.tab === activeTab && display.tracks === showTracks) return;
-    setPanelPhase('out');
-    const timer = window.setTimeout(() => {
-      setDisplay({ tab: activeTab, tracks: showTracks });
-      setPanelPhase('in');
-    }, PANEL_FADE_MS);
-    return () => window.clearTimeout(timer);
+    setPrevious(display);
+    setDisplay({ tab: activeTab, tracks: showTracks });
+    setXfade('enter');
   }, [activeTab, showTracks, display.tab, display.tracks]);
+
+  // Drive enter -> active one frame later, so the start opacities (prev 1 / next 0) paint
+  // before the transition runs — then the two overlap-fade simultaneously.
+  useEffect(() => {
+    if (xfade !== 'enter') return undefined;
+    const raf = requestAnimationFrame(() => setXfade('active'));
+    return () => cancelAnimationFrame(raf);
+  }, [xfade]);
+
+  // Once a crossfade has run its --ds-duration-fade pass, drop the outgoing layer. Keyed on
+  // `previous` so a new tab click mid-fade cleanly restarts the timer (queue-last).
+  useEffect(() => {
+    if (!previous) return undefined;
+    const timer = window.setTimeout(() => { setPrevious(null); setXfade('idle'); }, PANEL_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [previous]);
 
   const active = useMemo(() => tabs.find((tab) => tab.id === display.tab) || tabs[0], [display.tab]);
 
@@ -633,6 +645,17 @@ export function Settings(): ReactElement {
     </>
   );
 
+  // One panel's content, by tab — used for BOTH the incoming and (during a crossfade) the
+  // outgoing layer, so the two stack and overlap-fade in a single pass.
+  const renderPanel = (d: { tab: SettingsTab; tracks: boolean }) => (
+    <>
+      {d.tab === 'general' ? renderGeneral() : null}
+      {d.tab === 'audio' ? (d.tracks ? renderTracks() : renderAudio()) : null}
+      {d.tab === 'gameplay' ? renderGameplay() : null}
+      {d.tab === 'creator-tools' ? renderCreatorTools() : null}
+    </>
+  );
+
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
@@ -693,11 +716,15 @@ export function Settings(): ReactElement {
               </div>
             ) : null}
             <KitScroll className="settings-scroll">
-              <div className={`settings-panel-content ${panelPhase === 'out' ? 'is-leaving' : 'is-entering'}`}>
-                {display.tab === 'general' ? renderGeneral() : null}
-                {display.tab === 'audio' ? (display.tracks ? renderTracks() : renderAudio()) : null}
-                {display.tab === 'gameplay' ? renderGameplay() : null}
-                {display.tab === 'creator-tools' ? renderCreatorTools() : null}
+              <div className={`settings-panel-content settings-xfade-${xfade}`}>
+                {previous ? (
+                  <div className="settings-xfade-layer settings-xfade-prev" aria-hidden="true">
+                    {renderPanel(previous)}
+                  </div>
+                ) : null}
+                <div className="settings-xfade-layer settings-xfade-next">
+                  {renderPanel(display)}
+                </div>
               </div>
             </KitScroll>
           </main>

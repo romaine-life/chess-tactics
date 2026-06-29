@@ -11,6 +11,7 @@ import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
 import { GroundCoverLayer } from './GroundCoverLayer';
+import { PropSprite } from './BoardStructure';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
@@ -60,7 +61,13 @@ function rockSpritePath(piece: Piece): string {
   return `/assets/units/rock/${variant}/${dir}.png`;
 }
 
+// Prop colliders are neutral `rock` pieces stamped under a multi-cell prop (id `prop-…`); their
+// VISUAL is the one tall PropSprite, so the collider itself must draw nothing — without this
+// guard the rock branch below would paint a phantom boulder on every footprint cell.
+const isPropCollider = (piece: Piece): boolean => piece.id.startsWith('prop-');
+
 function pieceImageSrc(piece: Piece): string | null {
+  if (isPropCollider(piece)) return null;
   if (piece.type === 'rock' || piece.type === 'random-rock') return rockSpritePath(piece);
   if (piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
   return pieceSpritePath(piece.type, SIDE_PALETTE[piece.side], piece.facing ?? defaultFacingForSide(piece.side));
@@ -319,7 +326,9 @@ export function SkirmishBoard() {
   }, [env, game.pieces, game.size, game.turn, game.winner, selectedId]);
   const board = useMemo(() => solveSkirmishBoard(game, seed), [game, seed]);
   const livePieces = useMemo(
-    () => game.pieces.filter((piece) => piece.alive).sort((a, b) => a.x + a.y - (b.x + b.y)),
+    // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
+    // seat — exclude them so they don't paint an empty/phantom seat over their footprint cells.
+    () => game.pieces.filter((piece) => piece.alive && !isPropCollider(piece)).sort((a, b) => a.x + a.y - (b.x + b.y)),
     [game.pieces],
   );
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
@@ -423,6 +432,9 @@ export function SkirmishBoard() {
           }}
         >
           <GroundCoverLayer cells={board.cells} />
+          {(game.props ?? []).map((prop) => (
+            <PropSprite key={`prop-${prop.propId}-${prop.x}-${prop.y}`} prop={prop} />
+          ))}
           {livePieces.map((piece) => (
             <UnitPiece
               key={piece.id}

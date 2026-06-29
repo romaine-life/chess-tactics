@@ -10,6 +10,7 @@ import { tileAssets, tileFamilies } from '../art/tileset';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
 import { defaultFacingForSide } from '../core/pieces';
+import { propCells, propDef } from '../core/props';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
 const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'rook', 'queen'];
@@ -61,10 +62,41 @@ function createFromLevel(level: Level): GameState {
     alive: true,
     startY: unit.side === 'player' ? level.board.rows - 1 : 0,
   }));
+
+  // Realise multi-cell BLOCKING props as single-cell neutral `rock` colliders — one per
+  // footprint cell. This is why blocking needs ZERO rules.ts changes: a rock is already an
+  // obstacle (legalMoves returns [], rays break on it, it's never an enemy/capture target, and
+  // victory counts only player/enemy living pieces). An unknown prop id is SKIPPED (no
+  // collider, no crash). A cell already taken by an authored unit/piece keeps the unit — the
+  // collider for that one cell is dropped so we never double-occupy a square.
+  const props = level.layers.props ?? [];
+  const occupied = new Set(pieces.map((p) => `${p.x},${p.y}`));
+  for (const placed of props) {
+    const def = propDef(placed.propId);
+    if (!def || !def.blocking) continue;
+    propCells(placed.x, placed.y, def).forEach((cell, cellIndex) => {
+      const key = `${cell.x},${cell.y}`;
+      if (occupied.has(key)) return; // authored unit wins this cell
+      occupied.add(key);
+      pieces.push({
+        id: `prop-${placed.propId}-${placed.x}-${placed.y}-${cellIndex}`,
+        side: 'neutral',
+        type: 'rock',
+        x: cell.x,
+        y: cell.y,
+        alive: true,
+        startY: -1,
+      });
+    });
+  }
+
   return {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
     terrain: level.layers.terrain,
+    // The render channel: the board draws the tall prop sprite from this list, while the
+    // colliders above do the blocking. Defaults to [] so a prop-free level stays prop-free.
+    props,
     turn: 'player',
     winner: null,
   };

@@ -217,7 +217,7 @@ the per-user row.
   workspace).
 - `frontend/src/ui/CampaignEditor.tsx`: add an **"Unassigned levels"** section
   listing `levels` keys referenced by no campaign, each with a preview thumb
-  (`LevelPreviewBoard`), **Edit** (deep-link `/edit?levelId=…`), and **Attach to
+  (`LevelThumbnail`), **Edit** (deep-link `/edit?levelId=…`), and **Attach to
   this campaign** (push a `CampaignLevelRef` to the selected campaign). Official /
   read-only rules from Phase 1 already apply.
 

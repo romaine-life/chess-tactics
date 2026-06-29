@@ -85,7 +85,7 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
 
   // Tiles + feature overlays. Each cell's frame origin is the projected point shifted by the
   // CSS translate(-stepX, -equator); the img fills the 96x180 frame.
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set() };
+  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
   for (const [key, f] of Object.entries(board.features)) presentByKind[f.kind].add(key);
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
 

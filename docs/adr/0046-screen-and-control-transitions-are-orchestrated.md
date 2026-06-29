@@ -51,10 +51,11 @@ fade* — fades do not vary by surface (the explicit product decision; it overru
 entrance-slower-than-control split). One knob (`--ds-duration-fade`) retimes everything. A new
 **stagger token** `--ds-stagger` (≈ 50ms) sets the gap between sequenced reveals.
 
-(A crossfade is a sequential out→in, so a tab change plays *two* fades at this one speed — i.e.
-~2× the wall-clock of a single entrance fade. Same *speed*, not same total time. If that total
-ever feels long, the follow-up is to overlap the two legs into one fade, not to give the
-crossfade its own faster duration.)
+(The settings tab crossfade is a true **overlap** — the outgoing panel and incoming panel are
+stacked in one grid cell and fade simultaneously (old 1→0 while new 0→1) over a *single*
+`--ds-duration-fade` pass, not a sequential out-then-in. So a tab change and a screen entrance
+take the same wall-clock, not 2×. If a crossfade ever needs a faster value, change
+`--ds-duration-fade` — never give the crossfade its own duration.)
 
 ### B. The primitive is a hook on the screen's CHROME root — not a route wrapper
 
@@ -117,9 +118,11 @@ consolidation (incl. folding in the veil, F) must preserve it.
 - Good: one built-in fade, one rhythm; adding a button/screen inherits the behaviour; the
   menu↔settings asymmetry is gone; the leak/layout failure modes are excluded by construction
   (no DOM restructure, no shared-class styling).
-- Cost / staged follow-ups (not this ADR's PR): migrating the **cold-load reveal** to the
-  orchestrated model (with `--ds-stagger`); applying the inert-during-motion rule to the
-  settings tab crossfade; unifying the route-veil into the same vocabulary.
+- Done since the first cut: the settings tab crossfade now **overlaps** into one pass (not 2×);
+  the campaign editor uses `useScreenEntrance()` instead of a hand-rolled entrance; every chrome
+  fade resolves to `--ds-duration-fade`.
+- Remaining staged follow-ups: migrating the **cold-load reveal** to the orchestrated model
+  (with `--ds-stagger`); unifying the **route-veil** into the same vocabulary.
 
 ## More Information
 

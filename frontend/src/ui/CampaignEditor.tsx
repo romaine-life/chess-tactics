@@ -12,6 +12,7 @@ import { injectStressLevels } from '../campaign/stressFixture';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { AmbienceBackground } from './AmbienceBackground';
+import { useScreenEntrance } from './shell/useScreenEntrance';
 
 const CE_ICONS = {
   star: '/assets/ui/kit/icons/star.png',
@@ -263,17 +264,10 @@ export function CampaignEditor() {
     return () => shell?.classList.remove('campaign-editor-active');
   }, []);
 
-  // One-time chrome entrance: .ce-screen paints at chrome-opacity 0, then flips .is-entered
-  // after the first paint so the panels fade in over the steady backdrop + rain (mirrors
-  // Settings' entrance). A transition, not an animation, so it survives reduced-motion. The
-  // rAF runs it as a fade; the timeout is a belt-and-suspenders so a throttled rAF (e.g. a
-  // backgrounded tab) can never strand the chrome hidden.
-  const [entered, setEntered] = useState(false);
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setEntered(true));
-    const t = window.setTimeout(() => setEntered(true), 120);
-    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
-  }, []);
+  // Chrome entrance via the SHARED primitive (ADR-0046): spread onto .ce-layout + .ce-footer
+  // below, so only the chrome fades in over the steady backdrop + rain. Replaces the bespoke
+  // .is-entered state this screen used to hand-roll; no-ops on a cold load.
+  const entranceClass = useScreenEntrance();
 
   useEffect(() => {
     let active = true;
@@ -437,7 +431,7 @@ export function CampaignEditor() {
     `/edit?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent('/campaigns-next')}`;
 
   return (
-    <div className={`ce-screen app-shell-bar-pad ${entered ? 'is-entered' : ''}`.trim()} data-testid="campaign-editor">
+    <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
       {/* Same art-directed backdrop + synced rain as the main menu (.ce-screen paints the
           menu scene; this canvas adds the shared rain). Mostly overlapped by the editor
           panels, but it keeps the feel consistent with the rest of the app in the gaps. */}
@@ -458,7 +452,7 @@ export function CampaignEditor() {
         </nav>
       </TitleBarSlot>
 
-      <main className="ce-layout">
+      <main className={`ce-layout ${entranceClass}`.trim()}>
         <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
           <div className="ce-panel-head">
             <h2>Campaigns</h2>
@@ -647,7 +641,7 @@ export function CampaignEditor() {
         </section>
       </main>
 
-      <footer className="ce-footer">
+      <footer className={`ce-footer ${entranceClass}`.trim()}>
         <AssetButton disabled={!camp || camp.origin === 'official'} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
         <AssetButton danger disabled={!camp || readOnly} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
