@@ -8,6 +8,7 @@ import './style.css';
 import './generated/nine-slice.css';
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
+import { armForColdHome, isMainMenuPath } from './ui/shell/coldReveal';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
 import { initBgm } from './bgm.js';
 
@@ -30,6 +31,24 @@ window.addEventListener('vite:preloadError', (event) => {
 // The shell ships hidden (avoids an unstyled flash); reveal it once JS runs.
 const shell = document.querySelector('.shell');
 if (shell instanceof HTMLElement) shell.style.visibility = 'visible';
+
+// Cold-load reveal (see ui/shell/coldReveal). On a fresh main-menu load, sequence the
+// menu's layers in a fixed order — background -> title -> buttons — then let rain drift
+// in. Arm BEFORE React renders so the first paint is already in the hidden/pending
+// state; it no-ops (everything stays revealed) on every other route and on later
+// soft navigations. The route-scoped background preload moves the scene — first in the
+// order — to the front of the network queue without taxing other routes (the global
+// preload was deliberately removed; see index.html).
+if (isMainMenuPath(window.location.pathname)) {
+  const bgPreload = document.createElement('link');
+  bgPreload.rel = 'preload';
+  bgPreload.as = 'image';
+  bgPreload.type = 'image/avif';
+  bgPreload.href = '/assets/ui/main-menu/background-scene-v1.avif';
+  bgPreload.setAttribute('fetchpriority', 'high');
+  document.head.appendChild(bgPreload);
+}
+armForColdHome();
 
 try { initBgm(); } catch { /* background music is decorative */ }
 
