@@ -5414,6 +5414,11 @@ body { font-size: 17px; }
   position: relative;
   text-align: left;
   width: 100%;
+  /* Windowing (web.dev): off-screen rows skip layout/paint. The intrinsic size keeps the
+     scrollbar + row footprint stable so nothing reflows when a row is virtualised out. The
+     value matches each row's min-height below; visible layout is unchanged. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
 }
 
 .ce-campaign-row.is-selected {
@@ -5441,6 +5446,7 @@ body { font-size: 17px; }
   grid-template-columns: 76px minmax(0, 1fr) auto auto;
   min-height: 70px;
   padding-block: 4px;
+  contain-intrinsic-size: auto 70px;
 }
 
 .ce-level-row.is-selected {
@@ -5553,10 +5559,24 @@ body { font-size: 17px; }
   width: 58px;
 }
 
-.ce-level-thumb .level-preview-board,
-.ce-level-thumb .level-preview-empty {
+.ce-level-thumb .level-thumbnail,
+.ce-level-thumb .ce-level-thumb-empty {
+  display: block;
   height: 100%;
   width: 100%;
+}
+
+/* The baked board thumbnail (one flat <img>) is letterboxed to the board's native aspect
+   inside the row's thumb box; its pending placeholder shares the calm panel fill. */
+.ce-level-thumb .level-thumbnail img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+.level-thumbnail-placeholder,
+.ce-level-thumb-empty {
+  background: linear-gradient(180deg, #0a2a50 0%, #061322 100%);
 }
 
 .ce-row-actions {
@@ -5904,6 +5924,27 @@ body { font-size: 17px; }
 .level-preview-board.is-compact,
 .level-preview-empty.is-compact {
   min-height: 0;
+}
+
+/* The SELECTED-level LIVE viewer: a pan/zoom ViewPane (StudioReadOnlyBoard inside) filling the
+   preview frame. Mirrors the old static preview's footprint so the panel doesn't resize when a
+   level is selected. The stage owns its own dark grid fill (.tileset-view-stage). */
+.ce-level-viewer {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 220px;
+  overflow: hidden;
+}
+
+.ce-level-viewer .tileset-view-stage {
+  border: 0;
+  border-radius: 0;
+}
+
+/* The read-only board sprites mustn't show the editor's grab/select cursors in this preview. */
+.ce-level-viewer .tileset-placement-board.is-readonly .tileset-generated-board-tile {
+  cursor: default;
 }
 
 .level-preview-empty {
