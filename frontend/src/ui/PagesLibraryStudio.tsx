@@ -95,6 +95,33 @@ const MM_LIVE = { btnH: 56, railW: 304, gap: 11, icon: 64, textX: 18 } as const;
 // handshake: the menu-scoped audition CSS is the per-control preview rules with the (now-absent)
 // `.pages-menu-tweak` scope prefix stripped, so they target the real menu elements and keep their
 // !important guards to beat the shipped chrome. "Copy menu CSS" still exports the bake-form rules.
+// A numeric slider row with − / + steppers (1px pixel nudges by default) and a ↺ reset — used by
+// every Main Menu tuner control so each gets exact pixel adjustment. The steppers and reset clamp
+// to [min, max]; pass `nudge` for a non-1 increment (e.g. the 0.05× Lighten control).
+function SliderRow({ label, value, set, min, max, step = 1, nudge = 1, dflt }: {
+  label: ReactNode;
+  value: number;
+  set: (v: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  nudge?: number;
+  dflt: number;
+}): ReactElement {
+  const clamp = (v: number): number => Math.min(max, Math.max(min, Math.round(v * 100) / 100));
+  return (
+    <label className="tileset-catalog-zoom">
+      <span>{label}</span>
+      <div className="pages-ctl-row">
+        <button type="button" className="pages-step" aria-label="Decrease" onClick={(e) => { e.preventDefault(); set(clamp(value - nudge)); }}>−</button>
+        <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} />
+        <button type="button" className="pages-step" aria-label="Increase" onClick={(e) => { e.preventDefault(); set(clamp(value + nudge)); }}>+</button>
+        <button type="button" className="pages-mini-reset" title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); set(dflt); }}>↺</button>
+      </div>
+    </label>
+  );
+}
+
 function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   // True-to-window miniature: the menu body is centred under a viewport-relative cap, so a
@@ -133,6 +160,11 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   const iconFilter = iconTreatFilter(iconTreat, iconLighten);
   const slide = hoverSlide === '6' ? 6 : hoverSlide === '10' ? 10 : 0;
   const surfaceUrl = surface ? `/assets/ui/surfaces/${surface}.png` : '';
+  // Slider bounds that reach the screen edges so buttons can be sized to / moved across the FULL
+  // window. window.innerWidth/Height is the preview's own viewport (useWindowScaledPreview re-renders
+  // this component on resize, so the bounds track the window). Floored so they never undershoot.
+  const screenW = Math.max(1920, Math.ceil(window.innerWidth));
+  const screenH = Math.max(1080, Math.ceil(window.innerHeight));
 
   // Each entry pairs a LIVE-preview rule (scoped to .pages-menu-tweak so it can't reach the shared
   // Settings page) with the menu-SCOPED bake rule to paste into style.css. Gated on "differs from
@@ -155,9 +187,12 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   add(btnH !== MM_LIVE.btnH,
     `.pages-menu-tweak .main-menu-mode-tab { min-height: ${btnH}px !important; }`,
     `.main-menu-mode-tab {\n  min-height: ${btnH}px;\n}`);
+  // Button width = the rail column. The shell ships a centred max-inline-size cap (clamp(900, 88vw,
+  // 1240)), so widen the cap to fit the chosen width — max() keeps the default cap for narrow widths
+  // (no surprise re-centre) and grows the body, centred, up to the full window for wide ones.
   add(railW !== MM_LIVE.railW,
-    `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; }`,
-    `.main-menu-twin-screen .settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n}`);
+    `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px) !important; }`,
+    `.main-menu-twin-screen .settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n  max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px);\n}`);
   add(tabGap !== MM_LIVE.gap,
     `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
     `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
@@ -275,48 +310,12 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
           <div className="tileset-control-stack">
             {header}
             <p className="tileset-catalog-note">Every control drives the <strong>live</strong> menu chrome; defaults = what ships. Tune, then <strong>Copy menu CSS</strong> to bake.</p>
-            <label className="tileset-catalog-zoom">
-              <span>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="44" max="96" step="1" value={btnH} onChange={(e) => setBtnH(Number(e.target.value))} />
-                {ctlReset(() => setBtnH(MM_LIVE.btnH))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="220" max="460" step="2" value={railW} onChange={(e) => setRailW(Number(e.target.value))} />
-                {ctlReset(() => setRailW(MM_LIVE.railW))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="4" max="28" step="1" value={tabGap} onChange={(e) => setTabGap(Number(e.target.value))} />
-                {ctlReset(() => setTabGap(MM_LIVE.gap))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === 0 ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="-200" max="400" step="2" value={btnX} onChange={(e) => setBtnX(Number(e.target.value))} />
-                {ctlReset(() => setBtnX(0))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === 0 ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="-200" max="500" step="2" value={btnY} onChange={(e) => setBtnY(Number(e.target.value))} />
-                {ctlReset(() => setBtnY(0))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="-80" max="160" step="2" value={textX} onChange={(e) => setTextX(Number(e.target.value))} />
-                {ctlReset(() => setTextX(MM_LIVE.textX))}
-              </div>
-            </label>
+            <SliderRow label={<>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</>} value={btnH} set={setBtnH} min={44} max={96} dflt={MM_LIVE.btnH} />
+            <SliderRow label={<>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</>} value={railW} set={setRailW} min={220} max={screenW} dflt={MM_LIVE.railW} />
+            <SliderRow label={<>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</>} value={tabGap} set={setTabGap} min={4} max={28} dflt={MM_LIVE.gap} />
+            <SliderRow label={<>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === 0 ? ' · live' : ''}</>} value={btnX} set={setBtnX} min={-screenW} max={screenW} dflt={0} />
+            <SliderRow label={<>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === 0 ? ' · live' : ''}</>} value={btnY} set={setBtnY} min={-screenH} max={screenH} dflt={0} />
+            <SliderRow label={<>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</>} value={textX} set={setTextX} min={-80} max={160} dflt={MM_LIVE.textX} />
             <label className="tileset-category-select">
               <span>Stone surface</span>
               <div className="pages-ctl-row">
@@ -327,20 +326,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
                 {ctlReset(() => setSurface(''))}
               </div>
             </label>
-            <label className="tileset-catalog-zoom">
-              <span>Icon size · {iconSize}px{iconSize === MM_LIVE.icon ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="24" max="96" step="1" value={iconSize} onChange={(e) => setIconSize(Number(e.target.value))} />
-                {ctlReset(() => setIconSize(MM_LIVE.icon))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Icon position · {iconX > 0 ? '+' : ''}{iconX}px{iconX === 0 ? ' · centred' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="-40" max="120" step="2" value={iconX} onChange={(e) => setIconX(Number(e.target.value))} />
-                {ctlReset(() => setIconX(0))}
-              </div>
-            </label>
+            <SliderRow label={<>Icon size · {iconSize}px{iconSize === MM_LIVE.icon ? ' · live' : ''}</>} value={iconSize} set={setIconSize} min={24} max={96} dflt={MM_LIVE.icon} />
+            <SliderRow label={<>Icon position · {iconX > 0 ? '+' : ''}{iconX}px{iconX === 0 ? ' · centred' : ''}</>} value={iconX} set={setIconX} min={-40} max={120} dflt={0} />
             <div className="tileset-filter-field">
               <span>Icon contrast</span>
               <div className="pages-ctl-row">
@@ -353,13 +340,7 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
               </div>
             </div>
             {iconTreat === 'limestone' ? (
-              <label className="tileset-catalog-zoom">
-                <span>Lighten · {iconLighten.toFixed(2)}×</span>
-                <div className="pages-ctl-row">
-                  <input type="range" min="1" max="2.6" step="0.05" value={iconLighten} onChange={(e) => setIconLighten(Number(e.target.value))} />
-                  {ctlReset(() => setIconLighten(1.85))}
-                </div>
-              </label>
+              <SliderRow label={<>Lighten · {iconLighten.toFixed(2)}×</>} value={iconLighten} set={setIconLighten} min={1} max={2.6} step={0.05} nudge={0.05} dflt={1.85} />
             ) : null}
             <p className="tileset-catalog-note">Carved icons measure ~1–1.25:1 on the stone (readable floor 3:1). <strong>Pale stone</strong> &amp; <strong>Bevel</strong> are pure CSS over the shipped art; <strong>Bronze*</strong> is a LOOK preview — shipping it means re-forging the icon PNGs, not a filter.</p>
             <div className="tileset-filter-field">
