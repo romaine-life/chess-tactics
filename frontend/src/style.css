@@ -10281,8 +10281,15 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   min-height: 56px;
   padding: 22px; /* even inset — icon sits with equal margin on every side (was 17px/22px) */
+  /* NON-fixed stone (was `repeat fixed`). background-attachment: fixed routes painting
+     through Chromium's viewport-fixed-background path, which intermittently fails to
+     repaint when a nearby element composites/decomposites — the Settings menu crossfade
+     (opacity on .settings-panel-content) was blanking these sibling tabs' surfaces.
+     A locally-attached background paints with the element and is immune. Continuity
+     across the stacked tabs is recovered with per-tab background-position-y below.
+     (Both layers keep the merged image-set optimization; only `fixed` is dropped.) */
   /* PNG fallback for engines without image-set()/type(). */
-  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat;
   /* Preferred AVIF -> WebP -> PNG (the ~440KB PNG is the single heaviest menu image;
      the derivatives let the buttons decode in time to reveal WITH their surface). */
   background:
@@ -10290,13 +10297,21 @@ button.tileset-relationship-cell {
       url("/assets/ui/surfaces/baseline-stone-blue.avif") type("image/avif"),
       url("/assets/ui/surfaces/baseline-stone-blue.webp") type("image/webp"),
       url("/assets/ui/surfaces/baseline-stone-blue.png") type("image/png")
-    ) 0 0 / 1024px repeat fixed;
+    ) 0 0 / 1024px repeat;
   background-origin: padding-box;
   background-clip: padding-box;
   text-align: left;
   text-decoration: none;
   transition: color .14s ease, filter .14s ease;
 }
+
+/* Recover the continuous-stone flow the retired `fixed` attachment gave: each stacked
+   tab samples the vertical slice it would have if one texture sheet ran down the rail.
+   Step = the ~98px tab pitch (measured; drifts a few px with the clamp()ed gap/padding,
+   imperceptible for a stone texture). The rail is exactly these four tabs in order. */
+.settings-tab:nth-child(2) { background-position-y: -98px; }
+.settings-tab:nth-child(3) { background-position-y: -196px; }
+.settings-tab:nth-child(4) { background-position-y: -294px; }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
@@ -10387,7 +10402,18 @@ button.tileset-relationship-cell {
   margin-inline: auto;
   min-height: 0;
   padding-block-end: 4px;
+  /* Toggling settings menus crossfades the body: the outgoing controls fade out, the
+     next menu's controls swap in at zero opacity, then fade in (driven by the
+     is-leaving/is-entering classes from Settings.tsx). Duration MUST match
+     PANEL_FADE_MS there. A pure opacity fade (no movement) is safe under
+     prefers-reduced-motion, so it is intentionally NOT gated on that query — many
+     players run with Windows "Animation effects" off (which Chrome reads as
+     reduced-motion) and should still get this transition. */
+  transition: opacity 150ms ease;
 }
+
+.settings-panel-content.is-leaving { opacity: 0; }
+.settings-panel-content.is-entering { opacity: 1; }
 
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
