@@ -3645,6 +3645,18 @@ h1 {
   background: transparent;
 }
 
+/* Coordinated board reveal (render/boardArtReady). The board's dozens of tile <img>s each
+   load independently; without this they'd pop in one at a time ("popcorn"). The board is
+   held hidden until its whole art set has DECODED, then fades in as one unit on the same
+   320ms opacity fade the cold-load menu uses (ui/shell/coldReveal). A failsafe in the hook
+   reveals anyway if an asset stalls, so the board can never hang invisible. */
+.skirmish-board-lab {
+  transition: opacity 320ms ease;
+}
+.skirmish-board-lab.is-board-loading {
+  opacity: 0;
+}
+
 /* Strip the default .tileset-view-stage box (checkerboard fill + border + radius) on
    both in-game boards: the live skirmish board AND the level editor. They share the
    same world background, so they must read identically — the editor board floats on
