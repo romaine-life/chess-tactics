@@ -73,7 +73,9 @@ HEAL_M = 16.0     # heal depth (how far in the edge normalisation blends)
 # Base-case cells in the guide layout (docs/art/codex-runs/roads/<mat>-base-guide.png),
 # grid 7x5, with each cell's grid-space connection mask (N=1,E=2,S=4,W=8).
 ROAD_GRID = (7, 5)
-ROAD_CASES = {'end': ((3, 0), 4), 'straight': ((3, 1), 5), 'corner': ((1, 2), 6), 'T': ((2, 2), 14), 'cross': ((3, 2), 15)}
+# Each base-case cell's ACTUAL grid-space connection mask in the guide layout (the guide's
+# (2,2) connects N+E+W = 11, NOT E+S+W; getting this wrong dropped the T's third arm).
+ROAD_CASES = {'end': ((3, 0), 4), 'straight': ((3, 1), 5), 'corner': ((1, 2), 6), 'T': ((2, 2), 11), 'cross': ((3, 2), 15)}
 
 
 def _rotcw(mask, k):
