@@ -10257,17 +10257,23 @@ button.tileset-relationship-cell {
   justify-self: center;
   min-height: 0;
   overflow: hidden;
-  /* Entry fade (ADR-0043): the chrome (rail + panel) fades in when the Settings screen
-     mounts. Settings.tsx adds .is-entered after the first paint so this opacity
-     transition runs. It's the entrance tier (slow) with the decelerate ease — motion
-     settles in. Pure opacity = reduced-motion-safe, so it is intentionally not gated
-     (same rationale as the menu crossfade). The rain backdrop sits behind .settings-shell
-     and is untouched — only the chrome fades in over it. */
+}
+
+/* Entry fade (ADR-0043): the chrome (rail + panel) fades in when the Settings screen
+   mounts. Settings.tsx adds .is-entered after the first paint so this opacity transition
+   runs (entrance tier — slow + decelerate). Pure opacity = reduced-motion-safe, so it is
+   intentionally not gated (same rationale as the menu crossfade); the rain backdrop sits
+   behind and is untouched — only the chrome fades in over it.
+   SCOPED to .settings-art-route: the main menu REUSES the .settings-shell class but has no
+   JS to add .is-entered, so an unscoped `opacity: 0` here left the whole main menu stuck
+   invisible (the rail/buttons inherited it). Only the real Settings screen, wrapped in
+   .settings-art-route, starts hidden and fades in. */
+.settings-art-route .settings-shell {
   opacity: 0;
   transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
 }
 
-.settings-shell.is-entered { opacity: 1; }
+.settings-art-route .settings-shell.is-entered { opacity: 1; }
 
 .settings-rail-frame,
 .settings-main-frame {
