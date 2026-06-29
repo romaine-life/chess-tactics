@@ -5,6 +5,7 @@ import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
+import { useScreenEntrance } from './shell/useScreenEntrance';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -307,22 +308,15 @@ export function Settings(): ReactElement {
   // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
   const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
   const [confirmingReset, setConfirmingReset] = useState(false);
-  // Drives the one-time fade-in when the Settings screen mounts (entering settings).
-  // Starts false so .settings-shell paints at opacity 0, then flips true after the first
-  // paint so the opacity transition runs it in. It resets on each mount, so it replays
-  // every time you enter settings — but NOT on tab toggles (Settings stays mounted for
-  // the whole /settings/* subtree, so toggles re-render without remounting).
-  const [entered, setEntered] = useState(false);
+  // Shared screen-entrance fade (ADR-0044): spread onto the chrome root (.settings-shell)
+  // below. Fades the chrome in on a navigation-driven mount, leaving the ambience sibling
+  // continuous; no-ops on a cold load. Replaces the bespoke `entered` state.
+  const entranceClass = useScreenEntrance();
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
-    // Flip after the first paint so the entry fade (opacity 0 -> 1) actually transitions.
-    const raf = requestAnimationFrame(() => setEntered(true));
-    return () => {
-      cancelAnimationFrame(raf);
-      shell?.classList.remove('settings-art-active');
-    };
+    return () => shell?.classList.remove('settings-art-active');
   }, []);
 
   useEffect(() => {
@@ -642,7 +636,7 @@ export function Settings(): ReactElement {
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
       <AmbienceBackground />
       <div className="settings-screen app-shell-bar-pad">
-        <div className={`settings-shell ${entered ? 'is-entered' : ''}`}>
+        <div className={`settings-shell ${entranceClass}`}>
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
               <a

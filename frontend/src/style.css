@@ -1184,6 +1184,9 @@ h1 {
   --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ds-ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ds-ease-linear: linear;
+  /* Gap between sequenced reveals (ADR-0044 choreography) — e.g. the cold-load menu
+     reveal once migrated; the stagger between items in a sequence. */
+  --ds-stagger: 50ms;
 }
 
 .main-assets-header .eyebrow {
@@ -10437,21 +10440,26 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-/* Entry fade (ADR-0043): the chrome (rail + panel) fades in when the Settings screen
-   mounts. Settings.tsx adds .is-entered after the first paint so this opacity transition
-   runs (entrance tier — slow + decelerate). Pure opacity = reduced-motion-safe, so it is
-   intentionally not gated (same rationale as the menu crossfade); the rain backdrop sits
-   behind and is untouched — only the chrome fades in over it.
-   SCOPED to .settings-art-route: the main menu REUSES the .settings-shell class but has no
-   JS to add .is-entered, so an unscoped `opacity: 0` here left the whole main menu stuck
-   invisible (the rail/buttons inherited it). Only the real Settings screen, wrapped in
-   .settings-art-route, starts hidden and fades in. */
-.settings-art-route .settings-shell {
-  opacity: 0;
+/* Screen entrance (ADR-0044): the SHARED entrance fade, applied via the useScreenEntrance()
+   hook to a screen's CHROME ROOT (.settings-shell in both Settings and the main menu) — never
+   the screen's outer element, so the ambience backdrop (a sibling) stays continuous and never
+   re-fades across art-background screens (ADR-0044 B/G). Entrance tier (slow + decelerate).
+   Pure opacity = reduced-motion-safe → not gated (ADR-0043). The hook only engages on a
+   navigation-driven mount; the cold-load menu reveal owns the first paint (no double-fade).
+   This replaces the old settings-only `.settings-art-route .settings-shell` opacity rule. */
+.screen-enter {
   transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
 }
-
-.settings-art-route .settings-shell.is-entered { opacity: 1; }
+/* Initial frame: paint at opacity 0 instantly (no transition), then the hook drops this class
+   next frame so the element transitions 0 -> 1. */
+.screen-enter.screen-enter-start {
+  opacity: 0;
+  transition: none;
+}
+/* Inert while the fade plays (ADR-0044 D): can't trigger a new transition mid-transition. */
+.screen-enter.screen-enter-lock {
+  pointer-events: none;
+}
 
 .settings-rail-frame,
 .settings-main-frame {
