@@ -33,9 +33,14 @@ const ERROR_SKIP_DELAY_MS = 1500;
 
 function readMuted() {
   try {
-    return window.localStorage.getItem(MUTE_STORAGE_KEY) === 'true';
+    // Default OFF: background music starts muted and the title-bar control is the
+    // explicit on switch — music only plays once the user turns it on (stored as
+    // 'false'). Autoplay is blocked until a gesture anyway, so "default on" only ever
+    // LOOKED on while silent; this makes the control honest. Keep in sync with
+    // Settings' readMuted (same MUTE_KEY).
+    return window.localStorage.getItem(MUTE_STORAGE_KEY) !== 'false';
   } catch {
-    return false;
+    return true; // storage blocked → stay quiet
   }
 }
 

@@ -135,7 +135,9 @@ function buildSummary(): { headline: string; detail: string } {
 }
 
 function readMuted(): boolean {
-  try { return localStorage.getItem(MUTE_KEY) === 'true'; } catch { return false; }
+  // Default OFF — music is muted until explicitly enabled (kept in sync with bgm.js
+  // readMuted). Only an explicit 'false' (user turned it on) counts as un-muted.
+  try { return localStorage.getItem(MUTE_KEY) !== 'false'; } catch { return true; }
 }
 
 function writeMuted(muted: boolean): void {
