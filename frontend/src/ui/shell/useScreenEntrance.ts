@@ -22,8 +22,8 @@ export function markScreenNavigation(): void {
   appHasNavigated = true;
 }
 
-// MUST match --ds-duration-slow in style.css: the inert-during-motion window == the fade length.
-const SCREEN_FADE_MS = 300;
+// MUST match --ds-duration-fade in style.css: the inert-during-motion window == the fade length.
+const SCREEN_FADE_MS = 350;
 
 export function useScreenEntrance(): string {
   // Freeze "did we arrive here via navigation?" at mount. Cold-loaded screens never fade.

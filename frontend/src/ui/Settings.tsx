@@ -12,9 +12,9 @@ const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
 const SETTINGS_KEY = 'chess-tactics-settings-v1';
 const ASSET_BASE = '/assets/ui/settings';
 // How long the panel body fades out before swapping in the next menu's controls,
-// then fades back in. MUST match the opacity transition on .settings-panel-content
-// in style.css (one constant, two places — keep them in sync).
-const PANEL_FADE_MS = 150;
+// then fades back in. MUST match --ds-duration-fade on .settings-panel-content in style.css
+// (the ONE shared fade duration, ADR-0044 — same speed as the screen entrance).
+const PANEL_FADE_MS = 350;
 
 type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools';
 type ButtonTone = 'neutral' | 'primary' | 'danger';

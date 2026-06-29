@@ -1170,17 +1170,16 @@ h1 {
      --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
      + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
   --app-header-h: clamp(84px, 5vw, 88px);
-  /* motion — duration + easing tokens (ADR-0043). Map MOTION ROLES onto these; don't
-     hand-pick ms per element. Two interactive tiers + an entrance tier:
+  /* motion — duration + easing tokens (ADR-0043, revised by ADR-0044). Map MOTION ROLES
+     onto these; don't hand-pick ms per element. Just TWO durations, by design:
        fast = instant feedback (hover / toggle / focus / filter swap),
-       base = content fades & crossfade legs (the settings menu crossfade),
-       slow = screen / large-surface entrances.
-     Easing (Material 3): standard for in-place changes; out (emphasized-decelerate)
-     for entrances — motion settles, never accelerates in; linear for pure opacity
-     crossfades (a fade reads fine linear). */
+       fade = EVERY fade/crossfade — screen entrances AND in-panel control swaps share ONE
+              fade speed. (Product decision: fades do NOT vary by surface; a fade is a fade.
+              This supersedes the earlier base/slow split.)
+     Easing (Material 3): standard for the fades + in-place changes; out kept available for a
+     decelerated entrance if ever needed; linear for the bgm button's opacity. */
   --ds-duration-fast: 100ms;
-  --ds-duration-base: 150ms;
-  --ds-duration-slow: 300ms;
+  --ds-duration-fade: 350ms;
   --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ds-ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ds-ease-linear: linear;
@@ -6044,7 +6043,7 @@ body { font-size: 17px; }
   image-rendering: pixelated;
   /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
      fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
-  transition: transform var(--ds-duration-fast) var(--ds-ease-standard), opacity var(--ds-duration-base) var(--ds-ease-linear);
+  transition: transform var(--ds-duration-fast) var(--ds-ease-standard), opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 
 .bgm-control-icon {
@@ -10448,7 +10447,7 @@ button.tileset-relationship-cell {
    navigation-driven mount; the cold-load menu reveal owns the first paint (no double-fade).
    This replaces the old settings-only `.settings-art-route .settings-shell` opacity rule. */
 .screen-enter {
-  transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
 /* Initial frame: paint at opacity 0 instantly (no transition), then the hook drops this class
    next frame so the element transitions 0 -> 1. */
@@ -10635,10 +10634,10 @@ button.tileset-relationship-cell {
      PANEL_FADE_MS there. A pure opacity fade (no movement) is safe under
      prefers-reduced-motion, so it is intentionally NOT gated on that query — many
      players run with Windows "Animation effects" off (which Chrome reads as
-     reduced-motion) and should still get this transition. The duration is the
-     content-fade token (ADR-0043); --ds-duration-base is 150ms, which MUST stay in
-     sync with PANEL_FADE_MS in Settings.tsx (the JS that times the swap). */
-  transition: opacity var(--ds-duration-base) var(--ds-ease-standard);
+     reduced-motion) and should still get this transition. The duration is the ONE shared
+     fade token (--ds-duration-fade, ADR-0044) — the same fade speed as the screen entrance;
+     it MUST stay in sync with PANEL_FADE_MS in Settings.tsx (the JS that times the swap). */
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
 
 .settings-panel-content.is-leaving { opacity: 0; }

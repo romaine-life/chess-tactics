@@ -43,12 +43,18 @@ reuses that class.)
 **All screen-entrance and in-screen control transitions go through shared, tokenized
 primitives that obey one choreography. Per-screen ad-hoc fade state is not allowed.**
 
-### A. Consistent timing (from ADR-0043)
+### A. Consistent timing — ONE fade speed (from ADR-0043)
 
-Every transition draws its duration + easing from the 0043 tokens — one fade speed app-wide.
-Screen entrance = `--ds-duration-slow` + `--ds-ease-out` (decelerate). In-screen control
-crossfade = `--ds-duration-base` + `--ds-ease-standard`. A new **stagger token**
-`--ds-stagger` (≈ 50ms) sets the gap between sequenced reveals.
+Every fade draws the SAME duration + easing from the 0043 tokens: `--ds-duration-fade` +
+`--ds-ease-standard`. A screen entrance and an in-panel control crossfade are the *identical
+fade* — fades do not vary by surface (the explicit product decision; it overruled an earlier
+entrance-slower-than-control split). One knob (`--ds-duration-fade`) retimes everything. A new
+**stagger token** `--ds-stagger` (≈ 50ms) sets the gap between sequenced reveals.
+
+(A crossfade is a sequential out→in, so a tab change plays *two* fades at this one speed — i.e.
+~2× the wall-clock of a single entrance fade. Same *speed*, not same total time. If that total
+ever feels long, the follow-up is to overlap the two legs into one fade, not to give the
+crossfade its own faster duration.)
 
 ### B. The primitive is a hook on the screen's CHROME root — not a route wrapper
 
