@@ -1,4 +1,4 @@
-// Linear-feature autotiling (roads now; rivers later). A "feature" is a ribbon a
+// Linear-feature autotiling (roads and rivers). A "feature" is a ribbon a
 // level author DRAWS across cells — the engine derives each cell's art from which
 // of its 4 cardinal neighbours also carry the same feature. This is the canonical
 // 4-bit connection / "edge Wang" autotile (Godot "Match Sides", Tiled edge set,
@@ -8,7 +8,7 @@
 //
 // Bit + direction convention is pinned to the board projection (boardProjection.ts:
 // left=(x-y)·stepX, top=(x+y)·stepY) AND to the baked sprite geometry
-// (scripts/build-road-tiles.py). Changing one without the others breaks ribbon
+// (scripts/build-feature-tiles.py). Changing one without the others breaks ribbon
 // continuity across the diamond seam.
 //
 //   bit  dir  grid neighbour   screen edge of the diamond
@@ -17,20 +17,40 @@
 //   4    S    (x,  y+1)        lower-left  (SW)
 //   8    W    (x-1, y)         upper-left  (NW)
 
-export type FeatureKind = 'road';
+// Linear-feature kinds. Each kind is its OWN connectivity class — a road connects to
+// roads, a river to rivers (never to each other). All baked by build-feature-tiles.py.
+export type FeatureKind = 'road' | 'river';
 
-// A road's surface look. Roads are one connectivity class (all roads connect
-// regardless of material — the shape flows, the surface can change per cell), but
-// the author picks which material to paint. Each is a baked 16-mask set
-// (road-<material>-<mask>.png); keep this list in sync with scripts/build-road-tiles.py.
+// A feature's surface look. Within a kind, all cells connect regardless of material
+// (the shape flows, the surface can change per cell); the author picks which to paint.
+// Each is a baked 16-mask set (<kind>-<material>-<mask>.png).
 export type RoadMaterial = 'dirt' | 'stone' | 'pebble';
-export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'stone', 'pebble'];
-export const ROAD_MATERIAL_LABELS: Record<RoadMaterial, string> = {
+export type RiverMaterial = 'water';
+export type FeatureMaterial = RoadMaterial | RiverMaterial;
+
+// Only 'dirt' ships for now — the authored codex-heal road (build-feature-tiles.py).
+// stone/pebble stay valid types; re-add them to the palette once they get the same
+// authored treatment (and the PixelLab flavour, for variety).
+export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt'];
+export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
+export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
   dirt: 'Dirt',
   stone: 'Cobblestone',
   pebble: 'Gravel',
+  water: 'Water',
 };
-export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'stone';
+// Back-compat alias (roads referenced this name before rivers existed).
+export const ROAD_MATERIAL_LABELS = FEATURE_MATERIAL_LABELS;
+export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'dirt';
+export const DEFAULT_RIVER_MATERIAL: RiverMaterial = 'water';
+
+/** Selectable materials for a feature kind (editor palette). */
+export const featureMaterials = (kind: FeatureKind): readonly FeatureMaterial[] =>
+  kind === 'river' ? RIVER_MATERIALS : ROAD_MATERIALS;
+
+/** The default brush material for a feature kind. */
+export const defaultFeatureMaterial = (kind: FeatureKind): FeatureMaterial =>
+  kind === 'river' ? DEFAULT_RIVER_MATERIAL : DEFAULT_ROAD_MATERIAL;
 
 export type FeatureEdge = 'N' | 'E' | 'S' | 'W';
 

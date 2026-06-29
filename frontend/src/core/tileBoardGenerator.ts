@@ -2,7 +2,7 @@ import { createRng } from './rng';
 import type { GroundCover } from './groundCover';
 import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
 import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
-import type { FeatureKind, RoadMaterial } from './featureAutotile';
+import type { FeatureKind, FeatureMaterial } from './featureAutotile';
 import { featureKey, featureMaskAt } from './featureAutotile';
 
 export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsset> {
@@ -25,7 +25,7 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
    * Orthogonal to socket selection — it never affects which base `asset` is chosen.
    * `mask` is the 4-bit connection mask; the renderer maps {kind, material, mask} to a sprite.
    */
-  feature?: { kind: FeatureKind; material: RoadMaterial; mask: number };
+  feature?: { kind: FeatureKind; material: FeatureMaterial; mask: number };
   missing?: {
     kind: 'missing-art' | 'unsupported-junction';
     label: string;
@@ -254,7 +254,7 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
    * orthogonal to `terrainMap`; cells in here get a `feature` with the connection
    * mask resolved from same-kind neighbours. Omit it for the original behaviour.
    */
-  featureMap?: ReadonlyMap<string, { kind: FeatureKind; material: RoadMaterial }>;
+  featureMap?: ReadonlyMap<string, { kind: FeatureKind; material: FeatureMaterial }>;
   /**
    * Optional per-family edge tiles. When supplied, any cell on a FRONT screen edge
    * (`x === columns - 1` or `y === rows - 1` — the void-facing rows in `x+y` paint order)
