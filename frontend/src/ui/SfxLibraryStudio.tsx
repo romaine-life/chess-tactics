@@ -84,70 +84,76 @@ function SfxAssignmentPanel(): ReactElement {
   };
 
   const label: CSSProperties = { color: 'var(--ds-ink-1, #ecedf2)', textTransform: 'capitalize' };
+  const heading: CSSProperties = { margin: 0, color: '#72bde8', font: '800 12px/1.3 var(--ds-font-sans, system-ui, sans-serif)', letterSpacing: 0.6, textTransform: 'uppercase' };
+  const note: CSSProperties = { margin: 0 };
+  const rows: CSSProperties = { display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 };
 
   return (
-    <section className="tileset-inspector-section" style={{ marginBottom: 16 }} aria-label="Sound assignments">
-      <h2>Assign sounds to terrains</h2>
-      <p className="tileset-catalog-note">
-        Pick which recorded sound voices each terrain, ▶ to hear it. These are a draft — they don’t change the
-        running game. Hit <strong>Copy for Claude</strong>, paste it into chat, and I’ll bake it into the game.
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 }}>
-        {ASSIGNABLE_TERRAINS.map((t) => (
-          <Fragment key={t}>
-            <span style={label}>{t}</span>
-            <select value={assign[t] ?? ''} onChange={(e) => setOne(t, e.target.value)} aria-label={`Sound for ${t}`} style={{ width: '100%' }}>
-              <option value="">— silent —</option>
-              {soundKeys.map((k) => <option key={k} value={k}>{k}</option>)}
-            </select>
-            <button
-              type="button"
-              className="tileset-view-action"
-              disabled={!assign[t]}
-              onClick={() => { if (assign[t]) previewSample(assign[t] as SampleKey); }}
-              aria-label={`Play the sound assigned to ${t}`}
-            >▶</button>
-          </Fragment>
-        ))}
+    <div aria-label="Sound assignments" style={{ display: 'grid', gap: 18, alignContent: 'start' }}>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <h2 style={heading}>Terrain sounds</h2>
+        <p className="tileset-catalog-note" style={note}>
+          Which recorded sound voices each terrain — ▶ to hear it. A draft; it doesn’t change the running game.
+        </p>
+        <div style={rows}>
+          {ASSIGNABLE_TERRAINS.map((t) => (
+            <Fragment key={t}>
+              <span style={label}>{t}</span>
+              <select value={assign[t] ?? ''} onChange={(e) => setOne(t, e.target.value)} aria-label={`Sound for ${t}`} style={{ width: '100%' }}>
+                <option value="">— silent —</option>
+                {soundKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+              <button
+                type="button"
+                className="tileset-view-action"
+                disabled={!assign[t]}
+                onClick={() => { if (assign[t]) previewSample(assign[t] as SampleKey); }}
+                aria-label={`Play the sound assigned to ${t}`}
+              >▶</button>
+            </Fragment>
+          ))}
+        </div>
       </div>
 
-      <h2 style={{ marginTop: 18 }}>Arrival (on deploy)</h2>
-      <p className="tileset-catalog-note">The thump layered over the terrain sound as a unit lands on the board.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 }}>
-        <span style={label}>Sound</span>
-        <select value={arrival.sound} onChange={(e) => setArr({ sound: e.target.value })} aria-label="Arrival sound" style={{ width: '100%' }}>
-          <option value="">— none (no thump) —</option>
-          {AUTHORED_SAMPLE_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
-        </select>
-        <button
-          type="button"
-          className="tileset-view-action"
-          disabled={!arrival.sound}
-          onClick={() => { if (arrival.sound) previewSample(arrival.sound as SampleKey, arrival.volume / 100); }}
-          aria-label="Play the arrival sound at its volume"
-        >▶</button>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <h2 style={heading}>Arrival (on deploy)</h2>
+        <p className="tileset-catalog-note" style={note}>The thump layered over the terrain sound as a unit lands on the board.</p>
+        <div style={rows}>
+          <span style={label}>Sound</span>
+          <select value={arrival.sound} onChange={(e) => setArr({ sound: e.target.value })} aria-label="Arrival sound" style={{ width: '100%' }}>
+            <option value="">— none (no thump) —</option>
+            {AUTHORED_SAMPLE_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <button
+            type="button"
+            className="tileset-view-action"
+            disabled={!arrival.sound}
+            onClick={() => { if (arrival.sound) previewSample(arrival.sound as SampleKey, arrival.volume / 100); }}
+            aria-label="Play the arrival sound at its volume"
+          >▶</button>
 
-        <span style={label}>Volume</span>
-        <input
-          type="range" min={0} max={100} value={arrival.volume}
-          onChange={(e) => setArr({ volume: Number(e.target.value) })}
-          aria-label="Arrival volume" style={{ width: '100%' }}
-        />
-        <span style={{ color: 'var(--ds-ink-2, #aeb4c2)', minWidth: 34, textAlign: 'right' }}>{arrival.volume}%</span>
+          <span style={label}>Volume</span>
+          <input
+            type="range" min={0} max={100} value={arrival.volume}
+            onChange={(e) => setArr({ volume: Number(e.target.value) })}
+            aria-label="Arrival volume" style={{ width: '100%' }}
+          />
+          <span style={{ color: 'var(--ds-ink-2, #aeb4c2)', minWidth: 34, textAlign: 'right' }}>{arrival.volume}%</span>
 
-        <span style={label}>Firing</span>
-        <select value={arrival.firing} onChange={(e) => setArr({ firing: e.target.value as FiringMode })} aria-label="Arrival firing mode" style={{ width: '100%' }}>
-          <option value="per-unit">per-unit (staggered)</option>
-          <option value="once">once (whole squad)</option>
-        </select>
-        <span />
+          <span style={label}>Firing</span>
+          <select value={arrival.firing} onChange={(e) => setArr({ firing: e.target.value as FiringMode })} aria-label="Arrival firing mode" style={{ width: '100%' }}>
+            <option value="per-unit">per-unit (staggered)</option>
+            <option value="once">once (whole squad)</option>
+          </select>
+          <span />
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" className="tileset-view-action" onClick={copy}>{copied ? 'Copied ✓' : 'Copy for Claude'}</button>
         <button type="button" className="tileset-view-action" onClick={reset}>Reset to current</button>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -213,9 +219,10 @@ export function SfxLibraryStudio({
 }): ReactElement {
   const q = search.trim().toLowerCase();
   const visible = SFX_ASSETS.filter((s) => !q || [s.label, s.terrain ?? '', s.character, s.build].join(' ').toLowerCase().includes(q));
+  // Catalog main is CONTENT ONLY — a single internally-scrolling grid, no sub-headers
+  // (docs/studio-control-architecture.md). The terrain→sound assignment editor is a
+  // control surface and lives in the Viewer 'sfx' kind (see SfxViewer), not here.
   return (
-    <>
-    <SfxAssignmentPanel />
     <div className="tileset-studio-grid surface-grid" aria-label="Sound Effects">
       {visible.map((s) => (
         <button
@@ -242,56 +249,33 @@ export function SfxLibraryStudio({
       ))}
       {visible.length === 0 ? <p className="tileset-studio-empty">No sound effects match.</p> : null}
     </div>
-    </>
   );
 }
 
-// The read-only Viewer for a single sound effect — shown big with its waveform and a
-// Play control, plus a Details readout. Mirrors SurfaceViewer. "Optimal interactivity"
-// per ADR-0029 means you actually HEAR it (the live thing), never a dead image: the
-// stage auditions on open and on click, and volume/mute follow Settings → Audio.
-export function SfxViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
-  const s = SFX_ASSETS.find((x) => x.name === name) ?? SFX_ASSETS[0];
-  const play = () => auditionAsset(s);
-  // Audition once when the stage opens (you reached it via a click — a user gesture —
-  // so the AudioContext is armed). Re-fires when you switch to a different effect.
-  useEffect(() => {
-    const t = setTimeout(() => auditionAsset(s), 180);
-    return () => clearTimeout(t);
-  }, [s]);
-
-  const stage: CSSProperties = {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20,
-    width: '100%', height: '100%', minHeight: 280, background: 'transparent', border: 'none', cursor: 'pointer',
-    color: 'var(--ds-accent, #7ea2ff)',
-  };
-  const takes = `${s.variantCount} authored take${s.variantCount === 1 ? '' : 's'} · recording`;
+// The 'sfx' Viewer kind is the sound-ASSIGNMENT EDITOR (not a per-sound read-only view).
+// It's a global config — the terrain→sound map + the arrival thump — so it ignores per-card
+// selection and always renders the same editor. It uses the blessed editing-kind shape the
+// spec names for Portrait/9-Slice (docs/studio-control-architecture.md): the editor IS the
+// .al-lab-main stage (room for the matrix), and the rail carries only the standing {header}
+// (Workspace tabs + Viewer-kind select) plus a one-line note — controls don't fragment
+// across regions. Reached from the catalog's "Assign sounds…" affordance (openViewer('sfx'))
+// or the Viewer-kind dropdown. (First global-config Viewer kind; deliberate — don't "fix" it
+// back into the 260px catalog rail, where the matrix would dominate, against the spec.)
+export function SfxViewer({ header }: { header?: ReactNode }): ReactElement {
   return (
     <>
-      <section className="al-lab-main surface-view-main" aria-label="Sound effect preview">
-        <button type="button" style={stage} onClick={play} aria-label={`Play the ${s.label} sound`}>
-          <span style={{ width: 'min(82%, 680px)', height: '44%', minHeight: 130 }}>
-            <SfxWaveform asset={s} />
-          </span>
-          <span style={{ font: '600 18px var(--ds-font-sans, system-ui, sans-serif)', color: 'var(--ds-ink-1, #ecedf2)', letterSpacing: 0.3 }}>
-            ▶ Play
-          </span>
-        </button>
+      <section className="al-lab-main" aria-label="Sound assignments">
+        <SfxAssignmentPanel />
       </section>
-      <aside className="tileset-view-controls" aria-label="Sound effect details">
+      <aside className="tileset-view-controls" aria-label="Sound assignment controls">
         <section className="tileset-inspector-section">
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            <button type="button" className="tileset-view-action" onClick={play}>▶ Play sound</button>
-            <p className="tileset-catalog-note">Volume + mute follow Settings → Audio (Master Audio + Effects Volume).</p>
-            <dl className="al-meta">
-              <div><dt>Effect</dt><dd>{s.label}</dd></div>
-              <div><dt>Terrain</dt><dd>{s.terrain ?? 'spawn / arrival'}</dd></div>
-              <div><dt>Character</dt><dd>{s.character}</dd></div>
-              <div><dt>Build</dt><dd>{s.build}</dd></div>
-              <div><dt>Source</dt><dd>{takes}</dd></div>
-            </dl>
+            <p className="tileset-catalog-note">
+              Assign which recorded sound voices each terrain and tune the arrival thump, ▶ to audition,
+              then <strong>Copy for Claude</strong> and paste it into chat — I’ll bake it into the game.
+            </p>
           </div>
         </section>
       </aside>

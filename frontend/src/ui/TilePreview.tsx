@@ -1050,7 +1050,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <span>Zoom</span>
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
-          <button type="button" className="tileset-view-action" onClick={() => openViewer('sfx')}>View Selected</button>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('sfx')}>Assign sounds…</button>
         </>
       ),
     },
@@ -1086,7 +1086,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="surface">Surface</option>
         <option value="scrollbar">Scrollbar</option>
         <option value="slider">Slider</option>
-        <option value="sfx">Sound FX</option>
+        <option value="sfx">Sound Assignments</option>
         <option value="page">Page</option>
         <option value="tileside">Tile Sides</option>
       </select>
@@ -1161,7 +1161,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         : viewerKind === 'tileside'
                           ? <TileSidesViewer name={selectedTileSideId} header={studioViewerHeader} />
                           : viewerKind === 'sfx'
-                            ? <SfxViewer name={selectedSfxName} header={studioViewerHeader} />
+                            ? <SfxViewer header={studioViewerHeader} />
                             : <AssetLab name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
         ) : null}
       </section>

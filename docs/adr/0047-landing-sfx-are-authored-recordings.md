@@ -83,8 +83,17 @@ map terrains to it. Long source packs are capped at `MAX_VARIANTS` takes by the 
 
 - **Components:** `frontend/src/sfx.ts` (sample sets, `playTerrain`, `playArrival`),
   `frontend/src/sfxWaveform.ts` (decoded-take waveform), `frontend/src/ui/sfxCatalog.ts` +
-  `SfxLibraryStudio.tsx` (catalog), `frontend/src/game/store.ts` (fires landings + the
-  arrival roll-call). **Assets:** `frontend/public/assets/sfx/<key>/`. **Pipeline:**
-  `tools/sfx/` (`source/`, `slice-sfx.sh`, `README.md`).
+  `SfxLibraryStudio.tsx` (catalog grid + the assignment editor), `frontend/src/game/store.ts`
+  (fires landings + the arrival roll-call). **Assets:** `frontend/public/assets/sfx/<key>/`.
+  **Pipeline:** `tools/sfx/` (`source/`, `slice-sfx.sh`, `README.md`).
+- **Studio placement:** the owner edits the terrain→sound map + arrival thump in an
+  assignment editor that lives as the **Viewer `sfx` kind** (`SfxViewer`), NOT in the
+  catalog main or the 260px controls rail. Per docs/studio-control-architecture.md the
+  catalog main is content-only (the card grid) and a heavy matrix would dominate the rail,
+  so the editor uses the blessed editing-kind shape (Portrait/9-Slice): editor = the
+  `al-lab-main` stage, controls in the rail. It is the first *global-config* Viewer kind
+  (no per-item selection) — deliberate; do not relocate it back into the catalog. Reached
+  via the catalog's "Assign sounds…" affordance (`openViewer('sfx')`). The editor writes a
+  localStorage DRAFT and a "Copy for Claude" blob the owner pastes back to bake in.
 - **Settings:** volume + mute via Settings → Audio (Master Audio + Effects Volume),
   unchanged.
