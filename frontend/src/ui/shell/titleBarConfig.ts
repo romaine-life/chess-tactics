@@ -1,64 +1,67 @@
 // Route -> persistent app-shell title-bar config, consumed by the single
-// <AppTitleBar> rendered in App. A non-null config means "the app-shell bar owns
-// this screen's title bar"; null means the screen still renders its OWN header (a
-// screen not yet migrated to the shell bar). The single bar renders from this table
-// so it survives navigation. Every shipping surface — including the design/asset
-// Studio and the dev/inspector tools — is on the shared bar; there is no permanent
-// opt-out set.
+// <AppTitleBar> rendered in App. The single bar renders from this table so it
+// survives navigation, and it ALWAYS draws the invariant chrome — BrandLockup
+// (leading) + HeaderAccountCluster (trailing) — on every route (ADR-0042). A config
+// can only ADD optional regions between brand and cluster; nothing here can suppress
+// the cluster. Every shipping surface (Studio + dev/inspector tools included) is on
+// the shared bar; there is no opt-out set, and the function never returns null.
 export interface TitleBarConfig {
   screenName: string;
-  /** Render the shared HeaderAccountCluster on the right. */
-  showAccountCluster?: boolean;
-  /** Show the Settings gear in the cluster. Hidden on the Settings screen itself. */
+  /** Hide the Settings gear in the cluster (default: shown). Available modulation, but
+   *  no screen currently sets it — even Settings keeps its gear as a "back to settings
+   *  root" link (#241). The account control always renders regardless (ADR-0036/0042). */
   showSettingsGear?: boolean;
-  /** Where sign-in returns to from this screen's account cluster. */
+  /** Where the cluster's signed-out Sign In control returns to from this screen. */
   signInReturnTo?: string;
   /** Extra class on the bar element to reuse a screen's column layout (e.g. the
-   *  menu's 2-column main-menu-twin-header, or an editor's 3-section bar). */
+   *  menu's 2-column main-menu-twin-header, or an editor's 4-section bar). */
   barClass?: string;
   /** Render a center portal slot the screen fills via <TitleBarSlot region="center">. */
   centerSlot?: boolean;
-  /** Render a right portal slot for custom actions (instead of the account cluster). */
-  rightSlot?: boolean;
+  /** Render an actions portal slot (labeled controls) the screen fills via
+   *  <TitleBarSlot region="actions">. Laid out BEFORE the cluster — additive, never
+   *  a replacement for it (ADR-0042). */
+  actionsSlot?: boolean;
 }
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
   // The design/asset Studio + its deep-link aliases: brand left, account cluster right.
   if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor') {
-    return { screenName: 'Studio', showAccountCluster: true };
+    return { screenName: 'Studio' };
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
-  if (path === '/portrait-editor') return { screenName: 'Portrait Editor', showAccountCluster: true };
-  if (path === '/doodad-editor') return { screenName: 'Doodad Editor', showAccountCluster: true };
-  if (path === '/tile-compare') return { screenName: 'Tile Compare', showAccountCluster: true };
-  if (path === '/artwork-compare') return { screenName: 'Artwork Compare', showAccountCluster: true };
-  if (path === '/surface-lab') return { screenName: 'Surface Lab', showAccountCluster: true };
+  if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
+  if (path === '/doodad-editor') return { screenName: 'Doodad Editor' };
+  if (path === '/tile-compare') return { screenName: 'Tile Compare' };
+  if (path === '/artwork-compare') return { screenName: 'Artwork Compare' };
+  if (path === '/surface-lab') return { screenName: 'Surface Lab' };
 
   if (path === '/play' || path === '/skirmish') {
-    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true, showAccountCluster: true };
+    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true };
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
-    return { screenName: 'Lobbies', showAccountCluster: true, signInReturnTo: '/lobbies' };
+    return { screenName: 'Lobbies', signInReturnTo: '/lobbies' };
   }
   if (path === '/party') {
-    return { screenName: 'Party', showAccountCluster: true, signInReturnTo: '/party' };
+    return { screenName: 'Party', signInReturnTo: '/party' };
   }
   if (path === '/edit' || path === '/level-editor') {
-    return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, rightSlot: true };
+    return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, actionsSlot: true };
   }
   if (path === '/campaigns-next' || path === '/campaigns') {
-    return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true, rightSlot: true };
+    return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true, actionsSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
-    // The Settings body scales with the UI-Scale setting (zoom: --settings-ui-scale on
-    // .settings-screen). The bar lives outside that element, so tag it to ride the same
-    // (global, on documentElement) var — the persistent bar drops this class on the next
     // screen, so only Settings scales.
-    return { screenName: 'Settings', showAccountCluster: true, showSettingsGear: false, signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
+    // Keep the gear visible on Settings too: every section is its own route
+    // (/settings/<tab>, /settings/audio/tracks), so the gear is a muscle-memory
+    // "back to settings root" from any sub-page. href="/settings" normalizes to
+    // the first tab. (Default showSettingsGear=true, so it's simply not hidden.)
+    return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
   }
   if (path === '/campaign' || path.startsWith('/campaign/')) {
-    return { screenName: 'Campaign', showAccountCluster: true, signInReturnTo: '/campaign', barClass: 'main-menu-twin-header' };
+    return { screenName: 'Campaign', signInReturnTo: '/campaign', barClass: 'main-menu-twin-header' };
   }
   // Fallback: the Main Menu — renderRoute's default for any unmatched path.
-  return { screenName: 'Main Menu', showAccountCluster: true, signInReturnTo: '/', barClass: 'main-menu-twin-header' };
+  return { screenName: 'Main Menu', signInReturnTo: '/', barClass: 'main-menu-twin-header' };
 }

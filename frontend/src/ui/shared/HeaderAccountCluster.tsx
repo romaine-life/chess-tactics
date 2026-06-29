@@ -25,7 +25,8 @@ const DEMO_USER: AuthUser = {
 interface HeaderAccountClusterProps {
   /** Where to return after sign-in (defaults to the current path+query). */
   signInReturnTo?: string;
-  /** Show the Settings gear. Hide it on the Settings screen itself. Default true. */
+  /** Show the Settings gear. Default true — kept on every screen, including
+   *  Settings itself (it links to the settings root from any sub-page). */
   showSettingsGear?: boolean;
 }
 

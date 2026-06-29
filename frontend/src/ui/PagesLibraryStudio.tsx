@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement, type React
 import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { SURFACE_ASSETS } from './surfaceCatalog';
+import { useWindowScaledPreview } from './useWindowScaledPreview';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -28,7 +29,9 @@ export function PagesLibraryStudio({
           aria-pressed={p.name === selected}
           title={`${p.label} — ${p.route}`}
         >
-          <span className="tileset-studio-card-image pages-card-image" aria-hidden="true">{p.label.slice(0, 1)}</span>
+          <span className="tileset-studio-card-image pages-card-image" aria-hidden="true">
+            <img src={p.thumb} alt="" loading="lazy" />
+          </span>
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">
               <strong>{p.label}</strong>
@@ -92,11 +95,43 @@ const MM_LIVE = { btnH: 56, railW: 304, gap: 11, icon: 64, textX: 18 } as const;
 // handshake: the menu-scoped audition CSS is the per-control preview rules with the (now-absent)
 // `.pages-menu-tweak` scope prefix stripped, so they target the real menu elements and keep their
 // !important guards to beat the shipped chrome. "Copy menu CSS" still exports the bake-form rules.
+// A numeric slider row with − / + steppers (1px pixel nudges by default) and a ↺ reset — used by
+// every Main Menu tuner control so each gets exact pixel adjustment. The steppers and reset clamp
+// to [min, max]; pass `nudge` for a non-1 increment (e.g. the 0.05× Lighten control).
+function SliderRow({ label, value, set, min, max, step = 1, nudge = 1, dflt }: {
+  label: ReactNode;
+  value: number;
+  set: (v: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  nudge?: number;
+  dflt: number;
+}): ReactElement {
+  const clamp = (v: number): number => Math.min(max, Math.max(min, Math.round(v * 100) / 100));
+  return (
+    <label className="tileset-catalog-zoom">
+      <span>{label}</span>
+      <div className="pages-ctl-row">
+        <button type="button" className="pages-step" aria-label="Decrease" onClick={(e) => { e.preventDefault(); set(clamp(value - nudge)); }}>−</button>
+        <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} />
+        <button type="button" className="pages-step" aria-label="Increase" onClick={(e) => { e.preventDefault(); set(clamp(value + nudge)); }}>+</button>
+        <button type="button" className="pages-mini-reset" title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); set(dflt); }}>↺</button>
+      </div>
+    </label>
+  );
+}
+
 function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // True-to-window miniature: the menu body is centred under a viewport-relative cap, so a
+  // panel-sized iframe would re-centre the rail at the wrong indent — see useWindowScaledPreview.
+  const { hostRef, frameStyle } = useWindowScaledPreview();
   const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // tab min-height
   const [railW, setRailW] = useState<number>(MM_LIVE.railW); // rail (button) width
   const [tabGap, setTabGap] = useState<number>(MM_LIVE.gap); // space between tabs
+  const [btnX, setBtnX] = useState(0); // move the whole button group left/right (px; 0 = shipped)
+  const [btnY, setBtnY] = useState(0); // ...and up/down
   const [textX, setTextX] = useState<number>(MM_LIVE.textX); // horizontal nudge of the label (px)
   const [iconSize, setIconSize] = useState<number>(MM_LIVE.icon); // live 34px in a 40px slot
   const [iconX, setIconX] = useState(0); // horizontal nudge of the icon (px; 0 = centred in slot)
@@ -110,6 +145,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     setBtnH(MM_LIVE.btnH);
     setRailW(MM_LIVE.railW);
     setTabGap(MM_LIVE.gap);
+    setBtnX(0);
+    setBtnY(0);
     setTextX(MM_LIVE.textX);
     setIconSize(MM_LIVE.icon);
     setIconX(0);
@@ -123,6 +160,11 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   const iconFilter = iconTreatFilter(iconTreat, iconLighten);
   const slide = hoverSlide === '6' ? 6 : hoverSlide === '10' ? 10 : 0;
   const surfaceUrl = surface ? `/assets/ui/surfaces/${surface}.png` : '';
+  // Slider bounds that reach the screen edges so buttons can be sized to / moved across the FULL
+  // window. window.innerWidth/Height is the preview's own viewport (useWindowScaledPreview re-renders
+  // this component on resize, so the bounds track the window). Floored so they never undershoot.
+  const screenW = Math.max(1920, Math.ceil(window.innerWidth));
+  const screenH = Math.max(1080, Math.ceil(window.innerHeight));
 
   // Each entry pairs a LIVE-preview rule (scoped to .pages-menu-tweak so it can't reach the shared
   // Settings page) with the menu-SCOPED bake rule to paste into style.css. Gated on "differs from
@@ -145,12 +187,24 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   add(btnH !== MM_LIVE.btnH,
     `.pages-menu-tweak .main-menu-mode-tab { min-height: ${btnH}px !important; }`,
     `.main-menu-mode-tab {\n  min-height: ${btnH}px;\n}`);
+  // Button width = the rail column. The shell ships a centred max-inline-size cap (clamp(900, 88vw,
+  // 1240)), so widen the cap to fit the chosen width — max() keeps the default cap for narrow widths
+  // (no surprise re-centre) and grows the body, centred, up to the full window for wide ones.
   add(railW !== MM_LIVE.railW,
-    `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; }`,
-    `.main-menu-twin-screen .settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n}`);
+    `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px) !important; }`,
+    `.main-menu-twin-screen .settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n  max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px);\n}`);
   add(tabGap !== MM_LIVE.gap,
     `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
     `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
+  // Move the WHOLE button group: transform the rail frame (not the tabs) so it nudges without
+  // reflow. X = left/right, Y = up/down; composes with the hover-slide (which transforms the tabs,
+  // a different element). The rail lives inside .settings-shell, which ships overflow:hidden — so a
+  // translated rail is CLIPPED the moment it crosses the shell edge (worse in a narrow window where
+  // the shell hugs the rail). Lift that clip (menu-scoped) whenever the group is moved, in BOTH the
+  // preview and the bake, so the buttons stay whole wherever you place them and what ships matches.
+  add(btnX !== 0 || btnY !== 0,
+    `.pages-menu-tweak .settings-shell { overflow: visible !important; }\n.pages-menu-tweak .settings-rail-frame { transform: translate(${btnX}px, ${btnY}px) !important; }`,
+    `.main-menu-twin-screen .settings-shell {\n  overflow: visible;\n}\n.main-menu-twin-screen .settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
   // Horizontal nudge of the label span (the second grid cell; transform doesn't reflow the layout).
   add(textX !== MM_LIVE.textX,
     `.pages-menu-tweak .main-menu-mode-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
@@ -239,9 +293,16 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     <>
       {/* Iframe the REAL "/" route so the preview carries the full app shell — the shared title bar
           included — exactly as it ships; the tweak controls inject into it (see inject() above).
-          .surface-dressing-main is a stretch-grid that gives the full-page iframe a definite height. */}
-      <section className="surface-dressing-main" aria-label="Main Menu preview">
-        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live main menu preview" />
+          is-window-scaled + frameStyle make it a true-to-window miniature so the rail indent matches
+          what ships, not a panel-sized re-centre (see useWindowScaledPreview). */}
+      <section className="surface-dressing-main is-window-scaled" aria-label="Main Menu preview" ref={hostRef}>
+        <iframe
+          ref={iframeRef}
+          className="surface-dressing-frame"
+          src={page.route}
+          title="Live main menu preview"
+          style={frameStyle}
+        />
       </section>
       <aside className="tileset-view-controls" aria-label="Main Menu controls">
         <section className="tileset-inspector-section">
@@ -249,34 +310,12 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
           <div className="tileset-control-stack">
             {header}
             <p className="tileset-catalog-note">Every control drives the <strong>live</strong> menu chrome; defaults = what ships. Tune, then <strong>Copy menu CSS</strong> to bake.</p>
-            <label className="tileset-catalog-zoom">
-              <span>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="44" max="96" step="1" value={btnH} onChange={(e) => setBtnH(Number(e.target.value))} />
-                {ctlReset(() => setBtnH(MM_LIVE.btnH))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="220" max="460" step="2" value={railW} onChange={(e) => setRailW(Number(e.target.value))} />
-                {ctlReset(() => setRailW(MM_LIVE.railW))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="4" max="28" step="1" value={tabGap} onChange={(e) => setTabGap(Number(e.target.value))} />
-                {ctlReset(() => setTabGap(MM_LIVE.gap))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="-80" max="160" step="2" value={textX} onChange={(e) => setTextX(Number(e.target.value))} />
-                {ctlReset(() => setTextX(MM_LIVE.textX))}
-              </div>
-            </label>
+            <SliderRow label={<>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</>} value={btnH} set={setBtnH} min={44} max={96} dflt={MM_LIVE.btnH} />
+            <SliderRow label={<>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</>} value={railW} set={setRailW} min={220} max={screenW} dflt={MM_LIVE.railW} />
+            <SliderRow label={<>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</>} value={tabGap} set={setTabGap} min={4} max={28} dflt={MM_LIVE.gap} />
+            <SliderRow label={<>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === 0 ? ' · live' : ''}</>} value={btnX} set={setBtnX} min={-screenW} max={screenW} dflt={0} />
+            <SliderRow label={<>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === 0 ? ' · live' : ''}</>} value={btnY} set={setBtnY} min={-screenH} max={screenH} dflt={0} />
+            <SliderRow label={<>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</>} value={textX} set={setTextX} min={-80} max={160} dflt={MM_LIVE.textX} />
             <label className="tileset-category-select">
               <span>Stone surface</span>
               <div className="pages-ctl-row">
@@ -287,20 +326,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
                 {ctlReset(() => setSurface(''))}
               </div>
             </label>
-            <label className="tileset-catalog-zoom">
-              <span>Icon size · {iconSize}px{iconSize === MM_LIVE.icon ? ' · live' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="24" max="96" step="1" value={iconSize} onChange={(e) => setIconSize(Number(e.target.value))} />
-                {ctlReset(() => setIconSize(MM_LIVE.icon))}
-              </div>
-            </label>
-            <label className="tileset-catalog-zoom">
-              <span>Icon position · {iconX > 0 ? '+' : ''}{iconX}px{iconX === 0 ? ' · centred' : ''}</span>
-              <div className="pages-ctl-row">
-                <input type="range" min="-40" max="120" step="2" value={iconX} onChange={(e) => setIconX(Number(e.target.value))} />
-                {ctlReset(() => setIconX(0))}
-              </div>
-            </label>
+            <SliderRow label={<>Icon size · {iconSize}px{iconSize === MM_LIVE.icon ? ' · live' : ''}</>} value={iconSize} set={setIconSize} min={24} max={96} dflt={MM_LIVE.icon} />
+            <SliderRow label={<>Icon position · {iconX > 0 ? '+' : ''}{iconX}px{iconX === 0 ? ' · centred' : ''}</>} value={iconX} set={setIconX} min={-40} max={120} dflt={0} />
             <div className="tileset-filter-field">
               <span>Icon contrast</span>
               <div className="pages-ctl-row">
@@ -313,13 +340,7 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
               </div>
             </div>
             {iconTreat === 'limestone' ? (
-              <label className="tileset-catalog-zoom">
-                <span>Lighten · {iconLighten.toFixed(2)}×</span>
-                <div className="pages-ctl-row">
-                  <input type="range" min="1" max="2.6" step="0.05" value={iconLighten} onChange={(e) => setIconLighten(Number(e.target.value))} />
-                  {ctlReset(() => setIconLighten(1.85))}
-                </div>
-              </label>
+              <SliderRow label={<>Lighten · {iconLighten.toFixed(2)}×</>} value={iconLighten} set={setIconLighten} min={1} max={2.6} step={0.05} nudge={0.05} dflt={1.85} />
             ) : null}
             <p className="tileset-catalog-note">Carved icons measure ~1–1.25:1 on the stone (readable floor 3:1). <strong>Pale stone</strong> &amp; <strong>Bevel</strong> are pure CSS over the shipped art; <strong>Bronze*</strong> is a LOOK preview — shipping it means re-forging the icon PNGs, not a filter.</p>
             <div className="tileset-filter-field">
@@ -498,6 +519,8 @@ function buildCeChromeCss(state: Record<string, CeGroupTune>): string {
 // and means this touches ZERO shipped CSS; "Copy CSS" exports the bare rules to bake in later.
 function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // True-to-window miniature so the editor's vw-based chrome previews at shipped proportions.
+  const { hostRef, frameStyle } = useWindowScaledPreview();
   const [groups, setGroups] = useState<Record<string, CeGroupTune>>(ceAllDefaults);
   const [activeId, setActiveId] = useState<string>(CE_GROUPS[0].id);
   const [copied, setCopied] = useState(false);
@@ -568,11 +591,11 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
 
   return (
     <>
-      {/* surface-dressing-main is a stretch-grid (grid-template-rows: minmax(0,1fr)) so the iframe
-          gets a DEFINITE height — the campaign editor's .ce-screen/.app-root are height:100% and
-          collapse to header+footer in a content-sized container like .al-lab-main. */}
-      <section className="surface-dressing-main" aria-label="Campaign Editor preview">
-        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live campaign editor preview" />
+      {/* True-to-window miniature (is-window-scaled + frameStyle): the iframe carries the live
+          window's size — a DEFINITE height for the editor's height:100% .ce-screen/.app-root — and
+          scales to fit, so the vw-based chrome previews at shipped proportions (useWindowScaledPreview). */}
+      <section className="surface-dressing-main is-window-scaled" aria-label="Campaign Editor preview" ref={hostRef}>
+        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live campaign editor preview" style={frameStyle} />
       </section>
       <aside className="tileset-view-controls" aria-label="Campaign Editor chrome controls">
         <section className="tileset-inspector-section">

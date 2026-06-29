@@ -10,6 +10,10 @@ const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
 const SETTINGS_KEY = 'chess-tactics-settings-v1';
 const ASSET_BASE = '/assets/ui/settings';
+// How long the panel body fades out before swapping in the next menu's controls,
+// then fades back in. MUST match the opacity transition on .settings-panel-content
+// in style.css (one constant, two places — keep them in sync).
+const PANEL_FADE_MS = 150;
 
 type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools';
 type ButtonTone = 'neutral' | 'primary' | 'danger';
@@ -282,6 +286,15 @@ function Slider({
 export function Settings(): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
   const [showTracks, setShowTracks] = useState<boolean>(() => isTracksView(window.location.pathname));
+  // What the panel body is currently rendering. It lags the URL-derived
+  // activeTab/showTracks by one fade so the outgoing menu's controls fade out, swap
+  // at zero opacity, then the incoming ones fade in. The rail highlight still tracks
+  // activeTab directly, so clicking a tab lights it instantly while the body crossfades.
+  const [display, setDisplay] = useState<{ tab: SettingsTab; tracks: boolean }>(() => ({
+    tab: tabFromPath(window.location.pathname),
+    tracks: isTracksView(window.location.pathname),
+  }));
+  const [panelPhase, setPanelPhase] = useState<'in' | 'out'>('in');
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
@@ -294,11 +307,22 @@ export function Settings(): ReactElement {
   // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
   const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
   const [confirmingReset, setConfirmingReset] = useState(false);
+  // Drives the one-time fade-in when the Settings screen mounts (entering settings).
+  // Starts false so .settings-shell paints at opacity 0, then flips true after the first
+  // paint so the opacity transition runs it in. It resets on each mount, so it replays
+  // every time you enter settings — but NOT on tab toggles (Settings stays mounted for
+  // the whole /settings/* subtree, so toggles re-render without remounting).
+  const [entered, setEntered] = useState(false);
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
-    return () => shell?.classList.remove('settings-art-active');
+    // Flip after the first paint so the entry fade (opacity 0 -> 1) actually transitions.
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => {
+      cancelAnimationFrame(raf);
+      shell?.classList.remove('settings-art-active');
+    };
   }, []);
 
   useEffect(() => {
@@ -383,7 +407,23 @@ export function Settings(): ReactElement {
     return () => window.removeEventListener(BGM_STATE_EVENT, onState);
   }, []);
 
-  const active = useMemo(() => tabs.find((tab) => tab.id === activeTab) || tabs[0], [activeTab]);
+  // Crossfade the panel body when the target menu changes: fade the current controls
+  // out, swap in the next menu's controls at zero opacity, then fade them in. The data
+  // fetch keys off showTracks (not display), so the soundtrack list is already loading
+  // while the fade-out plays. This is a pure opacity fade (no movement), which is safe
+  // under prefers-reduced-motion, so it runs for everyone — including the common case of
+  // Windows "Animation effects" off, which makes Chrome report reduced-motion.
+  useEffect(() => {
+    if (display.tab === activeTab && display.tracks === showTracks) return;
+    setPanelPhase('out');
+    const timer = window.setTimeout(() => {
+      setDisplay({ tab: activeTab, tracks: showTracks });
+      setPanelPhase('in');
+    }, PANEL_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, showTracks, display.tab, display.tracks]);
+
+  const active = useMemo(() => tabs.find((tab) => tab.id === display.tab) || tabs[0], [display.tab]);
 
   const updateSetting = <Key extends keyof LocalSettings>(key: Key, value: LocalSettings[Key]) => {
     setConfirmingReset(false);
@@ -602,7 +642,7 @@ export function Settings(): ReactElement {
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
       <AmbienceBackground />
       <div className="settings-screen app-shell-bar-pad">
-        <div className="settings-shell">
+        <div className={`settings-shell ${entered ? 'is-entered' : ''}`}>
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
               <a
@@ -627,7 +667,7 @@ export function Settings(): ReactElement {
                 nav button; a visible panel heading just duplicated them. Keep an
                 accessible heading for screen-reader structure. */}
             <h2 className="sr-only">{active.label}</h2>
-            {showTracks ? (
+            {display.tracks ? (
               <div className="settings-tracks-bar">
                 <div className="settings-tracks-bar-col">
                   <div className="settings-tracks-bar-actions">
@@ -657,11 +697,11 @@ export function Settings(): ReactElement {
               </div>
             ) : null}
             <KitScroll className="settings-scroll">
-              <div className="settings-panel-content">
-                {activeTab === 'general' ? renderGeneral() : null}
-                {activeTab === 'audio' ? (showTracks ? renderTracks() : renderAudio()) : null}
-                {activeTab === 'gameplay' ? renderGameplay() : null}
-                {activeTab === 'creator-tools' ? renderCreatorTools() : null}
+              <div className={`settings-panel-content ${panelPhase === 'out' ? 'is-leaving' : 'is-entering'}`}>
+                {display.tab === 'general' ? renderGeneral() : null}
+                {display.tab === 'audio' ? (display.tracks ? renderTracks() : renderAudio()) : null}
+                {display.tab === 'gameplay' ? renderGameplay() : null}
+                {display.tab === 'creator-tools' ? renderCreatorTools() : null}
               </div>
             </KitScroll>
           </main>

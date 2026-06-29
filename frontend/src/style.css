@@ -560,12 +560,38 @@ h1 {
   cursor: pointer;
 }
 .pages-mini-reset:hover { color: #f4fbff; background: rgba(120, 160, 200, .24); }
+/* − / + pixel steppers beside a slider — same plate as the reset, with a fixed width so a row of
+   [−][slider][+][↺] stays tidy. */
+.pages-step {
+  appearance: none;
+  flex: none;
+  align-self: stretch;
+  min-width: 26px;
+  padding: 0 8px;
+  font-size: 15px;
+  line-height: 1;
+  color: #9fc4e6;
+  background: rgba(120, 160, 200, .12);
+  border: 1px solid rgba(120, 160, 200, .32);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pages-step:hover { color: #f4fbff; background: rgba(120, 160, 200, .24); }
 /* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
-   sprites): a solid stone-ish plate with the page initial, centered by the base place-items. */
+   sprites): a hero shot of the live route, full-bleed. The gradient shows only until the
+   thumbnail loads / if it's missing. */
 .tileset-studio-card-image.pages-card-image {
   min-height: 96px;
-  font-family: var(--ds-font-display); font-size: 1.9rem; color: #9db8da;
+  aspect-ratio: 16 / 10;
   background: linear-gradient(180deg, #16243a, #0b1422);
+}
+/* Beats the base .tileset-studio-card-image img (iso-tile-sized, pixelated, contain). */
+.tileset-studio-card-image.pages-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  image-rendering: auto;
 }
 
 .mode-button {
@@ -1144,6 +1170,20 @@ h1 {
      --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
      + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
   --app-header-h: clamp(84px, 5vw, 88px);
+  /* motion — duration + easing tokens (ADR-0043). Map MOTION ROLES onto these; don't
+     hand-pick ms per element. Two interactive tiers + an entrance tier:
+       fast = instant feedback (hover / toggle / focus / filter swap),
+       base = content fades & crossfade legs (the settings menu crossfade),
+       slow = screen / large-surface entrances.
+     Easing (Material 3): standard for in-place changes; out (emphasized-decelerate)
+     for entrances — motion settles, never accelerates in; linear for pure opacity
+     crossfades (a fade reads fine linear). */
+  --ds-duration-fast: 100ms;
+  --ds-duration-base: 150ms;
+  --ds-duration-slow: 300ms;
+  --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ds-ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ds-ease-linear: linear;
 }
 
 .main-assets-header .eyebrow {
@@ -3416,6 +3456,15 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
+/* Editor bars (level + campaign editor) carry a 4th, trailing column for the always-on
+   account/settings cluster (ADR-0042): brand · live save-state · editor actions ·
+   cluster. Two classes out-rank the base .settings-header-frame grid (same trick the
+   skirmish override uses), so the cluster gets its own track instead of overflowing. */
+.app-shell-titlebar.le-topbar,
+.app-shell-titlebar.ce-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
 .skirmish-topbar-status {
   align-items: center;
   display: flex;
@@ -4926,13 +4975,15 @@ body { font-size: 17px; }
 .ce-screen.app-shell-bar-pad > .ce-footer { grid-row: 3; }
 
 .ce-topbar {
-  /* Frame + height come from .app-titlebar (ADR-0004); this is the shared
-     three-section content layout — brand / stats / controls — centered (ADR-0016). */
+  /* Frame + height come from .app-titlebar (ADR-0004); this is the shared content
+     layout — brand / stats / actions / account-cluster — centered (ADR-0016). The
+     4th column (the always-on cluster) is enforced at higher specificity below; this
+     value matches so the rule reads true even where base bar grid would shadow it. */
   align-content: center;
   align-items: center;
   display: grid;
   gap: clamp(10px, 1.4vw, 20px);
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
@@ -5926,7 +5977,9 @@ body { font-size: 17px; }
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
   image-rendering: pixelated;
-  transition: transform 0.1s ease, opacity 0.2s ease;
+  /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
+     fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
+  transition: transform var(--ds-duration-fast) var(--ds-ease-standard), opacity var(--ds-duration-base) var(--ds-ease-linear);
 }
 
 .bgm-control-icon {
@@ -7622,6 +7675,21 @@ body { font-size: 17px; }
   border: 0;
   border-radius: 5px;
   background: #05080c;
+}
+
+/* Main Menu viewer: the iframe is a true-to-window miniature. It carries the live window's
+   pixel size (set inline from the measured fit) so the menu's vw-based, centred layout
+   resolves exactly as it ships, then scales down to fit the panel. Absolute + centred (the
+   inline transform is translate(-50%,-50%) scale(s)) so its full-size layout box never
+   stretches the grid track; the panel's overflow:hidden clips the scaled-down result. */
+.surface-dressing-main.is-window-scaled {
+  position: relative;
+}
+.surface-dressing-main.is-window-scaled > .surface-dressing-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
 }
 
 .surface-region-card {
@@ -10307,6 +10375,22 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+/* Entry fade (ADR-0043): the chrome (rail + panel) fades in when the Settings screen
+   mounts. Settings.tsx adds .is-entered after the first paint so this opacity transition
+   runs (entrance tier — slow + decelerate). Pure opacity = reduced-motion-safe, so it is
+   intentionally not gated (same rationale as the menu crossfade); the rain backdrop sits
+   behind and is untouched — only the chrome fades in over it.
+   SCOPED to .settings-art-route: the main menu REUSES the .settings-shell class but has no
+   JS to add .is-entered, so an unscoped `opacity: 0` here left the whole main menu stuck
+   invisible (the rail/buttons inherited it). Only the real Settings screen, wrapped in
+   .settings-art-route, starts hidden and fades in. */
+.settings-art-route .settings-shell {
+  opacity: 0;
+  transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
+}
+
+.settings-art-route .settings-shell.is-entered { opacity: 1; }
+
 .settings-rail-frame,
 .settings-main-frame {
   min-height: 0;
@@ -10354,8 +10438,15 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   min-height: 56px;
   padding: 22px; /* even inset — icon sits with equal margin on every side (was 17px/22px) */
+  /* NON-fixed stone (was `repeat fixed`). background-attachment: fixed routes painting
+     through Chromium's viewport-fixed-background path, which intermittently fails to
+     repaint when a nearby element composites/decomposites — the Settings menu crossfade
+     (opacity on .settings-panel-content) was blanking these sibling tabs' surfaces.
+     A locally-attached background paints with the element and is immune. Continuity
+     across the stacked tabs is recovered with per-tab background-position-y below.
+     (Both layers keep the merged image-set optimization; only `fixed` is dropped.) */
   /* PNG fallback for engines without image-set()/type(). */
-  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat;
   /* Preferred AVIF -> WebP -> PNG (the ~440KB PNG is the single heaviest menu image;
      the derivatives let the buttons decode in time to reveal WITH their surface). */
   background:
@@ -10363,13 +10454,21 @@ button.tileset-relationship-cell {
       url("/assets/ui/surfaces/baseline-stone-blue.avif") type("image/avif"),
       url("/assets/ui/surfaces/baseline-stone-blue.webp") type("image/webp"),
       url("/assets/ui/surfaces/baseline-stone-blue.png") type("image/png")
-    ) 0 0 / 1024px repeat fixed;
+    ) 0 0 / 1024px repeat;
   background-origin: padding-box;
   background-clip: padding-box;
   text-align: left;
   text-decoration: none;
   transition: color .14s ease, filter .14s ease;
 }
+
+/* Recover the continuous-stone flow the retired `fixed` attachment gave: each stacked
+   tab samples the vertical slice it would have if one texture sheet ran down the rail.
+   Step = the ~98px tab pitch (measured; drifts a few px with the clamp()ed gap/padding,
+   imperceptible for a stone texture). The rail is exactly these four tabs in order. */
+.settings-tab:nth-child(2) { background-position-y: -98px; }
+.settings-tab:nth-child(3) { background-position-y: -196px; }
+.settings-tab:nth-child(4) { background-position-y: -294px; }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
@@ -10460,7 +10559,20 @@ button.tileset-relationship-cell {
   margin-inline: auto;
   min-height: 0;
   padding-block-end: 4px;
+  /* Toggling settings menus crossfades the body: the outgoing controls fade out, the
+     next menu's controls swap in at zero opacity, then fade in (driven by the
+     is-leaving/is-entering classes from Settings.tsx). Duration MUST match
+     PANEL_FADE_MS there. A pure opacity fade (no movement) is safe under
+     prefers-reduced-motion, so it is intentionally NOT gated on that query — many
+     players run with Windows "Animation effects" off (which Chrome reads as
+     reduced-motion) and should still get this transition. The duration is the
+     content-fade token (ADR-0043); --ds-duration-base is 150ms, which MUST stay in
+     sync with PANEL_FADE_MS in Settings.tsx (the JS that times the swap). */
+  transition: opacity var(--ds-duration-base) var(--ds-ease-standard);
 }
+
+.settings-panel-content.is-leaving { opacity: 0; }
+.settings-panel-content.is-entering { opacity: 1; }
 
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */

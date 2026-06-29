@@ -90,11 +90,11 @@ export function App(): ReactElement {
   // hops skip the veil and swap instantly. Timings mirror VEIL_*_MS / style.css.
   const [veil, setVeil] = useState<'idle' | 'cover' | 'reveal'>('idle');
   const [isPending, startRouteTransition] = useTransition();
-  // The persistent bar's center/right portal targets, owned here so the routed screen
+  // The persistent bar's center/actions portal targets, owned here so the routed screen
   // (a sibling of AppTitleBar) can portal its dynamic bar content into them.
   const [centerNode, setCenterNode] = useState<HTMLElement | null>(null);
-  const [rightNode, setRightNode] = useState<HTMLElement | null>(null);
-  const titleBarPortals = useMemo(() => ({ centerNode, rightNode }), [centerNode, rightNode]);
+  const [actionsNode, setActionsNode] = useState<HTMLElement | null>(null);
+  const titleBarPortals = useMemo(() => ({ centerNode, actionsNode }), [centerNode, actionsNode]);
   // Cold-load reveal: on a fresh main-menu load the title bar is the 2nd layer to appear
   // (after the background). It reads the shared director's stage so it can hold hidden
   // until its turn. On every other route / later navigation the store is fully revealed,
@@ -199,9 +199,10 @@ export function App(): ReactElement {
     <>
       <UpdateBanner />
       {/* The single persistent title bar, rendered OUTSIDE the routed screen so it
-          survives navigation (only its contents change). Renders nothing for routes
-          that keep their own header (Studio/dev + not-yet-migrated screens). */}
-      <AppTitleBar path={path} onCenterNode={setCenterNode} onRightNode={setRightNode} revealTitle={reveal.has('title')} />
+          survives navigation (only its contents change). It always draws the brand +
+          account/settings cluster; screens only fill its optional center/actions
+          slots (ADR-0042). revealTitle gates only the cold-load reveal. */}
+      <AppTitleBar path={path} onCenterNode={setCenterNode} onActionsNode={setActionsNode} revealTitle={reveal.has('title')} />
       {/* ONE stable Suspense boundary above the router. Because the boundary
           persists across every route swap (rather than each route mounting its
           own), a transition navigation keeps the already-revealed screen painted
