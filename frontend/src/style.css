@@ -10444,6 +10444,19 @@ button.tileset-relationship-cell {
   margin-inline: auto;
   min-height: 0;
   padding-block-end: 4px;
+  /* Toggling settings menus crossfades the body: the outgoing controls fade out, the
+     next menu's controls swap in at zero opacity, then fade in (driven by the
+     is-leaving/is-entering classes from Settings.tsx). Duration MUST match
+     PANEL_FADE_MS there. The global reduced-motion rule disables `animation`, not
+     `transition`, so the opacity step is silenced explicitly below. */
+  transition: opacity 150ms ease;
+}
+
+.settings-panel-content.is-leaving { opacity: 0; }
+.settings-panel-content.is-entering { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-panel-content { transition: none; }
 }
 
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
