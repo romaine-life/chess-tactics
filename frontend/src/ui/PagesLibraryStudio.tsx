@@ -160,11 +160,14 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
     `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
   // Move the WHOLE button group: transform the rail frame (not the tabs) so it nudges without
-  // reflow and is clipped by the roomy .settings-shell, not the tight rail box. X = left/right,
-  // Y = up/down. Composes with the hover-slide (which transforms the tabs, a different element).
+  // reflow. X = left/right, Y = up/down; composes with the hover-slide (which transforms the tabs,
+  // a different element). The rail lives inside .settings-shell, which ships overflow:hidden — so a
+  // translated rail is CLIPPED the moment it crosses the shell edge (worse in a narrow window where
+  // the shell hugs the rail). Lift that clip (menu-scoped) whenever the group is moved, in BOTH the
+  // preview and the bake, so the buttons stay whole wherever you place them and what ships matches.
   add(btnX !== 0 || btnY !== 0,
-    `.pages-menu-tweak .settings-rail-frame { transform: translate(${btnX}px, ${btnY}px) !important; }`,
-    `.main-menu-twin-screen .settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
+    `.pages-menu-tweak .settings-shell { overflow: visible !important; }\n.pages-menu-tweak .settings-rail-frame { transform: translate(${btnX}px, ${btnY}px) !important; }`,
+    `.main-menu-twin-screen .settings-shell {\n  overflow: visible;\n}\n.main-menu-twin-screen .settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
   // Horizontal nudge of the label span (the second grid cell; transform doesn't reflow the layout).
   add(textX !== MM_LIVE.textX,
     `.pages-menu-tweak .main-menu-mode-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
