@@ -990,6 +990,13 @@ h1 {
 .main-menu-twin-screen {
   transition: opacity 320ms ease;
 }
+/* Buttons hidden until revealed. On COLD load the director opens this stage in order
+   (bg -> title -> buttons). On a SOFT nav INTO the menu (e.g. campaign editor -> menu),
+   the store is already fully revealed, so MainMenu withholds data-reveal-buttons for one
+   frame after mount (its `entered` state) — that runs this same opacity transition as an
+   arrival fade, matching the editor's entrance so the hop dissolves the chrome both ways
+   while the shared backdrop + rain stay put. (Campaign reuses this class but hardcodes
+   data-reveal-buttons, so its play surface is never gated by this.) */
 .main-menu-layer:not([data-reveal-buttons]) .main-menu-twin-screen {
   opacity: 0;
 }
@@ -5023,6 +5030,23 @@ body { font-size: 17px; }
      falls behind the editor chrome (and the near drops cross in front of it). */
   position: relative;
   z-index: 3;
+}
+
+/* Menu-family chrome entrance. When the editor MOUNTS on a soft nav (menu <-> campaign
+   editor), only its chrome fades in — the shared backdrop scene + synced rain sit behind
+   it (on .ce-screen / the ambience canvases) and never move, so the hop reads as the UI
+   swapping over one continuous scene, not the whole screen dissolving. A TRANSITION, not
+   a keyframe animation, so it survives `@media (prefers-reduced-motion){ *{animation:none} }`
+   (~line 6031): many players (incl. this one) run Windows with animations off, which Chrome
+   reads as reduced-motion, and an opacity fade is motion-safe — same rationale as Settings'
+   entrance. CampaignEditor adds .is-entered to .ce-screen one frame after mount. */
+.ce-layout,
+.ce-footer {
+  transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
+}
+.ce-screen:not(.is-entered) .ce-layout,
+.ce-screen:not(.is-entered) .ce-footer {
+  opacity: 0;
 }
 
 /* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
