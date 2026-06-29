@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
+import { useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 import { useWindowScaledPreview } from './useWindowScaledPreview';
+import { SliderRow, ctlReset } from './dressing/SliderRow';
+import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
+import { useInjectedStyle } from './dressing/useInjectedStyle';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -97,33 +100,6 @@ const MM_LIVE = { btnH: 56, railW: 487, gap: 11, icon: 64, textX: 37, btnX: -230
 // handshake: the menu-scoped audition CSS is the per-control preview rules with the (now-absent)
 // `.pages-menu-tweak` scope prefix stripped, so they target the real menu elements and keep their
 // !important guards to beat the shipped chrome. "Copy menu CSS" still exports the bake-form rules.
-// A numeric slider row with − / + steppers (1px pixel nudges by default) and a ↺ reset — used by
-// every Main Menu tuner control so each gets exact pixel adjustment. The steppers and reset clamp
-// to [min, max]; pass `nudge` for a non-1 increment (e.g. the 0.05× Lighten control).
-function SliderRow({ label, value, set, min, max, step = 1, nudge = 1, dflt }: {
-  label: ReactNode;
-  value: number;
-  set: (v: number) => void;
-  min: number;
-  max: number;
-  step?: number;
-  nudge?: number;
-  dflt: number;
-}): ReactElement {
-  const clamp = (v: number): number => Math.min(max, Math.max(min, Math.round(v * 100) / 100));
-  return (
-    <label className="tileset-catalog-zoom">
-      <span>{label}</span>
-      <div className="pages-ctl-row">
-        <button type="button" className="pages-step" aria-label="Decrease" onClick={(e) => { e.preventDefault(); set(clamp(value - nudge)); }}>−</button>
-        <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} />
-        <button type="button" className="pages-step" aria-label="Increase" onClick={(e) => { e.preventDefault(); set(clamp(value + nudge)); }}>+</button>
-        <button type="button" className="pages-mini-reset" title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); set(dflt); }}>↺</button>
-      </div>
-    </label>
-  );
-}
-
 function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   // True-to-window miniature: the menu body is centred under a viewport-relative cap, so a
@@ -143,6 +119,7 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   const [iconTreat, setIconTreat] = useState<IconTreat>('off');
   const [iconLighten, setIconLighten] = useState(1.85);
   const [copied, setCopied] = useState(false);
+  const [group, setGroup] = useState<'buttons' | 'label' | 'icon' | 'interaction'>('buttons'); // active element category
   const resetDefaults = (): void => {
     setBtnH(MM_LIVE.btnH);
     setRailW(MM_LIVE.railW);
@@ -232,51 +209,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   // wrapper used. The !important guards stay, so the overrides still beat the shipped chrome.
   const injectedCss = previewCss.split('.pages-menu-tweak ').join('');
 
-  // Read the latest injected CSS via a ref so the load handler / interval stay stable (no
-  // re-subscribe per keystroke) while always painting current values (mirrors SurfaceDressingRoom).
-  const cssRef = useRef(injectedCss);
-  cssRef.current = injectedCss;
-
-  const inject = useCallback(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    try {
-      const doc = iframe.contentDocument;
-      if (!doc || !doc.head) return; // transient during navigation
-      let style = doc.getElementById('main-menu-tuning') as HTMLStyleElement | null;
-      if (!style) {
-        style = doc.createElement('style');
-        style.id = 'main-menu-tuning';
-        doc.head.appendChild(style);
-      }
-      style.textContent = cssRef.current;
-    } catch {
-      /* same-origin access can blip during reload — re-inject on the next tick/load */
-    }
-  }, []);
-
-  // Re-inject live whenever a control changes the audition CSS.
-  useEffect(() => {
-    inject();
-  }, [injectedCss, inject]);
-
-  // The SPA mounts "/" asynchronously after the iframe load fires, so re-inject on load and on a
-  // short interval until it sticks (same handshake as the dressing room / campaign viewer).
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const onLoad = () => inject();
-    iframe.addEventListener('load', onLoad);
-    let n = 0;
-    const timer = window.setInterval(() => {
-      inject();
-      if (++n > 24) window.clearInterval(timer);
-    }, 250);
-    return () => {
-      iframe.removeEventListener('load', onLoad);
-      window.clearInterval(timer);
-    };
-  }, [inject]);
+  // Inject the audition CSS into the live "/" iframe (shared handshake).
+  useInjectedStyle(iframeRef, 'main-menu-tuning', injectedCss);
 
   const copyMenuCss = async (): Promise<void> => {
     if (!bakeCss) return;
@@ -286,12 +220,14 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
       window.setTimeout(() => setCopied(false), 1400);
     } catch { /* clipboard blocked — the rule is still applied in the preview */ }
   };
-  // Per-control reset: a permanently-rendered ↺ that sits beside the control's widget (in a
-  // .pages-ctl-row) and resets just that one to its live default (the footer "Reset to defaults"
-  // still resets everything at once).
-  const ctlReset = (onReset: () => void): ReactElement => (
-    <button type="button" className="pages-mini-reset" title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); onReset(); }}>↺</button>
-  );
+
+  // Element categories for the dropdown — a ` •` marks a category that carries an override.
+  const groupOptions: ElementOption[] = [
+    { id: 'buttons', label: 'Buttons', tuned: btnH !== MM_LIVE.btnH || railW !== MM_LIVE.railW || tabGap !== MM_LIVE.gap || btnX !== MM_LIVE.btnX || btnY !== MM_LIVE.btnY || !!surface },
+    { id: 'label', label: 'Button label', tuned: textX !== MM_LIVE.textX },
+    { id: 'icon', label: 'Button icon', tuned: iconSize !== MM_LIVE.icon || iconX !== 0 || iconTreat !== 'off' },
+    { id: 'interaction', label: 'Interaction', tuned: hoverSlide !== 'off' },
+  ];
 
   return (
     <>
@@ -313,62 +249,81 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            <p className="tileset-catalog-note">Every control drives the <strong>live</strong> menu chrome; defaults = what ships. Tune, then <strong>Copy menu CSS</strong> to bake.</p>
-            <SliderRow label={<>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</>} value={btnH} set={setBtnH} min={44} max={96} dflt={MM_LIVE.btnH} />
-            <SliderRow label={<>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</>} value={railW} set={setRailW} min={220} max={screenW} dflt={MM_LIVE.railW} />
-            <SliderRow label={<>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</>} value={tabGap} set={setTabGap} min={4} max={28} dflt={MM_LIVE.gap} />
-            <SliderRow label={<>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === MM_LIVE.btnX ? ' · live' : ''}</>} value={btnX} set={setBtnX} min={-screenW} max={screenW} dflt={MM_LIVE.btnX} />
-            <SliderRow label={<>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === MM_LIVE.btnY ? ' · live' : ''}</>} value={btnY} set={setBtnY} min={-screenH} max={screenH} dflt={MM_LIVE.btnY} />
-            <SliderRow label={<>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</>} value={textX} set={setTextX} min={-80} max={160} dflt={MM_LIVE.textX} />
-            <label className="tileset-category-select">
-              <span>Stone surface</span>
-              <div className="pages-ctl-row">
-                <select value={surface} onChange={(e) => setSurface(e.target.value)} aria-label="Stone surface">
-                  <option value="">Default · live stone</option>
-                  {STONE_SURFACES.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
-                </select>
-                {ctlReset(() => setSurface(''))}
-              </div>
-            </label>
-            <SliderRow label={<>Icon size · {iconSize}px{iconSize === MM_LIVE.icon ? ' · live' : ''}</>} value={iconSize} set={setIconSize} min={24} max={96} dflt={MM_LIVE.icon} />
-            <SliderRow label={<>Icon position · {iconX > 0 ? '+' : ''}{iconX}px{iconX === 0 ? ' · centred' : ''}</>} value={iconX} set={setIconX} min={-40} max={120} dflt={0} />
-            <div className="tileset-filter-field">
-              <span>Icon contrast</span>
-              <div className="pages-ctl-row">
-                <div className="tileset-tier-seg" aria-label="Icon contrast treatment">
-                  {ICON_TREATS.map((t) => (
-                    <button key={t.id} type="button" className={iconTreat === t.id ? 'is-active' : ''} onClick={() => setIconTreat(t.id)}>{t.label}</button>
-                  ))}
-                </div>
-                {ctlReset(() => { setIconTreat('off'); setIconLighten(1.85); })}
-              </div>
-            </div>
-            {iconTreat === 'limestone' ? (
-              <SliderRow label={<>Lighten · {iconLighten.toFixed(2)}×</>} value={iconLighten} set={setIconLighten} min={1} max={2.6} step={0.05} nudge={0.05} dflt={1.85} />
+            <p className="tileset-catalog-note">Pick an <strong>element</strong>, then tune it — controls drive the <strong>live</strong> menu; defaults = what ships. <strong>Copy menu CSS</strong> to bake.</p>
+            <ElementSelect value={group} options={groupOptions} onChange={(id) => setGroup(id as typeof group)} />
+
+            {group === 'buttons' ? (
+              <>
+                <SliderRow label={<>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</>} value={btnH} set={setBtnH} min={44} max={96} dflt={MM_LIVE.btnH} />
+                <SliderRow label={<>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</>} value={railW} set={setRailW} min={220} max={screenW} dflt={MM_LIVE.railW} />
+                <SliderRow label={<>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</>} value={tabGap} set={setTabGap} min={4} max={28} dflt={MM_LIVE.gap} />
+                <SliderRow label={<>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === MM_LIVE.btnX ? ' · live' : ''}</>} value={btnX} set={setBtnX} min={-screenW} max={screenW} dflt={MM_LIVE.btnX} />
+                <SliderRow label={<>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === MM_LIVE.btnY ? ' · live' : ''}</>} value={btnY} set={setBtnY} min={-screenH} max={screenH} dflt={MM_LIVE.btnY} />
+                <label className="tileset-category-select">
+                  <span>Stone surface</span>
+                  <div className="pages-ctl-row">
+                    <select value={surface} onChange={(e) => setSurface(e.target.value)} aria-label="Stone surface">
+                      <option value="">Default · live stone</option>
+                      {STONE_SURFACES.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                    </select>
+                    {ctlReset(() => setSurface(''))}
+                  </div>
+                </label>
+              </>
             ) : null}
-            <p className="tileset-catalog-note">Carved icons measure ~1–1.25:1 on the stone (readable floor 3:1). <strong>Pale stone</strong> &amp; <strong>Bevel</strong> are pure CSS over the shipped art; <strong>Bronze*</strong> is a LOOK preview — shipping it means re-forging the icon PNGs, not a filter.</p>
-            <div className="tileset-filter-field">
-              <span>Hover slide</span>
-              <div className="pages-ctl-row">
-                <div className="tileset-tier-seg" aria-label="Hover slide">
-                  <button type="button" className={hoverSlide === 'off' ? 'is-active' : ''} onClick={() => setHoverSlide('off')}>Off</button>
-                  <button type="button" className={hoverSlide === '6' ? 'is-active' : ''} onClick={() => setHoverSlide('6')}>6px</button>
-                  <button type="button" className={hoverSlide === '10' ? 'is-active' : ''} onClick={() => setHoverSlide('10')}>10px</button>
+
+            {group === 'label' ? (
+              <SliderRow label={<>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</>} value={textX} set={setTextX} min={-80} max={160} dflt={MM_LIVE.textX} />
+            ) : null}
+
+            {group === 'icon' ? (
+              <>
+                <SliderRow label={<>Icon size · {iconSize}px{iconSize === MM_LIVE.icon ? ' · live' : ''}</>} value={iconSize} set={setIconSize} min={24} max={96} dflt={MM_LIVE.icon} />
+                <SliderRow label={<>Icon position · {iconX > 0 ? '+' : ''}{iconX}px{iconX === 0 ? ' · centred' : ''}</>} value={iconX} set={setIconX} min={-40} max={120} dflt={0} />
+                <div className="tileset-filter-field">
+                  <span>Icon contrast</span>
+                  <div className="pages-ctl-row">
+                    <div className="tileset-tier-seg" aria-label="Icon contrast treatment">
+                      {ICON_TREATS.map((t) => (
+                        <button key={t.id} type="button" className={iconTreat === t.id ? 'is-active' : ''} onClick={() => setIconTreat(t.id)}>{t.label}</button>
+                      ))}
+                    </div>
+                    {ctlReset(() => { setIconTreat('off'); setIconLighten(1.85); })}
+                  </div>
                 </div>
-                {ctlReset(() => setHoverSlide('off'))}
-              </div>
-            </div>
-            <div className="tileset-filter-field">
-              <span>Preview hover state</span>
-              <div className="pages-ctl-row">
-                <div className="tileset-tier-seg" aria-label="Preview hover state">
-                  <button type="button" className={!previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(false)}>Off</button>
-                  <button type="button" className={previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(true)}>On</button>
+                {iconTreat === 'limestone' ? (
+                  <SliderRow label={<>Lighten · {iconLighten.toFixed(2)}×</>} value={iconLighten} set={setIconLighten} min={1} max={2.6} step={0.05} nudge={0.05} dflt={1.85} />
+                ) : null}
+                <p className="tileset-catalog-note">Carved icons measure ~1–1.25:1 on the stone (readable floor 3:1). <strong>Pale stone</strong> &amp; <strong>Bevel</strong> are pure CSS over the shipped art; <strong>Bronze*</strong> is a LOOK preview — shipping it means re-forging the icon PNGs, not a filter.</p>
+              </>
+            ) : null}
+
+            {group === 'interaction' ? (
+              <>
+                <div className="tileset-filter-field">
+                  <span>Hover slide</span>
+                  <div className="pages-ctl-row">
+                    <div className="tileset-tier-seg" aria-label="Hover slide">
+                      <button type="button" className={hoverSlide === 'off' ? 'is-active' : ''} onClick={() => setHoverSlide('off')}>Off</button>
+                      <button type="button" className={hoverSlide === '6' ? 'is-active' : ''} onClick={() => setHoverSlide('6')}>6px</button>
+                      <button type="button" className={hoverSlide === '10' ? 'is-active' : ''} onClick={() => setHoverSlide('10')}>10px</button>
+                    </div>
+                    {ctlReset(() => setHoverSlide('off'))}
+                  </div>
                 </div>
-                {ctlReset(() => setPreviewHover(false))}
-              </div>
-            </div>
-            <p className="tileset-catalog-note">Tabs slide right when you point at them. Flip Preview <strong>On</strong> to freeze the slid look (and feel the distance) without a mouse — needs a Hover slide ≠ Off.</p>
+                <div className="tileset-filter-field">
+                  <span>Preview hover state</span>
+                  <div className="pages-ctl-row">
+                    <div className="tileset-tier-seg" aria-label="Preview hover state">
+                      <button type="button" className={!previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(false)}>Off</button>
+                      <button type="button" className={previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(true)}>On</button>
+                    </div>
+                    {ctlReset(() => setPreviewHover(false))}
+                  </div>
+                </div>
+                <p className="tileset-catalog-note">Tabs slide right when you point at them. Flip Preview <strong>On</strong> to freeze the slid look (and feel the distance) without a mouse — needs a Hover slide ≠ Off.</p>
+              </>
+            ) : null}
             <button type="button" className="tileset-view-action" onClick={copyMenuCss} disabled={!bakeCss}>{copied ? 'Copied CSS ✓' : 'Copy menu CSS'}</button>
             <button type="button" className="tileset-view-action pages-reset" onClick={resetDefaults}>Reset to defaults</button>
             <dl className="al-meta">
@@ -534,51 +489,8 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
   const patch = (next: Partial<CeGroupTune>): void =>
     setGroups((prev) => ({ ...prev, [g.id]: { ...prev[g.id], ...next } }));
 
-  // Read the latest state via a ref so the load handler / interval stay stable while always
-  // painting current values (mirrors SurfaceDressingRoom).
-  const groupsRef = useRef(groups);
-  groupsRef.current = groups;
-
-  const inject = useCallback(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    try {
-      const doc = iframe.contentDocument;
-      if (!doc || !doc.head) return; // transient during navigation
-      let style = doc.getElementById('ce-chrome-tuning') as HTMLStyleElement | null;
-      if (!style) {
-        style = doc.createElement('style');
-        style.id = 'ce-chrome-tuning';
-        doc.head.appendChild(style);
-      }
-      style.textContent = buildCeChromeCss(groupsRef.current);
-    } catch {
-      /* same-origin access can blip during reload — re-inject on the next tick/load */
-    }
-  }, []);
-
-  // Re-inject live whenever any element's tune changes.
-  useEffect(() => {
-    inject();
-  }, [groups, inject]);
-
-  // The SPA mounts /campaigns-next asynchronously after the iframe load fires, so re-inject on
-  // load and on a short interval until it sticks (same handshake as the dressing room).
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const onLoad = () => inject();
-    iframe.addEventListener('load', onLoad);
-    let n = 0;
-    const timer = window.setInterval(() => {
-      inject();
-      if (++n > 24) window.clearInterval(timer);
-    }, 250);
-    return () => {
-      iframe.removeEventListener('load', onLoad);
-      window.clearInterval(timer);
-    };
-  }, [inject]);
+  // Inject the chrome-tuning CSS into the live /campaigns-next iframe (shared handshake).
+  useInjectedStyle(iframeRef, 'ce-chrome-tuning', buildCeChromeCss(groups));
 
   const copyCss = async (): Promise<void> => {
     try {
@@ -609,14 +521,11 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
             <p className="tileset-catalog-note">
               Tune the campaign editor’s chrome live, one element at a time. Defaults match the editor exactly — each control only overrides what you touch. Nothing is saved; “Copy CSS” exports just those overrides (every element) to paste into style.css.
             </p>
-            <label className="tileset-category-select">
-              <span>Element</span>
-              <select value={activeId} onChange={(e) => setActiveId(e.target.value)} aria-label="Element to tune">
-                {CE_GROUPS.map((x) => (
-                  <option key={x.id} value={x.id}>{x.label}{buildCeGroupCss(x, groups[x.id] ?? groupDefault(x)) ? ' •' : ''}</option>
-                ))}
-              </select>
-            </label>
+            <ElementSelect
+              value={activeId}
+              options={CE_GROUPS.map((x) => ({ id: x.id, label: x.label, tuned: !!buildCeGroupCss(x, groups[x.id] ?? groupDefault(x)) }))}
+              onChange={setActiveId}
+            />
             {g.frameSel.includes(',') ? (
               <p className="tileset-catalog-note">Covers several elements at once — size / height / padding tune them together, and the copied CSS bakes one value for the group (any per-element specializations in style.css are flattened).</p>
             ) : null}
@@ -635,33 +544,18 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
               </>
             ) : null}
             {g.knobs.width ? (
-              <label className="tileset-catalog-zoom">
-                <span>Width · {t.size === 0 ? 'auto' : `${t.size}px`}</span>
-                <input type="range" min="0" max="400" step="4" value={t.size} onChange={(e) => patch({ size: Number(e.target.value) })} />
-              </label>
+              <SliderRow label={<>Width · {t.size === 0 ? 'auto' : `${t.size}px`}</>} value={t.size} set={(v) => patch({ size: v })} min={0} max={400} step={4} nudge={4} dflt={0} />
             ) : null}
             {g.knobs.square ? (
-              <label className="tileset-catalog-zoom">
-                <span>Size · {t.size}px</span>
-                <input type="range" min="20" max="72" step="1" value={t.size} onChange={(e) => patch({ size: Number(e.target.value) })} />
-              </label>
+              <SliderRow label={<>Size · {t.size}px</>} value={t.size} set={(v) => patch({ size: v })} min={20} max={72} dflt={g.minH} />
             ) : null}
             {g.knobs.height ? (
-              <label className="tileset-catalog-zoom">
-                <span>Height · {t.height}px</span>
-                <input type="range" min="20" max="120" step="1" value={t.height} onChange={(e) => patch({ height: Number(e.target.value) })} />
-              </label>
+              <SliderRow label={<>Height · {t.height}px</>} value={t.height} set={(v) => patch({ height: v })} min={20} max={120} dflt={g.minH} />
             ) : null}
             {g.knobs.padX ? (
-              <label className="tileset-catalog-zoom">
-                <span>Horizontal padding · {t.padX}px</span>
-                <input type="range" min="0" max="40" step="1" value={t.padX} onChange={(e) => patch({ padX: Number(e.target.value) })} />
-              </label>
+              <SliderRow label={<>Horizontal padding · {t.padX}px</>} value={t.padX} set={(v) => patch({ padX: v })} min={0} max={40} dflt={g.padX} />
             ) : null}
-            <label className="tileset-catalog-zoom">
-              <span>Frame thickness · {t.border}px</span>
-              <input type="range" min="2" max="28" step="1" value={t.border} onChange={(e) => patch({ border: Number(e.target.value) })} />
-            </label>
+            <SliderRow label={<>Frame thickness · {t.border}px</>} value={t.border} set={(v) => patch({ border: v })} min={2} max={28} dflt={g.border} />
             <div className="tileset-filter-field">
               <span>Background fill</span>
               <div className="tileset-tier-seg" aria-label="Background fill">
@@ -676,10 +570,7 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
                   <span>Fill color</span>
                   <input type="color" value={t.color} onChange={(e) => patch({ color: e.target.value })} aria-label="Fill color" />
                 </label>
-                <label className="tileset-catalog-zoom">
-                  <span>Fill opacity · {Math.round(t.opacity * 100)}%</span>
-                  <input type="range" min="0" max="1" step="0.05" value={t.opacity} onChange={(e) => patch({ opacity: Number(e.target.value) })} />
-                </label>
+                <SliderRow label={<>Fill opacity · {Math.round(t.opacity * 100)}%</>} value={t.opacity} set={(v) => patch({ opacity: v })} min={0} max={1} step={0.05} nudge={0.05} dflt={1} />
               </>
             ) : null}
             {t.fill === 'surface' ? (
