@@ -3394,11 +3394,6 @@ h1 {
   overflow: hidden;
 }
 
-.shell.skirmish-active + .bgm-control,
-.shell.skirmish-active ~ .bgm-control,
-.shell.is-immersive + .bgm-control,
-.shell.is-immersive ~ .bgm-control { display: none; }
-
 /* Studio/dev editor & inspector surfaces (Portrait Editor, Doodad Editor, Surface Lab,
    Artwork/Tile Compare) on the standard title bar (ADR-0004/0023): a full-bleed bar on
    top, the existing tool body filling and scrolling in the row below it. The shell runs
@@ -4797,11 +4792,6 @@ h1 {
     grid-column: 2;
     justify-self: start;
   }
-
-  .shell.skirmish-active + .bgm-control {
-    right: 14px;
-    top: 88px;
-  }
 }
 
 /* ---------------- Responsive ---------------- */
@@ -6021,26 +6011,31 @@ body { font-size: 17px; }
   }
 }
 
-/* ── Background music toggle ─────────────────────────────────────────────── */
-/* Self-contained floating control appended by bgm.js. Themed to the cobalt/gold
-   chrome palette; glows gently while a track is playing. */
-/* Floating BGM control — kit chrome (the symmetric mode-button frame) holding the
-   music glyph, so it reads as part of the art instead of a raw rounded button. The
-   active frame marks "playing"; the icon dims when muted / silent. */
+/* ── Background music mute control ───────────────────────────────────────── */
+/* Persistent mute control — the trailing cluster's media member (ADR-0044). The vanilla
+   BGM player (bgm.js) re-homes its own button into the title bar's .cluster-bgm-slot, so
+   this is no longer floating chrome docked bottom-right: it's an icon-only cluster button
+   sized to match the gear/avatar on the kit mode-button 9-slice frame (ADR-0002/0036), on
+   every route. The active frame marks "playing"; the icon dims when muted / silent. */
+.cluster-bgm-slot {
+  /* Boxless wrapper: when bgm hides the control (no soundtrack configured) or hasn't
+     re-homed it yet, the slot adds no width and no cluster gap; with the control present
+     it joins the .header-account-cluster flex row directly as its leading member. */
+  display: contents;
+}
+
 .bgm-control {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 50;
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
+  align-items: center;
+  block-size: 52px;
+  inline-size: 52px;
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
   padding: 0;
   cursor: pointer;
   appearance: none;
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
   image-rendering: pixelated;
   /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
      fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
@@ -6048,8 +6043,8 @@ body { font-size: 17px; }
 }
 
 .bgm-control-icon {
-  width: 22px;
-  height: 22px;
+  block-size: 26px;
+  inline-size: 26px;
   image-rendering: pixelated;
   pointer-events: none;
 }
@@ -6067,30 +6062,6 @@ body { font-size: 17px; }
 .bgm-control.is-muted .bgm-control-icon {
   opacity: 0.4;
   filter: grayscale(0.7);
-}
-
-.shell.main-menu-active ~ .bgm-control,
-.shell.main-menu-active + .bgm-control {
-  display: none !important;
-}
-
-@media (max-width: 560px) {
-  .bgm-control {
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-    right: 10px;
-    bottom: 10px;
-  }
-
-  .shell.main-menu-active + .bgm-control {
-    bottom: auto;
-    top: 96px;
-  }
-
-  .shell.main-menu-active .main-menu-screen {
-    padding-bottom: 64px;
-  }
 }
 
 .tile-preview-page {
@@ -6333,10 +6304,6 @@ body { font-size: 17px; }
   height: 100%;
   min-height: 0;
   overflow: hidden;
-}
-
-.shell.tileset-studio-active + .bgm-control {
-  display: none;
 }
 
 .tile-template-guides {
