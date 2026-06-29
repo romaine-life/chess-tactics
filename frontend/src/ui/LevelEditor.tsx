@@ -14,7 +14,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
-import { readBoardParam, encodeBoard, type FeatureCell } from './boardCode';
+import { readBoardParam, encodeBoard, type EditorBoard, type FeatureCell } from './boardCode';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
@@ -38,6 +38,11 @@ import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeat
 import { type TileFamilyId } from '../core/tileSockets';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
+import { useCampaigns } from '../campaign/store';
+import { ensureCampaignsHydrated } from '../campaign/hydrate';
+import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
+import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
+import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -231,6 +236,10 @@ const leSeedBoard = (): Record<string, string> => {
 };
 const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 
+// A stable fingerprint of an editor board, the basis of the real dirty flag: encodeBoard is
+// deterministic + lossless, so two boards encode identically iff they're the same board.
+const boardSignature = (board: EditorBoard): string => encodeBoard(board);
+
 // The 4-edge connection control for a selected feature tile. Mirrors the iso diamond:
 // each clickable edge is one cardinal neighbour (grid N/E/S/W = the screen NE/SE/SW/NW
 // edges). Joined edges read solid cyan, severed read dashed amber, edges with no SAME-KIND
@@ -307,7 +316,19 @@ export function LevelEditor(): ReactElement {
     };
   }, []);
   const cameFromStudio = studioArm.fromStudio;
+  // The campaign path deep-links here with ?campaignId&levelId (&returnTo): which level to
+  // edit, and where "Back" returns after a save. Read once at mount; absent ⇒ a standalone
+  // (board-link / blank) board with no campaign target.
+  const routeParams = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      campaignId: params.get('campaignId') ?? undefined,
+      levelId: params.get('levelId') ?? undefined,
+      returnTo: params.get('returnTo') ?? undefined,
+    };
+  }, []);
   // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
+  // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
   const loadedBoard = useMemo(() => readBoardParam(), []);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => loadedBoard?.cells ?? leSeedBoard());
   const [boardCols, setBoardCols] = useState(loadedBoard?.cols ?? LE_COLS);
@@ -347,12 +368,57 @@ export function LevelEditor(): ReactElement {
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
   const [unitSide, setUnitSide] = useState<'player' | 'enemy'>('player');
 
+  // The level being edited (campaign path). `levelId` is the store key the Save writes back
+  // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
+  // the title bar; `savedSig` is the board signature at last save, the basis of the dirty chip.
+  const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
+  const [levelName, setLevelName] = useState<string>('Untitled level');
+  const [savedSig, setSavedSig] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [me, setMe] = useState<AuthUser | null>(null);
+
+  // Who's signed in — for the publish confirm/label copy. The server's requireAdmin is the
+  // real gate (a non-admin save of an official level fails closed → 403 surfaced below).
+  useEffect(() => {
+    let active = true;
+    fetchMe().then((user) => { if (active) setMe(user); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   // Go full-bleed like Skirmish (is-immersive): #root owns the whole viewport so the
   // editor sits under only the persistent app-shell title bar, with no inset/gap.
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('is-immersive');
     return () => shell?.classList.remove('is-immersive');
+  }, []);
+
+  // Cold deep-link / campaign path: hydrate the shared store (idempotent), then — unless a
+  // `?board=` override was supplied — seed the board from the resolved level and mark it
+  // clean. Falls through to the blank/board-link board when no level resolves.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      await ensureCampaignsHydrated();
+      if (!active || loadedBoard || !routeParams.levelId) return;
+      const level = useCampaigns.getState().levels[routeParams.levelId];
+      if (!level) return;
+      const board = levelToEditorBoard(level);
+      setBoardCols(board.cols);
+      setBoardRows(board.rows);
+      setBoardCells(board.cells);
+      setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
+      setBoardDoodads(board.doodads);
+      setBoardCover(board.cover);
+      setBoardFeatures(board.features);
+      setFeatureCuts(board.featureCuts);
+      setEditingId(level.id);
+      setLevelName(level.name);
+      setSavedSig(boardSignature(board));
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resolveAsset = (id: string): StudioAsset | undefined => leAllTiles.find((asset) => asset.id === id);
@@ -460,9 +526,95 @@ export function LevelEditor(): ReactElement {
       }
       return next;
     });
+  // The current painted board as a single EditorBoard — the one shape both the board link
+  // and the level save serialize from, so they can never describe different boards.
+  const currentEditorBoard = useMemo<EditorBoard>(
+    () => ({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, cover: boardCover, features: boardFeatures, featureCuts }),
+    [boardCols, boardRows, boardCells, boardUnits, boardDoodads, boardCover, boardFeatures, featureCuts],
+  );
+  // Real dirty flag: the board has unsaved changes when its signature differs from the one
+  // captured at the last save. A standalone board (never saved) seeds savedSig lazily on
+  // first render below, so it reads clean until the first edit.
+  const currentSig = useMemo(() => boardSignature(currentEditorBoard), [currentEditorBoard]);
+  const dirty = savedSig === null ? false : currentSig !== savedSig;
+  // Seed the saved signature once for a board that wasn't hydrated from a campaign level
+  // (a blank or `?board=` board): the first render establishes the clean baseline.
+  useEffect(() => {
+    if (savedSig === null && !routeParams.levelId) setSavedSig(currentSig);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save the painted board. Campaign path: serialize into the resolved level id and write it
+  // back into the store, then route by TIER — an official (`off-`) level publishes to all
+  // players (confirmed); a private/unassigned level saves to the user workspace. The server's
+  // requireAdmin is the real gate; a non-admin official save fails closed (403 surfaced here).
+  const saveLevel = async (): Promise<void> => {
+    if (saving) return;
+    const targetId = editingId ?? routeParams.levelId;
+    if (!targetId) {
+      // Cold path (no campaign level): a standalone board authored outside a campaign.
+      // Mint a fresh per-user level id (`l<n>`) and write it into the user workspace — never
+      // an `off-` id (INV8). createUnassignedLevel stamps the minted id onto the level and
+      // returns it; the editor then tracks that id so subsequent saves write back to it.
+      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelName });
+      const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
+      setEditingId(newId);
+      setSaving(true);
+      setSaveStatus('');
+      try {
+        await saveUserWorkspace();
+        setSaveStatus('Saved to server.');
+        setSavedSig(currentSig);
+      } catch (e) {
+        const mapped = mapSaveError(e);
+        if ('action' in mapped) { goSignIn(); return; }
+        setSaveStatus(mapped.message);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    // Carry the existing level's authored metadata (objective/difficulty/economy/notes/theme)
+    // so a board save doesn't reset them; only the painted board + name are re-derived here.
+    const existing = useCampaigns.getState().levels[targetId];
+    const level = editorBoardToLevel(currentEditorBoard, {
+      id: targetId,
+      name: levelName,
+      notes: existing?.notes,
+      objective: existing?.objective,
+      difficulty: existing?.difficulty,
+      economy: existing?.economy,
+      theme: existing?.theme,
+      // Preserve non-editor-expressible terrain (road/bridge/cliff/rock) from the saved level so
+      // republishing a legacy official (no boardCode) doesn't flatten those surfaces to grass.
+      previousTerrain: existing?.layers.terrain,
+    });
+    useCampaigns.getState().replaceLevel(level);
+    const official = tierOf(level.id) === 'official';
+    if (official && !window.confirm('Publish changes to the official campaigns? Every player will receive them.')) return;
+    setSaving(true);
+    setSaveStatus('');
+    try {
+      if (official) {
+        const { revision } = await publishOfficialWorkspace();
+        setSaveStatus(`Published (revision ${revision}).`);
+      } else {
+        await saveUserWorkspace();
+        setSaveStatus('Saved to server.');
+      }
+      setSavedSig(currentSig);
+    } catch (e) {
+      const mapped = mapSaveError(e);
+      if ('action' in mapped) { goSignIn(); return; }
+      setSaveStatus(mapped.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Export the whole board as a /level-editor?board=<code> link (round-trips via boardCode.ts).
   const copyBoardLink = (): void => {
-    const code = encodeBoard({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, cover: boardCover, features: boardFeatures, featureCuts });
+    const code = encodeBoard(currentEditorBoard);
     void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
   };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
@@ -530,21 +682,42 @@ export function LevelEditor(): ReactElement {
     setFeatureCuts((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
   const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
 
+  // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
+  // PUBLISHES to all players; a private/unassigned level just SAVES. A level only resolves a
+  // tier once a target id is known (campaign path); a fresh standalone board saves as private.
+  const targetLevelId = editingId ?? routeParams.levelId;
+  const isOfficialTarget = targetLevelId ? tierOf(targetLevelId) === 'official' : false;
+  const saveLabel = isOfficialTarget ? 'Publish to all players' : 'Save';
+  const isAdmin = Boolean(me?.is_admin);
+  const saveStateLabel = saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved';
+  const saveStateClass = saving ? 'is-saving' : dirty ? 'is-dirty' : 'is-clean';
+
   return (
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
         {/* The title bar lives in the app shell now; the editor paints its live
             save-state + actions into it via portals (state stays in this component). */}
         <TitleBarSlot region="center">
           <div className="le-topbar-stats" aria-label="Level status">
-            <span className="le-level-name">Untitled level</span>
-            <span className="le-save-state is-dirty">Unsaved</span>
+            <span className="le-level-name">{levelName}</span>
+            {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
+            <span className={`le-save-state ${saveStateClass}`}>{saveStatus || saveStateLabel}</span>
           </div>
         </TitleBarSlot>
         <TitleBarSlot region="actions">
           <nav className="le-topbar-actions" aria-label="Editor actions">
             {cameFromStudio ? <a className="app-header-button le-back-catalog" href="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</a> : null}
+            {routeParams.returnTo ? <a className="app-header-button" href={routeParams.returnTo} title="Return to the campaign editor">‹ Back</a> : null}
             <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
-            <button type="button" className="app-header-button app-header-button-active" disabled title="Saving unlocks once the editor is hosted.">Save</button>
+            <button
+              type="button"
+              className="app-header-button app-header-button-active"
+              data-testid="le-save"
+              disabled={saving || !dirty}
+              title={isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.'}
+              onClick={() => { void saveLevel(); }}
+            >
+              {saveLabel}
+            </button>
           </nav>
         </TitleBarSlot>
 

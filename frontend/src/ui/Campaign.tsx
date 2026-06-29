@@ -165,7 +165,18 @@ export function Campaign(): ReactElement {
   const myCampaigns = campaigns.filter((c) => c.origin !== 'official');
 
   return (
-    <div className="menu-layer main-menu-layer is-ready" data-testid="campaign-menu">
+    // The cold-load reveal director (shell/coldReveal) arms ONLY on the home menu path,
+    // so it never sequences this screen. But its opt-OUT gates hide any .main-menu-layer's
+    // background (::after photo) and buttons (.main-menu-twin-screen) UNTIL data-reveal-* is
+    // present (#238). The Campaign reuses those twin classes without running the director, so
+    // declare both up front to render fully revealed — otherwise the photo + level buttons
+    // stay stuck at opacity 0.
+    <div
+      className="menu-layer main-menu-layer is-ready"
+      data-testid="campaign-menu"
+      data-reveal-bg=""
+      data-reveal-buttons=""
+    >
       <AmbienceBackground />
       {/* Settings-twin layout, mirroring the main menu: shared app title bar + a rail
           of campaign tabs and a level-select panel over the ambience. */}

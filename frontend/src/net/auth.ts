@@ -8,8 +8,8 @@ export interface AuthUser {
   name?: string;
   avatar_url?: string | null;
   // True when the signed-in email is in the server's ADMIN_EMAILS allowlist. UI
-  // affordance only (gates the editor's "Edit Officials" tab); the real gate is
-  // server-side requireAdmin. See ADR-0038.
+  // affordance only (gates inline editing + "Publish to all players" for official
+  // campaigns); the real gate is server-side requireAdmin. See ADR-0038.
   is_admin?: boolean;
 }
 
