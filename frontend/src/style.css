@@ -10429,15 +10429,20 @@ button.tileset-relationship-cell {
 
 .settings-shell {
   display: grid;
-  grid-template-columns: minmax(244px, 304px) minmax(0, 1fr);
+  /* Button (rail) width + body cap are the baked output of the Main Menu tuner. SHARED by the
+     menu and Settings so the Settings rail tabs stay faithful to the menu's buttons (they're the
+     alignment reference for the Settings rows). overflow:visible lets the rail's offset (below)
+     show past the shell edge. Re-tune via the dressing room (MainMenuViewer) — it bakes these
+     same shared selectors. */
+  grid-template-columns: 487px minmax(0, 1fr);
   gap: clamp(8px, .85vw, 14px);
   /* Body (rail + content) is a centred contained block beneath the full-bleed top
      bar, so rows don't stretch the full width while the title bar stays flush. */
   inline-size: 100%;
-  max-inline-size: clamp(900px, 88vw, 1240px);
+  max-inline-size: max(clamp(900px, 88vw, 1240px), 487px);
   justify-self: center;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Entry fade (ADR-0043): the chrome (rail + panel) fades in when the Settings screen
@@ -10467,6 +10472,9 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(9px, .8vw, 13px);
   padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
+  /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
+     sit identically (the menu is the alignment reference). Re-tune in the dressing room. */
+  transform: translate(-230px, -21px);
 }
 
 /* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label
@@ -10537,7 +10545,7 @@ button.tileset-relationship-cell {
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
-  transform: translateX(18px); /* nudge the label clear of the enlarged icon */
+  transform: translateX(37px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
 }
 
 .settings-tab:not(.is-active):hover {
