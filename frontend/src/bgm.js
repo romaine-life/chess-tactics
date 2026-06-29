@@ -444,8 +444,23 @@ export function initBgm() {
     el.addEventListener('click', (event) => {
       event.preventDefault();
       if (!state.owner) {
-        // A follower tab — clicking takes playback over to this tab.
+        // A follower tab — clicking takes playback over to this tab. Start audio
+        // SYNCHRONOUSLY inside this user gesture: real Chrome's autoplay policy
+        // blocks any play() that runs after the async lock acquisition, so we must
+        // play here first, THEN steal the lock (the previous owner steps down when
+        // it hears our 'owner' broadcast). takeOwnership() early-returns if we're
+        // already owner, so we leave state.owner=false until it runs.
         pendingAction = null;
+        state.muted = false;
+        writeMuted(false);
+        state.stopped = false;
+        if (audio.src && audio.paused) {
+          const attempt = audio.play();
+          if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+        } else if (!audio.src) {
+          playNext();
+        }
+        updateControl();
         takeOwnership();
       } else if (state.unavailable && !state.muted) {
         // In the unavailable state the button is a retry affordance.
@@ -494,9 +509,14 @@ export function initBgm() {
       return;
     }
     el.style.display = '';
+    el.classList.remove('is-othertab'); // only the follower state below re-adds it
     if (!state.owner && state.otherPlaying) {
-      // Another tab owns playback; this one is a silent follower.
+      // Another tab owns playback; this one is a silent follower. Wear the LIT (active)
+      // frame so it's visibly distinct from a muted control — which uses the base frame
+      // and is otherwise pixel-identical — because music IS playing, just not here. The
+      // icon stays dimmed (is-muted) to mark that this tab is silent.
       el.classList.remove('is-playing');
+      el.classList.add('is-othertab');
       el.classList.add('is-muted');
       const other = state.otherTitle ? `Playing in another tab — ${state.otherTitle}` : 'Playing in another tab';
       el.setAttribute('aria-label', `${other} — click to play here`);
