@@ -57,13 +57,16 @@ The procedural synthesis is **deleted**: `RECIPES`, the per-terrain recipe funct
 (~445 lines). `playTerrain` now plays a terrain's sample set or nothing — there is no
 synthesized voice.
 
-Current coverage: **grass** (hay), **water**, **sand**, **stone** (footsteps), and the
+Recorded sound sets: **grass** (hay), **water**, **sand**, **stone** (footsteps), and the
 non-terrain **arrival** thump (`landing.mp3`, layered over the per-terrain spawn sound at
-the deploy roll-call, ADR-0045). Terrains without a recorded set — **road, bridge, dirt,
-pebble** — are **silent on landing** until recordings are added (`cliff`/`rock` are
-impassable, never a landing). Adding sound to one = drop sliced takes under
-`assets/sfx/<key>/` and map the terrain in `TERRAIN_SAMPLE`. Long source packs are capped
-at `MAX_VARIANTS` takes by the slicer (stone kept 12 of 29).
+the deploy roll-call, ADR-0045). The terrain→sound MAP is decoupled from the sets
+(`TERRAIN_SAMPLE`): every landable terrain is voiced — the bare hard-ground terrains
+**road/bridge/dirt/pebble reuse the stone footsteps** — and only the impassable
+`cliff`/`rock` are silent (pieces never land there). The owner edits the map in the Studio
+assignment panel and hands it back to bake in. New distinct sound = drop sliced takes under
+`assets/sfx/<key>/`, register the source in `slice-sfx.sh`, add a `SFX_ASSETS` entry, and
+map terrains to it. Long source packs are capped at `MAX_VARIANTS` takes by the slicer
+(stone kept 12 of 29).
 
 ### Consequences
 

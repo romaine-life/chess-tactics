@@ -3,8 +3,9 @@
 //
 // Every effect here is AUTHORED recorded foley, sliced into one-shot take variants
 // under public/assets/sfx/<key>/ and random-picked per landing (so repeats never
-// fatigue). The card waveform is the real decoded take. Terrains without a recorded
-// set (road/bridge/dirt/pebble) are silent on landing and aren't listed; an earlier
+// fatigue). The card waveform is the real decoded take. A card is one SOUND set; the
+// terrain→sound MAP (which terrains use it) lives in TERRAIN_SAMPLE + the assignment
+// panel — e.g. road/bridge/dirt/pebble all reuse the stone footsteps. An earlier
 // procedurally-synthesised set was removed (we play recordings, not synth).
 //
 // Adding an effect = drop sliced takes under public/assets/sfx/<key>/ + a manifest,

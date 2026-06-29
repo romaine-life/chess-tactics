@@ -265,9 +265,9 @@ function registerVoice(node: GainNode, duration: number): void {
 // Terrains are voiced by recorded foley: a set of one-shot take variants under
 // /assets/sfx/<key>/ (sliced from the raw recordings; see tools/sfx/slice-sfx.sh).
 // When a set is decoded we play a RANDOM take per landing so repeated moves never
-// fatigue. Until a set is decoded (or if it fails to load) that terrain is silent;
-// a terrain with no set at all (road/bridge/dirt/pebble) stays silent until recordings
-// are added — there is no synthesised fallback.
+// fatigue. Until a set is decoded (or if it fails to load) that terrain is briefly
+// silent; a terrain with no entry at all (only the impassable cliff/rock) is always
+// silent — there is no synthesised fallback.
 //
 // 'arrival' is not a terrain — it's the "unit lands on the board" thump, layered on
 // top of the per-terrain spawn sound (see store.ts deploy roll-call) via playArrival.
@@ -281,12 +281,18 @@ const SAMPLE_GAINS: Record<string, number> = { grass: 0.5, water: 0.5, sand: 0.6
 const SAMPLE_KEYS = ['grass', 'water', 'sand', 'stone', 'arrival'] as const;
 type SampleKey = (typeof SAMPLE_KEYS)[number];
 
-// Which terrains are voiced by an authored set (the rest have no sound yet).
+// Which terrains are voiced by an authored set. Every landable terrain is mapped; the
+// bare hard-ground terrains (road/bridge/dirt/pebble) reuse the stone footsteps. Only
+// the impassable cliff/rock have no entry (pieces never land on them).
 const TERRAIN_SAMPLE: Partial<Record<TerrainType, SampleKey>> = {
   grass: 'grass',
   water: 'water',
   sand: 'sand',
   stone: 'stone',
+  road: 'stone',
+  bridge: 'stone',
+  dirt: 'stone',
+  pebble: 'stone',
 };
 
 interface SampleSet {
@@ -386,9 +392,9 @@ export function playTerrain(terrain: TerrainType, opts?: { gain?: number }): voi
   const callGain = normGain(opts?.gain);
 
   // Authored recordings are the only landing voices. A terrain with a decoded sample
-  // set plays a random take; one without a set (road/bridge/dirt/pebble, and the
-  // impassable cliff/rock) is silent until its takes are added. If the set isn't decoded
-  // yet, kick off its load — the first landing may be silent, then later ones play.
+  // set plays a random take; one with no mapping (only the impassable cliff/rock) is
+  // silent. If the set isn't decoded yet, kick off its load — the first landing may be
+  // silent, then later ones play.
   const sampleKey = TERRAIN_SAMPLE[terrain];
   if (!sampleKey) return;
   if (!playSampleSet(sampleKey, callGain)) void loadSampleSet(sampleKey);
