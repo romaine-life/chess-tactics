@@ -54,7 +54,7 @@ export function deriveFeatureOverlays(
   featureCuts: EditorBoard['featureCuts'],
 ): FeatureOverlayMap {
   const isSevered = (edge: string): boolean => featureCuts[edge] === true;
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set() };
+  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
   for (const [key, f] of Object.entries(features)) presentByKind[f.kind].add(key);
   const out: FeatureOverlayMap = {};
   for (const [key, f] of Object.entries(features)) {

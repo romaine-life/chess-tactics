@@ -18,39 +18,54 @@
 //   8    W    (x-1, y)         upper-left  (NW)
 
 // Linear-feature kinds. Each kind is its OWN connectivity class — a road connects to
-// roads, a river to rivers (never to each other). All baked by build-feature-tiles.py.
-export type FeatureKind = 'road' | 'river';
+// roads, a river to rivers, a fence to fences (never to each other). Roads/rivers are baked by
+// build-feature-tiles.py; FENCES are PLUMBING ONLY in v1 (no baked mask art yet, brush gated in
+// the editor, visual-only when art lands — they add nothing to collision).
+export type FeatureKind = 'road' | 'river' | 'fence';
 
 // A feature's surface look. Within a kind, all cells connect regardless of material
 // (the shape flows, the surface can change per cell); the author picks which to paint.
 // Each is a baked 16-mask set (<kind>-<material>-<mask>.png).
 export type RoadMaterial = 'dirt' | 'cobble' | 'stone' | 'pebble';
 export type RiverMaterial = 'water';
-export type FeatureMaterial = RoadMaterial | RiverMaterial;
+// Fence materials — plumbing only; the mask art does not exist yet (see ROAD/RIVER comment).
+export type FenceMaterial = 'wood' | 'stone';
+export type FeatureMaterial = RoadMaterial | RiverMaterial | FenceMaterial;
 
 // Authored codex-heal materials that ship (build-feature-tiles.py). stone/pebble stay
 // valid types but aren't in the palette until they get the same treatment.
 export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'cobble'];
 export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
+// Fence materials exist as types/plumbing, but the brush is gated until mask art ships, so the
+// palette is intentionally empty for now (nothing selectable yet).
+export const FENCE_MATERIALS: readonly FenceMaterial[] = [];
 export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
   dirt: 'Dirt',
   cobble: 'Cobblestone',
   stone: 'Stone',
   pebble: 'Gravel',
   water: 'Water',
+  wood: 'Wood',
 };
 // Back-compat alias (roads referenced this name before rivers existed).
 export const ROAD_MATERIAL_LABELS = FEATURE_MATERIAL_LABELS;
 export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'dirt';
 export const DEFAULT_RIVER_MATERIAL: RiverMaterial = 'water';
+export const DEFAULT_FENCE_MATERIAL: FenceMaterial = 'wood';
+
+// Fences are PLUMBING-ONLY in v1: the kind, materials, wire key (`fn`) and editor brush all
+// exist, but there is no baked mask art yet, so the brush is GATED (disabled) in the editor and
+// any fence cell renders no image (never a broken/404 sprite). Edge-blocking is deferred —
+// fences add NOTHING to collision.
+export const FENCE_ART_PENDING = true;
 
 /** Selectable materials for a feature kind (editor palette). */
 export const featureMaterials = (kind: FeatureKind): readonly FeatureMaterial[] =>
-  kind === 'river' ? RIVER_MATERIALS : ROAD_MATERIALS;
+  kind === 'river' ? RIVER_MATERIALS : kind === 'fence' ? FENCE_MATERIALS : ROAD_MATERIALS;
 
 /** The default brush material for a feature kind. */
 export const defaultFeatureMaterial = (kind: FeatureKind): FeatureMaterial =>
-  kind === 'river' ? DEFAULT_RIVER_MATERIAL : DEFAULT_ROAD_MATERIAL;
+  kind === 'river' ? DEFAULT_RIVER_MATERIAL : kind === 'fence' ? DEFAULT_FENCE_MATERIAL : DEFAULT_ROAD_MATERIAL;
 
 export type FeatureEdge = 'N' | 'E' | 'S' | 'W';
 

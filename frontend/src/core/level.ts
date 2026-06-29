@@ -4,6 +4,7 @@
 // world/levels model, typed fields). Persisted as a validated JSONB body.
 
 import type { BoardSize, PieceType, Side, TerrainCell, TerrainType, UnitFacing } from './types';
+import type { PlacedProp } from './props';
 
 // Terrain vocabulary now lives in the foundational type module so the editor's
 // `Level` and the live `GameState` share one definition; re-exported here so
@@ -66,6 +67,12 @@ export interface Level {
     decals: Decal[];
     zones: Zone[];
     units: LevelUnit[];
+    // Multi-cell decorative props (trees/houses). Optional + back-compat: legacy bodies omit
+    // it (validator only checks it WHEN PRESENT, never adds it to the required-array loop), and
+    // a prop-free editor save leaves it `[]`. This is the durable channel the GAME reads
+    // (createFromLevel reads `layers`, not `boardCode`); boardCode carries a parallel 'p' map
+    // only to re-seed the editor losslessly.
+    props?: PlacedProp[];
   };
 }
 
@@ -110,7 +117,7 @@ export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows 
     difficulty: 'normal',
     economy: { startingFunds: 1200, incomePerTurn: 150 },
     theme: 'grassland',
-    layers: { terrain, decals: [], zones: [], units: [] },
+    layers: { terrain, decals: [], zones: [], units: [], props: [] },
   };
 }
 
@@ -147,6 +154,26 @@ export function validateLevel(value: unknown): ValidateResult {
         if (u.x < 0 || u.x >= b.cols || u.y < 0 || u.y >= b.rows) {
           errors.push(`unit out of bounds at (${u.x}, ${u.y})`);
           break;
+        }
+      }
+    }
+    // Props are an OPTIONAL layer (back-compat: legacy bodies omit it, so it is NOT in the
+    // required-array loop above). Validate its shape only when present.
+    if (layers.props !== undefined) {
+      if (!Array.isArray(layers.props)) {
+        errors.push('layers.props must be an array');
+      } else {
+        for (const p of layers.props) {
+          if (!p || typeof p !== 'object' || typeof p.propId !== 'string' || typeof p.x !== 'number' || typeof p.y !== 'number') {
+            errors.push('malformed prop entry (need numeric x,y and string propId)');
+            break;
+          }
+          // Bounds-check the anchor symmetrically with units: an off-board anchor would otherwise
+          // stamp off-board rock colliders in createFromLevel (propCells does not clamp).
+          if (b && (p.x < 0 || p.x >= b.cols || p.y < 0 || p.y >= b.rows)) {
+            errors.push(`prop out of bounds at (${p.x}, ${p.y})`);
+            break;
+          }
         }
       }
     }

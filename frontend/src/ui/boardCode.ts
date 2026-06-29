@@ -4,15 +4,15 @@
 // and to EXPORT the current one.
 //
 // Wire shape (keys kept short): { c:cols, r:rows, f?:fillTileId, t?:{cell:tileId},
-//   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, v?:{cell:density},
-//   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, rc?:[edgeKey], rx?:[edgeKey] }. `f` fills
-// every cell, then `t` overrides — so a "mostly one tile" board stays tiny. Features split per
-// kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on decode; `rc`
-// (severed edges) and `rx` (forced outward exits) are shared edge lists. base64url of the JSON
-// (no padding, +/ -> -_).
+//   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
+//   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fn?:{cell:fenceMaterial}, rc?:[edgeKey],
+//   rx?:[edgeKey] }. `f` fills every cell, then `t` overrides — so a "mostly one tile" board stays
+// tiny. Features split per kind on the wire (rd=roads, rv=rivers, fn=fences) and merge into one
+// `features` map on decode; `rc` (severed edges) and `rx` (forced outward exits) are shared edge
+// lists. base64url of the JSON (no padding, +/ -> -_).
 
 import type { GroundCoverDensity } from '../core/groundCover';
-import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial } from '../core/featureAutotile';
+import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
 
 /** One painted feature cell: which linear feature it carries and its surface material. */
 export interface FeatureCell {
@@ -26,6 +26,8 @@ export interface EditorBoard {
   cells: Record<string, string>;
   units: Record<string, { unitId: string; direction: string; faction: string }>;
   doodads: Record<string, { doodadId: string }>;
+  /** Multi-cell props (trees/houses), keyed by ANCHOR cell "x,y" -> {propId} (mirrors doodads). */
+  props: Record<string, { propId: string }>;
   cover: Record<string, GroundCoverDensity>;
   features: Record<string, FeatureCell>;
   featureCuts: Record<string, true>;
@@ -54,16 +56,22 @@ export function encodeBoard(b: EditorBoard): string {
   if (nonEmpty(t)) wire.t = t;
   if (nonEmpty(b.units)) wire.u = Object.fromEntries(Object.entries(b.units).map(([k, v]) => [k, [v.unitId, v.direction, v.faction]]));
   if (nonEmpty(b.doodads)) wire.d = Object.fromEntries(Object.entries(b.doodads).map(([k, v]) => [k, v.doodadId]));
+  // Props mirror doodads on the wire: anchor cell -> bare propId. Emitted only when nonEmpty so a
+  // prop-free board encodes byte-identically to a pre-props board.
+  if (b.props && nonEmpty(b.props)) wire.p = Object.fromEntries(Object.entries(b.props).map(([k, v]) => [k, v.propId]));
   if (nonEmpty(b.cover)) wire.v = b.cover;
-  // Split features by kind so each map's values are bare materials (rd=roads, rv=rivers).
+  // Split features by kind so each map's values are bare materials (rd=roads, rv=rivers, fn=fences).
   const rd: Record<string, RoadMaterial> = {};
   const rv: Record<string, RiverMaterial> = {};
+  const fn: Record<string, FenceMaterial> = {};
   for (const [k, f] of Object.entries(b.features)) {
     if (f.kind === 'river') rv[k] = f.material as RiverMaterial;
+    else if (f.kind === 'fence') fn[k] = f.material as FenceMaterial;
     else rd[k] = f.material as RoadMaterial;
   }
   if (nonEmpty(rd)) wire.rd = rd;
   if (nonEmpty(rv)) wire.rv = rv;
+  if (nonEmpty(fn)) wire.fn = fn;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
   return enc(JSON.stringify(wire));
@@ -82,16 +90,19 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (w.u) for (const [k, a] of Object.entries(w.u as Record<string, [string, string, string]>)) units[k] = { unitId: a[0], direction: a[1], faction: a[2] };
     const doodads: EditorBoard['doodads'] = {};
     if (w.d) for (const [k, id] of Object.entries(w.d as Record<string, string>)) doodads[k] = { doodadId: id };
+    const props: EditorBoard['props'] = {};
+    if (w.p) for (const [k, id] of Object.entries(w.p as Record<string, string>)) props[k] = { propId: id };
     const featureCuts: Record<string, true> = {};
     if (Array.isArray(w.rc)) for (const e of w.rc) featureCuts[e] = true;
     const featureExits: Record<string, true> = {};
     if (Array.isArray(w.rx)) for (const e of w.rx) featureExits[e] = true;
-    // Merge the per-kind wire maps back into one features map (rd=roads, rv=rivers).
+    // Merge the per-kind wire maps back into one features map (rd=roads, rv=rivers, fn=fences).
     const features: Record<string, FeatureCell> = {};
     if (w.rd) for (const [k, m] of Object.entries(w.rd as Record<string, RoadMaterial>)) features[k] = { kind: 'road', material: m };
     if (w.rv) for (const [k, m] of Object.entries(w.rv as Record<string, RiverMaterial>)) features[k] = { kind: 'river', material: m };
+    if (w.fn) for (const [k, m] of Object.entries(w.fn as Record<string, FenceMaterial>)) features[k] = { kind: 'fence', material: m };
     return {
-      cols, rows, cells, units, doodads,
+      cols, rows, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       features,
       featureCuts,

@@ -2,6 +2,8 @@
 // the codebase that must outlive every renderer/UI choice (Phase 1 of the
 // migration). Everything here is serializable.
 
+import type { PlacedProp } from './props';
+
 export type Side = 'player' | 'enemy' | 'neutral';
 
 export type PieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king' | 'rock' | 'random-rock';
@@ -131,6 +133,13 @@ export interface GameState {
    * honours this when the layer is indexed into `MoveEnv.terrain`.
    */
   terrain?: TerrainCell[];
+  /**
+   * Multi-cell decorative props (trees, houses). Optional + serializable, mirroring
+   * `terrain?`: a legacy/prop-free state simply omits it (= no props). Blocking props are
+   * realised as neutral `rock` colliders in `pieces` at build time (see game/setup.ts); this
+   * list is the RENDER channel the board reads to draw the tall prop sprite (see SkirmishBoard).
+   */
+  props?: PlacedProp[];
   turn: Turn;
   winner: Winner;
   /** Last displaced move, used for immediate pawn en passant eligibility. */
