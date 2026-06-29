@@ -5,11 +5,11 @@
 //
 // Wire shape (keys kept short): { c:cols, r:rows, f?:fillTileId, t?:{cell:tileId},
 //   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, v?:{cell:density},
-//   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, rc?:[edgeKey] }. `f` fills every cell,
-// then `t` overrides — so a "mostly one tile" board stays tiny. Features split per kind on the
-// wire (rd=roads, rv=rivers) and merge into one `features` map on decode; `rc` (severed edges)
-// is shared (a cut edge only ever joins same-kind cells). base64url of the JSON (no padding,
-// +/ -> -_).
+//   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, rc?:[edgeKey], rx?:[edgeKey] }. `f` fills
+// every cell, then `t` overrides — so a "mostly one tile" board stays tiny. Features split per
+// kind on the wire (rd=roads, rv=rivers) and merge into one `features` map on decode; `rc`
+// (severed edges) and `rx` (forced outward exits) are shared edge lists. base64url of the JSON
+// (no padding, +/ -> -_).
 
 import type { GroundCoverDensity } from '../core/groundCover';
 import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial } from '../core/featureAutotile';
@@ -29,6 +29,7 @@ export interface EditorBoard {
   cover: Record<string, GroundCoverDensity>;
   features: Record<string, FeatureCell>;
   featureCuts: Record<string, true>;
+  featureExits: Record<string, true>;
 }
 
 const enc = (s: string): string => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -64,6 +65,7 @@ export function encodeBoard(b: EditorBoard): string {
   if (nonEmpty(rd)) wire.rd = rd;
   if (nonEmpty(rv)) wire.rv = rv;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
+  if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
   return enc(JSON.stringify(wire));
 }
 
@@ -82,6 +84,8 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (w.d) for (const [k, id] of Object.entries(w.d as Record<string, string>)) doodads[k] = { doodadId: id };
     const featureCuts: Record<string, true> = {};
     if (Array.isArray(w.rc)) for (const e of w.rc) featureCuts[e] = true;
+    const featureExits: Record<string, true> = {};
+    if (Array.isArray(w.rx)) for (const e of w.rx) featureExits[e] = true;
     // Merge the per-kind wire maps back into one features map (rd=roads, rv=rivers).
     const features: Record<string, FeatureCell> = {};
     if (w.rd) for (const [k, m] of Object.entries(w.rd as Record<string, RoadMaterial>)) features[k] = { kind: 'road', material: m };
@@ -91,6 +95,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       features,
       featureCuts,
+      featureExits,
     };
   } catch {
     return null;

@@ -3,7 +3,7 @@
 // elevation + gameplay zones); LDtk-inspired structure (defs/instances spirit,
 // world/levels model, typed fields). Persisted as a validated JSONB body.
 
-import type { BoardSize, PieceType, Side, TerrainCell, TerrainType } from './types';
+import type { BoardSize, PieceType, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 
 // Terrain vocabulary now lives in the foundational type module so the editor's
 // `Level` and the live `GameState` share one definition; re-exported here so
@@ -36,6 +36,9 @@ export interface LevelUnit {
   y: number;
   type: PieceType;
   side: Side;
+  // The 8-direction sprite facing painted in the editor. Optional + back-compat: the
+  // game falls back to the side's default facing when absent (see game/setup.ts).
+  facing?: UnitFacing;
 }
 
 export interface LevelEconomy {
@@ -53,6 +56,11 @@ export interface Level {
   difficulty: string;
   economy: LevelEconomy;
   theme: string;
+  // The Level Editor's compact, lossless board encoding (see ui/boardCode.ts). Optional +
+  // back-compat: the validator ignores unknown fields, so older bodies stay valid; when
+  // present it is the source of truth for re-seeding the editor (round-trips doodads,
+  // cover, roads/rivers and unit facing that `layers` alone can't fully express).
+  boardCode?: string;
   layers: {
     terrain: TerrainCell[];
     decals: Decal[];

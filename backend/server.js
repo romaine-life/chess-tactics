@@ -296,8 +296,9 @@ function publicUser(session) {
     gravatar_url: gravatar,
     avatar_url: user.image || gravatar,
     role: user.role || 'pending',
-    // UI affordance only (shows the editor's "Edit Officials" tab); the real gate is
-    // server-side requireAdmin. The allowlist itself is never sent to the client.
+    // UI affordance only (gates inline editing + "Publish to all players" for official
+    // campaigns); the real gate is server-side requireAdmin. The allowlist itself is
+    // never sent to the client.
     is_admin: isAdminEmail(user.email),
   };
 }
@@ -1384,7 +1385,7 @@ function isLevelBody(body) {
 }
 
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'survive', 'reach']);
-const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock']);
+const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble']);
 const WORKSPACE_ZONE_TYPES = new Set(['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock']);
 const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
 const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);

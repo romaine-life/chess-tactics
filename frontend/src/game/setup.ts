@@ -55,6 +55,9 @@ function createFromLevel(level: Level): GameState {
     type: unit.type,
     x: unit.x,
     y: unit.y,
+    // Honor the authored facing so test-play shows the painted direction; fall back to
+    // the side's default when a level (legacy / facing-free) doesn't carry one.
+    facing: unit.facing ?? defaultFacingForSide(unit.side),
     alive: true,
     startY: unit.side === 'player' ? level.board.rows - 1 : 0,
   }));

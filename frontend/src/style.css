@@ -3640,6 +3640,18 @@ h1 {
   background: transparent;
 }
 
+/* Coordinated board reveal (render/boardArtReady). The board's dozens of tile <img>s each
+   load independently; without this they'd pop in one at a time ("popcorn"). The board is
+   held hidden until its whole art set has DECODED, then fades in as one unit on the same
+   320ms opacity fade the cold-load menu uses (ui/shell/coldReveal). A failsafe in the hook
+   reveals anyway if an asset stalls, so the board can never hang invisible. */
+.skirmish-board-lab {
+  transition: opacity 320ms ease;
+}
+.skirmish-board-lab.is-board-loading {
+  opacity: 0;
+}
+
 /* Strip the default .tileset-view-stage box (checkerboard fill + border + radius) on
    both in-game boards: the live skirmish board AND the level editor. They share the
    same world background, so they must read identically — the editor board floats on
@@ -4314,9 +4326,12 @@ h1 {
 
 /* road connection editor — clickable diamond edges for the selected road tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
-.le-roadconn-edge.is-joined, .le-roadconn-edge.is-cut { cursor: pointer; }
+.le-roadconn-edge { cursor: pointer; }
 .le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
 .le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
+.le-roadconn-edge.is-exit:hover line:last-child { stroke: #9bf0bb; }
+/* No same-kind neighbour: dim until hovered, where it previews the green "run off this edge" stub. */
+.le-roadconn-edge.is-none:hover line:last-child { stroke: #67d98a; }
 .le-roadconn-edge:focus-visible { outline: none; }
 .le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
 
@@ -5067,8 +5082,9 @@ body { font-size: 17px; }
   text-shadow: 0 0 8px rgba(240, 189, 85, .28);
 }
 
-/* Admin "Edit Officials" mode marker — the editor is a dev/admin surface, so a
-   plain high-contrast tag is fine (out of scope for player chrome polish). */
+/* "OFFICIAL" tier tag + read-only badge on official campaigns — the editor is a
+   dev/admin surface, so a plain high-contrast tag is fine (out of scope for player
+   chrome polish). */
 .ce-official-badge {
   color: var(--ce-gold-bright);
   font-weight: 700;
@@ -5461,6 +5477,27 @@ body { font-size: 17px; }
 .ce-row-actions {
   display: flex;
   gap: 5px;
+}
+
+/* Unassigned-levels section: a workspace-wide list of orphan levels (referenced by no
+   campaign), shown under the campaign's own levels. Reuses the level-row chrome; its
+   actions stack Edit + Attach vertically so the longer "Attach to this campaign" label
+   fits without crowding the row. */
+.ce-unassigned {
+  display: grid;
+  gap: 0;
+  margin-top: 14px;
+}
+
+.ce-unassigned-row .ce-row-actions {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.ce-unassigned-row .ce-row-actions .ce-asset-button,
+.ce-unassigned-row .ce-row-actions .ce-link-button {
+  font-size: var(--ds-text-2xs);
+  min-height: 32px;
 }
 
 .ce-campaign-summary {
@@ -10359,15 +10396,20 @@ button.tileset-relationship-cell {
 
 .settings-shell {
   display: grid;
-  grid-template-columns: minmax(244px, 304px) minmax(0, 1fr);
+  /* Button (rail) width + body cap are the baked output of the Main Menu tuner. SHARED by the
+     menu and Settings so the Settings rail tabs stay faithful to the menu's buttons (they're the
+     alignment reference for the Settings rows). overflow:visible lets the rail's offset (below)
+     show past the shell edge. Re-tune via the dressing room (MainMenuViewer) — it bakes these
+     same shared selectors. */
+  grid-template-columns: 487px minmax(0, 1fr);
   gap: clamp(8px, .85vw, 14px);
   /* Body (rail + content) is a centred contained block beneath the full-bleed top
      bar, so rows don't stretch the full width while the title bar stays flush. */
   inline-size: 100%;
-  max-inline-size: clamp(900px, 88vw, 1240px);
+  max-inline-size: max(clamp(900px, 88vw, 1240px), 487px);
   justify-self: center;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Entry fade (ADR-0043): the chrome (rail + panel) fades in when the Settings screen
@@ -10397,6 +10439,9 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(9px, .8vw, 13px);
   padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
+  /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
+     sit identically (the menu is the alignment reference). Re-tune in the dressing room. */
+  transform: translate(-230px, -21px);
 }
 
 /* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label
@@ -10467,7 +10512,7 @@ button.tileset-relationship-cell {
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
-  transform: translateX(18px); /* nudge the label clear of the enlarged icon */
+  transform: translateX(37px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
 }
 
 .settings-tab:not(.is-active):hover {
