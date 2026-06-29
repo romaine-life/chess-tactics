@@ -392,7 +392,7 @@ export function CampaignEditor() {
           <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
         </div>
       </TitleBarSlot>
-      <TitleBarSlot region="right">
+      <TitleBarSlot region="actions">
         <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
           {me?.is_admin ? (
             officialMode
@@ -400,7 +400,6 @@ export function CampaignEditor() {
               : <button type="button" data-testid="edit-officials" className="app-header-button" onClick={() => void enterOfficialEditing()}>Edit Officials</button>
           ) : null}
           <button type="button" data-testid="save-workspace" className="app-header-button app-header-button-active" onClick={saveWorkspaceNow}>{officialMode ? 'Publish' : 'Save'}</button>
-          <a className="app-header-button" href="/settings">Settings</a>
         </nav>
       </TitleBarSlot>
 

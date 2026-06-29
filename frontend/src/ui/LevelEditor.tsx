@@ -540,12 +540,11 @@ export function LevelEditor(): ReactElement {
             <span className="le-save-state is-dirty">Unsaved</span>
           </div>
         </TitleBarSlot>
-        <TitleBarSlot region="right">
+        <TitleBarSlot region="actions">
           <nav className="le-topbar-actions" aria-label="Editor actions">
             {cameFromStudio ? <a className="app-header-button le-back-catalog" href="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</a> : null}
             <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
             <button type="button" className="app-header-button app-header-button-active" disabled title="Saving unlocks once the editor is hosted.">Save</button>
-            <a className="app-header-button" href="/settings">Settings</a>
           </nav>
         </TitleBarSlot>
 
