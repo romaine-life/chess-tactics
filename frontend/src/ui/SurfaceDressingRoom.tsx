@@ -4,6 +4,7 @@ import { useWindowScaledPreview } from './useWindowScaledPreview';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
+import { ICON_TREATS, iconTreatFilter, type IconTreat } from './dressing/iconTreat';
 import panelCfg from '../../config/nine-slice/panel.json';
 import modeButtonCfg from '../../config/nine-slice/mode-button.json';
 
@@ -26,7 +27,7 @@ const FRAME_FILL: Record<FrameId, number> = {
 
 type RegionId = 'title' | 'tabsBox' | 'buttons' | 'rowsBox' | 'rows';
 type BoxId = 'tabsBox' | 'rowsBox';
-type GeomKey = 'minH' | 'padX' | 'padY' | 'gap' | 'iconSize' | 'moveX' | 'moveY';
+type GeomKey = 'minH' | 'padX' | 'padY' | 'gap' | 'iconSize' | 'moveX' | 'moveY' | 'width' | 'iconX';
 
 interface RegionDef {
   id: RegionId;
@@ -48,9 +49,9 @@ interface RegionDef {
 const REGIONS: RegionDef[] = [
   { id: 'title', label: 'Title bar', selector: '[data-testid="settings"] .app-titlebar.settings-header-frame', hint: 'The top header strip.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: false, geom: ['padX', 'padY', 'moveX', 'moveY'] },
   { id: 'tabsBox', label: 'Rail box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['padX', 'padY', 'gap'], inherited: 'Rail width & offset (X / Y) are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
-  { id: 'buttons', label: 'Rail tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round', frameWidth: 12, configId: 'mode-button', isBox: false, geom: ['minH', 'padX', 'padY', 'gap', 'iconSize'], inherited: 'Label position is shared with the Main Menu buttons — tune it in the Main Menu dressing room.' },
-  { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['padX', 'padY', 'moveX', 'moveY'] },
-  { id: 'rows', label: 'Setting rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round', frameWidth: 14, configId: 'panel', isBox: false, geom: ['minH', 'padX', 'padY', 'moveX', 'moveY'] },
+  { id: 'buttons', label: 'Rail tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round', frameWidth: 12, configId: 'mode-button', isBox: false, geom: ['minH', 'padX', 'padY', 'gap', 'iconSize', 'iconX'], inherited: 'Width, offset (X / Y) & label position are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
+  { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['width', 'padX', 'padY', 'moveX', 'moveY'] },
+  { id: 'rows', label: 'Setting rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round', frameWidth: 14, configId: 'panel', isBox: false, geom: ['minH', 'width', 'padX', 'padY', 'moveX', 'moveY'] },
 ];
 
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];
@@ -67,15 +68,17 @@ const GEOM_META: Record<GeomKey, { label: string; min: number; max: number; step
   iconSize: { label: 'Icon size', min: 16, max: 120 },
   moveX: { label: 'Move · horizontal', min: -600, max: 600 },
   moveY: { label: 'Move · vertical', min: -400, max: 400 },
+  width: { label: 'Width', min: 200, max: 1800 },
+  iconX: { label: 'Icon position', min: -40, max: 120 },
 };
 
 // A region's live computed geometry, measured once from the real element (before our overrides).
-interface GeomBase { padT: number; padR: number; padB: number; padL: number; minH: number; gap: number; iconSize: number; }
+interface GeomBase { padT: number; padR: number; padB: number; padL: number; minH: number; gap: number; iconSize: number; width: number; }
 // Placeholder until the live measure lands (the iframe mounts a tick after first render).
-const GEOM_FALLBACK: GeomBase = { padT: 22, padR: 22, padB: 22, padL: 22, minH: 56, gap: 11, iconSize: 64 };
+const GEOM_FALLBACK: GeomBase = { padT: 22, padR: 22, padB: 22, padL: 22, minH: 56, gap: 11, iconSize: 64, width: 740 };
 const geomBaseVal = (b: GeomBase, key: GeomKey): number =>
-  key === 'minH' ? b.minH : key === 'gap' ? b.gap : key === 'iconSize' ? b.iconSize
-    : key === 'padX' ? b.padL : key === 'padY' ? b.padT : 0; // moveX/moveY default to 0 (no transform)
+  key === 'minH' ? b.minH : key === 'gap' ? b.gap : key === 'iconSize' ? b.iconSize : key === 'width' ? b.width
+    : key === 'padX' ? b.padL : key === 'padY' ? b.padT : 0; // moveX/moveY/iconX default to 0 (no transform)
 
 type GeomTune = Partial<Record<GeomKey, number>>;
 
@@ -84,6 +87,7 @@ interface DressingConfig {
   boxDisabled: Record<BoxId, boolean>;
   boxOpacity: Record<BoxId, number>;
   geom: Record<RegionId, GeomTune>; // per-element geometry overrides (key absent = shipped)
+  fx: { iconTreat: IconTreat; iconLighten: number; hoverSlide: 'off' | '6' | '10' }; // rail-tab icon contrast + hover (buttons only)
   tilePx: number;
   offsetX: number;
   offsetY: number;
@@ -94,6 +98,7 @@ const blankConfig = (): DressingConfig => ({
   boxDisabled: { tabsBox: false, rowsBox: false },
   boxOpacity: { tabsBox: 1, rowsBox: 1 },
   geom: { title: {}, tabsBox: {}, buttons: {}, rowsBox: {}, rows: {} },
+  fx: { iconTreat: 'off', iconLighten: 1.85, hoverSlide: 'off' },
   tilePx: DEFAULT_TILE,
   offsetX: 0,
   offsetY: 0,
@@ -114,6 +119,7 @@ function loadConfig(seed?: string): DressingConfig {
 function regionTuned(config: DressingConfig, base: Record<RegionId, GeomBase>, id: RegionId): boolean {
   if (isSurface(config.surfaces[id]) || config.surfaces[id] === CLEAR) return true;
   if (BOX_IDS.includes(id as BoxId) && (config.boxDisabled[id as BoxId] || config.boxOpacity[id as BoxId] < 1)) return true;
+  if (id === 'buttons' && (config.fx.iconTreat !== 'off' || config.fx.hoverSlide !== 'off')) return true;
   const b = base[id] ?? GEOM_FALLBACK;
   const tune = config.geom[id] ?? {};
   return (Object.keys(tune) as GeomKey[]).some((k) => tune[k] !== undefined && tune[k] !== geomBaseVal(b, k));
@@ -177,6 +183,9 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
     if (region.geom.includes('minH') && tune.minH !== undefined && tune.minH !== b.minH) decls.push(`min-height: ${tune.minH}px`);
     if (region.geom.includes('gap') && tune.gap !== undefined && tune.gap !== b.gap) decls.push(`gap: ${tune.gap}px`);
     if (region.geom.includes('iconSize') && tune.iconSize !== undefined && tune.iconSize !== b.iconSize) decls.push(`--settings-tab-icon-size: ${tune.iconSize}px`);
+    // Width — a grid item, so the explicit width overrides its track; the shell's overflow:visible
+    // lets it grow past the column. (Rail width is menu-owned, so it's not offered here.)
+    if (region.geom.includes('width') && tune.width !== undefined && tune.width !== b.width) decls.push(`width: ${tune.width}px`);
     // Move (translate) — settings-only elements; the rail/tabs use the menu-owned shared transform.
     // The shell ships overflow:visible (baked), so a moved box shows past the shell edge, not clipped.
     const mX = tune.moveX ?? 0;
@@ -184,6 +193,18 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
     if ((region.geom.includes('moveX') || region.geom.includes('moveY')) && (mX !== 0 || mY !== 0)) decls.push(`transform: translate(${mX}px, ${mY}px)`);
 
     if (decls.length) blocks.push(`${sel} {\n${decls.map((d) => `  ${d} !important;`).join('\n')}\n}`);
+
+    // Rail-tab icon position / contrast / hover-slide (buttons only) — these target the icon <img>
+    // or the tab's :hover, so they're separate rules from the element block above.
+    if (region.id === 'buttons') {
+      const iconImg = `${sel} .settings-tab-icon img`;
+      const ix = tune.iconX ?? 0;
+      if (ix !== 0) blocks.push(`${iconImg} {\n  transform: translate(calc(-50% + ${ix}px), -50%) !important;\n}`);
+      const filter = iconTreatFilter(config.fx.iconTreat, config.fx.iconLighten);
+      if (filter) blocks.push(`${iconImg} {\n  filter: ${filter} !important;\n  image-rendering: pixelated !important;\n}`);
+      const slide = config.fx.hoverSlide === '6' ? 6 : config.fx.hoverSlide === '10' ? 10 : 0;
+      if (slide > 0) blocks.push(`${sel} {\n  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), color .14s ease !important;\n}\n${sel}:hover, ${sel}:focus-visible {\n  transform: translateX(${slide}px) !important;\n}`);
+    }
 
     if (region.isBox) {
       const op = config.boxOpacity[region.id as BoxId];
@@ -224,10 +245,11 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
         const el = doc.querySelector(region.selector);
         if (!el) continue;
         const cs = win.getComputedStyle(el);
-        const px = (v: string): number => parseFloat(v) || 0;
+        const px = (v: string): number => Math.round(parseFloat(v) || 0);
         next[region.id] = {
           padT: px(cs.paddingTop), padR: px(cs.paddingRight), padB: px(cs.paddingBottom), padL: px(cs.paddingLeft),
           minH: px(cs.minHeight), gap: px(cs.columnGap || cs.gap), iconSize: px(cs.getPropertyValue('--settings-tab-icon-size')) || 64,
+          width: px(cs.width),
         };
       }
       if (Object.keys(next).length) setBase((prev) => ({ ...prev, ...next }));
@@ -244,6 +266,8 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
     setConfig((prev) => ({ ...prev, boxOpacity: { ...prev.boxOpacity, [id]: value } }));
   const setGeom = (id: RegionId, key: GeomKey, value: number): void =>
     setConfig((prev) => ({ ...prev, geom: { ...prev.geom, [id]: { ...prev.geom[id], [key]: value } } }));
+  const setFx = (patch: Partial<DressingConfig['fx']>): void =>
+    setConfig((prev) => ({ ...prev, fx: { ...prev.fx, ...patch } }));
   const setGlobal = (patch: Partial<Pick<DressingConfig, 'tilePx' | 'offsetX' | 'offsetY'>>): void =>
     setConfig((prev) => ({ ...prev, ...patch }));
   const resetElement = (id: RegionId): void =>
@@ -251,6 +275,7 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
       ...prev,
       surfaces: { ...prev.surfaces, [id]: null },
       geom: { ...prev.geom, [id]: {} },
+      ...(id === 'buttons' ? { fx: { iconTreat: 'off' as IconTreat, iconLighten: 1.85, hoverSlide: 'off' as const } } : {}),
       ...(BOX_IDS.includes(id as BoxId) ? { boxDisabled: { ...prev.boxDisabled, [id]: false }, boxOpacity: { ...prev.boxOpacity, [id]: 1 } } : {}),
     }));
 
@@ -327,6 +352,36 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
                 <SliderRow key={key} label={<>{meta.label} · {v}px{live ? ' · live' : ''}</>} value={v} set={(val) => setGeom(region.id, key, val)} min={meta.min} max={meta.max} step={meta.step ?? 1} dflt={geomDflt(key)} />
               );
             })}
+
+            {region.id === 'buttons' ? (
+              <>
+                <div className="tileset-filter-field">
+                  <span>Icon contrast</span>
+                  <div className="pages-ctl-row">
+                    <div className="tileset-tier-seg" aria-label="Icon contrast treatment">
+                      {ICON_TREATS.map((t) => (
+                        <button key={t.id} type="button" className={config.fx.iconTreat === t.id ? 'is-active' : ''} onClick={() => setFx({ iconTreat: t.id })}>{t.label}</button>
+                      ))}
+                    </div>
+                    {ctlReset(() => setFx({ iconTreat: 'off', iconLighten: 1.85 }))}
+                  </div>
+                </div>
+                {config.fx.iconTreat === 'limestone' ? (
+                  <SliderRow label={<>Lighten · {config.fx.iconLighten.toFixed(2)}×</>} value={config.fx.iconLighten} set={(v) => setFx({ iconLighten: v })} min={1} max={2.6} step={0.05} nudge={0.05} dflt={1.85} />
+                ) : null}
+                <div className="tileset-filter-field">
+                  <span>Hover slide</span>
+                  <div className="pages-ctl-row">
+                    <div className="tileset-tier-seg" aria-label="Hover slide">
+                      <button type="button" className={config.fx.hoverSlide === 'off' ? 'is-active' : ''} onClick={() => setFx({ hoverSlide: 'off' })}>Off</button>
+                      <button type="button" className={config.fx.hoverSlide === '6' ? 'is-active' : ''} onClick={() => setFx({ hoverSlide: '6' })}>6px</button>
+                      <button type="button" className={config.fx.hoverSlide === '10' ? 'is-active' : ''} onClick={() => setFx({ hoverSlide: '10' })}>10px</button>
+                    </div>
+                    {ctlReset(() => setFx({ hoverSlide: 'off' }))}
+                  </div>
+                </div>
+              </>
+            ) : null}
 
             {region.inherited ? <p className="tileset-catalog-note">{region.inherited}</p> : null}
 

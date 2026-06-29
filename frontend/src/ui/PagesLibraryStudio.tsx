@@ -6,6 +6,7 @@ import { useWindowScaledPreview } from './useWindowScaledPreview';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
+import { ICON_TREATS, iconTreatFilter, type IconTreat } from './dressing/iconTreat';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -57,29 +58,7 @@ const STONE_SURFACES = [
   { name: 'wood-oak', label: 'Oak' },
 ];
 
-// Icon-contrast treatments auditioned LIVE on the real menu icons (.settings-tab-icon img).
-// The carved-stone bodies measure ~1.0–1.25:1 against the stone tab (WCAG non-text floor is 3:1),
-// so the bulk of each glyph is camouflaged. These raise separation WITHOUT a glow (ADR-0006/0027)
-// and WITHOUT a fabricated CSS surface behind the icon (ADR-0032). 'limestone' and 'bevel' are
-// pure CSS over the shipped PNGs (paste the Copy-CSS rule into style.css to bake). 'bronze' is a
-// LOOK preview only — shipping warm-metal icons means RE-FORGING the PNGs (ADR-0011/0025), not a
-// sepia filter, so it's starred.
-type IconTreat = 'off' | 'limestone' | 'bronze' | 'bevel';
-const ICON_TREATS: { id: IconTreat; label: string }[] = [
-  { id: 'off', label: 'Off' },
-  { id: 'limestone', label: 'Pale stone' },
-  { id: 'bronze', label: 'Bronze*' },
-  { id: 'bevel', label: 'Bevel' },
-];
-function iconTreatFilter(treat: IconTreat, lighten: number): string {
-  if (treat === 'limestone')
-    return `brightness(${lighten}) saturate(0.55) contrast(1.05) drop-shadow(0 1px 0 rgba(0,0,0,0.5)) drop-shadow(0 -1px 0 rgba(255,255,255,0.25))`;
-  if (treat === 'bronze')
-    return `brightness(1.35) sepia(0.85) saturate(2.4) hue-rotate(-18deg) drop-shadow(0 1px 0 rgba(0,0,0,0.55)) drop-shadow(0 -1px 0 rgba(255,231,180,0.35))`;
-  if (treat === 'bevel')
-    return `drop-shadow(0 -1px 0 #0a121e) drop-shadow(-1px 0 0 #0a121e) drop-shadow(0 1px 0 rgba(210,228,246,0.7)) drop-shadow(1px 0 0 rgba(210,228,246,0.45))`;
-  return '';
-}
+// Icon-contrast treatments live in ./dressing/iconTreat (shared with the Settings tuner).
 
 // Live-menu baselines (what actually ships — the settings-twin chrome). A control emits an
 // override ONLY when it differs from these, so an untouched panel renders pixel-identical to the
