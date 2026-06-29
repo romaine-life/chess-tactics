@@ -561,11 +561,20 @@ h1 {
 }
 .pages-mini-reset:hover { color: #f4fbff; background: rgba(120, 160, 200, .24); }
 /* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
-   sprites): a solid stone-ish plate with the page initial, centered by the base place-items. */
+   sprites): a hero shot of the live route, full-bleed. The gradient shows only until the
+   thumbnail loads / if it's missing. */
 .tileset-studio-card-image.pages-card-image {
   min-height: 96px;
-  font-family: var(--ds-font-display); font-size: 1.9rem; color: #9db8da;
+  aspect-ratio: 16 / 10;
   background: linear-gradient(180deg, #16243a, #0b1422);
+}
+/* Beats the base .tileset-studio-card-image img (iso-tile-sized, pixelated, contain). */
+.tileset-studio-card-image.pages-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  image-rendering: auto;
 }
 
 .mode-button {
