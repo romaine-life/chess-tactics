@@ -31,6 +31,7 @@ import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudi
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { PAGE_ENTRIES } from './pagesCatalog';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
+import { SfxLibraryStudio, SfxViewer } from './SfxLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
 import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
@@ -71,13 +72,13 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -156,7 +157,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -216,7 +217,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
     viewerKind: isNineSliceAlias ? 'nineslice'
-      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' ? vk : undefined,
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -333,6 +334,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedSideFamilies, setSelectedSideFamilies] = useState<TileFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [sliderSearch, setSliderSearch] = useState('');
   const [selectedSliderName, setSelectedSliderName] = useState<string | undefined>(undefined);
+  const [sfxSearch, setSfxSearch] = useState('');
+  const [selectedSfxName, setSelectedSfxName] = useState<string | undefined>(undefined);
   const [pageSearch, setPageSearch] = useState('');
   const [selectedPageName, setSelectedPageName] = useState<string | undefined>(initialRoute.selectedPageName);
   const [glossarySearch, setGlossarySearch] = useState('');
@@ -1035,6 +1038,23 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
+      id: 'sfx', label: 'Sound Effects', hint: 'Audition the procedural terrain footstep / landing sounds — synthesized in code, played live.',
+      main: <SfxLibraryStudio search={sfxSearch} zoom={zoom} selected={selectedSfxName} onSelect={setSelectedSfxName} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={sfxSearch} onChange={(event) => setSfxSearch(event.target.value)} placeholder="terrain, character…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('sfx')}>View Selected</button>
+        </>
+      ),
+    },
+    {
       id: 'pages', label: 'Pages', hint: 'Browse the app screens — inspect each live page; tune the Main Menu in place.',
       main: <PagesLibraryStudio search={pageSearch} selected={selectedPageName} onSelect={setSelectedPageName} />,
       controls: (
@@ -1066,6 +1086,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="surface">Surface</option>
         <option value="scrollbar">Scrollbar</option>
         <option value="slider">Slider</option>
+        <option value="sfx">Sound FX</option>
         <option value="page">Page</option>
         <option value="tileside">Tile Sides</option>
       </select>
@@ -1139,7 +1160,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         ? <PagesViewer name={selectedPageName} header={studioViewerHeader} />
                         : viewerKind === 'tileside'
                           ? <TileSidesViewer name={selectedTileSideId} header={studioViewerHeader} />
-                          : <AssetLab name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
+                          : viewerKind === 'sfx'
+                            ? <SfxViewer name={selectedSfxName} header={studioViewerHeader} />
+                            : <AssetLab name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
         ) : null}
       </section>
     </main>

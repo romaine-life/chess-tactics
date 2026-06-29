@@ -22,9 +22,9 @@
 //   - Bounded: a polyphony cap drops (or steals) voices so a flurry of rapid moves
 //     can never pile up an unbounded graph of nodes.
 //
-// The per-terrain RECIPES are authored, hand-tuned procedural foley (see
-// /sfx-lab to audition them). Each is intentionally short and subtle — landing
-// feedback plays on every move, so it must never fatigue.
+// The per-terrain RECIPES are authored, hand-tuned procedural foley (audition them
+// in the Studio's "Sound Effects" catalog). Each is intentionally short and subtle —
+// landing feedback plays on every move, so it must never fatigue.
 
 import type { TerrainType } from './core/types';
 
@@ -225,7 +225,7 @@ export function primeSfx(): void {
 
 export type NoiseColor = 'white' | 'pink' | 'brown';
 
-export function noiseSource(context: AudioContext, seconds: number, color: NoiseColor): AudioBufferSourceNode {
+export function noiseSource(context: BaseAudioContext, seconds: number, color: NoiseColor): AudioBufferSourceNode {
   const length = Math.max(1, Math.floor(context.sampleRate * Math.max(0, seconds)));
   const buffer = context.createBuffer(1, length, context.sampleRate);
   const data = buffer.getChannelData(0);
@@ -264,7 +264,10 @@ export function noiseSource(context: AudioContext, seconds: number, color: Noise
 // them subtle (this plays on every landing). cliff/rock are no-ops (impassable:
 // pieces never land on them) and return 0.
 
-export type SfxRecipe = (ctx: AudioContext, dest: AudioNode, now: number) => number;
+// Recipes take a BaseAudioContext (not AudioContext) so the very same recipe can be
+// rendered offline for the catalog waveform preview (OfflineAudioContext) as well as
+// played live. They only ever use create*/currentTime/sampleRate, all on the base type.
+export type SfxRecipe = (ctx: BaseAudioContext, dest: AudioNode, now: number) => number;
 
 const NO_OP: SfxRecipe = () => 0;
 
