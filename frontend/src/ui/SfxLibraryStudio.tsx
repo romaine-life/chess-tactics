@@ -4,10 +4,16 @@ import { AUTHORED_SAMPLE_KEYS, authoredSampleKeyFor, previewArrival, previewSamp
 import { sfxSampleWaveform, sfxSampleWaveformCached } from '../sfxWaveform';
 import { ASSIGNABLE_TERRAINS, SFX_ASSETS, type SfxAsset } from './sfxCatalog';
 
-// Draft terrain→sound assignments live in localStorage so they survive reloads. They do
-// NOT change the running game — they're a proposal you craft here and hand to Claude
-// (the "Copy for Claude" button), who bakes the final map into TERRAIN_SAMPLE in sfx.ts.
+// Draft SFX assignments live in localStorage so they survive reloads. They do NOT change
+// the running game — they're a proposal you craft here and hand to Claude (the "Copy for
+// Claude" button), who bakes the final values into TERRAIN_SAMPLE / playArrival.
 const ASSIGN_STORE_KEY = 'chess-tactics-sfx-assignments-v1';
+const ARRIVAL_STORE_KEY = 'chess-tactics-sfx-arrival-v1';
+
+type FiringMode = 'per-unit' | 'once';
+interface ArrivalSettings { sound: string; volume: number; firing: FiringMode }
+// Current baked-in behaviour: the 'arrival' set, ~0.55 call gain, one thump per unit.
+const DEFAULT_ARRIVAL: ArrivalSettings = { sound: 'arrival', volume: 55, firing: 'per-unit' };
 
 function defaultAssignments(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -27,38 +33,69 @@ function loadAssignments(): Record<string, string> {
   return out;
 }
 
-// The terrain→sound assignment editor shown above the audition grid.
+function loadArrival(): ArrivalSettings {
+  const out = { ...DEFAULT_ARRIVAL };
+  try {
+    const raw = window.localStorage.getItem(ARRIVAL_STORE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<ArrivalSettings>;
+      if (typeof p.sound === 'string') out.sound = p.sound;
+      if (typeof p.volume === 'number' && Number.isFinite(p.volume)) out.volume = Math.min(100, Math.max(0, p.volume));
+      if (p.firing === 'per-unit' || p.firing === 'once') out.firing = p.firing;
+    }
+  } catch { /* absent / malformed → defaults */ }
+  return out;
+}
+
+// The SFX assignment editor (terrain→sound + the arrival thump) shown above the grid.
 function SfxAssignmentPanel(): ReactElement {
   const soundKeys = useMemo(() => AUTHORED_SAMPLE_KEYS.filter((k) => k !== 'arrival'), []);
   const [assign, setAssign] = useState<Record<string, string>>(() => loadAssignments());
+  const [arrival, setArrival] = useState<ArrivalSettings>(() => loadArrival());
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     try { window.localStorage.setItem(ASSIGN_STORE_KEY, JSON.stringify(assign)); } catch { /* ignore */ }
   }, [assign]);
+  useEffect(() => {
+    try { window.localStorage.setItem(ARRIVAL_STORE_KEY, JSON.stringify(arrival)); } catch { /* ignore */ }
+  }, [arrival]);
 
   const setOne = (terrain: string, key: string) => setAssign((a) => ({ ...a, [terrain]: key }));
-  const reset = () => setAssign(defaultAssignments());
+  const setArr = (patch: Partial<ArrivalSettings>) => setArrival((a) => ({ ...a, ...patch }));
+  const reset = () => { setAssign(defaultAssignments()); setArrival({ ...DEFAULT_ARRIVAL }); };
   const copy = () => {
     const w = Math.max(...ASSIGNABLE_TERRAINS.map((t) => t.length));
-    const lines = ASSIGNABLE_TERRAINS.map((t) => `  ${t.padEnd(w)} -> ${assign[t] ? assign[t] : '(silent)'}`);
-    const text = `SFX terrain assignments (apply to TERRAIN_SAMPLE in frontend/src/sfx.ts):\n${lines.join('\n')}`;
+    const terrainLines = ASSIGNABLE_TERRAINS.map((t) => `  ${t.padEnd(w)} -> ${assign[t] ? assign[t] : '(silent)'}`);
+    const text = [
+      'SFX assignments (apply in frontend/src/sfx.ts + game/store.ts):',
+      '',
+      'Terrains (TERRAIN_SAMPLE):',
+      ...terrainLines,
+      '',
+      'Arrival / deploy thump (playArrival):',
+      `  sound  -> ${arrival.sound || 'none (off)'}`,
+      `  volume -> ${arrival.volume}%`,
+      `  firing -> ${arrival.firing}`,
+    ].join('\n');
     void navigator.clipboard?.writeText(text)
       .then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500); })
       .catch(() => { /* clipboard blocked — the user can still read the rows */ });
   };
 
+  const label: CSSProperties = { color: 'var(--ds-ink-1, #ecedf2)', textTransform: 'capitalize' };
+
   return (
-    <section className="tileset-inspector-section" style={{ marginBottom: 16 }} aria-label="Terrain sound assignments">
+    <section className="tileset-inspector-section" style={{ marginBottom: 16 }} aria-label="Sound assignments">
       <h2>Assign sounds to terrains</h2>
       <p className="tileset-catalog-note">
         Pick which recorded sound voices each terrain, ▶ to hear it. These are a draft — they don’t change the
-        running game. Hit <strong>Copy for Claude</strong>, paste it into chat, and I’ll bake the map into the game.
+        running game. Hit <strong>Copy for Claude</strong>, paste it into chat, and I’ll bake it into the game.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 }}>
         {ASSIGNABLE_TERRAINS.map((t) => (
           <Fragment key={t}>
-            <span style={{ color: 'var(--ds-ink-1, #ecedf2)', textTransform: 'capitalize' }}>{t}</span>
+            <span style={label}>{t}</span>
             <select value={assign[t] ?? ''} onChange={(e) => setOne(t, e.target.value)} aria-label={`Sound for ${t}`} style={{ width: '100%' }}>
               <option value="">— silent —</option>
               {soundKeys.map((k) => <option key={k} value={k}>{k}</option>)}
@@ -73,7 +110,40 @@ function SfxAssignmentPanel(): ReactElement {
           </Fragment>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+
+      <h2 style={{ marginTop: 18 }}>Arrival (on deploy)</h2>
+      <p className="tileset-catalog-note">The thump layered over the terrain sound as a unit lands on the board.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 }}>
+        <span style={label}>Sound</span>
+        <select value={arrival.sound} onChange={(e) => setArr({ sound: e.target.value })} aria-label="Arrival sound" style={{ width: '100%' }}>
+          <option value="">— none (no thump) —</option>
+          {AUTHORED_SAMPLE_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+        <button
+          type="button"
+          className="tileset-view-action"
+          disabled={!arrival.sound}
+          onClick={() => { if (arrival.sound) previewSample(arrival.sound as SampleKey, arrival.volume / 100); }}
+          aria-label="Play the arrival sound at its volume"
+        >▶</button>
+
+        <span style={label}>Volume</span>
+        <input
+          type="range" min={0} max={100} value={arrival.volume}
+          onChange={(e) => setArr({ volume: Number(e.target.value) })}
+          aria-label="Arrival volume" style={{ width: '100%' }}
+        />
+        <span style={{ color: 'var(--ds-ink-2, #aeb4c2)', minWidth: 34, textAlign: 'right' }}>{arrival.volume}%</span>
+
+        <span style={label}>Firing</span>
+        <select value={arrival.firing} onChange={(e) => setArr({ firing: e.target.value as FiringMode })} aria-label="Arrival firing mode" style={{ width: '100%' }}>
+          <option value="per-unit">per-unit (staggered)</option>
+          <option value="once">once (whole squad)</option>
+        </select>
+        <span />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
         <button type="button" className="tileset-view-action" onClick={copy}>{copied ? 'Copied ✓' : 'Copy for Claude'}</button>
         <button type="button" className="tileset-view-action" onClick={reset}>Reset to current</button>
       </div>

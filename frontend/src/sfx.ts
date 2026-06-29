@@ -426,18 +426,18 @@ export function previewArrival(): void {
 }
 
 /**
- * Audition a sample set directly by key — a random take at full gain. Used by the
- * Studio's terrain-assignment panel so you can hear what a sound would be like on a
- * terrain before assigning it. No-op (kicking off a load) until the set is decoded.
+ * Audition a sample set directly by key — a random take at the given call gain (default
+ * full). Used by the Studio's assignment panel so you can hear what a sound would be like
+ * (and at what level) before assigning it. No-op (kicking off a load) until decoded.
  */
-export function previewSample(key: SampleKey): void {
+export function previewSample(key: SampleKey, gain = 1): void {
   const context = ensureContext();
   if (!context || !master) return;
   if (context.state === 'suspended') {
     void context.resume().catch(() => { /* may need a real gesture first */ });
   }
   if (masterGainFor(effectsSettings()) <= 0) return;
-  if (!playSampleSet(key, 1)) void loadSampleSet(key);
+  if (!playSampleSet(key, normGain(gain))) void loadSampleSet(key);
 }
 
 // ---- catalog / audition accessors ------------------------------------------
