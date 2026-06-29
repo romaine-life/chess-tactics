@@ -73,12 +73,13 @@ const GEOM_META: Record<GeomKey, { label: string; min: number; max: number; step
 };
 
 // A region's live computed geometry, measured once from the real element (before our overrides).
-interface GeomBase { padT: number; padR: number; padB: number; padL: number; minH: number; gap: number; iconSize: number; width: number; }
+interface GeomBase { padT: number; padR: number; padB: number; padL: number; minH: number; gap: number; iconSize: number; width: number; moveX: number; moveY: number; }
 // Placeholder until the live measure lands (the iframe mounts a tick after first render).
-const GEOM_FALLBACK: GeomBase = { padT: 22, padR: 22, padB: 22, padL: 22, minH: 56, gap: 11, iconSize: 64, width: 740 };
+const GEOM_FALLBACK: GeomBase = { padT: 22, padR: 22, padB: 22, padL: 22, minH: 56, gap: 11, iconSize: 64, width: 740, moveX: 0, moveY: 0 };
 const geomBaseVal = (b: GeomBase, key: GeomKey): number =>
   key === 'minH' ? b.minH : key === 'gap' ? b.gap : key === 'iconSize' ? b.iconSize : key === 'width' ? b.width
-    : key === 'padX' ? b.padL : key === 'padY' ? b.padT : 0; // moveX/moveY/iconX default to 0 (no transform)
+    : key === 'moveX' ? b.moveX : key === 'moveY' ? b.moveY
+    : key === 'padX' ? b.padL : key === 'padY' ? b.padT : 0; // iconX defaults to 0 (no offset)
 
 type GeomTune = Partial<Record<GeomKey, number>>;
 
@@ -188,9 +189,9 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
     if (region.geom.includes('width') && tune.width !== undefined && tune.width !== b.width) decls.push(`width: ${tune.width}px`);
     // Move (translate) — settings-only elements; the rail/tabs use the menu-owned shared transform.
     // The shell ships overflow:visible (baked), so a moved box shows past the shell edge, not clipped.
-    const mX = tune.moveX ?? 0;
-    const mY = tune.moveY ?? 0;
-    if ((region.geom.includes('moveX') || region.geom.includes('moveY')) && (mX !== 0 || mY !== 0)) decls.push(`transform: translate(${mX}px, ${mY}px)`);
+    const mX = tune.moveX ?? b.moveX;
+    const mY = tune.moveY ?? b.moveY;
+    if ((region.geom.includes('moveX') || region.geom.includes('moveY')) && (mX !== b.moveX || mY !== b.moveY)) decls.push(`transform: translate(${mX}px, ${mY}px)`);
 
     if (decls.length) blocks.push(`${sel} {\n${decls.map((d) => `  ${d} !important;`).join('\n')}\n}`);
 
@@ -246,10 +247,14 @@ export function SurfaceDressingRoom({ seed, header }: { seed?: string; header?: 
         if (!el) continue;
         const cs = win.getComputedStyle(el);
         const px = (v: string): number => Math.round(parseFloat(v) || 0);
+        // Parse the element's own translate from its computed matrix(a,b,c,d,tx,ty) so the Move
+        // sliders open at a baked transform's offset (not 0), keeping re-tuning honest.
+        const tm = /matrix\(([^)]+)\)/.exec(cs.transform);
+        const tn = tm ? tm[1].split(',').map((n) => parseFloat(n)) : [];
         next[region.id] = {
           padT: px(cs.paddingTop), padR: px(cs.paddingRight), padB: px(cs.paddingBottom), padL: px(cs.paddingLeft),
           minH: px(cs.minHeight), gap: px(cs.columnGap || cs.gap), iconSize: px(cs.getPropertyValue('--settings-tab-icon-size')) || 64,
-          width: px(cs.width),
+          width: px(cs.width), moveX: Math.round(tn[4] || 0), moveY: Math.round(tn[5] || 0),
         };
       }
       if (Object.keys(next).length) setBase((prev) => ({ ...prev, ...next }));
