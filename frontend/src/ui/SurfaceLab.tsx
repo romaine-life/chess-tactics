@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
+import { tileAssets, tileFamilies, edgeTiles, muralTiles, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
 import { BrandLockup } from './shared/BrandLockup';
@@ -67,6 +67,7 @@ export function SurfaceLab(): ReactElement {
       rows: ROWS,
       familyAssets: tileFamilies,
       edgeAssets: edgeTiles,
+      muralEdges: muralTiles,
     }),
     [family, seed],
   );

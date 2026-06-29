@@ -100,6 +100,34 @@ export const edgeTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.from
   EDGE_FAMILIES.map((family) => [family, Array.from({ length: EDGE_VARIANTS }, (_, v) => edgeVariant(family, v))]),
 ) as Partial<Record<TileFamilyId, TileAsset[]>>;
 
+// CONTINUITY murals (ADR-0039). One WIDE codex cliff mural per family, sliced into
+// MURAL_WINDOWS ORDERED windows (build-mural-edges.py): consecutive windows are adjacent
+// columns of the same mural, so when the solver hands consecutive void-facing edge cells
+// consecutive windows the cliff FLOWS across tiles instead of each tile re-starting at a
+// random variant. The index IS the window order; `probability` is unused (the solver picks
+// sequentially by run-position, not weighted). Supersedes the random `edgeTiles` pick for any
+// family present here; families absent here fall back to `edgeTiles`.
+// 48 = three codex murals (16 windows each) pooled into ONE ordered bank: every generated
+// mural is used, and the bank is long enough that no realistic board edge repeats a window.
+export const MURAL_WINDOWS = 48;
+const muralVariant = (family: TileFamilyId, i: number): TileAsset => ({
+  id: `${family}-mural-${i}`,
+  label: `${terrainLabels[family]} · Mural ${i + 1}`,
+  src: `/assets/tiles/surface/${family}-mural-${i}.png`,
+  role: 'edge',
+  kind: 'tile',
+  source: 'pixel:surface',
+  method: 'Edge mural (continuous cliff)',
+  probability: 1,
+  notes: `${terrainLabels[family]} — continuous cliff mural, window ${i + 1} of ${MURAL_WINDOWS}.`,
+  terrains: [family],
+});
+// Families with a baked continuity mural. Rolling out one at a time; the rest keep edgeTiles.
+const MURAL_FAMILIES: readonly TileFamilyId[] = ['grass'];
+export const muralTiles: Partial<Record<TileFamilyId, TileAsset[]>> = Object.fromEntries(
+  MURAL_FAMILIES.map((family) => [family, Array.from({ length: MURAL_WINDOWS }, (_, i) => muralVariant(family, i))]),
+) as Partial<Record<TileFamilyId, TileAsset[]>>;
+
 export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => tileFamilies[family]);
 
 export const tileFrameSrc = (asset: TileAsset): string => asset.src;

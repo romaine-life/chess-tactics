@@ -63,12 +63,15 @@ Fill the entire canvas edge to edge with the cliff material — fully opaque, no
 Save it as ./${spec.name}.png in the current working directory, then stop.`;
 }
 
-async function forgeOne(spec, maxTries) {
+async function forgeOne(spec, maxTries, ref) {
   let prior = '';
   for (let attempt = 1; attempt <= maxTries; attempt += 1) {
     const work = mkdtempSync(join(tmpdir(), `side-${spec.name}-`));
     try {
-      const { out: jsonl } = await runCodex(work, prompt(spec, prior));
+      const text = prompt(spec, prior) + (ref
+        ? '\n\nVISUAL REFERENCE: an attached photo of a real mountainside is provided. Use it as reference for the rock shapes, strata, weathering, and the grass/rock colour — but RE-RENDER the scene as the pixel-art cliff cross-section described above. Do NOT copy the photo literally and keep zero photographic detail; it informs the forms only.'
+        : '');
+      const { out: jsonl } = await runCodex(work, text, ref);
       mkdirSync(EVID, { recursive: true });
       writeFileSync(join(EVID, `side-${spec.name}-try${attempt}.jsonl`), jsonl);
       const verdict = imageGenVerdict(jsonl);
@@ -100,13 +103,14 @@ const flag = (n, def) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1
 const n = Math.max(1, parseInt(flag('--n', '3'), 10));
 const maxTries = Math.max(1, parseInt(flag('--tries', '2'), 10));
 const idx = Math.max(0, parseInt(flag('--index', '0'), 10));
-const VALUE_FLAGS = ['--n', '--tries', '--index'];
+const ref = flag('--ref', null);
+const VALUE_FLAGS = ['--n', '--tries', '--index', '--ref'];
 const names = argv.filter((a) => !a.startsWith('--') && !VALUE_FLAGS.includes(argv[argv.indexOf(a) - 1]));
 const queue = (argv.includes('--all') || !names.length ? SPECS : SPECS.filter((s) => names.includes(s.name))).map((s) => ({ ...s, idx }));
 
 console.log(`forge-side-texture: ${queue.length} slab(s), concurrency ${n}, up to ${maxTries} tries\n  codex: ${CODEX}\n`);
 let i = 0; const results = [];
-const worker = async () => { while (i < queue.length) { const s = queue[i]; i += 1; results.push(await forgeOne(s, maxTries)); } };
+const worker = async () => { while (i < queue.length) { const s = queue[i]; i += 1; results.push(await forgeOne(s, maxTries, ref)); } };
 await Promise.all(Array.from({ length: Math.min(n, queue.length) }, worker));
 const ok = results.filter((r) => r.pass).length;
 console.log(`\n==== ${ok}/${results.length} forged ====`);
