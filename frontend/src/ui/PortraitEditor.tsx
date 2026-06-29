@@ -30,12 +30,18 @@ const COMMITTED = COMMITTED_CROPS as Record<Piece, Crop>;
 export const STORAGE_KEY = 'portrait-editor-crops-v3'; // v3: discard stale v2 (centered-default) crops
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-// Crop is only clamped to the image bounds — free to pan anywhere. Tightening is
-// top-anchored (see setZoom) so zooming for a headshot doesn't eat the head.
+// s ≤ 1 crops INSIDE the master (the original behaviour); s > 1 lets the crop extend BEYOND
+// it, wrapping the unit in transparent padding — so you can add headroom a tightly-framed
+// master can't otherwise give (e.g. above the rook keep). S_MAX caps how small the unit can go.
+const S_MAX = 2;
+const Z_OFF = 0.15 + S_MAX; // zoom slider maps value = Z_OFF - s, so dragging right still zooms in
+// For s ≤ 1 this keeps the window inside the image (unchanged, so other portraits don't move);
+// for s > 1 it lets the centre roam so the unit can sit against an edge with padding on the far side.
 function clampCrop({ cx, cy, s }: Crop): Crop {
-  const ss = clamp(s, 0.15, 1);
+  const ss = clamp(s, 0.15, S_MAX);
   const half = ss / 2;
-  return { s: ss, cx: clamp(cx, half, 1 - half), cy: clamp(cy, half, 1 - half) };
+  const lo = Math.min(half, 1 - half), hi = Math.max(half, 1 - half);
+  return { s: ss, cx: clamp(cx, lo, hi), cy: clamp(cy, lo, hi) };
 }
 
 export const masterSrc = (piece: Piece, pal: Palette, method: PortraitMethod = 'smooth') => portraitMasterSrc(piece, pal, method);
@@ -117,7 +123,7 @@ function usePortraitEditor() {
     setCrops((prev) => {
       const c = prev[piece];
       const top = c.cy - c.s / 2;
-      const s = clamp(nextS, 0.15, 1);
+      const s = clamp(nextS, 0.15, S_MAX);
       return { ...prev, [piece]: clampCrop({ cx: c.cx, s, cy: top + s / 2 }) };
     });
   }, [piece]);
@@ -133,7 +139,10 @@ function usePortraitEditor() {
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = dragRef.current; const box = canvasRef.current?.getBoundingClientRect();
     if (!d || !box) return;
-    setCrop({ ...crop, cx: d.cx + (e.clientX - d.startX) / box.width, cy: d.cy + (e.clientY - d.startY) / box.height });
+    // When zoomed out into padding (s>1) the master is drawn smaller in the canvas, so pan
+    // proportionally faster to keep the crop tracking the cursor.
+    const k = Math.max(1, crop.s);
+    setCrop({ ...crop, cx: d.cx + ((e.clientX - d.startX) / box.width) * k, cy: d.cy + ((e.clientY - d.startY) / box.height) * k });
   };
   const onPointerUp = () => { dragRef.current = null; };
   const onWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
@@ -158,12 +167,23 @@ function usePortraitEditor() {
   return { crops, piece, setPiece, palette, setPalette, method, setMethod, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll };
 }
 
-const overlayStyle = (crop: Crop): CSSProperties => ({
-  position: 'absolute', boxSizing: 'border-box',
-  left: `${(crop.cx - crop.s / 2) * 100}%`, top: `${(crop.cy - crop.s / 2) * 100}%`,
-  width: `${crop.s * 100}%`, height: `${crop.s * 100}%`,
-  border: '2px solid #7fd0ff', boxShadow: '0 0 0 9999px rgba(2,8,13,.55)', borderRadius: 4, cursor: 'grab',
-});
+// Editor display scale: when s>1 the master shrinks to 1/s of the canvas (centred) so the
+// crop — which can now exceed the image — still fits, and the transparent padding shows as
+// checker margin around the unit. For s≤1 the master fills the canvas exactly as before.
+const editorDisp = (s: number) => 1 / Math.max(1, s);
+const editorImgStyle = (s: number): CSSProperties => {
+  const d = editorDisp(s); const m = ((1 - d) / 2) * 100;
+  return { position: 'absolute', left: `${m}%`, top: `${m}%`, width: `${d * 100}%`, height: `${d * 100}%`, objectFit: 'contain', pointerEvents: 'none', userSelect: 'none' };
+};
+const overlayStyle = (crop: Crop): CSSProperties => {
+  const d = editorDisp(crop.s); const off = (1 - d) / 2;
+  return {
+    position: 'absolute', boxSizing: 'border-box',
+    left: `${(off + (crop.cx - crop.s / 2) * d) * 100}%`, top: `${(off + (crop.cy - crop.s / 2) * d) * 100}%`,
+    width: `${crop.s * d * 100}%`, height: `${crop.s * d * 100}%`,
+    border: '2px solid #7fd0ff', boxShadow: '0 0 0 9999px rgba(2,8,13,.55)', borderRadius: 4, cursor: 'grab',
+  };
+};
 const checkerBg = 'repeating-conic-gradient(#15202b 0% 25%, #0e161e 0% 50%) 50% / 28px 28px';
 
 // In-studio Viewer surface — the same crop editor in the studio's [main][aside]
@@ -187,7 +207,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
               onPointerDown={ed.onPointerDown} onPointerMove={ed.onPointerMove} onPointerUp={ed.onPointerUp} onWheel={ed.onWheel}
               style={{ position: 'relative', width: CANVAS, height: CANVAS, borderRadius: 8, overflow: 'hidden', background: checkerBg, touchAction: 'none', userSelect: 'none' }}
             >
-              <img src={masterSrc(piece, palette)} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
+              <img src={masterSrc(piece, palette)} alt="" draggable={false} style={editorImgStyle(crop.s)} />
               <div style={overlayStyle(crop)} />
             </div>
           </div>
@@ -237,7 +257,7 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
               ))}
             </div>
             <label className="tileset-catalog-zoom"><span>Zoom</span>
-              <input type="range" min={0.15} max={1} step={0.005} value={1.15 - crop.s} onChange={(e) => ed.setZoom(1.15 - Number(e.target.value))} />
+              <input type="range" min={0.15} max={S_MAX} step={0.005} value={Z_OFF - crop.s} onChange={(e) => ed.setZoom(Z_OFF - Number(e.target.value))} />
             </label>
             <label className="tileset-catalog-zoom"><span>Vertical</span>
               <input type="range" min={0} max={1} step={0.002} value={crop.cy} onChange={(e) => ed.setCrop({ ...crop, cy: Number(e.target.value) })} />
@@ -261,18 +281,13 @@ export function PortraitEditor(): ReactElement {
   const { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll } = usePortraitEditor();
 
   const CANVAS = 420;
-  const overlay: CSSProperties = {
-    position: 'absolute', boxSizing: 'border-box',
-    left: `${(crop.cx - crop.s / 2) * 100}%`, top: `${(crop.cy - crop.s / 2) * 100}%`,
-    width: `${crop.s * 100}%`, height: `${crop.s * 100}%`,
-    border: '2px solid #7fd0ff', boxShadow: '0 0 0 9999px rgba(2,8,13,.55)', borderRadius: 4, cursor: 'grab',
-  };
+  const overlay = overlayStyle(crop);
 
   return (
     <main style={{ minHeight: '100vh', background: '#0b1016', color: '#cfe3ee', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
       <h1 style={{ margin: '0 0 4px', fontSize: 20 }}>Portrait Editor</h1>
       <p style={{ margin: '0 0 18px', color: '#7fa8bd', fontSize: 13 }}>
-        Drag the crop to pan · scroll or use the zoom slider · the crop is per-piece (shared across palettes).
+        Drag the crop to pan · scroll or use the zoom slider (below 1× adds transparent padding for headroom) · the crop is per-piece (shared across palettes).
         Tune each unit, then <strong>Copy JSON</strong> and paste it back in chat.
       </p>
 
@@ -299,8 +314,8 @@ export function PortraitEditor(): ReactElement {
             <label style={rowStyle}>
               <span style={{ width: 56 }}>Zoom</span>
               {/* invert so dragging right = tighter crop */}
-              <input type="range" min={0.15} max={1} step={0.005} value={1.15 - crop.s}
-                onChange={(e) => setZoom(1.15 - Number(e.target.value))}
+              <input type="range" min={0.15} max={S_MAX} step={0.005} value={Z_OFF - crop.s}
+                onChange={(e) => setZoom(Z_OFF - Number(e.target.value))}
                 style={{ flex: 1 }} />
               <span style={{ width: 44, textAlign: 'right' }}>{(1 / crop.s).toFixed(2)}×</span>
             </label>
