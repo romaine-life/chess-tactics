@@ -10147,7 +10147,16 @@ button.tileset-relationship-cell {
   block-size: var(--app-header-h);
   display: grid;
   gap: clamp(10px, 1.1vw, 18px);
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* The DEFAULT bar is two sections: brand (1fr, leading) · account cluster (auto,
+     trailing) — the invariant chrome every screen carries (ADR-0042). The cluster is the
+     last DOM child, so it lands in this final column flush to the right padding edge.
+     A screen that ADDS optional center/actions slots ALSO sets a barClass that overrides
+     this with the extra columns (skirmish-topbar=3, le/ce-topbar=4); those overrides carry
+     two classes so they out-rank this base. Do NOT pad this with an extra empty `auto`
+     column "for the slots" — an unused trailing track + its gap would push the cluster a
+     gap-width left on every plain bar, so the cluster would jump when navigating to a
+     bar that DOES override (e.g. menu -> skirmish). Keep it at exactly two. */
+  grid-template-columns: minmax(0, 1fr) auto;
   /* Fork A (ADR-0037): full-bleed oak whose bottom edge is a forged NAILHEAD iron rule
      (a studded band) capped by a centred diamond stud, replacing the panel-LINE frame.
      With no border the wood reaches the element edge — no side/top frame and no 1px keyline
