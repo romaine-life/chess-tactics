@@ -23,10 +23,9 @@ export interface TitleBarConfig {
 }
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
-  // The design/asset Studio + its deep-link aliases: brand left, breadcrumb in the
-  // center slot (filled by <TitleBarSlot> inside the studio), account cluster right.
+  // The design/asset Studio + its deep-link aliases: brand left, account cluster right.
   if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor') {
-    return { screenName: 'Studio', barClass: 'tileset-studio-titlebar', centerSlot: true, showAccountCluster: true };
+    return { screenName: 'Studio', showAccountCluster: true };
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor', showAccountCluster: true };
