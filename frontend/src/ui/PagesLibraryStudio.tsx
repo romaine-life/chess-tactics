@@ -106,6 +106,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // tab min-height
   const [railW, setRailW] = useState<number>(MM_LIVE.railW); // rail (button) width
   const [tabGap, setTabGap] = useState<number>(MM_LIVE.gap); // space between tabs
+  const [btnX, setBtnX] = useState(0); // move the whole button group left/right (px; 0 = shipped)
+  const [btnY, setBtnY] = useState(0); // ...and up/down
   const [textX, setTextX] = useState<number>(MM_LIVE.textX); // horizontal nudge of the label (px)
   const [iconSize, setIconSize] = useState<number>(MM_LIVE.icon); // live 34px in a 40px slot
   const [iconX, setIconX] = useState(0); // horizontal nudge of the icon (px; 0 = centred in slot)
@@ -119,6 +121,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     setBtnH(MM_LIVE.btnH);
     setRailW(MM_LIVE.railW);
     setTabGap(MM_LIVE.gap);
+    setBtnX(0);
+    setBtnY(0);
     setTextX(MM_LIVE.textX);
     setIconSize(MM_LIVE.icon);
     setIconX(0);
@@ -160,6 +164,12 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   add(tabGap !== MM_LIVE.gap,
     `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
     `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
+  // Move the WHOLE button group: transform the rail frame (not the tabs) so it nudges without
+  // reflow and is clipped by the roomy .settings-shell, not the tight rail box. X = left/right,
+  // Y = up/down. Composes with the hover-slide (which transforms the tabs, a different element).
+  add(btnX !== 0 || btnY !== 0,
+    `.pages-menu-tweak .settings-rail-frame { transform: translate(${btnX}px, ${btnY}px) !important; }`,
+    `.main-menu-twin-screen .settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
   // Horizontal nudge of the label span (the second grid cell; transform doesn't reflow the layout).
   add(textX !== MM_LIVE.textX,
     `.pages-menu-tweak .main-menu-mode-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
@@ -310,6 +320,20 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
               <div className="pages-ctl-row">
                 <input type="range" min="4" max="28" step="1" value={tabGap} onChange={(e) => setTabGap(Number(e.target.value))} />
                 {ctlReset(() => setTabGap(MM_LIVE.gap))}
+              </div>
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === 0 ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="-200" max="400" step="2" value={btnX} onChange={(e) => setBtnX(Number(e.target.value))} />
+                {ctlReset(() => setBtnX(0))}
+              </div>
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === 0 ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="-200" max="500" step="2" value={btnY} onChange={(e) => setBtnY(Number(e.target.value))} />
+                {ctlReset(() => setBtnY(0))}
               </div>
             </label>
             <label className="tileset-catalog-zoom">
