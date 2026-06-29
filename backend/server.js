@@ -12,17 +12,27 @@ const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').r
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
 const lobbies = new Map();
 
-// Background music: the blob container is the source of truth. BGM_BASE_URL is
-// the public base for both the index.json playlist and the track files; the
-// browser uses it directly to stream. BGM_READ_URL overrides only where the
-// server fetches the index from (e.g. a test slot serving it same-origin) and
-// defaults to the public base. No Azure credentials — the index and tracks are
-// public-read blobs fetched over plain HTTPS, the same way the server already
-// calls auth.romaine.life.
+// Background music. The browser streams tracks directly from BGM_BASE_URL (the
+// public-read blob container). The backend assembles the /api/bgm playlist one
+// of two ways:
+//   - BGM_READ_URL set -> read a static index.json served there (test slots and
+//     local dev point this at a same-origin fixture). Plain HTTPS, no creds.
+//   - else, an Azure blob base -> LIST the container live (with each blob's
+//     title/artist/album metadata) using the pod's workload identity. The
+//     container is the single source of truth: drop or delete a track in the
+//     container and the playlist follows it — there is no manifest to regenerate.
+// Either way this is non-critical chrome: /api/bgm never 500s — it degrades to
+// the last good list, then to an empty playlist.
 const bgmBaseUrl = (process.env.BGM_BASE_URL || '').replace(/\/+$/, '');
-const bgmReadUrl = (process.env.BGM_READ_URL || bgmBaseUrl).replace(/\/+$/, '');
+const bgmIndexUrl = (process.env.BGM_READ_URL || '').replace(/\/+$/, '');
+const bgmIsAzureBlob = (() => {
+  if (!bgmBaseUrl) return false;
+  try { return /(^|\.)blob\.core\.windows\.net$/i.test(new URL(bgmBaseUrl).hostname); }
+  catch { return false; }
+})();
 const BGM_CACHE_TTL_MS = 5 * 60 * 1000;
 let bgmCache = { tracks: null, expiry: 0 };
+let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode only)
 
 app.use(express.json({ limit: '256kb' }));
 
@@ -889,10 +899,50 @@ app.get('/health', (_req, res) => {
   res.status(200).send('ok');
 });
 
+// Readable fallback title from a slugged blob name, used only when a track has no
+// `title` metadata yet (e.g. just dropped in the container, not synced). e.g.
+// "03-heavens-devils.mp3" -> "Heavens Devils".
+function bgmTitleFromName(file) {
+  const base = String(file).replace(/\.mp3$/i, '').replace(/^\d+\s*[-._\s]\s*/, '');
+  const words = base.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return words.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1)) || String(file);
+}
+
+// List the BGM container's .mp3 blobs with metadata (prod / Azure mode).
+// DefaultAzureCredential uses the pod's federated workload-identity token — the
+// same mechanism the Postgres pool uses — authorized by the Storage Blob Data
+// Reader role on the media account (tofu/storage.tf). Lazily required so non-Azure
+// environments (the index path) never load the SDK.
+async function listBgmTracksFromContainer() {
+  if (!bgmContainerClient) {
+    const { BlobServiceClient } = require('@azure/storage-blob');
+    const { DefaultAzureCredential } = require('@azure/identity');
+    const u = new URL(bgmBaseUrl);
+    const service = new BlobServiceClient(`${u.protocol}//${u.host}`, new DefaultAzureCredential());
+    bgmContainerClient = service.getContainerClient(u.pathname.replace(/^\/+/, ''));
+  }
+  const tracks = [];
+  for await (const blob of bgmContainerClient.listBlobsFlat({ includeMetadata: true })) {
+    if (!/\.mp3$/i.test(blob.name)) continue;
+    const md = blob.metadata || {};
+    const title = (md.title || '').trim();
+    const artist = (md.artist || '').trim();
+    const album = (md.album || '').trim();
+    tracks.push({
+      title: title || bgmTitleFromName(blob.name),
+      ...(artist ? { artist } : {}),
+      ...(album ? { album } : {}),
+      url: `${bgmBaseUrl}/${encodeURIComponent(blob.name)}`,
+    });
+  }
+  // Stable order so the cached payload is deterministic; the player reshuffles.
+  tracks.sort((a, b) => a.url.localeCompare(b.url));
+  return tracks;
+}
+
 // Background-music playlist. The frontend consumes this app-owned contract; the
 // blob storage account stays under the backend (borrow primitives, not
-// boundaries). The list is the durable index.json the upload pipeline writes
-// into the container, cached briefly so we don't refetch on every page load.
+// boundaries). Cached briefly so we don't re-list / re-fetch on every page load.
 // BGM is non-critical chrome: this endpoint never 500s — it degrades to the
 // last good list, then to an empty playlist.
 app.get('/api/bgm', async (_req, res) => {
@@ -906,18 +956,25 @@ app.get('/api/bgm', async (_req, res) => {
     return;
   }
   try {
-    const response = await fetch(`${bgmReadUrl}/index.json`, { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) throw new Error(`index ${response.status}`);
-    const index = await response.json();
-    const list = Array.isArray(index && index.tracks) ? index.tracks : [];
-    const tracks = list
-      .filter((track) => track && typeof track.file === 'string' && track.file)
-      .map((track) => ({
-        title: typeof track.title === 'string' && track.title ? track.title : track.file,
-        ...(typeof track.artist === 'string' && track.artist ? { artist: track.artist } : {}),
-        ...(typeof track.album === 'string' && track.album ? { album: track.album } : {}),
-        url: `${bgmBaseUrl}/${encodeURIComponent(track.file)}`,
-      }));
+    let tracks;
+    if (bgmIndexUrl) {
+      const response = await fetch(`${bgmIndexUrl}/index.json`, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error(`index ${response.status}`);
+      const index = await response.json();
+      const list = Array.isArray(index && index.tracks) ? index.tracks : [];
+      tracks = list
+        .filter((track) => track && typeof track.file === 'string' && track.file)
+        .map((track) => ({
+          title: typeof track.title === 'string' && track.title ? track.title : track.file,
+          ...(typeof track.artist === 'string' && track.artist ? { artist: track.artist } : {}),
+          ...(typeof track.album === 'string' && track.album ? { album: track.album } : {}),
+          url: `${bgmBaseUrl}/${encodeURIComponent(track.file)}`,
+        }));
+    } else if (bgmIsAzureBlob) {
+      tracks = await listBgmTracksFromContainer();
+    } else {
+      tracks = [];
+    }
     bgmCache = { tracks, expiry: now + BGM_CACHE_TTL_MS };
     res.status(200).json({ tracks });
   } catch (error) {
@@ -925,7 +982,7 @@ app.get('/api/bgm', async (_req, res) => {
       res.status(200).json({ tracks: bgmCache.tracks });
       return;
     }
-    console.warn(`/api/bgm: could not load index from ${bgmReadUrl}: ${error.message}`);
+    console.warn(`/api/bgm: could not load playlist (${bgmIndexUrl ? 'index' : 'list'}): ${error.message}`);
     res.status(200).json({ tracks: [] });
   }
 });

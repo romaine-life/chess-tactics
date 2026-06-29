@@ -136,6 +136,9 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     PORT: String(port),
     PUBLIC_ORIGIN: 'https://chess.romaine.life',
     BGM_BASE_URL: `http://127.0.0.1:${bgmPort}`,
+    // Non-Azure base: exercise the static-index path (the mock serves index.json).
+    // Prod sets no BGM_READ_URL and lists the Azure container live instead.
+    BGM_READ_URL: `http://127.0.0.1:${bgmPort}`,
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
     // The mock auth returns player@example.com for any non-rival session; make that
