@@ -7,6 +7,7 @@ import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '..
 import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { AmbienceBackground } from './AmbienceBackground';
 
 const CE_ICONS = {
   star: '/assets/ui/kit/icons/star.png',
@@ -402,6 +403,10 @@ export function CampaignEditor() {
 
   return (
     <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
+      {/* Same art-directed backdrop + synced rain as the main menu (.ce-screen paints the
+          menu scene; this canvas adds the shared rain). Mostly overlapped by the editor
+          panels, but it keeps the feel consistent with the rest of the app in the gaps. */}
+      <AmbienceBackground />
       {/* Title bar lives in the app shell; the editor paints its live save-state +
           shortcuts into it via portals (workspace state stays in this component). */}
       <TitleBarSlot region="center">
