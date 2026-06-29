@@ -1,9 +1,17 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useSyncExternalStore, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
 import { MENU_MODES } from './design/catalogData';
+import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
 const BRAND_SHIELD = '/assets/ui/kit/icons/brand-shield.png';
+// The heaviest button asset — the carved-stone surface behind every rail tab. The
+// buttons layer only counts as "ready" once this (plus the icons) has decoded, so the
+// rail never reveals as bare panels with the stone snapping in underneath later.
+const STONE_SURFACE = '/assets/ui/surfaces/baseline-stone-blue.avif';
+// The title bar's wooden surface — gate the title layer on it (plus the brand shield)
+// so the bar reveals whole, not wordmark-first then wood.
+const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
 
 const MODE_HREFS: Record<string, string> = {
   'solo-skirmish': '/play',
@@ -56,9 +64,13 @@ function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
 }
 
 export function MainMenu(): ReactElement {
-  // Coordinated reveal: hold the menu until its sprites decode, then fade the whole
-  // screen in at once instead of letting each frame/icon pop in on a cold first boot.
-  const [ready, setReady] = useState(false);
+  // Cold-load reveal: the menu's layers fade in in a fixed order — background -> title
+  // -> buttons (rain drifts in last on its own) — driven by the shared reveal director
+  // (see shell/coldReveal). Here MainMenu just REPORTS readiness for the title's brand
+  // mark and the buttons' art (icons + stone surface) and gates the background + button
+  // layers off the director's stage; the director owns the ordering and the background
+  // probe. On any non-cold load the store is already fully revealed, so this is inert.
+  const reveal = useSyncExternalStore(subscribe, getSnapshot);
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -67,17 +79,31 @@ export function MainMenu(): ReactElement {
   }, []);
 
   useEffect(() => {
-    const urls = new Set<string>([BRAND_SHIELD, SETTINGS_ICON]);
-    for (const tab of MENU_TABS) urls.add(`${ICONS}/${tab.iconSlug}.png`);
-    let done = false;
-    const reveal = () => { if (!done) { done = true; setReady(true); } };
-    Promise.allSettled([...urls].map((src) => { const img = new Image(); img.src = src; return img.decode(); })).then(reveal);
-    const fallback = window.setTimeout(reveal, 1500); // never block the menu on one slow asset
-    return () => window.clearTimeout(fallback);
+    // Warm + decode each layer's art, then signal the director. decode() resolves once
+    // the bitmap is ready; failures (404 / no-AVIF UA) resolve too so a watchdog backstops.
+    const decode = (src: string): Promise<void> => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+      return (img.decode?.() ?? Promise.reject(new Error('decode unsupported'))).then(
+        () => {},
+        () => {},
+      );
+    };
+    // Title: the brand shield + the wooden bar surface, so the bar reveals whole.
+    void Promise.allSettled([BRAND_SHIELD, TITLE_SURFACE].map(decode)).then(() => markReady('title'));
+    // Buttons: the carved icons + the heaviest stone rail surface.
+    const buttonArt = [SETTINGS_ICON, STONE_SURFACE, ...MENU_TABS.map((tab) => `${ICONS}/${tab.iconSlug}.png`)];
+    void Promise.allSettled(buttonArt.map(decode)).then(() => markReady('buttons'));
   }, []);
 
   return (
-    <div className={`menu-layer main-menu-layer ${ready ? 'is-ready' : 'is-loading'}`} data-testid="main-menu-next">
+    <div
+      className="menu-layer main-menu-layer"
+      data-testid="main-menu-next"
+      data-reveal-bg={reveal.has('bg') ? '' : undefined}
+      data-reveal-buttons={reveal.has('buttons') ? '' : undefined}
+    >
       <AmbienceBackground />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}

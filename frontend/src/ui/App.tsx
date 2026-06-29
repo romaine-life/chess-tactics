@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactElement } from 'react';
 import { MainMenu } from './MainMenu';
+import { getSnapshot as getRevealSnapshot, subscribe as subscribeReveal } from './shell/coldReveal';
 import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
@@ -94,6 +95,11 @@ export function App(): ReactElement {
   const [centerNode, setCenterNode] = useState<HTMLElement | null>(null);
   const [rightNode, setRightNode] = useState<HTMLElement | null>(null);
   const titleBarPortals = useMemo(() => ({ centerNode, rightNode }), [centerNode, rightNode]);
+  // Cold-load reveal: on a fresh main-menu load the title bar is the 2nd layer to appear
+  // (after the background). It reads the shared director's stage so it can hold hidden
+  // until its turn. On every other route / later navigation the store is fully revealed,
+  // so revealTitle is permanently true and the persistent bar never blinks.
+  const reveal = useSyncExternalStore(subscribeReveal, getRevealSnapshot);
   const pendingTarget = useRef<string | null>(null);
   // Set true once the cover phase has actually swapped the route. The reveal gate keys
   // off THIS, not an exact path match — a destination that redirects to a sub-route on
@@ -195,7 +201,7 @@ export function App(): ReactElement {
       {/* The single persistent title bar, rendered OUTSIDE the routed screen so it
           survives navigation (only its contents change). Renders nothing for routes
           that keep their own header (Studio/dev + not-yet-migrated screens). */}
-      <AppTitleBar path={path} onCenterNode={setCenterNode} onRightNode={setRightNode} />
+      <AppTitleBar path={path} onCenterNode={setCenterNode} onRightNode={setRightNode} revealTitle={reveal.has('title')} />
       {/* ONE stable Suspense boundary above the router. Because the boundary
           persists across every route swap (rather than each route mounting its
           own), a transition navigation keeps the already-revealed screen painted
