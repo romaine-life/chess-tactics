@@ -24,18 +24,18 @@ export type FeatureKind = 'road' | 'river';
 // A feature's surface look. Within a kind, all cells connect regardless of material
 // (the shape flows, the surface can change per cell); the author picks which to paint.
 // Each is a baked 16-mask set (<kind>-<material>-<mask>.png).
-export type RoadMaterial = 'dirt' | 'stone' | 'pebble';
+export type RoadMaterial = 'dirt' | 'cobble' | 'stone' | 'pebble';
 export type RiverMaterial = 'water';
 export type FeatureMaterial = RoadMaterial | RiverMaterial;
 
-// Only 'dirt' ships for now — the authored codex-heal road (build-feature-tiles.py).
-// stone/pebble stay valid types; re-add them to the palette once they get the same
-// authored treatment (and the PixelLab flavour, for variety).
-export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt'];
+// Authored codex-heal materials that ship (build-feature-tiles.py). stone/pebble stay
+// valid types but aren't in the palette until they get the same treatment.
+export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'cobble'];
 export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
 export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
   dirt: 'Dirt',
-  stone: 'Cobblestone',
+  cobble: 'Cobblestone',
+  stone: 'Stone',
   pebble: 'Gravel',
   water: 'Water',
 };

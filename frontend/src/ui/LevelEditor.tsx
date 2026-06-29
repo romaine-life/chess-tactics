@@ -14,7 +14,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
-import { readBoardParam, encodeBoard } from './boardCode';
+import { readBoardParam, encodeBoard, type FeatureCell } from './boardCode';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
@@ -34,7 +34,7 @@ import {
   type StudioFamily,
 } from './studioBoard';
 import { featureFrameSrc, featureThumbSrc } from '../art/tileset';
-import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, ROAD_MATERIAL_LABELS, DEFAULT_ROAD_MATERIAL, type FeatureKind, type RoadMaterial } from '../core/featureAutotile';
+import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
@@ -76,8 +76,8 @@ function StudioEditableBoard({
   cells: Record<string, string>;
   units: Record<string, BoardUnitPlacement>;
   doodads: Record<string, { doodadId: string }>;
-  /** Linear-feature overlays (road; rivers later) keyed by "x,y" -> {kind, material, mask}. */
-  features?: Record<string, { kind: FeatureKind; material: RoadMaterial; mask: number }>;
+  /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
+  features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
   resolveAsset: (id: string) => StudioAsset | undefined;
   resolveUnit: (id: string) => UnitAsset | undefined;
   resolveDoodad: (id: string) => DoodadAsset | undefined;
@@ -231,21 +231,25 @@ const leSeedBoard = (): Record<string, string> => {
 };
 const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 
-// The 4-edge connection control for a selected road tile. Mirrors the iso diamond:
+// The 4-edge connection control for a selected feature tile. Mirrors the iso diamond:
 // each clickable edge is one cardinal neighbour (grid N/E/S/W = the screen NE/SE/SW/NW
-// edges). Joined edges read solid cyan, severed read dashed amber, edges with no road
-// neighbour are dim and inert. Clicking toggles the SHARED edge, so both tiles re-cap.
-function RoadConnections({
+// edges). Joined edges read solid cyan, severed read dashed amber, edges with no SAME-KIND
+// feature neighbour are dim and inert (roads only connect to roads, rivers to rivers).
+// Clicking toggles the SHARED edge, so both tiles re-cap.
+function FeatureConnections({
   cell,
-  roads,
+  kind,
+  features,
   cuts,
   onToggle,
 }: {
   cell: { x: number; y: number };
-  roads: Record<string, RoadMaterial>;
+  kind: FeatureKind;
+  features: Record<string, FeatureCell>;
   cuts: Record<string, true>;
   onToggle: (edge: string) => void;
 }): ReactElement {
+  const kindLabel = kind === 'river' ? 'river' : 'road';
   // Diamond geometry (viewBox 128x96): apex, right, bottom, left vertices.
   const V = { apex: [64, 14], right: [114, 48], bottom: [64, 82], left: [14, 48] } as const;
   const EDGE_GEO: Record<string, readonly [readonly [number, number], readonly [number, number]]> = {
@@ -255,18 +259,18 @@ function RoadConnections({
     W: [V.left, V.apex],
   };
   return (
-    <svg className="le-roadconn" viewBox="0 0 128 96" role="group" aria-label="Road connections for the selected tile">
+    <svg className="le-roadconn" viewBox="0 0 128 96" role="group" aria-label={`${kindLabel} connections for the selected tile`}>
       <polygon points={`${V.apex} ${V.right} ${V.bottom} ${V.left}`} fill="rgba(8,20,28,.55)" stroke="rgba(82,142,170,.35)" strokeWidth="1" />
       {FEATURE_DIRS.map((dir) => {
         const nx = cell.x + dir.dx;
         const ny = cell.y + dir.dy;
-        const hasNeighbor = roads[`${nx},${ny}`] !== undefined;
+        const hasNeighbor = features[`${nx},${ny}`]?.kind === kind; // only same-kind neighbours connect
         const edge = roadEdgeKey(cell.x, cell.y, nx, ny);
         const severed = cuts[edge] === true;
         const [[x1, y1], [x2, y2]] = EDGE_GEO[dir.edge];
         const state = !hasNeighbor ? 'none' : severed ? 'cut' : 'joined';
         const stroke = state === 'joined' ? 'var(--skirmish-cyan, #38d7ff)' : state === 'cut' ? '#f0a23a' : 'rgba(120,150,165,.35)';
-        const label = `${state === 'joined' ? 'Sever' : state === 'cut' ? 'Rejoin' : 'No road'} ${dir.edge} connection`;
+        const label = `${state === 'joined' ? 'Sever' : state === 'cut' ? 'Rejoin' : `No ${kindLabel}`} ${dir.edge} connection`;
         return (
           <g
             key={dir.edge}
@@ -314,8 +318,8 @@ export function LevelEditor(): ReactElement {
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'cover' | 'road'>(studioArm.kind ?? 'tile');
-  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'cover' | 'road'>(studioArm.kind ?? 'tile');
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'cover' | 'road' | 'river'>(studioArm.kind ?? 'tile');
+  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'cover' | 'road' | 'river'>(studioArm.kind ?? 'tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
@@ -323,14 +327,21 @@ export function LevelEditor(): ReactElement {
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(loadedBoard?.cover ?? {});
   const [coverBrushDensity, setCoverBrushDensity] = useState<GroundCoverDensity>('sparse');
   const [coverSeed, setCoverSeed] = useState(1234);
-  // Roads are a LINEAR feature (a ribbon you draw), not a per-cell terrain material:
-  // store each painted cell's road MATERIAL, then derive its connection mask from its
-  // neighbours so the renderer picks straight/corner/T/cross. See core/featureAutotile.ts.
-  const [boardRoads, setBoardRoads] = useState<Record<string, RoadMaterial>>(loadedBoard?.roads ?? {});
-  const [roadMaterial, setRoadMaterial] = useState<RoadMaterial>(DEFAULT_ROAD_MATERIAL);
-  // Manually SEVERED road connections, keyed by the shared edge between two cells
+  // Roads and rivers are LINEAR features (ribbons you draw), not per-cell terrain materials:
+  // store each painted cell's {kind, material}, then derive its connection mask from its
+  // SAME-KIND neighbours so the renderer picks straight/corner/T/cross. One unified layer —
+  // roads connect to roads, rivers to rivers, never to each other. See core/featureAutotile.ts.
+  const [boardFeatures, setBoardFeatures] = useState<Record<string, FeatureCell>>(loadedBoard?.features ?? {});
+  // The remembered brush material PER kind, so switching Road↔River keeps each picker's choice.
+  const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
+    road: defaultFeatureMaterial('road'),
+    river: defaultFeatureMaterial('river'),
+  });
+  // Manually SEVERED feature connections, keyed by the shared edge between two cells
   // (roadEdgeKey, order-independent). A cut overrides auto-connect for BOTH tiles.
-  const [boardRoadCuts, setBoardRoadCuts] = useState<Record<string, true>>(loadedBoard?.roadCuts ?? {});
+  const [featureCuts, setFeatureCuts] = useState<Record<string, true>>(loadedBoard?.featureCuts ?? {});
+  // The active feature kind = the current layer when it's a feature layer, else null.
+  const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' ? brushKind : null;
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : unitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -375,26 +386,29 @@ export function LevelEditor(): ReactElement {
     return terrain !== undefined && doodad.terrains.includes(terrain);
   };
 
-  // Derive the per-cell road connection mask from the painted set, live. Cheap (one
-  // pass over the road cells) and the source of truth is the painted set, so the
-  // ribbon re-knits itself whenever a cell is added or removed.
-  const roadFeatures = useMemo(() => {
-    const present = new Set(Object.keys(boardRoads));
-    const isSevered = (edge: string): boolean => boardRoadCuts[edge] === true;
-    const out: Record<string, { kind: FeatureKind; material: RoadMaterial; mask: number }> = {};
-    for (const key of present) {
+  // Derive each cell's connection mask from the painted set, live. Connectivity is PER KIND:
+  // a road's mask is resolved against road neighbours only, a river's against rivers only, so
+  // a road and a river crossing adjacent cells never knit together. Cheap (one pass) and the
+  // painted set is the source of truth, so the ribbon re-knits whenever a cell changes.
+  const featureOverlays = useMemo(() => {
+    const isSevered = (edge: string): boolean => featureCuts[edge] === true;
+    const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set() };
+    for (const [key, f] of Object.entries(boardFeatures)) presentByKind[f.kind].add(key);
+    const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
+    for (const [key, f] of Object.entries(boardFeatures)) {
       const [x, y] = key.split(',').map(Number);
-      out[key] = { kind: 'road', material: boardRoads[key], mask: featureMaskAt(present, x, y, isSevered) };
+      out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered) };
     }
     return out;
-  }, [boardRoads, boardRoadCuts]);
+  }, [boardFeatures, featureCuts]);
 
   const eraseKey = <T,>(setter: (updater: (prev: Record<string, T>) => Record<string, T>) => void, key: string): void =>
     setter((prev) => { if (!(key in prev)) return prev; const next = { ...prev }; delete next[key]; return next; });
   const paintCell = (x: number, y: number): void => {
     const key = `${x},${y}`;
-    if (brushKind === 'road') {
-      setBoardRoads((prev) => (prev[key] === roadMaterial ? prev : { ...prev, [key]: roadMaterial }));
+    if (featureKind) {
+      const material = featureBrushMaterial[featureKind];
+      setBoardFeatures((prev) => (prev[key]?.kind === featureKind && prev[key]?.material === material ? prev : { ...prev, [key]: { kind: featureKind, material } }));
       return;
     }
     if (brushKind === 'unit') {
@@ -418,9 +432,9 @@ export function LevelEditor(): ReactElement {
   };
   const eraseCell = (x: number, y: number): void => {
     const key = `${x},${y}`;
-    if (brushKind === 'road') {
-      eraseKey(setBoardRoads, key);
-      setBoardRoadCuts((prev) => {
+    if (featureKind) {
+      eraseKey(setBoardFeatures, key);
+      setFeatureCuts((prev) => {
         const next: Record<string, true> = {};
         let changed = false;
         for (const edge of Object.keys(prev)) {
@@ -436,7 +450,7 @@ export function LevelEditor(): ReactElement {
     if (brushKind === 'cover') return eraseKey(setBoardCover, key);
     eraseKey(setBoardCells, key);
   };
-  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardCover({}); setBoardRoads({}); setBoardRoadCuts({}); setSelectedCell(null); };
+  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardCover({}); setBoardFeatures({}); setFeatureCuts({}); setSelectedCell(null); };
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
@@ -448,7 +462,7 @@ export function LevelEditor(): ReactElement {
     });
   // Export the whole board as a /level-editor?board=<code> link (round-trips via boardCode.ts).
   const copyBoardLink = (): void => {
-    const code = encodeBoard({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, cover: boardCover, roads: boardRoads, roadCuts: boardRoadCuts });
+    const code = encodeBoard({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, cover: boardCover, features: boardFeatures, featureCuts });
     void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
   };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
@@ -471,9 +485,9 @@ export function LevelEditor(): ReactElement {
     setBoardUnits((prev) => prune(prev));
     setBoardDoodads((prev) => prune(prev));
     setBoardCover((prev) => prune(prev));
-    setBoardRoads((prev) => prune(prev));
+    setBoardFeatures((prev) => prune(prev));
     // Cuts are keyed by edge ("a|b"); keep only edges whose BOTH endpoints survive.
-    setBoardRoadCuts((prev) => {
+    setFeatureCuts((prev) => {
       const next: Record<string, true> = {};
       let dropped = false;
       for (const edge of Object.keys(prev)) {
@@ -511,9 +525,9 @@ export function LevelEditor(): ReactElement {
     }
     return list;
   }, [boardCover, boardCells, coverSeed]);
-  const selectedRoad = selectedCell ? boardRoads[`${selectedCell.x},${selectedCell.y}`] : undefined;
-  const toggleRoadCut = (edge: string): void =>
-    setBoardRoadCuts((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
+  const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
+  const toggleFeatureCut = (edge: string): void =>
+    setFeatureCuts((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
   const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
 
   return (
@@ -545,7 +559,7 @@ export function LevelEditor(): ReactElement {
                   cells={boardCells}
                   units={boardUnits}
                   doodads={boardDoodads}
-                  features={roadFeatures}
+                  features={featureOverlays}
                   resolveAsset={resolveAsset}
                   resolveUnit={resolveUnitAsset}
                   resolveDoodad={resolveDoodadAsset}
@@ -572,6 +586,7 @@ export function LevelEditor(): ReactElement {
             <button type="button" className={`le-seg-btn ${layer === 'board' ? 'active' : ''}`.trim()} onClick={() => { setLayer('board'); setTool('select'); }}>Board</button>
             <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
             <button type="button" className={`le-seg-btn ${layer === 'road' ? 'active' : ''}`.trim()} onClick={() => { setLayer('road'); setBrushKind('road'); setTool('brush'); }}>Road</button>
+            <button type="button" className={`le-seg-btn ${layer === 'river' ? 'active' : ''}`.trim()} onClick={() => { setLayer('river'); setBrushKind('river'); setTool('brush'); }}>River</button>
             <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
             <button type="button" className={`le-seg-btn ${layer === 'doodad' ? 'active' : ''}`.trim()} onClick={() => { setLayer('doodad'); setBrushKind('doodad'); setTool('brush'); }}>Doodad</button>
             <button type="button" className={`le-seg-btn ${layer === 'cover' ? 'active' : ''}`.trim()} onClick={() => { setLayer('cover'); setBrushKind('cover'); setTool('brush'); }}>Cover</button>
@@ -601,13 +616,13 @@ export function LevelEditor(): ReactElement {
                 ? <img src={unitBrushAsset.sprite(unitFaction, 'south')} alt="" draggable={false} />
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
-                : brushKind === 'road'
-                ? <img src={featureThumbSrc('road', roadMaterial)} alt="" draggable={false} />
+                : featureKind
+                ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
                 : <img src={brushAsset.src} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : brushKind === 'road' ? `${ROAD_MATERIAL_LABELS[roadMaterial]} road` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'cover' ? 'ground cover' : brushKind === 'road' ? 'feature · road' : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'cover' ? 'ground cover' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -674,24 +689,28 @@ export function LevelEditor(): ReactElement {
               </div>
             <p className="le-board-note">Doodads only land on a tile of their home terrain.</p>
           </section>
-        ) : brushKind === 'road' ? (
+        ) : featureKind ? (
           <section className="skirmish-card le-brush-panel">
-            <h2>Road material</h2>
+            <h2>{featureKind === 'river' ? 'River material' : 'Road material'}</h2>
             <div className="le-swatches">
-              {ROAD_MATERIALS.map((mat) => (
+              {featureMaterials(featureKind).map((mat) => (
                 <button
                   type="button"
                   key={mat}
-                  className={`le-swatch ${roadMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
-                  title={ROAD_MATERIAL_LABELS[mat]}
-                  onClick={() => { setRoadMaterial(mat); setBrushKind('road'); setLayer('road'); setTool('brush'); }}
+                  className={`le-swatch ${featureBrushMaterial[featureKind] === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  title={FEATURE_MATERIAL_LABELS[mat]}
+                  onClick={() => { setFeatureBrushMaterial((prev) => ({ ...prev, [featureKind]: mat })); setBrushKind(featureKind); setLayer(featureKind); setTool('brush'); }}
                 >
-                  <img src={featureThumbSrc('road', mat)} alt="" draggable={false} />
-                  <small>{ROAD_MATERIAL_LABELS[mat]}</small>
+                  <img src={featureThumbSrc(featureKind, mat)} alt="" draggable={false} />
+                  <small>{FEATURE_MATERIAL_LABELS[mat]}</small>
                 </button>
               ))}
             </div>
-            <p className="le-board-note">Drag to draw a road; each tile picks its own piece (straight, corner, junction) from its road neighbours. Roads of any material connect — the surface just changes per cell. Erase to cut; the ends re-cap.</p>
+            <p className="le-board-note">
+              {featureKind === 'river'
+                ? 'Drag to draw a river; each tile picks its own piece (straight, bend, fork) from its river neighbours. Rivers connect only to rivers, never to roads. Erase to cut; the ends re-cap.'
+                : 'Drag to draw a road; each tile picks its own piece (straight, corner, junction) from its road neighbours. Roads of any material connect (the surface just changes per cell), but never to rivers. Erase to cut; the ends re-cap.'}
+            </p>
           </section>
         ) : brushKind === 'tile' ? (
           <section className="skirmish-card le-brush-panel">
@@ -718,11 +737,11 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : null}
 
-        {layer === 'road' && selectedCell && selectedRoad ? (
+        {featureKind && selectedCell && selectedFeature && selectedFeature.kind === featureKind ? (
           <section className="skirmish-card">
-            <h2>Road connections</h2>
-            <RoadConnections cell={selectedCell} roads={boardRoads} cuts={boardRoadCuts} onToggle={toggleRoadCut} />
-            <p className="le-board-note">Select a road tile, then click an edge to sever or rejoin it. A cut applies to both tiles, so the road caps off cleanly instead of always connecting.</p>
+            <h2>{featureKind === 'river' ? 'River connections' : 'Road connections'}</h2>
+            <FeatureConnections cell={selectedCell} kind={featureKind} features={boardFeatures} cuts={featureCuts} onToggle={toggleFeatureCut} />
+            <p className="le-board-note">Select a {featureKind} tile, then click an edge to sever or rejoin it. A cut applies to both tiles, so the {featureKind} caps off cleanly instead of always connecting.</p>
           </section>
         ) : null}
 
