@@ -33,9 +33,14 @@ const ERROR_SKIP_DELAY_MS = 1500;
 
 function readMuted() {
   try {
-    return window.localStorage.getItem(MUTE_STORAGE_KEY) === 'true';
+    // Default OFF: background music starts muted and the title-bar control is the
+    // explicit on switch — music only plays once the user turns it on (stored as
+    // 'false'). Autoplay is blocked until a gesture anyway, so "default on" only ever
+    // LOOKED on while silent; this makes the control honest. Keep in sync with
+    // Settings' readMuted (same MUTE_KEY).
+    return window.localStorage.getItem(MUTE_STORAGE_KEY) !== 'false';
   } catch {
-    return false;
+    return true; // storage blocked → stay quiet
   }
 }
 
@@ -55,6 +60,23 @@ export function shuffled(items) {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
+}
+
+// Re-home the persistent mute control into the title bar's trailing cluster slot
+// (ADR-0044). initBgm() runs (main.tsx) BEFORE React mounts the title bar, so the slot
+// may not exist yet — keep the button DETACHED and observe for the slot, placing it the
+// instant it appears (so it never flashes at a temporary body-docked position). The
+// persistent title bar renders the cluster on every route, so the slot always arrives.
+function mountControl(el) {
+  const SLOT = '.cluster-bgm-slot';
+  const place = () => {
+    const slot = document.querySelector(SLOT);
+    if (slot) { slot.appendChild(el); return true; }
+    return false;
+  };
+  if (place()) return;
+  const observer = new MutationObserver(() => { if (place()) observer.disconnect(); });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 }
 
 // Build one shuffle cycle of indices [0..length-1], ensuring the first index is
@@ -101,7 +123,7 @@ export function initBgm() {
   };
 
   const control = buildControl();
-  document.body.appendChild(control.el);
+  mountControl(control.el);
 
   // ---- single-owner cross-tab coordination --------------------------------
   // Web Locks elect one owner (auto-released when its tab closes → a follower takes
@@ -351,7 +373,12 @@ export function initBgm() {
   // Browsers block audible autoplay until a user gesture. Keep listening on
   // every gesture until playback actually begins, then disarm.
   const armEvents = ['pointerdown', 'keydown', 'touchstart'];
-  function onGesture() {
+  function onGesture(event) {
+    // The mute control owns its own click — ignore gestures that land ON it, or this
+    // pre-arms playback on the same pointerdown and fights the toggle (the "first click
+    // does nothing, second works" bug). Gestures ELSEWHERE still arm already-unmuted
+    // music so it starts on the first interaction (the autoplay workaround).
+    if (event && event.target && control.el.contains(event.target)) return;
     beginPlayback();
   }
   function disarmGesture() {
@@ -417,8 +444,23 @@ export function initBgm() {
     el.addEventListener('click', (event) => {
       event.preventDefault();
       if (!state.owner) {
-        // A follower tab — clicking takes playback over to this tab.
+        // A follower tab — clicking takes playback over to this tab. Start audio
+        // SYNCHRONOUSLY inside this user gesture: real Chrome's autoplay policy
+        // blocks any play() that runs after the async lock acquisition, so we must
+        // play here first, THEN steal the lock (the previous owner steps down when
+        // it hears our 'owner' broadcast). takeOwnership() early-returns if we're
+        // already owner, so we leave state.owner=false until it runs.
         pendingAction = null;
+        state.muted = false;
+        writeMuted(false);
+        state.stopped = false;
+        if (audio.src && audio.paused) {
+          const attempt = audio.play();
+          if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+        } else if (!audio.src) {
+          playNext();
+        }
+        updateControl();
         takeOwnership();
       } else if (state.unavailable && !state.muted) {
         // In the unavailable state the button is a retry affordance.
@@ -427,7 +469,13 @@ export function initBgm() {
         beginPlayback();
         updateControl();
       } else {
-        toggleMute();
+        // Toggle whether music is actually SOUNDING, not just the muted flag: if it's
+        // audibly playing, mute it; otherwise unmute AND (re)start playback. setMuted(false)
+        // calls beginPlayback within this click gesture, so autoplay permits it. One click
+        // then always does the intuitive thing — even from the "unmuted but autoplay-blocked
+        // / not started yet" state, where flipping the flag alone would have muted.
+        const audible = !audio.paused && state.started && !state.muted;
+        setMuted(audible);
       }
     });
     return { el };
@@ -461,9 +509,14 @@ export function initBgm() {
       return;
     }
     el.style.display = '';
+    el.classList.remove('is-othertab'); // only the follower state below re-adds it
     if (!state.owner && state.otherPlaying) {
-      // Another tab owns playback; this one is a silent follower.
+      // Another tab owns playback; this one is a silent follower. Wear the LIT (active)
+      // frame so it's visibly distinct from a muted control — which uses the base frame
+      // and is otherwise pixel-identical — because music IS playing, just not here. The
+      // icon stays dimmed (is-muted) to mark that this tab is silent.
       el.classList.remove('is-playing');
+      el.classList.add('is-othertab');
       el.classList.add('is-muted');
       const other = state.otherTitle ? `Playing in another tab — ${state.otherTitle}` : 'Playing in another tab';
       el.setAttribute('aria-label', `${other} — click to play here`);

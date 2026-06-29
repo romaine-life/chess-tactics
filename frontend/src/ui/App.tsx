@@ -65,12 +65,16 @@ function prefetchRoute(path: string): void {
   void thunk();
 }
 
-// Heavy screens ride the cross-route veil — they're weighty enough that a plain swap
-// feels abrupt (skirmish, level editor, campaign editor). The dissolve plays BOTH
-// ways: entering a heavy screen (masks its load) AND leaving one (smooths the big
-// board->menu visual jump). A hop between two light screens (menu <-> settings) stays
-// instant; a fade there would just add friction. Tune membership here.
-const HEAVY_ROUTES = new Set(['/play', '/skirmish', '/edit', '/level-editor', '/campaigns-next', '/campaigns']);
+// The cross-route veil masks the weight of entering/leaving a PIXI BOARD surface
+// (skirmish, level editor) — a plain swap of those feels abrupt, and the dissolve also
+// smooths the big board->menu jump. It is deliberately NOT used for the menu-family
+// panel screens (menu, settings, party, lobbies, campaign EDITOR): they all share the
+// SAME backdrop scene + synced rain, and the veil is a full-screen OPAQUE field — so
+// veiling a hop between them would fade that shared backdrop out and back in, defeating
+// the very continuity it exists for. Those hops stay instant (the menu stays painted
+// until the destination's chunk is ready, then swaps in one commit), leaving the
+// backdrop + rain rock-steady while only the UI changes. Tune membership here.
+const HEAVY_ROUTES = new Set(['/play', '/skirmish', '/edit', '/level-editor']);
 const isHeavyRoute = (path: string): boolean => HEAVY_ROUTES.has(path);
 
 // Routes whose screen drives the board-art reveal gate (render/boardArtReady). Entering
