@@ -10707,9 +10707,14 @@ button.tileset-relationship-cell {
 }
 
 /* Rows-box placement, baked from the Settings dressing room: widened, padding tightened to the
-   edges, and nudged into position. Scoped to the real Settings screen; the shell's overflow:visible
-   lets the offset/wider box sit where it's placed. Re-tune in the Settings dressing room (Rows box). */
-.settings-art-route .settings-main-frame {
+   edges, and nudged into position. SHARED by the real Settings screen AND the Campaign play
+   screen (a settings-twin) so the rail↔rows relationship is identical on both — the menu,
+   settings, and campaign are one chrome family, positioned by the same rules. The main menu
+   has no rows box, so the .main-menu-twin-screen arm only ever matches Campaign. The shell's
+   overflow:visible lets the offset/wider box sit where it's placed. Re-tune in the Settings
+   dressing room (Rows box). */
+.settings-art-route .settings-main-frame,
+.main-menu-twin-screen .settings-main-frame {
   padding: 16px 0;
   width: 931px;
   transform: translate(-270px, -28px);
