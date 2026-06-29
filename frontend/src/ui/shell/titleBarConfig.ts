@@ -1,8 +1,10 @@
 // Route -> persistent app-shell title-bar config, consumed by the single
 // <AppTitleBar> rendered in App. A non-null config means "the app-shell bar owns
-// this screen's title bar"; null means the screen keeps its OWN header — either it's
-// out of scope (the Studio + dev surfaces) or it hasn't been migrated yet (staged
-// rollout). The single bar renders from this table so it survives navigation.
+// this screen's title bar"; null means the screen still renders its OWN header (a
+// screen not yet migrated to the shell bar). The single bar renders from this table
+// so it survives navigation. Every shipping surface — including the design/asset
+// Studio and the dev/inspector tools — is on the shared bar; there is no permanent
+// opt-out set.
 export interface TitleBarConfig {
   screenName: string;
   /** Render the shared HeaderAccountCluster on the right. */
@@ -20,15 +22,18 @@ export interface TitleBarConfig {
   rightSlot?: boolean;
 }
 
-// Out of scope — render their own header (Studio + dev/compare surfaces).
-const KEEPS_OWN_HEADER = new Set<string>([
-  '/tileset-studio', '/unit-studio', '/nine-slice-editor',
-  '/portrait-editor', '/doodad-editor',
-  '/artwork-compare', '/tile-compare', '/surface-lab',
-]);
-
 export function titleBarConfig(path: string): TitleBarConfig | null {
-  if (KEEPS_OWN_HEADER.has(path)) return null;
+  // The design/asset Studio + its deep-link aliases: brand left, breadcrumb in the
+  // center slot (filled by <TitleBarSlot> inside the studio), account cluster right.
+  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor') {
+    return { screenName: 'Studio', barClass: 'tileset-studio-titlebar', centerSlot: true, showAccountCluster: true };
+  }
+  // Dev / inspector tools — the shared bar with just brand + account cluster.
+  if (path === '/portrait-editor') return { screenName: 'Portrait Editor', showAccountCluster: true };
+  if (path === '/doodad-editor') return { screenName: 'Doodad Editor', showAccountCluster: true };
+  if (path === '/tile-compare') return { screenName: 'Tile Compare', showAccountCluster: true };
+  if (path === '/artwork-compare') return { screenName: 'Artwork Compare', showAccountCluster: true };
+  if (path === '/surface-lab') return { screenName: 'Surface Lab', showAccountCluster: true };
 
   if (path === '/play' || path === '/skirmish') {
     return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true, showAccountCluster: true };

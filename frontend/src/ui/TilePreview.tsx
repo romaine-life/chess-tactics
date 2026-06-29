@@ -35,8 +35,7 @@ import { DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
+import { TitleBarSlot } from './shell/TitleBarSlot';
 import {
   activeUnitFamilies,
   familyLabels,
@@ -1053,9 +1052,10 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const studioViewerHeader = <>{studioModeTabs}{viewerKindSelect}</>;
 
   return (
-    <main className="tileset-studio-page">
-      <header className="app-titlebar settings-header-frame tileset-studio-titlebar">
-        <BrandLockup screenName="Studio" />
+    <main className="tileset-studio-page app-shell-bar-pad">
+      {/* Breadcrumb portals into the shared app-shell bar's center slot; the brand +
+          account cluster come from <AppTitleBar> via titleBarConfig('/tileset-studio'). */}
+      <TitleBarSlot region="center">
         <div className="tileset-studio-context">
           <nav className="tileset-crumb" aria-label="Location">
             {crumbTrail.map((part, index) => (
@@ -1064,8 +1064,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           </nav>
           {crumbMeta ? <span className="tileset-crumb-meta">{crumbMeta}</span> : null}
         </div>
-        <HeaderAccountCluster />
-      </header>
+      </TitleBarSlot>
 
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'artwork' ? 'is-artwork' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (

@@ -6589,6 +6589,13 @@ body { font-size: 17px; }
   font-family: var(--ds-font-sans, system-ui, sans-serif);
 }
 
+/* Migrated to the shell bar: the in-page <header> is gone, so reserve row 1 at the
+   fixed bar's height (an `auto` row would collapse and slide the studio under the
+   bar) — .app-shell-bar-pad then pins the body to row 2. */
+.tileset-studio-page.app-shell-bar-pad {
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+}
+
 .tileset-crumb {
   display: flex;
   align-items: center;
