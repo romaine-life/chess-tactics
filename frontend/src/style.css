@@ -10154,10 +10154,30 @@ button.tileset-relationship-cell {
   inset-block-start: calc(100% + 12px);
   inset-inline-end: 0;
   justify-content: space-between;
-  padding: 4px 12px;
+  padding: 8px 12px;
   position: absolute;
   white-space: nowrap;
   z-index: 60;
+}
+
+/* Identity block: the immutable email (small, muted, static) stacked above the
+   editable username. */
+.account-menu-identity {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.account-menu-email {
+  color: #8fb6d6;
+  font-size: var(--ds-text-xs);
+  line-height: 1.1;
+  max-inline-size: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .account-menu-name {
@@ -10166,6 +10186,85 @@ button.tileset-relationship-cell {
   line-height: 1.1;
   margin: 0;
   text-shadow: 0 2px 0 #02070b;
+}
+
+/* The name doubles as the edit trigger — a bare button that reads as plain text and
+   brightens on hover/focus so it's discoverable as clickable. */
+.account-menu-name-button {
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  margin: 0;
+  max-inline-size: 220px;
+  padding: 0;
+}
+
+.account-menu-name-button:hover .account-menu-name,
+.account-menu-name-button:focus-visible .account-menu-name {
+  color: var(--cobalt-bright);
+}
+
+.account-menu-name-button:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+/* Rename field: the kit 9-slice text frame (same as the campaign name field) so the
+   input wears kit chrome, not a hand-rolled border, with a bare save icon beside it. */
+.account-menu-rename {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.account-menu-input {
+  background: transparent;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 8px stretch;
+  box-sizing: border-box;
+  color: #f6fbff;
+  font-family: inherit;
+  font-size: var(--ds-text-sm);
+  image-rendering: pixelated;
+  inline-size: 172px;
+  line-height: 1.1;
+  outline: none;
+  padding: 6px 10px;
+}
+
+.account-menu-input:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.account-menu-icon-button {
+  align-items: center;
+  appearance: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 4px;
+}
+
+.account-menu-icon-button:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+.account-menu-icon-button:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.account-menu-glyph-sm {
+  block-size: 24px;
+  flex: none;
+  image-rendering: pixelated;
+  inline-size: 24px;
+  object-fit: contain;
 }
 
 /* The door is the action — a bare icon button (no fabricated surface), labelled

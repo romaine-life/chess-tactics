@@ -124,6 +124,21 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 5,
+    name: 'per-user editable display name',
+    // The editable account username (the name shown in the account menu / in-game).
+    // The identity (email) is owned by upstream auth and is immutable; this is a
+    // per-account override keyed by that email. A null/absent display_name means
+    // "no override" — fall back to the upstream name, then the email.
+    sql: `
+      CREATE TABLE IF NOT EXISTS user_profiles (
+        email        text        PRIMARY KEY,
+        display_name text,
+        updated_at   timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -914,13 +929,68 @@ app.get('/api/bgm', async (_req, res) => {
   }
 });
 
+// --- Editable account username ---------------------------------------------
+// The display name shown for a signed-in user is editable: the email is the
+// immutable upstream identity, but the name is a per-account override stored here.
+const DISPLAY_NAME_MAX = 40;
+
+async function dbGetDisplayName(email) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT display_name FROM user_profiles WHERE email = $1',
+    [email],
+  );
+  return rows[0] ? rows[0].display_name : null;
+}
+
+async function dbPutDisplayName(email, displayName) {
+  await ensureDbReady();
+  await pool.query(
+    `INSERT INTO user_profiles (email, display_name)
+       VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET
+       display_name = EXCLUDED.display_name,
+       updated_at = now()`,
+    [email, displayName],
+  );
+}
+
+// Overlay the user's chosen name onto the public user shape. A DB hiccup must never
+// break the identity read, so a failed/disabled lookup just yields the upstream name.
+async function withDisplayName(user) {
+  if (!user || !user.signed_in || !pool) return user;
+  try {
+    const displayName = await dbGetDisplayName(user.email);
+    if (displayName) return { ...user, name: displayName };
+  } catch (error) {
+    console.warn('display-name lookup failed; using upstream name:', error.message);
+  }
+  return user;
+}
+
 app.get('/api/auth/me', async (req, res) => {
   try {
     const session = await readSession(req);
-    res.status(200).json(publicUser(session));
+    res.status(200).json(await withDisplayName(publicUser(session)));
   } catch (error) {
     console.error('auth session check failed:', error);
     res.status(502).json({ signed_in: false, error: 'auth_unavailable' });
+  }
+});
+
+// Set or clear the signed-in user's display name. Body: { name }. An empty/whitespace
+// name clears the override, falling back to the upstream name then the email. The email
+// is the identity and is never editable here.
+app.patch('/api/auth/me', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const raw = req.body && typeof req.body.name === 'string' ? req.body.name : '';
+  const name = clampText(raw, '', DISPLAY_NAME_MAX);
+  try {
+    await dbPutDisplayName(user.email, name || null);
+    res.status(200).json(name ? { ...user, name } : user);
+  } catch (error) {
+    dbUnavailable(res, 'display name write failed', error, 'profile_unavailable');
   }
 });
 

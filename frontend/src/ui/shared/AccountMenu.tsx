@@ -1,25 +1,36 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 
 // The signed-in account control for the trailing edge of the app chrome: an
-// icon-only avatar button (Gravatar) that opens a small kit-framed menu naming
-// the user and offering Sign Out. The canonical "account menu" pattern (GitHub /
-// Google / Slack): the avatar carries the identity in the bar, so the menu just
-// names who's signed in (no redundant second avatar) and acts. Pairs with the
-// Settings gear so the top-right reads as one "settings + user" cluster.
+// icon-only avatar button (Gravatar) that opens a small kit-framed menu. The menu
+// shows the immutable email (small, static) above the editable username — click the
+// name to rename it, Enter / the save button to commit, Escape to cancel — and the
+// door (the door IS Sign Out, no text label; the bar avatar already carries identity).
+// Pairs with the Settings gear so the top-right reads as one "settings + user" cluster.
 
 interface AccountMenuProps {
   name: string;
+  email: string;
   avatarUrl: string | null;
+  /** Persist a new display name (empty clears it). Rejects on failure. */
+  onRename: (name: string) => Promise<void>;
   onSignOut: () => void;
   /** Render the menu open on mount (screenshot / demo harness only). */
   defaultOpen?: boolean;
+  /** Render the name field in edit mode on mount (screenshot / demo harness only). */
+  defaultEditing?: boolean;
 }
+
+const NAME_MAX = 40;
 
 const initial = (name: string): string => (name.trim()[0] || '?').toUpperCase();
 
-export function AccountMenu({ name, avatarUrl, onSignOut, defaultOpen }: AccountMenuProps): ReactElement {
+export function AccountMenu({ name, email, avatarUrl, onRename, onSignOut, defaultOpen, defaultEditing }: AccountMenuProps): ReactElement {
   const [open, setOpen] = useState(Boolean(defaultOpen));
+  const [editing, setEditing] = useState(Boolean(defaultEditing));
+  const [draft, setDraft] = useState(name);
+  const [saving, setSaving] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Dismiss on outside-click / Escape — standard menu behaviour.
   useEffect(() => {
@@ -30,6 +41,28 @@ export function AccountMenu({ name, avatarUrl, onSignOut, defaultOpen }: Account
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [open]);
+
+  // Keep the draft mirrored to the live name whenever we're not mid-edit (e.g. after a
+  // save resolves, or a fresh fetch lands), and select-all when the field opens.
+  useEffect(() => { if (!editing) setDraft(name); }, [name, editing]);
+  useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
+
+  const startEdit = (): void => { setDraft(name); setEditing(true); };
+  const cancelEdit = (): void => { setDraft(name); setEditing(false); };
+
+  const commit = async (): Promise<void> => {
+    const next = draft.trim().slice(0, NAME_MAX);
+    if (next === name.trim()) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await onRename(next);
+      setEditing(false);
+    } catch {
+      // Keep the field open so the typed name isn't lost; the user can retry or cancel.
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const avatar = (cls: string): ReactElement => (avatarUrl
     ? <img className={cls} src={avatarUrl} alt="" />
@@ -50,7 +83,46 @@ export function AccountMenu({ name, avatarUrl, onSignOut, defaultOpen }: Account
 
       {open && (
         <div className="account-menu" role="menu" aria-label="Account">
-          <span className="account-menu-name">{name}</span>
+          <div className="account-menu-identity">
+            <span className="account-menu-email" title={email}>{email}</span>
+            {editing ? (
+              <form
+                className="account-menu-rename"
+                onSubmit={(e) => { e.preventDefault(); void commit(); }}
+              >
+                <input
+                  ref={inputRef}
+                  className="account-menu-input"
+                  type="text"
+                  value={draft}
+                  maxLength={NAME_MAX}
+                  aria-label="Display name"
+                  disabled={saving}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); } }}
+                />
+                <button
+                  type="submit"
+                  className="account-menu-icon-button"
+                  aria-label="Save name"
+                  title="Save"
+                  disabled={saving}
+                >
+                  <img className="account-menu-glyph-sm" src="/assets/ui/kit/icons/save.png" alt="" aria-hidden="true" />
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                className="account-menu-name-button"
+                aria-label={`${name} — edit name`}
+                title="Edit name"
+                onClick={startEdit}
+              >
+                <span className="account-menu-name">{name}</span>
+              </button>
+            )}
+          </div>
           <button
             type="button"
             className="account-menu-exit"
