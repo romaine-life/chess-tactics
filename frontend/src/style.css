@@ -311,12 +311,11 @@ button:disabled {
 .shell {
   visibility: visible;
   display: grid;
-  /* Full-width app column: topbar on top, the React app (#root) fills the rest.
-     Was a 2-col grid with a fixed 340px right rail — a leftover of the retired
-     app.js game layout — which squished every React surface (menu, catalog,
-     editors) into a 340px column. */
+  /* Full-bleed app column: #root fills the shell. The persistent title bar is a
+     fixed React element (AppTitleBar) overlaying the top; the old static-topbar row
+     was deleted when every screen moved to the shell bar. */
   grid-template-columns: 1fr;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 14px;
   height: 100vh;
   height: 100dvh;
@@ -344,87 +343,11 @@ button:disabled {
   overflow: hidden;
 }
 
-.topbar {
-  align-items: stretch;
-  background:
-    linear-gradient(180deg, rgba(16, 29, 39, .96), rgba(9, 17, 24, .96));
-  border: 1px solid rgba(85, 114, 130, .62);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 1px 0 rgba(199, 226, 232, .06),
-    0 12px 32px rgba(0, 0, 0, .24);
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 72px;
-  padding: 12px 14px;
-}
-
-.mission-id {
-  align-content: center;
-  border-left: 3px solid var(--cobalt);
-  display: grid;
-  min-width: 0;
-  padding-left: 12px;
-}
-
-.topbar-right {
-  align-items: center;
-  display: grid;
-  gap: 9px;
-  justify-items: end;
-}
-
-.account {
-  align-items: center;
-  background: rgba(5, 12, 17, .64);
-  border: 1px solid rgba(71, 97, 113, .58);
-  border-radius: 4px;
-  display: flex;
-  gap: 7px;
-  min-width: 0;
-  padding: 5px;
-}
-
-.account-avatar {
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  display: block;
-  height: 30px;
-  image-rendering: auto;
-  width: 30px;
-}
-
-#accountName {
-  color: var(--muted);
-  font-size: 1rem;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#signInButton,
-#signOutButton {
-  border-color: rgba(101, 184, 255, .56);
-  color: var(--ink-strong);
-  min-height: 30px;
-  padding: 5px 8px;
-}
-
 h1 {
   color: var(--ink-strong);
   font-size: clamp(.88rem, 1.8vw, 1.34rem);
   line-height: 1.15;
   text-shadow: 0 2px 0 #020507, 0 0 18px rgba(101, 184, 255, .18);
-}
-
-#statusLine {
-  color: var(--cobalt-bright);
-  font-size: 1rem;
-  line-height: 1.1;
-  margin-top: 6px;
-  text-transform: uppercase;
 }
 
 .meters {
@@ -613,7 +536,6 @@ h1 {
   grid-template-rows: minmax(0, 1fr);
 }
 
-.shell.main-menu-active .topbar,
 .shell.main-menu-active .panel {
   display: none;
 }
@@ -2708,7 +2630,6 @@ h1 {
   grid-template-rows: minmax(0, 1fr);
 }
 
-.shell.concept-screen-active .topbar,
 .shell.concept-screen-active .panel,
 .shell.concept-screen-active .board-scroll,
 .shell.concept-screen-active .skyline {
@@ -4224,20 +4145,14 @@ h1 {
   z-index: 5;
 }
 
-/* Immersive / full-bleed screens hide the static global .topbar (index.html) and let
-   .app-root own the whole viewport, so the screen shows only its OWN title bar instead
-   of stacking under the global one. Skirmish uses `.skirmish-active`; screen-agnostic
-   surfaces (the level editor) use `.is-immersive` — same behaviour, neutral name. */
+/* Immersive / full-bleed screens let .app-root own the whole viewport (no shell padding
+   or gap). Skirmish uses `.skirmish-active`; screen-agnostic surfaces (the level editor)
+   use `.is-immersive` — same behaviour, neutral name. */
 .shell.skirmish-active,
 .shell.is-immersive {
   gap: 0;
   grid-template-rows: minmax(0, 1fr);
   padding: 0;
-}
-
-.shell.skirmish-active .topbar,
-.shell.is-immersive .topbar {
-  display: none;
 }
 
 .shell.skirmish-active .app-root,
@@ -5674,21 +5589,12 @@ h1 {
     padding: 10px;
   }
 
-  .topbar {
-    align-items: start;
-    flex-direction: column;
-    gap: 10px;
-    padding: 10px;
-  }
 
-  .topbar-right { align-items: start; justify-items: start; width: 100%; }
   .account { justify-content: space-between; width: 100%; }
-  #accountName { max-width: min(58vw, 260px); }
   .meters { justify-content: flex-start; }
   .meters span { font-size: .48rem; padding: 7px 8px; }
   body { font-size: 17px; }
   h1 { font-size: .82rem; }
-  #statusLine { font-size: .95rem; }
   .panel { padding: 8px; }
   .panel-section { padding: 9px; }
   .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -5779,10 +5685,6 @@ h1 {
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
   padding: 0;
-}
-
-.shell.campaign-editor-active .topbar {
-  display: none;
 }
 
 .shell.campaign-editor-active .app-root {
@@ -7150,9 +7052,7 @@ h1 {
   background: #071019;
 }
 
-.shell.tile-review-active .topbar,
 .shell.tile-review-active > .panel,
-.shell.tileset-studio-active .topbar,
 .shell.tileset-studio-active > .panel {
   display: none;
 }
@@ -10347,7 +10247,6 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-.shell.unit-studio-active .topbar,
 .shell.unit-studio-active > .panel,
 .shell.unit-studio-active + .bgm-control {
   display: none;
@@ -11020,7 +10919,6 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-.shell.settings-art-active .topbar,
 .shell.settings-art-active .panel {
   display: none;
 }
@@ -11155,6 +11053,12 @@ button.tileset-relationship-cell {
   position: fixed;
   inset: 0 0 auto 0;
   z-index: 10000;
+}
+/* On Settings, scale the bar with the UI-Scale setting so it matches the (zoomed)
+   Settings body. `zoom` (not transform) keeps the baked oak surface continuous, same
+   as .settings-screen. Only the Settings bar carries this class. */
+.app-shell-titlebar.app-titlebar--ui-scaled {
+  zoom: var(--settings-ui-scale, 1);
 }
 /* A screen migrated to the shell bar KEEPS its grid header row intact (so the body
    stays exactly where it was — same height, same gap) but renders nothing into it;

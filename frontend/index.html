@@ -30,20 +30,9 @@
   </head>
   <body>
     <main class="shell">
-      <header class="topbar">
-        <div class="mission-id">
-          <h1>Chess Tactics</h1>
-          <p id="statusLine">Tactical chess. Infinite possibilities.</p>
-        </div>
-        <div class="topbar-right">
-          <div class="account" id="account">
-            <img id="accountAvatar" class="account-avatar" alt="" hidden>
-            <span id="accountName">Guest</span>
-            <button id="signInButton" type="button">Sign In</button>
-            <button id="signOutButton" type="button" hidden>Sign Out</button>
-          </div>
-        </div>
-      </header>
+      <!-- The title bar is the React app-shell bar (src/ui/shell/AppTitleBar), rendered
+           inside #root and fixed at the top; the old static topbar + its auth wiring were
+           retired and deleted when every screen moved to the shell bar. -->
       <div id="root" class="app-root"></div>
     </main>
 
