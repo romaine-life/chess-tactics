@@ -27,6 +27,7 @@ const has = (name) => argv.includes(`--${name}`);
 const select = flag('select');
 const out = resolve(process.cwd(), flag('out', 'tmp-shots/shot.png'));
 const [w, h] = String(flag('size', '1280x800')).split('x').map(Number);
+const scale = Math.max(1, Number(flag('scale', 1)) || 1); // deviceScaleFactor — bump for small elements
 const readyExpr = flag('ready');
 const fullPage = has('full');
 
@@ -37,7 +38,7 @@ const CHROMES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const executablePath = CHROMES.find(existsSync);
-if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--ready jsExpr] [--full]'); process.exit(2); }
+if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--full]'); process.exit(2); }
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
 
@@ -49,7 +50,7 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
-  await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
+  await page.setViewport({ width: w, height: h, deviceScaleFactor: scale });
   // Prefer a fully-idle network, but live routes with persistent connections
   // (e.g. the main menu's rain ambience) never reach networkidle0 — fall back to
   // domcontentloaded so those pages still capture. The --ready gate below ensures

@@ -23,6 +23,20 @@ export async function fetchMe(): Promise<AuthUser> {
   }
 }
 
+// Set (or clear, with an empty string) the signed-in user's display name — the
+// editable account username. The email is the immutable identity and is unaffected.
+// Resolves to the refreshed user; rejects on failure so the caller can surface it.
+export async function updateDisplayName(name: string): Promise<AuthUser> {
+  const res = await fetch('/api/auth/me', {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`rename failed: ${res.status}`);
+  return (await res.json()) as AuthUser;
+}
+
 export function signInHref(returnTo: string = window.location.pathname + window.location.search): string {
   return `/api/auth/sign-in?returnTo=${encodeURIComponent(returnTo)}`;
 }

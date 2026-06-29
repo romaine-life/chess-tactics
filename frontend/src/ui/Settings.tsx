@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { fetchMe, type AuthUser } from '../net/auth';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { KitScroll } from './KitScroll';
@@ -296,7 +295,6 @@ export function Settings(): ReactElement {
     tracks: isTracksView(window.location.pathname),
   }));
   const [panelPhase, setPanelPhase] = useState<'in' | 'out'>('in');
-  const [me, setMe] = useState<AuthUser | null>(null);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
@@ -342,12 +340,6 @@ export function Settings(): ReactElement {
       window.removeEventListener('popstate', sync);
       window.removeEventListener(APP_NAVIGATION_EVENT, sync);
     };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    fetchMe().then((user) => { if (active) setMe(user); });
-    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -493,7 +485,6 @@ export function Settings(): ReactElement {
     updateSetting('uiScale', clamp(settings.uiScale + delta, 90, 120, DEFAULT_SETTINGS.uiScale));
   };
 
-  const signedIn = Boolean(me?.signed_in);
   const build = buildSummary();
 
   // The track currently coming out of the speakers, looked up in the loaded list by
@@ -504,13 +495,6 @@ export function Settings(): ReactElement {
 
   const renderGeneral = () => (
     <>
-      <SettingsSection title="Account">
-        <SettingsRow
-          title="Account"
-          description={signedIn ? 'Signed in profile for this browser.' : 'Guest profile for this browser.'}
-          value={<span>{signedIn ? 'Ready' : 'Guest'}</span>}
-        />
-      </SettingsSection>
       <SettingsSection title="Interface">
         <SettingsRow
           title="UI Scale"
@@ -534,13 +518,6 @@ export function Settings(): ReactElement {
         >
           <SettingsButton tone="danger" onClick={resetDefaults}>Reset</SettingsButton>
         </SettingsRow>
-      </SettingsSection>
-      <SettingsSection title="About">
-        <SettingsRow
-          title="Build"
-          description={build.detail}
-          value={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{build.headline}</span>}
-        />
       </SettingsSection>
     </>
   );
@@ -642,13 +619,22 @@ export function Settings(): ReactElement {
   );
 
   const renderCreatorTools = () => (
-    <SettingsSection title="Workspaces">
-      {creatorTools.map((tool) => (
-        <SettingsRow key={tool.href} title={tool.label} description={tool.description}>
-          <SettingsButton tone="primary" href={tool.href} external={tool.external} ariaLabel={`Open ${tool.label}`}>Open</SettingsButton>
-        </SettingsRow>
-      ))}
-    </SettingsSection>
+    <>
+      <SettingsSection title="Workspaces">
+        {creatorTools.map((tool) => (
+          <SettingsRow key={tool.href} title={tool.label} description={tool.description}>
+            <SettingsButton tone="primary" href={tool.href} external={tool.external} ariaLabel={`Open ${tool.label}`}>Open</SettingsButton>
+          </SettingsRow>
+        ))}
+      </SettingsSection>
+      <SettingsSection title="About">
+        <SettingsRow
+          title="Build"
+          description={build.detail}
+          value={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{build.headline}</span>}
+        />
+      </SettingsSection>
+    </>
   );
 
   return (
