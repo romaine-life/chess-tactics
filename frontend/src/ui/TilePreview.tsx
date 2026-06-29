@@ -1038,7 +1038,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
-      id: 'sfx', label: 'Sound Effects', hint: 'Audition the procedural terrain footstep / landing sounds — synthesized in code, played live.',
+      id: 'sfx', label: 'Sound Effects', hint: 'Audition the landing sounds — recorded foley (grass/water/sand) + the arrival thump. Played live.',
       main: <SfxLibraryStudio search={sfxSearch} zoom={zoom} selected={selectedSfxName} onSelect={setSelectedSfxName} />,
       controls: (
         <>

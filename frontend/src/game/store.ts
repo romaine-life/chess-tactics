@@ -8,7 +8,7 @@ import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '..
 import { evaluateObjective, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
-import { playTerrain } from '../sfx';
+import { playArrival, playTerrain } from '../sfx';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 
@@ -227,14 +227,20 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : `Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`;
     const selectedId = firstPlayerId(game);
     set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null });
-    // "Units come onto the board": a soft staggered roll-call of footsteps as the
-    // player's force deploys, each sounding the terrain it lands on. Softer (gain
-    // 0.7) and spread out so a whole squad arriving doesn't stack into one loud
-    // click. Silent until a gesture arms the AudioContext — entering a skirmish is
-    // one, so the navigating click covers it.
+    // "Units come onto the board": a soft staggered roll-call as the player's force
+    // deploys. Each unit sounds the terrain it lands on (softer, gain 0.7) layered
+    // with the authored "arrival" thump (playArrival) — the landing.mp3 that plays
+    // when a unit first arrives, combined with its terrain. Spread out so a whole
+    // squad arriving reads as a roll-call swell, not one loud stack. Silent until a
+    // gesture arms the AudioContext — entering a skirmish is one, so the navigating
+    // click covers it.
     game.pieces
       .filter((pc) => pc.alive && pc.side === 'player')
-      .forEach((pc, i) => playLandingSfx(env, pc.x, pc.y, SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER, 0.7));
+      .forEach((pc, i) => {
+        const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
+        playLandingSfx(env, pc.x, pc.y, delay, 0.7);
+        setTimeout(() => playArrival({ gain: 0.55 }), delay);
+      });
   },
 
   select: (id) => {

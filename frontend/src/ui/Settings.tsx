@@ -546,7 +546,7 @@ export function Settings(): ReactElement {
             label="Effects Volume"
             onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
           />
-          <SettingsButton onClick={() => previewTerrain('stone')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
+          <SettingsButton onClick={() => previewTerrain('water')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
         </SettingsRow>
         <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
           <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />

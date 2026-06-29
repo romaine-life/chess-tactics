@@ -1,27 +1,36 @@
 import { useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import type { TerrainType } from '../core/types';
-import { previewTerrain } from '../sfx';
-import { sfxWaveform, sfxWaveformCached } from '../sfxWaveform';
-import { SFX_ASSETS } from './sfxCatalog';
+import { previewArrival, previewTerrain } from '../sfx';
+import { sfxSampleWaveform, sfxSampleWaveformCached } from '../sfxWaveform';
+import { SFX_ASSETS, type SfxAsset } from './sfxCatalog';
 
-// Read-only catalog for the terrain landing sound effects (ADR-0029). Each card shows
-// the sound's real waveform (offline-rendered from the same recipe the game plays — see
-// sfxWaveform) and auditions it on click; the Viewer plays it big with a Details readout.
-// "Read-only" constrains editability, not liveness — the whole point is to hear it. The
-// sounds are synthesized in code (no asset files), so the card art is generated, never an
-// authored image. Reuses the shared studio card classes so it matches the other grids.
+// Read-only catalog for the landing sound effects (ADR-0029 catalog requirements). Each
+// card shows the sound's real recorded waveform and auditions it on click; the Viewer
+// plays it big with a Details readout. "Read-only" constrains editability, not liveness —
+// the whole point is to hear it. Every effect is authored foley (the recorded take's
+// envelope is the card art). Reuses the shared studio card classes so it matches the grids.
 
-/** Live amplitude envelope of a terrain's SFX, drawn as centered SVG bars. */
-function SfxWaveform({ terrain, bars = 56 }: { terrain: TerrainType; bars?: number }): ReactElement {
-  const [peaks, setPeaks] = useState<number[]>(() => sfxWaveformCached(terrain, bars) ?? []);
+/** Audition an asset live: the arrival thump, or the terrain's recorded landing sound. */
+function auditionAsset(asset: SfxAsset): void {
+  if (asset.sampleKey === 'arrival') previewArrival();
+  else if (asset.terrain) previewTerrain(asset.terrain);
+}
+
+/** Normalized peaks for an asset, from the longest decoded take of its sample set. */
+function useSfxPeaks(asset: SfxAsset, bars: number): number[] {
+  const [peaks, setPeaks] = useState<number[]>(() => sfxSampleWaveformCached(asset.sampleKey, bars) ?? []);
   useEffect(() => {
-    const ready = sfxWaveformCached(terrain, bars);
+    const ready = sfxSampleWaveformCached(asset.sampleKey, bars);
     if (ready) { setPeaks(ready); return; }
     let alive = true;
-    void sfxWaveform(terrain, bars).then((p) => { if (alive) setPeaks(p); });
+    void sfxSampleWaveform(asset.sampleKey, bars).then((p) => { if (alive) setPeaks(p); });
     return () => { alive = false; };
-  }, [terrain, bars]);
+  }, [asset.sampleKey, bars]);
+  return peaks;
+}
 
+/** Live amplitude envelope of an effect, drawn as centered SVG bars. */
+function SfxWaveform({ asset, bars = 56 }: { asset: SfxAsset; bars?: number }): ReactElement {
+  const peaks = useSfxPeaks(asset, bars);
   const n = peaks.length || bars;
   return (
     <svg
@@ -55,7 +64,7 @@ export function SfxLibraryStudio({
   onSelect: (name: string) => void;
 }): ReactElement {
   const q = search.trim().toLowerCase();
-  const visible = SFX_ASSETS.filter((s) => !q || [s.label, s.terrain, s.character, s.build].join(' ').toLowerCase().includes(q));
+  const visible = SFX_ASSETS.filter((s) => !q || [s.label, s.terrain ?? '', s.character, s.build].join(' ').toLowerCase().includes(q));
   return (
     <div className="tileset-studio-grid surface-grid" aria-label="Sound Effects">
       {visible.map((s) => (
@@ -63,7 +72,7 @@ export function SfxLibraryStudio({
           key={s.name}
           type="button"
           className={`tileset-studio-card ${s.name === selected ? 'is-selected' : ''}`.trim()}
-          onClick={() => { onSelect(s.name); previewTerrain(s.terrain); }}
+          onClick={() => { onSelect(s.name); auditionAsset(s); }}
           aria-pressed={s.name === selected}
           title={`${s.label} — click to hear`}
         >
@@ -71,7 +80,7 @@ export function SfxLibraryStudio({
             className="tileset-studio-card-image sfx-card-wave"
             style={{ '--tile-zoom': zoom, color: 'var(--ds-accent, #7ea2ff)', height: `${Math.round(80 * zoom)}px` } as CSSProperties}
           >
-            <SfxWaveform terrain={s.terrain} />
+            <SfxWaveform asset={s} />
           </span>
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">
@@ -92,25 +101,26 @@ export function SfxLibraryStudio({
 // stage auditions on open and on click, and volume/mute follow Settings → Audio.
 export function SfxViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
   const s = SFX_ASSETS.find((x) => x.name === name) ?? SFX_ASSETS[0];
-  const play = () => previewTerrain(s.terrain);
+  const play = () => auditionAsset(s);
   // Audition once when the stage opens (you reached it via a click — a user gesture —
   // so the AudioContext is armed). Re-fires when you switch to a different effect.
   useEffect(() => {
-    const t = setTimeout(() => previewTerrain(s.terrain), 180);
+    const t = setTimeout(() => auditionAsset(s), 180);
     return () => clearTimeout(t);
-  }, [s.terrain]);
+  }, [s]);
 
   const stage: CSSProperties = {
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20,
     width: '100%', height: '100%', minHeight: 280, background: 'transparent', border: 'none', cursor: 'pointer',
     color: 'var(--ds-accent, #7ea2ff)',
   };
+  const takes = `${s.variantCount} authored take${s.variantCount === 1 ? '' : 's'} · recording`;
   return (
     <>
       <section className="al-lab-main surface-view-main" aria-label="Sound effect preview">
         <button type="button" style={stage} onClick={play} aria-label={`Play the ${s.label} sound`}>
           <span style={{ width: 'min(82%, 680px)', height: '44%', minHeight: 130 }}>
-            <SfxWaveform terrain={s.terrain} />
+            <SfxWaveform asset={s} />
           </span>
           <span style={{ font: '600 18px var(--ds-font-sans, system-ui, sans-serif)', color: 'var(--ds-ink-1, #ecedf2)', letterSpacing: 0.3 }}>
             ▶ Play
@@ -126,10 +136,10 @@ export function SfxViewer({ name, header }: { name?: string; header?: ReactNode 
             <p className="tileset-catalog-note">Volume + mute follow Settings → Audio (Master Audio + Effects Volume).</p>
             <dl className="al-meta">
               <div><dt>Effect</dt><dd>{s.label}</dd></div>
-              <div><dt>Terrain</dt><dd>{s.terrain}</dd></div>
+              <div><dt>Terrain</dt><dd>{s.terrain ?? 'spawn / arrival'}</dd></div>
               <div><dt>Character</dt><dd>{s.character}</dd></div>
               <div><dt>Build</dt><dd>{s.build}</dd></div>
-              <div><dt>Duration</dt><dd>{s.durationMs}ms · procedural (Web Audio)</dd></div>
+              <div><dt>Source</dt><dd>{takes}</dd></div>
             </dl>
           </div>
         </section>

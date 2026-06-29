@@ -1,32 +1,39 @@
-// The terrain landing sound effects, as catalog items. Read-only: you audition them
-// (the Viewer plays them live), you don't edit them — the sounds are synthesized
-// procedurally in code (see frontend/src/sfx.ts, RECIPES), so there is no asset file.
-// Adding an effect = one entry here + its RECIPES recipe, like the other *Catalog
-// data modules. cliff/rock are impassable (pieces never land), so they have no sound
-// and aren't listed.
+// The landing sound effects, as catalog items. Read-only: you audition them (the
+// Viewer plays them live), you don't edit them.
+//
+// Every effect here is AUTHORED recorded foley, sliced into one-shot take variants
+// under public/assets/sfx/<key>/ and random-picked per landing (so repeats never
+// fatigue). The card waveform is the real decoded take. Terrains without a recorded
+// set (road/bridge/dirt/pebble) are silent on landing and aren't listed; an earlier
+// procedurally-synthesised set was removed (we play recordings, not synth).
+//
+// Adding an effect = drop sliced takes under public/assets/sfx/<key>/ + a manifest,
+// then an entry here. cliff/rock are impassable (pieces never land), so no sound.
 
 import type { TerrainType } from '../core/types';
+import type { SampleKey } from '../sfx';
 
 export interface SfxAsset {
-  /** Stable id == the terrain it sounds for; backs the catalog selection state. */
+  /** Stable id (== the terrain it sounds for, or 'arrival'); backs catalog selection. */
   name: string;
-  terrain: TerrainType;
+  /** The terrain this sounds for; omitted for the non-terrain arrival thump. */
+  terrain?: TerrainType;
+  /** The authored sample key under /assets/sfx/<key>/. */
+  sampleKey: SampleKey;
   label: string;
   /** One-line description of what the sound evokes (the Details "Character"). */
   character: string;
-  /** How it's synthesized — the Details "Build" line. */
+  /** How it's made — the Details "Build" line. */
   build: string;
-  /** Approximate one-shot length in ms (the recipe's reported duration). */
-  durationMs: number;
+  /** How many take variants are random-picked per landing. */
+  variantCount: number;
 }
 
 export const SFX_ASSETS: SfxAsset[] = [
-  { name: 'grass', terrain: 'grass', label: 'Grass', character: 'Soft dry rustle/swish of blades.', build: 'Pink-noise burst · swept bandpass · high-passed', durationMs: 180 },
-  { name: 'dirt', terrain: 'dirt', label: 'Dirt', character: 'Muffled low pat of packed earth.', build: 'Low-passed brown noise + faint low sine body', durationMs: 180 },
-  { name: 'stone', terrain: 'stone', label: 'Stone', character: "Crisp hard flagstone 'tok'.", build: 'Bright noise clack + resonant ping + low knock', durationMs: 165 },
-  { name: 'pebble', terrain: 'pebble', label: 'Pebble', character: 'Granular gravel crunch.', build: 'Scattered noise grains over a low settle', durationMs: 185 },
-  { name: 'sand', terrain: 'sand', label: 'Sand', character: "Airy 'shff' shuffle, no low end.", build: 'High-passed white noise, band-shaped', durationMs: 170 },
-  { name: 'water', terrain: 'water', label: 'Water', character: "Small splash / 'ploop'.", build: 'Downward-swept noise + descending droplet sine', durationMs: 220 },
-  { name: 'road', terrain: 'road', label: 'Road', character: 'Packed cobble footstep scuff.', build: 'Swept mid-bandpass grit + low body knock', durationMs: 160 },
-  { name: 'bridge', terrain: 'bridge', label: 'Bridge', character: 'Hollow wooden plank knock.', build: 'Woody triangle + harmonic + contact tick', durationMs: 220 },
+  { name: 'grass', terrain: 'grass', sampleKey: 'grass', label: 'Grass', character: 'Recorded dry hay/grass rustle.', build: 'Authored recording · sliced one-shot takes', variantCount: 4 },
+  { name: 'water', terrain: 'water', sampleKey: 'water', label: 'Water', character: 'Recorded splash / wet step.', build: 'Authored recording · sliced one-shot takes', variantCount: 10 },
+  { name: 'sand', terrain: 'sand', sampleKey: 'sand', label: 'Sand', character: 'Recorded soft sandy shuffle.', build: 'Authored recording · sliced one-shot takes', variantCount: 11 },
+  { name: 'stone', terrain: 'stone', sampleKey: 'stone', label: 'Stone', character: 'Recorded footsteps on stone.', build: 'Authored recording · sliced one-shot takes', variantCount: 12 },
+  // The "unit lands on the board" thump, layered over the terrain at the deploy roll-call.
+  { name: 'arrival', sampleKey: 'arrival', label: 'Arrival', character: 'Unit lands on the board — layered over terrain on deploy.', build: 'Authored recording (landing.mp3)', variantCount: 1 },
 ];
