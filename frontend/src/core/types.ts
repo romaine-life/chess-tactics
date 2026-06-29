@@ -32,6 +32,8 @@ export interface TerrainCell {
   terrain: TerrainType;
   /** Elevation level (0 = ground). The isometric multi-height axis. */
   elevation: number;
+  /** Ambient ground-cover density (see core/groundCover). Absent = no cover on this tile. */
+  cover?: { density: 'sparse' | 'filled' };
 }
 
 export interface Piece {

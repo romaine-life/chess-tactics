@@ -254,7 +254,7 @@ export function ArtworkCompare(): ReactElement {
 }
 
 const AC_CSS = `
-.ac { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column;
+.ac { position: fixed; inset: var(--app-header-h) 0 0 0; z-index: 5; display: flex; flex-direction: column;
   background: #06080d; color: #cfe3ff; font-family: var(--ds-font-sans, system-ui, sans-serif); }
 .ac-panes { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
 .ac-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid #1b2740; }

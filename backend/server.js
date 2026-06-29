@@ -105,6 +105,25 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 4,
+    name: 'official campaigns global tier',
+    // The global OFFICIAL campaign tier (ADR-0038): one upserted row per id (PK id
+    // alone ⇒ global, mirroring design_portfolios), holding a complete Workspace
+    // {campaigns,levels}. Public GET / admin-gated PUT. The committed official.json
+    // is the durable fallback, so the game never depends on this row.
+    sql: `
+      CREATE TABLE IF NOT EXISTS official_campaigns (
+        id                    text        PRIMARY KEY,
+        data                  jsonb       NOT NULL,
+        client_schema_version integer,
+        revision              integer     NOT NULL DEFAULT 0,
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -236,6 +255,20 @@ function gravatarUrl(email, size = 96) {
   return `https://www.gravatar.com/avatar/${hash}?d=retro&s=${size}`;
 }
 
+// Admins who may author the global OFFICIAL campaign tier (ADR-0038). Comma-separated
+// allowlist, parsed once into a lowercased Set. FAIL-CLOSED: unset/empty ⇒ nobody can
+// publish officials and the game runs on the committed official.json fallback. There
+// is no admin role upstream; this is the honest gate, swappable to a role check later.
+const adminEmails = new Set(
+  String(process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean),
+);
+function isAdminEmail(email) {
+  return Boolean(email) && adminEmails.has(String(email).toLowerCase());
+}
+
 function publicUser(session) {
   const user = session && session.user;
   if (!user || !user.email) return { signed_in: false };
@@ -248,6 +281,9 @@ function publicUser(session) {
     gravatar_url: gravatar,
     avatar_url: user.image || gravatar,
     role: user.role || 'pending',
+    // UI affordance only (shows the editor's "Edit Officials" tab); the real gate is
+    // server-side requireAdmin. The allowlist itself is never sent to the client.
+    is_admin: isAdminEmail(user.email),
   };
 }
 
@@ -772,6 +808,20 @@ async function requireUser(req, res) {
   const user = publicUser(session);
   if (!user.signed_in) {
     res.status(401).json({ error: 'sign_in_required' });
+    return null;
+  }
+  return user;
+}
+
+// Gate for authoring the global OFFICIAL campaign tier (ADR-0038). requireUser first
+// (reusing its 401/502 behavior), then allowlist membership. Fail-closed when
+// ADMIN_EMAILS is unset. Deliberately NOT requireDesignPortfolioWriter, which falls
+// through to any-signed-in-user in prod.
+async function requireAdmin(req, res) {
+  const user = await requireUser(req, res);
+  if (!user) return null;
+  if (!isAdminEmail(user.email)) {
+    res.status(403).json({ error: 'admin_required' });
     return null;
   }
   return user;
@@ -1478,6 +1528,128 @@ app.put('/api/campaign-workspace', async (req, res) => {
     res.status(200).json({ ok: true, campaigns: raw.campaigns.length, updated_at: updatedAt });
   } catch (error) {
     dbUnavailable(res, 'campaign workspace write failed', error, 'workspace_unavailable');
+  }
+});
+
+// --- Official (global) campaign tier (ADR-0038) ----------------------------
+// Global game content readable by everyone (public GET) and authored by admins
+// (requireAdmin PUT). One upserted row per id holding a complete Workspace. The
+// client falls back to the committed official.json on any failure, so the game and
+// /play never depend on this — mirrors the design_portfolios global pattern.
+const OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION = 1;
+const OFFICIAL_CAMPAIGN_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+function officialCampaignsRowId(raw) {
+  const id = String(raw || '').trim();
+  return OFFICIAL_CAMPAIGN_ROW_ID_PATTERN.test(id) ? id : null;
+}
+
+// Every campaign/level id in an official Workspace must be an `off-` prefixed,
+// lowercase, DIGIT-FREE slug — exactly what the client minter produces
+// (`off-<c|l>-<slug>`, slug ∈ [a-z-]). Digit-free so officials can't collide the
+// per-user `c/l<n>` id counter; lowercase-only so the id matches isOfficialId and the
+// loader's assumptions (rejects off-FOO, off-a_b, off-l-1).
+const OFFICIAL_WORKSPACE_ID_PATTERN = /^off-[a-z]+(-[a-z]+)*$/;
+function validateOfficialWorkspaceIds(data) {
+  const validId = (id) => typeof id === 'string' && OFFICIAL_WORKSPACE_ID_PATTERN.test(id);
+  for (const key of Object.keys((data && data.levels) || {})) {
+    if (!validId(key)) return `level id "${key}" must be an off- prefixed, lowercase, digit-free slug`;
+  }
+  for (const campaign of (data && data.campaigns) || []) {
+    if (!validId(campaign && campaign.id)) return `campaign id "${campaign && campaign.id}" must be an off- prefixed, lowercase, digit-free slug`;
+  }
+  return null;
+}
+
+async function dbGetOfficialCampaigns(id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM official_campaigns WHERE id = $1',
+    [id],
+  );
+  return rows[0] || null;
+}
+
+async function dbUpsertOfficialCampaigns(id, input) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO official_campaigns (id, data, client_schema_version, revision, updated_by)
+       VALUES ($1, $2::jsonb, $3, 1, $4)
+     ON CONFLICT (id) DO UPDATE SET
+       data = EXCLUDED.data,
+       client_schema_version = EXCLUDED.client_schema_version,
+       revision = official_campaigns.revision + 1,
+       updated_at = now(),
+       updated_by = EXCLUDED.updated_by
+     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+  );
+  return rows[0];
+}
+
+function publicOfficialCampaignsDocument(id, document) {
+  return {
+    id,
+    data: isObjectRecord(document && document.data) ? document.data : {},
+    client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
+    revision: Number.isInteger(document && document.revision) ? document.revision : 0,
+    created_at: document && document.created_at ? document.created_at : null,
+    updated_at: document && document.updated_at ? document.updated_at : null,
+    updated_by: document && document.updated_by ? document.updated_by : null,
+  };
+}
+
+app.get('/api/official-campaigns/:id', async (req, res) => {
+  const id = officialCampaignsRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_official_campaign_id' });
+    return;
+  }
+  try {
+    const document = await dbGetOfficialCampaigns(id);
+    res.status(200).json({
+      portfolio: publicOfficialCampaignsDocument(id, document),
+      store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'official campaigns read failed', error, 'official_campaign_store_unavailable');
+  }
+});
+
+app.put('/api/official-campaigns/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = officialCampaignsRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_official_campaign_id' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!isObjectRecord(raw.data)) {
+    res.status(400).json({ error: 'official_campaign_data_object_required' });
+    return;
+  }
+  const validationError = validateWorkspaceBody(raw.data);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_workspace', details: validationError });
+    return;
+  }
+  const idError = validateOfficialWorkspaceIds(raw.data);
+  if (idError) {
+    res.status(400).json({ error: 'invalid_official_ids', details: idError });
+    return;
+  }
+  try {
+    const document = await dbUpsertOfficialCampaigns(id, {
+      data: { campaigns: raw.data.campaigns, levels: raw.data.levels },
+      client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
+      updated_by: user.email,
+    });
+    res.status(200).json({
+      portfolio: publicOfficialCampaignsDocument(id, document),
+      store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'official campaigns write failed', error, 'official_campaign_store_unavailable');
   }
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { tileFrameSrc, tileAssets, tileFamilies, type TileAsset } from '../art/tileset';
+import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGenerator';
+import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { BoardSize, Move, Piece, TerrainType, Vec } from '../core/types';
 import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
 import { canTraverse, elevationAt } from '../core/terrain';
@@ -9,6 +10,7 @@ import type { TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
+import { GroundCoverLayer } from './GroundCoverLayer';
 import { ViewPane } from '../ui/shared/ViewPane';
 
 const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
@@ -76,14 +78,26 @@ function solveSkirmishBoard(
   game: ReturnType<typeof useSkirmish.getState>['game'],
   seed: number,
 ): SocketBoardResult<TileAsset> {
-  return solveSocketBoard({
+  const result = solveSocketBoard({
     assets: tileAssets,
     terrainMap: terrainMapForGame(game),
     seed,
     columns: game.size.cols,
     rows: game.size.rows,
     familyAssets: tileFamilies,
+    edgeAssets: edgeTiles,
   });
+  // Resolve ambient ground cover ONCE here (placement/build time), not per render.
+  // Painted cover (level data) is authoritative; a level with NO cover painted at all
+  // falls back to a low-frequency density field so generated/legacy boards still grow grass.
+  const painted = new Map(
+    (game.terrain ?? []).filter((c) => c.cover).map((c) => [`${c.x},${c.y}`, c.cover!.density]),
+  );
+  const hasPainted = painted.size > 0;
+  resolveGroundCover(result.cells, seed, (cell) =>
+    painted.get(`${cell.x},${cell.y}`) ?? (hasPainted ? null : densityFieldAt(cell.x, cell.y, seed)),
+  );
+  return result;
 }
 
 function terrainBlocks(env: ReturnType<typeof useSkirmish.getState>['env'], piece: Piece, x: number, y: number): boolean {
@@ -290,6 +304,7 @@ export function SkirmishBoard() {
             );
           }}
         >
+          <GroundCoverLayer cells={board.cells} />
           {livePieces.map((piece) => (
             <UnitPiece
               key={piece.id}

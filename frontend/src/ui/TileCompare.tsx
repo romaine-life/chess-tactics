@@ -107,7 +107,7 @@ export function TileCompare(): ReactElement {
 }
 
 const TC_CSS = `
-.tc { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column;
+.tc { position: fixed; inset: var(--app-header-h) 0 0 0; z-index: 5; display: flex; flex-direction: column;
   background: #0a0c12; color: #d7e6ff; font-family: var(--ds-font-sans, system-ui, sans-serif); }
 .tc-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #0d1626; border-bottom: 1px solid #1b2740; }
 .tc-name { font-size: 18px; font-weight: 700; letter-spacing: .02em; color: #eaf3ff; }

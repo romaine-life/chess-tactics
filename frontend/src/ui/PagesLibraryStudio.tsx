@@ -52,48 +52,139 @@ const STONE_SURFACES = [
   { name: 'wood-oak', label: 'Oak' },
 ];
 
-// Functional viewer: the LIVE MainMenu (ADR-0029 req 4 — exercise the real component, never
-// a dead image) with in-place tweak controls that drive the menu's own CSS custom properties
-// (--menu-btn-h / --menu-icon-size / --menu-stone-surface) and the .indent-hover slide class.
-// The wrapper is positioned so the menu's absolute .menu-layer fills the viewer stage.
+// Icon-contrast treatments auditioned LIVE on the real menu icons (.settings-tab-icon img).
+// The carved-stone bodies measure ~1.0–1.25:1 against the stone tab (WCAG non-text floor is 3:1),
+// so the bulk of each glyph is camouflaged. These raise separation WITHOUT a glow (ADR-0006/0027)
+// and WITHOUT a fabricated CSS surface behind the icon (ADR-0032). 'limestone' and 'bevel' are
+// pure CSS over the shipped PNGs (paste the Copy-CSS rule into style.css to bake). 'bronze' is a
+// LOOK preview only — shipping warm-metal icons means RE-FORGING the PNGs (ADR-0011/0025), not a
+// sepia filter, so it's starred.
+type IconTreat = 'off' | 'limestone' | 'bronze' | 'bevel';
+const ICON_TREATS: { id: IconTreat; label: string }[] = [
+  { id: 'off', label: 'Off' },
+  { id: 'limestone', label: 'Pale stone' },
+  { id: 'bronze', label: 'Bronze*' },
+  { id: 'bevel', label: 'Bevel' },
+];
+function iconTreatFilter(treat: IconTreat, lighten: number): string {
+  if (treat === 'limestone')
+    return `brightness(${lighten}) saturate(0.55) contrast(1.05) drop-shadow(0 1px 0 rgba(0,0,0,0.5)) drop-shadow(0 -1px 0 rgba(255,255,255,0.25))`;
+  if (treat === 'bronze')
+    return `brightness(1.35) sepia(0.85) saturate(2.4) hue-rotate(-18deg) drop-shadow(0 1px 0 rgba(0,0,0,0.55)) drop-shadow(0 -1px 0 rgba(255,231,180,0.35))`;
+  if (treat === 'bevel')
+    return `drop-shadow(0 -1px 0 #0a121e) drop-shadow(-1px 0 0 #0a121e) drop-shadow(0 1px 0 rgba(210,228,246,0.7)) drop-shadow(1px 0 0 rgba(210,228,246,0.45))`;
+  return '';
+}
+
+// Live-menu baselines (what actually ships — the settings-twin chrome). A control emits an
+// override ONLY when it differs from these, so an untouched panel renders pixel-identical to the
+// real menu (the dressing-room principle). The menu reuses the Settings-tab chrome: tabs are
+// `.settings-tab.main-menu-mode-tab` in a `.settings-rail-frame` inside `.settings-shell`.
+// icon/textX reflect the BAKED menu (icon 64, label +18, even 22px padding — committed to
+// .main-menu-mode-tab in style.css), so the tuner opens matching what ships, not the pre-bake 34/0.
+const MM_LIVE = { btnH: 56, railW: 304, gap: 11, icon: 64, textX: 18 } as const;
+
+// Functional viewer: the LIVE MainMenu (ADR-0029 req 4 — exercise the real component, never a
+// dead image) with in-place tweak controls that drive the menu's REAL settings-twin chrome. Every
+// control injects a scoped override into THIS viewer (.pages-menu-tweak) — touching zero shipped
+// CSS, like the dressing room — and "Copy menu CSS" exports the menu-scoped rules to bake in.
 function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
-  const [btnH, setBtnH] = useState(80);
-  const [btnW, setBtnW] = useState(370);
-  const [iconSize, setIconSize] = useState(64);
-  // Static indent of the whole button stack. Opens at 16px — the design-research
-  // recommendation (1em, "clearly nested under the brand") — even though the live menu
-  // still ships flush (0). Slider snaps to the 8px grid (0/8/16/24/32).
-  const [indent, setIndent] = useState(16);
+  const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // tab min-height
+  const [railW, setRailW] = useState<number>(MM_LIVE.railW); // rail (button) width
+  const [tabGap, setTabGap] = useState<number>(MM_LIVE.gap); // space between tabs
+  const [textX, setTextX] = useState<number>(MM_LIVE.textX); // horizontal nudge of the label (px)
+  const [iconSize, setIconSize] = useState<number>(MM_LIVE.icon); // live 34px in a 40px slot
+  const [iconX, setIconX] = useState(0); // horizontal nudge of the icon (px; 0 = centred in slot)
   const [hoverSlide, setHoverSlide] = useState<'off' | '6' | '10'>('off');
-  // Editor-only aid: freeze the buttons in their hovered look so the hover slide + lift
-  // are visible without a mouse (the slide otherwise only fires on a live pointer hover).
-  const [previewHover, setPreviewHover] = useState(false);
-  const [profileBg, setProfileBg] = useState(true);
-  const [stone, setStone] = useState('stone-slate-blue');
+  const [previewHover, setPreviewHover] = useState(false); // freeze the slid look without a mouse
+  const [surface, setSurface] = useState(''); // '' = the live baseline-stone-blue tab surface
+  const [iconTreat, setIconTreat] = useState<IconTreat>('off');
+  const [iconLighten, setIconLighten] = useState(1.85);
+  const [copied, setCopied] = useState(false);
   const resetDefaults = (): void => {
-    setBtnH(80);
-    setBtnW(370);
-    setIconSize(64);
-    setIndent(16);
+    setBtnH(MM_LIVE.btnH);
+    setRailW(MM_LIVE.railW);
+    setTabGap(MM_LIVE.gap);
+    setTextX(MM_LIVE.textX);
+    setIconSize(MM_LIVE.icon);
+    setIconX(0);
     setHoverSlide('off');
     setPreviewHover(false);
-    setProfileBg(true);
-    setStone('stone-slate-blue');
+    setSurface('');
+    setIconTreat('off');
+    setIconLighten(1.85);
   };
-  const wrapStyle = {
-    '--menu-btn-h': `${btnH}px`,
-    '--menu-btn-w': `${btnW}px`,
-    '--menu-icon-size': `${iconSize}px`,
-    '--menu-btn-indent': `${indent}px`,
-    '--menu-stone-surface': `url("/assets/ui/surfaces/${stone}.png")`,
-    '--profile-bar-frame': profileBg ? 'block' : 'none',
-  } as CSSProperties;
-  const slideClass = hoverSlide === '6' ? 'indent-hover' : hoverSlide === '10' ? 'indent-hover indent-hover-10' : '';
-  const wrapClass = `pages-menu-tweak ${slideClass} ${previewHover ? 'preview-hover' : ''}`.replace(/\s+/g, ' ').trim();
+
+  const iconFilter = iconTreatFilter(iconTreat, iconLighten);
+  const slide = hoverSlide === '6' ? 6 : hoverSlide === '10' ? 10 : 0;
+  const surfaceUrl = surface ? `/assets/ui/surfaces/${surface}.png` : '';
+
+  // Each entry pairs a LIVE-preview rule (scoped to .pages-menu-tweak so it can't reach the shared
+  // Settings page) with the menu-SCOPED bake rule to paste into style.css. Gated on "differs from
+  // live" so untouched controls emit nothing.
+  const parts: Array<[string, string]> = [];
+  const add = (on: boolean, preview: string, bake: string): void => { if (on) parts.push([preview, bake]); };
+
+  // Icon size scales ONLY the glyph; the tab box never resizes. The glyph grows from a FIXED centre
+  // — translate(-50%,-50%) truly centres at any size (margin:auto LEFT-anchors an oversized abspos
+  // element per CSS §10.3.7, grid top-anchors it). Icon position nudges that centre horizontally.
+  // The slot lets it spill past its 40px bound (overflow:visible) and the TAB clips it at the button
+  // edge (overflow:hidden), so it grows freely from its centre but is cut off at the button.
+  const iconXform = `translate(calc(-50% + ${iconX}px), -50%)`;
+  add(iconSize !== MM_LIVE.icon || iconX !== 0,
+    `.pages-menu-tweak .settings-tab.main-menu-mode-tab { --settings-tab-icon-size: ${iconSize}px; overflow: hidden; }\n.pages-menu-tweak .main-menu-mode-tab .settings-tab-icon { overflow: visible; position: relative; }\n.pages-menu-tweak .main-menu-mode-tab .settings-tab-icon img { position: absolute; left: 50%; top: 50%; transform: ${iconXform}; }`,
+    `.settings-tab.main-menu-mode-tab {\n  --settings-tab-icon-size: ${iconSize}px;\n  overflow: hidden;\n}\n.main-menu-mode-tab .settings-tab-icon {\n  overflow: visible;\n  position: relative;\n}\n.main-menu-mode-tab .settings-tab-icon img {\n  position: absolute;\n  left: 50%;\n  top: 50%;\n  transform: ${iconXform};\n}`);
+  add(!!iconFilter,
+    `.pages-menu-tweak .settings-tab-icon img { filter: ${iconFilter} !important; image-rendering: pixelated; }`,
+    `.main-menu-mode-tab .settings-tab-icon img {\n  filter: ${iconFilter};\n  image-rendering: pixelated;\n}`);
+  add(btnH !== MM_LIVE.btnH,
+    `.pages-menu-tweak .main-menu-mode-tab { min-height: ${btnH}px !important; }`,
+    `.main-menu-mode-tab {\n  min-height: ${btnH}px;\n}`);
+  add(railW !== MM_LIVE.railW,
+    `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; }`,
+    `.main-menu-twin-screen .settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n}`);
+  add(tabGap !== MM_LIVE.gap,
+    `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
+    `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
+  // Horizontal nudge of the label span (the second grid cell; transform doesn't reflow the layout).
+  add(textX !== MM_LIVE.textX,
+    `.pages-menu-tweak .main-menu-mode-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
+    `.main-menu-mode-tab > span:not(.settings-tab-icon) {\n  transform: translateX(${textX}px);\n}`);
+  add(!!surfaceUrl,
+    `.pages-menu-tweak .main-menu-mode-tab { background-image: url("${surfaceUrl}") !important; }`,
+    `.main-menu-mode-tab {\n  background-image: url("${surfaceUrl}");\n}`);
+  add(slide > 0,
+    `.pages-menu-tweak .main-menu-mode-tab { transition: transform 120ms cubic-bezier(.2,0,0,1), color .14s ease; }\n.pages-menu-tweak .main-menu-mode-tab:hover, .pages-menu-tweak .main-menu-mode-tab:focus-visible { transform: translateX(${slide}px); }`,
+    `.main-menu-mode-tab {\n  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), color .14s ease;\n}\n.main-menu-mode-tab:hover,\n.main-menu-mode-tab:focus-visible {\n  transform: translateX(${slide}px);\n}`);
+  // Preview-hover is an editor-only aid (freeze the slid look) — never baked.
+  add(previewHover && slide > 0,
+    `.pages-menu-tweak .main-menu-mode-tab { transform: translateX(${slide}px); }`,
+    '');
+
+  const previewCss = parts.map((p) => p[0]).filter(Boolean).join('\n');
+  const bakeCss = parts.map((p) => p[1]).filter(Boolean).join('\n\n');
+  const copyMenuCss = async (): Promise<void> => {
+    if (!bakeCss) return;
+    try {
+      await navigator.clipboard.writeText(bakeCss);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch { /* clipboard blocked — the rule is still applied in the preview */ }
+  };
+  // Per-control reset: a permanently-rendered ↺ that sits beside the control's widget (in a
+  // .pages-ctl-row) and resets just that one to its live default (the footer "Reset to defaults"
+  // still resets everything at once).
+  const ctlReset = (onReset: () => void): ReactElement => (
+    <button type="button" className="pages-mini-reset" title="Reset to default" aria-label="Reset to default" onClick={(e) => { e.preventDefault(); onReset(); }}>↺</button>
+  );
+
   return (
     <>
+      {/* Scoped to THIS viewer's menu (.pages-menu-tweak) so the audition touches zero shipped
+          CSS — same principle as the dressing room. Drives the real settings-twin chrome live. */}
+      {previewCss ? <style>{previewCss}</style> : null}
       <section className="al-lab-main pages-view-main" aria-label="Main Menu preview">
-        <div className={wrapClass} style={wrapStyle}>
+        <div className="pages-menu-tweak">
           <MainMenu />
         </div>
       </section>
@@ -102,52 +193,103 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
+            <p className="tileset-catalog-note">Every control drives the <strong>live</strong> menu chrome; defaults = what ships. Tune, then <strong>Copy menu CSS</strong> to bake.</p>
             <label className="tileset-catalog-zoom">
-              <span>Button height · {btnH}px</span>
-              <input type="range" min="56" max="120" step="1" value={btnH} onChange={(e) => setBtnH(Number(e.target.value))} />
+              <span>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="44" max="96" step="1" value={btnH} onChange={(e) => setBtnH(Number(e.target.value))} />
+                {ctlReset(() => setBtnH(MM_LIVE.btnH))}
+              </div>
             </label>
             <label className="tileset-catalog-zoom">
-              <span>Button length · {btnW}px</span>
-              <input type="range" min="240" max="460" step="2" value={btnW} onChange={(e) => setBtnW(Number(e.target.value))} />
+              <span>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="220" max="460" step="2" value={railW} onChange={(e) => setRailW(Number(e.target.value))} />
+                {ctlReset(() => setRailW(MM_LIVE.railW))}
+              </div>
             </label>
             <label className="tileset-catalog-zoom">
-              <span>Button indent · {indent}px{indent === 16 ? ' · recommended' : ''}</span>
-              <input type="range" min="0" max="32" step="8" value={indent} onChange={(e) => setIndent(Number(e.target.value))} />
+              <span>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="4" max="28" step="1" value={tabGap} onChange={(e) => setTabGap(Number(e.target.value))} />
+                {ctlReset(() => setTabGap(MM_LIVE.gap))}
+              </div>
             </label>
-            <p className="tileset-catalog-note">Indent offsets the whole stack right of the brand. Research: ~16px (1em) reads as “nested under the brand”; the live menu still ships flush (0).</p>
             <label className="tileset-catalog-zoom">
-              <span>Icon size · {iconSize}px</span>
-              <input type="range" min="32" max="96" step="1" value={iconSize} onChange={(e) => setIconSize(Number(e.target.value))} />
+              <span>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="-80" max="160" step="2" value={textX} onChange={(e) => setTextX(Number(e.target.value))} />
+                {ctlReset(() => setTextX(MM_LIVE.textX))}
+              </div>
+            </label>
+            <label className="tileset-category-select">
+              <span>Stone surface</span>
+              <div className="pages-ctl-row">
+                <select value={surface} onChange={(e) => setSurface(e.target.value)} aria-label="Stone surface">
+                  <option value="">Default · live stone</option>
+                  {STONE_SURFACES.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                </select>
+                {ctlReset(() => setSurface(''))}
+              </div>
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Icon size · {iconSize}px{iconSize === MM_LIVE.icon ? ' · live' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="24" max="96" step="1" value={iconSize} onChange={(e) => setIconSize(Number(e.target.value))} />
+                {ctlReset(() => setIconSize(MM_LIVE.icon))}
+              </div>
+            </label>
+            <label className="tileset-catalog-zoom">
+              <span>Icon position · {iconX > 0 ? '+' : ''}{iconX}px{iconX === 0 ? ' · centred' : ''}</span>
+              <div className="pages-ctl-row">
+                <input type="range" min="-40" max="120" step="2" value={iconX} onChange={(e) => setIconX(Number(e.target.value))} />
+                {ctlReset(() => setIconX(0))}
+              </div>
             </label>
             <div className="tileset-filter-field">
+              <span>Icon contrast</span>
+              <div className="pages-ctl-row">
+                <div className="tileset-tier-seg" aria-label="Icon contrast treatment">
+                  {ICON_TREATS.map((t) => (
+                    <button key={t.id} type="button" className={iconTreat === t.id ? 'is-active' : ''} onClick={() => setIconTreat(t.id)}>{t.label}</button>
+                  ))}
+                </div>
+                {ctlReset(() => { setIconTreat('off'); setIconLighten(1.85); })}
+              </div>
+            </div>
+            {iconTreat === 'limestone' ? (
+              <label className="tileset-catalog-zoom">
+                <span>Lighten · {iconLighten.toFixed(2)}×</span>
+                <div className="pages-ctl-row">
+                  <input type="range" min="1" max="2.6" step="0.05" value={iconLighten} onChange={(e) => setIconLighten(Number(e.target.value))} />
+                  {ctlReset(() => setIconLighten(1.85))}
+                </div>
+              </label>
+            ) : null}
+            <p className="tileset-catalog-note">Carved icons measure ~1–1.25:1 on the stone (readable floor 3:1). <strong>Pale stone</strong> &amp; <strong>Bevel</strong> are pure CSS over the shipped art; <strong>Bronze*</strong> is a LOOK preview — shipping it means re-forging the icon PNGs, not a filter.</p>
+            <div className="tileset-filter-field">
               <span>Hover slide</span>
-              <div className="tileset-tier-seg" aria-label="Hover slide">
-                <button type="button" className={hoverSlide === 'off' ? 'is-active' : ''} onClick={() => setHoverSlide('off')}>Off</button>
-                <button type="button" className={hoverSlide === '6' ? 'is-active' : ''} onClick={() => setHoverSlide('6')}>6px</button>
-                <button type="button" className={hoverSlide === '10' ? 'is-active' : ''} onClick={() => setHoverSlide('10')}>10px</button>
+              <div className="pages-ctl-row">
+                <div className="tileset-tier-seg" aria-label="Hover slide">
+                  <button type="button" className={hoverSlide === 'off' ? 'is-active' : ''} onClick={() => setHoverSlide('off')}>Off</button>
+                  <button type="button" className={hoverSlide === '6' ? 'is-active' : ''} onClick={() => setHoverSlide('6')}>6px</button>
+                  <button type="button" className={hoverSlide === '10' ? 'is-active' : ''} onClick={() => setHoverSlide('10')}>10px</button>
+                </div>
+                {ctlReset(() => setHoverSlide('off'))}
               </div>
             </div>
             <div className="tileset-filter-field">
               <span>Preview hover state</span>
-              <div className="tileset-tier-seg" aria-label="Preview hover state">
-                <button type="button" className={!previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(false)}>Off</button>
-                <button type="button" className={previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(true)}>On</button>
+              <div className="pages-ctl-row">
+                <div className="tileset-tier-seg" aria-label="Preview hover state">
+                  <button type="button" className={!previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(false)}>Off</button>
+                  <button type="button" className={previewHover ? 'is-active' : ''} onClick={() => setPreviewHover(true)}>On</button>
+                </div>
+                {ctlReset(() => setPreviewHover(false))}
               </div>
             </div>
-            <p className="tileset-catalog-note">Buttons lean right and the iron lip lifts when you point at them. Flip this On to freeze that look (and feel the slide distance) without a mouse.</p>
-            <div className="tileset-filter-field">
-              <span>User box background</span>
-              <div className="tileset-tier-seg" aria-label="User box background">
-                <button type="button" className={profileBg ? 'is-active' : ''} onClick={() => setProfileBg(true)}>On</button>
-                <button type="button" className={!profileBg ? 'is-active' : ''} onClick={() => setProfileBg(false)}>Off</button>
-              </div>
-            </div>
-            <label className="tileset-category-select">
-              <span>Stone surface</span>
-              <select value={stone} onChange={(e) => setStone(e.target.value)} aria-label="Stone surface">
-                {STONE_SURFACES.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
-              </select>
-            </label>
+            <p className="tileset-catalog-note">Tabs slide right when you point at them. Flip Preview <strong>On</strong> to freeze the slid look (and feel the distance) without a mouse — needs a Hover slide ≠ Off.</p>
+            <button type="button" className="tileset-view-action" onClick={copyMenuCss} disabled={!bakeCss}>{copied ? 'Copied CSS ✓' : 'Copy menu CSS'}</button>
             <button type="button" className="tileset-view-action pages-reset" onClick={resetDefaults}>Reset to defaults</button>
             <dl className="al-meta">
               <div><dt>Page</dt><dd>{page.label}</dd></div>

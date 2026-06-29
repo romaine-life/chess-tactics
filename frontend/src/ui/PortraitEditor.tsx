@@ -281,12 +281,18 @@ export function PortraitLab({ header }: { header?: ReactNode }): ReactElement {
 export function PortraitEditor(): ReactElement {
   const { crops, piece, setPiece, palette, setPalette, crop, setCrop, setZoom, canvasRef, onPointerDown, onPointerMove, onPointerUp, onWheel, json, copied, copy, resetPiece, resetAll } = usePortraitEditor();
 
+  useEffect(() => {
+    const shell = document.querySelector('.shell');
+    shell?.classList.add('is-immersive');
+    return () => shell?.classList.remove('is-immersive');
+  }, []);
+
   const CANVAS = 420;
   const overlay = overlayStyle(crop);
 
   return (
-    <main style={{ minHeight: '100vh', background: '#0b1016', color: '#cfe3ee', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
-      <h1 style={{ margin: '0 0 4px', fontSize: 20 }}>Portrait Editor</h1>
+    <div className="dev-editor-screen app-shell-bar-pad">
+      <main style={{ background: '#0b1016', color: '#cfe3ee', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
       <p style={{ margin: '0 0 18px', color: '#7fa8bd', fontSize: 13 }}>
         Drag the crop into the transparent padding around the unit for headroom · scroll or the zoom slider sizes the crop · the crop is per-piece (shared across palettes).
         Tune each unit, then <strong>Copy JSON</strong> and paste it back in chat.
@@ -371,7 +377,8 @@ export function PortraitEditor(): ReactElement {
               borderRadius: 6, padding: 10, fontFamily: 'ui-monospace, monospace', fontSize: 11 }} />
         </div>
       </div>
-    </main>
+      </main>
+    </div>
   );
 }
 

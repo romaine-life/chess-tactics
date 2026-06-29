@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { fetchMe, signInHref, type AuthUser } from '../net/auth';
+import { fetchMe, type AuthUser } from '../net/auth';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
-import { BrandLockup } from './shared/BrandLockup';
 import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -195,12 +194,6 @@ function SettingsButton({
       <span>{children}</span>
     </button>
   );
-}
-
-function displayAccountName(user: AuthUser | null): string {
-  if (user === null) return 'Checking';
-  if (!user.signed_in) return 'Guest';
-  return user.name || user.email || 'Player';
 }
 
 function SettingsRow({
@@ -447,18 +440,11 @@ export function Settings(): ReactElement {
     restoreAudibleControls();
   };
 
-  const signOut = async () => {
-    try { await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }); } catch { /* ignore */ }
-    window.location.reload();
-  };
-
   const adjustScale = (delta: number) => {
     updateSetting('uiScale', clamp(settings.uiScale + delta, 90, 120, DEFAULT_SETTINGS.uiScale));
   };
 
   const signedIn = Boolean(me?.signed_in);
-  const accountName = displayAccountName(me);
-  const accountStatus = signedIn ? 'Signed in' : me === null ? 'Checking account' : 'Not signed in';
   const build = buildSummary();
 
   // The track currently coming out of the speakers, looked up in the loaded list by
@@ -620,24 +606,7 @@ export function Settings(): ReactElement {
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
       <AmbienceBackground />
-      <div className="settings-screen">
-        <header className="app-titlebar settings-header-frame">
-          <BrandLockup screenName="Settings" />
-          <div className="settings-account" aria-label="Account">
-            <span>
-              <strong>{accountName}</strong>
-              <em>{accountStatus}</em>
-            </span>
-            {signedIn
-              ? <SettingsButton className="settings-header-button settings-header-button-active" onClick={signOut}>Sign Out</SettingsButton>
-              : <SettingsButton className="settings-header-button settings-header-button-active" href={signInHref('/settings')}>Sign In</SettingsButton>}
-          </div>
-          <nav className="settings-header-actions" aria-label="Settings navigation">
-            <SettingsButton className="settings-header-button" onClick={() => window.history.back()}>Back</SettingsButton>
-            <SettingsButton className="settings-header-button" href="/">Menu</SettingsButton>
-          </nav>
-        </header>
-
+      <div className="settings-screen app-shell-bar-pad">
         <div className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (

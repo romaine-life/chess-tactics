@@ -2,6 +2,11 @@
 """Build the PRODUCTION surface-swap tileset from committed inputs — self-contained,
 re-runnable, the single source of truth for /assets/tiles/surface/<fam>-<n>.png.
 
+NOTE (ADR-0039): the board now renders tiles as LAYERED top/side. After this script,
+`split-tiles.py` derives <fam>-<n>-top.png / -side.png from each combined tile here; the
+board composes those halves, while this combined PNG stays the split source and the
+catalog/inspector image. Re-run split-tiles.py whenever this output changes.
+
 Pipeline per tile (see scripts/TILE_PIPELINE.md for the full flow incl. generation):
   1. take a curated flat top-down PixelLab surface  (docs/art/pixellab-runs/surfaces/)
   2. PROJECT it into the exact iso top-diamond        (square -> rhombus affine, NEAREST)
