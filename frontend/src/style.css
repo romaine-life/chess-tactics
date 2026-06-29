@@ -10347,13 +10347,27 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   min-height: 56px;
   padding: 22px; /* even inset — icon sits with equal margin on every side (was 17px/22px) */
-  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  /* NON-fixed stone (was `repeat fixed`). background-attachment: fixed routes painting
+     through Chromium's viewport-fixed-background path, which intermittently fails to
+     repaint when a nearby element composites/decomposites — the Settings menu crossfade
+     (opacity on .settings-panel-content) was blanking these sibling tabs' surfaces.
+     A locally-attached background paints with the element and is immune. Continuity
+     across the stacked tabs is recovered with per-tab background-position-y below. */
+  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat;
   background-origin: padding-box;
   background-clip: padding-box;
   text-align: left;
   text-decoration: none;
   transition: color .14s ease, filter .14s ease;
 }
+
+/* Recover the continuous-stone flow the retired `fixed` attachment gave: each stacked
+   tab samples the vertical slice it would have if one texture sheet ran down the rail.
+   Step = the ~98px tab pitch (measured; drifts a few px with the clamp()ed gap/padding,
+   imperceptible for a stone texture). The rail is exactly these four tabs in order. */
+.settings-tab:nth-child(2) { background-position-y: -98px; }
+.settings-tab:nth-child(3) { background-position-y: -196px; }
+.settings-tab:nth-child(4) { background-position-y: -294px; }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
@@ -10452,15 +10466,6 @@ button.tileset-relationship-cell {
      players run with Windows "Animation effects" off (which Chrome reads as
      reduced-motion) and should still get this transition. */
   transition: opacity 150ms ease;
-  /* Keep this element on a permanent compositing layer. The fade is `transition:
-     opacity`, which otherwise PROMOTES the element to a layer at animation-start and
-     DEMOTES it at animation-end; that create/destroy churn triggers a Chromium repaint
-     bug that leaves the SIBLING rail tabs' `background-attachment: fixed` stone surfaces
-     unpainted (they flash to the bare ambience). A stable layer = no churn = no dropout.
-     `will-change: opacity` (NOT transform/filter) is required: opacity does not establish
-     a containing block, so it will NOT re-anchor the fixed surface texture the way a
-     transform would (see the UI-scale note above .settings-screen). */
-  will-change: opacity;
 }
 
 .settings-panel-content.is-leaving { opacity: 0; }
