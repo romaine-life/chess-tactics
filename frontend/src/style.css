@@ -10568,6 +10568,15 @@ button.tileset-relationship-cell {
   padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
 }
 
+/* Rows-box placement, baked from the Settings dressing room: widened, padding tightened to the
+   edges, and nudged into position. Scoped to the real Settings screen; the shell's overflow:visible
+   lets the offset/wider box sit where it's placed. Re-tune in the Settings dressing room (Rows box). */
+.settings-art-route .settings-main-frame {
+  padding: 16px 0;
+  width: 931px;
+  transform: translate(-270px, -28px);
+}
+
 .settings-panel-heading {
   align-content: center;
   block-size: clamp(64px, 6vw, 80px);
