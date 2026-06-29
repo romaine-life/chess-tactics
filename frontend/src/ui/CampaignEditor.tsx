@@ -7,6 +7,7 @@ import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '..
 import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { AmbienceBackground } from './AmbienceBackground';
 
 const CE_ICONS = {
   star: '/assets/ui/kit/icons/star.png',
@@ -255,6 +256,18 @@ export function CampaignEditor() {
     return () => shell?.classList.remove('campaign-editor-active');
   }, []);
 
+  // One-time chrome entrance: .ce-screen paints at chrome-opacity 0, then flips .is-entered
+  // after the first paint so the panels fade in over the steady backdrop + rain (mirrors
+  // Settings' entrance). A transition, not an animation, so it survives reduced-motion. The
+  // rAF runs it as a fade; the timeout is a belt-and-suspenders so a throttled rAF (e.g. a
+  // backgrounded tab) can never strand the chrome hidden.
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    const t = window.setTimeout(() => setEntered(true), 120);
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
+  }, []);
+
   useEffect(() => {
     let active = true;
     fetchMe().then((user) => { if (active) setMe(user); });
@@ -401,7 +414,11 @@ export function CampaignEditor() {
     `/edit?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent('/campaigns-next')}`;
 
   return (
-    <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
+    <div className={`ce-screen app-shell-bar-pad ${entered ? 'is-entered' : ''}`.trim()} data-testid="campaign-editor">
+      {/* Same art-directed backdrop + synced rain as the main menu (.ce-screen paints the
+          menu scene; this canvas adds the shared rain). Mostly overlapped by the editor
+          panels, but it keeps the feel consistent with the rest of the app in the gaps. */}
+      <AmbienceBackground />
       {/* Title bar lives in the app shell; the editor paints its live save-state +
           shortcuts into it via portals (workspace state stays in this component). */}
       <TitleBarSlot region="center">

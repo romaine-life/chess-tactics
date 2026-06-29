@@ -990,6 +990,13 @@ h1 {
 .main-menu-twin-screen {
   transition: opacity 320ms ease;
 }
+/* Buttons hidden until revealed. On COLD load the director opens this stage in order
+   (bg -> title -> buttons). On a SOFT nav INTO the menu (e.g. campaign editor -> menu),
+   the store is already fully revealed, so MainMenu withholds data-reveal-buttons for one
+   frame after mount (its `entered` state) — that runs this same opacity transition as an
+   arrival fade, matching the editor's entrance so the hop dissolves the chrome both ways
+   while the shared backdrop + rain stay put. (Campaign reuses this class but hardcodes
+   data-reveal-buttons, so its play surface is never gated by this.) */
 .main-menu-layer:not([data-reveal-buttons]) .main-menu-twin-screen {
   opacity: 0;
 }
@@ -5010,10 +5017,23 @@ body { font-size: 17px; }
   --ce-slate: #b7cad4;
   --ce-gold-bright: #f5bb45;
   --ce-eyebrow: #c9a877;
+  /* Same art-directed backdrop as the main menu (.main-menu-layer / .settings-art-route)
+     so the editor sits over the menu scene + the synced rain (AmbienceBackground, below).
+     Keep this declaration in sync with .settings-art-route. The editor's panels overlap
+     most of it; the scene + rain only show in the gaps, for a consistent feel.
+     First declaration = PNG fallback for engines without image-set()/type(). */
   background:
-    radial-gradient(720px 460px at 74% 24%, rgba(28, 106, 149, .24), transparent 62%),
-    radial-gradient(520px 320px at 34% 68%, rgba(64, 89, 59, .16), transparent 68%),
-    linear-gradient(180deg, #07131d 0%, #04080d 100%);
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat #02070b;
   color: var(--ce-ink);
   display: grid;
   font-family: var(--ds-font-pixel);
@@ -5040,8 +5060,28 @@ body { font-size: 17px; }
 .ce-topbar,
 .ce-footer,
 .ce-layout {
+  /* Above the rain field (.ambience-background, z2), below the overlay drops
+     (.ambience-overlay, z5) — mirrors the menu's z3 UI layer so the synced rain
+     falls behind the editor chrome (and the near drops cross in front of it). */
   position: relative;
-  z-index: 1;
+  z-index: 3;
+}
+
+/* Menu-family chrome entrance. When the editor MOUNTS on a soft nav (menu <-> campaign
+   editor), only its chrome fades in — the shared backdrop scene + synced rain sit behind
+   it (on .ce-screen / the ambience canvases) and never move, so the hop reads as the UI
+   swapping over one continuous scene, not the whole screen dissolving. A TRANSITION, not
+   a keyframe animation, so it survives `@media (prefers-reduced-motion){ *{animation:none} }`
+   (~line 6031): many players (incl. this one) run Windows with animations off, which Chrome
+   reads as reduced-motion, and an opacity fade is motion-safe — same rationale as Settings'
+   entrance. CampaignEditor adds .is-entered to .ce-screen one frame after mount. */
+.ce-layout,
+.ce-footer {
+  transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
+}
+.ce-screen:not(.is-entered) .ce-layout,
+.ce-screen:not(.is-entered) .ce-footer {
+  opacity: 0;
 }
 
 /* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
@@ -9985,7 +10025,8 @@ button.tileset-relationship-cell {
    so the in-front rain matches the menu's restraint. The field rain behind the
    frames is untouched, and the menu overlay is unaffected (scoped via the
    re-parented overlay living under .settings-art-route only while on settings). */
-.settings-art-route .ambience-overlay {
+.settings-art-route .ambience-overlay,
+.ce-screen .ambience-overlay {
   opacity: 0.3;
 }
 
