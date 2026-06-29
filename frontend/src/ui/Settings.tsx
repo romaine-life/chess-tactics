@@ -5,6 +5,7 @@ import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -357,6 +358,10 @@ export function Settings(): ReactElement {
   useEffect(() => {
     saveLocalSettings(settings);
     applyUiScale(settings.uiScale);
+    // Let the running SFX service pick up master-audio / effects-volume changes live
+    // (it re-reads localStorage on this event), so the Effects slider takes effect
+    // without a reload — the SFX analogue of the BGM mute-change event.
+    window.dispatchEvent(new CustomEvent(SFX_SETTINGS_CHANGE_EVENT));
   }, [settings]);
 
   // Load the soundtrack list whenever the dedicated tracks view is opened. A fresh
@@ -547,6 +552,7 @@ export function Settings(): ReactElement {
             label="Effects Volume"
             onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
           />
+          <SettingsButton onClick={() => previewTerrain('stone')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
         </SettingsRow>
         <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
           <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
