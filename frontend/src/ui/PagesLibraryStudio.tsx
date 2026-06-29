@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
-import { MainMenu } from './MainMenu';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 
@@ -84,11 +83,17 @@ function iconTreatFilter(treat: IconTreat, lighten: number): string {
 // .main-menu-mode-tab in style.css), so the tuner opens matching what ships, not the pre-bake 34/0.
 const MM_LIVE = { btnH: 56, railW: 304, gap: 11, icon: 64, textX: 18 } as const;
 
-// Functional viewer: the LIVE MainMenu (ADR-0029 req 4 — exercise the real component, never a
-// dead image) with in-place tweak controls that drive the menu's REAL settings-twin chrome. Every
-// control injects a scoped override into THIS viewer (.pages-menu-tweak) — touching zero shipped
-// CSS, like the dressing room — and "Copy menu CSS" exports the menu-scoped rules to bake in.
+// Functional viewer: the LIVE main menu shown by iframing the REAL "/" route (ADR-0029 req 4 —
+// exercise the real component, never a dead image). Iframing — the same shape the Settings dressing
+// room and Campaign viewer already use — makes the preview inherit the full app shell, INCLUDING the
+// shared title bar, exactly as it ships; rendering the bare <MainMenu/> dropped that title panel (the
+// bar lives in the app shell, not the component) and showed only its reserved-but-empty header gap.
+// The tweak controls inject their overrides into the iframe document via the same same-origin
+// handshake: the menu-scoped audition CSS is the per-control preview rules with the (now-absent)
+// `.pages-menu-tweak` scope prefix stripped, so they target the real menu elements and keep their
+// !important guards to beat the shipped chrome. "Copy menu CSS" still exports the bake-form rules.
 function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // tab min-height
   const [railW, setRailW] = useState<number>(MM_LIVE.railW); // rail (button) width
   const [tabGap, setTabGap] = useState<number>(MM_LIVE.gap); // space between tabs
@@ -163,6 +168,58 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
 
   const previewCss = parts.map((p) => p[0]).filter(Boolean).join('\n');
   const bakeCss = parts.map((p) => p[1]).filter(Boolean).join('\n\n');
+
+  // The iframe renders the REAL "/" route, so the audition styles must target the real menu
+  // elements directly — strip the `.pages-menu-tweak ` scoping prefix the (now-removed) in-page
+  // wrapper used. The !important guards stay, so the overrides still beat the shipped chrome.
+  const injectedCss = previewCss.split('.pages-menu-tweak ').join('');
+
+  // Read the latest injected CSS via a ref so the load handler / interval stay stable (no
+  // re-subscribe per keystroke) while always painting current values (mirrors SurfaceDressingRoom).
+  const cssRef = useRef(injectedCss);
+  cssRef.current = injectedCss;
+
+  const inject = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.head) return; // transient during navigation
+      let style = doc.getElementById('main-menu-tuning') as HTMLStyleElement | null;
+      if (!style) {
+        style = doc.createElement('style');
+        style.id = 'main-menu-tuning';
+        doc.head.appendChild(style);
+      }
+      style.textContent = cssRef.current;
+    } catch {
+      /* same-origin access can blip during reload — re-inject on the next tick/load */
+    }
+  }, []);
+
+  // Re-inject live whenever a control changes the audition CSS.
+  useEffect(() => {
+    inject();
+  }, [injectedCss, inject]);
+
+  // The SPA mounts "/" asynchronously after the iframe load fires, so re-inject on load and on a
+  // short interval until it sticks (same handshake as the dressing room / campaign viewer).
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const onLoad = () => inject();
+    iframe.addEventListener('load', onLoad);
+    let n = 0;
+    const timer = window.setInterval(() => {
+      inject();
+      if (++n > 24) window.clearInterval(timer);
+    }, 250);
+    return () => {
+      iframe.removeEventListener('load', onLoad);
+      window.clearInterval(timer);
+    };
+  }, [inject]);
+
   const copyMenuCss = async (): Promise<void> => {
     if (!bakeCss) return;
     try {
@@ -180,13 +237,11 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
 
   return (
     <>
-      {/* Scoped to THIS viewer's menu (.pages-menu-tweak) so the audition touches zero shipped
-          CSS — same principle as the dressing room. Drives the real settings-twin chrome live. */}
-      {previewCss ? <style>{previewCss}</style> : null}
-      <section className="al-lab-main pages-view-main" aria-label="Main Menu preview">
-        <div className="pages-menu-tweak">
-          <MainMenu />
-        </div>
+      {/* Iframe the REAL "/" route so the preview carries the full app shell — the shared title bar
+          included — exactly as it ships; the tweak controls inject into it (see inject() above).
+          .surface-dressing-main is a stretch-grid that gives the full-page iframe a definite height. */}
+      <section className="surface-dressing-main" aria-label="Main Menu preview">
+        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live main menu preview" />
       </section>
       <aside className="tileset-view-controls" aria-label="Main Menu controls">
         <section className="tileset-inspector-section">
