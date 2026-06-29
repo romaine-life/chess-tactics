@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { SURFACE_ASSETS } from './surfaceCatalog';
+import { useWindowScaledPreview } from './useWindowScaledPreview';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -94,15 +95,9 @@ const MM_LIVE = { btnH: 56, railW: 304, gap: 11, icon: 64, textX: 18 } as const;
 // !important guards to beat the shipped chrome. "Copy menu CSS" still exports the bake-form rules.
 function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const hostRef = useRef<HTMLElement | null>(null);
-  // The preview iframe is a true-to-window MINIATURE. The menu body is centred under a
-  // viewport-relative cap (.settings-shell: max-inline-size: clamp(900px, 88vw, 1240px);
-  // justify-self: center), and `vw` inside an iframe resolves against the IFRAME's own
-  // viewport — so a panel-sized iframe would centre the rail at a different indent than the
-  // full-window menu actually ships at. Fix: give the iframe the LIVE window's pixel size
-  // (its vw basis then matches the real page) and scale it down to fit the panel. `fit` holds
-  // that window size + the contain-scale; remeasured whenever the panel or window resizes.
-  const [fit, setFit] = useState<{ w: number; h: number; scale: number }>({ w: 0, h: 0, scale: 1 });
+  // True-to-window miniature: the menu body is centred under a viewport-relative cap, so a
+  // panel-sized iframe would re-centre the rail at the wrong indent — see useWindowScaledPreview.
+  const { hostRef, frameStyle } = useWindowScaledPreview();
   const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // tab min-height
   const [railW, setRailW] = useState<number>(MM_LIVE.railW); // rail (button) width
   const [tabGap, setTabGap] = useState<number>(MM_LIVE.gap); // space between tabs
@@ -239,31 +234,6 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     };
   }, [inject]);
 
-  // Fit the full-window menu into the panel: size the iframe to the live window (so its vw
-  // basis matches the shipped page) and contain-scale it. useLayoutEffect so the size lands
-  // before paint; ResizeObserver tracks the panel, the resize listener tracks the window
-  // (the vw basis itself), so the miniature stays true at any panel/window size.
-  useLayoutEffect(() => {
-    const measure = (): void => {
-      const host = hostRef.current;
-      if (!host) return;
-      const rect = host.getBoundingClientRect();
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      if (!rect.width || !rect.height || !vw || !vh) return;
-      setFit({ w: vw, h: vh, scale: Math.min(rect.width / vw, rect.height / vh) });
-    };
-    measure();
-    const host = hostRef.current;
-    const ro = typeof ResizeObserver !== 'undefined' && host ? new ResizeObserver(measure) : null;
-    if (host && ro) ro.observe(host);
-    window.addEventListener('resize', measure);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, []);
-
   const copyMenuCss = async (): Promise<void> => {
     if (!bakeCss) return;
     try {
@@ -283,16 +253,15 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     <>
       {/* Iframe the REAL "/" route so the preview carries the full app shell — the shared title bar
           included — exactly as it ships; the tweak controls inject into it (see inject() above).
-          The iframe is sized to the LIVE window and scaled to fit (see the fit measure above), so
-          the menu's vw-based, centred layout reads at true proportions — the rail indent matches
-          what ships, not a panel-sized re-centre. is-window-scaled abs-centres it in the panel. */}
+          is-window-scaled + frameStyle make it a true-to-window miniature so the rail indent matches
+          what ships, not a panel-sized re-centre (see useWindowScaledPreview). */}
       <section className="surface-dressing-main is-window-scaled" aria-label="Main Menu preview" ref={hostRef}>
         <iframe
           ref={iframeRef}
           className="surface-dressing-frame"
           src={page.route}
           title="Live main menu preview"
-          style={{ width: `${fit.w}px`, height: `${fit.h}px`, transform: `translate(-50%, -50%) scale(${fit.scale})` }}
+          style={frameStyle}
         />
       </section>
       <aside className="tileset-view-controls" aria-label="Main Menu controls">
@@ -564,6 +533,8 @@ function buildCeChromeCss(state: Record<string, CeGroupTune>): string {
 // and means this touches ZERO shipped CSS; "Copy CSS" exports the bare rules to bake in later.
 function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // True-to-window miniature so the editor's vw-based chrome previews at shipped proportions.
+  const { hostRef, frameStyle } = useWindowScaledPreview();
   const [groups, setGroups] = useState<Record<string, CeGroupTune>>(ceAllDefaults);
   const [activeId, setActiveId] = useState<string>(CE_GROUPS[0].id);
   const [copied, setCopied] = useState(false);
@@ -634,11 +605,11 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
 
   return (
     <>
-      {/* surface-dressing-main is a stretch-grid (grid-template-rows: minmax(0,1fr)) so the iframe
-          gets a DEFINITE height — the campaign editor's .ce-screen/.app-root are height:100% and
-          collapse to header+footer in a content-sized container like .al-lab-main. */}
-      <section className="surface-dressing-main" aria-label="Campaign Editor preview">
-        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live campaign editor preview" />
+      {/* True-to-window miniature (is-window-scaled + frameStyle): the iframe carries the live
+          window's size — a DEFINITE height for the editor's height:100% .ce-screen/.app-root — and
+          scales to fit, so the vw-based chrome previews at shipped proportions (useWindowScaledPreview). */}
+      <section className="surface-dressing-main is-window-scaled" aria-label="Campaign Editor preview" ref={hostRef}>
+        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live campaign editor preview" style={frameStyle} />
       </section>
       <aside className="tileset-view-controls" aria-label="Campaign Editor chrome controls">
         <section className="tileset-inspector-section">
