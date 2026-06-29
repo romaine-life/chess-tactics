@@ -131,10 +131,6 @@ function buildSummary(): { headline: string; detail: string } {
   };
 }
 
-function prefersReducedMotion(): boolean {
-  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
-}
-
 function readMuted(): boolean {
   try { return localStorage.getItem(MUTE_KEY) === 'true'; } catch { return false; }
 }
@@ -402,14 +398,11 @@ export function Settings(): ReactElement {
   // Crossfade the panel body when the target menu changes: fade the current controls
   // out, swap in the next menu's controls at zero opacity, then fade them in. The data
   // fetch keys off showTracks (not display), so the soundtrack list is already loading
-  // while the fade-out plays. Motion-reduced users skip the delay and swap instantly.
+  // while the fade-out plays. This is a pure opacity fade (no movement), which is safe
+  // under prefers-reduced-motion, so it runs for everyone — including the common case of
+  // Windows "Animation effects" off, which makes Chrome report reduced-motion.
   useEffect(() => {
     if (display.tab === activeTab && display.tracks === showTracks) return;
-    if (prefersReducedMotion()) {
-      setDisplay({ tab: activeTab, tracks: showTracks });
-      setPanelPhase('in');
-      return;
-    }
     setPanelPhase('out');
     const timer = window.setTimeout(() => {
       setDisplay({ tab: activeTab, tracks: showTracks });
