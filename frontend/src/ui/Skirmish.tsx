@@ -41,6 +41,13 @@ export function Skirmish() {
   // editor's "Test Play" (mode=test) or a free skirmish (no campaign/level).
   const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
   const [routeLevel, setRouteLevel] = useState(() => (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null));
+  // The board mounts only once this screen has DECIDED which game to play (fresh vs resume).
+  // The store ships a populated placeholder game (store.ts INITIAL_GAME), so mounting the
+  // board before that decision would render the placeholder, then a second time when
+  // newSkirmish swaps in the real seed — the board (and the unit deploy) would play twice,
+  // the second time at the new positions. Gating the mount on this lets the board mount once,
+  // fresh, for the game we actually play.
+  const [boardSettled, setBoardSettled] = useState(false);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const game = useSkirmish((s) => s.game);
   const turnLabel = game.winner
@@ -97,6 +104,7 @@ export function Skirmish() {
     if (!routeLevelId || routeLevel) {
       const levelId = routeLevel?.id ?? null;
       if (shouldStartFresh(levelId)) newSkirmish({ seed: freshSeed(), level: routeLevel ?? undefined });
+      setBoardSettled(true);
       return;
     }
     let active = true;
@@ -111,8 +119,9 @@ export function Skirmish() {
         const level = useCampaigns.getState().levels[routeLevelId] ?? null;
         setRouteLevel(level);
         if (shouldStartFresh(level?.id ?? null)) newSkirmish({ seed: freshSeed(), level: level ?? undefined });
+        setBoardSettled(true);
       })
-      .catch(() => { if (shouldStartFresh(null)) newSkirmish({ seed: freshSeed() }); });
+      .catch(() => { if (shouldStartFresh(null)) newSkirmish({ seed: freshSeed() }); setBoardSettled(true); });
     return () => { active = false; };
   }, [newSkirmish, routeCampaignId, routeLevel, routeLevelId]);
 
@@ -144,7 +153,7 @@ export function Skirmish() {
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
-            <SkirmishBoard />
+            {boardSettled ? <SkirmishBoard /> : null}
           </div>
         </div>
       </section>
