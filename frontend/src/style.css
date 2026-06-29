@@ -525,36 +525,10 @@ h1 {
   .main-menu-actions-assets.indent-hover .mode-button-stone:focus-visible { transform: none; }
 }
 
-/* ── Pages catalog viewer (ADR-0029) — the live page mounts inside the viewer stage.
-   The menu's absolute .menu-layer (inset:8px) fills this relatively-positioned stage; the
-   tweak wrapper carries the --menu-* overrides + the hover-slide class from the rail. */
+/* ── Pages catalog viewer (ADR-0029) — the stub viewer's stage: a relatively-positioned,
+   clipped box that the live-route iframe (.pages-stub-frame) fills. The Main Menu and
+   Campaign viewers iframe their own route inside .surface-dressing-main instead. */
 .pages-view-main { position: relative; overflow: hidden; min-height: 0; }
-.pages-menu-tweak { position: absolute; inset: 0; }
-.pages-menu-tweak.indent-hover .mode-button-stone {
-  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), border-color .1s ease, box-shadow .1s ease;
-}
-.pages-menu-tweak.indent-hover .mode-button-stone:hover,
-.pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: translateX(6px); }
-.pages-menu-tweak.indent-hover-10 .mode-button-stone:hover,
-.pages-menu-tweak.indent-hover-10 .mode-button-stone:focus-visible { transform: translateX(10px); }
-@media (prefers-reduced-motion: reduce) {
-  .pages-menu-tweak.indent-hover .mode-button-stone:hover,
-  .pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: none; }
-}
-/* "Preview hover state" (editor only): freeze every button in its pointed-at look —
-   the iron-lip lift plus, if a slide amount is selected, the slide offset — so the
-   hover micro-interaction is visible without a mouse (otherwise the control does nothing
-   until you physically hover a single button). */
-.pages-menu-tweak.preview-hover .mode-button-stone {
-  border-color: #2c3c4e;
-  border-top-color: #4a607c;
-  box-shadow:
-    inset 0 1px 0 rgba(160, 191, 230, .26),
-    inset 0 0 0 1px rgba(0, 0, 0, .40),
-    0 1px 3px rgba(0, 0, 0, .55);
-}
-.pages-menu-tweak.preview-hover.indent-hover .mode-button-stone { transform: translateX(6px); }
-.pages-menu-tweak.preview-hover.indent-hover-10 .mode-button-stone { transform: translateX(10px); }
 .pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
 /* A control + its permanent per-control reset, side by side. The widget flexes to fill, the ↺
    sits to its right. Studio tooling chrome (out of scope for the player-facing kit). */
