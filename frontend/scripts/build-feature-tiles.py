@@ -96,11 +96,29 @@ def _case_for(mask):
     raise SystemExit(f'no rotation maps {name}({bm}) -> {mask}')
 
 
+def _canonical_ribbon(mask):
+    """The consistent-width ribbon SHAPE (centre -> each connected edge midpoint) the road
+    is CLAMPED to, so the variable-width codex road can't bulge in the middle / pinch at
+    seams. Square space, slightly wider than HEAL_W so organic edge nibbles survive inside."""
+    img = Image.new('L', (T, T), 0); d = ImageDraw.Draw(img); c = (T / 2, T / 2)
+    mids = {1: (T / 2, 0), 2: (T, T / 2), 4: (T / 2, T), 8: (0, T / 2)}
+    half = (HEAL_W + 6) / 2
+    for bit, (mx, my) in mids.items():
+        if mask & bit:
+            dx, dy = mx - c[0], my - c[1]; L = math.hypot(dx, dy) or 1.0; nx, ny = -dy / L * half, dx / L * half
+            ex, ey = mx + dx / L * 4, my + dy / L * 4  # run a touch past the edge
+            d.polygon([(c[0] + nx, c[1] + ny), (ex + nx, ey + ny), (ex - nx, ey - ny), (c[0] - nx, c[1] - ny)], fill=255)
+    d.ellipse([c[0] - half, c[1] - half, c[0] + half, c[1] + half], fill=255)
+    return np.array(img) > 0
+
+
 def _heal(arr, mask):
-    """Normalise a sliced road cell so it tessellates: every connected edge crosses at one
-    canonical centred band; non-connected edges fade to grass. Interior keeps codex texture."""
+    """Normalise a sliced road cell so it tessellates: clamp the road to a consistent-width
+    ribbon (no bulge), force every connected edge to cross at one canonical centred band,
+    and fade non-connected edges to grass. Interior keeps codex texture + organic narrowing."""
     R, G, B = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
     a = (~((G > R + 6) & (G > B - 4) & (G > 90))).astype(float)  # road = NOT dithered grass
+    a *= _canonical_ribbon(mask)                                  # CLAMP: road can't exceed the ribbon
     ys, xs = np.mgrid[0:T, 0:T]
     edges = {1: (ys, xs), 4: (T - 1 - ys, xs), 2: (T - 1 - xs, ys), 8: (xs, ys)}  # bit:(depth, perp)
     for bit, (d, perp) in edges.items():
