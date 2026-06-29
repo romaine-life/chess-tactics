@@ -14,6 +14,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
+import { readBoardParam, encodeBoard } from './boardCode';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   MISSING_DIRECTION_SPRITE,
@@ -302,9 +303,11 @@ export function LevelEditor(): ReactElement {
     };
   }, []);
   const cameFromStudio = studioArm.fromStudio;
-  const [boardCells, setBoardCells] = useState<Record<string, string>>(leSeedBoard);
-  const [boardCols, setBoardCols] = useState(LE_COLS);
-  const [boardRows, setBoardRows] = useState(LE_ROWS);
+  // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
+  const loadedBoard = useMemo(() => readBoardParam(), []);
+  const [boardCells, setBoardCells] = useState<Record<string, string>>(() => loadedBoard?.cells ?? leSeedBoard());
+  const [boardCols, setBoardCols] = useState(loadedBoard?.cols ?? LE_COLS);
+  const [boardRows, setBoardRows] = useState(loadedBoard?.rows ?? LE_ROWS);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase'>('brush');
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
@@ -313,21 +316,21 @@ export function LevelEditor(): ReactElement {
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'cover' | 'road'>(studioArm.kind ?? 'tile');
   const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'cover' | 'road'>(studioArm.kind ?? 'tile');
-  const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>({});
-  const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>({});
+  const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
+  const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
-  const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>({});
+  const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(loadedBoard?.cover ?? {});
   const [coverBrushDensity, setCoverBrushDensity] = useState<GroundCoverDensity>('sparse');
   const [coverSeed, setCoverSeed] = useState(1234);
   // Roads are a LINEAR feature (a ribbon you draw), not a per-cell terrain material:
   // store each painted cell's road MATERIAL, then derive its connection mask from its
   // neighbours so the renderer picks straight/corner/T/cross. See core/featureAutotile.ts.
-  const [boardRoads, setBoardRoads] = useState<Record<string, RoadMaterial>>({});
+  const [boardRoads, setBoardRoads] = useState<Record<string, RoadMaterial>>(loadedBoard?.roads ?? {});
   const [roadMaterial, setRoadMaterial] = useState<RoadMaterial>(DEFAULT_ROAD_MATERIAL);
   // Manually SEVERED road connections, keyed by the shared edge between two cells
   // (roadEdgeKey, order-independent). A cut overrides auto-connect for BOTH tiles.
-  const [boardRoadCuts, setBoardRoadCuts] = useState<Record<string, true>>({});
+  const [boardRoadCuts, setBoardRoadCuts] = useState<Record<string, true>>(loadedBoard?.roadCuts ?? {});
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : unitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -443,6 +446,11 @@ export function LevelEditor(): ReactElement {
       }
       return next;
     });
+  // Export the whole board as a /level-editor?board=<code> link (round-trips via boardCode.ts).
+  const copyBoardLink = (): void => {
+    const code = encodeBoard({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, cover: boardCover, roads: boardRoads, roadCuts: boardRoadCuts });
+    void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
+  };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
@@ -576,6 +584,7 @@ export function LevelEditor(): ReactElement {
             <h2>Board</h2>
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy board link</button>
           </section>
         ) : (<>
 
