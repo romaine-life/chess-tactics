@@ -27,7 +27,7 @@ const DEFAULT_CROP: Crop = { cx: 0.5, cy: 0.30, s: 0.50 };
 // The committed, intentional per-piece framing (off-center lead room, zoom) — the single source
 // of truth the editor, the Skirmish HUD, and the roster all START from, so they never diverge.
 const COMMITTED = COMMITTED_CROPS as Record<Piece, Crop>;
-export const STORAGE_KEY = 'portrait-editor-crops-v3'; // v3: discard stale v2 (centered-default) crops
+export const STORAGE_KEY = 'portrait-editor-crops-v4'; // v4: discard pre-padding drafts so the committed rook headroom (and any baked crop) shows
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 // PAD is a fixed band of transparent padding (in image fractions) AROUND the master on every
