@@ -1153,6 +1153,20 @@ h1 {
      --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
      + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
   --app-header-h: clamp(84px, 5vw, 88px);
+  /* motion — duration + easing tokens (ADR-0043). Map MOTION ROLES onto these; don't
+     hand-pick ms per element. Two interactive tiers + an entrance tier:
+       fast = instant feedback (hover / toggle / focus / filter swap),
+       base = content fades & crossfade legs (the settings menu crossfade),
+       slow = screen / large-surface entrances.
+     Easing (Material 3): standard for in-place changes; out (emphasized-decelerate)
+     for entrances — motion settles, never accelerates in; linear for pure opacity
+     crossfades (a fade reads fine linear). */
+  --ds-duration-fast: 100ms;
+  --ds-duration-base: 150ms;
+  --ds-duration-slow: 300ms;
+  --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ds-ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ds-ease-linear: linear;
 }
 
 .main-assets-header .eyebrow {
@@ -5946,7 +5960,9 @@ body { font-size: 17px; }
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
   image-rendering: pixelated;
-  transition: transform 0.1s ease, opacity 0.2s ease;
+  /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
+     fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
+  transition: transform var(--ds-duration-fast) var(--ds-ease-standard), opacity var(--ds-duration-base) var(--ds-ease-linear);
 }
 
 .bgm-control-icon {
@@ -10241,7 +10257,17 @@ button.tileset-relationship-cell {
   justify-self: center;
   min-height: 0;
   overflow: hidden;
+  /* Entry fade (ADR-0043): the chrome (rail + panel) fades in when the Settings screen
+     mounts. Settings.tsx adds .is-entered after the first paint so this opacity
+     transition runs. It's the entrance tier (slow) with the decelerate ease — motion
+     settles in. Pure opacity = reduced-motion-safe, so it is intentionally not gated
+     (same rationale as the menu crossfade). The rain backdrop sits behind .settings-shell
+     and is untouched — only the chrome fades in over it. */
+  opacity: 0;
+  transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
 }
+
+.settings-shell.is-entered { opacity: 1; }
 
 .settings-rail-frame,
 .settings-main-frame {
@@ -10417,8 +10443,10 @@ button.tileset-relationship-cell {
      PANEL_FADE_MS there. A pure opacity fade (no movement) is safe under
      prefers-reduced-motion, so it is intentionally NOT gated on that query — many
      players run with Windows "Animation effects" off (which Chrome reads as
-     reduced-motion) and should still get this transition. */
-  transition: opacity 150ms ease;
+     reduced-motion) and should still get this transition. The duration is the
+     content-fade token (ADR-0043); --ds-duration-base is 150ms, which MUST stay in
+     sync with PANEL_FADE_MS in Settings.tsx (the JS that times the swap). */
+  transition: opacity var(--ds-duration-base) var(--ds-ease-standard);
 }
 
 .settings-panel-content.is-leaving { opacity: 0; }
