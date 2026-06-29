@@ -26,7 +26,7 @@ const FRAME_FILL: Record<FrameId, number> = {
 
 type RegionId = 'title' | 'tabsBox' | 'buttons' | 'rowsBox' | 'rows';
 type BoxId = 'tabsBox' | 'rowsBox';
-type GeomKey = 'minH' | 'padX' | 'padY' | 'gap' | 'iconSize';
+type GeomKey = 'minH' | 'padX' | 'padY' | 'gap' | 'iconSize' | 'moveX' | 'moveY';
 
 interface RegionDef {
   id: RegionId;
@@ -46,11 +46,11 @@ interface RegionDef {
 // Selectors verified against the live Settings DOM. `[data-testid="settings"]` is on the
 // .settings-art-route wrapper, so these scope every override to the real Settings screen.
 const REGIONS: RegionDef[] = [
-  { id: 'title', label: 'Title bar', selector: '[data-testid="settings"] .app-titlebar.settings-header-frame', hint: 'The top header strip.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: false, geom: ['padX', 'padY'] },
+  { id: 'title', label: 'Title bar', selector: '[data-testid="settings"] .app-titlebar.settings-header-frame', hint: 'The top header strip.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: false, geom: ['padX', 'padY', 'moveX', 'moveY'] },
   { id: 'tabsBox', label: 'Rail box', selector: '[data-testid="settings"] .settings-rail-frame', hint: 'The left rail container holding the tab buttons.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['padX', 'padY', 'gap'], inherited: 'Rail width & offset (X / Y) are shared with the Main Menu buttons — tune them in the Main Menu dressing room.' },
   { id: 'buttons', label: 'Rail tabs', selector: '[data-testid="settings"] .settings-tab', hint: 'The individual tab buttons inside the rail.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round', frameWidth: 12, configId: 'mode-button', isBox: false, geom: ['minH', 'padX', 'padY', 'gap', 'iconSize'], inherited: 'Label position is shared with the Main Menu buttons — tune it in the Main Menu dressing room.' },
-  { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['padX', 'padY'] },
-  { id: 'rows', label: 'Setting rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round', frameWidth: 14, configId: 'panel', isBox: false, geom: ['minH', 'padX', 'padY'] },
+  { id: 'rowsBox', label: 'Rows box', selector: '[data-testid="settings"] .settings-main-frame', hint: 'The main panel container holding the rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 16px round', frameWidth: 16, configId: 'panel', isBox: true, geom: ['padX', 'padY', 'moveX', 'moveY'] },
+  { id: 'rows', label: 'Setting rows', selector: '[data-testid="settings"] .settings-row', hint: 'The individual setting rows.', frame: 'url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round', frameWidth: 14, configId: 'panel', isBox: false, geom: ['minH', 'padX', 'padY', 'moveX', 'moveY'] },
 ];
 
 const BOX_IDS: BoxId[] = ['tabsBox', 'rowsBox'];
@@ -65,6 +65,8 @@ const GEOM_META: Record<GeomKey, { label: string; min: number; max: number; step
   padY: { label: 'Padding · vertical', min: 0, max: 96 },
   gap: { label: 'Gap', min: 0, max: 48 },
   iconSize: { label: 'Icon size', min: 16, max: 120 },
+  moveX: { label: 'Move · horizontal', min: -600, max: 600 },
+  moveY: { label: 'Move · vertical', min: -400, max: 400 },
 };
 
 // A region's live computed geometry, measured once from the real element (before our overrides).
@@ -72,7 +74,8 @@ interface GeomBase { padT: number; padR: number; padB: number; padL: number; min
 // Placeholder until the live measure lands (the iframe mounts a tick after first render).
 const GEOM_FALLBACK: GeomBase = { padT: 22, padR: 22, padB: 22, padL: 22, minH: 56, gap: 11, iconSize: 64 };
 const geomBaseVal = (b: GeomBase, key: GeomKey): number =>
-  key === 'minH' ? b.minH : key === 'gap' ? b.gap : key === 'iconSize' ? b.iconSize : key === 'padX' ? b.padL : b.padT;
+  key === 'minH' ? b.minH : key === 'gap' ? b.gap : key === 'iconSize' ? b.iconSize
+    : key === 'padX' ? b.padL : key === 'padY' ? b.padT : 0; // moveX/moveY default to 0 (no transform)
 
 type GeomTune = Partial<Record<GeomKey, number>>;
 
@@ -174,6 +177,11 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
     if (region.geom.includes('minH') && tune.minH !== undefined && tune.minH !== b.minH) decls.push(`min-height: ${tune.minH}px`);
     if (region.geom.includes('gap') && tune.gap !== undefined && tune.gap !== b.gap) decls.push(`gap: ${tune.gap}px`);
     if (region.geom.includes('iconSize') && tune.iconSize !== undefined && tune.iconSize !== b.iconSize) decls.push(`--settings-tab-icon-size: ${tune.iconSize}px`);
+    // Move (translate) — settings-only elements; the rail/tabs use the menu-owned shared transform.
+    // The shell ships overflow:visible (baked), so a moved box shows past the shell edge, not clipped.
+    const mX = tune.moveX ?? 0;
+    const mY = tune.moveY ?? 0;
+    if ((region.geom.includes('moveX') || region.geom.includes('moveY')) && (mX !== 0 || mY !== 0)) decls.push(`transform: translate(${mX}px, ${mY}px)`);
 
     if (decls.length) blocks.push(`${sel} {\n${decls.map((d) => `  ${d} !important;`).join('\n')}\n}`);
 
