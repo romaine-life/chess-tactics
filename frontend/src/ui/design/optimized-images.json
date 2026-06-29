@@ -13,6 +13,12 @@
       "note": "Accepted title art; has alpha.",
       "avif": { "quality": 60, "effort": 6 },
       "webp": { "quality": 88, "effort": 6 }
+    },
+    {
+      "path": "/assets/ui/surfaces/baseline-stone-blue.png",
+      "note": "Carved-stone rail/tab surface (~440KB PNG, opaque). Single heaviest menu image; gates the buttons layer in the cold-load reveal. Higher quality preserves the 1024px tile under `repeat`.",
+      "avif": { "quality": 70, "effort": 6 },
+      "webp": { "quality": 90, "effort": 6 }
     }
   ]
 }

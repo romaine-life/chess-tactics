@@ -373,13 +373,33 @@ h1 {
 
 .menu-layer.main-menu-layer {
   align-items: stretch;
+  /* Solid dark floor only — the photographic scene rides the ::after pseudo below so it
+     can fade in FIRST in the cold-load order without fading the rain or UI above it.
+     This floor keeps the screen dark (never white) from the very first paint. */
+  background: #02070b;
+  inset: 0;
+  justify-content: stretch;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The background scene as a fade-able layer (cold-load reveal step 1, see
+   shell/coldReveal). Sits above the floor and BELOW the rain (z2) + UI (z3), exactly
+   where the layer's own background used to paint. Hidden until the director opens the
+   'bg' stage, then fades in over the SAME 320ms used by the old menu reveal. */
+.main-menu-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
   /* PNG fallback declaration for browsers without image-set()/type() support. */
   background:
     linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
-  /* Preferred: AVIF -> WebP -> PNG. The whole declaration is dropped (falling
-     back to the one above) on engines that don't support image-set() type(). */
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat;
+  /* Preferred: AVIF -> WebP -> PNG. The whole declaration is dropped (falling back to
+     the one above) on engines that don't support image-set() type(). */
   background:
     linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
     linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
@@ -387,12 +407,11 @@ h1 {
       url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
       url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
       url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat #02070b;
-  inset: 0;
-  justify-content: stretch;
-  overflow: hidden;
-  pointer-events: none;
+    ) center / cover no-repeat;
+  opacity: 1;
+  transition: opacity 320ms ease;
 }
+.main-menu-layer:not([data-reveal-bg])::after { opacity: 0; }
 
 .main-menu-screen {
   --menu-blue: #1f84f5;
@@ -508,53 +527,10 @@ h1 {
   margin-left: var(--menu-btn-indent, 0px);
 }
 
-/* Comparison knob (?indent=hover|hover10): a deliberate slide-RIGHT on hover/focus —
-   the game "row leans toward the action" focus cue. NOT the old accidental shrink:
-   it's smooth (GPU transform only), paired with the iron-lip lift as a non-motion cue,
-   keyboard-reachable, and disabled under reduced-motion. Static indent is settled FLUSH
-   (the brand + buttons are siblings sharing one left edge), so it is not on the knob. */
-.main-menu-actions-assets.indent-hover .mode-button-stone {
-  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), border-color .1s ease, box-shadow .1s ease;
-}
-.main-menu-actions-assets.indent-hover .mode-button-stone:hover,
-.main-menu-actions-assets.indent-hover .mode-button-stone:focus-visible { transform: translateX(6px); }
-.main-menu-actions-assets.indent-hover-10 .mode-button-stone:hover,
-.main-menu-actions-assets.indent-hover-10 .mode-button-stone:focus-visible { transform: translateX(10px); }
-@media (prefers-reduced-motion: reduce) {
-  .main-menu-actions-assets.indent-hover .mode-button-stone:hover,
-  .main-menu-actions-assets.indent-hover .mode-button-stone:focus-visible { transform: none; }
-}
-
-/* ── Pages catalog viewer (ADR-0029) — the live page mounts inside the viewer stage.
-   The menu's absolute .menu-layer (inset:8px) fills this relatively-positioned stage; the
-   tweak wrapper carries the --menu-* overrides + the hover-slide class from the rail. */
+/* ── Pages catalog viewer (ADR-0029) — the stub viewer's stage: a relatively-positioned,
+   clipped box that the live-route iframe (.pages-stub-frame) fills. The Main Menu and
+   Campaign viewers iframe their own route inside .surface-dressing-main instead. */
 .pages-view-main { position: relative; overflow: hidden; min-height: 0; }
-.pages-menu-tweak { position: absolute; inset: 0; }
-.pages-menu-tweak.indent-hover .mode-button-stone {
-  transition: transform 120ms cubic-bezier(.2, 0, 0, 1), border-color .1s ease, box-shadow .1s ease;
-}
-.pages-menu-tweak.indent-hover .mode-button-stone:hover,
-.pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: translateX(6px); }
-.pages-menu-tweak.indent-hover-10 .mode-button-stone:hover,
-.pages-menu-tweak.indent-hover-10 .mode-button-stone:focus-visible { transform: translateX(10px); }
-@media (prefers-reduced-motion: reduce) {
-  .pages-menu-tweak.indent-hover .mode-button-stone:hover,
-  .pages-menu-tweak.indent-hover .mode-button-stone:focus-visible { transform: none; }
-}
-/* "Preview hover state" (editor only): freeze every button in its pointed-at look —
-   the iron-lip lift plus, if a slide amount is selected, the slide offset — so the
-   hover micro-interaction is visible without a mouse (otherwise the control does nothing
-   until you physically hover a single button). */
-.pages-menu-tweak.preview-hover .mode-button-stone {
-  border-color: #2c3c4e;
-  border-top-color: #4a607c;
-  box-shadow:
-    inset 0 1px 0 rgba(160, 191, 230, .26),
-    inset 0 0 0 1px rgba(0, 0, 0, .40),
-    0 1px 3px rgba(0, 0, 0, .55);
-}
-.pages-menu-tweak.preview-hover.indent-hover .mode-button-stone { transform: translateX(6px); }
-.pages-menu-tweak.preview-hover.indent-hover-10 .mode-button-stone { transform: translateX(10px); }
 .pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
 /* A control + its permanent per-control reset, side by side. The widget flexes to fill, the ↺
    sits to its right. Studio tooling chrome (out of scope for the player-facing kit). */
@@ -590,80 +566,6 @@ h1 {
   min-height: 96px;
   font-family: var(--ds-font-display); font-size: 1.9rem; color: #9db8da;
   background: linear-gradient(180deg, #16243a, #0b1422);
-}
-
-/* ── Main-menu mode buttons — "Wet Stone & Cold Iron" (ADR-0025 register) ───────────
-   A matte wet-stone slab with a thin forged-iron lip, carrying the forged carved-stone
-   icon (icons-carved/<slug>.png, canonical 64×64 per ADR-0026, optical keylines ADR-0027) at --menu-icon-size.
-   Hover lifts the iron lip (no glow); active = a contained cobalt hairline (the board's
-   move-overlay tongue). Slab = the forged stone-slate-blue tile (#162 surface set); the
-   iron lip is still a CSS border — baking it into a 9-slice frame (ADR-0002/0012) is next. */
-.mode-button-stone {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  min-height: var(--menu-btn-h, 60px);
-  padding: 8px 16px;
-  text-decoration: none;
-  color: #cdd6e2;
-  background-color: #0f1b2b;
-  background-image:
-    linear-gradient(180deg, rgba(54, 72, 94, .24) 0%, rgba(8, 16, 28, 0) 46%, rgba(0, 0, 0, .42) 100%),
-    var(--menu-stone-surface, url("/assets/ui/surfaces/stone-slate-blue.png"));
-  background-size: auto, 48px 48px;
-  background-repeat: no-repeat, repeat;
-  image-rendering: pixelated;
-  border: 2px solid #1c2836;
-  border-top-color: #2a3a4c;
-  border-radius: 3px;
-  box-shadow:
-    inset 0 1px 0 rgba(160, 191, 230, .07),
-    inset 0 0 0 1px rgba(0, 0, 0, .40),
-    0 1px 3px rgba(0, 0, 0, .55);
-  -webkit-tap-highlight-color: transparent;
-  transition: border-color .1s ease, box-shadow .1s ease;
-}
-
-.mode-button-stone-icon {
-  flex: none;
-  width: var(--menu-icon-size, 30px);
-  height: var(--menu-icon-size, 30px);
-  image-rendering: pixelated;
-}
-
-.mode-button-stone-label {
-  font-family: var(--ds-font-display);
-  font-weight: 400;
-  font-size: var(--ds-text-md);
-  letter-spacing: .02em;
-  line-height: 1;
-  color: #cdd6e2;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
-  white-space: nowrap;
-}
-
-.mode-button-stone:hover,
-.mode-button-stone:focus-visible {
-  border-color: #2c3c4e;
-  border-top-color: #4a607c;
-  box-shadow:
-    inset 0 1px 0 rgba(160, 191, 230, .26),
-    inset 0 0 0 1px rgba(0, 0, 0, .40),
-    0 1px 3px rgba(0, 0, 0, .55);
-}
-
-.mode-button-stone.is-active {
-  border-color: #2c3c4e;
-  border-top-color: #4a607c;
-  box-shadow:
-    inset 0 0 0 1.5px #3a6ea5,
-    inset 0 1px 0 rgba(160, 191, 230, .18),
-    0 1px 3px rgba(0, 0, 0, .55);
-}
-
-.mode-button-stone:focus-visible {
-  outline: 2px solid rgba(58, 110, 165, .85);
-  outline-offset: -3px;
 }
 
 .mode-button {
@@ -1053,16 +955,22 @@ h1 {
     linear-gradient(180deg, rgba(0, 0, 0, .34), transparent 28%, rgba(0, 0, 0, .5));
 }
 
-/* Coordinated reveal: the menu content (brand + buttons + profile) stays hidden
-   until its sprites are decoded, then fades in together over the gradient
-   backdrop above — no per-asset pop-in. The ::before backdrop and the rain
-   canvas are unaffected (rain fades in on its own when its runtime is ready). */
-.main-menu-layer .main-menu-left,
-.main-menu-layer .main-menu-right {
+/* Cold-load reveal (see shell/coldReveal): the menu's layers fade in over the dark
+   floor in a fixed order — background (.main-menu-layer::after, above) -> title bar
+   (.app-shell-titlebar) -> buttons (.main-menu-twin-screen) -> rain. Each is hidden
+   until the director opens its stage, then rides the SAME 320ms opacity fade as the old
+   gate — repointed from the retired .main-menu-left/right layout to the elements that
+   render today. Rain is unaffected (it fades in on its own when its runtime is ready). */
+.main-menu-twin-screen {
   transition: opacity 320ms ease;
 }
-.main-menu-layer.is-loading .main-menu-left,
-.main-menu-layer.is-loading .main-menu-right {
+.main-menu-layer:not([data-reveal-buttons]) .main-menu-twin-screen {
+  opacity: 0;
+}
+.app-shell-titlebar {
+  transition: opacity 320ms ease;
+}
+.app-shell-titlebar.reveal-pending {
   opacity: 0;
 }
 
@@ -10362,7 +10270,16 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   min-height: 56px;
   padding: 22px; /* even inset — icon sits with equal margin on every side (was 17px/22px) */
+  /* PNG fallback for engines without image-set()/type(). */
   background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  /* Preferred AVIF -> WebP -> PNG (the ~440KB PNG is the single heaviest menu image;
+     the derivatives let the buttons decode in time to reveal WITH their surface). */
+  background:
+    image-set(
+      url("/assets/ui/surfaces/baseline-stone-blue.avif") type("image/avif"),
+      url("/assets/ui/surfaces/baseline-stone-blue.webp") type("image/webp"),
+      url("/assets/ui/surfaces/baseline-stone-blue.png") type("image/png")
+    ) 0 0 / 1024px repeat fixed;
   background-origin: padding-box;
   background-clip: padding-box;
   text-align: left;
