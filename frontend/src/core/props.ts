@@ -66,8 +66,14 @@ export const PROP_DEFS: readonly PropDef[] = [
     h: 2,
     blocking: true,
     terrains: ['grass', 'dirt', 'stone'],
-    sprite: { w: 192, h: 300, anchorX: 96, anchorY: 255 },
+    sprite: { w: 177, h: 184, anchorX: 88, anchorY: 172 },
   },
+  // Houses — the stylized keeper set. `cottage` above is the low-poly mesh render; these two are
+  // gated Codex img2img RESTYLES of real Blender captures (photoreal meshes read "too realistic"
+  // raw, so the cabin/green-roof shapes are kept but re-skinned to pixel-art). Method-verified via
+  // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
+  { id: 'cabin', label: 'Log cabin', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], sprite: { w: 220, h: 176, anchorX: 119, anchorY: 156 } },
+  { id: 'lodge', label: 'Green-roof house', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], sprite: { w: 210, h: 177, anchorX: 105, anchorY: 175 } },
 ];
 
 /**
