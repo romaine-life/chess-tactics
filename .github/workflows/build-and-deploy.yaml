@@ -148,7 +148,13 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.TAG }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
+          # mode=min: export only the final-stage layers, not every intermediate
+          # stage. mode=max also cached the frontend-build stage (full dev
+          # node_modules), and since cache-to overwrites :app each run, every push
+          # orphaned the prior multi-hundred-MB cache set as untagged manifests —
+          # a steady contributor to ACR storage bloat. The fingerprint gate already
+          # skips unchanged builds, so the cache only matters on content changes.
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=min
 
       - name: Bump image tag in k8s/values.yaml
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

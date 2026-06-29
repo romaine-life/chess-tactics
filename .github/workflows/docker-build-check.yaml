@@ -155,7 +155,10 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.fingerprint.outputs.proof_tag }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=max
+          # mode=min: export only final-stage layers. See build-and-deploy.yaml —
+          # mode=max orphaned the frontend-build stage's cache set into untagged
+          # manifests on every run, bloating ACR storage.
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}-build-cache:app,mode=min
 
       - name: Tag app image by commit
         # Commit-addressed alias of the fingerprint manifest so Glimmung's
