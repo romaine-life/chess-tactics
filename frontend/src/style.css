@@ -10452,6 +10452,15 @@ button.tileset-relationship-cell {
      players run with Windows "Animation effects" off (which Chrome reads as
      reduced-motion) and should still get this transition. */
   transition: opacity 150ms ease;
+  /* Keep this element on a permanent compositing layer. The fade is `transition:
+     opacity`, which otherwise PROMOTES the element to a layer at animation-start and
+     DEMOTES it at animation-end; that create/destroy churn triggers a Chromium repaint
+     bug that leaves the SIBLING rail tabs' `background-attachment: fixed` stone surfaces
+     unpainted (they flash to the bare ambience). A stable layer = no churn = no dropout.
+     `will-change: opacity` (NOT transform/filter) is required: opacity does not establish
+     a containing block, so it will NOT re-anchor the fixed surface texture the way a
+     transform would (see the UI-scale note above .settings-screen). */
+  will-change: opacity;
 }
 
 .settings-panel-content.is-leaving { opacity: 0; }
