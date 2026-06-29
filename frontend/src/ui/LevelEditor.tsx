@@ -4,9 +4,8 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { boardLabCellPosition } from '../render/BoardLabBoard';
-import { DoodadSprite } from '../render/BoardDoodad';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
+import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { TitleBarSlot } from './shell/TitleBarSlot';
@@ -17,7 +16,6 @@ import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, type EditorBoard, type FeatureCell } from './boardCode';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
-  MISSING_DIRECTION_SPRITE,
   hasDirectionSprite,
   rookDirections,
   unitAssets,
@@ -26,14 +24,13 @@ import {
   type UnitAsset,
 } from './unitCatalog';
 import {
-  assetFrameSrc,
   studioFamilies,
   useAnimationClock,
   FacingCompass,
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureFrameSrc, featureThumbSrc } from '../art/tileset';
+import { featureThumbSrc } from '../art/tileset';
 import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
@@ -107,9 +104,10 @@ function StudioEditableBoard({
     else onSelect(x, y);
   };
 
-  // The editor is an adapter over the shared TileGrid core (the same one the
-  // game's BoardLabBoard uses). It only supplies per-cell content: the tile art,
-  // the placed unit, the selection ring, and the paint/erase/select hit target.
+  // The editor is an adapter over the shared StudioReadOnlyBoard render path (the same cell
+  // art + sprite seating the Campaign Editor's read-only viewer uses): it supplies the SHARED
+  // tile/feature art via `studioCellArt`, then layers its own interaction chrome — the selection
+  // ring and the paint/erase/select hit target — on top per cell.
   const cells: TileGridCell[] = [];
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
@@ -124,15 +122,7 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {asset && !hidden?.tile ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
-            {placedFeatures[key] ? (
-              <img
-                className="tileset-feature-overlay"
-                src={featureFrameSrc(placedFeatures[key].kind, placedFeatures[key].material, placedFeatures[key].mask)}
-                alt=""
-                draggable={false}
-              />
-            ) : null}
+            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], animationFrame, hidden })}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
@@ -152,48 +142,33 @@ function StudioEditableBoard({
   }
 
   // Units + doodads render at GRID level via the SHARED seat (.board-unit-seat) and the
-  // shared <DoodadSprite> — exactly like the game board (SkirmishBoard) — instead of inside
-  // cells. One seating, both boards; it can't drift. Doodad back/front bracket the unit by z.
-  const overlaySprites: ReactNode[] = [];
-  for (const key of new Set([...Object.keys(placedUnits), ...Object.keys(placedDoodads)])) {
-    const [cx, cy] = key.split(',').map(Number);
-    const { left, top, zIndex } = boardLabCellPosition({ x: cx, y: cy });
-    const doodadEntry = placedDoodads[key] ? resolveDoodad(placedDoodads[key].doodadId) : undefined;
-    if (doodadEntry && !hidden?.doodad) {
-      overlaySprites.push(<DoodadSprite key={`dd-${key}`} doodad={{ x: cx, y: cy, type: doodadEntry.id }} />);
-      // The doodad stands UP above its foot cell, but the shared sprite is pointer-events:none,
-      // so clicking the visible prop body falls through to the cell behind it — erase/select
-      // would miss the doodad. This Studio-only hit target sits over the prop and routes the
-      // tool to the doodad's OWN cell. It's transparent in brush mode so painting still flows
-      // to the tiles underneath; it only catches clicks while erasing or selecting.
-      overlaySprites.push(
-        <span
-          key={`dd-hit-${key}`}
-          className="tileset-doodad-hit"
-          style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' ? 'none' : 'auto' }}
-          onPointerDown={(event) => {
-            if (event.button === 2) return;
-            event.stopPropagation();
-            if (tool !== 'select') paintingRef.current = true;
-            applyTool(cx, cy);
-          }}
-          onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
-        />,
-      );
-    }
-    const unitPlacement = placedUnits[key];
-    const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
-    if (unitAsset && unitPlacement && !hidden?.unit) {
-      const sprite = hasDirectionSprite(unitAsset, unitPlacement.direction)
-        ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
-        : MISSING_DIRECTION_SPRITE;
-      overlaySprites.push(
-        <div key={`u-${key}`} className={`board-unit-seat is-${unitAsset.family}`} style={{ left, top, zIndex: zIndex + 20000 }}>
-          <img src={sprite} alt="" draggable={false} />
-        </div>,
-      );
-    }
-  }
+  // shared <DoodadSprite> through `studioBoardSprites` — exactly the same seating the read-only
+  // viewer uses, so they can't drift. The editor injects a transparent doodad hit target
+  // alongside each prop: the doodad stands UP above its foot cell and the shared sprite is
+  // pointer-events:none, so clicking the visible body would otherwise fall through to the cell
+  // behind it. The hit routes the tool to the doodad's OWN cell; transparent in brush mode so
+  // painting still flows to the tiles underneath, catching clicks only while erasing/selecting.
+  const overlaySprites: ReactNode[] = studioBoardSprites({
+    units: placedUnits,
+    doodads: placedDoodads,
+    resolveUnit,
+    resolveDoodad,
+    hidden,
+    renderDoodadExtra: ({ x: cx, y: cy, left, top, zIndex }) => (
+      <span
+        key={`dd-hit-${cx},${cy}`}
+        className="tileset-doodad-hit"
+        style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' ? 'none' : 'auto' }}
+        onPointerDown={(event) => {
+          if (event.button === 2) return;
+          event.stopPropagation();
+          if (tool !== 'select') paintingRef.current = true;
+          applyTool(cx, cy);
+        }}
+        onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
+      />
+    ),
+  });
 
   return (
     <TileGrid
