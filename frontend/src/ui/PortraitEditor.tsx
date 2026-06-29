@@ -19,7 +19,7 @@ export type Crop = { cx: number; cy: number; s: number };
 // JSON so the crop can be mapped back to camera framing exactly.
 const MASTER_FRAMING: Record<Piece, { tz: number; span: number }> = {
   pawn: { tz: 0.5, span: 1.45 }, knight: { tz: 0.5, span: 1.45 }, bishop: { tz: 0.5, span: 1.45 },
-  rook: { tz: 0.45, span: 1.75 }, queen: { tz: 0.5, span: 1.45 }, king: { tz: 0.5, span: 1.45 },
+  rook: { tz: 0.5, span: 1.15 }, queen: { tz: 0.5, span: 1.45 }, king: { tz: 0.5, span: 1.45 },
 };
 
 // Fallback headshot if a piece is somehow missing from the committed crops below.
