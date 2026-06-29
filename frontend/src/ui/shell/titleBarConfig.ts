@@ -9,7 +9,8 @@ export interface TitleBarConfig {
   screenName: string;
   /** Render the shared HeaderAccountCluster on the right. */
   showAccountCluster?: boolean;
-  /** Show the Settings gear in the cluster. Hidden on the Settings screen itself. */
+  /** Show the Settings gear in the cluster. Default true — kept visible even on
+   *  Settings itself so it returns to the settings root from any sub-page. */
   showSettingsGear?: boolean;
   /** Where sign-in returns to from this screen's account cluster. */
   signInReturnTo?: string;
@@ -54,7 +55,11 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     // .settings-screen). The bar lives outside that element, so tag it to ride the same
     // (global, on documentElement) var — the persistent bar drops this class on the next
     // screen, so only Settings scales.
-    return { screenName: 'Settings', showAccountCluster: true, showSettingsGear: false, signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
+    // Keep the gear visible on Settings too: every section is its own route
+    // (/settings/<tab>, /settings/audio/tracks), so the gear is a muscle-memory
+    // "back to settings root" from any sub-page. href="/settings" normalizes to
+    // the first tab. (Default showSettingsGear=true, so it's simply not hidden.)
+    return { screenName: 'Settings', showAccountCluster: true, signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
   }
   if (path === '/campaign' || path.startsWith('/campaign/')) {
     return { screenName: 'Campaign', showAccountCluster: true, signInReturnTo: '/campaign', barClass: 'main-menu-twin-header' };
