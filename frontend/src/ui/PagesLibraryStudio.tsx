@@ -82,9 +82,11 @@ function iconTreatFilter(treat: IconTreat, lighten: number): string {
 // override ONLY when it differs from these, so an untouched panel renders pixel-identical to the
 // real menu (the dressing-room principle). The menu reuses the Settings-tab chrome: tabs are
 // `.settings-tab.main-menu-mode-tab` in a `.settings-rail-frame` inside `.settings-shell`.
-// icon/textX reflect the BAKED menu (icon 64, label +18, even 22px padding — committed to
-// .main-menu-mode-tab in style.css), so the tuner opens matching what ships, not the pre-bake 34/0.
-const MM_LIVE = { btnH: 56, railW: 304, gap: 11, icon: 64, textX: 18 } as const;
+// These reflect the BAKED menu in style.css, so the tuner opens matching what ships. railW/textX/
+// btnX/btnY are baked onto the SHARED .settings-* rules (width 487, label +37, rail offset
+// -230/-21), so the Settings rail tabs stay faithful too — the bake below targets those same
+// shared selectors. Re-tuning here updates both surfaces; reset returns to these shipped values.
+const MM_LIVE = { btnH: 56, railW: 487, gap: 11, icon: 64, textX: 37, btnX: -230, btnY: -21 } as const;
 
 // Functional viewer: the LIVE main menu shown by iframing the REAL "/" route (ADR-0029 req 4 —
 // exercise the real component, never a dead image). Iframing — the same shape the Settings dressing
@@ -130,8 +132,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // tab min-height
   const [railW, setRailW] = useState<number>(MM_LIVE.railW); // rail (button) width
   const [tabGap, setTabGap] = useState<number>(MM_LIVE.gap); // space between tabs
-  const [btnX, setBtnX] = useState(0); // move the whole button group left/right (px; 0 = shipped)
-  const [btnY, setBtnY] = useState(0); // ...and up/down
+  const [btnX, setBtnX] = useState<number>(MM_LIVE.btnX); // move the whole button group left/right (px; baseline = shipped)
+  const [btnY, setBtnY] = useState<number>(MM_LIVE.btnY); // ...and up/down
   const [textX, setTextX] = useState<number>(MM_LIVE.textX); // horizontal nudge of the label (px)
   const [iconSize, setIconSize] = useState<number>(MM_LIVE.icon); // live 34px in a 40px slot
   const [iconX, setIconX] = useState(0); // horizontal nudge of the icon (px; 0 = centred in slot)
@@ -145,8 +147,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     setBtnH(MM_LIVE.btnH);
     setRailW(MM_LIVE.railW);
     setTabGap(MM_LIVE.gap);
-    setBtnX(0);
-    setBtnY(0);
+    setBtnX(MM_LIVE.btnX);
+    setBtnY(MM_LIVE.btnY);
     setTextX(MM_LIVE.textX);
     setIconSize(MM_LIVE.icon);
     setIconX(0);
@@ -190,9 +192,11 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   // Button width = the rail column. The shell ships a centred max-inline-size cap (clamp(900, 88vw,
   // 1240)), so widen the cap to fit the chosen width — max() keeps the default cap for narrow widths
   // (no surprise re-centre) and grows the body, centred, up to the full window for wide ones.
+  // Bakes onto the SHARED .settings-shell (not the menu-only scope) so the Settings rail width
+  // stays faithful to the menu's buttons.
   add(railW !== MM_LIVE.railW,
     `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px) !important; }`,
-    `.main-menu-twin-screen .settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n  max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px);\n}`);
+    `.settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n  max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px);\n}`);
   add(tabGap !== MM_LIVE.gap,
     `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
     `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);
@@ -202,13 +206,13 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   // translated rail is CLIPPED the moment it crosses the shell edge (worse in a narrow window where
   // the shell hugs the rail). Lift that clip (menu-scoped) whenever the group is moved, in BOTH the
   // preview and the bake, so the buttons stay whole wherever you place them and what ships matches.
-  add(btnX !== 0 || btnY !== 0,
+  add(btnX !== MM_LIVE.btnX || btnY !== MM_LIVE.btnY,
     `.pages-menu-tweak .settings-shell { overflow: visible !important; }\n.pages-menu-tweak .settings-rail-frame { transform: translate(${btnX}px, ${btnY}px) !important; }`,
-    `.main-menu-twin-screen .settings-shell {\n  overflow: visible;\n}\n.main-menu-twin-screen .settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
+    `.settings-shell {\n  overflow: visible;\n}\n.settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
   // Horizontal nudge of the label span (the second grid cell; transform doesn't reflow the layout).
   add(textX !== MM_LIVE.textX,
-    `.pages-menu-tweak .main-menu-mode-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
-    `.main-menu-mode-tab > span:not(.settings-tab-icon) {\n  transform: translateX(${textX}px);\n}`);
+    `.pages-menu-tweak .settings-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
+    `.settings-tab > span:not(.settings-tab-icon) {\n  transform: translateX(${textX}px);\n}`);
   add(!!surfaceUrl,
     `.pages-menu-tweak .main-menu-mode-tab { background-image: url("${surfaceUrl}") !important; }`,
     `.main-menu-mode-tab {\n  background-image: url("${surfaceUrl}");\n}`);
@@ -313,8 +317,8 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
             <SliderRow label={<>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</>} value={btnH} set={setBtnH} min={44} max={96} dflt={MM_LIVE.btnH} />
             <SliderRow label={<>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</>} value={railW} set={setRailW} min={220} max={screenW} dflt={MM_LIVE.railW} />
             <SliderRow label={<>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</>} value={tabGap} set={setTabGap} min={4} max={28} dflt={MM_LIVE.gap} />
-            <SliderRow label={<>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === 0 ? ' · live' : ''}</>} value={btnX} set={setBtnX} min={-screenW} max={screenW} dflt={0} />
-            <SliderRow label={<>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === 0 ? ' · live' : ''}</>} value={btnY} set={setBtnY} min={-screenH} max={screenH} dflt={0} />
+            <SliderRow label={<>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === MM_LIVE.btnX ? ' · live' : ''}</>} value={btnX} set={setBtnX} min={-screenW} max={screenW} dflt={MM_LIVE.btnX} />
+            <SliderRow label={<>Buttons · vertical · {btnY > 0 ? '+' : ''}{btnY}px{btnY === MM_LIVE.btnY ? ' · live' : ''}</>} value={btnY} set={setBtnY} min={-screenH} max={screenH} dflt={MM_LIVE.btnY} />
             <SliderRow label={<>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</>} value={textX} set={setTextX} min={-80} max={160} dflt={MM_LIVE.textX} />
             <label className="tileset-category-select">
               <span>Stone surface</span>
