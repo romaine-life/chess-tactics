@@ -560,6 +560,23 @@ h1 {
   cursor: pointer;
 }
 .pages-mini-reset:hover { color: #f4fbff; background: rgba(120, 160, 200, .24); }
+/* − / + pixel steppers beside a slider — same plate as the reset, with a fixed width so a row of
+   [−][slider][+][↺] stays tidy. */
+.pages-step {
+  appearance: none;
+  flex: none;
+  align-self: stretch;
+  min-width: 26px;
+  padding: 0 8px;
+  font-size: 15px;
+  line-height: 1;
+  color: #9fc4e6;
+  background: rgba(120, 160, 200, .12);
+  border: 1px solid rgba(120, 160, 200, .32);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pages-step:hover { color: #f4fbff; background: rgba(120, 160, 200, .24); }
 /* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
    sprites): a hero shot of the live route, full-bleed. The gradient shows only until the
    thumbnail loads / if it's missing. */
