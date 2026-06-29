@@ -29,6 +29,10 @@ export interface SfxAsset {
   variantCount: number;
 }
 
+// Terrains a piece can land on (cliff/rock are impassable → never a landing, so not
+// assignable). Drives the Studio terrain→sound assignment panel.
+export const ASSIGNABLE_TERRAINS: TerrainType[] = ['grass', 'water', 'sand', 'stone', 'road', 'bridge', 'dirt', 'pebble'];
+
 export const SFX_ASSETS: SfxAsset[] = [
   { name: 'grass', terrain: 'grass', sampleKey: 'grass', label: 'Grass', character: 'Recorded dry hay/grass rustle.', build: 'Authored recording · sliced one-shot takes', variantCount: 4 },
   { name: 'water', terrain: 'water', sampleKey: 'water', label: 'Water', character: 'Recorded splash / wet step.', build: 'Authored recording · sliced one-shot takes', variantCount: 10 },

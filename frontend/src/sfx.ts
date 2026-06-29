@@ -419,6 +419,21 @@ export function previewArrival(): void {
   playArrival();
 }
 
+/**
+ * Audition a sample set directly by key — a random take at full gain. Used by the
+ * Studio's terrain-assignment panel so you can hear what a sound would be like on a
+ * terrain before assigning it. No-op (kicking off a load) until the set is decoded.
+ */
+export function previewSample(key: SampleKey): void {
+  const context = ensureContext();
+  if (!context || !master) return;
+  if (context.state === 'suspended') {
+    void context.resume().catch(() => { /* may need a real gesture first */ });
+  }
+  if (masterGainFor(effectsSettings()) <= 0) return;
+  if (!playSampleSet(key, 1)) void loadSampleSet(key);
+}
+
 // ---- catalog / audition accessors ------------------------------------------
 // Surface the authored-sample wiring to the Studio so it can tell which terrains are
 // voiced by recordings and render the real take waveforms.

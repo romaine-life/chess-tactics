@@ -1,7 +1,85 @@
-import { useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { previewArrival, previewTerrain } from '../sfx';
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import type { TerrainType } from '../core/types';
+import { AUTHORED_SAMPLE_KEYS, authoredSampleKeyFor, previewArrival, previewSample, previewTerrain, type SampleKey } from '../sfx';
 import { sfxSampleWaveform, sfxSampleWaveformCached } from '../sfxWaveform';
-import { SFX_ASSETS, type SfxAsset } from './sfxCatalog';
+import { ASSIGNABLE_TERRAINS, SFX_ASSETS, type SfxAsset } from './sfxCatalog';
+
+// Draft terrain→sound assignments live in localStorage so they survive reloads. They do
+// NOT change the running game — they're a proposal you craft here and hand to Claude
+// (the "Copy for Claude" button), who bakes the final map into TERRAIN_SAMPLE in sfx.ts.
+const ASSIGN_STORE_KEY = 'chess-tactics-sfx-assignments-v1';
+
+function defaultAssignments(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const t of ASSIGNABLE_TERRAINS) out[t] = authoredSampleKeyFor(t) ?? '';
+  return out;
+}
+
+function loadAssignments(): Record<string, string> {
+  const out = defaultAssignments();
+  try {
+    const raw = window.localStorage.getItem(ASSIGN_STORE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      for (const t of ASSIGNABLE_TERRAINS) if (typeof parsed[t] === 'string') out[t] = parsed[t] as string;
+    }
+  } catch { /* absent / malformed → defaults */ }
+  return out;
+}
+
+// The terrain→sound assignment editor shown above the audition grid.
+function SfxAssignmentPanel(): ReactElement {
+  const soundKeys = useMemo(() => AUTHORED_SAMPLE_KEYS.filter((k) => k !== 'arrival'), []);
+  const [assign, setAssign] = useState<Record<string, string>>(() => loadAssignments());
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(ASSIGN_STORE_KEY, JSON.stringify(assign)); } catch { /* ignore */ }
+  }, [assign]);
+
+  const setOne = (terrain: string, key: string) => setAssign((a) => ({ ...a, [terrain]: key }));
+  const reset = () => setAssign(defaultAssignments());
+  const copy = () => {
+    const w = Math.max(...ASSIGNABLE_TERRAINS.map((t) => t.length));
+    const lines = ASSIGNABLE_TERRAINS.map((t) => `  ${t.padEnd(w)} -> ${assign[t] ? assign[t] : '(silent)'}`);
+    const text = `SFX terrain assignments (apply to TERRAIN_SAMPLE in frontend/src/sfx.ts):\n${lines.join('\n')}`;
+    void navigator.clipboard?.writeText(text)
+      .then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500); })
+      .catch(() => { /* clipboard blocked — the user can still read the rows */ });
+  };
+
+  return (
+    <section className="tileset-inspector-section" style={{ marginBottom: 16 }} aria-label="Terrain sound assignments">
+      <h2>Assign sounds to terrains</h2>
+      <p className="tileset-catalog-note">
+        Pick which recorded sound voices each terrain, ▶ to hear it. These are a draft — they don’t change the
+        running game. Hit <strong>Copy for Claude</strong>, paste it into chat, and I’ll bake the map into the game.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 }}>
+        {ASSIGNABLE_TERRAINS.map((t) => (
+          <Fragment key={t}>
+            <span style={{ color: 'var(--ds-ink-1, #ecedf2)', textTransform: 'capitalize' }}>{t}</span>
+            <select value={assign[t] ?? ''} onChange={(e) => setOne(t, e.target.value)} aria-label={`Sound for ${t}`} style={{ width: '100%' }}>
+              <option value="">— silent —</option>
+              {soundKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+            </select>
+            <button
+              type="button"
+              className="tileset-view-action"
+              disabled={!assign[t]}
+              onClick={() => { if (assign[t]) previewSample(assign[t] as SampleKey); }}
+              aria-label={`Play the sound assigned to ${t}`}
+            >▶</button>
+          </Fragment>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button type="button" className="tileset-view-action" onClick={copy}>{copied ? 'Copied ✓' : 'Copy for Claude'}</button>
+        <button type="button" className="tileset-view-action" onClick={reset}>Reset to current</button>
+      </div>
+    </section>
+  );
+}
 
 // Read-only catalog for the landing sound effects (ADR-0029 catalog requirements). Each
 // card shows the sound's real recorded waveform and auditions it on click; the Viewer
@@ -66,6 +144,8 @@ export function SfxLibraryStudio({
   const q = search.trim().toLowerCase();
   const visible = SFX_ASSETS.filter((s) => !q || [s.label, s.terrain ?? '', s.character, s.build].join(' ').toLowerCase().includes(q));
   return (
+    <>
+    <SfxAssignmentPanel />
     <div className="tileset-studio-grid surface-grid" aria-label="Sound Effects">
       {visible.map((s) => (
         <button
@@ -92,6 +172,7 @@ export function SfxLibraryStudio({
       ))}
       {visible.length === 0 ? <p className="tileset-studio-empty">No sound effects match.</p> : null}
     </div>
+    </>
   );
 }
 
