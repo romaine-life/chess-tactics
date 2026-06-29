@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactElement } from 'react';
 import { MainMenu } from './MainMenu';
 import { getSnapshot as getRevealSnapshot, subscribe as subscribeReveal } from './shell/coldReveal';
+import { armBoardArtForNav, isBoardArtPending, subscribeBoardArt } from '../render/boardArtReady';
 import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
@@ -72,6 +73,12 @@ function prefetchRoute(path: string): void {
 const HEAVY_ROUTES = new Set(['/play', '/skirmish', '/edit', '/level-editor', '/campaigns-next', '/campaigns']);
 const isHeavyRoute = (path: string): boolean => HEAVY_ROUTES.has(path);
 
+// Routes whose screen drives the board-art reveal gate (render/boardArtReady). Entering
+// one, the veil holds its dissolve until the board's tiles have decoded — so the reveal
+// lands on a complete board, never an empty frame that then popcorns in. Only the live
+// skirmish opts in today; the level/campaign editors keep the plain JS-load veil.
+const BOARD_ART_ROUTES = new Set(['/play', '/skirmish']);
+
 // Veil timings — keep in lockstep with --route-veil-cover-ms / --route-veil-reveal-ms
 // in style.css (JS drives the route swap; CSS drives the opacity fade).
 const VEIL_COVER_MS = 260;
@@ -100,6 +107,9 @@ export function App(): ReactElement {
   // until its turn. On every other route / later navigation the store is fully revealed,
   // so revealTitle is permanently true and the persistent bar never blinks.
   const reveal = useSyncExternalStore(subscribeReveal, getRevealSnapshot);
+  // Board-art readiness for the veil: true while a board route's tiles are still decoding,
+  // so the dissolve reveals a complete board instead of an empty frame (render/boardArtReady).
+  const boardArtPending = useSyncExternalStore(subscribeBoardArt, isBoardArtPending);
   const pendingTarget = useRef<string | null>(null);
   // Set true once the cover phase has actually swapped the route. The reveal gate keys
   // off THIS, not an exact path match — a destination that redirects to a sub-route on
@@ -122,6 +132,9 @@ export function App(): ReactElement {
       if (isHeavyRoute(next) || isHeavyRoute(pathRef.current)) {
         pendingTarget.current = next; // hold the swap until the field is fully opaque
         coverCommitted.current = false;
+        // Entering the board: mark its art pending NOW (before the board mounts) so the
+        // veil's reveal gate below waits for the real tiles, not just the JS commit.
+        if (BOARD_ART_ROUTES.has(next)) armBoardArtForNav();
         setVeil('cover');
       } else {
         // Light hop: keep the current screen painted (no fallback flash), swap when ready.
@@ -182,11 +195,11 @@ export function App(): ReactElement {
   // (the chunk's loaded / the screen settled, including any on-mount sub-route redirect)
   // — so the player never sees a half-composed surface, and the veil never sticks.
   useEffect(() => {
-    if (veil === 'cover' && coverCommitted.current && !isPending) {
+    if (veil === 'cover' && coverCommitted.current && !isPending && !boardArtPending) {
       pendingTarget.current = null;
       setVeil('reveal');
     }
-  }, [veil, path, isPending]);
+  }, [veil, path, isPending, boardArtPending]);
 
   // Reveal finished → idle.
   useEffect(() => {

@@ -12,6 +12,9 @@ import { useSkirmishView } from '../game/skirmishView';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
 import { GroundCoverLayer } from './GroundCoverLayer';
 import { ViewPane } from '../ui/shared/ViewPane';
+import { useBoardArtReveal } from './boardArtReady';
+import { groundCoverSet } from '../core/groundCover';
+import { featureFrameSrc } from '../art/tileset';
 
 const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
   grass: 'grass',
@@ -151,6 +154,41 @@ function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], size: B
   return [...blocked.values()];
 }
 
+// Every image URL the board will draw, split into the STABLE tile set (terrain/seed —
+// unchanged by play) and the live unit set (changes on capture). The reveal arms on the
+// tile signature so it fires once per board, not once per move; the full list is what we
+// preload so units don't popcorn in on the first paint either. The -top/-side derivation
+// mirrors BoardLabBoard exactly (one tile = a SIDE layer under a TOP layer, ADR-0039).
+function collectBoardArt(
+  board: SocketBoardResult<TileAsset>,
+  livePieces: readonly Piece[],
+): { urls: string[]; signature: string } {
+  const tiles = new Set<string>();
+  for (const cell of board.cells) {
+    if (cell.asset) {
+      const top = tileFrameSrc(cell.asset);
+      tiles.add(top.replace(/\.png$/, '-top.png'));
+      const side = cell.sideAsset ? tileFrameSrc(cell.sideAsset) : top;
+      tiles.add(side.replace(/\.png$/, '-side.png'));
+    }
+    if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask));
+    const cover = cell.groundCover;
+    if (cover) {
+      const set = groundCoverSet(cell.terrain);
+      if (set) for (const tuft of cover.tufts) tiles.add(`${set.basePath}/v${tuft.variant}.png`);
+    }
+  }
+  const units = new Set<string>();
+  for (const piece of livePieces) {
+    const src = pieceImageSrc(piece);
+    if (src) units.add(src);
+  }
+  return {
+    urls: [...new Set([...tiles, ...units])],
+    signature: [...tiles].sort().join('|'),
+  };
+}
+
 function UnitPiece({ piece, selected = false, focused = false }: { piece: Piece; selected?: boolean; focused?: boolean }) {
   const { left, top, zIndex } = boardLabCellPosition(piece);
   const [displayPosition, setDisplayPosition] = useState({ left, top });
@@ -231,6 +269,11 @@ export function SkirmishBoard() {
     () => game.pieces.filter((piece) => piece.alive).sort((a, b) => a.x + a.y - (b.x + b.y)),
     [game.pieces],
   );
+  // Hold the board hidden until its whole art set has decoded, then fade it in as one
+  // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
+  // (stable across moves), so this arms once per board/seed, not on every move.
+  const boardArt = useMemo(() => collectBoardArt(board, livePieces), [board, livePieces]);
+  const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   const focusPiece = useMemo(
     () => livePieces.find((piece) => piece.id === focusedId) ?? livePieces.find((piece) => piece.id === selectedId) ?? null,
     [focusedId, livePieces, selectedId],
@@ -266,7 +309,7 @@ export function SkirmishBoard() {
   };
 
   return (
-    <div data-testid="skirmish-board" className="skirmish-board-lab">
+    <div data-testid="skirmish-board" className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'}`.trim()}>
       <ViewPane
         kind="board"
         ariaLabel="Skirmish board viewport"
