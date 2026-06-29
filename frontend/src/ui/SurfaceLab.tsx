@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 // Inspector for the production surface-swap tileset (Blender edge + flat PixelLab top,
 // palette-tied sides; built by scripts/build-surface-tiles.py). Two views:
@@ -74,10 +72,6 @@ export function SurfaceLab(): ReactElement {
   return (
     <section className="sl">
       <style>{SL_CSS}</style>
-      <header className="app-titlebar settings-header-frame">
-        <BrandLockup screenName="Surface Lab" />
-        <HeaderAccountCluster />
-      </header>
       <header className="sl-bar">
         <div className="sl-seg">
           <button type="button" className={`sl-tab ${view === 'board' ? 'is-active' : ''}`} onClick={() => setView('board')}>Board</button>
@@ -122,7 +116,7 @@ export function SurfaceLab(): ReactElement {
 }
 
 const SL_CSS = `
-.sl { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column;
+.sl { position: fixed; inset: var(--app-header-h) 0 0 0; z-index: 5; display: flex; flex-direction: column;
   background: #0a0c12; color: #d7e6ff; font-family: var(--ds-font-sans, system-ui, sans-serif); }
 .sl-bar { display: flex; align-items: center; gap: 12px; padding: 9px 16px; background: #0d1626; border-bottom: 1px solid #1b2740; flex-wrap: wrap; }
 .sl-name { font-size: 18px; font-weight: 700; color: #eaf3ff; }

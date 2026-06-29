@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import { DOODAD_ASSETS } from './doodadCatalog';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 // Hands-on doodad composer: arm a doodad from the shelf, click the tile to drop it where you
 // click, then move/resize/flip it and tag it front (in front of the unit) or back (behind).
@@ -159,11 +157,7 @@ export function DoodadEditor(): ReactElement {
   }, []);
 
   return (
-    <div className="dev-editor-screen">
-      <header className="app-titlebar settings-header-frame">
-        <BrandLockup screenName="Doodad Editor" />
-        <HeaderAccountCluster />
-      </header>
+    <div className="dev-editor-screen app-shell-bar-pad">
       <div style={shell}>
       <aside style={panel}>
         <h2 style={h2}>Doodads</h2>

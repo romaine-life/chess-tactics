@@ -7,8 +7,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
 import COMMITTED_CROPS from '../art/portraitCrops.json';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 
 const PIECES = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const;
 const PALETTES = ['navy-blue', 'crimson', 'golden', 'emerald'] as const;
@@ -254,11 +252,7 @@ export function PortraitEditor(): ReactElement {
   };
 
   return (
-    <div className="dev-editor-screen">
-      <header className="app-titlebar settings-header-frame">
-        <BrandLockup screenName="Portrait Editor" />
-        <HeaderAccountCluster />
-      </header>
+    <div className="dev-editor-screen app-shell-bar-pad">
       <main style={{ background: '#0b1016', color: '#cfe3ee', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
       <p style={{ margin: '0 0 18px', color: '#7fa8bd', fontSize: 13 }}>
         Drag the crop to pan · scroll or use the zoom slider · the crop is per-piece (shared across palettes).

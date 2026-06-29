@@ -35,8 +35,6 @@ import { DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 import {
   activeUnitFamilies,
   familyLabels,
@@ -587,46 +585,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const visibleUnits = normalizedUnitQuery
     ? unitAssets.filter((unit) => [unit.label, unit.badge, unit.family, unit.read, unit.status].join(' ').toLowerCase().includes(normalizedUnitQuery))
     : unitAssets;
-  // Slim topbar: a breadcrumb + a quiet count instead of a big titleblock. Keeps
-  // the header height constant (the Lab already shares this header — no second
-  // row inside the board surface, which is what made the controls rail jump).
-  const viewerName = viewerKind === 'artwork' ? selectedArtworkName : viewerKind === 'asset' ? selectedAssetName : viewerKind === 'nineslice' ? selectedFrameName : viewerKind === 'glossary' ? selectedGlossaryName : viewerKind === 'surface' ? (selectedSurfaceName ?? '') : viewerKind === 'scrollbar' ? (selectedScrollbarName ?? '') : viewerKind === 'slider' ? (selectedSliderName ?? '') : viewerKind === 'page' ? (selectedPageName ?? '') : viewerKind === 'tileside' ? (selectedTileSideId ?? '') : '';
-  const viewerKindLabel = viewerKind === 'artwork' ? 'Artwork' : viewerKind === 'portrait' ? 'Portrait' : viewerKind === 'nineslice' ? '9-Slice' : viewerKind === 'glossary' ? 'Glossary' : viewerKind === 'surface' ? 'Surface' : viewerKind === 'scrollbar' ? 'Scrollbar' : viewerKind === 'slider' ? 'Slider' : viewerKind === 'page' ? 'Page' : viewerKind === 'tileside' ? 'Tile Sides' : 'Asset';
-  const crumbTrail =
-    studioMode === 'catalog'
-      ? ['Catalog', category === 'units' ? 'Units' : category === 'doodads' ? 'Doodads' : category === 'assets' ? 'Assets' : category === 'artwork' ? 'Artwork' : category === 'glossary' ? 'Glossary' : category === 'surfaces' ? 'Surfaces' : category === 'scrollbars' ? 'Scrollbars' : category === 'sliders' ? 'Sliders' : category === 'pages' ? 'Pages' : category === 'tilesides' ? 'Tile Sides' : 'Tiles']
-      : studioMode === 'viewer'
-        ? (viewerKind === 'portrait' ? ['Viewer', 'Portrait'] : ['Viewer', viewerKindLabel, viewerName || '—'])
-        : ['Lab', labMode === 'unit' ? 'Unit' : labMode === 'tile' ? 'Tile' : labMode === 'doodad' ? 'Doodad' : 'Board'];
-  const visibleDoodads = normalizedCatalogQuery
-    ? DOODAD_ASSETS.filter((d) => [d.label, d.status, ...d.terrains].join(' ').toLowerCase().includes(normalizedCatalogQuery))
-    : DOODAD_ASSETS;
-  const crumbMeta =
-    studioMode === 'catalog'
-      ? category === 'units'
-        ? `${visibleUnits.length} unit${visibleUnits.length === 1 ? '' : 's'}`
-        : category === 'doodads'
-          ? `${visibleDoodads.length} doodad${visibleDoodads.length === 1 ? '' : 's'}`
-        : category === 'assets'
-          ? `${kitManifest.summary.total} icons`
-          : category === 'artwork'
-            ? `${artworkManifest.summary.total} artworks`
-            : category === 'glossary'
-              ? 'reference & process docs'
-              : category === 'surfaces'
-                ? 'background surfaces'
-                : category === 'scrollbars'
-                  ? 'scrollbar grips'
-                  : category === 'sliders'
-                    ? 'slide bars'
-                    : category === 'pages'
-                      ? `${PAGE_ENTRIES.length} pages`
-                      : category === 'tilesides'
-                        ? 'tile side faces'
-                        : `${visibleCatalogCount} asset${visibleCatalogCount === 1 ? '' : 's'} · ${selectedCollectionLabel}`
-      : studioMode === 'viewer'
-        ? (viewerKind === 'artwork' ? 'full-art preview' : viewerKind === 'portrait' ? 'headshot crop editor' : viewerKind === 'nineslice' ? 'frame alignment editor' : viewerKind === 'glossary' ? 'definition + process doc' : viewerKind === 'surface' ? 'tiled surface preview' : viewerKind === 'scrollbar' ? 'live scroll test' : viewerKind === 'slider' ? 'live drag test' : viewerKind === 'page' ? 'live page preview' : viewerKind === 'tileside' ? 'side-face inspection' : 'preview on backdrops')
-        : viewSubtitle;
   const openCatalogMode = (): void => {
     if (tileFilter === 'board') setTileFilter('base');
     setStudioMode('catalog');
@@ -1053,20 +1011,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const studioViewerHeader = <>{studioModeTabs}{viewerKindSelect}</>;
 
   return (
-    <main className="tileset-studio-page">
-      <header className="app-titlebar settings-header-frame tileset-studio-titlebar">
-        <BrandLockup screenName="Studio" />
-        <div className="tileset-studio-context">
-          <nav className="tileset-crumb" aria-label="Location">
-            {crumbTrail.map((part, index) => (
-              <span key={index} className={index === crumbTrail.length - 1 ? 'is-current' : ''}>{part}</span>
-            ))}
-          </nav>
-          {crumbMeta ? <span className="tileset-crumb-meta">{crumbMeta}</span> : null}
-        </div>
-        <HeaderAccountCluster />
-      </header>
-
+    <main className="tileset-studio-page app-shell-bar-pad">
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'artwork' ? 'is-artwork' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
