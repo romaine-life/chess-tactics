@@ -4,7 +4,7 @@ date: 2026-06-29
 deciders: Nelson, Claude
 ---
 
-# ADR-0044: Screen & control transitions are one orchestrated system
+# ADR-0046: Screen & control transitions are one orchestrated system
 
 The behaviour layer on top of [ADR-0043](0043-ui-motion-system.md). Where 0043 sets the
 motion *tokens* (how long, what curve), this ADR sets the *choreography*: when transitions

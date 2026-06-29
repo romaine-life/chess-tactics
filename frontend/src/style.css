@@ -990,6 +990,13 @@ h1 {
 .main-menu-twin-screen {
   transition: opacity 320ms ease;
 }
+/* Buttons hidden until revealed. On COLD load the director opens this stage in order
+   (bg -> title -> buttons). On a SOFT nav INTO the menu (e.g. campaign editor -> menu),
+   the store is already fully revealed, so MainMenu withholds data-reveal-buttons for one
+   frame after mount (its `entered` state) — that runs this same opacity transition as an
+   arrival fade, matching the editor's entrance so the hop dissolves the chrome both ways
+   while the shared backdrop + rain stay put. (Campaign reuses this class but hardcodes
+   data-reveal-buttons, so its play surface is never gated by this.) */
 .main-menu-layer:not([data-reveal-buttons]) .main-menu-twin-screen {
   opacity: 0;
 }
@@ -1170,7 +1177,7 @@ h1 {
      --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
      + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
   --app-header-h: clamp(84px, 5vw, 88px);
-  /* motion — duration + easing tokens (ADR-0043, revised by ADR-0044). Map MOTION ROLES
+  /* motion — duration + easing tokens (ADR-0043, revised by ADR-0046). Map MOTION ROLES
      onto these; don't hand-pick ms per element. Just TWO durations, by design:
        fast = instant feedback (hover / toggle / focus / filter swap),
        fade = EVERY fade/crossfade — screen entrances AND in-panel control swaps share ONE
@@ -1183,7 +1190,7 @@ h1 {
   --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ds-ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ds-ease-linear: linear;
-  /* Gap between sequenced reveals (ADR-0044 choreography) — e.g. the cold-load menu
+  /* Gap between sequenced reveals (ADR-0046 choreography) — e.g. the cold-load menu
      reveal once migrated; the stagger between items in a sequence. */
   --ds-stagger: 50ms;
 }
@@ -3396,11 +3403,6 @@ h1 {
   overflow: hidden;
 }
 
-.shell.skirmish-active + .bgm-control,
-.shell.skirmish-active ~ .bgm-control,
-.shell.is-immersive + .bgm-control,
-.shell.is-immersive ~ .bgm-control { display: none; }
-
 /* Studio/dev editor & inspector surfaces (Portrait Editor, Doodad Editor, Surface Lab,
    Artwork/Tile Compare) on the standard title bar (ADR-0004/0023): a full-bleed bar on
    top, the existing tool body filling and scrolling in the row below it. The shell runs
@@ -3824,6 +3826,43 @@ h1 {
   100% { transform: translateY(0) scale(1); }       /* settle */
 }
 
+/* Deploy arrival (render/SkirmishBoard). On board start each unit MATERIALIZES a short
+   distance above its own square and FALLS into the seat with an ease-out settle + a tiny
+   rebound — "setting the pieces on the board." Staggered per unit via --arrival-delay
+   (player wave, then the enemy answers; see computeArrivalDelays). `both` fill holds the
+   unit hidden at the 0% frame until its delay elapses, so it waits its turn instead of
+   flashing then dropping. Same motion family as the move-hop (ADR-0043); the per-tile
+   landing effect + sound cue hook in at the settle. */
+/* The deploy drop plays by DEFAULT, even under OS prefers-reduced-motion: this machine (and
+   many players' — Windows "Animation effects" off) reports reduce FALSELY, and gating on it
+   would hide the deploy from the very people it's for. Hence !important, to clear the global
+   `* { animation: none }` OS-reduce reset (style.css ~6036). Reduced motion is instead an
+   EXPLICIT in-game choice: `:root.reduce-motion` swaps the fall for a calm staggered fade
+   (below). A Settings toggle that sets that class is the remaining follow-up (see ADR). This
+   mirrors the repo's existing "a pure fade isn't gated on the OS query" precedent. */
+.skirmish-board-unit.is-arriving img {
+  animation: unit-arrival var(--arrival-anim, 620ms) linear var(--arrival-delay, 0ms) both !important;
+  transform-origin: center bottom; /* the impact squash compresses onto the feet, not the center */
+}
+:root.reduce-motion .skirmish-board-unit.is-arriving img {
+  animation: unit-arrival-soft 280ms ease var(--arrival-delay, 0ms) both !important;
+}
+
+/* The unit SPAWNS high above its square and hangs there MOTIONLESS, then drops under gravity
+   (ease-in builds speed over enough height to feel weighty) and hits the ground with a THUD:
+   a quick impact squash that recovers, no pre-jiggle and no upward bounce. Per-unit
+   --arrival-delay staggers the whole spawn→drop into a wave. The impact is ~85% of the
+   duration (≈ --arrival-delay + 525ms) — the hook point for the landing sound cue + the
+   per-tile dust/splash effect (wired later). */
+@keyframes unit-arrival {
+  0%   { opacity: 0; transform: translateY(-60px); animation-timing-function: ease-out; }     /* spawn high above, fading in */
+  26%  { opacity: 1; transform: translateY(-60px); animation-timing-function: linear; }        /* materialized, hanging still */
+  46%  { opacity: 1; transform: translateY(-60px); animation-timing-function: cubic-bezier(.55, 0, .9, .2); } /* release: fall, building speed */
+  82%  { transform: translateY(0) scaleX(1) scaleY(1); animation-timing-function: cubic-bezier(.3, 0, .2, 1); } /* contact */
+  88%  { transform: translateY(0) scaleX(1.16) scaleY(.82); animation-timing-function: ease-out; } /* THUD: impact squash */
+  100% { transform: translateY(0) scaleX(1) scaleY(1); }                                        /* recover */
+}
+
 .skirmish-board-unit img {
   position: relative;
   z-index: 1;
@@ -3893,12 +3932,20 @@ h1 {
   .skirmish-board-unit.is-enemy.is-moving img {
     animation: unit-move-hop-soft var(--move-duration) ease-in-out !important;
   }
+  /* NOTE: the deploy arrival is deliberately NOT swapped here on the OS query — it keys off
+     the explicit `:root.reduce-motion` class instead (see the .is-arriving rules above), so
+     a falsely-reported OS reduce never hides the drop from the maintainer/most players. */
 }
 
 @keyframes unit-move-hop-soft {
   0% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
   100% { transform: translateY(0); }
+}
+
+@keyframes unit-arrival-soft {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 .skirmish-left-panel {
@@ -4333,9 +4380,12 @@ h1 {
 
 /* road connection editor — clickable diamond edges for the selected road tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
-.le-roadconn-edge.is-joined, .le-roadconn-edge.is-cut { cursor: pointer; }
+.le-roadconn-edge { cursor: pointer; }
 .le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
 .le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
+.le-roadconn-edge.is-exit:hover line:last-child { stroke: #9bf0bb; }
+/* No same-kind neighbour: dim until hovered, where it previews the green "run off this edge" stub. */
+.le-roadconn-edge.is-none:hover line:last-child { stroke: #67d98a; }
 .le-roadconn-edge:focus-visible { outline: none; }
 .le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
 
@@ -4796,11 +4846,6 @@ h1 {
     grid-column: 2;
     justify-self: start;
   }
-
-  .shell.skirmish-active + .bgm-control {
-    right: 14px;
-    top: 88px;
-  }
 }
 
 /* ---------------- Responsive ---------------- */
@@ -4974,10 +5019,23 @@ body { font-size: 17px; }
   --ce-slate: #b7cad4;
   --ce-gold-bright: #f5bb45;
   --ce-eyebrow: #c9a877;
+  /* Same art-directed backdrop as the main menu (.main-menu-layer / .settings-art-route)
+     so the editor sits over the menu scene + the synced rain (AmbienceBackground, below).
+     Keep this declaration in sync with .settings-art-route. The editor's panels overlap
+     most of it; the scene + rain only show in the gaps, for a consistent feel.
+     First declaration = PNG fallback for engines without image-set()/type(). */
   background:
-    radial-gradient(720px 460px at 74% 24%, rgba(28, 106, 149, .24), transparent 62%),
-    radial-gradient(520px 320px at 34% 68%, rgba(64, 89, 59, .16), transparent 68%),
-    linear-gradient(180deg, #07131d 0%, #04080d 100%);
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat #02070b;
   color: var(--ce-ink);
   display: grid;
   font-family: var(--ds-font-pixel);
@@ -5004,8 +5062,28 @@ body { font-size: 17px; }
 .ce-topbar,
 .ce-footer,
 .ce-layout {
+  /* Above the rain field (.ambience-background, z2), below the overlay drops
+     (.ambience-overlay, z5) — mirrors the menu's z3 UI layer so the synced rain
+     falls behind the editor chrome (and the near drops cross in front of it). */
   position: relative;
-  z-index: 1;
+  z-index: 3;
+}
+
+/* Menu-family chrome entrance. When the editor MOUNTS on a soft nav (menu <-> campaign
+   editor), only its chrome fades in — the shared backdrop scene + synced rain sit behind
+   it (on .ce-screen / the ambience canvases) and never move, so the hop reads as the UI
+   swapping over one continuous scene, not the whole screen dissolving. A TRANSITION, not
+   a keyframe animation, so it survives `@media (prefers-reduced-motion){ *{animation:none} }`
+   (~line 6031): many players (incl. this one) run Windows with animations off, which Chrome
+   reads as reduced-motion, and an opacity fade is motion-safe — same rationale as Settings'
+   entrance. CampaignEditor adds .is-entered to .ce-screen one frame after mount. */
+.ce-layout,
+.ce-footer {
+  transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
+}
+.ce-screen:not(.is-entered) .ce-layout,
+.ce-screen:not(.is-entered) .ce-footer {
+  opacity: 0;
 }
 
 /* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
@@ -5338,6 +5416,11 @@ body { font-size: 17px; }
   position: relative;
   text-align: left;
   width: 100%;
+  /* Windowing (web.dev): off-screen rows skip layout/paint. The intrinsic size keeps the
+     scrollbar + row footprint stable so nothing reflows when a row is virtualised out. The
+     value matches each row's min-height below; visible layout is unchanged. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
 }
 
 .ce-campaign-row.is-selected {
@@ -5365,6 +5448,7 @@ body { font-size: 17px; }
   grid-template-columns: 76px minmax(0, 1fr) auto auto;
   min-height: 70px;
   padding-block: 4px;
+  contain-intrinsic-size: auto 70px;
 }
 
 .ce-level-row.is-selected {
@@ -5477,10 +5561,24 @@ body { font-size: 17px; }
   width: 58px;
 }
 
-.ce-level-thumb .level-preview-board,
-.ce-level-thumb .level-preview-empty {
+.ce-level-thumb .level-thumbnail,
+.ce-level-thumb .ce-level-thumb-empty {
+  display: block;
   height: 100%;
   width: 100%;
+}
+
+/* The baked board thumbnail (one flat <img>) is letterboxed to the board's native aspect
+   inside the row's thumb box; its pending placeholder shares the calm panel fill. */
+.ce-level-thumb .level-thumbnail img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+.level-thumbnail-placeholder,
+.ce-level-thumb-empty {
+  background: linear-gradient(180deg, #0a2a50 0%, #061322 100%);
 }
 
 .ce-row-actions {
@@ -5830,6 +5928,27 @@ body { font-size: 17px; }
   min-height: 0;
 }
 
+/* The SELECTED-level LIVE viewer: a pan/zoom ViewPane (StudioReadOnlyBoard inside) filling the
+   preview frame. Mirrors the old static preview's footprint so the panel doesn't resize when a
+   level is selected. The stage owns its own dark grid fill (.tileset-view-stage). */
+.ce-level-viewer {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 220px;
+  overflow: hidden;
+}
+
+.ce-level-viewer .tileset-view-stage {
+  border: 0;
+  border-radius: 0;
+}
+
+/* The read-only board sprites mustn't show the editor's grab/select cursors in this preview. */
+.ce-level-viewer .tileset-placement-board.is-readonly .tileset-generated-board-tile {
+  cursor: default;
+}
+
 .level-preview-empty {
   color: var(--ce-slate);
   font-size: var(--ds-text-md);
@@ -6020,26 +6139,31 @@ body { font-size: 17px; }
   }
 }
 
-/* ── Background music toggle ─────────────────────────────────────────────── */
-/* Self-contained floating control appended by bgm.js. Themed to the cobalt/gold
-   chrome palette; glows gently while a track is playing. */
-/* Floating BGM control — kit chrome (the symmetric mode-button frame) holding the
-   music glyph, so it reads as part of the art instead of a raw rounded button. The
-   active frame marks "playing"; the icon dims when muted / silent. */
+/* ── Background music mute control ───────────────────────────────────────── */
+/* Persistent mute control — the trailing cluster's media member (ADR-0044). The vanilla
+   BGM player (bgm.js) re-homes its own button into the title bar's .cluster-bgm-slot, so
+   this is no longer floating chrome docked bottom-right: it's an icon-only cluster button
+   sized to match the gear/avatar on the kit mode-button 9-slice frame (ADR-0002/0036), on
+   every route. The active frame marks "playing"; the icon dims when muted / silent. */
+.cluster-bgm-slot {
+  /* Boxless wrapper: when bgm hides the control (no soundtrack configured) or hasn't
+     re-homed it yet, the slot adds no width and no cluster gap; with the control present
+     it joins the .header-account-cluster flex row directly as its leading member. */
+  display: contents;
+}
+
 .bgm-control {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 50;
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
+  align-items: center;
+  block-size: 52px;
+  inline-size: 52px;
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
   padding: 0;
   cursor: pointer;
   appearance: none;
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
   image-rendering: pixelated;
   /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
      fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
@@ -6047,8 +6171,8 @@ body { font-size: 17px; }
 }
 
 .bgm-control-icon {
-  width: 22px;
-  height: 22px;
+  block-size: 26px;
+  inline-size: 26px;
   image-rendering: pixelated;
   pointer-events: none;
 }
@@ -6058,38 +6182,18 @@ body { font-size: 17px; }
   outline-offset: 2px;
 }
 
-.bgm-control.is-playing {
-  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. */
+.bgm-control.is-playing,
+.bgm-control.is-othertab {
+  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. is-othertab is
+     a follower tab: same lit frame (music IS playing, elsewhere), but its icon stays
+     dimmed via is-muted, so it reads as "on, not here" — distinct from the base-frame
+     muted state it used to be pixel-identical to. */
   border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .bgm-control.is-muted .bgm-control-icon {
   opacity: 0.4;
   filter: grayscale(0.7);
-}
-
-.shell.main-menu-active ~ .bgm-control,
-.shell.main-menu-active + .bgm-control {
-  display: none !important;
-}
-
-@media (max-width: 560px) {
-  .bgm-control {
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-    right: 10px;
-    bottom: 10px;
-  }
-
-  .shell.main-menu-active + .bgm-control {
-    bottom: auto;
-    top: 96px;
-  }
-
-  .shell.main-menu-active .main-menu-screen {
-    padding-bottom: 64px;
-  }
 }
 
 .tile-preview-page {
@@ -6332,10 +6436,6 @@ body { font-size: 17px; }
   height: 100%;
   min-height: 0;
   overflow: hidden;
-}
-
-.shell.tileset-studio-active + .bgm-control {
-  display: none;
 }
 
 .tile-template-guides {
@@ -9972,7 +10072,8 @@ button.tileset-relationship-cell {
    so the in-front rain matches the menu's restraint. The field rain behind the
    frames is untouched, and the menu overlay is unaffected (scoped via the
    re-parented overlay living under .settings-art-route only while on settings). */
-.settings-art-route .ambience-overlay {
+.settings-art-route .ambience-overlay,
+.ce-screen .ambience-overlay {
   opacity: 0.3;
 }
 
@@ -10428,21 +10529,26 @@ button.tileset-relationship-cell {
 
 .settings-shell {
   display: grid;
-  grid-template-columns: minmax(244px, 304px) minmax(0, 1fr);
+  /* Button (rail) width + body cap are the baked output of the Main Menu tuner. SHARED by the
+     menu and Settings so the Settings rail tabs stay faithful to the menu's buttons (they're the
+     alignment reference for the Settings rows). overflow:visible lets the rail's offset (below)
+     show past the shell edge. Re-tune via the dressing room (MainMenuViewer) — it bakes these
+     same shared selectors. */
+  grid-template-columns: 487px minmax(0, 1fr);
   gap: clamp(8px, .85vw, 14px);
   /* Body (rail + content) is a centred contained block beneath the full-bleed top
      bar, so rows don't stretch the full width while the title bar stays flush. */
   inline-size: 100%;
-  max-inline-size: clamp(900px, 88vw, 1240px);
+  max-inline-size: max(clamp(900px, 88vw, 1240px), 487px);
   justify-self: center;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
-/* Screen entrance (ADR-0044): the SHARED entrance fade, applied via the useScreenEntrance()
+/* Screen entrance (ADR-0046): the SHARED entrance fade, applied via the useScreenEntrance()
    hook to a screen's CHROME ROOT (.settings-shell in both Settings and the main menu) — never
    the screen's outer element, so the ambience backdrop (a sibling) stays continuous and never
-   re-fades across art-background screens (ADR-0044 B/G). Entrance tier (slow + decelerate).
+   re-fades across art-background screens (ADR-0046 B/G). Entrance tier (slow + decelerate).
    Pure opacity = reduced-motion-safe → not gated (ADR-0043). The hook only engages on a
    navigation-driven mount; the cold-load menu reveal owns the first paint (no double-fade).
    This replaces the old settings-only `.settings-art-route .settings-shell` opacity rule. */
@@ -10455,7 +10561,7 @@ button.tileset-relationship-cell {
   opacity: 0;
   transition: none;
 }
-/* Inert while the fade plays (ADR-0044 D): can't trigger a new transition mid-transition. */
+/* Inert while the fade plays (ADR-0046 D): can't trigger a new transition mid-transition. */
 .screen-enter.screen-enter-lock {
   pointer-events: none;
 }
@@ -10471,6 +10577,9 @@ button.tileset-relationship-cell {
   display: grid;
   gap: clamp(9px, .8vw, 13px);
   padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
+  /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
+     sit identically (the menu is the alignment reference). Re-tune in the dressing room. */
+  transform: translate(-230px, -21px);
 }
 
 /* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label
@@ -10541,7 +10650,7 @@ button.tileset-relationship-cell {
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
-  transform: translateX(18px); /* nudge the label clear of the enlarged icon */
+  transform: translateX(37px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
 }
 
 .settings-tab:not(.is-active):hover {
@@ -10597,6 +10706,15 @@ button.tileset-relationship-cell {
   padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
 }
 
+/* Rows-box placement, baked from the Settings dressing room: widened, padding tightened to the
+   edges, and nudged into position. Scoped to the real Settings screen; the shell's overflow:visible
+   lets the offset/wider box sit where it's placed. Re-tune in the Settings dressing room (Rows box). */
+.settings-art-route .settings-main-frame {
+  padding: 16px 0;
+  width: 931px;
+  transform: translate(-270px, -28px);
+}
+
 .settings-panel-heading {
   align-content: center;
   block-size: clamp(64px, 6vw, 80px);
@@ -10635,7 +10753,7 @@ button.tileset-relationship-cell {
      prefers-reduced-motion, so it is intentionally NOT gated on that query — many
      players run with Windows "Animation effects" off (which Chrome reads as
      reduced-motion) and should still get this transition. The duration is the ONE shared
-     fade token (--ds-duration-fade, ADR-0044) — the same fade speed as the screen entrance;
+     fade token (--ds-duration-fade, ADR-0046) — the same fade speed as the screen entrance;
      it MUST stay in sync with PANEL_FADE_MS in Settings.tsx (the JS that times the swap). */
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }

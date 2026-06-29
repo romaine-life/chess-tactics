@@ -4,9 +4,14 @@ import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, offi
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level, type ObjectiveType } from '../core/level';
 import { loadWorkspace, loadOfficialCampaigns } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
-import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
+import { LevelThumbnail } from '../render/LevelThumbnail';
+import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
+import { levelToEditorBoard } from '../core/levelBoard';
+import { ViewPane } from './shared/ViewPane';
+import { injectStressLevels } from '../campaign/stressFixture';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { AmbienceBackground } from './AmbienceBackground';
 
 const CE_ICONS = {
   star: '/assets/ui/kit/icons/star.png',
@@ -197,7 +202,7 @@ function LevelRow({
       }}
     >
       <span className="ce-level-thumb" aria-hidden="true">
-        <LevelPreviewBoard level={level ?? null} compact />
+        {level ? <LevelThumbnail level={level} width={46} height={32} /> : <span className="ce-level-thumb-empty" />}
       </span>
       <span className="ce-row-copy">
         <strong>{index + 1}. {level?.name ?? levelRef.levelId}</strong>
@@ -223,6 +228,9 @@ export function CampaignEditor() {
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
   const [levelView, setLevelView] = useState<'board' | 'info'>('board');
+  // Pan/zoom for the SELECTED-level live viewer (the list rows stay flat baked thumbnails).
+  const [viewZoom, setViewZoom] = useState(0.5);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const currentWorkspace = useMemo(() => ({ campaigns, levels }), [campaigns, levels]);
   // Two tier-scoped dirty signals: a private "Save" and an official "Publish" are
   // independent acts, each with its own last-saved signature.
@@ -255,6 +263,18 @@ export function CampaignEditor() {
     return () => shell?.classList.remove('campaign-editor-active');
   }, []);
 
+  // One-time chrome entrance: .ce-screen paints at chrome-opacity 0, then flips .is-entered
+  // after the first paint so the panels fade in over the steady backdrop + rain (mirrors
+  // Settings' entrance). A transition, not an animation, so it survives reduced-motion. The
+  // rAF runs it as a fade; the timeout is a belt-and-suspenders so a throttled rAF (e.g. a
+  // backgrounded tab) can never strand the chrome hidden.
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    const t = window.setTimeout(() => setEntered(true), 120);
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
+  }, []);
+
   useEffect(() => {
     let active = true;
     fetchMe().then((user) => { if (active) setMe(user); });
@@ -269,7 +289,12 @@ export function CampaignEditor() {
         if (active && isUnauthorized(e)) setStatus('Official campaigns shown. Sign in to author your own.');
       }
       if (!active) return;
-      selectFirstEditable();
+      // Dev-only perf harness: `?stress=<n>` injects a throwaway campaign of N generated levels
+      // (selecting it) so scroll/thumbnail perf can be measured on a long list. No-op without the
+      // flag, so it never touches normal use; the levels live only in the in-memory store.
+      const injected = injectStressLevels();
+      if (injected) setStatus(`Stress fixture: injected ${injected} generated levels.`);
+      else selectFirstEditable();
       resyncSavedSignatures();
     })();
     return () => { active = false; };
@@ -284,6 +309,13 @@ export function CampaignEditor() {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty]);
+
+  // Re-frame the live viewer whenever the selected level changes, so each board opens centred
+  // at the default zoom instead of inheriting the previous level's pan/zoom.
+  useEffect(() => {
+    setViewZoom(0.5);
+    setViewPan({ x: 0, y: 0 });
+  }, [selectedLevelId]);
 
   // Private "Save": frictionless, writes only the user slice (officials never enter it).
   const saveUserNow = async () => {
@@ -372,6 +404,10 @@ export function CampaignEditor() {
   const ownCount = campaigns.filter((c) => c.origin !== 'official').length;
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
   const levelDoc = selectedLevelId ? levels[selectedLevelId] : null;
+  // The SELECTED level's LIVE board, derived the SAME way the list thumbnails and the Level
+  // Editor derive theirs (prefers boardCode, falls back to layers) — so what the viewer shows,
+  // a row's baked thumbnail, and the editor all agree.
+  const viewerBoard = useMemo(() => (levelDoc ? levelToEditorBoard(levelDoc) : null), [levelDoc]);
   const levelRef = camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
   const selectedLevelIndex = orderedLevels.findIndex((r) => r.levelId === selectedLevelId);
   const totalLevels = orderedLevels.length;
@@ -401,7 +437,11 @@ export function CampaignEditor() {
     `/edit?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent('/campaigns-next')}`;
 
   return (
-    <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
+    <div className={`ce-screen app-shell-bar-pad ${entered ? 'is-entered' : ''}`.trim()} data-testid="campaign-editor">
+      {/* Same art-directed backdrop + synced rain as the main menu (.ce-screen paints the
+          menu scene; this canvas adds the shared rain). Mostly overlapped by the editor
+          panels, but it keeps the feel consistent with the rest of the app in the gaps. */}
+      <AmbienceBackground />
       {/* Title bar lives in the app shell; the editor paints its live save-state +
           shortcuts into it via portals (workspace state stays in this component). */}
       <TitleBarSlot region="center">
@@ -527,7 +567,7 @@ export function CampaignEditor() {
                 {unassignedLevels.map((level) => (
                   <div key={level.id} className="ce-level-row ce-unassigned-row">
                     <span className="ce-level-thumb" aria-hidden="true">
-                      <LevelPreviewBoard level={level} compact />
+                      <LevelThumbnail level={level} width={46} height={32} />
                     </span>
                     <span className="ce-row-copy">
                       <strong>{level.name}</strong>
@@ -570,9 +610,31 @@ export function CampaignEditor() {
                 <button type="button" role="tab" aria-selected={levelView === 'info'} className={levelView === 'info' ? 'is-active' : ''} onClick={() => setLevelView('info')}>Info</button>
               </div>
             ) : null}
-            {levelDoc && levelView === 'info'
-              ? <LevelInfoCompact level={levelDoc} />
-              : <LevelPreviewBoard level={levelDoc} />}
+            {levelDoc && levelView === 'info' ? (
+              <LevelInfoCompact level={levelDoc} />
+            ) : levelDoc && viewerBoard ? (
+              // The SELECTED viewer is a LIVE board (pan/zoom) rendered through the SAME read-only
+              // renderer the editor uses, inside the shared ViewPane. Static frame (no animation
+              // clock here): a preview shouldn't run a per-frame loop while the editor is open.
+              <div className="ce-level-viewer">
+                <ViewPane
+                  kind="board"
+                  ariaLabel={`${levelDoc.name} board`}
+                  zoom={viewZoom}
+                  pan={viewPan}
+                  minZoom={0.2}
+                  maxZoom={2}
+                  onZoomChange={setViewZoom}
+                  onPanChange={setViewPan}
+                >
+                  <div className="tileset-view-board-content is-board">
+                    <StudioReadOnlyBoard board={viewerBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel={`${levelDoc.name} board`} />
+                  </div>
+                </ViewPane>
+              </div>
+            ) : (
+              <div className="level-preview-empty" aria-label="No level preview"><span>Select a level.</span></div>
+            )}
           </div>
           {levelDoc && levelRef ? (
             <div className="ce-preview-actions">

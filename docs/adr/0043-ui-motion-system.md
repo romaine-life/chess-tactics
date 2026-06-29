@@ -57,7 +57,7 @@ different speeds in different spots was the exact inconsistency we set out to ki
 fades resolve to the single `--ds-duration-fade`. (`--ds-duration-fade` is one knob — tune the
 one value to retime every fade at once.) `fast` stays a separate, snappier tier because
 hover/toggle feedback is an *instant state change*, not a fade — matching it to the fade speed
-would make the UI feel laggy. ADR-0044's choreography assumes this single fade speed.
+would make the UI feel laggy. ADR-0046's choreography assumes this single fade speed.
 
 ### B. Easing tokens — name the intent, don't paste a bezier
 
@@ -81,7 +81,7 @@ deliberately-surviving path.)
 
 1. Interactive UI transitions resolve to a duration token + an easing token. No raw ms /
    bespoke bezier on `transition` (allow `0s`).
-2. **First consumers:** the settings menu crossfade, the screen-entrance fade (ADR-0044), and
+2. **First consumers:** the settings menu crossfade, the screen-entrance fade (ADR-0046), and
    `.bgm-control`'s show/hide fade all resolve to `--ds-duration-fade` — one fade speed across
    all of them (the "same fade speed?" fix, taken to its conclusion).
 3. **Staged migration** (the 0024/0031 model): the remaining ~hand-tuned transitions migrate

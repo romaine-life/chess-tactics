@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
@@ -189,7 +189,54 @@ function collectBoardArt(
   };
 }
 
-function UnitPiece({ piece, selected = false, focused = false }: { piece: Piece; selected?: boolean; focused?: boolean }) {
+// Deploy choreography: when the board first reveals, the armies arrive in a staggered
+// wave rather than all popping in at once (see ADR — board-start unit arrival). Order is
+// communication: the PLAYER force lands first (back row → forward), then the ENEMY answers
+// from its edge, each wave ending on its royal piece (king/queen) as a focal accent — so the
+// motion alone teaches mine-vs-theirs and turn-taking before turn 1. Neutral rocks are
+// scenery, not deploying units, so they get no drop (null delay → they just appear with the
+// board). Timing is bounded (~1.2s total) and presentation-only — board state and input are
+// live immediately, so the sequence never gates play.
+const ARRIVAL_BASE_MS = 400; // first unit lands AFTER the board reveal (veil/board fade) has finished
+const ARRIVAL_WAVE_GAP_MS = 240; // the enemy wave answers this long after the player wave starts
+const ARRIVAL_STEP_MS = 50; // per-unit stagger within a wave
+// The spawn→drop keyframe (unit-arrival) is ~620ms; the land impact is at ~85% of it —
+// that fraction is where the per-unit sound cue + landing effect will hook in (see style.css).
+export const ARRIVAL_TOTAL_MS = 1700; // upper bound: hold `is-arriving` at least this long
+
+const isRoyal = (type: Piece['type']): boolean => type === 'king' || type === 'queen';
+
+function computeArrivalDelays(pieces: readonly Piece[]): Map<string, number> {
+  const delays = new Map<string, number>();
+  (['player', 'enemy'] as const).forEach((side, wave) => {
+    const group = pieces.filter((p) => p.side === side && p.type !== 'rock' && p.type !== 'random-rock');
+    // Order within the wave: by rows out from the home edge (startY), royals last.
+    group.sort((a, b) => {
+      if (isRoyal(a.type) !== isRoyal(b.type)) return isRoyal(a.type) ? 1 : -1;
+      const da = Math.abs(a.y - (a.startY ?? a.y));
+      const db = Math.abs(b.y - (b.startY ?? b.y));
+      return da !== db ? da - db : a.x - b.x;
+    });
+    const waveBase = ARRIVAL_BASE_MS + wave * ARRIVAL_WAVE_GAP_MS;
+    group.forEach((p, i) => delays.set(p.id, waveBase + i * ARRIVAL_STEP_MS));
+  });
+  return delays;
+}
+
+function UnitPiece({
+  piece,
+  selected = false,
+  focused = false,
+  arriving = false,
+  arrivalDelay = 0,
+}: {
+  piece: Piece;
+  selected?: boolean;
+  focused?: boolean;
+  /** Play the one-shot deploy drop (board start), staggered by `arrivalDelay`. */
+  arriving?: boolean;
+  arrivalDelay?: number;
+}) {
   const { left, top, zIndex } = boardLabCellPosition(piece);
   const [displayPosition, setDisplayPosition] = useState({ left, top });
   const [isMoving, setIsMoving] = useState(false);
@@ -225,10 +272,16 @@ function UnitPiece({ piece, selected = false, focused = false }: { piece: Piece;
         `is-${piece.side}`,
         `is-${piece.type}`,
         isMoving ? 'is-moving' : '',
+        arriving ? 'is-arriving' : '',
         selected ? 'is-selected' : '',
         focused ? 'is-focused' : '',
       ].filter(Boolean).join(' ')}
-      style={{ left: displayPosition.left, top: displayPosition.top, zIndex: zIndex + 20000 }}
+      style={{
+        left: displayPosition.left,
+        top: displayPosition.top,
+        zIndex: zIndex + 20000,
+        ...(arriving ? { ['--arrival-delay' as string]: `${arrivalDelay}ms` } : {}),
+      } as CSSProperties}
       aria-label={`${piece.side} ${piece.type}`}
     >
       {src ? <img src={src} alt="" draggable={false} /> : <span>{PIECE_MARK[piece.type] ?? '?'}</span>}
@@ -274,6 +327,22 @@ export function SkirmishBoard() {
   // (stable across moves), so this arms once per board/seed, not on every move.
   const boardArt = useMemo(() => collectBoardArt(board, livePieces), [board, livePieces]);
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
+  // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
+  // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
+  const arrivalDelays = useMemo(() => computeArrivalDelays(livePieces), [livePieces]);
+  // `arriving` is derived DURING render (not pushed from an effect) so `is-arriving` lands in
+  // the SAME commit the board first reveals. If it lagged a commit, there'd be one painted
+  // frame where units sit at their seats (the old "just appear" look) before the drop's
+  // fill-mode hides them — reading as units appearing, vanishing, then dropping in. A timer
+  // flips arrivalDone when the whole wave is done so the class comes off for normal play.
+  const [arrivalDone, setArrivalDone] = useState(false);
+  useEffect(() => { setArrivalDone(false); }, [boardArt.signature]);
+  useEffect(() => {
+    if (!boardReady || arrivalDone) return undefined;
+    const done = window.setTimeout(() => setArrivalDone(true), ARRIVAL_TOTAL_MS);
+    return () => window.clearTimeout(done);
+  }, [boardReady, arrivalDone]);
+  const arriving = boardReady && !arrivalDone;
   const focusPiece = useMemo(
     () => livePieces.find((piece) => piece.id === focusedId) ?? livePieces.find((piece) => piece.id === selectedId) ?? null,
     [focusedId, livePieces, selectedId],
@@ -360,6 +429,8 @@ export function SkirmishBoard() {
               piece={piece}
               selected={piece.id === selectedId}
               focused={piece.id === focusPiece?.id}
+              arriving={arriving && arrivalDelays.has(piece.id)}
+              arrivalDelay={arrivalDelays.get(piece.id) ?? 0}
             />
           ))}
         </BoardLabBoard>

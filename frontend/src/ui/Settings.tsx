@@ -6,6 +6,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
 import { useScreenEntrance } from './shell/useScreenEntrance';
+import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -13,7 +14,7 @@ const SETTINGS_KEY = 'chess-tactics-settings-v1';
 const ASSET_BASE = '/assets/ui/settings';
 // How long the panel body fades out before swapping in the next menu's controls,
 // then fades back in. MUST match --ds-duration-fade on .settings-panel-content in style.css
-// (the ONE shared fade duration, ADR-0044 — same speed as the screen entrance).
+// (the ONE shared fade duration, ADR-0046 — same speed as the screen entrance).
 const PANEL_FADE_MS = 350;
 
 type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools';
@@ -136,7 +137,9 @@ function buildSummary(): { headline: string; detail: string } {
 }
 
 function readMuted(): boolean {
-  try { return localStorage.getItem(MUTE_KEY) === 'true'; } catch { return false; }
+  // Default OFF — music is muted until explicitly enabled (kept in sync with bgm.js
+  // readMuted). Only an explicit 'false' (user turned it on) counts as un-muted.
+  try { return localStorage.getItem(MUTE_KEY) !== 'false'; } catch { return true; }
 }
 
 function writeMuted(muted: boolean): void {
@@ -308,7 +311,7 @@ export function Settings(): ReactElement {
   // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
   const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
   const [confirmingReset, setConfirmingReset] = useState(false);
-  // Shared screen-entrance fade (ADR-0044): spread onto the chrome root (.settings-shell)
+  // Shared screen-entrance fade (ADR-0046): spread onto the chrome root (.settings-shell)
   // below. Fades the chrome in on a navigation-driven mount, leaving the ambience sibling
   // continuous; no-ops on a cold load. Replaces the bespoke `entered` state.
   const entranceClass = useScreenEntrance();
@@ -349,6 +352,10 @@ export function Settings(): ReactElement {
   useEffect(() => {
     saveLocalSettings(settings);
     applyUiScale(settings.uiScale);
+    // Let the running SFX service pick up master-audio / effects-volume changes live
+    // (it re-reads localStorage on this event), so the Effects slider takes effect
+    // without a reload — the SFX analogue of the BGM mute-change event.
+    window.dispatchEvent(new CustomEvent(SFX_SETTINGS_CHANGE_EVENT));
   }, [settings]);
 
   // Load the soundtrack list whenever the dedicated tracks view is opened. A fresh
@@ -422,12 +429,6 @@ export function Settings(): ReactElement {
   const updateSetting = <Key extends keyof LocalSettings>(key: Key, value: LocalSettings[Key]) => {
     setConfirmingReset(false);
     setSettings((current) => ({ ...current, [key]: value }));
-  };
-
-  const setBackgroundMusic = (enabled: boolean) => {
-    setConfirmingReset(false);
-    setMuted(!enabled);
-    writeMuted(!enabled);
   };
 
   const setMasterAudio = (enabled: boolean) => {
@@ -524,9 +525,9 @@ export function Settings(): ReactElement {
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Music">
-        <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
-          <Toggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
-        </SettingsRow>
+        {/* Background-music on/off lives on the persistent title-bar mute control now
+            (ADR-0044) — it drove the same MUTE_KEY as this row, so the row was a dup.
+            Master Audio above is the all-sound master; this section keeps mix + tracks. */}
         <SettingsRow title="Music Volume" description="Set the target music mix for this browser.">
           <Slider
             value={settings.musicVolume}
@@ -545,6 +546,7 @@ export function Settings(): ReactElement {
             label="Effects Volume"
             onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
           />
+          <SettingsButton onClick={() => previewTerrain('stone')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
         </SettingsRow>
         <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
           <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />

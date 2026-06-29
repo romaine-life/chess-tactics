@@ -4,9 +4,8 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { boardLabCellPosition } from '../render/BoardLabBoard';
-import { DoodadSprite } from '../render/BoardDoodad';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
+import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { TitleBarSlot } from './shell/TitleBarSlot';
@@ -17,7 +16,6 @@ import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, type EditorBoard, type FeatureCell } from './boardCode';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
-  MISSING_DIRECTION_SPRITE,
   hasDirectionSprite,
   rookDirections,
   unitAssets,
@@ -26,14 +24,13 @@ import {
   type UnitAsset,
 } from './unitCatalog';
 import {
-  assetFrameSrc,
   studioFamilies,
   useAnimationClock,
   FacingCompass,
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureFrameSrc, featureThumbSrc } from '../art/tileset';
+import { featureThumbSrc } from '../art/tileset';
 import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
@@ -107,9 +104,10 @@ function StudioEditableBoard({
     else onSelect(x, y);
   };
 
-  // The editor is an adapter over the shared TileGrid core (the same one the
-  // game's BoardLabBoard uses). It only supplies per-cell content: the tile art,
-  // the placed unit, the selection ring, and the paint/erase/select hit target.
+  // The editor is an adapter over the shared StudioReadOnlyBoard render path (the same cell
+  // art + sprite seating the Campaign Editor's read-only viewer uses): it supplies the SHARED
+  // tile/feature art via `studioCellArt`, then layers its own interaction chrome — the selection
+  // ring and the paint/erase/select hit target — on top per cell.
   const cells: TileGridCell[] = [];
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
@@ -124,15 +122,7 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {asset && !hidden?.tile ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
-            {placedFeatures[key] ? (
-              <img
-                className="tileset-feature-overlay"
-                src={featureFrameSrc(placedFeatures[key].kind, placedFeatures[key].material, placedFeatures[key].mask)}
-                alt=""
-                draggable={false}
-              />
-            ) : null}
+            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], animationFrame, hidden })}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
@@ -152,48 +142,33 @@ function StudioEditableBoard({
   }
 
   // Units + doodads render at GRID level via the SHARED seat (.board-unit-seat) and the
-  // shared <DoodadSprite> — exactly like the game board (SkirmishBoard) — instead of inside
-  // cells. One seating, both boards; it can't drift. Doodad back/front bracket the unit by z.
-  const overlaySprites: ReactNode[] = [];
-  for (const key of new Set([...Object.keys(placedUnits), ...Object.keys(placedDoodads)])) {
-    const [cx, cy] = key.split(',').map(Number);
-    const { left, top, zIndex } = boardLabCellPosition({ x: cx, y: cy });
-    const doodadEntry = placedDoodads[key] ? resolveDoodad(placedDoodads[key].doodadId) : undefined;
-    if (doodadEntry && !hidden?.doodad) {
-      overlaySprites.push(<DoodadSprite key={`dd-${key}`} doodad={{ x: cx, y: cy, type: doodadEntry.id }} />);
-      // The doodad stands UP above its foot cell, but the shared sprite is pointer-events:none,
-      // so clicking the visible prop body falls through to the cell behind it — erase/select
-      // would miss the doodad. This Studio-only hit target sits over the prop and routes the
-      // tool to the doodad's OWN cell. It's transparent in brush mode so painting still flows
-      // to the tiles underneath; it only catches clicks while erasing or selecting.
-      overlaySprites.push(
-        <span
-          key={`dd-hit-${key}`}
-          className="tileset-doodad-hit"
-          style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' ? 'none' : 'auto' }}
-          onPointerDown={(event) => {
-            if (event.button === 2) return;
-            event.stopPropagation();
-            if (tool !== 'select') paintingRef.current = true;
-            applyTool(cx, cy);
-          }}
-          onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
-        />,
-      );
-    }
-    const unitPlacement = placedUnits[key];
-    const unitAsset = unitPlacement ? resolveUnit(unitPlacement.unitId) : undefined;
-    if (unitAsset && unitPlacement && !hidden?.unit) {
-      const sprite = hasDirectionSprite(unitAsset, unitPlacement.direction)
-        ? unitAsset.sprite(unitPlacement.faction, unitPlacement.direction)
-        : MISSING_DIRECTION_SPRITE;
-      overlaySprites.push(
-        <div key={`u-${key}`} className={`board-unit-seat is-${unitAsset.family}`} style={{ left, top, zIndex: zIndex + 20000 }}>
-          <img src={sprite} alt="" draggable={false} />
-        </div>,
-      );
-    }
-  }
+  // shared <DoodadSprite> through `studioBoardSprites` — exactly the same seating the read-only
+  // viewer uses, so they can't drift. The editor injects a transparent doodad hit target
+  // alongside each prop: the doodad stands UP above its foot cell and the shared sprite is
+  // pointer-events:none, so clicking the visible body would otherwise fall through to the cell
+  // behind it. The hit routes the tool to the doodad's OWN cell; transparent in brush mode so
+  // painting still flows to the tiles underneath, catching clicks only while erasing/selecting.
+  const overlaySprites: ReactNode[] = studioBoardSprites({
+    units: placedUnits,
+    doodads: placedDoodads,
+    resolveUnit,
+    resolveDoodad,
+    hidden,
+    renderDoodadExtra: ({ x: cx, y: cy, left, top, zIndex }) => (
+      <span
+        key={`dd-hit-${cx},${cy}`}
+        className="tileset-doodad-hit"
+        style={{ position: 'absolute', left, top, zIndex: zIndex + 20002, width: 54, height: 88, transform: 'translate(-50%, -75%)', pointerEvents: tool === 'brush' ? 'none' : 'auto' }}
+        onPointerDown={(event) => {
+          if (event.button === 2) return;
+          event.stopPropagation();
+          if (tool !== 'select') paintingRef.current = true;
+          applyTool(cx, cy);
+        }}
+        onContextMenu={(event) => { event.preventDefault(); onErase(cx, cy); }}
+      />
+    ),
+  });
 
   return (
     <TileGrid
@@ -241,22 +216,28 @@ const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
 
 // The 4-edge connection control for a selected feature tile. Mirrors the iso diamond:
-// each clickable edge is one cardinal neighbour (grid N/E/S/W = the screen NE/SE/SW/NW
-// edges). Joined edges read solid cyan, severed read dashed amber, edges with no SAME-KIND
-// feature neighbour are dim and inert (roads only connect to roads, rivers to rivers).
-// Clicking toggles the SHARED edge, so both tiles re-cap.
+// each edge is one cardinal neighbour (grid N/E/S/W = the screen NE/SE/SW/NW edges).
+// Every edge is clickable and toggles the SHARED edge, so both tiles re-cap together:
+//   • a SAME-KIND neighbour → joined (solid cyan) ↔ cut (dashed amber): sever / rejoin.
+//   • NO same-kind neighbour (board boundary or a non-feature tile) → none (dim) ↔ exit
+//     (solid green): force the ribbon to run OFF that edge instead of capping.
+// Roads only connect to roads, rivers to rivers.
 function FeatureConnections({
   cell,
   kind,
   features,
   cuts,
+  exits,
   onToggle,
+  onToggleExit,
 }: {
   cell: { x: number; y: number };
   kind: FeatureKind;
   features: Record<string, FeatureCell>;
   cuts: Record<string, true>;
+  exits: Record<string, true>;
   onToggle: (edge: string) => void;
+  onToggleExit: (edge: string) => void;
 }): ReactElement {
   const kindLabel = kind === 'river' ? 'river' : 'road';
   // Diamond geometry (viewBox 128x96): apex, right, bottom, left vertices.
@@ -276,19 +257,31 @@ function FeatureConnections({
         const hasNeighbor = features[`${nx},${ny}`]?.kind === kind; // only same-kind neighbours connect
         const edge = roadEdgeKey(cell.x, cell.y, nx, ny);
         const severed = cuts[edge] === true;
+        const exited = exits[edge] === true;
         const [[x1, y1], [x2, y2]] = EDGE_GEO[dir.edge];
-        const state = !hasNeighbor ? 'none' : severed ? 'cut' : 'joined';
-        const stroke = state === 'joined' ? 'var(--skirmish-cyan, #38d7ff)' : state === 'cut' ? '#f0a23a' : 'rgba(120,150,165,.35)';
-        const label = `${state === 'joined' ? 'Sever' : state === 'cut' ? 'Rejoin' : `No ${kindLabel}`} ${dir.edge} connection`;
+        // With a neighbour: joined ↔ cut. Without one: none ↔ exit (forced outward stub).
+        const state = hasNeighbor ? (severed ? 'cut' : 'joined') : exited ? 'exit' : 'none';
+        const stroke =
+          state === 'joined' ? 'var(--skirmish-cyan, #38d7ff)'
+          : state === 'cut' ? '#f0a23a'
+          : state === 'exit' ? '#67d98a'
+          : 'rgba(120,150,165,.35)';
+        const toggle = (): void => (hasNeighbor ? onToggle(edge) : onToggleExit(edge));
+        const label =
+          state === 'joined' ? `Sever ${dir.edge} ${kindLabel} connection`
+          : state === 'cut' ? `Rejoin ${dir.edge} ${kindLabel} connection`
+          : state === 'exit' ? `Close ${dir.edge} edge — stop running the ${kindLabel} off it`
+          : `Run the ${kindLabel} off the ${dir.edge} edge`;
         return (
           <g
             key={dir.edge}
             className={`le-roadconn-edge is-${state}`}
-            role={hasNeighbor ? 'button' : undefined}
-            aria-label={hasNeighbor ? label : undefined}
-            tabIndex={hasNeighbor ? 0 : undefined}
-            onClick={hasNeighbor ? () => onToggle(edge) : undefined}
-            onKeyDown={hasNeighbor ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(edge); } } : undefined}
+            role="button"
+            aria-label={label}
+            aria-pressed={state === 'cut' || state === 'exit'}
+            tabIndex={0}
+            onClick={toggle}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
           >
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" strokeLinecap="round" />
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth="6" strokeLinecap="round" strokeDasharray={state === 'cut' ? '5 5' : undefined} />
@@ -361,6 +354,10 @@ export function LevelEditor(): ReactElement {
   // Manually SEVERED feature connections, keyed by the shared edge between two cells
   // (roadEdgeKey, order-independent). A cut overrides auto-connect for BOTH tiles.
   const [featureCuts, setFeatureCuts] = useState<Record<string, true>>(loadedBoard?.featureCuts ?? {});
+  // Forced outward stubs, the mirror of a cut: each keyed edge has NO same-kind neighbour but is
+  // pushed to connect anyway, so the ribbon runs off the board edge (or into a non-feature tile)
+  // instead of capping. Same edge keying as cuts (roadEdgeKey); the neighbour may be off-board.
+  const [featureExits, setFeatureExits] = useState<Record<string, true>>(loadedBoard?.featureExits ?? {});
   // The active feature kind = the current layer when it's a feature layer, else null.
   const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' ? brushKind : null;
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : unitAssets[0].id);
@@ -413,6 +410,7 @@ export function LevelEditor(): ReactElement {
       setBoardCover(board.cover);
       setBoardFeatures(board.features);
       setFeatureCuts(board.featureCuts);
+      setFeatureExits(board.featureExits);
       setEditingId(level.id);
       setLevelName(level.name);
       setSavedSig(boardSignature(board));
@@ -458,15 +456,16 @@ export function LevelEditor(): ReactElement {
   // painted set is the source of truth, so the ribbon re-knits whenever a cell changes.
   const featureOverlays = useMemo(() => {
     const isSevered = (edge: string): boolean => featureCuts[edge] === true;
+    const isExit = (edge: string): boolean => featureExits[edge] === true;
     const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set() };
     for (const [key, f] of Object.entries(boardFeatures)) presentByKind[f.kind].add(key);
     const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
     for (const [key, f] of Object.entries(boardFeatures)) {
       const [x, y] = key.split(',').map(Number);
-      out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered) };
+      out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered, isExit) };
     }
     return out;
-  }, [boardFeatures, featureCuts]);
+  }, [boardFeatures, featureCuts, featureExits]);
 
   const eraseKey = <T,>(setter: (updater: (prev: Record<string, T>) => Record<string, T>) => void, key: string): void =>
     setter((prev) => { if (!(key in prev)) return prev; const next = { ...prev }; delete next[key]; return next; });
@@ -500,15 +499,17 @@ export function LevelEditor(): ReactElement {
     const key = `${x},${y}`;
     if (featureKind) {
       eraseKey(setBoardFeatures, key);
-      setFeatureCuts((prev) => {
+      const dropEdgesTouching = (prev: Record<string, true>): Record<string, true> => {
         const next: Record<string, true> = {};
         let changed = false;
         for (const edge of Object.keys(prev)) {
-          if (edge.split('|').includes(key)) changed = true; // a cut touching the erased cell
+          if (edge.split('|').includes(key)) changed = true; // an edge touching the erased cell
           else next[edge] = true;
         }
         return changed ? next : prev;
-      });
+      };
+      setFeatureCuts(dropEdgesTouching);
+      setFeatureExits(dropEdgesTouching);
       return;
     }
     if (brushKind === 'unit') return eraseKey(setBoardUnits, key);
@@ -516,7 +517,7 @@ export function LevelEditor(): ReactElement {
     if (brushKind === 'cover') return eraseKey(setBoardCover, key);
     eraseKey(setBoardCells, key);
   };
-  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardCover({}); setBoardFeatures({}); setFeatureCuts({}); setSelectedCell(null); };
+  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardCover({}); setBoardFeatures({}); setFeatureCuts({}); setFeatureExits({}); setSelectedCell(null); };
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
@@ -529,8 +530,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, cover: boardCover, features: boardFeatures, featureCuts }),
-    [boardCols, boardRows, boardCells, boardUnits, boardDoodads, boardCover, boardFeatures, featureCuts],
+    () => ({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, cover: boardCover, features: boardFeatures, featureCuts, featureExits }),
+    [boardCols, boardRows, boardCells, boardUnits, boardDoodads, boardCover, boardFeatures, featureCuts, featureExits],
   );
   // Real dirty flag: the board has unsaved changes when its signature differs from the one
   // captured at the last save. A standalone board (never saved) seeds savedSig lazily on
@@ -649,6 +650,18 @@ export function LevelEditor(): ReactElement {
       }
       return dropped ? next : prev;
     });
+    // Exits point at an OFF-board neighbour (always out of bounds by design), so keep an exit
+    // whenever its owning cell — whichever endpoint is still on the board — survives.
+    setFeatureExits((prev) => {
+      const next: Record<string, true> = {};
+      let dropped = false;
+      for (const edge of Object.keys(prev)) {
+        const [p1, p2] = edge.split('|');
+        if (within(p1) || within(p2)) next[edge] = true;
+        else dropped = true;
+      }
+      return dropped ? next : prev;
+    });
     setSelectedCell((sel) => (sel && (sel.x >= nextCols || sel.y >= nextRows) ? null : sel));
     setBoardCols(nextCols);
     setBoardRows(nextRows);
@@ -680,6 +693,8 @@ export function LevelEditor(): ReactElement {
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const toggleFeatureCut = (edge: string): void =>
     setFeatureCuts((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
+  const toggleFeatureExit = (edge: string): void =>
+    setFeatureExits((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
   const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
 
   // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
@@ -912,8 +927,8 @@ export function LevelEditor(): ReactElement {
         {featureKind && selectedCell && selectedFeature && selectedFeature.kind === featureKind ? (
           <section className="skirmish-card">
             <h2>{featureKind === 'river' ? 'River connections' : 'Road connections'}</h2>
-            <FeatureConnections cell={selectedCell} kind={featureKind} features={boardFeatures} cuts={featureCuts} onToggle={toggleFeatureCut} />
-            <p className="le-board-note">Select a {featureKind} tile, then click an edge to sever or rejoin it. A cut applies to both tiles, so the {featureKind} caps off cleanly instead of always connecting.</p>
+            <FeatureConnections cell={selectedCell} kind={featureKind} features={boardFeatures} cuts={featureCuts} exits={featureExits} onToggle={toggleFeatureCut} onToggleExit={toggleFeatureExit} />
+            <p className="le-board-note">Click an edge that has a neighbour to sever or rejoin it. Click an edge with no neighbour — a board boundary or a non-{featureKind} tile — to run the {featureKind} <em>off</em> that edge instead of capping it.</p>
           </section>
         ) : null}
 

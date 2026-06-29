@@ -7,7 +7,8 @@ import type { GameEvent, GameState, Move, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
 import { evaluateObjective, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType } from '../core/level';
-import { buildTerrainIndex } from '../core/terrain';
+import { buildTerrainIndex, terrainAt } from '../core/terrain';
+import { playTerrain } from '../sfx';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 
@@ -15,6 +16,16 @@ import { createSkirmish, type SkirmishOptions } from './setup';
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
 // delay stages that read-beat + thinking pause before the enemy reply resolves.
 const ENEMY_REPLY_DELAY = 520;
+
+// Landing-SFX timing. The move tween runs ~170ms (see SkirmishBoard); fire the
+// terrain footstep a beat into it so the sound lands as the piece *seats*, not as
+// it lifts off. Several enemy moves resolved in one reply are spread out so their
+// footsteps read as a sequence rather than one muddy stack; spawned units deploy as
+// a soft staggered roll-call.
+const LANDING_SFX_DELAY = 150;
+const ENEMY_LANDING_STAGGER = 130;
+const SPAWN_SFX_BASE_DELAY = 220;
+const SPAWN_SFX_STAGGER = 70;
 
 const OBJECTIVE_LOG_COPY = {
   'capture-all': 'capture all enemy pieces',
@@ -37,6 +48,23 @@ function objectiveOutcomeCopy(objective: ObjectiveType, winner: Winner): string 
 /** Movement environment for a state: indexes its terrain layer (if authored). */
 function envFor(game: GameState): MoveEnv {
   return { terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined, lastMove: game.lastMove };
+}
+
+/**
+ * Fire the terrain "footstep" for a piece arriving at (x, y): read the destination
+ * tile's material from the indexed terrain and play its one-shot. A no-op when the
+ * board has no terrain authored there; `playTerrain` itself stays silent when
+ * effects are muted or the AudioContext isn't armed yet, so callers never need to
+ * know the audio state. `delayMs` aligns the sound with the move tween; `gain`
+ * (<1) softens secondary footsteps (enemy replies, spawn roll-call).
+ */
+function playLandingSfx(env: MoveEnv, x: number, y: number, delayMs: number, gain?: number): void {
+  if (!env.terrain) return;
+  const cell = terrainAt(env.terrain, x, y);
+  if (!cell) return;
+  const opts = gain !== undefined ? { gain } : undefined;
+  if (delayMs > 0) setTimeout(() => playTerrain(cell.terrain, opts), delayMs);
+  else playTerrain(cell.terrain, opts);
 }
 
 function describeEvent(ev: GameEvent): string | null {
@@ -164,6 +192,12 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         focusedId: firstPlayerId(game),
         log: [...msgs.reverse(), ...cur.log].slice(0, 12),
       });
+      // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
+      // multi-move reply reads as a sequence, not one muddy stack. Terrain is static,
+      // so the pre-reply env indexes the same board the pieces landed on.
+      enemyRes.events
+        .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
+        .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
     }, ENEMY_REPLY_DELAY);
   };
 
@@ -193,6 +227,14 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : `Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`;
     const selectedId = firstPlayerId(game);
     set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null });
+    // "Units come onto the board": a soft staggered roll-call of footsteps as the
+    // player's force deploys, each sounding the terrain it lands on. Softer (gain
+    // 0.7) and spread out so a whole squad arriving doesn't stack into one loud
+    // click. Silent until a gesture arms the AudioContext — entering a skirmish is
+    // one, so the navigating click covers it.
+    game.pieces
+      .filter((pc) => pc.alive && pc.side === 'player')
+      .forEach((pc, i) => playLandingSfx(env, pc.x, pc.y, SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER, 0.7));
   },
 
   select: (id) => {
@@ -224,6 +266,13 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     if (!mv) return;
     const playerRes = applyMove(s.game, p.id, mv);
     let game = playerRes.state;
+    // Footstep: only when the piece actually relocates (applyMove emits a 'moved'
+    // event). An attack-in-place against an hp>1 target emits 'damaged' with no
+    // 'moved', so it must not sound a landing — this mirrors the enemy path. The
+    // single player 'moved' event's destination equals (x, y), so the args are right.
+    if (playerRes.events.some((e) => e.kind === 'moved')) {
+      playLandingSfx(s.env, x, y, LANDING_SFX_DELAY);
+    }
     const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
     // Objective win on the player's move: capturing the enemy King, routing the
     // last enemy, or stepping a piece onto a reach tile ends the game immediately —

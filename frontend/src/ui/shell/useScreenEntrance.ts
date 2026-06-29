@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 
-// Screen entrance transition (ADR-0044). The single built-in primitive for fading a screen's
+// Screen entrance transition (ADR-0046). The single built-in primitive for fading a screen's
 // chrome in when you navigate to it. Spread the returned className onto the screen's CHROME
 // ROOT only (e.g. .settings-shell) — never the screen's outer element, which also hosts the
 // persistent ambience backdrop: the homepage rain must stay continuous across art-background
-// screens, so it lives OUTSIDE the faded chrome and never re-fades (ADR-0044 B/G).
+// screens, so it lives OUTSIDE the faded chrome and never re-fades (ADR-0046 B/G).
 //
 // Behaviour: on a NAVIGATION-driven mount the chrome paints at opacity 0, then fades to 1 over
 // the entrance tier (slow + decelerate, ADR-0043) and is inert (pointer-events:none) until the
-// fade settles (ADR-0044 D — no starting a new transition mid-transition). A pure opacity fade
+// fade settles (ADR-0046 D — no starting a new transition mid-transition). A pure opacity fade
 // is reduced-motion-safe, so it is NOT gated on prefers-reduced-motion (ADR-0043).
 //
 // It deliberately does NOT play on the initial cold page load — the main menu's cold-load
