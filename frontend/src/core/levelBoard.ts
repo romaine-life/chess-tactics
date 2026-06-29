@@ -12,6 +12,7 @@
 
 import type { Level, LevelEconomy, LevelUnit, ObjectiveType } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
+import type { PlacedProp } from './props';
 import type { Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, type EditorBoard } from '../ui/boardCode';
@@ -130,7 +131,15 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     };
   }
 
-  return { cols, rows, cells, units, doodads: {}, cover, features: {}, featureCuts: {} };
+  // Legacy fallback: a level with no boardCode still carries props in layers.props (the durable
+  // game channel), so re-derive the editor's anchor-keyed props map from it.
+  const props: EditorBoard['props'] = {};
+  for (const p of level.layers.props ?? []) {
+    if (p.x < 0 || p.x >= cols || p.y < 0 || p.y >= rows) continue;
+    props[`${p.x},${p.y}`] = { propId: p.propId };
+  }
+
+  return { cols, rows, cells, units, doodads: {}, props, cover, features: {}, featureCuts: {} };
 }
 
 // Serialize the painted board into a valid `Level`. `boardCode` is stamped for a lossless
@@ -183,6 +192,17 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     units.push({ x, y, type, side: factionToSide(placement.faction), facing: placement.direction as UnitFacing });
   }
 
+  // Dual-write props: the durable game channel (layers.props) AND the lossless boardCode 'p' map
+  // (via encodeBoard below). The game reads layers.props; the editor re-opens from boardCode. The
+  // anchor (the prop's min-corner) is the map key; out-of-bounds anchors are dropped on resize so
+  // this is just a projection. (Footprint bounds are enforced at paint time, not re-checked here.)
+  const props: PlacedProp[] = [];
+  for (const [key, placement] of Object.entries(board.props ?? {})) {
+    const [x, y] = key.split(',').map(Number);
+    if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+    props.push({ x, y, propId: placement.propId });
+  }
+
   return {
     formatVersion: LEVEL_FORMAT_VERSION,
     id: meta.id,
@@ -196,6 +216,6 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     economy: meta.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
     theme: meta.theme ?? 'grassland',
     boardCode: encodeBoard({ ...board, cols, rows }),
-    layers: { terrain, decals: [], zones: [], units },
+    layers: { terrain, decals: [], zones: [], units, props },
   };
 }

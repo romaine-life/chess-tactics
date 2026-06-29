@@ -6,6 +6,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { DoodadSprite } from '../render/BoardDoodad';
+import { PropSprite } from '../render/BoardStructure';
+import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
@@ -34,7 +36,7 @@ import {
   type StudioFamily,
 } from './studioBoard';
 import { featureFrameSrc, featureThumbSrc } from '../art/tileset';
-import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_ART_PENDING, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
@@ -60,10 +62,12 @@ function StudioEditableBoard({
   cells: placed,
   units: placedUnits,
   doodads: placedDoodads,
+  props: placedProps = {},
   features: placedFeatures = {},
   resolveAsset,
   resolveUnit,
   resolveDoodad,
+  resolveProp,
   tool,
   selectedCell,
   showFootprint,
@@ -73,6 +77,7 @@ function StudioEditableBoard({
   onPaint,
   onErase,
   onSelect,
+  propBrush,
   overlay,
   hidden,
 }: {
@@ -81,11 +86,14 @@ function StudioEditableBoard({
   cells: Record<string, string>;
   units: Record<string, BoardUnitPlacement>;
   doodads: Record<string, { doodadId: string }>;
+  /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
+  props?: Record<string, { propId: string }>;
   /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
   features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
   resolveAsset: (id: string) => StudioAsset | undefined;
   resolveUnit: (id: string) => UnitAsset | undefined;
   resolveDoodad: (id: string) => DoodadAsset | undefined;
+  resolveProp: (id: string) => PropDef | undefined;
   tool: 'select' | 'brush' | 'erase';
   selectedCell: { x: number; y: number } | null;
   showFootprint: boolean;
@@ -95,11 +103,14 @@ function StudioEditableBoard({
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
   onSelect: (x: number, y: number) => void;
+  /** When the prop brush is armed: its def + a placeability test, used for the footprint hover. */
+  propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
   overlay?: ReactNode;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
   hidden?: { tile: boolean; unit: boolean; doodad: boolean };
 }): ReactElement {
   const paintingRef = useRef(false);
+  const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const stopPainting = () => { paintingRef.current = false; };
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
@@ -125,7 +136,9 @@ function StudioEditableBoard({
         children: (
           <>
             {asset && !hidden?.tile ? <img src={assetFrameSrc(asset, animationFrame)} alt="" draggable={false} /> : null}
-            {placedFeatures[key] ? (
+            {placedFeatures[key] && placedFeatures[key].kind !== 'fence' ? (
+              // Fences are PLUMBING-ONLY (no baked mask art yet): never request a fence sprite, or
+              // it would 404. They render no image until the art ships — see FENCE_ART_PENDING.
               <img
                 className="tileset-feature-overlay"
                 src={featureFrameSrc(placedFeatures[key].kind, placedFeatures[key].material, placedFeatures[key].mask)}
@@ -142,7 +155,7 @@ function StudioEditableBoard({
                 if (tool !== 'select') paintingRef.current = true;
                 applyTool(x, y);
               }}
-              onPointerEnter={() => { if (paintingRef.current) applyTool(x, y); }}
+              onPointerEnter={() => { setHoverCell({ x, y }); if (paintingRef.current) applyTool(x, y); }}
               onContextMenu={(event) => { event.preventDefault(); onErase(x, y); }}
             />
           </>
@@ -195,6 +208,85 @@ function StudioEditableBoard({
     }
   }
 
+  // Multi-cell props: the tall PropSprite (back/front halves) seated over its footprint, plus a
+  // Studio-only hit target spanning the footprint's screen bbox so a click on the prop body routes
+  // select/erase to the OWNING ANCHOR (the shared sprite is pointer-events:none, so otherwise the
+  // click falls through to whatever cell is behind it).
+  for (const [key, placement] of Object.entries(placedProps)) {
+    const def = resolveProp(placement.propId);
+    if (!def) continue; // unknown prop id — skip (matches the renderer/collision skip)
+    const [ax, ay] = key.split(',').map(Number);
+    overlaySprites.push(<PropSprite key={`prop-${key}`} prop={{ x: ax, y: ay, propId: placement.propId }} def={def} />);
+    // Footprint screen bbox: project all footprint cell centres, take their extent, pad to the
+    // diamond half-width/height. zIndex above the front-most cell's sprite so clicks land on it.
+    const cells = propCells(ax, ay, def);
+    const pts = cells.map((c) => boardLabCellPosition(c));
+    const minLeft = Math.min(...pts.map((p) => p.left));
+    const maxLeft = Math.max(...pts.map((p) => p.left));
+    const minTop = Math.min(...pts.map((p) => p.top));
+    const maxTop = Math.max(...pts.map((p) => p.top));
+    const frontZ = (ax + def.w - 1) + (ay + def.h - 1) + 20000;
+    overlaySprites.push(
+      <span
+        key={`prop-hit-${key}`}
+        className="tileset-doodad-hit"
+        style={{
+          position: 'absolute',
+          left: minLeft,
+          top: minTop,
+          zIndex: frontZ + 2,
+          width: (maxLeft - minLeft) + 96,
+          height: (maxTop - minTop) + 96,
+          transform: 'translate(-50%, -75%)',
+          pointerEvents: tool === 'brush' ? 'none' : 'auto',
+        }}
+        onPointerDown={(event) => {
+          if (event.button === 2) return;
+          event.stopPropagation();
+          if (tool !== 'select') paintingRef.current = true;
+          applyTool(ax, ay);
+        }}
+        onContextMenu={(event) => { event.preventDefault(); onErase(ax, ay); }}
+      />,
+    );
+  }
+
+  // Footprint hover preview for the prop brush: outline every cell the prop would occupy under the
+  // cursor (placeable vs blocked), and ghost the PropSprite at the anchor so the author sees both
+  // where it lands and what it looks like before committing.
+  if (propBrush && tool === 'brush' && hoverCell) {
+    const { def } = propBrush;
+    const placeable = propBrush.canPlaceAt(hoverCell.x, hoverCell.y);
+    for (const c of propCells(hoverCell.x, hoverCell.y, def)) {
+      if (c.x < 0 || c.x >= cols || c.y < 0 || c.y >= rows) continue;
+      const { left, top, zIndex } = boardLabCellPosition(c);
+      overlaySprites.push(
+        <span
+          key={`prop-ghostcell-${c.x},${c.y}`}
+          className={`le-prop-ghost-cell ${placeable ? 'is-ok' : 'is-blocked'}`}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left,
+            top,
+            zIndex: zIndex + 19000,
+            width: 96,
+            height: 55,
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            outline: `2px solid ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
+            background: placeable ? 'rgba(80,220,140,.18)' : 'rgba(240,90,90,.18)',
+          }}
+        />,
+      );
+    }
+    overlaySprites.push(
+      <span key="prop-ghost-sprite" aria-hidden="true" style={{ opacity: placeable ? 0.65 : 0.3, position: 'absolute', left: 0, top: 0 }}>
+        <PropSprite prop={{ x: hoverCell.x, y: hoverCell.y, propId: def.id }} def={def} />
+      </span>,
+    );
+  }
+
   return (
     <TileGrid
       cells={cells}
@@ -204,7 +296,7 @@ function StudioEditableBoard({
       boardZoom={boardZoom}
       boardPan={boardPan}
       onPointerUp={stopPainting}
-      onPointerLeave={stopPainting}
+      onPointerLeave={() => { stopPainting(); setHoverCell(null); }}
     >
       {overlay}
       {overlaySprites}
@@ -339,10 +431,13 @@ export function LevelEditor(): ReactElement {
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'cover' | 'road' | 'river'>(studioArm.kind ?? 'tile');
-  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'cover' | 'road' | 'river'>(studioArm.kind ?? 'tile');
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
+  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
+  // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
+  const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(loadedBoard?.props ?? {});
+  const [propBrushId, setPropBrushId] = useState<string>(PROP_DEFS[0].id);
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
   const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(loadedBoard?.cover ?? {});
@@ -357,12 +452,13 @@ export function LevelEditor(): ReactElement {
   const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
     road: defaultFeatureMaterial('road'),
     river: defaultFeatureMaterial('river'),
+    fence: defaultFeatureMaterial('fence'),
   });
   // Manually SEVERED feature connections, keyed by the shared edge between two cells
   // (roadEdgeKey, order-independent). A cut overrides auto-connect for BOTH tiles.
   const [featureCuts, setFeatureCuts] = useState<Record<string, true>>(loadedBoard?.featureCuts ?? {});
   // The active feature kind = the current layer when it's a feature layer, else null.
-  const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' ? brushKind : null;
+  const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' || brushKind === 'fence' ? brushKind : null;
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : unitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -410,6 +506,7 @@ export function LevelEditor(): ReactElement {
       setBoardCells(board.cells);
       setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
       setBoardDoodads(board.doodads);
+      setBoardProps(board.props);
       setBoardCover(board.cover);
       setBoardFeatures(board.features);
       setFeatureCuts(board.featureCuts);
@@ -451,6 +548,40 @@ export function LevelEditor(): ReactElement {
     const terrain = tileId ? leFamilyOfTile(tileId)?.id : undefined;
     return terrain !== undefined && doodad.terrains.includes(terrain);
   };
+  const resolvePropDef = (id: string): PropDef | undefined => propDef(id);
+  const propBrushDef = resolvePropDef(propBrushId) ?? PROP_DEFS[0];
+  // Generalised doodadFitsTile for a W×H footprint: EVERY footprint cell must be in-bounds AND
+  // its tile's family must be a terrain the prop allows. (Overlap with units/other props is a
+  // separate check at paint time — fit is purely about the terrain bed.)
+  const propFitsBoard = (def: PropDef, ax: number, ay: number): boolean => {
+    if (ax < 0 || ay < 0 || ax + def.w > boardCols || ay + def.h > boardRows) return false;
+    return propCells(ax, ay, def).every((c) => {
+      const fam = boardCells[`${c.x},${c.y}`] ? leFamilyOfTile(boardCells[`${c.x},${c.y}`])?.id : undefined;
+      return fam !== undefined && def.terrains.includes(fam);
+    });
+  };
+  // The footprint cells of every already-placed prop (skipping unknown ids), so a new prop can't
+  // overlap an existing one. Recomputed per call — cheap for a hand-authored board.
+  const occupiedPropCells = (): Set<string> => {
+    const set = new Set<string>();
+    for (const [key, placement] of Object.entries(boardProps)) {
+      const def = resolvePropDef(placement.propId);
+      if (!def) continue;
+      const [ax, ay] = key.split(',').map(Number);
+      for (const c of propCells(ax, ay, def)) set.add(`${c.x},${c.y}`);
+    }
+    return set;
+  };
+  // A prop places at (ax,ay) iff it FITS (bounds + terrain) AND no footprint cell collides with a
+  // placed unit or another prop's footprint. Used for the paint gate AND the hover preview styling.
+  const canPlaceProp = (def: PropDef, ax: number, ay: number): boolean => {
+    if (!propFitsBoard(def, ax, ay)) return false;
+    const occupied = occupiedPropCells();
+    return propCells(ax, ay, def).every((c) => {
+      const key = `${c.x},${c.y}`;
+      return !boardUnits[key] && !occupied.has(key);
+    });
+  };
 
   // Derive each cell's connection mask from the painted set, live. Connectivity is PER KIND:
   // a road's mask is resolved against road neighbours only, a river's against rivers only, so
@@ -458,7 +589,7 @@ export function LevelEditor(): ReactElement {
   // painted set is the source of truth, so the ribbon re-knits whenever a cell changes.
   const featureOverlays = useMemo(() => {
     const isSevered = (edge: string): boolean => featureCuts[edge] === true;
-    const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set() };
+    const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
     for (const [key, f] of Object.entries(boardFeatures)) presentByKind[f.kind].add(key);
     const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
     for (const [key, f] of Object.entries(boardFeatures)) {
@@ -477,6 +608,11 @@ export function LevelEditor(): ReactElement {
       setBoardFeatures((prev) => (prev[key]?.kind === featureKind && prev[key]?.material === material ? prev : { ...prev, [key]: { kind: featureKind, material } }));
       return;
     }
+    // A unit/doodad/cover must not land on a placed prop's footprint: for a BLOCKING prop the
+    // collision bridge gives an authored unit priority and DROPS that cell's collider
+    // (game/setup.ts), silently un-blocking the prop; and any sprite there would overlap the prop.
+    // Refuse so the editor matches in-game collision. (Props ↔ features don't gate each other.)
+    if ((brushKind === 'unit' || brushKind === 'doodad' || brushKind === 'cover') && occupiedPropCells().has(key)) return;
     if (brushKind === 'unit') {
       setBoardUnits((prev) => ({ ...prev, [key]: { unitId: unitBrushAsset.id, direction: unitBrushDirection, faction: unitFaction } }));
       return;
@@ -485,6 +621,13 @@ export function LevelEditor(): ReactElement {
       // A doodad only lands on a tile of its home terrain; painting elsewhere is a no-op.
       if (!doodadFitsTile(doodadBrushAsset, boardCells[key])) return;
       setBoardDoodads((prev) => ({ ...prev, [key]: { doodadId: doodadBrushAsset.id } }));
+      return;
+    }
+    if (brushKind === 'prop') {
+      // A multi-cell prop anchors at the clicked cell and must FIT (bounds + terrain) with no
+      // footprint cell overlapping a unit or another prop. Anything else is a no-op.
+      if (!canPlaceProp(propBrushDef, x, y)) return;
+      setBoardProps((prev) => ({ ...prev, [key]: { propId: propBrushDef.id } }));
       return;
     }
     if (brushKind === 'cover') {
@@ -513,10 +656,31 @@ export function LevelEditor(): ReactElement {
     }
     if (brushKind === 'unit') return eraseKey(setBoardUnits, key);
     if (brushKind === 'doodad') return eraseKey(setBoardDoodads, key);
+    if (brushKind === 'prop') {
+      // Erase the prop whose FOOTPRINT contains the clicked cell — not only an exact anchor hit,
+      // so clicking anywhere on a 2×2 removes it. Reverse-scan so the last-placed (top) prop wins
+      // when footprints somehow overlap (they can't via the paint gate, but be defensive).
+      setBoardProps((prev) => {
+        const entries = Object.entries(prev);
+        for (let i = entries.length - 1; i >= 0; i -= 1) {
+          const [anchorKey, placement] = entries[i];
+          const def = resolvePropDef(placement.propId);
+          if (!def) continue;
+          const [ax, ay] = anchorKey.split(',').map(Number);
+          if (propCells(ax, ay, def).some((c) => c.x === x && c.y === y)) {
+            const next = { ...prev };
+            delete next[anchorKey];
+            return next;
+          }
+        }
+        return prev;
+      });
+      return;
+    }
     if (brushKind === 'cover') return eraseKey(setBoardCover, key);
     eraseKey(setBoardCells, key);
   };
-  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardCover({}); setBoardFeatures({}); setFeatureCuts({}); setSelectedCell(null); };
+  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardProps({}); setBoardCover({}); setBoardFeatures({}); setFeatureCuts({}); setSelectedCell(null); };
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
@@ -529,8 +693,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, cover: boardCover, features: boardFeatures, featureCuts }),
-    [boardCols, boardRows, boardCells, boardUnits, boardDoodads, boardCover, boardFeatures, featureCuts],
+    () => ({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, features: boardFeatures, featureCuts }),
+    [boardCols, boardRows, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardFeatures, featureCuts],
   );
   // Real dirty flag: the board has unsaved changes when its signature differs from the one
   // captured at the last save. A standalone board (never saved) seeds savedSig lazily on
@@ -636,6 +800,22 @@ export function LevelEditor(): ReactElement {
     setBoardCells((prev) => prune(prev));
     setBoardUnits((prev) => prune(prev));
     setBoardDoodads((prev) => prune(prev));
+    // Props are FOOTPRINT-aware: drop a prop if its anchor OR any footprint cell falls outside
+    // the new bounds (a 2×2 anchored at the last column would otherwise hang off the edge).
+    setBoardProps((prev) => {
+      const next: Record<string, { propId: string }> = {};
+      let dropped = false;
+      for (const [key, placement] of Object.entries(prev)) {
+        const def = resolvePropDef(placement.propId);
+        const [ax, ay] = key.split(',').map(Number);
+        const fits = def
+          ? ax >= 0 && ay >= 0 && ax + def.w <= nextCols && ay + def.h <= nextRows
+          : within(key); // unknown id: fall back to the anchor-only check
+        if (fits) next[key] = placement;
+        else dropped = true;
+      }
+      return dropped ? next : prev;
+    });
     setBoardCover((prev) => prune(prev));
     setBoardFeatures((prev) => prune(prev));
     // Cuts are keyed by edge ("a|b"); keep only edges whose BOTH endpoints survive.
@@ -657,12 +837,28 @@ export function LevelEditor(): ReactElement {
   const paintedCount = Object.keys(boardCells).length;
   const unitCount = Object.keys(boardUnits).length;
   const doodadCount = Object.keys(boardDoodads).length;
+  const propCount = Object.keys(boardProps).length;
   const selectedTileId = selectedCell ? boardCells[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedAsset = selectedTileId ? resolveAsset(selectedTileId) : undefined;
   const selectedUnit = selectedCell ? boardUnits[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedUnitAsset = selectedUnit ? resolveUnitAsset(selectedUnit.unitId) : undefined;
   const selectedDoodad = selectedCell ? boardDoodads[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedDoodadAsset = selectedDoodad ? resolveDoodadAsset(selectedDoodad.doodadId) : undefined;
+  // The prop whose footprint contains the selected cell (a click anywhere on a 2×2 selects it),
+  // plus its def — for the Details panel.
+  const selectedProp = useMemo(() => {
+    if (!selectedCell) return undefined;
+    for (const [key, placement] of Object.entries(boardProps)) {
+      const def = resolvePropDef(placement.propId);
+      if (!def) continue;
+      const [ax, ay] = key.split(',').map(Number);
+      if (propCells(ax, ay, def).some((c) => c.x === selectedCell.x && c.y === selectedCell.y)) {
+        return { anchor: { x: ax, y: ay }, def };
+      }
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCell, boardProps]);
   const coverCount = Object.keys(boardCover).length;
   // Resolve the painted cover into concrete tufts (once, here — not per render). Re-roll
   // bumps coverSeed to reshuffle every cell's scatter while keeping the same densities.
@@ -731,10 +927,12 @@ export function LevelEditor(): ReactElement {
                   cells={boardCells}
                   units={boardUnits}
                   doodads={boardDoodads}
+                  props={boardProps}
                   features={featureOverlays}
                   resolveAsset={resolveAsset}
                   resolveUnit={resolveUnitAsset}
                   resolveDoodad={resolveDoodadAsset}
+                  resolveProp={resolvePropDef}
                   tool={tool}
                   selectedCell={selectedCell}
                   showFootprint={showFootprint}
@@ -744,6 +942,7 @@ export function LevelEditor(): ReactElement {
                   onPaint={paintCell}
                   onErase={eraseCell}
                   onSelect={selectCell}
+                  propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
                   overlay={<GroundCoverLayer cells={coverCells} />}
                 />
               </div>
@@ -759,8 +958,16 @@ export function LevelEditor(): ReactElement {
             <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
             <button type="button" className={`le-seg-btn ${layer === 'road' ? 'active' : ''}`.trim()} onClick={() => { setLayer('road'); setBrushKind('road'); setTool('brush'); }}>Road</button>
             <button type="button" className={`le-seg-btn ${layer === 'river' ? 'active' : ''}`.trim()} onClick={() => { setLayer('river'); setBrushKind('river'); setTool('brush'); }}>River</button>
+            <button
+              type="button"
+              className={`le-seg-btn ${layer === 'fence' ? 'active' : ''}`.trim()}
+              disabled={FENCE_ART_PENDING}
+              title={FENCE_ART_PENDING ? 'Fence art is pending — the brush is disabled until the mask set ships.' : 'Paint fences (visual only).'}
+              onClick={() => { if (FENCE_ART_PENDING) return; setLayer('fence'); setBrushKind('fence'); setTool('brush'); }}
+            >Fence</button>
             <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
             <button type="button" className={`le-seg-btn ${layer === 'doodad' ? 'active' : ''}`.trim()} onClick={() => { setLayer('doodad'); setBrushKind('doodad'); setTool('brush'); }}>Doodad</button>
+            <button type="button" className={`le-seg-btn ${layer === 'prop' ? 'active' : ''}`.trim()} onClick={() => { setLayer('prop'); setBrushKind('prop'); setTool('brush'); }}>Prop</button>
             <button type="button" className={`le-seg-btn ${layer === 'cover' ? 'active' : ''}`.trim()} onClick={() => { setLayer('cover'); setBrushKind('cover'); setTool('brush'); }}>Cover</button>
           </div>
         </section>
@@ -788,13 +995,17 @@ export function LevelEditor(): ReactElement {
                 ? <img src={unitBrushAsset.sprite(unitFaction, 'south')} alt="" draggable={false} />
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
+                : brushKind === 'prop'
+                ? <img src={`/assets/props/${propBrushDef.id}/front.png`} alt="" draggable={false} />
+                : featureKind === 'fence'
+                ? <span className="le-brush-thumb-pending" aria-hidden="true" /> /* fence art pending — no thumb to request */
                 : featureKind
                 ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
                 : <img src={brushAsset.src} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'cover' ? 'ground cover' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -860,6 +1071,41 @@ export function LevelEditor(): ReactElement {
                 ))}
               </div>
             <p className="le-board-note">Doodads only land on a tile of their home terrain.</p>
+          </section>
+        ) : brushKind === 'prop' ? (
+          <section className="skirmish-card le-brush-panel">
+            {(['tree', 'house'] as PropKind[]).map((kind) => {
+              const group = PROP_DEFS.filter((def) => def.kind === kind);
+              if (!group.length) return null;
+              return (
+                <div className="le-pal-group" key={kind}>
+                  <span className="le-pal-grouplabel">{kind === 'tree' ? 'Trees' : 'Houses'}</span>
+                  <div className="le-swatches">
+                    {group.map((def) => (
+                      <button
+                        type="button"
+                        key={def.id}
+                        className={`le-swatch ${propBrushId === def.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                        title={`${def.label} · ${def.w}×${def.h} · ${def.terrains.join(', ')}${def.blocking ? ' · blocks' : ''}`}
+                        onClick={() => { setPropBrushId(def.id); setBrushKind('prop'); setLayer('prop'); setTool('brush'); }}
+                      >
+                        <img src={`/assets/props/${def.id}/front.png`} alt="" draggable={false} />
+                        <small>{def.label}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <p className="le-board-note">Props span {propBrushDef.w}×{propBrushDef.h} tiles, anchored at the clicked cell. They only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses) become impassable in play.</p>
+          </section>
+        ) : featureKind === 'fence' ? (
+          <section className="skirmish-card le-brush-panel">
+            <h2>Fence</h2>
+            <p className="le-board-note">
+              Fences are <strong>visual only</strong> and the art is still pending, so the brush is
+              disabled for now. They never affect movement — edge-blocking is a later milestone.
+            </p>
           </section>
         ) : featureKind ? (
           <section className="skirmish-card le-brush-panel">
@@ -947,9 +1193,9 @@ export function LevelEditor(): ReactElement {
           </div>
         </section>
 
-        {(selectedUnitAsset || selectedDoodadAsset || selectedAsset || selectedCell) ? (
+        {(selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
         <section className="skirmish-card le-details">
-          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedAsset ? 'Tile' : 'Cell'}</h2>
+          <h2>Details · {selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedProp ? 'Prop' : selectedAsset ? 'Tile' : 'Cell'}</h2>
           {selectedUnitAsset && selectedUnit ? (
             <dl>
               <div><dt>Piece</dt><dd>{selectedUnitAsset.label}</dd></div>
@@ -962,6 +1208,12 @@ export function LevelEditor(): ReactElement {
               <div><dt>Terrain</dt><dd>{selectedDoodadAsset.terrains.join(', ')}</dd></div>
               <div><dt>Cell</dt><dd>{selectedCell?.x}, {selectedCell?.y}</dd></div>
             </dl>
+          ) : selectedProp ? (
+            <dl>
+              <div><dt>Prop</dt><dd>{selectedProp.def.label}</dd></div>
+              <div><dt>Footprint</dt><dd>{selectedProp.def.w}×{selectedProp.def.h}{selectedProp.def.blocking ? ' · blocks' : ''}</dd></div>
+              <div><dt>Anchor</dt><dd>{selectedProp.anchor.x}, {selectedProp.anchor.y}</dd></div>
+            </dl>
           ) : selectedAsset ? (
             <dl>
               <div><dt>Type</dt><dd>{leFamilyOfTile(selectedAsset.id)?.label ?? '—'}</dd></div>
@@ -973,13 +1225,14 @@ export function LevelEditor(): ReactElement {
               <div><dt>Tiles</dt><dd>{paintedCount}</dd></div>
               <div><dt>Units</dt><dd>{unitCount}</dd></div>
               <div><dt>Doodads</dt><dd>{doodadCount}</dd></div>
+              <div><dt>Props</dt><dd>{propCount}</dd></div>
             </dl>
           )}
         </section>
         ) : null}
 
         <div className="le-statusline">
-          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · {boardCols}×{boardRows}
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · {boardCols}×{boardRows}
         </div>
         </KitScroll>
       </aside>
