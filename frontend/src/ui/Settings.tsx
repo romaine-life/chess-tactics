@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode
 import { fetchMe, type AuthUser } from '../net/auth';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
-import { BrandLockup } from './shared/BrandLockup';
-import { HeaderAccountCluster } from './shared/HeaderAccountCluster';
 import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -608,14 +606,7 @@ export function Settings(): ReactElement {
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
       <AmbienceBackground />
-      <div className="settings-screen">
-        <header className="app-titlebar settings-header-frame">
-          <BrandLockup screenName="Settings" />
-          {/* The shared account cluster (ADR-0036). No Settings gear — we're already on
-              Settings; the brand lockup is the home link, so no Menu/Back chrome either. */}
-          <HeaderAccountCluster showSettingsGear={false} signInReturnTo="/settings" />
-        </header>
-
+      <div className="settings-screen app-shell-bar-pad">
         <div className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (

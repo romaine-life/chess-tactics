@@ -311,12 +311,11 @@ button:disabled {
 .shell {
   visibility: visible;
   display: grid;
-  /* Full-width app column: topbar on top, the React app (#root) fills the rest.
-     Was a 2-col grid with a fixed 340px right rail — a leftover of the retired
-     app.js game layout — which squished every React surface (menu, catalog,
-     editors) into a 340px column. */
+  /* Full-bleed app column: #root fills the shell. The persistent title bar is a
+     fixed React element (AppTitleBar) overlaying the top; the old static-topbar row
+     was deleted when every screen moved to the shell bar. */
   grid-template-columns: 1fr;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 14px;
   height: 100vh;
   height: 100dvh;
@@ -344,87 +343,11 @@ button:disabled {
   overflow: hidden;
 }
 
-.topbar {
-  align-items: stretch;
-  background:
-    linear-gradient(180deg, rgba(16, 29, 39, .96), rgba(9, 17, 24, .96));
-  border: 1px solid rgba(85, 114, 130, .62);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 1px 0 rgba(199, 226, 232, .06),
-    0 12px 32px rgba(0, 0, 0, .24);
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 72px;
-  padding: 12px 14px;
-}
-
-.mission-id {
-  align-content: center;
-  border-left: 3px solid var(--cobalt);
-  display: grid;
-  min-width: 0;
-  padding-left: 12px;
-}
-
-.topbar-right {
-  align-items: center;
-  display: grid;
-  gap: 9px;
-  justify-items: end;
-}
-
-.account {
-  align-items: center;
-  background: rgba(5, 12, 17, .64);
-  border: 1px solid rgba(71, 97, 113, .58);
-  border-radius: 4px;
-  display: flex;
-  gap: 7px;
-  min-width: 0;
-  padding: 5px;
-}
-
-.account-avatar {
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  display: block;
-  height: 30px;
-  image-rendering: auto;
-  width: 30px;
-}
-
-#accountName {
-  color: var(--muted);
-  font-size: 1rem;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#signInButton,
-#signOutButton {
-  border-color: rgba(101, 184, 255, .56);
-  color: var(--ink-strong);
-  min-height: 30px;
-  padding: 5px 8px;
-}
-
 h1 {
   color: var(--ink-strong);
   font-size: clamp(.88rem, 1.8vw, 1.34rem);
   line-height: 1.15;
   text-shadow: 0 2px 0 #020507, 0 0 18px rgba(101, 184, 255, .18);
-}
-
-#statusLine {
-  color: var(--cobalt-bright);
-  font-size: 1rem;
-  line-height: 1.1;
-  margin-top: 6px;
-  text-transform: uppercase;
 }
 
 .meters {
@@ -613,7 +536,6 @@ h1 {
   grid-template-rows: minmax(0, 1fr);
 }
 
-.shell.main-menu-active .topbar,
 .shell.main-menu-active .panel {
   display: none;
 }
@@ -753,6 +675,11 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* The enlarged tab look (64px carved icon, even 22px padding, label nudged +18px, icon grown from a
+   fixed centre and clipped at the button edge) now lives on the shared .settings-tab base above, so
+   the main-menu, campaign, AND settings tabs all match. The Pages tuner (MainMenuViewer) still
+   overrides .main-menu-mode-tab live for further auditioning. */
+
 /* Ambience shared-world effect canvas. Sits over the menu's background art
    (the layer's CSS background) and under the menu UI (.main-menu-screen, z3).
    The sim only paints lit pixels, so the background scene shows through. */
@@ -853,6 +780,34 @@ h1 {
 .pages-menu-tweak.preview-hover.indent-hover .mode-button-stone { transform: translateX(6px); }
 .pages-menu-tweak.preview-hover.indent-hover-10 .mode-button-stone { transform: translateX(10px); }
 .pages-stub-frame { width: 100%; height: 100%; border: 0; display: block; background: #02070b; }
+/* A control + its permanent per-control reset, side by side. The widget flexes to fill, the ↺
+   sits to its right. Studio tooling chrome (out of scope for the player-facing kit). */
+.pages-ctl-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pages-ctl-row > input[type="range"],
+.pages-ctl-row > select,
+.pages-ctl-row > .tileset-tier-seg {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+.pages-mini-reset {
+  appearance: none;
+  flex: none;
+  align-self: stretch;
+  padding: 0 8px;
+  font-size: 14px;
+  line-height: 1;
+  color: #9fc4e6;
+  background: rgba(120, 160, 200, .12);
+  border: 1px solid rgba(120, 160, 200, .32);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pages-mini-reset:hover { color: #f4fbff; background: rgba(120, 160, 200, .24); }
 /* Two classes → out-specifies the base card-image checkerboard (pages aren't transparent
    sprites): a solid stone-ish plate with the page initial, centered by the base place-items. */
 .tileset-studio-card-image.pages-card-image {
@@ -1333,6 +1288,39 @@ h1 {
 .main-menu-layer.is-loading .main-menu-left,
 .main-menu-layer.is-loading .main-menu-right {
   opacity: 0;
+}
+
+/* Cross-route veil (App.tsx) — an atmospheric field that fades OVER the current
+   screen, lets a heavy destination load + compose underneath while opaque, then
+   fades UP into it: one calm dissolve instead of a "Loading…" snap. Only heavy
+   entrances trigger it (skirmish / level editor / campaign editor); light hops
+   swap instantly. Timings mirror VEIL_COVER_MS / VEIL_REVEAL_MS in App.tsx.
+   Retune the field + timing here — it's meant to be tuned by feel. */
+:root {
+  --route-veil-cover-ms: 260ms;
+  --route-veil-reveal-ms: 340ms;
+  /* cold, rainy dark — never white (white is what reads as "browser loading") */
+  --route-veil-field: radial-gradient(130% 130% at 50% 34%, #151c29 0%, #0a0d13 62%, #05070b 100%);
+}
+.route-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--route-veil-field);
+  transition: opacity var(--route-veil-reveal-ms) ease;
+  will-change: opacity;
+}
+.route-veil.is-cover {
+  opacity: 1;
+  pointer-events: auto; /* swallow clicks mid-transition */
+  transition-duration: var(--route-veil-cover-ms);
+}
+.route-veil.is-reveal {
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: var(--route-veil-reveal-ms);
 }
 
 /* "New version available" prompt — quiet, fixed, non-blocking. Shown only after
@@ -2642,7 +2630,6 @@ h1 {
   grid-template-rows: minmax(0, 1fr);
 }
 
-.shell.concept-screen-active .topbar,
 .shell.concept-screen-active .panel,
 .shell.concept-screen-active .board-scroll,
 .shell.concept-screen-active .skyline {
@@ -4158,20 +4145,14 @@ h1 {
   z-index: 5;
 }
 
-/* Immersive / full-bleed screens hide the static global .topbar (index.html) and let
-   .app-root own the whole viewport, so the screen shows only its OWN title bar instead
-   of stacking under the global one. Skirmish uses `.skirmish-active`; screen-agnostic
-   surfaces (the level editor) use `.is-immersive` — same behaviour, neutral name. */
+/* Immersive / full-bleed screens let .app-root own the whole viewport (no shell padding
+   or gap). Skirmish uses `.skirmish-active`; screen-agnostic surfaces (the level editor)
+   use `.is-immersive` — same behaviour, neutral name. */
 .shell.skirmish-active,
 .shell.is-immersive {
   gap: 0;
   grid-template-rows: minmax(0, 1fr);
   padding: 0;
-}
-
-.shell.skirmish-active .topbar,
-.shell.is-immersive .topbar {
-  display: none;
 }
 
 .shell.skirmish-active .app-root,
@@ -4238,8 +4219,9 @@ h1 {
 
 /* Higher specificity than .settings-header-frame so the in-game three-section centred
    layout wins over the menu's 2-trailing grid: brand (left) · live status (centre) ·
-   account cluster (right). */
-.skirmish-screen .skirmish-topbar {
+   account cluster (right). Scoped to the bar element (it lives in the app shell now,
+   outside .skirmish-screen) — two classes still out-rank the single .settings-header-frame. */
+.app-shell-titlebar.skirmish-topbar {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
@@ -4922,9 +4904,11 @@ h1 {
   grid-template-areas:
     "titlebar titlebar"
     "board    rail";
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Row 1 (the titlebar area) stays sized for the persistent shell bar that overlays
+     it — the bar lives in the app shell now (no in-screen <header>), so an `auto` row
+     would collapse and the board/rail would slide up under the bar. */
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr);
 }
-.level-editor-screen .le-topbar { grid-area: titlebar; }
 .level-editor-screen .skirmish-field { grid-area: board; }
 /* No scrollbar-gutter here: this HUD is overflow:hidden (never scrolls), so a stable
    gutter only reserved ~10px of dead space on the RIGHT — making the inner padding
@@ -4939,11 +4923,14 @@ h1 {
    on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
    stats/actions content below are scoped here — three sections: brand · save-state ·
    labeled header buttons (.app-header-button on the kit gold frame). */
-.level-editor-screen .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
-.level-editor-screen .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.level-editor-screen .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
-.level-editor-screen .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
-.level-editor-screen .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
+/* Bar-content rules are scoped to the bar class (.le-topbar), NOT the screen — the
+   bar now lives in the app shell, outside .level-editor-screen, so the stats/actions
+   (portaled into the bar via <TitleBarSlot>) are descendants of .le-topbar there. */
+.le-topbar .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
+.le-topbar .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.le-topbar .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
+.le-topbar .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+.le-topbar .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
@@ -4997,14 +4984,15 @@ h1 {
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
-/* palette (folded into the rail) */
-/* The palette is the PRIMARY work area, so it flex-GROWS to take all height the
-   fixed controls (Layer/Tool/brush/Fill/View) leave, and is the single scroll
-   region — not a fixed box competing with a whole-rail scroll. Tile- and unit-
-   panels share this one growing slot, so flipping layers can't wobble the rail. */
-.le-brush-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 150px; overflow: hidden; }
-.le-brush-panel .le-palette-scroll { flex: 1; height: auto; min-height: 0; }
-.le-palette-scroll { height: 300px; }
+/* Brush palettes render at full height and let the ONE side-panel scrollbar (.le-hud-scroll,
+   ADR-0030) do the scrolling — no scroll-within-a-scroll. (Supersedes the earlier per-palette
+   scroll region: the whole control column is the single scroll now.) */
+.le-brush-panel { display: flex; flex-direction: column; }
+/* The editor's control column scrolls as one (ADR-0030 KitScroll) so tall layers — e.g.
+   Cover — never clip their bottom controls. Layer tabs stay fixed above it; this fills the
+   remaining panel height and carries the same stack gap the sections had as aside children. */
+.le-hud-scroll { flex: 1 1 auto; min-height: 0; }
+.le-hud-scroll > .kit-scroll-content { display: flex; flex-direction: column; gap: var(--ds-stack); }
 
 /* kit-scroll — the DRAWN scroll primitive (ADR-0030), rendered by <KitScroll>. The native bar is
    hidden; we draw an ALWAYS-PRESENT rail (a real DOM element the browser can't hide) + a grip thumb
@@ -5601,21 +5589,12 @@ h1 {
     padding: 10px;
   }
 
-  .topbar {
-    align-items: start;
-    flex-direction: column;
-    gap: 10px;
-    padding: 10px;
-  }
 
-  .topbar-right { align-items: start; justify-items: start; width: 100%; }
   .account { justify-content: space-between; width: 100%; }
-  #accountName { max-width: min(58vw, 260px); }
   .meters { justify-content: flex-start; }
   .meters span { font-size: .48rem; padding: 7px 8px; }
   body { font-size: 17px; }
   h1 { font-size: .82rem; }
-  #statusLine { font-size: .95rem; }
   .panel { padding: 8px; }
   .panel-section { padding: 9px; }
   .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -5708,10 +5687,6 @@ h1 {
   padding: 0;
 }
 
-.shell.campaign-editor-active .topbar {
-  display: none;
-}
-
 .shell.campaign-editor-active .app-root {
   height: 100%;
   min-height: 0;
@@ -5766,6 +5741,14 @@ h1 {
   position: relative;
   z-index: 1;
 }
+
+/* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
+   the fixed bar overlay and pin the layout + footer to rows 2/3 (3-row grid). */
+.ce-screen.app-shell-bar-pad {
+  grid-template-rows: var(--app-header-h) minmax(0, 1fr) auto;
+}
+.ce-screen.app-shell-bar-pad > .ce-layout { grid-row: 2; }
+.ce-screen.app-shell-bar-pad > .ce-footer { grid-row: 3; }
 
 .ce-topbar {
   /* Frame + height come from .app-titlebar (ADR-0004); this is the shared
@@ -7069,9 +7052,7 @@ h1 {
   background: #071019;
 }
 
-.shell.tile-review-active .topbar,
 .shell.tile-review-active > .panel,
-.shell.tileset-studio-active .topbar,
 .shell.tileset-studio-active > .panel {
   display: none;
 }
@@ -9707,6 +9688,25 @@ button.tileset-relationship-cell {
    level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
    The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */
 
+/* Ground-cover tufts (see render/GroundCoverLayer). The sway is BAKED frames in a
+   horizontal sheet; this only advances the frame index via steps() — no visual effect.
+   Per-tuft phase comes from a negative --gc-delay so the field never pulses in unison. */
+.gc-tuft {
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  animation: gc-sway var(--gc-dur, 1.14s) steps(6) infinite;
+  animation-delay: var(--gc-delay, 0s);
+  will-change: background-position;
+}
+@keyframes gc-sway {
+  from { background-position-x: 0; }
+  to { background-position-x: var(--gc-travel, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gc-tuft { animation: none; }
+}
+
 .tileset-generated-board-overlay-cell {
   position: absolute;
   width: 96px;
@@ -10247,7 +10247,6 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-.shell.unit-studio-active .topbar,
 .shell.unit-studio-active > .panel,
 .shell.unit-studio-active + .bgm-control {
   display: none;
@@ -10920,7 +10919,6 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-.shell.settings-art-active .topbar,
 .shell.settings-art-active .panel {
   display: none;
 }
@@ -11042,6 +11040,32 @@ button.tileset-relationship-cell {
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
   box-sizing: border-box;
   min-block-size: var(--app-header-h);
+}
+
+/* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered ONCE in App,
+   outside the routed screen, so the bar survives navigation. Fixed at the top, above
+   the route-veil (z 9999) so it stays LIT while the body dissolves through a heavy-
+   route transition. It carries .app-titlebar + .settings-header-frame for the shared
+   oak look; only position + stacking are set here. A migrated screen adds
+   .app-shell-bar-pad to its body root to reserve the header height the fixed bar now
+   overlays (the per-screen <header> is gone — the bar lives in the shell). */
+.app-shell-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 10000;
+}
+/* On Settings, scale the bar with the UI-Scale setting so it matches the (zoomed)
+   Settings body. `zoom` (not transform) keeps the baked oak surface continuous, same
+   as .settings-screen. Only the Settings bar carries this class. */
+.app-shell-titlebar.app-titlebar--ui-scaled {
+  zoom: var(--settings-ui-scale, 1);
+}
+/* A screen migrated to the shell bar KEEPS its grid header row intact (so the body
+   stays exactly where it was — same height, same gap) but renders nothing into it;
+   the fixed shell bar overlays that row. Pin the body to row 2 so it doesn't collapse
+   up into the now-empty header track. */
+.app-shell-bar-pad > :first-child {
+  grid-row: 2;
 }
 
 /* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
@@ -11354,9 +11378,10 @@ button.tileset-relationship-cell {
    already carries the gold-bracket chrome). Mirrors the grouped-list content. */
 .settings-tab {
   --settings-tab-icon-slot: 40px;
-  --settings-tab-icon-size: 34px;
+  --settings-tab-icon-size: 64px;
   align-items: center;
   appearance: none;
+  overflow: hidden; /* clip the enlarged carved icon at the button edge */
   /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
      mode-button frame). Active swaps the marker, not the frame (below). ADR-0034. */
   border: 2px solid transparent;
@@ -11369,7 +11394,7 @@ button.tileset-relationship-cell {
   grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr);
   image-rendering: pixelated;
   min-height: 56px;
-  padding: 17px 22px; /* frame-compensated inset so content clears the line frame */
+  padding: 22px; /* even inset — icon sits with equal margin on every side (was 17px/22px) */
   background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
   background-origin: padding-box;
   background-clip: padding-box;
@@ -11380,6 +11405,7 @@ button.tileset-relationship-cell {
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
+  transform: translateX(18px); /* nudge the label clear of the enlarged icon */
 }
 
 .settings-tab:not(.is-active):hover {
@@ -11397,7 +11423,8 @@ button.tileset-relationship-cell {
   display: grid;
   height: var(--settings-tab-icon-slot);
   justify-items: center;
-  overflow: hidden;
+  overflow: visible; /* let the enlarged icon spill its 40px slot; the tab clips it at the button edge */
+  position: relative;
   width: var(--settings-tab-icon-slot);
 }
 
@@ -11407,6 +11434,11 @@ button.tileset-relationship-cell {
   width: var(--settings-tab-icon-size);
   image-rendering: pixelated;
   object-fit: contain;
+  /* Grow from a FIXED centre at any size (margin:auto/grid would anchor an oversized glyph). */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .settings-tab strong {

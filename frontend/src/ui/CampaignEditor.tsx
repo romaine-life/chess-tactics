@@ -5,7 +5,7 @@ import { loadWorkspace, saveWorkspace, loadOfficialCampaigns, saveOfficialCampai
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { LevelPreviewBoard } from '../render/LevelPreviewBoard';
 import { LevelInfoCompact } from './LevelInfoCompact';
-import { BrandLockup } from './shared/BrandLockup';
+import { TitleBarSlot } from './shell/TitleBarSlot';
 
 const CE_ICONS = {
   star: '/assets/ui/kit/icons/star.png',
@@ -383,13 +383,16 @@ export function CampaignEditor() {
   const playHref = camp && levelDoc ? `/play?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent('/campaigns-next')}` : '/play';
 
   return (
-    <div className="ce-screen" data-testid="campaign-editor">
-      <header className="app-titlebar settings-header-frame ce-topbar">
-        <BrandLockup screenName="Campaign Editor" />
+    <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
+      {/* Title bar lives in the app shell; the editor paints its live save-state +
+          shortcuts into it via portals (workspace state stays in this component). */}
+      <TitleBarSlot region="center">
         <div className="ce-topbar-stats" aria-label="Campaign workspace stats">
           {officialMode ? <span className="ce-save-state ce-official-badge">OFFICIAL</span> : null}
           <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
         </div>
+      </TitleBarSlot>
+      <TitleBarSlot region="right">
         <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
           {me?.is_admin ? (
             officialMode
@@ -399,7 +402,7 @@ export function CampaignEditor() {
           <button type="button" data-testid="save-workspace" className="app-header-button app-header-button-active" onClick={saveWorkspaceNow}>{officialMode ? 'Publish' : 'Save'}</button>
           <a className="app-header-button" href="/settings">Settings</a>
         </nav>
-      </header>
+      </TitleBarSlot>
 
       <main className="ce-layout">
         <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
