@@ -444,8 +444,23 @@ export function initBgm() {
     el.addEventListener('click', (event) => {
       event.preventDefault();
       if (!state.owner) {
-        // A follower tab — clicking takes playback over to this tab.
+        // A follower tab — clicking takes playback over to this tab. Start audio
+        // SYNCHRONOUSLY inside this user gesture: real Chrome's autoplay policy
+        // blocks any play() that runs after the async lock acquisition, so we must
+        // play here first, THEN steal the lock (the previous owner steps down when
+        // it hears our 'owner' broadcast). takeOwnership() early-returns if we're
+        // already owner, so we leave state.owner=false until it runs.
         pendingAction = null;
+        state.muted = false;
+        writeMuted(false);
+        state.stopped = false;
+        if (audio.src && audio.paused) {
+          const attempt = audio.play();
+          if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+        } else if (!audio.src) {
+          playNext();
+        }
+        updateControl();
         takeOwnership();
       } else if (state.unavailable && !state.muted) {
         // In the unavailable state the button is a retry affordance.
