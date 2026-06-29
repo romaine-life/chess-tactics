@@ -28,7 +28,10 @@ export type RoadMaterial = 'dirt' | 'stone' | 'pebble';
 export type RiverMaterial = 'water';
 export type FeatureMaterial = RoadMaterial | RiverMaterial;
 
-export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'stone', 'pebble'];
+// Only 'dirt' ships for now — the authored codex-heal road (build-feature-tiles.py).
+// stone/pebble stay valid types; re-add them to the palette once they get the same
+// authored treatment (and the PixelLab flavour, for variety).
+export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt'];
 export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
 export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
   dirt: 'Dirt',
@@ -38,7 +41,7 @@ export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
 };
 // Back-compat alias (roads referenced this name before rivers existed).
 export const ROAD_MATERIAL_LABELS = FEATURE_MATERIAL_LABELS;
-export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'stone';
+export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'dirt';
 export const DEFAULT_RIVER_MATERIAL: RiverMaterial = 'water';
 
 /** Selectable materials for a feature kind (editor palette). */
