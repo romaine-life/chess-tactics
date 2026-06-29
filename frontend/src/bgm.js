@@ -373,7 +373,12 @@ export function initBgm() {
   // Browsers block audible autoplay until a user gesture. Keep listening on
   // every gesture until playback actually begins, then disarm.
   const armEvents = ['pointerdown', 'keydown', 'touchstart'];
-  function onGesture() {
+  function onGesture(event) {
+    // The mute control owns its own click — ignore gestures that land ON it, or this
+    // pre-arms playback on the same pointerdown and fights the toggle (the "first click
+    // does nothing, second works" bug). Gestures ELSEWHERE still arm already-unmuted
+    // music so it starts on the first interaction (the autoplay workaround).
+    if (event && event.target && control.el.contains(event.target)) return;
     beginPlayback();
   }
   function disarmGesture() {
@@ -449,7 +454,13 @@ export function initBgm() {
         beginPlayback();
         updateControl();
       } else {
-        toggleMute();
+        // Toggle whether music is actually SOUNDING, not just the muted flag: if it's
+        // audibly playing, mute it; otherwise unmute AND (re)start playback. setMuted(false)
+        // calls beginPlayback within this click gesture, so autoplay permits it. One click
+        // then always does the intuitive thing — even from the "unmuted but autoplay-blocked
+        // / not started yet" state, where flipping the flag alone would have muted.
+        const audible = !audio.paused && state.started && !state.muted;
+        setMuted(audible);
       }
     });
     return { el };
