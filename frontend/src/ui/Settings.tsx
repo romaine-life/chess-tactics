@@ -309,11 +309,22 @@ export function Settings(): ReactElement {
   // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
   const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
   const [confirmingReset, setConfirmingReset] = useState(false);
+  // Drives the one-time fade-in when the Settings screen mounts (entering settings).
+  // Starts false so .settings-shell paints at opacity 0, then flips true after the first
+  // paint so the opacity transition runs it in. It resets on each mount, so it replays
+  // every time you enter settings — but NOT on tab toggles (Settings stays mounted for
+  // the whole /settings/* subtree, so toggles re-render without remounting).
+  const [entered, setEntered] = useState(false);
 
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
-    return () => shell?.classList.remove('settings-art-active');
+    // Flip after the first paint so the entry fade (opacity 0 -> 1) actually transitions.
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => {
+      cancelAnimationFrame(raf);
+      shell?.classList.remove('settings-art-active');
+    };
   }, []);
 
   useEffect(() => {
@@ -645,7 +656,7 @@ export function Settings(): ReactElement {
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
       <AmbienceBackground />
       <div className="settings-screen app-shell-bar-pad">
-        <div className="settings-shell">
+        <div className={`settings-shell ${entered ? 'is-entered' : ''}`}>
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
               <a
