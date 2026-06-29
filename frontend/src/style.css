@@ -5069,22 +5069,10 @@ body { font-size: 17px; }
   z-index: 3;
 }
 
-/* Menu-family chrome entrance. When the editor MOUNTS on a soft nav (menu <-> campaign
-   editor), only its chrome fades in — the shared backdrop scene + synced rain sit behind
-   it (on .ce-screen / the ambience canvases) and never move, so the hop reads as the UI
-   swapping over one continuous scene, not the whole screen dissolving. A TRANSITION, not
-   a keyframe animation, so it survives `@media (prefers-reduced-motion){ *{animation:none} }`
-   (~line 6031): many players (incl. this one) run Windows with animations off, which Chrome
-   reads as reduced-motion, and an opacity fade is motion-safe — same rationale as Settings'
-   entrance. CampaignEditor adds .is-entered to .ce-screen one frame after mount. */
-.ce-layout,
-.ce-footer {
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
-}
-.ce-screen:not(.is-entered) .ce-layout,
-.ce-screen:not(.is-entered) .ce-footer {
-  opacity: 0;
-}
+/* Editor chrome entrance is the SHARED screen-entrance primitive (ADR-0046): CampaignEditor
+   spreads useScreenEntrance()'s class onto .ce-layout + .ce-footer, so only the chrome fades
+   in while the .ce-screen backdrop + rain stay continuous — see `.screen-enter` in the motion
+   block. No bespoke .is-entered rule here anymore (it duplicated the hook). */
 
 /* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
    the fixed bar overlay and pin the layout + footer to rows 2/3 (3-row grid). */
@@ -10734,32 +10722,40 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
+/* Crossfade STACK: the panel body holds up to two layers in ONE grid cell — the incoming
+   (.settings-xfade-next) and, during a tab change, the outgoing (.settings-xfade-prev) — so
+   they OVERLAP-fade (old 1->0 while new 0->1) in a single --ds-duration-fade pass (ADR-0046),
+   not sequentially. Width constraint + centring stay here; the section layout lives on each
+   layer so both render identically. Scrolling + the drawn rail (ADR-0030) are owned by the
+   wrapping <KitScroll>. */
 .settings-panel-content {
+  display: grid;
+  inline-size: min(100%, 880px);
+  margin-inline: auto;
+  min-height: 0;
+}
+
+.settings-xfade-layer {
+  grid-area: 1 / 1;            /* stack both layers in the same cell; cell sizes to the larger */
   align-content: start;
   display: grid;
   /* Inter-section spacing — looser than the row gap so groups read as distinct. */
   gap: clamp(14px, 1.3vw, 22px);
-  /* Contain the row column to a comfortable reading width and centre it inside the
-     scroll viewport, so rows don't stretch the full bleed. Scrolling + the always-on
-     drawn rail (ADR-0030) are owned by the wrapping <KitScroll>, not this element. */
-  inline-size: min(100%, 880px);
-  margin-inline: auto;
-  min-height: 0;
+  min-width: 0;
   padding-block-end: 4px;
-  /* Toggling settings menus crossfades the body: the outgoing controls fade out, the
-     next menu's controls swap in at zero opacity, then fade in (driven by the
-     is-leaving/is-entering classes from Settings.tsx). Duration MUST match
-     PANEL_FADE_MS there. A pure opacity fade (no movement) is safe under
-     prefers-reduced-motion, so it is intentionally NOT gated on that query — many
-     players run with Windows "Animation effects" off (which Chrome reads as
-     reduced-motion) and should still get this transition. The duration is the ONE shared
-     fade token (--ds-duration-fade, ADR-0046) — the same fade speed as the screen entrance;
-     it MUST stay in sync with PANEL_FADE_MS in Settings.tsx (the JS that times the swap). */
+  /* Pure opacity fade (no movement) = reduced-motion-safe, so NOT gated (ADR-0043); many
+     players run Windows "Animation effects" off (Chrome `reduce`) and still get it. The ONE
+     shared fade token — kept in sync with PANEL_FADE_MS in Settings.tsx (the JS swap timer). */
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
 
-.settings-panel-content.is-leaving { opacity: 0; }
-.settings-panel-content.is-entering { opacity: 1; }
+/* enter = paint the start opacities instantly (prev visible, next hidden); JS flips to active
+   one frame later so the transition has a start value. */
+.settings-xfade-enter .settings-xfade-prev { opacity: 1; transition: none; }
+.settings-xfade-enter .settings-xfade-next { opacity: 0; transition: none; }
+/* active = end opacities; both layers transition at once → the overlap crossfade. */
+.settings-xfade-active .settings-xfade-prev { opacity: 0; }
+.settings-xfade-active .settings-xfade-next { opacity: 1; }
 
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
