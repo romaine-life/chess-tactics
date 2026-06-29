@@ -5,7 +5,7 @@
 // board-placeable thing is a catalogCategories entry + a focus, never a bespoke view or a
 // `category === '…'` branch.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { tileFamilies } from '../art/tileset';
+import { tileFamilies, edgeTiles } from '../art/tileset';
 import { nonProductionTileAssets, nonProductionTileFamilyOf } from '../art/nonProductionTiles';
 import {
   terrainLabels,

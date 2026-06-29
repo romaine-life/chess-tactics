@@ -262,7 +262,15 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
    * frays while keeping its own top variant. The top (`asset`) and sockets are untouched, so
    * terrain and adjacency are unchanged — only the cliff face changes.
    */
-  edgeAssets?: Partial<Record<TileFamilyId, TAsset>>;
+  edgeAssets?: Partial<Record<TileFamilyId, TAsset[]>>;
+  /**
+   * Optional per-family ORDERED continuity-mural windows (ADR-0039). When a family is present
+   * here, its void-facing edge cells get a SEQUENTIAL window by run-position instead of the
+   * random `edgeAssets` variant — so the cliff FLOWS continuously across adjacent tiles. The
+   * run wraps the bottom corner: the right edge (p = y) continues into the bottom edge. A
+   * family absent here falls back to `edgeAssets`. Index order == window order.
+   */
+  muralEdges?: Partial<Record<TileFamilyId, TAsset[]>>;
 }
 
 /**
@@ -281,6 +289,7 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   familyAssets,
   featureMap,
   edgeAssets,
+  muralEdges,
 }: SolveSocketBoardOptions<TAsset>): SocketBoardResult<TAsset> {
   const usableAssets = assets.filter((asset) => asset.kind === 'tile' && asset.probability > 0);
   const boardAssets = usableAssets.length > 0 ? usableAssets : assets.filter((asset) => asset.kind === 'tile');
@@ -330,15 +339,45 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
     }
   }
 
-  // Give front-edge cells the family's frayed SIDE layer (ADR-0039), keeping each cell's own
-  // top variant and sockets — so legality and the stats below are unaffected. Only the
-  // void-facing rows in `x+y` paint order.
-  if (edgeAssets) {
+  // Give front-edge cells a rich SIDE layer (ADR-0039). Two strategies, per family:
+  //  • CONTINUITY MURAL (muralEdges): consecutive cells get consecutive ORDERED windows of one
+  //    wide cliff, so the geology FLOWS across tiles. Run-position wraps the bottom corner —
+  //    the right edge (p = y, top→bottom corner) continues into the bottom edge
+  //    (p = rows-1 + (columns-1 - x), bottom corner→left corner) as one unbroken count.
+  //  • RANDOM VARIANT (edgeAssets): a weighted, anti-adjacent pick — rich but non-continuous.
+  // Either keeps each cell's own top + sockets, so legality and the stats below are unaffected.
+  if (edgeAssets || muralEdges) {
+    const edgeRng = createRng(seed + 271);
+    const sideById = new Map<string, string>();
     for (const cell of cells) {
-      if (cell.asset && (cell.x === columns - 1 || cell.y === rows - 1)) {
-        const edge = edgeAssets[cell.terrain];
-        if (edge) cell.sideAsset = edge;
+      if (!cell.asset || !(cell.x === columns - 1 || cell.y === rows - 1)) continue;
+
+      const mural = muralEdges?.[cell.terrain];
+      if (mural && mural.length > 0) {
+        const p = cell.x === columns - 1
+          ? cell.y                                    // right edge (incl. bottom corner)
+          : (rows - 1) + (columns - 1 - cell.x);      // bottom edge, continuing past the corner
+        const pick = mural[((p % mural.length) + mural.length) % mural.length];
+        cell.sideAsset = pick;
+        sideById.set(`${cell.x}-${cell.y}`, pick.id);
+        continue;
       }
+
+      const variants = edgeAssets?.[cell.terrain];
+      if (!variants || variants.length === 0) continue;
+      const neighborIds = [
+        sideById.get(`${cell.x - 1}-${cell.y}`),
+        sideById.get(`${cell.x}-${cell.y - 1}`),
+        sideById.get(`${cell.x + 1}-${cell.y}`),
+        sideById.get(`${cell.x}-${cell.y + 1}`),
+      ];
+      let pick = pickWeightedAsset(variants, edgeRng.next);
+      if (variants.length > 1 && neighborIds.includes(pick.id)) {
+        pick = pickWeightedAsset(variants, edgeRng.next); // re-roll once…
+        if (neighborIds.includes(pick.id)) pick = variants.find((v) => !neighborIds.includes(v.id)) ?? pick; // …then force a different one
+      }
+      cell.sideAsset = pick;
+      sideById.set(`${cell.x}-${cell.y}`, pick.id);
     }
   }
 
