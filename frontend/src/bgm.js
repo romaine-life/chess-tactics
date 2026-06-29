@@ -443,6 +443,7 @@ export function initBgm() {
     el.appendChild(icon);
     el.addEventListener('click', (event) => {
       event.preventDefault();
+      if (state.loaded && !state.tracks.length) return; // no soundtrack — persistent but inert
       if (!state.owner) {
         // A follower tab — clicking takes playback over to this tab. Start audio
         // SYNCHRONOUSLY inside this user gesture: real Chrome's autoplay policy
@@ -503,13 +504,19 @@ export function initBgm() {
 
   function renderControl() {
     const el = control.el;
-    if (state.loaded && !state.tracks.length) {
-      // No BGM configured for this environment — don't show a dead control.
-      el.style.display = 'none';
-      return;
-    }
+    // ADR-0044: the mute control is a PERSISTENT member of the trailing cluster — it must
+    // not vanish, even when no soundtrack is configured for this environment (dev without
+    // BGM_DEV_TRACKS, or an empty library). Present it dimmed/inert in that case instead of
+    // hiding it, so the cluster keeps the same members on every route.
     el.style.display = '';
     el.classList.remove('is-othertab'); // only the follower state below re-adds it
+    if (state.loaded && !state.tracks.length) {
+      el.classList.remove('is-playing');
+      el.classList.add('is-muted');
+      el.setAttribute('aria-label', 'Background music — no soundtrack configured');
+      el.title = 'Background music — no soundtrack configured';
+      return;
+    }
     if (!state.owner && state.otherPlaying) {
       // Another tab owns playback; this one is a silent follower. Wear the LIT (active)
       // frame so it's visibly distinct from a muted control — which uses the base frame
