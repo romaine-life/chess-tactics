@@ -73,8 +73,9 @@ already proved, generalized.
 The **only** per-cluster modulations a config may set are the ones ADR-0036 already
 sanctioned, and neither removes the account control:
 
-- `showSettingsGear: false` — Settings hides *its own* gear (you don't link to Settings
-  from Settings); the avatar / Sign In control stays.
+- `showSettingsGear: false` — hides *only* the gear (the account control stays). An
+  available modulation, but no screen currently uses it: even Settings keeps its gear
+  as a "back to settings root" link (#241), so the gear is effectively universal too.
 - `signInReturnTo` — where the signed-out **Sign In** control returns to.
 
 `showAccountCluster` is **deleted** — its only honest value was `true`. The config can

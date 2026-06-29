@@ -7,8 +7,9 @@
 // the shared bar; there is no opt-out set, and the function never returns null.
 export interface TitleBarConfig {
   screenName: string;
-  /** Hide the Settings gear in the cluster. ONLY the Settings screen itself sets this
-   *  (you don't link to Settings from Settings); the account control still renders. */
+  /** Hide the Settings gear in the cluster (default: shown). Available modulation, but
+   *  no screen currently sets it — even Settings keeps its gear as a "back to settings
+   *  root" link (#241). The account control always renders regardless (ADR-0036/0042). */
   showSettingsGear?: boolean;
   /** Where the cluster's signed-out Sign In control returns to from this screen. */
   signInReturnTo?: string;
@@ -51,12 +52,12 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true, actionsSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
-    // The Settings body scales with the UI-Scale setting (zoom: --settings-ui-scale on
-    // .settings-screen). The bar lives outside that element, so tag it to ride the same
-    // (global, on documentElement) var — the persistent bar drops this class on the next
-    // screen, so only Settings scales. showSettingsGear:false hides only the gear (no
-    // self-link to Settings); the account control still renders (ADR-0036/0042).
-    return { screenName: 'Settings', showSettingsGear: false, signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
+    // screen, so only Settings scales.
+    // Keep the gear visible on Settings too: every section is its own route
+    // (/settings/<tab>, /settings/audio/tracks), so the gear is a muscle-memory
+    // "back to settings root" from any sub-page. href="/settings" normalizes to
+    // the first tab. (Default showSettingsGear=true, so it's simply not hidden.)
+    return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
   }
   if (path === '/campaign' || path.startsWith('/campaign/')) {
     return { screenName: 'Campaign', signInReturnTo: '/campaign', barClass: 'main-menu-twin-header' };

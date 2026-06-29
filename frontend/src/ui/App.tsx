@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactElement } from 'react';
 import { MainMenu } from './MainMenu';
+import { getSnapshot as getRevealSnapshot, subscribe as subscribeReveal } from './shell/coldReveal';
 import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
@@ -94,6 +95,11 @@ export function App(): ReactElement {
   const [centerNode, setCenterNode] = useState<HTMLElement | null>(null);
   const [actionsNode, setActionsNode] = useState<HTMLElement | null>(null);
   const titleBarPortals = useMemo(() => ({ centerNode, actionsNode }), [centerNode, actionsNode]);
+  // Cold-load reveal: on a fresh main-menu load the title bar is the 2nd layer to appear
+  // (after the background). It reads the shared director's stage so it can hold hidden
+  // until its turn. On every other route / later navigation the store is fully revealed,
+  // so revealTitle is permanently true and the persistent bar never blinks.
+  const reveal = useSyncExternalStore(subscribeReveal, getRevealSnapshot);
   const pendingTarget = useRef<string | null>(null);
   // Set true once the cover phase has actually swapped the route. The reveal gate keys
   // off THIS, not an exact path match — a destination that redirects to a sub-route on
@@ -195,8 +201,8 @@ export function App(): ReactElement {
       {/* The single persistent title bar, rendered OUTSIDE the routed screen so it
           survives navigation (only its contents change). It always draws the brand +
           account/settings cluster; screens only fill its optional center/actions
-          slots (ADR-0042). */}
-      <AppTitleBar path={path} onCenterNode={setCenterNode} onActionsNode={setActionsNode} />
+          slots (ADR-0042). revealTitle gates only the cold-load reveal. */}
+      <AppTitleBar path={path} onCenterNode={setCenterNode} onActionsNode={setActionsNode} revealTitle={reveal.has('title')} />
       {/* ONE stable Suspense boundary above the router. Because the boundary
           persists across every route swap (rather than each route mounting its
           own), a transition navigation keeps the already-revealed screen painted

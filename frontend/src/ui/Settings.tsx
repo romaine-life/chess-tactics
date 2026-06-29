@@ -40,6 +40,9 @@ interface CreatorTool {
   label: string;
   href: string;
   description: string;
+  // When true the href is an external URL opened in a new tab (e.g. the ambience
+  // broadcast monitor), not an in-app SPA route.
+  external?: boolean;
 }
 
 const DEFAULT_SETTINGS: LocalSettings = {
@@ -89,6 +92,7 @@ function isTracksView(pathname: string): boolean {
 const creatorTools: CreatorTool[] = [
   { label: 'Studio', href: '/tileset-studio', description: 'The creator workspace — browse tiles, units, the UI-kit asset library, and the artwork gallery, all in one place.' },
   { label: 'Artwork Compare', href: '/artwork-compare', description: 'Two-panel view — the accepted concept art beside the live screen, for matching the art direction.' },
+  { label: 'Broadcast Monitor', href: 'https://ambience.romaine.life/?world=chess', description: 'Inspect the live menu-rain broadcast on ambience — the current scene, what is queued up next, and the event log. Opens in a new tab.', external: true },
 ];
 
 function asset(file: string): string {
@@ -173,6 +177,7 @@ function SettingsButton({
   href,
   className = '',
   ariaLabel,
+  external = false,
 }: {
   children: ReactNode;
   tone?: ButtonTone;
@@ -180,11 +185,15 @@ function SettingsButton({
   href?: string;
   className?: string;
   ariaLabel?: string;
+  external?: boolean;
 }): ReactElement {
   const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
   if (href) {
+    // External links open in a new tab; rel guards against reverse-tabnabbing.
+    // Internal routes (the default) stay in the SPA.
+    const externalProps = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
     return (
-      <a className={classes} href={href} aria-label={ariaLabel}>
+      <a className={classes} href={href} aria-label={ariaLabel} {...externalProps}>
         <span>{children}</span>
       </a>
     );
@@ -596,7 +605,7 @@ export function Settings(): ReactElement {
     <SettingsSection title="Workspaces">
       {creatorTools.map((tool) => (
         <SettingsRow key={tool.href} title={tool.label} description={tool.description}>
-          <SettingsButton tone="primary" href={tool.href} ariaLabel={`Open ${tool.label}`}>Open</SettingsButton>
+          <SettingsButton tone="primary" href={tool.href} external={tool.external} ariaLabel={`Open ${tool.label}`}>Open</SettingsButton>
         </SettingsRow>
       ))}
     </SettingsSection>
