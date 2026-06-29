@@ -3,7 +3,7 @@ import { useCampaigns } from './store';
 import { validateLevel } from '../core/level';
 
 function reset() {
-  useCampaigns.setState({ campaigns: [], levels: {}, selectedCampaignId: null, selectedLevelId: null, counter: 1, officialMode: false });
+  useCampaigns.setState({ campaigns: [], levels: {}, selectedCampaignId: null, selectedLevelId: null, counter: 1 });
 }
 
 const OFFICIAL_ID = /^off-[a-z]+(-[a-z]+)*$/; // backend validateOfficialWorkspaceIds contract
@@ -152,32 +152,55 @@ describe('tiered campaigns (ADR-0038)', () => {
     expect(useCampaigns.getState().campaigns.find((c) => c.origin !== 'official')!.id).toBe('c1');
   });
 
-  it('mints digit-free off- ids that do NOT collide across editing sessions', () => {
-    // Session 1: author one default-named campaign + level into an empty official set.
-    useCampaigns.getState().hydrateOfficialForEditing({ campaigns: [], levels: {} });
-    expect(useCampaigns.getState().officialMode).toBe(true);
+  it('mints off- ids driven by the SELECTED campaign origin, not a global mode', () => {
+    // newOfficialCampaign mints an off-c-… id and selects it…
+    useCampaigns.getState().newOfficialCampaign();
+    const official = useCampaigns.getState().campaigns[0];
+    expect(official.id).toMatch(OFFICIAL_ID);
+    expect(official).toMatchObject({ origin: 'official' });
+    expect(useCampaigns.getState().selectedCampaignId).toBe(official.id);
+    // …and adding a level to it mints an off-l-… level (origin follows the selection).
+    useCampaigns.getState().addLevel();
+    const officialLevelId = useCampaigns.getState().campaigns[0].levels[0].levelId;
+    expect(officialLevelId).toMatch(OFFICIAL_ID);
+
+    // A private campaign mints plain l<n> levels — the official ids above did not bump
+    // the user counter, so this lands on c1 / l1.
     useCampaigns.getState().newCampaign();
+    const mine = useCampaigns.getState().campaigns.find((c) => c.origin !== 'official')!;
+    expect(mine.id).toBe('c1');
+    useCampaigns.getState().selectCampaign(mine.id);
+    useCampaigns.getState().addLevel();
+    const mineLevelId = useCampaigns.getState().campaigns.find((c) => c.id === mine.id)!.levels[0].levelId;
+    expect(mineLevelId).toMatch(/^l\d+$/);
+
+    // No id appears twice across campaigns or levels.
+    const s = useCampaigns.getState();
+    const ids = [...s.campaigns.map((c) => c.id), ...Object.keys(s.levels)];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('mints fresh off- ids that do NOT collide across sessions (counter-reset bug)', () => {
+    // Author one default-named official campaign + level…
+    useCampaigns.getState().newOfficialCampaign();
     useCampaigns.getState().addLevel();
     const s1 = useCampaigns.getState();
     const c1 = s1.campaigns[0];
     const l1 = c1.levels[0].levelId;
-    expect(c1.id).toMatch(OFFICIAL_ID);
-    expect(l1).toMatch(OFFICIAL_ID);
-    const published = { campaigns: s1.campaigns, levels: s1.levels };
+    const published = { campaigns: s1.campaigns.map((c) => ({ ...c })), levels: { ...s1.levels } };
 
-    // Session 2: re-enter editing on the published set; default-named adds must get
-    // FRESH ids, not re-mint the existing ones (the counter-reset collision bug).
-    useCampaigns.getState().hydrateOfficialForEditing(published);
-    useCampaigns.getState().newCampaign();
-    const s2 = useCampaigns.getState();
-    const c2 = s2.campaigns.find((c) => c.id !== c1.id)!;
+    // Re-merge the published officials (a new session), then author again with the same
+    // default names: the new ids must be FRESH, not re-mint the existing ones.
+    reset();
+    useCampaigns.getState().mergeOfficial(published);
+    useCampaigns.getState().newOfficialCampaign();
+    const c2 = useCampaigns.getState().campaigns.find((c) => c.id !== c1.id)!;
     expect(c2.id).toMatch(OFFICIAL_ID);
     expect(c2.id).not.toBe(c1.id);
     useCampaigns.getState().selectCampaign(c2.id);
     useCampaigns.getState().addLevel();
     const l2 = useCampaigns.getState().campaigns.find((c) => c.id === c2.id)!.levels[0].levelId;
     expect(l2).not.toBe(l1);
-    // No id appears twice across campaigns or levels.
     const ids = [c1.id, c2.id, ...Object.keys(useCampaigns.getState().levels)];
     expect(new Set(ids).size).toBe(ids.length);
   });

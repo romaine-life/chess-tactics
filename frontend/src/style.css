@@ -5077,8 +5077,9 @@ body { font-size: 17px; }
   text-shadow: 0 0 8px rgba(240, 189, 85, .28);
 }
 
-/* Admin "Edit Officials" mode marker — the editor is a dev/admin surface, so a
-   plain high-contrast tag is fine (out of scope for player chrome polish). */
+/* "OFFICIAL" tier tag + read-only badge on official campaigns — the editor is a
+   dev/admin surface, so a plain high-contrast tag is fine (out of scope for player
+   chrome polish). */
 .ce-official-badge {
   color: var(--ce-gold-bright);
   font-weight: 700;
@@ -5471,6 +5472,27 @@ body { font-size: 17px; }
 .ce-row-actions {
   display: flex;
   gap: 5px;
+}
+
+/* Unassigned-levels section: a workspace-wide list of orphan levels (referenced by no
+   campaign), shown under the campaign's own levels. Reuses the level-row chrome; its
+   actions stack Edit + Attach vertically so the longer "Attach to this campaign" label
+   fits without crowding the row. */
+.ce-unassigned {
+  display: grid;
+  gap: 0;
+  margin-top: 14px;
+}
+
+.ce-unassigned-row .ce-row-actions {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.ce-unassigned-row .ce-row-actions .ce-asset-button,
+.ce-unassigned-row .ce-row-actions .ce-link-button {
+  font-size: var(--ds-text-2xs);
+  min-height: 32px;
 }
 
 .ce-campaign-summary {
