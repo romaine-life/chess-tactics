@@ -10566,6 +10566,14 @@ button.tileset-relationship-cell {
   grid-row: 2;
 }
 
+/* Settings carries the return "‹ Back" in its actions slot (portaled by the Settings
+   screen when a valid ?returnTo is present), so its bar needs a 3rd, trailing column for
+   the account cluster: brand · actions · cluster. Two classes out-rank the base
+   .settings-header-frame 2-column grid (the same trick the skirmish/editor bars use). */
+.app-shell-titlebar.settings-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 /* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
    height, always labeled (ADR-0016). The cyan `-active` variant marks a single
    primary action (e.g. Save / Sign In). Used by every app title bar's controls;
