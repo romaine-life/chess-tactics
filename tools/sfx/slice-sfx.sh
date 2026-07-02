@@ -12,6 +12,10 @@
 # Re-run after editing source recordings: `bash tools/sfx/slice-sfx.sh`. Requires ffmpeg.
 #
 #   source key -> terrain:  hay -> grass,  water -> water,  sand -> sand,  landing -> arrival
+#   UI feedback:            ui-click -> click  (the interface tap, played by playInterface)
+#
+# A UI click take is much shorter than a footstep; if the slicer drops it as "too short",
+# lower MIN_SEG for that run (or hand-place the take as click/v0.mp3 + a manifest listing it).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,6 +40,7 @@ declare -A SRC=(
   [sand]="sand.mp3"
   [stone]="stone.mp3"
   [arrival]="landing.mp3"
+  [click]="ui-click.mp3"
 )
 
 peak_of() {
@@ -103,4 +108,9 @@ slice_one() {
 }
 
 for k in grass water sand stone arrival; do slice_one "$k"; done
+# The UI click is optional: only slice it if its source recording has been supplied, so the
+# terrain foley regenerates cleanly whether or not ui-click.mp3 exists yet.
+if [ -f "$SRC_DIR/${SRC[click]}" ]; then slice_one click; else
+  echo "==> click: skipped (no $SRC_DIR/${SRC[click]} — UI click stays silent until supplied)"
+fi
 echo "DONE. Output under $OUT_ROOT"

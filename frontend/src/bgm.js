@@ -21,12 +21,18 @@ import { readDisabledUrls, BGM_DISABLED_KEY, BGM_DISABLED_CHANGE_EVENT, BGM_COMM
 const BGM_API_URL = '/api/bgm';
 const MUTE_STORAGE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
+// The Settings screen persists a JSON settings blob under this key and fires this event
+// after every change (see Settings.tsx / sfx.ts SFX_SETTINGS_CHANGE_EVENT). We read the
+// one field we care about — musicVolume — so the Music Volume slider drives BGM loudness
+// live, mirroring how sfx.ts reacts to the same event for the Effects slider.
+const SETTINGS_KEY = 'chess-tactics-settings-v1';
+const SETTINGS_CHANGE_EVENT = 'chess-tactics:settings-change';
 // Cross-tab single-owner coordination: exactly one tab holds the Web Lock and is the
 // only one that plays; the BroadcastChannel announces ownership + what's playing so
 // other tabs can show "Playing in another tab".
 const BGM_OWNER_LOCK = 'chess-tactics-bgm-owner';
 const BGM_CHANNEL_NAME = 'chess-tactics-bgm';
-const DEFAULT_VOLUME = 0.5;
+const DEFAULT_MUSIC_VOLUME = 70; // 0..100, matches Settings DEFAULT_SETTINGS.musicVolume
 // If a track 404s or fails to decode, wait briefly then skip to the next one so
 // a single bad asset can never wedge the playlist.
 const ERROR_SKIP_DELAY_MS = 1500;
@@ -49,6 +55,24 @@ function writeMuted(muted) {
     window.localStorage.setItem(MUTE_STORAGE_KEY, muted ? 'true' : 'false');
   } catch {
     /* storage unavailable (private mode, etc.) — non-fatal */
+  }
+}
+
+// The Music Volume slider (Settings → Audio) writes musicVolume (0..100) into the shared
+// settings blob. Scale it to the HTMLMediaElement 0..1 range. Default matches Settings'
+// DEFAULT_SETTINGS so the slider readout and actual loudness agree out of the box. This is
+// independent of mute (which pauses); volume just sets how loud playback is when it runs.
+function readMusicVolume() {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return DEFAULT_MUSIC_VOLUME / 100;
+    const parsed = JSON.parse(raw);
+    const v = typeof parsed.musicVolume === 'number' && Number.isFinite(parsed.musicVolume)
+      ? Math.min(100, Math.max(0, parsed.musicVolume))
+      : DEFAULT_MUSIC_VOLUME;
+    return v / 100;
+  } catch {
+    return DEFAULT_MUSIC_VOLUME / 100;
   }
 }
 
@@ -97,7 +121,7 @@ export function initBgm() {
   const audio = new Audio();
   audio.preload = 'none';
   audio.loop = false;
-  audio.volume = DEFAULT_VOLUME;
+  audio.volume = readMusicVolume();
   // BGM is decorative; never let it hijack media-session hardware keys.
   audio.setAttribute('aria-hidden', 'true');
 
@@ -317,6 +341,13 @@ export function initBgm() {
     setMuted(!state.muted);
   }
 
+  // Push the current Music Volume setting into the live <audio> element (cheap; safe to
+  // call often — a slider drag fires this per step). No ramp needed: setting .volume is
+  // sample-accurate and click-free on an HTMLMediaElement.
+  function applyMusicVolume() {
+    audio.volume = readMusicVolume();
+  }
+
   // ---- audio element events ------------------------------------------------
   audio.addEventListener('ended', () => {
     state.errorStreak = 0;
@@ -390,6 +421,10 @@ export function initBgm() {
     setMuted(Boolean(event && event.detail && event.detail.muted), { persist: false, notify: false });
   });
 
+  // Live Music Volume: the Settings screen fires this after writing the settings blob, so a
+  // slider drag re-scales BGM loudness immediately (the music analogue of the Effects slider).
+  window.addEventListener(SETTINGS_CHANGE_EVENT, applyMusicVolume);
+
   // Live updates to the user's track on/off set (from the Settings soundtrack
   // manager). Re-filter the rotation; if the playing track was just turned off,
   // skip to an enabled one; if nothing is left enabled, stop.
@@ -428,6 +463,7 @@ export function initBgm() {
   window.addEventListener('storage', (event) => {
     if (event.key === MUTE_STORAGE_KEY) setMuted(readMuted(), { persist: false });
     if (event.key === BGM_DISABLED_KEY) onDisabledChange();
+    if (event.key === SETTINGS_KEY) applyMusicVolume();
   });
 
   // ---- mute control UI -----------------------------------------------------

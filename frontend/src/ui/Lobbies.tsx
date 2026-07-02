@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { HttpError } from '../net/http';
 import { AmbienceBackground } from './AmbienceBackground';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 
 interface LobbyUser { name?: string; email?: string; avatar_url?: string | null }
 interface Lobby {
@@ -68,7 +69,7 @@ export function Lobbies() {
     <section className="settings-art-route" aria-label="Lobbies" data-testid="lobbies">
       <AmbienceBackground />
       <div className="settings-screen utility-twin-screen app-shell-bar-pad">
-        <div className="utility-screen utility-lobbies">
+        <ArtRouteChrome className="utility-screen utility-lobbies">
           {me && !me.signed_in ? (
             <section className="utility-panel utility-empty-panel">
               <a href={signInHref()} data-testid="lobbies-sign-in" className="utility-button utility-button-primary">Sign in to host or join</a>
@@ -130,7 +131,7 @@ export function Lobbies() {
               </div>
             </div>
           )}
-        </div>
+        </ArtRouteChrome>
       </div>
     </section>
   );

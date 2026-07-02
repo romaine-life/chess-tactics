@@ -538,11 +538,8 @@ h1 {
   color: rgba(214, 232, 242, .55);
   text-decoration: none;
   opacity: 1;
-  /* Opacity TRANSITION (not @keyframes) for the first-ever appearance: the
-     global prefers-reduced-motion reset kills keyframe animations, while
-     opacity transitions are the deliberately-surviving path (ADR-0043 §C) —
-     same pattern as .screen-enter. Route swaps never replay it: the label is
-     module-cached, so remounts render already-entered (ADR-0046 B/G, the
+  /* Opacity TRANSITION for the first-ever appearance. Route swaps never replay it:
+     the label is module-cached, so remounts render already-entered (ADR-0046 B/G, the
      backdrop layer stays continuous across navigation). */
   transition:
     opacity var(--ds-duration-fade) var(--ds-ease-standard),
@@ -550,7 +547,7 @@ h1 {
 }
 
 /* One start frame at opacity 0; AmbienceBackground drops this class on the
-   next frame and the transition above plays (mirrors .screen-enter-start). */
+   next frame and the transition above plays. */
 .ambience-credit-start {
   opacity: 0;
 }
@@ -3487,6 +3484,21 @@ h1 {
   z-index: -1;
 }
 
+.skirmish-screen.skirmish-picker-screen::before {
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat;
+}
+
 .skirmish-war-room {
   display: grid;
   grid-column: 1;
@@ -3502,6 +3514,144 @@ h1 {
      where they overlap. Cut only at the screen edge (.skirmish-screen: overflow hidden). */
   position: relative;
   z-index: 0;
+}
+
+.skirmish-picker {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-height: 0;
+  overflow: auto;
+  padding: clamp(16px, 2.2vw, 28px);
+  position: relative;
+  z-index: 3;
+}
+
+.skirmish-picker-header {
+  align-items: end;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-inline: auto;
+  max-width: 1180px;
+  width: 100%;
+}
+
+.skirmish-picker-header h1 {
+  color: #f4fbff;
+  font-family: var(--ds-font-display);
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  line-height: 1;
+  margin: 4px 0 0;
+  text-transform: uppercase;
+}
+
+.skirmish-picker-random {
+  min-width: 178px;
+}
+
+.skirmish-map-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  margin-inline: auto;
+  max-width: 1180px;
+  width: 100%;
+}
+
+.skirmish-map-card {
+  background: linear-gradient(180deg, rgba(10, 29, 42, .92), rgba(5, 15, 24, .9));
+  border: 1px solid rgba(149, 216, 234, .2);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 0 16px 30px rgba(0, 0, 0, .26);
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto minmax(120px, 1fr) auto;
+  min-height: 0;
+  padding: 10px;
+}
+
+.skirmish-map-thumb {
+  align-items: center;
+  background: rgba(1, 7, 12, .48);
+  border: 1px solid rgba(149, 216, 234, .16);
+  border-radius: 6px;
+  display: grid;
+  justify-items: center;
+  min-height: 132px;
+  overflow: hidden;
+}
+
+.skirmish-map-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.skirmish-map-copy h2,
+.skirmish-picker-empty-card h2 {
+  color: #f1cf86;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  line-height: 1.15;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.skirmish-map-copy dl {
+  color: var(--skirmish-muted);
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.skirmish-map-copy dl div {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.skirmish-map-copy dt {
+  color: rgba(149, 216, 234, .78);
+  font-size: var(--ds-text-2xs);
+  text-transform: uppercase;
+}
+
+.skirmish-map-copy dd {
+  color: var(--skirmish-ink);
+  font-size: var(--ds-text-xs);
+  margin: 0;
+  text-align: right;
+}
+
+.skirmish-map-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.skirmish-map-actions .ce-link-button {
+  min-height: 38px;
+}
+
+.skirmish-picker-empty {
+  justify-self: center;
+  margin-top: 18px;
+}
+
+.skirmish-picker-empty-card {
+  justify-self: center;
+  max-width: 520px;
+  padding: 18px;
+  text-align: center;
+}
+
+.skirmish-picker-empty-card p {
+  color: var(--skirmish-muted);
+  line-height: 1.45;
+  margin: 8px 0 16px;
 }
 
 .skirmish-topbar {
@@ -4322,11 +4472,16 @@ h1 {
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
+/* Editor buttons wear the SHARED kit frame (ADR-0002/0011/0012): the 9-slice border-image
+   button atoms, same art as the Settings action buttons — never hand-rolled gradients.
+   neutral = gold (default/inactive), primary = cyan (active/selected), danger = red (Clear).
+   The icon+label grid layout stays the editor's own; only the frame comes from the kit. */
 .le-seg-btn {
-  background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94));
-  border: 1px solid rgba(82, 142, 170, .34);
-  border-radius: 5px;
-  color: #cfe6f1;
+  appearance: none;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
   cursor: pointer;
   display: grid;
   font: inherit;
@@ -4334,24 +4489,84 @@ h1 {
   gap: 5px;
   grid-auto-flow: column;
   line-height: 1;
-  min-height: 30px;
-  padding: 4px 6px;
+  min-height: 38px;
+  padding: 0 2px;
   place-items: center;
+  text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
 }
 .le-seg-btn:disabled { cursor: default; opacity: .4; }
-.le-seg-btn:not(:disabled):hover {
-  color: #f4fbff;
-}
+.le-seg-btn:not(:disabled):hover { filter: brightness(1.08); }
 .le-seg-btn:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
-.le-seg-btn.active {
-  background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
-  border-color: var(--skirmish-cyan);
-  box-shadow: 0 0 0 1px rgba(56, 215, 255, .3);
-  color: #eafaff;
+.le-seg-btn.active { border-image-source: url("/assets/ui/kit/button-primary.png"); }
+.le-seg-btn.danger { border-image-source: url("/assets/ui/kit/button-danger.png"); }
+
+/* Layer picker — a dropdown (the tab count outgrew a single segmented row). Wears the same
+   kit frame (border-image button atom) as the editor buttons so it reads as one control family,
+   not a lone gradient; the native select keeps its dropdown chevron. */
+/* The 10px kit frame's fill slice paints over the select's own background, and a <select>
+   can't host a reliable ::after — so the dropdown chevron rides on the wrapper, above the frame. */
+.le-layer-select-wrap { position: relative; }
+.le-layer-select-wrap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 12px;
+  height: 8px;
+  transform: translateY(-50%);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
+  pointer-events: none;
+}
+.le-layer-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  min-height: 40px;
+  outline: none;
+  padding: 0 22px 0 6px;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
+  width: 100%;
+}
+.le-layer-select:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+.le-layer-select option {
+  background: #0a1f2e;
+  color: #cfe6f1;
+  text-transform: none;
+}
+.le-layer-select option:disabled { color: rgba(207, 230, 241, .4); }
+.le-board-link-input {
+  appearance: none;
+  background: rgba(3, 12, 19, .74);
+  border: 1px solid rgba(87, 153, 184, .4);
+  border-radius: 5px;
+  box-sizing: border-box;
+  color: #eff9ff;
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  margin-top: 8px;
+  min-height: 38px;
+  outline: none;
+  padding: 0 10px;
+  width: 100%;
+}
+.le-board-link-input::placeholder { color: rgba(207, 230, 241, .52); }
+.le-board-link-input:focus-visible {
+  border-color: rgba(101, 184, 255, .72);
+  box-shadow: 0 0 0 2px rgba(101, 184, 255, .2);
 }
 
 /* active brush picker */
@@ -4364,11 +4579,16 @@ h1 {
   height: 44px;
   overflow: hidden;
   place-items: center;
+  position: relative;
   width: 48px;
 }
 /* Fit the brush preview INSIDE the thumb. The old height:90% mis-resolved against the
    auto grid row, so portrait sprites (roads) overflowed to ~88px and clipped. */
 .le-brush-thumb img { display: block; max-width: 100%; max-height: 100%; image-rendering: pixelated; object-fit: contain; }
+/* Tile chip: the surface sprite is a tall 96x180 frame (diamond up top, empty below), so
+   `contain` shrinks it to a low sliver. Fill the chip and frame the diamond so the preview
+   focuses on the surface. object-position pulls the upper diamond into the box center. */
+.le-brush-thumb img.le-thumb-tile { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 26%; }
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
@@ -4436,6 +4656,35 @@ h1 {
 .le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
+.le-status-card { gap: 10px; }
+.le-status-current {
+  background: rgba(4, 13, 20, .7);
+  border: 1px solid rgba(82, 142, 170, .3);
+  border-radius: 5px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+.le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
+.le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
+.le-status-current.is-ready { border-color: rgba(103, 217, 138, .42); }
+.le-status-current.is-blocked { border-color: rgba(240, 189, 85, .42); }
+.le-status-log { display: grid; gap: 8px; }
+.le-status-entry {
+  background: rgba(3, 12, 19, .58);
+  border-left: 3px solid rgba(143, 182, 198, .55);
+  border-radius: 4px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  padding: 8px;
+}
+.le-status-entry time { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.2; }
+.le-status-entry strong { color: #f3ead8; display: block; font-size: var(--ds-text-sm); line-height: 1.2; }
+.le-status-entry span { color: var(--skirmish-muted); display: block; font-size: var(--ds-text-sm); line-height: 1.35; margin-top: 3px; }
+.le-status-entry.is-success { border-left-color: #67d98a; }
+.le-status-entry.is-warning { border-left-color: #f0bd55; }
+.le-status-entry.is-error { border-left-color: #ff7f70; }
 
 /* road connection editor — clickable diamond edges for the selected road tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
@@ -5129,9 +5378,8 @@ body { font-size: 17px; }
 }
 
 /* Editor chrome entrance is the SHARED screen-entrance primitive (ADR-0046): CampaignEditor
-   spreads useScreenEntrance()'s class onto .ce-layout + .ce-footer, so only the chrome fades
-   in while the .ce-screen backdrop + rain stay continuous — see `.screen-enter` in the motion
-   block. No bespoke .is-entered rule here anymore (it duplicated the hook). */
+   renders .ce-layout + .ce-footer through ArtRouteChrome, so only the chrome fades in while
+   the .ce-screen backdrop + rain stay continuous. */
 
 /* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
    the fixed bar overlay and pin the layout + footer to rows 2/3 (3-row grid). */
@@ -8877,16 +9125,16 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   background-repeat: no-repeat;
   pointer-events: none;
-  animation: gc-sway var(--gc-dur, 1.14s) steps(6) infinite;
-  animation-delay: var(--gc-delay, 0s);
+  animation: gc-sway var(--gc-dur, 1.14s) steps(6) infinite !important;
+  animation-delay: var(--gc-delay, 0s) !important;
   will-change: background-position;
 }
 @keyframes gc-sway {
   from { background-position-x: 0; }
   to { background-position-x: var(--gc-travel, 0); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .gc-tuft { animation: none; }
+:root.reduce-motion .gc-tuft {
+  animation: none !important;
 }
 
 .tileset-generated-board-overlay-cell {
@@ -10240,6 +10488,13 @@ button.tileset-relationship-cell {
   border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
 }
 
+.app-header-button.is-disabled,
+.app-header-button[aria-disabled="true"] {
+  cursor: help;
+  filter: grayscale(.12);
+  opacity: .55;
+}
+
 .app-header-button:hover {
   color: #f4fbff;
 }
@@ -10605,21 +10860,20 @@ button.tileset-relationship-cell {
   overflow: visible;
 }
 
-/* Screen entrance (ADR-0046): the SHARED entrance fade, applied via the useScreenEntrance()
-   hook to a screen's CHROME ROOT (.settings-shell in both Settings and the main menu) — never
-   the screen's outer element, so the ambience backdrop (a sibling) stays continuous and never
-   re-fades across art-background screens (ADR-0046 B/G). Entrance tier (slow + decelerate).
-   Pure opacity = reduced-motion-safe → not gated (ADR-0043). The hook only engages on a
-   navigation-driven mount; the cold-load menu reveal owns the first paint (no double-fade).
-   This replaces the old settings-only `.settings-art-route .settings-shell` opacity rule. */
+/* Screen entrance (ADR-0046): the SHARED entrance fade, applied through ArtRouteChrome to a
+   screen's CHROME ROOT (.settings-shell in Settings/menu, .skirmish-picker for map select) —
+   never the screen's outer element, so the ambience backdrop (a sibling) stays continuous and
+   never re-fades across art-background screens (ADR-0046 B/G). Entrance tier (slow +
+   decelerate). Pure opacity = reduced-motion-safe -> not gated (ADR-0043). The hook only
+   engages on a navigation-driven mount; the cold-load menu reveal owns the first paint (no
+   double-fade). */
 .screen-enter {
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+  animation: screen-enter-fade var(--ds-duration-fade) var(--ds-ease-standard) both !important;
 }
-/* Initial frame: paint at opacity 0 instantly (no transition), then the hook drops this class
-   next frame so the element transitions 0 -> 1. */
-.screen-enter.screen-enter-start {
-  opacity: 0;
-  transition: none;
+
+@keyframes screen-enter-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 /* Inert while the fade plays (ADR-0046 D): can't trigger a new transition mid-transition. */
 .screen-enter.screen-enter-lock {
