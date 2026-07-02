@@ -2,11 +2,8 @@
 // time; the tool renders the rest of the frame from those nudges, live.
 //
 // Decomposition (the model we settled on):
-//   - KEYLINE: the corner border + the edges, LOCKED together as ONE continuous
-//     line. The original misalignment was the corner keyline drifting out of step
-//     with the edge keyline — a seam. Locked, that seam can't exist; nudging the
-//     keyline moves corner + all four edges as a rigid border.
-//   - BRACKET: the gold corner decoration, FREE to nudge against that border.
+//   - FRAME: the cool corner-frame pixels + the straight edge atoms, tuned as one layer.
+//   - BRACKET: the gold corner decoration, tuned with the same control profile.
 //   - CONTENT: an inset guide marking where text/icons start (consumption-side).
 // Toggle the outer/content guide boxes (fixed at the footprint) to align against.
 //
@@ -22,8 +19,13 @@ import { SURFACE_ASSETS } from './surfaceCatalog';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
-type EditState = { keyline: Off; bracket: Off; content: number; fill: number };
-type PieceKey = 'keyline' | 'bracket';
+type BracketCorner = 'tl' | 'tr' | 'bl' | 'br';
+type BracketScope = 'all' | 'top' | 'bottom' | 'left' | 'right' | BracketCorner;
+type BracketCorners = Record<BracketCorner, Off>;
+type EdgeSide = 'top' | 'bottom' | 'left' | 'right';
+type EdgeSides = Record<EdgeSide, Off>;
+type EditState = { keyline: Off; frameCorners: BracketCorners; edge: Off; edgeSides: EdgeSides; frameScale: number; bracket: Off; bracketCorners: BracketCorners; content: number; fill: number; bracketScale: number };
+type PieceKey = 'frame' | 'bracket';
 
 type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean };
 
@@ -50,8 +52,147 @@ const DEFAULT_CONTENT = 0;
 // 0 = the fill boundary IS the footprint edge (no inset). The fill box marks where a surface
 // painted behind this frame should stop — the frame's corners can bleed outside it.
 const DEFAULT_FILL = 0;
+const DEFAULT_BRACKET_SCALE = 1;
+const DEFAULT_FRAME_SCALE = 1;
+const ZERO_OFF: Off = { dx: 0, dy: 0 };
+const CORNERS: BracketCorner[] = ['tl', 'tr', 'bl', 'br'];
+const SIDES: EdgeSide[] = ['top', 'bottom', 'left', 'right'];
+const ZERO_BRACKET_CORNERS: BracketCorners = {
+  tl: { dx: 0, dy: 0 },
+  tr: { dx: 0, dy: 0 },
+  bl: { dx: 0, dy: 0 },
+  br: { dx: 0, dy: 0 },
+};
+const ZERO_EDGE_SIDES: EdgeSides = {
+  top: { dx: 0, dy: 0 },
+  bottom: { dx: 0, dy: 0 },
+  left: { dx: 0, dy: 0 },
+  right: { dx: 0, dy: 0 },
+};
+const BRACKET_SCOPES: { key: BracketScope; label: string }[] = [
+  { key: 'all', label: 'all' },
+  { key: 'top', label: 'top' },
+  { key: 'bottom', label: 'bottom' },
+  { key: 'left', label: 'left' },
+  { key: 'right', label: 'right' },
+  { key: 'tl', label: 'TL' },
+  { key: 'tr', label: 'TR' },
+  { key: 'bl', label: 'BL' },
+  { key: 'br', label: 'BR' },
+];
 const STORAGE_KEY = 'nine-slice-editor-v4';
 const Z = 6;
+
+function cloneBracketCorners(src?: Partial<BracketCorners>): BracketCorners {
+  return {
+    tl: { ...(src?.tl ?? ZERO_OFF) },
+    tr: { ...(src?.tr ?? ZERO_OFF) },
+    bl: { ...(src?.bl ?? ZERO_OFF) },
+    br: { ...(src?.br ?? ZERO_OFF) },
+  };
+}
+
+function cloneEdgeSides(src?: Partial<EdgeSides>): EdgeSides {
+  return {
+    top: { ...(src?.top ?? ZERO_OFF) },
+    bottom: { ...(src?.bottom ?? ZERO_OFF) },
+    left: { ...(src?.left ?? ZERO_OFF) },
+    right: { ...(src?.right ?? ZERO_OFF) },
+  };
+}
+
+const DEFAULT_EDIT: EditState = {
+  keyline: { dx: 0, dy: 0 },
+  frameCorners: cloneBracketCorners(),
+  edge: { dx: 0, dy: 0 },
+  edgeSides: cloneEdgeSides(),
+  frameScale: DEFAULT_FRAME_SCALE,
+  bracket: { dx: 0, dy: 0 },
+  bracketCorners: cloneBracketCorners(),
+  content: DEFAULT_CONTENT,
+  fill: DEFAULT_FILL,
+  bracketScale: DEFAULT_BRACKET_SCALE,
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizedOff(value: unknown, fallback: Off): Off {
+  const raw = asRecord(value);
+  return {
+    dx: finiteNumber(raw.dx, fallback.dx),
+    dy: finiteNumber(raw.dy, fallback.dy),
+  };
+}
+
+function normalizedCorners(value: unknown, fallback: BracketCorners): BracketCorners {
+  const raw = asRecord(value);
+  return {
+    tl: normalizedOff(raw.tl, fallback.tl),
+    tr: normalizedOff(raw.tr, fallback.tr),
+    bl: normalizedOff(raw.bl, fallback.bl),
+    br: normalizedOff(raw.br, fallback.br),
+  };
+}
+
+function normalizedEdgeSides(value: unknown, fallback: EdgeSides): EdgeSides {
+  const raw = asRecord(value);
+  return {
+    top: normalizedOff(raw.top, fallback.top),
+    bottom: normalizedOff(raw.bottom, fallback.bottom),
+    left: normalizedOff(raw.left, fallback.left),
+    right: normalizedOff(raw.right, fallback.right),
+  };
+}
+
+function roundedScale(value: unknown, fallback: number): number {
+  return Math.max(1, Math.min(4, Math.round(finiteNumber(value, fallback) * 100) / 100));
+}
+
+function normalizedEdit(value: unknown, fallback: EditState = DEFAULT_EDIT): EditState {
+  const raw = asRecord(value);
+  return {
+    keyline: normalizedOff(raw.keyline, fallback.keyline),
+    frameCorners: normalizedCorners(raw.frameCorners, fallback.frameCorners),
+    edge: normalizedOff(raw.edge, fallback.edge),
+    edgeSides: normalizedEdgeSides(raw.edgeSides, fallback.edgeSides),
+    frameScale: roundedScale(raw.frameScale ?? raw.edgeScale, fallback.frameScale),
+    bracket: normalizedOff(raw.bracket, fallback.bracket),
+    bracketCorners: normalizedCorners(raw.bracketCorners, fallback.bracketCorners),
+    content: Math.max(0, Math.round(finiteNumber(raw.content, fallback.content))),
+    fill: Math.max(0, Math.round(finiteNumber(raw.fill, fallback.fill))),
+    bracketScale: roundedScale(raw.bracketScale, fallback.bracketScale),
+  };
+}
+
+function pastedAssetId(value: unknown): string | null {
+  const asset = asRecord(value).asset;
+  return typeof asset === 'string' && REGISTRY[asset] ? asset : null;
+}
+
+function cornersForScope(scope: BracketScope): BracketCorner[] {
+  if (scope === 'all') return CORNERS;
+  if (scope === 'top') return ['tl', 'tr'];
+  if (scope === 'bottom') return ['bl', 'br'];
+  if (scope === 'left') return ['tl', 'bl'];
+  if (scope === 'right') return ['tr', 'br'];
+  return [scope];
+}
+
+function sidesForScope(scope: BracketScope): EdgeSide[] {
+  if (scope === 'all') return SIDES;
+  if (scope === 'top') return ['top'];
+  if (scope === 'bottom') return ['bottom'];
+  if (scope === 'left') return ['left'];
+  if (scope === 'right') return ['right'];
+  return [];
+}
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -76,6 +217,23 @@ function flip(src: CanvasImageSource, w: number, h: number, fx: boolean, fy: boo
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d')!; g.imageSmoothingEnabled = false;
   g.translate(fx ? w : 0, fy ? h : 0); g.scale(fx ? -1 : 1, fy ? -1 : 1); g.drawImage(src, 0, 0); return c;
+}
+
+function scaleCanvas(src: HTMLCanvasElement, scale: number): HTMLCanvasElement {
+  if (scale === 1) return src;
+  const w = src.width, h = src.height;
+  const dw = Math.max(1, Math.round(w * scale)), dh = Math.max(1, Math.round(h * scale));
+  const s = src.getContext('2d')!.getImageData(0, 0, w, h);
+  const c = document.createElement('canvas'); c.width = dw; c.height = dh;
+  const g = c.getContext('2d')!, d = g.createImageData(dw, dh);
+  for (let y = 0; y < dh; y++) for (let x = 0; x < dw; x++) {
+    const sx = Math.min(w - 1, Math.floor(x / scale));
+    const sy = Math.min(h - 1, Math.floor(y / scale));
+    const si = (sy * w + sx) * 4, di = (y * dw + x) * 4;
+    for (let k = 0; k < 4; k++) d.data[di + k] = s.data[si + k];
+  }
+  g.putImageData(d, 0, 0);
+  return c;
 }
 
 // rot90 copied from assemble-frame.mjs: dest(x,y) = src(y, h-1-x). Same chirality
@@ -137,42 +295,103 @@ function opaqueBox(c: HTMLCanvasElement): { minX: number; minY: number; maxX: nu
   return maxX < 0 ? { minX: 0, minY: 0, maxX: 0, maxY: 0 } : { minX, minY, maxX, maxY };
 }
 
-const tileH = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number, x1: number, y: number) => { for (let x = x0; x < x1; x += t.width) g.drawImage(t, x, y); };
-const tileV = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, y0: number, y1: number, x: number) => { for (let y = y0; y < y1; y += t.height) g.drawImage(t, x, y); };
-const tileRect = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number, y0: number, x1: number, y1: number) => { for (let y = y0; y < y1; y += t.height) for (let x = x0; x < x1; x += t.width) g.drawImage(t, x, y); };
+function scaleBox(box: { minX: number; minY: number; maxX: number; maxY: number }, scale: number): { minX: number; minY: number; maxX: number; maxY: number } {
+  return {
+    minX: Math.ceil(box.minX * scale),
+    minY: Math.ceil(box.minY * scale),
+    maxX: Math.ceil((box.maxX + 1) * scale) - 1,
+    maxY: Math.ceil((box.maxY + 1) * scale) - 1,
+  };
+}
 
-type Loaded = { base: HTMLCanvasElement; accent: HTMLCanvasElement; hasAccent: boolean; edge: HTMLImageElement; fill: HTMLImageElement; target: HTMLImageElement | null; cw: number; ch: number; ew: number; eh: number; baseBox: { minX: number; minY: number; maxX: number; maxY: number }; accentBox: { minX: number; minY: number; maxX: number; maxY: number } };
+const tileH = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number, x1: number, y: number) => {
+  for (let x = x0; x < x1; x += t.width) {
+    const sw = Math.min(t.width, x1 - x);
+    if (sw > 0) g.drawImage(t, 0, 0, sw, t.height, x, y, sw, t.height);
+  }
+};
+const tileV = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, y0: number, y1: number, x: number) => {
+  for (let y = y0; y < y1; y += t.height) {
+    const sh = Math.min(t.height, y1 - y);
+    if (sh > 0) g.drawImage(t, 0, 0, t.width, sh, x, y, t.width, sh);
+  }
+};
+const tileRect = (g: CanvasRenderingContext2D, t: HTMLCanvasElement, x0: number, y0: number, x1: number, y1: number) => {
+  for (let y = y0; y < y1; y += t.height) for (let x = x0; x < x1; x += t.width) {
+    const sw = Math.min(t.width, x1 - x);
+    const sh = Math.min(t.height, y1 - y);
+    if (sw > 0 && sh > 0) g.drawImage(t, 0, 0, sw, sh, x, y, sw, sh);
+  }
+};
 
-// Assemble the 9-slice at an arbitrary W×H (no margin) with the keyline/bracket
+type Loaded = {
+  base: HTMLCanvasElement;
+  accent: HTMLCanvasElement;
+  hasAccent: boolean;
+  edge: HTMLImageElement;
+  fill: HTMLImageElement;
+  target: HTMLImageElement | null;
+  cw: number;
+  ch: number;
+  ew: number;
+  eh: number;
+  baseBox: { minX: number; minY: number; maxX: number; maxY: number };
+  accentBox: { minX: number; minY: number; maxX: number; maxY: number };
+  edgeMinDx: number;
+  edgeMinDy: number;
+  edgeMaxDx: number;
+  edgeMaxDy: number;
+};
+
+// Assemble the 9-slice at an arbitrary W×H (no margin) with the edge/keyline/bracket
 // offsets baked in. This is the single source of truth for both the editor canvas
 // and the live previews, so a preview can never diverge from what you're editing.
-function buildFrameCanvas(L: Loaded, kx: number, ky: number, bdx: number, bdy: number, w: number, h: number, carve = false, flipSides = false, noFill = false): HTMLCanvasElement {
+// bracketScale enlarges the gold corner bracket; frameScale enlarges the cool frame layer
+// (corner-frame pixels and straight pipes). Both use nearest-neighbour scaling.
+// The Node bake mirrors this split-layer model.
+function buildFrameCanvas(L: Loaded, edit: EditState, w: number, h: number, carve = false, flipSides = false, noFill = false): HTMLCanvasElement {
   const { cw, ch, ew, eh } = L;
   const W = Math.max(2 * cw, w), H = Math.max(2 * ch, h);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d')!; g.imageSmoothingEnabled = false;
   // noFill = ornament only (transparent interior) — the "line" frame a surface shows through.
   if (!noFill) tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
-  const topS = toCanvas(L.edge, ew, eh);
-  const botS = flip(topS, ew, eh, false, true);
+  const topS = scaleCanvas(toCanvas(L.edge, ew, eh), edit.frameScale);
+  const botS = flip(topS, topS.width, topS.height, false, true);
   // Side edges via rot90; flipSides swaps L/R for beveled rails (row) so the bevel
   // matches the corner at the join instead of reversing — mirrors assemble-frame.
-  const r = rot90(L.edge, ew, eh);
+  const r = scaleCanvas(rot90(L.edge, ew, eh), edit.frameScale);
   const fr = flip(r, r.width, r.height, true, false);
   const rightS = flipSides ? fr : r;
   const leftS = flipSides ? r : fr;
-  tileH(g, topS, cw, W - cw, ky);
-  tileH(g, botS, cw, W - cw, H - botS.height - ky);
-  tileV(g, leftS, ch, H - ch, kx);
-  tileV(g, rightS, ch, H - ch, W - rightS.width - kx);
-  const corner = (art: HTMLCanvasElement, ox: number, oy: number) => {
-    g.drawImage(art, ox, oy);
-    g.drawImage(flip(art, cw, ch, true, false), W - cw - ox, oy);
-    g.drawImage(flip(art, cw, ch, false, true), ox, H - ch - oy);
-    g.drawImage(flip(art, cw, ch, true, true), W - cw - ox, H - ch - oy);
+  const topY = edit.edge.dy + edit.edgeSides.top.dy;
+  const bottomY = edit.edge.dy + edit.edgeSides.bottom.dy;
+  const leftX = edit.edge.dx + edit.edgeSides.left.dx;
+  const rightX = edit.edge.dx + edit.edgeSides.right.dx;
+  // Pipes are an underlay. Keep them spanning the original corner-to-corner interval
+  // even when the frame corners are scaled larger; otherwise max-scale corners can consume
+  // the whole side and a one-pixel corner nudge exposes an empty center seam.
+  const pipeBleed = Math.max(0, Math.round(edit.frameScale) - 1);
+  for (let d = 0; d <= pipeBleed; d++) {
+    tileH(g, topS, cw, W - cw, topY - d);
+    tileH(g, botS, cw, W - cw, H - botS.height - bottomY + d);
+    tileV(g, leftS, ch, H - ch, leftX + d);
+    tileV(g, rightS, ch, H - ch, W - rightS.width - rightX + d);
+  }
+  const corner = (art: HTMLCanvasElement, ox: number, oy: number, scale = 1, perCorner: BracketCorners = ZERO_BRACKET_CORNERS) => {
+    const tl = scaleCanvas(art, scale);
+    const tr = scaleCanvas(flip(art, cw, ch, true, false), scale);
+    const bl = scaleCanvas(flip(art, cw, ch, false, true), scale);
+    const br = scaleCanvas(flip(art, cw, ch, true, true), scale);
+    const dw = tl.width, dh = tl.height;
+    const p = perCorner;
+    g.drawImage(tl, ox + p.tl.dx, oy + p.tl.dy);
+    g.drawImage(tr, W - dw - (ox + p.tr.dx), oy + p.tr.dy);
+    g.drawImage(bl, ox + p.bl.dx, H - dh - (oy + p.bl.dy));
+    g.drawImage(br, W - dw - (ox + p.br.dx), H - dh - (oy + p.br.dy));
   };
-  corner(L.base, kx, ky);
-  if (L.hasAccent) corner(L.accent, bdx, bdy);
+  corner(L.base, edit.keyline.dx, edit.keyline.dy, edit.frameScale, edit.frameCorners); // cool frame corners
+  if (L.hasAccent) corner(L.accent, edit.bracket.dx, edit.bracket.dy, edit.bracketScale, edit.bracketCorners); // gold bracket
   if (carve) carveExterior(c);
   return c;
 }
@@ -192,6 +411,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId) ?? ASSETS[0], [assetId]);
   const aid = asset.id;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [layerScope, setLayerScope] = useState<BracketScope>('all');
   // Fingerprints of the exact tile bytes this view is built from (corner/edge/fill),
   // shown in the header so the asset on screen is identifiable and matchable to disk.
   const [tileHashes, setTileHashes] = useState<{ corner?: string; edge?: string; fill?: string }>({});
@@ -216,21 +436,27 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       const clean: Record<string, EditState> = {};
       for (const k of Object.keys(raw)) {
         const e = raw[k];
-        if (e && e.keyline && typeof e.keyline.dx === 'number' && e.bracket && typeof e.bracket.dx === 'number') clean[k] = e;
+        if (e && e.keyline && typeof e.keyline.dx === 'number' && e.bracket && typeof e.bracket.dx === 'number') {
+          clean[k] = normalizedEdit(e);
+        }
       }
       return clean;
     } catch { return {}; }
   });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pvActualRef = useRef<HTMLCanvasElement>(null);
-  const pvUseRef = useRef<HTMLCanvasElement>(null);
-  const DEFAULT_EDIT: EditState = { keyline: { dx: 0, dy: 0 }, bracket: { dx: 0, dy: 0 }, content: DEFAULT_CONTENT, fill: DEFAULT_FILL };
   const stored = edits[aid];
   const edit: EditState = {
     keyline: stored?.keyline ?? { dx: 0, dy: 0 },
+    frameCorners: cloneBracketCorners(stored?.frameCorners),
+    edge: stored?.edge ?? { dx: 0, dy: 0 },
+    edgeSides: cloneEdgeSides(stored?.edgeSides),
+    frameScale: stored?.frameScale ?? DEFAULT_FRAME_SCALE,
     bracket: stored?.bracket ?? { dx: 0, dy: 0 },
+    bracketCorners: cloneBracketCorners(stored?.bracketCorners),
     content: stored?.content ?? DEFAULT_CONTENT,
     fill: stored?.fill ?? DEFAULT_FILL,
+    bracketScale: stored?.bracketScale ?? DEFAULT_BRACKET_SCALE,
   };
 
   useEffect(() => {
@@ -239,12 +465,47 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       .then(([corner, edge, fill, target]) => {
         if (!live) return;
         const { base, accent, hasAccent } = splitWarm(corner);
-        setLoaded({ base, accent, hasAccent, edge, fill, target, cw: corner.width, ch: corner.height, ew: edge.width, eh: edge.height, baseBox: opaqueBox(base), accentBox: hasAccent ? opaqueBox(accent) : { minX: 0, minY: 0, maxX: corner.width - 1, maxY: corner.height - 1 } });
+        const topEdge = toCanvas(edge, edge.width, edge.height);
+        const bottomEdge = flip(topEdge, topEdge.width, topEdge.height, false, true);
+        const side = rot90(edge, edge.width, edge.height);
+        const flippedSide = flip(side, side.width, side.height, true, false);
+        const rightEdge = asset.flipSides ? flippedSide : side;
+        const leftEdge = asset.flipSides ? side : flippedSide;
+        const topBox = opaqueBox(topEdge);
+        const bottomBox = opaqueBox(bottomEdge);
+        const leftBox = opaqueBox(leftEdge);
+        const rightBox = opaqueBox(rightEdge);
+        const edgeMinDx = Math.max(-leftBox.minX, rightBox.maxX - rightEdge.width + 1);
+        const edgeMinDy = Math.max(-topBox.minY, bottomBox.maxY - bottomEdge.height + 1);
+        const edgeMaxDx = Math.max(edgeMinDx, Math.floor((asset.frame.w - leftEdge.width - rightEdge.width) / 2));
+        const edgeMaxDy = Math.max(edgeMinDy, Math.floor((asset.frame.h - topEdge.height - bottomEdge.height) / 2));
+        setLoaded({
+          base,
+          accent,
+          hasAccent,
+          edge,
+          fill,
+          target,
+          cw: corner.width,
+          ch: corner.height,
+          ew: edge.width,
+          eh: edge.height,
+          baseBox: opaqueBox(base),
+          accentBox: hasAccent ? opaqueBox(accent) : { minX: 0, minY: 0, maxX: corner.width - 1, maxY: corner.height - 1 },
+          edgeMinDx,
+          edgeMinDy,
+          edgeMaxDx,
+          edgeMaxDy,
+        });
       }).catch(() => { if (live) setLoaded(null); });
     return () => { live = false; };
   }, [asset]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
+
+  useEffect(() => {
+    if (loaded && !loaded.hasAccent && active === 'bracket') setActive('frame');
+  }, [loaded, active]);
 
   // Fingerprint the actual served bytes of this asset's tiles (no cache), so the
   // header shows exactly which artwork the on-screen frame is assembled from.
@@ -272,6 +533,10 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   // editor reflects what's actually baked — not stale localStorage or defaults. This
   // is what stops a fresh editor from saving default values over your real config.
   const hydrated = useRef<Set<string>>(new Set());
+  // The saved/baked config each asset was hydrated from — a per-control "Reset" reverts to THIS
+  // (its shipped value), mirroring the dressing rooms, rather than to a bare zero. Falls back to
+  // DEFAULT_EDIT when no config has loaded (fresh asset / production, where there's no hydrate).
+  const baselineRef = useRef<Record<string, EditState>>({});
   useEffect(() => {
     if (!((import.meta as { env?: { DEV?: boolean } }).env?.DEV) || hydrated.current.has(aid)) return;
     let live = true;
@@ -280,7 +545,9 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       .then((j) => {
         if (!live || !j.ok || !j.config) return;
         hydrated.current.add(aid);
-        setEdits((prev) => ({ ...prev, [aid]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL } }));
+        const hydratedEdit = normalizedEdit(j.config);
+        baselineRef.current[aid] = hydratedEdit;
+        setEdits((prev) => ({ ...prev, [aid]: hydratedEdit }));
       })
       .catch(() => {});
     return () => { live = false; };
@@ -290,29 +557,202 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     const cur = prev[aid] ?? DEFAULT_EDIT;
     return { ...prev, [aid]: mut(cur) };
   });
-  // Clamp an offset so the active piece's opaque pixels stay inside the footprint —
-  // outward stops at flush (you can't push out of bounds; that's never wanted), inward
-  // stops before the far edge. -box.min is exactly the "max out" flush position.
-  const clampOffset = (dx: number, dy: number): Off => {
-    if (!loaded) return { dx, dy };
-    const box = active === 'keyline' ? loaded.baseBox : loaded.accentBox;
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const maxFrameScale = loaded ? Math.max(1, Math.min(4, asset.frame.w / (2 * loaded.cw), asset.frame.h / (2 * loaded.ch))) : 4;
+  const boxRange = (box: { minX: number; minY: number; maxX: number; maxY: number }, scale: number) => {
+    const scaled = scaleBox(box, scale);
     const W = asset.frame.w, H = asset.frame.h;
+    return { minX: -scaled.minX, maxX: W - 1 - scaled.maxX, minY: -scaled.minY, maxY: H - 1 - scaled.maxY };
+  };
+  const bracketRange = () => loaded ? boxRange(loaded.accentBox, edit.bracketScale) : null;
+  const frameCornerRange = (scale = edit.frameScale) => loaded ? boxRange(loaded.baseBox, scale) : null;
+  const edgeRange = (scale = edit.frameScale, sides = edit.edgeSides) => {
+    if (!loaded) return null;
+    const topEdge = scaleCanvas(toCanvas(loaded.edge, loaded.ew, loaded.eh), scale);
+    const bottomEdge = flip(topEdge, topEdge.width, topEdge.height, false, true);
+    const side = scaleCanvas(rot90(loaded.edge, loaded.ew, loaded.eh), scale);
+    const flippedSide = flip(side, side.width, side.height, true, false);
+    const rightEdge = asset.flipSides ? flippedSide : side;
+    const leftEdge = asset.flipSides ? side : flippedSide;
+    const topBox = opaqueBox(topEdge);
+    const bottomBox = opaqueBox(bottomEdge);
+    const leftBox = opaqueBox(leftEdge);
+    const rightBox = opaqueBox(rightEdge);
+    const minDx = Math.max(-leftBox.minX - sides.left.dx, rightBox.maxX - rightEdge.width + 1 - sides.right.dx);
+    const minDy = Math.max(-topBox.minY - sides.top.dy, bottomBox.maxY - bottomEdge.height + 1 - sides.bottom.dy);
     return {
-      dx: Math.max(-box.minX, Math.min(W - 1 - box.maxX, dx)),
-      dy: Math.max(-box.minY, Math.min(H - 1 - box.maxY, dy)),
+      minDx,
+      minDy,
+      maxDx: Math.max(minDx, Math.floor((asset.frame.w - leftEdge.width - rightEdge.width) / 2) - Math.max(sides.left.dx, sides.right.dx)),
+      maxDy: Math.max(minDy, Math.floor((asset.frame.h - topEdge.height - bottomEdge.height) / 2) - Math.max(sides.top.dy, sides.bottom.dy)),
     };
   };
-  const nudge = (dx: number, dy: number) => update((cur) => ({ ...cur, [active]: clampOffset(cur[active].dx + dx, cur[active].dy + dy) }));
+  const nudgeBracket = (dx: number, dy: number) => {
+    const range = bracketRange();
+    if (!range) return;
+    const scoped = cornersForScope(layerScope);
+    update((cur) => {
+      const corners = cloneBracketCorners(cur.bracketCorners);
+      if (layerScope === 'all') {
+        const minDx = Math.max(...CORNERS.map((k) => range.minX - corners[k].dx));
+        const maxDx = Math.min(...CORNERS.map((k) => range.maxX - corners[k].dx));
+        const minDy = Math.max(...CORNERS.map((k) => range.minY - corners[k].dy));
+        const maxDy = Math.min(...CORNERS.map((k) => range.maxY - corners[k].dy));
+        return { ...cur, bracket: { dx: clamp(cur.bracket.dx + dx, minDx, maxDx), dy: clamp(cur.bracket.dy + dy, minDy, maxDy) } };
+      }
+      for (const k of scoped) {
+        const actualX = clamp(cur.bracket.dx + corners[k].dx + dx, range.minX, range.maxX);
+        const actualY = clamp(cur.bracket.dy + corners[k].dy + dy, range.minY, range.maxY);
+        corners[k] = { dx: actualX - cur.bracket.dx, dy: actualY - cur.bracket.dy };
+      }
+      return { ...cur, bracketCorners: corners };
+    });
+  };
+  const nudgeFrame = (dx: number, dy: number) => {
+    const cornerRange = frameCornerRange();
+    const edgeBaseRange = edgeRange();
+    if (!cornerRange || !edgeBaseRange) return;
+    const cornerScope = cornersForScope(layerScope);
+    const sideScope = sidesForScope(layerScope);
+    update((cur) => {
+      const frameCorners = cloneBracketCorners(cur.frameCorners);
+      const edgeSides = cloneEdgeSides(cur.edgeSides);
+      if (layerScope === 'all') {
+        const minDx = Math.max(...CORNERS.map((k) => cornerRange.minX - frameCorners[k].dx));
+        const maxDx = Math.min(...CORNERS.map((k) => cornerRange.maxX - frameCorners[k].dx));
+        const minDy = Math.max(...CORNERS.map((k) => cornerRange.minY - frameCorners[k].dy));
+        const maxDy = Math.min(...CORNERS.map((k) => cornerRange.maxY - frameCorners[k].dy));
+        return {
+          ...cur,
+          keyline: { dx: clamp(cur.keyline.dx + dx, minDx, maxDx), dy: clamp(cur.keyline.dy + dy, minDy, maxDy) },
+          edge: { dx: clamp(cur.edge.dx + dx, edgeBaseRange.minDx, edgeBaseRange.maxDx), dy: clamp(cur.edge.dy + dy, edgeBaseRange.minDy, edgeBaseRange.maxDy) },
+        };
+      }
+      for (const k of cornerScope) {
+        const actualX = clamp(cur.keyline.dx + frameCorners[k].dx + dx, cornerRange.minX, cornerRange.maxX);
+        const actualY = clamp(cur.keyline.dy + frameCorners[k].dy + dy, cornerRange.minY, cornerRange.maxY);
+        frameCorners[k] = { dx: actualX - cur.keyline.dx, dy: actualY - cur.keyline.dy };
+      }
+      for (const side of sideScope) {
+        if (side === 'top' || side === 'bottom') {
+          edgeSides[side] = { ...edgeSides[side], dy: edgeSides[side].dy + dy };
+        } else {
+          edgeSides[side] = { ...edgeSides[side], dx: edgeSides[side].dx + dx };
+        }
+      }
+      return { ...cur, frameCorners, edgeSides };
+    });
+  };
+  const nudge = (dx: number, dy: number) => {
+    if (active === 'bracket') { nudgeBracket(dx, dy); return; }
+    nudgeFrame(dx, dy);
+  };
   // Send the active piece to its max outward position — flush with the footprint corner.
   const maxOut = () => {
     if (!loaded) return;
-    const box = active === 'keyline' ? loaded.baseBox : loaded.accentBox;
-    update((cur) => ({ ...cur, [active]: { dx: -box.minX, dy: -box.minY } }));
+    if (active === 'bracket') {
+      const range = bracketRange();
+      if (!range) return;
+      const scoped = cornersForScope(layerScope);
+      update((cur) => {
+        const corners = cloneBracketCorners(cur.bracketCorners);
+        if (layerScope === 'all') return { ...cur, bracket: { dx: range.minX, dy: range.minY }, bracketCorners: cloneBracketCorners() };
+        for (const k of scoped) corners[k] = { dx: range.minX - cur.bracket.dx, dy: range.minY - cur.bracket.dy };
+        return { ...cur, bracketCorners: corners };
+      });
+      return;
+    }
+    const cornerRange = frameCornerRange();
+    const edgeBaseRange = edgeRange();
+    if (!cornerRange || !edgeBaseRange) return;
+    const cornerScope = cornersForScope(layerScope);
+    const sideScope = sidesForScope(layerScope);
+    update((cur) => {
+      const frameCorners = cloneBracketCorners(cur.frameCorners);
+      const edgeSides = cloneEdgeSides(cur.edgeSides);
+      if (layerScope === 'all') {
+        return {
+          ...cur,
+          keyline: { dx: cornerRange.minX, dy: cornerRange.minY },
+          frameCorners: cloneBracketCorners(),
+          edge: { dx: edgeBaseRange.minDx, dy: edgeBaseRange.minDy },
+          edgeSides: cloneEdgeSides(),
+        };
+      }
+      for (const k of cornerScope) frameCorners[k] = { dx: cornerRange.minX - cur.keyline.dx, dy: cornerRange.minY - cur.keyline.dy };
+      for (const side of sideScope) {
+        if (side === 'top' || side === 'bottom') edgeSides[side] = { ...edgeSides[side], dy: edgeBaseRange.minDy - cur.edge.dy };
+        else edgeSides[side] = { ...edgeSides[side], dx: edgeBaseRange.minDx - cur.edge.dx };
+      }
+      return { ...cur, frameCorners, edgeSides };
+    });
   };
   const setContent = (dc: number) => update((cur) => ({ ...cur, content: Math.max(0, (cur.content ?? DEFAULT_CONTENT) + dc) }));
   // Fill inset can't exceed half the smaller frame dim (box would invert); clamp to >= 0.
   const setFill = (df: number) => update((cur) => ({ ...cur, fill: Math.max(0, Math.min(Math.floor(Math.min(asset.frame.w, asset.frame.h) / 2) - 1, (cur.fill ?? DEFAULT_FILL) + df)) }));
-  const reset = () => update(() => DEFAULT_EDIT);
+  const setBracketScale = (next: number | ((cur: number) => number)) => update((cur) => {
+    const raw = typeof next === 'function' ? next(cur.bracketScale ?? DEFAULT_BRACKET_SCALE) : next;
+    return { ...cur, bracketScale: Math.max(1, Math.min(4, Math.round(raw * 100) / 100)) };
+  });
+  const setFrameScale = (next: number | ((cur: number) => number)) => update((cur) => {
+    const raw = typeof next === 'function' ? next(cur.frameScale ?? DEFAULT_FRAME_SCALE) : next;
+    const frameScale = clamp(Math.round(raw * 100) / 100, 1, maxFrameScale);
+    const range = edgeRange(frameScale, cur.edgeSides);
+    return {
+      ...cur,
+      frameScale,
+      edge: range ? { dx: clamp(cur.edge.dx, range.minDx, range.maxDx), dy: clamp(cur.edge.dy, range.minDy, range.maxDy) } : cur.edge,
+    };
+  });
+  // Per-control resets — each reverts ONE control to the asset's saved baseline (its shipped value),
+  // the same "↺ back to default" every other Studio tuner gives its controls. Backing is preview-only,
+  // so it resets to its neutral state (none).
+  const baselineOf = (): EditState => baselineRef.current[aid] ?? DEFAULT_EDIT;
+  const resetBracket = () => update((cur) => {
+    const base = baselineOf();
+    if (layerScope === 'all') return { ...cur, bracket: base.bracket, bracketCorners: cloneBracketCorners(base.bracketCorners) };
+    const corners = cloneBracketCorners(cur.bracketCorners);
+    const baseCorners = cloneBracketCorners(base.bracketCorners);
+    for (const k of cornersForScope(layerScope)) corners[k] = baseCorners[k];
+    return { ...cur, bracketCorners: corners };
+  });
+  const resetFrame = () => update((cur) => {
+    const base = baselineOf();
+    if (layerScope === 'all') {
+      return {
+        ...cur,
+        keyline: base.keyline,
+        frameCorners: cloneBracketCorners(base.frameCorners),
+        edge: base.edge,
+        edgeSides: cloneEdgeSides(base.edgeSides),
+      };
+    }
+    const frameCorners = cloneBracketCorners(cur.frameCorners);
+    const edgeSides = cloneEdgeSides(cur.edgeSides);
+    const baseFrameCorners = cloneBracketCorners(base.frameCorners);
+    const baseEdgeSides = cloneEdgeSides(base.edgeSides);
+    for (const k of cornersForScope(layerScope)) frameCorners[k] = baseFrameCorners[k];
+    for (const s of sidesForScope(layerScope)) edgeSides[s] = baseEdgeSides[s];
+    return { ...cur, frameCorners, edgeSides };
+  });
+  const resetContent = () => update((cur) => ({ ...cur, content: baselineOf().content }));
+  const resetFill = () => update((cur) => ({ ...cur, fill: baselineOf().fill }));
+  const resetBracketScale = () => update((cur) => ({ ...cur, bracketScale: baselineOf().bracketScale ?? DEFAULT_BRACKET_SCALE }));
+  const resetFrameScale = () => update((cur) => {
+    const frameScale = clamp(baselineOf().frameScale ?? DEFAULT_FRAME_SCALE, 1, maxFrameScale);
+    const range = edgeRange(frameScale, cur.edgeSides);
+    return {
+      ...cur,
+      frameScale,
+      edge: range ? { dx: clamp(cur.edge.dx, range.minDx, range.maxDx), dy: clamp(cur.edge.dy, range.minDy, range.maxDy) } : cur.edge,
+    };
+  });
+  const resetAll = () => { update(() => baselineOf()); setBacking('none'); };
+
+  useEffect(() => {
+    if (!loaded || edit.frameScale <= maxFrameScale) return;
+    update((cur) => ({ ...cur, frameScale: maxFrameScale }));
+  }, [aid, loaded, edit.frameScale, maxFrameScale]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -324,14 +764,13 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, aid, loaded]);
+  }, [active, aid, loaded, edit.bracketScale, edit.frameScale, layerScope]);
 
   useEffect(() => {
     if (!loaded) return;
     const W = asset.frame.w, H = asset.frame.h;        // canvas = the asset footprint
-    // keyline is inert (the border is continuous by construction) — always 0, matching the bake.
-    const off = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides);        // full frame (baked body)
-    const orn = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, W, H, asset.carve, asset.flipSides, true);  // ornament only (no fill)
+    const off = buildFrameCanvas(loaded, edit, W, H, asset.carve, asset.flipSides);        // full frame (baked body)
+    const orn = buildFrameCanvas(loaded, edit, W, H, asset.carve, asset.flipSides, true);  // ornament only (no fill)
     const g = off.getContext('2d')!; // status reads the full frame's opaque box
 
     const view = canvasRef.current; if (!view) return;
@@ -357,7 +796,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     }
 
     // Guides are FIXED references at the asset footprint — you position the
-    // keyline/bracket RELATIVE to them; they do NOT follow the art.
+    // edge/keyline/bracket RELATIVE to them; they do NOT follow the art.
     // OUTER box = the footprint edge. CONTENT box = inset by `content` px.
     if (showOuter) {
       vg.strokeStyle = '#ff5cf0'; vg.lineWidth = 2;
@@ -383,48 +822,202 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
     }
     setStatus(maxX < 0 ? null : { top: minY, left: minX, right: (W - 1) - maxX, bottom: (H - 1) - maxY });
-  }, [loaded, edit, showOuter, showContent, showFill, backing, surfaceImg, asset]);
+  }, [
+    loaded,
+    edit.keyline.dx,
+    edit.keyline.dy,
+    edit.frameCorners.tl.dx,
+    edit.frameCorners.tl.dy,
+    edit.frameCorners.tr.dx,
+    edit.frameCorners.tr.dy,
+    edit.frameCorners.bl.dx,
+    edit.frameCorners.bl.dy,
+    edit.frameCorners.br.dx,
+    edit.frameCorners.br.dy,
+    edit.edge.dx,
+    edit.edge.dy,
+    edit.edgeSides.top.dy,
+    edit.edgeSides.bottom.dy,
+    edit.edgeSides.left.dx,
+    edit.edgeSides.right.dx,
+    edit.frameScale,
+    edit.bracket.dx,
+    edit.bracket.dy,
+    edit.bracketCorners.tl.dx,
+    edit.bracketCorners.tl.dy,
+    edit.bracketCorners.tr.dx,
+    edit.bracketCorners.tr.dy,
+    edit.bracketCorners.bl.dx,
+    edit.bracketCorners.bl.dy,
+    edit.bracketCorners.br.dx,
+    edit.bracketCorners.br.dy,
+    edit.bracketScale,
+    edit.content,
+    edit.fill,
+    showOuter,
+    showContent,
+    showFill,
+    backing,
+    surfaceImg,
+    asset,
+  ]);
 
-  // LIVE previews — the same builder rendered at actual size and stretched in-use,
-  // so you can judge the real result here without an apply-and-screenshot round trip.
+  // LIVE preview — the exact assembled asset footprint. Consumer previews below use
+  // real app DOM/CSS with this live frame source instead of a hand-drawn imitation.
   useEffect(() => {
     if (!loaded) return;
     const fw = asset.frame.w, fh = asset.frame.h;
-    const draw = (ref: React.RefObject<HTMLCanvasElement | null>, w: number, h: number, scale: number, label: string | null) => {
+    const draw = (ref: React.RefObject<HTMLCanvasElement | null>, w: number, h: number, scale: number) => {
       const cvs = ref.current; if (!cvs) return;
-      cvs.width = w * scale; cvs.height = h * scale;
+      const f = buildFrameCanvas(loaded, edit, w, h, asset.carve, asset.flipSides, backing !== 'fill');
+      const sw = f.width, sh = f.height;
+      cvs.width = sw * scale; cvs.height = sh * scale;
       const g = cvs.getContext('2d')!; g.imageSmoothingEnabled = false;
       g.clearRect(0, 0, cvs.width, cvs.height);
-      const f = buildFrameCanvas(loaded, 0, 0, edit.bracket.dx, edit.bracket.dy, w, h, asset.carve, asset.flipSides, backing !== 'fill');
-      g.drawImage(f, 0, 0, w, h, 0, 0, w * scale, h * scale);
-      if (label) {
-        g.fillStyle = '#e8f0ff'; g.font = `${13 * scale}px system-ui, sans-serif`;
-        g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(label, cvs.width / 2, cvs.height / 2);
-      }
+      g.drawImage(f, 0, 0, sw, sh, 0, 0, cvs.width, cvs.height);
     };
-    draw(pvActualRef, fw, fh, 1, null);
-    draw(pvUseRef, 150, 44, 2, 'Settings');
-  }, [loaded, edit.keyline, edit.bracket, asset, backing]);
+    draw(pvActualRef, fw, fh, 1);
+  }, [
+    loaded,
+    edit.keyline.dx,
+    edit.keyline.dy,
+    edit.frameCorners.tl.dx,
+    edit.frameCorners.tl.dy,
+    edit.frameCorners.tr.dx,
+    edit.frameCorners.tr.dy,
+    edit.frameCorners.bl.dx,
+    edit.frameCorners.bl.dy,
+    edit.frameCorners.br.dx,
+    edit.frameCorners.br.dy,
+    edit.edge.dx,
+    edit.edge.dy,
+    edit.edgeSides.top.dy,
+    edit.edgeSides.bottom.dy,
+    edit.edgeSides.left.dx,
+    edit.edgeSides.right.dx,
+    edit.frameScale,
+    edit.bracket.dx,
+    edit.bracket.dy,
+    edit.bracketCorners.tl.dx,
+    edit.bracketCorners.tl.dy,
+    edit.bracketCorners.tr.dx,
+    edit.bracketCorners.tr.dy,
+    edit.bracketCorners.bl.dx,
+    edit.bracketCorners.bl.dy,
+    edit.bracketCorners.br.dx,
+    edit.bracketCorners.br.dy,
+    edit.bracketScale,
+    asset,
+    backing,
+  ]);
 
-  const exportJson = JSON.stringify({ asset: aid, keyline: edit.keyline, bracket: edit.bracket, content: edit.content, fill: edit.fill }, null, 2);
-  // Only the bracket is nudgeable. Keyline is inert (continuous border by construction);
-  // exposing a keyline nudge would let the preview show a state the bake can't reproduce.
-  const pieces: PieceKey[] = loaded?.hasAccent ? ['bracket'] : [];
+  const liveConsumerFrameUrl = useMemo(() => {
+    if (!loaded) return null;
+    const frame = buildFrameCanvas(loaded, edit, asset.frame.w, asset.frame.h, asset.carve, asset.flipSides);
+    return frame.toDataURL('image/png');
+  }, [
+    loaded,
+    edit.keyline.dx,
+    edit.keyline.dy,
+    edit.frameCorners.tl.dx,
+    edit.frameCorners.tl.dy,
+    edit.frameCorners.tr.dx,
+    edit.frameCorners.tr.dy,
+    edit.frameCorners.bl.dx,
+    edit.frameCorners.bl.dy,
+    edit.frameCorners.br.dx,
+    edit.frameCorners.br.dy,
+    edit.edge.dx,
+    edit.edge.dy,
+    edit.edgeSides.top.dy,
+    edit.edgeSides.bottom.dy,
+    edit.edgeSides.left.dx,
+    edit.edgeSides.right.dx,
+    edit.frameScale,
+    edit.bracket.dx,
+    edit.bracket.dy,
+    edit.bracketCorners.tl.dx,
+    edit.bracketCorners.tl.dy,
+    edit.bracketCorners.tr.dx,
+    edit.bracketCorners.tr.dy,
+    edit.bracketCorners.bl.dx,
+    edit.bracketCorners.bl.dy,
+    edit.bracketCorners.br.dx,
+    edit.bracketCorners.br.dy,
+    edit.bracketScale,
+    asset,
+  ]);
+  const liveConsumerFrameStyle: CSSProperties | undefined = liveConsumerFrameUrl
+    ? { borderImageSource: `url("${liveConsumerFrameUrl}")` }
+    : undefined;
+
+  const exportJson = JSON.stringify({
+    asset: aid,
+    keyline: edit.keyline,
+    frameCorners: edit.frameCorners,
+    edge: edit.edge,
+    edgeSides: edit.edgeSides,
+    frameScale: edit.frameScale,
+    bracket: edit.bracket,
+    bracketCorners: edit.bracketCorners,
+    bracketScale: edit.bracketScale,
+    content: edit.content,
+    fill: edit.fill,
+  }, null, 2);
+  const pieces: PieceKey[] = loaded ? (loaded.hasAccent ? ['bracket', 'frame'] : ['frame']) : [];
+  const pieceLabel = (k: PieceKey) => (k === 'frame' ? 'frame' : 'bracket');
+  const scopeLabel = BRACKET_SCOPES.find((s) => s.key === layerScope)?.label ?? layerScope;
+  const activeLabel = layerScope !== 'all' ? `${pieceLabel(active)} ${scopeLabel}` : pieceLabel(active);
+  const resetActive = active === 'frame' ? resetFrame : resetBracket;
 
   // Save straight to the on-disk config + regenerate the asset, via the dev-only
   // Vite endpoint. import.meta.env.DEV gates the button; the endpoint only exists
   // while `vite` is serving — so this whole path is dev-only by construction.
   const isDev = Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV);
   const [saveMsg, setSaveMsg] = useState('');
+  const [importJson, setImportJson] = useState('');
+  const [importMsg, setImportMsg] = useState('');
   const saveToDisk = async () => {
     setSaveMsg('saving…');
     try {
       const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
       const j = await r.json();
+      if (j.ok) baselineRef.current[aid] = edit; // the just-saved config is the new reset baseline
       const warn = (j.warns && j.warns.length) ? ` · ⚠ ${j.warns.join('; ')}` : '';
       setSaveMsg(j.ok ? `saved ${j.config} → ${j.written.join(', ')}${warn} · hard-refresh to see it${j.note ? ` (${j.note})` : ''}` : `error: ${j.error}`);
     } catch (e) { setSaveMsg(`error: ${String(e)}`); }
+  };
+  const applyImportJson = (mode: 'current' | 'named') => {
+    const text = importJson.trim();
+    if (!text) { setImportMsg('error: paste JSON first'); return; }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch (e) {
+      setImportMsg(`error: ${e instanceof Error ? e.message : 'invalid JSON'}`);
+      return;
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      setImportMsg('error: JSON must be an object');
+      return;
+    }
+    const named = pastedAssetId(raw);
+    if (mode === 'named' && !named) {
+      setImportMsg('error: JSON asset is not a known frame');
+      return;
+    }
+    const targetAid = mode === 'named' ? named! : aid;
+    const fallback = edits[targetAid] ?? baselineRef.current[targetAid] ?? DEFAULT_EDIT;
+    const next = normalizedEdit(raw, fallback);
+    setEdits((prev) => ({ ...prev, [targetAid]: next }));
+    setSaveMsg('');
+    if (mode === 'named') {
+      baselineRef.current[targetAid] = baselineRef.current[targetAid] ?? fallback;
+      hydrated.current.add(targetAid);
+      if (targetAid !== aid) onAssetId(targetAid);
+    }
+    const note = mode === 'current' && named && named !== aid ? `; ignored asset ${named}` : '';
+    setImportMsg(`loaded into ${targetAid}${note}`);
   };
 
   return (
@@ -434,7 +1027,18 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           <canvas ref={canvasRef} style={{ imageRendering: 'pixelated', maxWidth: '100%' }} />
           <div style={ST.previewStrip}>
             <div style={ST.previewItem}><span style={ST.previewLabel}>actual size · 1×</span><canvas ref={pvActualRef} style={{ imageRendering: 'pixelated' }} /></div>
-            <div style={ST.previewItem}><span style={ST.previewLabel}>stretched in-use · 2×</span><canvas ref={pvUseRef} style={{ imageRendering: 'pixelated' }} /></div>
+            <div style={ST.previewItem}>
+              <span style={ST.previewLabel}>real button · 2× view</span>
+              <div style={ST.consumerPreview}>
+                {aid === 'mode-button' ? (
+                  <button type="button" className="app-header-button" style={{ ...liveConsumerFrameStyle, transform: 'scale(2)', transformOrigin: 'center' }}>
+                    Settings
+                  </button>
+                ) : (
+                  <span style={ST.previewNote}>No placed app button consumes this frame yet.</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -460,18 +1064,60 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
             </div>
           <div style={ST.pieceRow}>
             {pieces.map((k) => (
-              <button key={k} type="button" onClick={() => setActive(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{k}</button>
+              <button key={k} type="button" onClick={() => setActive(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{pieceLabel(k)}</button>
             ))}
           </div>
-          <p style={ST.hint}>Editing the <b>bracket</b> (the gold corner accent) — arrow keys nudge 1px. The keyline border is fixed/continuous by construction.</p>
+          <div style={ST.scopeBox}>
+            <span style={ST.scopeLabel}>{pieceLabel(active)} scope</span>
+            <div style={ST.scopeGrid}>
+              {BRACKET_SCOPES.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setLayerScope(s.key)}
+                  style={{ ...ST.scopeBtn, ...(layerScope === s.key ? ST.scopeBtnOn : {}) }}
+                  title={`Nudge ${s.label} ${pieceLabel(active)} piece${cornersForScope(s.key).length > 1 || sidesForScope(s.key).length > 1 ? 's' : ''}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p style={ST.hint}>Editing <b>{activeLabel}</b> — arrow keys nudge 1px. Bracket and frame use the same scope, nudge, size, and reset controls.</p>
           <div style={ST.dpad}>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, -1)}>↑</button><div />
             <button type="button" style={ST.nb} onClick={() => nudge(-1, 0)}>←</button>
-            <button type="button" style={ST.nbReset} onClick={reset}>0</button>
+            <button type="button" style={ST.nbReset} title={`Reset ${activeLabel} nudge to saved`} aria-label={`Reset ${activeLabel} nudge`} onClick={resetActive}>↺</button>
             <button type="button" style={ST.nb} onClick={() => nudge(1, 0)}>→</button>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, 1)}>↓</button><div />
           </div>
-          <button type="button" style={ST.maxBtn} onClick={maxOut}>⤢ Send {active} to max (flush to box corner)</button>
+          <button type="button" style={ST.maxBtn} onClick={maxOut}>⤢ Send {activeLabel} to max (flush to box corner)</button>
+          {active === 'bracket' && (
+            <>
+              <div style={ST.tunerRow}>
+                <span style={{ ...ST.sizeLabel, color: '#ffd98a', whiteSpace: 'nowrap' }}>Bracket size</span>
+                <button type="button" style={ST.sb} onClick={() => setBracketScale((s) => s - 0.25)}>-</button>
+                <span style={ST.sizeW}>x{edit.bracketScale.toFixed(2)}</span>
+                <button type="button" style={ST.sb} onClick={() => setBracketScale((s) => s + 0.25)}>+</button>
+                <button type="button" style={ST.sb} title="Reset bracket size to saved" aria-label="Reset bracket size" onClick={resetBracketScale}>↺</button>
+              </div>
+              <input type="range" min={1} max={4} step={0.05} value={edit.bracketScale} onChange={(e) => setBracketScale(Number(e.target.value))} style={{ display: 'block', width: '100%', minWidth: 0, boxSizing: 'border-box' }} aria-label="Bracket size" />
+              <p style={ST.hint}>Scales the gold bracket layer only. Switch to <b>frame</b> for the cool frame and pipe layer.</p>
+            </>
+          )}
+          {active === 'frame' && (
+            <>
+              <div style={ST.tunerRow}>
+                <span style={{ ...ST.sizeLabel, color: '#9fd6ff', whiteSpace: 'nowrap' }}>Frame size</span>
+                <button type="button" style={ST.sb} onClick={() => setFrameScale((s) => s - 0.25)}>-</button>
+                <span style={ST.sizeW}>x{edit.frameScale.toFixed(2)}</span>
+                <button type="button" style={ST.sb} onClick={() => setFrameScale((s) => s + 0.25)}>+</button>
+                <button type="button" style={ST.sb} title="Reset frame size to saved" aria-label="Reset frame size" onClick={resetFrameScale}>↺</button>
+              </div>
+              <input type="range" min={1} max={maxFrameScale} step={0.05} value={edit.frameScale} onChange={(e) => setFrameScale(Number(e.target.value))} style={{ display: 'block', width: '100%', minWidth: 0, boxSizing: 'border-box' }} aria-label="Frame size" />
+              <p style={ST.hint}>Scales the cool corner-frame pixels and straight pipes together.</p>
+            </>
+          )}
           <div style={ST.sizeBox}>
             <label style={ST.toggle}>
               <input type="checkbox" checked={showOuter} onChange={(e) => setShowOuter(e.target.checked)} />
@@ -481,38 +1127,39 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               <input type="checkbox" checked={showContent} onChange={(e) => setShowContent(e.target.checked)} />
               <span style={{ color: '#5cff9e' }}>■</span> Content box — where text / icons start
             </label>
-            <div style={ST.sizeRow}>
-              <span style={ST.sizeW}>inset {edit.content} px</span>
-              <button type="button" style={ST.sb} onClick={() => setContent(-1)}>−</button>
-              <button type="button" style={ST.sb} onClick={() => setContent(1)}>＋</button>
-              <span style={ST.sizeLabel}>uniform on all sides</span>
+            <div style={ST.insetRow}>
+              <span style={ST.sizeW}>inset {edit.content}px</span>
+              <button type="button" style={ST.sb} onClick={() => setContent(-1)}>-</button>
+              <button type="button" style={ST.sb} onClick={() => setContent(1)}>+</button>
+              <button type="button" style={ST.sb} title="Reset content inset to saved" aria-label="Reset content inset" onClick={resetContent}>↺</button>
             </div>
             <label style={ST.toggle}>
               <input type="checkbox" checked={showFill} onChange={(e) => setShowFill(e.target.checked)} />
               <span style={{ color: '#ffb454' }}>■</span> Fill box — where a surface fill stops (frame may bleed outside it)
             </label>
-            <div style={ST.sizeRow}>
-              <span style={ST.sizeW}>inset {edit.fill} px</span>
-              <button type="button" style={ST.sb} onClick={() => setFill(-1)}>−</button>
-              <button type="button" style={ST.sb} onClick={() => setFill(1)}>＋</button>
-              <span style={ST.sizeLabel}>uniform on all sides</span>
+            <div style={ST.insetRow}>
+              <span style={ST.sizeW}>inset {edit.fill}px</span>
+              <button type="button" style={ST.sb} onClick={() => setFill(-1)}>-</button>
+              <button type="button" style={ST.sb} onClick={() => setFill(1)}>+</button>
+              <button type="button" style={ST.sb} title="Reset fill inset to saved" aria-label="Reset fill inset" onClick={resetFill}>↺</button>
             </div>
-            <div style={ST.sizeRow}>
+            <div style={ST.backingRow}>
               <span style={{ ...ST.sizeLabel, color: '#cfe3ff', minWidth: 52 }}>Backing</span>
-              <select value={backing} onChange={(e) => setBacking(e.target.value as 'none' | 'fill' | 'surface')} style={{ ...ST.select, fontSize: 13, flex: 1 }}>
+              <select value={backing} onChange={(e) => setBacking(e.target.value as 'none' | 'fill' | 'surface')} style={{ ...ST.select, fontSize: 13, flex: 1, minWidth: 0 }}>
                 <option value="none">None — ornament only</option>
                 <option value="fill">Default fill — baked body</option>
                 <option value="surface">Surface…</option>
               </select>
+              <button type="button" style={ST.sb} title="Reset backing to None" aria-label="Reset backing" onClick={() => setBacking('none')}>↺</button>
             </div>
             {backing === 'surface' && (
               <div style={ST.sizeRow}>
-                <select value={previewSurfaceName} onChange={(e) => setPreviewSurfaceName(e.target.value)} style={{ ...ST.select, fontSize: 13, flex: 1 }}>
+                <select value={previewSurfaceName} onChange={(e) => setPreviewSurfaceName(e.target.value)} style={{ ...ST.select, fontSize: 13, flex: 1, minWidth: 0 }}>
                   {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
                 </select>
               </div>
             )}
-            <span style={ST.sizeLabel}>Preview only — you're editing the ornament; the body is a backing the consumer supplies (Save still writes the asset as-is).</span>
+            <span style={ST.sizeLabel}>Preview only — you're editing the ornament; the body is a backing the consumer supplies. Save writes bracket, frame, sizes, content, and fill.</span>
           </div>
           {status && (status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0) && (
             <div style={{ ...ST.statusBox, borderColor: '#e0556a', color: '#ff9aa8' }}>
@@ -527,16 +1174,37 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           )}
           <div style={ST.offsets}>
             <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
+            <div>bracket corners: TL {edit.bracketCorners.tl.dx},{edit.bracketCorners.tl.dy} TR {edit.bracketCorners.tr.dx},{edit.bracketCorners.tr.dy}</div>
+            <div>bracket corners: BL {edit.bracketCorners.bl.dx},{edit.bracketCorners.bl.dy} BR {edit.bracketCorners.br.dx},{edit.bracketCorners.br.dy}</div>
+            <div>frame: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
+            <div>frame corners: TL {edit.frameCorners.tl.dx},{edit.frameCorners.tl.dy} TR {edit.frameCorners.tr.dx},{edit.frameCorners.tr.dy}</div>
+            <div>frame corners: BL {edit.frameCorners.bl.dx},{edit.frameCorners.bl.dy} BR {edit.frameCorners.br.dx},{edit.frameCorners.br.dy}</div>
+            <div>frame sides: T {edit.edgeSides.top.dy} B {edit.edgeSides.bottom.dy} L {edit.edgeSides.left.dx} R {edit.edgeSides.right.dx}</div>
+            <div>bracket size: x{edit.bracketScale.toFixed(2)}</div>
+            <div>frame size: x{edit.frameScale.toFixed(2)}</div>
             <div>content inset: {edit.content} px</div>
             <div>fill inset: {edit.fill} px</div>
           </div>
+          <button type="button" style={ST.resetAll} onClick={resetAll}>↺ Reset all adjustments</button>
           {isDev && (
             <>
               <button type="button" style={ST.save} onClick={saveToDisk}>💾 Save to disk + regenerate (dev)</button>
               {saveMsg && <div style={{ ...ST.hint, color: saveMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{saveMsg}</div>}
             </>
           )}
-          <label style={ST.hint}>Export — paste this back:</label>
+          <label style={ST.hint}>Import JSON</label>
+          <textarea
+            value={importJson}
+            onChange={(e) => setImportJson(e.target.value)}
+            placeholder='{"asset":"mode-button",...}'
+            style={ST.export}
+          />
+          <div style={ST.importActions}>
+            <button type="button" style={ST.copy} onClick={() => applyImportJson('current')}>Apply to current</button>
+            <button type="button" style={ST.copy} onClick={() => applyImportJson('named')}>Open named asset</button>
+          </div>
+          {importMsg && <div style={{ ...ST.hint, color: importMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{importMsg}</div>}
+          <label style={ST.hint}>Export JSON</label>
           <textarea readOnly value={exportJson} style={ST.export} onFocus={(e) => e.currentTarget.select()} />
           <button type="button" style={ST.copy} onClick={() => navigator.clipboard?.writeText(exportJson)}>Copy JSON</button>
           </div>
@@ -547,7 +1215,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
 }
 
 const ST: Record<string, CSSProperties> = {
-  select: { fontSize: 15, padding: '4px 8px', background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 4 },
+  select: { minWidth: 0, fontSize: 15, lineHeight: 1.2, padding: '4px 8px', background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 4 },
   fpBox: { display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 10px', background: '#0a0f1c', border: '1px solid #1b2740', borderRadius: 6 },
   fpHead: { fontSize: 11, color: '#7f93ad', letterSpacing: 0.2 },
   fpRow: { display: 'flex', flexWrap: 'wrap', gap: '0 10px', alignItems: 'baseline', justifyContent: 'space-between' },
@@ -557,24 +1225,36 @@ const ST: Record<string, CSSProperties> = {
   previewStrip: { display: 'flex', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'center' },
   previewItem: { display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 16, background: '#0e1626', border: '1px solid #1b2740', borderRadius: 8 },
   previewLabel: { fontSize: 11, color: '#9fc4d5', letterSpacing: 0.3 },
-  pieceRow: { display: 'flex', gap: 6 },
-  pieceBtn: { flex: 1, padding: '8px 0', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', textTransform: 'capitalize' },
+  consumerPreview: { display: 'grid', placeItems: 'center', minWidth: 300, minHeight: 112, padding: '10px 18px', boxSizing: 'border-box' },
+  previewNote: { fontSize: 12, color: '#9fc4d5', textAlign: 'center' },
+  pieceRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))', gap: 6 },
+  pieceBtn: { display: 'grid', placeItems: 'center', minWidth: 0, padding: '8px 6px', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', textTransform: 'none', lineHeight: 1.1, overflow: 'hidden' },
   pieceBtnOn: { background: '#1d5f9e', color: '#fff', borderColor: '#4fbdf0' },
+  scopeBox: { display: 'grid', gap: 6, minWidth: 0 },
+  scopeLabel: { fontSize: 11, color: '#ffd98a', lineHeight: 1, textTransform: 'uppercase' },
+  scopeGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 4, minWidth: 0 },
+  scopeBtn: { display: 'grid', placeItems: 'center', minWidth: 0, minHeight: 0, height: 28, padding: '0 4px', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', fontSize: 11, lineHeight: 1, textTransform: 'none', overflow: 'hidden' },
+  scopeBtnOn: { background: '#6b4f1d', color: '#fff2c4', borderColor: '#d5a34a' },
   hint: { fontSize: 13, color: '#9fc4d5', margin: 0, textTransform: 'none', fontWeight: 400, letterSpacing: 0 },
   dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 56px)', gridAutoRows: '56px', gap: 6, justifyContent: 'center' },
-  nb: { fontSize: 22, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
-  nbReset: { fontSize: 14, background: '#17223a', color: '#9fc4d5', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
-  maxBtn: { padding: '9px 0', background: '#15324a', color: '#bfe3ff', border: '1px solid #3a7fb0', borderRadius: 6, cursor: 'pointer', fontSize: 13, textTransform: 'capitalize' },
+  nb: { display: 'grid', placeItems: 'center', minHeight: 0, padding: 0, fontFamily: 'system-ui, sans-serif', fontSize: 22, lineHeight: 1, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
+  nbReset: { display: 'grid', placeItems: 'center', minHeight: 0, padding: 0, fontFamily: 'system-ui, sans-serif', fontSize: 18, lineHeight: 1, background: '#17223a', color: '#9fc4d5', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
+  maxBtn: { display: 'grid', placeItems: 'center', minWidth: 0, padding: '9px 10px', background: '#15324a', color: '#bfe3ff', border: '1px solid #3a7fb0', borderRadius: 6, cursor: 'pointer', fontSize: 12, lineHeight: 1.2, textTransform: 'none' },
+  resetAll: { padding: '9px 0', background: '#241a2b', color: '#e6c8ef', border: '1px solid #6b4f78', borderRadius: 6, cursor: 'pointer', fontSize: 13 },
   sizeBox: { display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0', borderTop: '1px solid #1b2740' },
-  sizeLabel: { fontSize: 12, color: '#9fc4d5' },
+  sizeLabel: { fontSize: 12, lineHeight: 1.15, color: '#9fc4d5' },
   sizeRow: { display: 'flex', alignItems: 'center', gap: 6 },
-  sizeW: { fontFamily: 'ui-monospace, monospace', fontSize: 13, minWidth: 46, color: '#dbe9ff' },
-  sb: { width: 34, height: 30, fontSize: 16, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 5, cursor: 'pointer' },
+  tunerRow: { display: 'grid', gridTemplateColumns: 'minmax(58px, 1fr) 30px 46px 30px 30px', alignItems: 'center', gap: 5, minWidth: 0 },
+  insetRow: { display: 'grid', gridTemplateColumns: '78px 30px 30px 30px', alignItems: 'center', gap: 5, minWidth: 0 },
+  backingRow: { display: 'grid', gridTemplateColumns: '64px minmax(0, 1fr) 30px', alignItems: 'center', gap: 5, minWidth: 0 },
+  sizeW: { display: 'grid', placeItems: 'center', minWidth: 0, fontFamily: 'ui-monospace, monospace', fontSize: 13, lineHeight: 1, whiteSpace: 'nowrap', color: '#dbe9ff' },
+  sb: { display: 'grid', placeItems: 'center', minWidth: 0, minHeight: 0, width: 30, height: 30, padding: 0, boxSizing: 'border-box', fontFamily: 'system-ui, sans-serif', fontSize: 18, lineHeight: 1, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 5, cursor: 'pointer', overflow: 'hidden' },
   toggle: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#cfe3ff', textTransform: 'none', fontWeight: 400, letterSpacing: 0 },
   statusBox: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, padding: '8px 10px', border: '1px solid', borderRadius: 6, background: '#0a0f1c' },
   statusGrid: { display: 'flex', gap: 14, fontFamily: 'ui-monospace, monospace', fontSize: 13 },
   offsets: { fontSize: 13, fontFamily: 'ui-monospace, monospace', color: '#dbe9ff', display: 'grid', gap: 2 },
   export: { width: '100%', minHeight: 130, flexShrink: 0, resize: 'vertical', background: '#0a0f1c', color: '#dbe9ff', border: '1px solid #2a3c5e', borderRadius: 4, fontFamily: 'ui-monospace, monospace', fontSize: 12, padding: 8, boxSizing: 'border-box' },
+  importActions: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, minWidth: 0 },
   save: { padding: '10px 0', background: '#15532f', color: '#dffbe8', border: '1px solid #43b06a', borderRadius: 4, cursor: 'pointer', fontWeight: 700 },
   copy: { padding: '8px 0', background: '#1d5f9e', color: '#fff', border: '1px solid #4fbdf0', borderRadius: 4, cursor: 'pointer' },
 };
