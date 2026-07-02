@@ -8968,6 +8968,13 @@ button.tileset-relationship-cell {
 .tileset-placement-board.is-tool-select .tileset-cell-hit {
   cursor: pointer;
 }
+/* Move tool: an open hand over grabbable cells, closed while dragging a held unit. */
+.tileset-placement-board.is-tool-move .tileset-cell-hit {
+  cursor: grab;
+}
+.tileset-placement-board.is-tool-move .tileset-cell-hit:active {
+  cursor: grabbing;
+}
 
 /* Selection highlight (a child element — pseudo-elements are used by footprint/empty). */
 .tileset-cell-ring {
