@@ -22,21 +22,22 @@ import {
 } from './navigation';
 import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey } from './routeSurfaces';
 import { SCREEN_EXIT_MS, setScreenExiting } from './shell/screenExit';
-import { ensureCampaignsHydrated } from '../campaign/hydrate';
+import {
+  importCampaignEditor,
+  importDoodadEditor,
+  importLevelEditor,
+  importPortraitEditor,
+  importSkirmish,
+  importSkirmishMapPicker,
+  importTilePreview,
+  prefetchRoute,
+} from './routePrefetch';
 
 // The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc.
 // don't pull the renderer bundle (preserving app.js's lazy-mount behaviour).
-// The raw import() thunks are named so the same chunk can be *prefetched* on
-// hover/focus (see prefetchRoute) and consumed by lazy() at click time — the
-// module registry dedupes, so warming === the click-time download.
-const importSkirmish = () => import('./Skirmish');
-const importSkirmishMapPicker = () => import('./SkirmishMapPicker');
-const importCampaignEditor = () => import('./CampaignEditor');
-const importTilePreview = () => import('./TilePreview');
-const importLevelEditor = () => import('./LevelEditor');
-const importPortraitEditor = () => import('./PortraitEditor');
-const importDoodadEditor = () => import('./DoodadEditor');
-
+// The raw import() thunks live in routePrefetch.ts (shared with NavButton's
+// hover/focus warm-up) and are consumed by lazy() at click time — the module
+// registry dedupes, so warming === the click-time download.
 const Skirmish = lazy(() => importSkirmish().then((m) => ({ default: m.Skirmish })));
 const SkirmishMapPickerRoute = lazy(() => importSkirmishMapPicker().then((m) => ({ default: m.SkirmishMapPickerRoute })));
 const CampaignEditor = lazy(() => importCampaignEditor().then((m) => ({ default: m.CampaignEditor })));
@@ -46,40 +47,6 @@ const PortraitEditor = lazy(() => importPortraitEditor().then((m) => ({ default:
 const DoodadEditor = lazy(() => importDoodadEditor().then((m) => ({ default: m.DoodadEditor })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
-
-// Mirror of renderRoute's lazy routes: which chunk a path needs, if any. Eager
-// routes (Campaign, Lobbies, Settings…) return null — they're already in the main
-// bundle, nothing to warm.
-function chunkForPath(path: string): (() => Promise<unknown>) | null {
-  if (path === '/play') return importSkirmish;
-  if (path === '/skirmish') return importSkirmishMapPicker;
-  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor') return importTilePreview;
-  if (path === '/edit' || path === '/level-editor') return importLevelEditor;
-  if (path === '/portrait-editor') return importPortraitEditor;
-  if (path === '/doodad-editor') return importDoodadEditor;
-  if (path === '/campaigns-next' || path === '/campaigns') return importCampaignEditor;
-  return null;
-}
-
-// Warm a route's JS chunk on intent (hover/focus) so the click doesn't wait on a
-// cold download. The set keeps us from re-invoking the thunk on every pointer move
-// (the import() itself is already idempotent, but this avoids the churn).
-const prefetched = new Set<() => Promise<unknown>>();
-function prefetchRoute(path: string): void {
-  const thunk = chunkForPath(path);
-  if (thunk && !prefetched.has(thunk)) {
-    prefetched.add(thunk);
-    void thunk();
-  }
-  // Warm route DATA the same way (ADR-0051): the Campaign play screen holds its reveal
-  // on the campaign store hydrating, and the skirmish map picker's "Loading maps."
-  // window shrinks with it — so start that fetch at hover/focus intent; by click time
-  // the store is usually populated. ensureCampaignsHydrated is self-deduping, so
-  // repeat intent events are free.
-  if (path === '/campaign' || path.startsWith('/campaign/') || path === '/skirmish') {
-    void ensureCampaignsHydrated();
-  }
-}
 
 // Route transition behavior is declared in routeSurfaces.ts (ADR-0049). Heavy routes get
 // the veil; light-art routes keep the shared menu backdrop/rain continuous and fade their

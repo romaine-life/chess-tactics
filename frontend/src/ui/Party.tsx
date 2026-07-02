@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { AmbienceBackground } from './AmbienceBackground';
+import { NavButton } from './shared/NavButton';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 
 const OPTIONS = PLAYABLE_PIECE_TYPES.filter((piece) => piece !== 'pawn');
@@ -45,13 +46,15 @@ export function Party() {
             </div>
           </section>
           <div className="utility-actions">
-            <a
-              href="/play"
+            {/* Native disabled (a button CAN be disabled, unlike the anchor this replaced,
+                which needed aria-disabled + pointer-events:none to fake it). */}
+            <NavButton
+              to="/play"
               data-testid="party-deploy"
-              aria-disabled={picks.length !== 2}
-              className={`utility-button utility-button-primary ${picks.length === 2 ? '' : 'is-disabled'}`.trim()}
-            >Deploy</a>
-            <a href="/" className="utility-button utility-button-neutral">Menu</a>
+              disabled={picks.length !== 2}
+              className="utility-button utility-button-primary"
+            >Deploy</NavButton>
+            <NavButton to="/" className="utility-button utility-button-neutral">Menu</NavButton>
           </div>
         </ArtRouteChrome>
       </div>

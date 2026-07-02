@@ -11,6 +11,7 @@ import { levelToEditorBoard } from '../core/levelBoard';
 import { ViewPane } from './shared/ViewPane';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
+import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -572,7 +573,7 @@ export function CampaignEditor() {
                       <small>{levelObjectiveLine(level)}</small>
                     </span>
                     <span className="ce-row-actions" aria-label="Unassigned level actions">
-                      <a className="ce-link-button ce-link-button-ghost" href={editHrefForUnassigned(level.id)}><span>Edit</span></a>
+                      <NavButton className="ce-link-button ce-link-button-ghost" to={editHrefForUnassigned(level.id)}><span>Edit</span></NavButton>
                       <AssetButton
                         disabled={!canAttachTo(level)}
                         title={camp ? `Attach to ${camp.name}` : 'Select a campaign to attach this level'}
@@ -636,8 +637,8 @@ export function CampaignEditor() {
           </div>
           {levelDoc && levelRef ? (
             <div className="ce-preview-actions">
-              <a className="ce-link-button" href={editHref}><span>Edit Board</span></a>
-              <a className="ce-link-button ce-link-button-ghost" href={playHref}><span>Test Play</span></a>
+              <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
+              <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
             </div>
           ) : (
             <p className="ce-empty ce-empty-large">Select a level.</p>

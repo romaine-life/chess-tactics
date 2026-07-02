@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { NavButton } from './shared/NavButton';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -43,16 +44,16 @@ function Stars({ count }: { count: number }): ReactElement {
 // main menu's mode tabs use, so the Campaign screen reads as a twin of the menu.
 function CampaignTab({ campaign, active }: { campaign: CampaignDoc; active: boolean }): ReactElement {
   return (
-    <a
+    <NavButton
       className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
-      href={`/campaign/${campaign.id}`}
+      to={`/campaign/${campaign.id}`}
       aria-current={active ? 'page' : undefined}
     >
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={CAMPAIGN_ICON} alt="" />
       </span>
       <span><strong>{campaign.name}</strong></span>
-    </a>
+    </NavButton>
   );
 }
 
@@ -100,11 +101,11 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
                   <div className="settings-row-control">
                     {unlocked
                       ? (
-                        <a className="app-header-button app-header-button-active" href={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
+                        <NavButton className="app-header-button app-header-button-active" to={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
                           {completed ? 'Replay' : 'Play'}
-                        </a>
+                        </NavButton>
                       )
-                      : <span className="app-header-button" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: 'none' }}>Locked</span>}
+                      : <button type="button" className="app-header-button" disabled>Locked</button>}
                   </div>
                 </section>
               );

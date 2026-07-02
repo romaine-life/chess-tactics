@@ -12,6 +12,7 @@ import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
+import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -1381,8 +1382,8 @@ export function LevelEditor(): ReactElement {
         </TitleBarSlot>
         <TitleBarSlot region="actions">
           <nav className="le-topbar-actions" aria-label="Editor actions">
-            {cameFromStudio ? <a className="app-header-button le-back-catalog" href="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</a> : null}
-            {routeParams.returnTo ? <a className="app-header-button" href={routeParams.returnTo} title="Return to the campaign editor">‹ Back</a> : null}
+            {cameFromStudio ? <NavButton className="app-header-button le-back-catalog" to="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</NavButton> : null}
+            {routeParams.returnTo ? <NavButton className="app-header-button" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</NavButton> : null}
             <button
               type="button"
               className="app-header-button"
@@ -1394,12 +1395,12 @@ export function LevelEditor(): ReactElement {
                 level is SAVED, violation-free, with a resolvable id — /play reads the STORED level,
                 so testing an unsaved board would run the stale saved version. */}
             {canTest && testHref ? (
-              <a
+              <NavButton
                 className="app-header-button"
                 data-testid="le-test"
-                href={testHref}
+                to={testHref}
                 title="Play-test this level (progress is not recorded)."
-              >Test</a>
+              >Test</NavButton>
             ) : (
               <button
                 type="button"

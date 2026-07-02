@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
+import { NavButton } from './shared/NavButton';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
@@ -196,14 +197,21 @@ function SettingsButton({
   external?: boolean;
 }): ReactElement {
   const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
-  if (href) {
-    // External links open in a new tab; rel guards against reverse-tabnabbing.
-    // Internal routes (the default) stay in the SPA.
-    const externalProps = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+  if (href && external) {
+    // External links stay REAL anchors (ADR-0052): open in a new tab; rel guards
+    // against reverse-tabnabbing.
     return (
-      <a className={classes} href={href} aria-label={ariaLabel} {...externalProps}>
+      <a className={classes} href={href} aria-label={ariaLabel} target="_blank" rel="noopener noreferrer">
         <span>{children}</span>
       </a>
+    );
+  }
+  if (href) {
+    // Internal routes are game controls — a NavButton, not a hyperlink (ADR-0052).
+    return (
+      <NavButton className={classes} to={href} aria-label={ariaLabel}>
+        <span>{children}</span>
+      </NavButton>
     );
   }
   return (
@@ -674,7 +682,7 @@ export function Settings(): ReactElement {
           valid origin; on a direct open the brand lockup is the way home. */}
       <TitleBarSlot region="actions">
         {returnTo ? (
-          <a className="app-header-button" data-testid="settings-back" href={returnTo} title="Back to the previous screen">‹ Back</a>
+          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
         ) : null}
       </TitleBarSlot>
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
@@ -683,9 +691,9 @@ export function Settings(): ReactElement {
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
-              <a
+              <NavButton
                 key={tab.id}
-                href={withReturnTo(TAB_PATHS[tab.id])}
+                to={withReturnTo(TAB_PATHS[tab.id])}
                 className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
                 aria-current={tab.id === activeTab ? 'page' : undefined}
                 onClick={() => setConfirmingReset(false)}
@@ -696,7 +704,7 @@ export function Settings(): ReactElement {
                 <span>
                   <strong>{tab.label}</strong>
                 </span>
-              </a>
+              </NavButton>
             ))}
           </aside>
 

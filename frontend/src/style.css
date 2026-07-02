@@ -2714,7 +2714,8 @@ h1 {
 }
 
 .utility-button.is-disabled,
-.utility-button[aria-disabled="true"] {
+.utility-button[aria-disabled="true"],
+.utility-button:disabled {
   filter: grayscale(.4);
   opacity: .48;
   pointer-events: none;
@@ -5711,6 +5712,7 @@ body { font-size: 17px; }
 .ce-footer-link {
   align-items: center;
   background: transparent;
+  cursor: pointer;
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/button-primary.png") 24 fill / 12px round;
   box-sizing: border-box;
@@ -10608,7 +10610,8 @@ button.tileset-relationship-cell {
 }
 
 .app-header-button.is-disabled,
-.app-header-button[aria-disabled="true"] {
+.app-header-button[aria-disabled="true"],
+.app-header-button:disabled {
   cursor: help;
   filter: grayscale(.12);
   opacity: .55;
@@ -10751,6 +10754,10 @@ button.tileset-relationship-cell {
    carries a glyph/avatar without the frame dominating. */
 .cluster-icon-button {
   align-items: center;
+  /* Rendered as a <button> since ADR-0052 (the gear): clear the UA button surface so
+     only the kit mode-button frame paints, exactly as the anchor version did. */
+  appearance: none;
+  background: transparent;
   block-size: 52px;
   border: 10px solid transparent;
   border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
@@ -11067,6 +11074,10 @@ button.tileset-relationship-cell {
   --settings-tab-icon-size: 64px;
   align-items: center;
   appearance: none;
+  /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
+     get the arrow cursor — restore the exact look/feel the anchor version had. */
+  cursor: pointer;
+  font: inherit;
   overflow: hidden; /* clip the enlarged carved icon at the button edge */
   /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
      mode-button frame). Active swaps the marker, not the frame (below). ADR-0034. */
