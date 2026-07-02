@@ -355,6 +355,22 @@ const leUnitAssets = productionUnitAssets.length ? productionUnitAssets : unitAs
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
 const cloneEditorBoard = (board: EditorBoard): EditorBoard => structuredClone(board) as EditorBoard;
 const HISTORY_LIMIT = 100;
+const LEVEL_EDITOR_LAYER_OPTIONS = [
+  { id: 'board', label: 'Board' },
+  { id: 'tile', label: 'Tile' },
+  { id: 'road', label: 'Road' },
+  { id: 'river', label: 'River' },
+  { id: 'fence', label: 'Fence' },
+  { id: 'unit', label: 'Unit' },
+  { id: 'doodad', label: 'Doodad' },
+  { id: 'prop', label: 'Prop' },
+  { id: 'cover', label: 'Cover' },
+] as const;
+type LevelEditorLayer = typeof LEVEL_EDITOR_LAYER_OPTIONS[number]['id'];
+type LevelEditorBrushKind = Exclude<LevelEditorLayer, 'board'>;
+const defaultLevelEditorLayer = (): LevelEditorLayer => LEVEL_EDITOR_LAYER_OPTIONS[0].id;
+const brushKindForLayer = (editorLayer: LevelEditorLayer): LevelEditorBrushKind => editorLayer === 'board' ? 'tile' : editorLayer;
+const toolForLayer = (editorLayer: LevelEditorLayer): 'select' | 'brush' => editorLayer === 'board' ? 'select' : 'brush';
 
 // The 4-edge connection control for a selected feature tile. Mirrors the iso diamond:
 // each edge is one cardinal neighbour (grid N/E/S/W = the screen NE/SE/SW/NW edges).
@@ -437,7 +453,7 @@ export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link) and optionally
   // ?kind=tile|unit|doodad&brush=<id> to pre-arm the brush you clicked in the catalog. Read
-  // once at mount; reached from the main menu these are all absent and we open on tiles.
+  // once at mount; reached from the main menu these are all absent and we open on the first layer.
   const studioArm = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const kindParam = params.get('kind');
@@ -450,6 +466,7 @@ export function LevelEditor(): ReactElement {
     };
   }, []);
   const cameFromStudio = studioArm.fromStudio;
+  const initialLayer = studioArm.kind ?? defaultLevelEditorLayer();
   // The campaign path deep-links here with ?campaignId&levelId (&returnTo): which level to
   // edit, and where "Back" returns after a save. Read once at mount; absent ⇒ a standalone
   // (board-link / blank) board with no campaign target.
@@ -470,14 +487,14 @@ export function LevelEditor(): ReactElement {
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
     (loadedBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(loadedBoard.playerFaction)) ? loadedBoard.playerFaction as UnitPalette : null,
   );
-  const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>('brush');
+  const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
-  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
+  const [brushKind, setBrushKind] = useState<LevelEditorBrushKind>(brushKindForLayer(initialLayer));
+  const [layer, setLayer] = useState<LevelEditorLayer>(initialLayer);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
@@ -910,6 +927,16 @@ export function LevelEditor(): ReactElement {
     const code = encodeBoard(currentEditorBoard);
     void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
   };
+  const selectLayer = (nextLayer: LevelEditorLayer): void => {
+    if (nextLayer === 'fence' && FENCE_ART_PENDING) return;
+    setLayer(nextLayer);
+    if (nextLayer === 'board') {
+      setTool('select');
+      return;
+    }
+    setBrushKind(nextLayer);
+    setTool('brush');
+  };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   // A held unit may drop on an in-bounds cell that has no other unit and isn't under a prop
   // footprint — the same collision the unit brush enforces, so a moved unit lands where a
@@ -1135,21 +1162,21 @@ export function LevelEditor(): ReactElement {
         <section className="skirmish-card">
           <h2>Layer</h2>
           <div className="le-seg">
-            <button type="button" className={`le-seg-btn ${layer === 'board' ? 'active' : ''}`.trim()} onClick={() => { setLayer('board'); setTool('select'); }}>Board</button>
-            <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
-            <button type="button" className={`le-seg-btn ${layer === 'road' ? 'active' : ''}`.trim()} onClick={() => { setLayer('road'); setBrushKind('road'); setTool('brush'); }}>Road</button>
-            <button type="button" className={`le-seg-btn ${layer === 'river' ? 'active' : ''}`.trim()} onClick={() => { setLayer('river'); setBrushKind('river'); setTool('brush'); }}>River</button>
-            <button
-              type="button"
-              className={`le-seg-btn ${layer === 'fence' ? 'active' : ''}`.trim()}
-              disabled={FENCE_ART_PENDING}
-              title={FENCE_ART_PENDING ? 'Fence art is pending — the brush is disabled until the mask set ships.' : 'Paint fences (visual only).'}
-              onClick={() => { if (FENCE_ART_PENDING) return; setLayer('fence'); setBrushKind('fence'); setTool('brush'); }}
-            >Fence</button>
-            <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
-            <button type="button" className={`le-seg-btn ${layer === 'doodad' ? 'active' : ''}`.trim()} onClick={() => { setLayer('doodad'); setBrushKind('doodad'); setTool('brush'); }}>Doodad</button>
-            <button type="button" className={`le-seg-btn ${layer === 'prop' ? 'active' : ''}`.trim()} onClick={() => { setLayer('prop'); setBrushKind('prop'); setTool('brush'); }}>Prop</button>
-            <button type="button" className={`le-seg-btn ${layer === 'cover' ? 'active' : ''}`.trim()} onClick={() => { setLayer('cover'); setBrushKind('cover'); setTool('brush'); }}>Cover</button>
+            {LEVEL_EDITOR_LAYER_OPTIONS.map((option) => {
+              const disabled = option.id === 'fence' && FENCE_ART_PENDING;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`le-seg-btn ${layer === option.id ? 'active' : ''}`.trim()}
+                  disabled={disabled}
+                  title={option.id === 'fence' ? (FENCE_ART_PENDING ? 'Fence art is pending — the brush is disabled until the mask set ships.' : 'Paint fences (visual only).') : undefined}
+                  onClick={() => selectLayer(option.id)}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
         </section>
 
