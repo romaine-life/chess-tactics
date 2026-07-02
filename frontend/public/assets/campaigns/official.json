@@ -7,7 +7,7 @@
         {
           "levelId": "off-l-break-line",
           "ordinal": 0,
-          "objective": "capture-king"
+          "objective": "rival-kings"
         },
         {
           "levelId": "off-l-river-crossing",
@@ -22,7 +22,7 @@
         {
           "levelId": "off-l-fortress-gate",
           "ordinal": 3,
-          "objective": "capture-king"
+          "objective": "rival-kings"
         },
         {
           "levelId": "off-l-high-ground",
@@ -1322,7 +1322,7 @@
         "startingFunds": 1000
       },
       "boardCode": "eyJjIjoxMiwiciI6OCwiZiI6ImdyYXNzLXN1cmYtMCIsInQiOnsiOCwwIjoiZGlydC1zdXJmLTYiLCI4LDEiOiJkaXJ0LXN1cmYtNiIsIjgsMiI6ImRpcnQtc3VyZi02IiwiOCwzIjoiZGlydC1zdXJmLTYiLCI4LDQiOiJkaXJ0LXN1cmYtNiIsIjYsNSI6ImRpcnQtc3VyZi02IiwiNyw1IjoiZGlydC1zdXJmLTYiLCI4LDUiOiJkaXJ0LXN1cmYtNiIsIjYsNiI6ImRpcnQtc3VyZi02IiwiNiw3IjoiZGlydC1zdXJmLTYifSwidSI6eyIxLDYiOlsia2luZy1jcm93biIsInNvdXRoIiwibmF2eS1ibHVlIl0sIjIsNSI6WyJyb29rLWJsZW5kZXItdjQtY2FsaWJyYXRlZCIsInNvdXRoIiwibmF2eS1ibHVlIl0sIjQsNiI6WyJrbmlnaHQtZnVyIiwic291dGgiLCJuYXZ5LWJsdWUiXSwiMTAsMSI6WyJraW5nLWNyb3duIiwic291dGgiLCJjcmltc29uIl0sIjksMiI6WyJyb29rLWJsZW5kZXItdjQtY2FsaWJyYXRlZCIsInNvdXRoIiwiY3JpbXNvbiJdLCI3LDEiOlsiYmlzaG9wLW1pdHJlIiwic291dGgiLCJjcmltc29uIl19LCJyZCI6eyI1LDYiOiJjb2JibGUiLCI0LDYiOiJjb2JibGUiLCI2LDYiOiJjb2JibGUiLCIzLDYiOiJjb2JibGUiLCIyLDYiOiJjb2JibGUiLCIxLDYiOiJjb2JibGUiLCIwLDYiOiJjb2JibGUifX0",
-      "objective": "capture-king",
+      "objective": "rival-kings",
       "difficulty": "normal",
       "formatVersion": 1
     },
@@ -3236,7 +3236,7 @@
         "incomePerTurn": 120,
         "startingFunds": 1600
       },
-      "objective": "capture-king",
+      "objective": "rival-kings",
       "difficulty": "hard",
       "formatVersion": 1
     },
