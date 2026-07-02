@@ -1193,7 +1193,7 @@ export function LevelEditor(): ReactElement {
           <div className="le-brush-pick">
             <span className="le-brush-thumb">
               {brushKind === 'unit'
-                ? <img src={unitBrushAsset.sprite(unitFaction, 'south')} alt="" draggable={false} />
+                ? <img src={unitBrushAsset.sprite(unitFaction, unitBrushDirection)} alt="" draggable={false} />
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'prop'
@@ -1268,7 +1268,11 @@ export function LevelEditor(): ReactElement {
                   title={unit.label}
                   onClick={() => { setUnitBrushId(unit.id); setBrushKind('unit'); setTool('brush'); }}
                 >
-                  <img src={unit.sprite(unitFaction, 'south')} alt="" draggable={false} />
+                  <img
+                    src={unit.sprite(unitFaction, hasDirectionSprite(unit, unitBrushDirection) ? unitBrushDirection : 'south')}
+                    alt=""
+                    draggable={false}
+                  />
                   <small>{unit.label}</small>
                 </button>
               ))}
