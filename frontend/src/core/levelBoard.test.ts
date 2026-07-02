@@ -39,6 +39,21 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
     expect(level.layers.terrain.every((c) => c.terrain === 'grass' && c.elevation === 0)).toBe(true);
     expect(typeof level.boardCode).toBe('string');
   });
+
+  it('maps only the assigned player faction to player and leaves unassigned maps CPU-only', () => {
+    const board = emptyBoard(4, 4);
+    board.playerFaction = 'emerald';
+    board.units = {
+      '0,0': { unitId: 'rook-blender-v4-calibrated', direction: 'south', faction: 'emerald' },
+      '1,0': { unitId: 'knight-fur', direction: 'south', faction: 'crimson' },
+    };
+    const assigned = editorBoardToLevel(board, { id: 'l6', name: 'Faction' });
+    expect(assigned.layers.units.find((unit) => unit.x === 0)?.side).toBe('player');
+    expect(assigned.layers.units.find((unit) => unit.x === 1)?.side).toBe('enemy');
+
+    const unassigned = editorBoardToLevel({ ...board, playerFaction: null }, { id: 'l7', name: 'Neutral' });
+    expect(unassigned.layers.units.every((unit) => unit.side === 'enemy')).toBe(true);
+  });
 });
 
 describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
@@ -59,5 +74,18 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
     const reopened = levelToEditorBoard(level);
     expect(reopened.cols).toBe(6);
     expect(reopened.rows).toBe(5);
+  });
+
+  it('derives navy as the player faction for legacy player/enemy levels', () => {
+    const saved = editorBoardToLevel(emptyBoard(4, 4), { id: 'l8', name: 'Legacy' });
+    const legacy = {
+      ...saved,
+      boardCode: undefined,
+      layers: {
+        ...saved.layers,
+        units: [{ x: 0, y: 0, type: 'king' as const, side: 'player' as const }],
+      },
+    };
+    expect(levelToEditorBoard(legacy).playerFaction).toBe('navy-blue');
   });
 });

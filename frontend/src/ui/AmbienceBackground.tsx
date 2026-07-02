@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 
 // AmbienceBackground renders cross-client-synchronized rain by subscribing to
 // ambience's rain-pinned `/chess` world (https://github.com/romaine-life/ambience).
@@ -26,6 +26,12 @@ import { useLayoutEffect, useRef, type ReactElement } from 'react';
 // The rain world's stream endpoint. The vendored client derives /chess/events +
 // /chess/snapshot from this.
 const CHESS_WORLD_URL = 'https://ambience.romaine.life/chess';
+
+// The human-facing view of the same broadcast: ambience's live monitor pointed
+// at the chess world (read-only inspector). The corner credit links here, so
+// "what is this rain?" has an answer one click away — the same world, same
+// authority clock, running full-screen on ambience.
+const CHESS_WORLD_VIEW_URL = 'https://ambience.romaine.life/?world=chess';
 
 // Where the vendored runtime lives, served from our own origin.
 const VENDOR_BASE = '/ambience';
@@ -109,12 +115,86 @@ function ensureScene(): void {
   loadVendoredClient();
 }
 
+// What the vendored client publishes on window for telemetry (client.js
+// window.AmbienceClient) — only the slice the credit reads.
+type AmbienceDebugState = {
+  effectType?: string | null;
+  scene?: { currentName?: string | null };
+};
+
+// The label lives at MODULE scope, like the canvases, and for the same reason:
+// the backdrop layer must be continuous across route swaps (ADR-0046 B/G). A
+// screen that remounts AmbienceBackground seeds its state from this cache in
+// its first commit, so the credit never blinks out or re-fades on navigation —
+// only its very first appearance (client just loaded) fades in.
+let lastEffectName: string | null = null;
+let creditHasAppeared = false;
+
+// The live name of what the rain world is running, read off the vendored
+// client's debug surface. The chess world pins the "rain" effect but rotates
+// named scenes within it on the authority clock (e.g. "blue-fast-drizzle",
+// hours each) — the scene name is the world's own name for the current
+// broadcast, so prefer it and fall back to the effect type until scene data
+// lands.
+function readEffectName(): string | null {
+  const client = (window as { AmbienceClient?: { getDebugState?: () => AmbienceDebugState } })
+    .AmbienceClient;
+  const state = client?.getDebugState?.();
+  if (state) {
+    const raw = state.scene?.currentName || state.effectType || '';
+    // Ambience's own label treatment (chrome.js effectLabel): hyphenated
+    // scene ids read as plain words.
+    const label = raw.replace(/-/g, ' ').trim();
+    if (label) lastEffectName = label;
+  }
+  return lastEffectName;
+}
+
+// Polled because the client exposes state, not events; the read is a local
+// object access (no network), so a short interval costs nothing and also
+// covers the client's async load. Scene changes are hours apart.
+function useAmbienceEffectName(): string | null {
+  const [name, setName] = useState<string | null>(readEffectName);
+  useEffect(() => {
+    const read = (): void => {
+      const label = readEffectName();
+      if (label) setName(label);
+    };
+    read();
+    const timer = window.setInterval(read, 2000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return name;
+}
+
+// First-EVER appearance fade: render one frame at opacity 0 (.ambience-credit-start),
+// then drop the class so the opacity transition plays. After that the module flag keeps
+// every later mount steady; route-level chrome entrance is owned separately by
+// ArtRouteChrome/useScreenEntrance.
+function useCreditEntrance(effectName: string | null): boolean {
+  const [entered, setEntered] = useState(() => creditHasAppeared);
+  useEffect(() => {
+    if (!effectName || entered) return undefined;
+    creditHasAppeared = true;
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, [effectName, entered]);
+  return entered;
+}
+
 // Mount point for the shared rain on a screen. Renders a display:contents host so
 // the re-parented canvases behave as direct children of the positioned screen
 // layer — their position:absolute inset:0 anchors to that layer, exactly as if the
 // canvases were declared inline (the menu's z-order is unchanged).
+//
+// Alongside the canvases it renders the ambience credit: a quiet bottom-right
+// link naming the scene the world is running right now, opening ambience's
+// read-only monitor for the same broadcast. It lives here (not per screen) so
+// every surface that shows the shared rain carries the credit automatically.
 export function AmbienceBackground(): ReactElement {
   const hostRef = useRef<HTMLDivElement>(null);
+  const effectName = useAmbienceEffectName();
+  const creditEntered = useCreditEntrance(effectName);
 
   // useLayoutEffect (not useEffect): re-parent the canvases BEFORE the browser
   // paints the new screen. With useEffect the canvas is detached for one painted
@@ -138,5 +218,22 @@ export function AmbienceBackground(): ReactElement {
     };
   }, []);
 
-  return <div ref={hostRef} style={{ display: 'contents' }} aria-hidden="true" />;
+  return (
+    <>
+      <div ref={hostRef} style={{ display: 'contents' }} aria-hidden="true" />
+      {effectName ? (
+        <a
+          className={`ambience-credit${creditEntered ? '' : ' ambience-credit-start'}`}
+          data-testid="ambience-credit"
+          href={CHESS_WORLD_VIEW_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Ambience: ${effectName} — watch this effect live (opens in new tab)`}
+          title={`Live from ambience — watch “${effectName}” running (opens in new tab)`}
+        >
+          {effectName}
+        </a>
+      ) : null}
+    </>
+  );
 }

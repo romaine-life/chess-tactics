@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
-import { useScreenEntrance } from './shell/useScreenEntrance';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -15,7 +15,7 @@ const STONE_SURFACE = '/assets/ui/surfaces/baseline-stone-blue.avif';
 const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
 
 const MODE_HREFS: Record<string, string> = {
-  'solo-skirmish': '/play',
+  'solo-skirmish': '/skirmish',
   'campaign-editor': '/campaigns-next',
   'level-editor': '/edit',
   lobbies: '/lobbies',
@@ -32,10 +32,7 @@ interface MenuTab { slug: string; label: string; href: string; iconSlug: string 
 // carving is forged.
 const MENU_TABS: MenuTab[] = [
   { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
-  // Settings is excluded from the rail — it now lives in the trailing "settings +
-  // user" chrome cluster (the gear beside the account control), not as a mode tab.
   ...MENU_MODES
-    .filter((mode) => mode.slug !== 'settings')
     .map((mode) => ({
       slug: mode.slug,
       label: mode.label,
@@ -72,11 +69,6 @@ export function MainMenu(): ReactElement {
   // layers off the director's stage; the director owns the ordering and the background
   // probe. On any non-cold load the store is already fully revealed, so this is inert.
   const reveal = useSyncExternalStore(subscribe, getSnapshot);
-  // Shared screen-entrance fade (ADR-0046): fades the chrome in when you navigate TO the menu
-  // (e.g. back from settings), leaving the ambience rain continuous. No-ops on the cold load,
-  // where the reveal director above owns the first paint.
-  const entranceClass = useScreenEntrance();
-
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
@@ -128,11 +120,11 @@ export function MainMenu(): ReactElement {
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
-        <div className={`settings-shell ${entranceClass}`.trim()}>
+        <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
           </aside>
-        </div>
+        </ArtRouteChrome>
       </div>
     </div>
   );

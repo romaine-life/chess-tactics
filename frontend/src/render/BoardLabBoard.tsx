@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
 import { TileGrid } from './TileGrid';
+import { TileTopLayer } from './TileTopLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
@@ -44,8 +45,9 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
     sourceCells.map((cell): [string, SocketBoardCell<TAsset>] => [`${cell.x}-${cell.y}`, cell]),
   );
   const cells = sourceCells.map((cell) => {
-    // ADR-0039: a tile is a SIDE layer with the TOP composited over it — two <img>s in the
-    // cell's one z-band. The TOP comes from `asset`; the SIDE comes from `sideAsset` when set
+    // ADR-0039: a tile is a SIDE layer with the TOP composited over it — two stacked layers
+    // in the cell's one z-band (the top via the shared <TileTopLayer>, which also owns the
+    // animated-water case). The TOP comes from `asset`; the SIDE comes from `sideAsset` when set
     // (the frayed edge / future river-waterfall), else from `asset` itself. Each layer is the
     // baked tile's `-top`/`-side` half; top ∪ side == the original cube, so a plain cell is
     // unchanged and an edge cell keeps its own top with a frayed side. A linear-feature
@@ -67,7 +69,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       children: topSrc ? (
         <>
           <img className="tile-layer-side" src={(sideSrc ?? topSrc).replace(/\.png$/, '-side.png')} alt="" draggable={false} />
-          <img className="tile-layer-top" src={topSrc.replace(/\.png$/, '-top.png')} alt="" draggable={false} />
+          <TileTopLayer baseSrc={topSrc} animFrames={cell.asset?.topAnimFrames} x={cell.x} y={cell.y} />
           {cell.feature ? (
             <img
               className="tileset-feature-overlay"

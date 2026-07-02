@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
-import { validateLevel, type Campaign, type CampaignLevelRef, type Level, type ObjectiveType } from '../core/level';
+import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
+import { MODE_NAME } from '../core/objectives';
 import { loadWorkspace, loadOfficialCampaigns } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { LevelThumbnail } from '../render/LevelThumbnail';
@@ -9,10 +10,10 @@ import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { ViewPane } from './shared/ViewPane';
 import { injectStressLevels } from '../campaign/stressFixture';
-import { LevelInfoCompact } from './LevelInfoCompact';
+import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { AmbienceBackground } from './AmbienceBackground';
-import { useScreenEntrance } from './shell/useScreenEntrance';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 
 const CE_ICONS = {
   star: '/assets/ui/kit/icons/star.png',
@@ -21,13 +22,6 @@ const CE_ICONS = {
   delete: '/assets/ui/kit/icons/delete.png',
   lock: '/assets/ui/kit/icons/lock.png',
 } as const;
-
-const objectiveLabel: Record<ObjectiveType, string> = {
-  'capture-all': 'Capture all enemy pieces',
-  'capture-king': 'Capture the enemy King',
-  survive: 'Survive the assault',
-  reach: 'Reach the objective',
-};
 
 function workspaceSignature(ws: { campaigns: Campaign[]; levels: Record<string, Level> }): string {
   return JSON.stringify(ws);
@@ -188,7 +182,10 @@ function LevelRow({
   onMoveDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
-  const objective = levelRef.objective ?? level?.objective ?? 'capture-all';
+  // The full level doc drives a direction-aware goal line (King Assault reads "Protect
+  // your King" when the player holds the King); before it hydrates, fall back to the
+  // ref's objective as a mode name only.
+  const goalLine = level ? levelObjectiveLine(level) : MODE_NAME[levelRef.objective ?? 'capture-all'];
   return (
     <div
       role="button"
@@ -207,7 +204,7 @@ function LevelRow({
       </span>
       <span className="ce-row-copy">
         <strong>{index + 1}. {level?.name ?? levelRef.levelId}</strong>
-        <small>{objectiveLabel[objective]}</small>
+        <small>{goalLine}</small>
       </span>
       <Stars count={levelRef.stars ?? 0} />
       {readOnly ? null : (
@@ -263,11 +260,6 @@ export function CampaignEditor() {
     shell?.classList.add('campaign-editor-active');
     return () => shell?.classList.remove('campaign-editor-active');
   }, []);
-
-  // Chrome entrance via the SHARED primitive (ADR-0046): spread onto .ce-layout + .ce-footer
-  // below, so only the chrome fades in over the steady backdrop + rain. Replaces the bespoke
-  // .is-entered state this screen used to hand-roll; no-ops on a cold load.
-  const entranceClass = useScreenEntrance();
 
   useEffect(() => {
     let active = true;
@@ -452,7 +444,7 @@ export function CampaignEditor() {
         </nav>
       </TitleBarSlot>
 
-      <main className={`ce-layout ${entranceClass}`.trim()}>
+      <ArtRouteChrome as="main" className="ce-layout">
         <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
           <div className="ce-panel-head">
             <h2>Campaigns</h2>
@@ -565,7 +557,7 @@ export function CampaignEditor() {
                     </span>
                     <span className="ce-row-copy">
                       <strong>{level.name}</strong>
-                      <small>{objectiveLabel[level.objective]}</small>
+                      <small>{levelObjectiveLine(level)}</small>
                     </span>
                     <span className="ce-row-actions" aria-label="Unassigned level actions">
                       <a className="ce-link-button ce-link-button-ghost" href={editHrefForUnassigned(level.id)}><span>Edit</span></a>
@@ -639,13 +631,13 @@ export function CampaignEditor() {
             <p className="ce-empty ce-empty-large">Select a level.</p>
           )}
         </section>
-      </main>
+      </ArtRouteChrome>
 
-      <footer className={`ce-footer ${entranceClass}`.trim()}>
+      <ArtRouteChrome as="footer" className="ce-footer">
         <AssetButton disabled={!camp || camp.origin === 'official'} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
         <AssetButton danger disabled={!camp || readOnly} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
-      </footer>
+      </ArtRouteChrome>
     </div>
   );
 }

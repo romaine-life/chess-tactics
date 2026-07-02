@@ -3,6 +3,7 @@ import { boardLabCellPosition } from './boardProjection';
 import { DoodadSprite } from './BoardDoodad';
 import { GroundCoverLayer } from './GroundCoverLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
+import { TileTopLayer } from './TileTopLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
 import { featureFrameSrc } from '../art/tileset';
 import {
@@ -70,15 +71,34 @@ export function studioCellArt({
   feature,
   animationFrame,
   hidden,
+  x = 0,
+  y = 0,
 }: {
   tileAsset: StudioAsset | undefined;
   feature: { kind: FeatureKind; material: FeatureMaterial; mask: number } | undefined;
   animationFrame: number;
   hidden?: BoardLayerVisibility;
+  /** Board coords; only used to phase-stagger an animated top (water ripple). */
+  x?: number;
+  y?: number;
 }): ReactNode {
+  // A tile with an animated top (water) renders as its split halves so the ripple sheet can
+  // drive the surface while the side stays frozen — the same layers the game board draws
+  // (top ∪ side == the combined sprite, so the static look is unchanged). Static tiles keep
+  // the single combined <img>.
+  const animFrames = tileAsset?.topAnimFrames ?? 0;
   return (
     <>
-      {tileAsset && !hidden?.tile ? <img src={assetFrameSrc(tileAsset, animationFrame)} alt="" draggable={false} /> : null}
+      {tileAsset && !hidden?.tile ? (
+        animFrames > 1 ? (
+          <>
+            <img className="tile-layer-side" src={tileAsset.src.replace(/\.png$/, '-side.png')} alt="" draggable={false} />
+            <TileTopLayer baseSrc={tileAsset.src} animFrames={animFrames} x={x} y={y} />
+          </>
+        ) : (
+          <img src={assetFrameSrc(tileAsset, animationFrame)} alt="" draggable={false} />
+        )
+      ) : null}
       {feature ? (
         <img
           className="tileset-feature-overlay"
@@ -193,7 +213,7 @@ export function StudioReadOnlyBoard({
         x,
         y,
         className: `tileset-placement-cell ${tileAsset ? '' : 'is-empty'}`.trim(),
-        children: studioCellArt({ tileAsset, feature: featureOverlays[key], animationFrame }),
+        children: studioCellArt({ tileAsset, feature: featureOverlays[key], animationFrame, x, y }),
       });
     }
   }
