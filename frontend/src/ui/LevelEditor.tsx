@@ -146,6 +146,11 @@ function StudioEditableBoard({
       const assetId = placed[key];
       const asset = assetId ? resolveAsset(assetId) : undefined;
       const isSelected = selectedCell?.x === x && selectedCell?.y === y;
+      // Move-tool feedback reuses the built-in diamond tile-ring (not an axis-aligned box): the
+      // picked-up unit's cell, plus the cell under the cursor tinted by whether a drop is legal.
+      const isMoveFrom = tool === 'move' && movingFrom?.x === x && movingFrom?.y === y;
+      const isMoveTo = tool === 'move' && !!movingFrom && !isMoveFrom && hoverCell?.x === x && hoverCell?.y === y;
+      const moveDroppable = isMoveTo && (canMoveTo ? canMoveTo(x, y) : true);
       cells.push({
         key,
         x,
@@ -158,6 +163,8 @@ function StudioEditableBoard({
                 see FENCE_ART_PENDING. */}
             {studioCellArt({ tileAsset: asset, feature: placedFeatures[key]?.kind === 'fence' ? undefined : placedFeatures[key], animationFrame, hidden })}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
+            {isMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
+            {isMoveTo ? <span className={`tileset-cell-ring ${moveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
               onPointerDown={(event) => {
@@ -286,31 +293,6 @@ function StudioEditableBoard({
         <PropSprite prop={{ x: hoverCell.x, y: hoverCell.y, propId: def.id }} def={def} />
       </span>,
     );
-  }
-
-  // Move tool feedback: outline the picked-up unit's source cell (blue, dashed) and — while
-  // dragging over a different cell — the destination (green if the unit can drop there, red if
-  // it's blocked by another unit or a prop footprint). Same diamond geometry as the prop ghost.
-  if (tool === 'move' && movingFrom) {
-    const src = boardLabCellPosition(movingFrom);
-    overlaySprites.push(
-      <span
-        key="move-src"
-        aria-hidden="true"
-        style={{ position: 'absolute', left: src.left, top: src.top, zIndex: src.zIndex + 19000, width: 96, height: 55, transform: 'translate(-50%, -50%)', pointerEvents: 'none', outline: '2px dashed rgba(120,180,255,.95)', background: 'rgba(120,180,255,.16)' }}
-      />,
-    );
-    if (hoverCell && !(hoverCell.x === movingFrom.x && hoverCell.y === movingFrom.y)) {
-      const droppable = canMoveTo ? canMoveTo(hoverCell.x, hoverCell.y) : true;
-      const dst = boardLabCellPosition(hoverCell);
-      overlaySprites.push(
-        <span
-          key="move-dst"
-          aria-hidden="true"
-          style={{ position: 'absolute', left: dst.left, top: dst.top, zIndex: dst.zIndex + 19000, width: 96, height: 55, transform: 'translate(-50%, -50%)', pointerEvents: 'none', outline: `2px solid ${droppable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`, background: droppable ? 'rgba(80,220,140,.18)' : 'rgba(240,90,90,.18)' }}
-        />,
-      );
-    }
   }
 
   return (
