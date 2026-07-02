@@ -57,7 +57,11 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     // (/settings/<tab>, /settings/audio/tracks), so the gear is a muscle-memory
     // "back to settings root" from any sub-page. href="/settings" normalizes to
     // the first tab. (Default showSettingsGear=true, so it's simply not hidden.)
-    return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
+    // actionsSlot hosts the "‹ Back" return control (Settings portals it there when the URL
+    // carries a valid ?returnTo) — the same trailing slot the Level Editor's back uses, so
+    // every return control sits with the account/settings cluster. settings-topbar adds the
+    // 3rd grid column (brand · actions · cluster) that slot needs.
+    return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled settings-topbar', actionsSlot: true };
   }
   if (path === '/campaign' || path.startsWith('/campaign/')) {
     return { screenName: 'Campaign', signInReturnTo: '/campaign', barClass: 'main-menu-twin-header' };

@@ -19,6 +19,26 @@ export function getAppNavigationUrl(href: string, baseHref: string = window.loca
   return url;
 }
 
+// The "return to where you came from" target carried as ?returnTo on a pushed screen's
+// URL (written by the title-bar gear when opening Settings; read by the title bar to draw
+// the leading Back control and by Settings to thread the param through its own links). It
+// becomes an anchor href, i.e. a navigation target, so it is strictly validated: it must
+// RESOLVE same-origin (getAppNavigationUrl — the exact gate the click interceptor applies,
+// so any host-escape trick the browser normalizes, e.g. `/\host` or `/<tab>/host`, is
+// rejected) and must never point back into Settings (no self-loops). Returns a clean
+// same-origin path+search+hash, or null when absent/invalid (⇒ no Back is shown).
+// NOTE: distinct from the auth returnTo (net/auth signInHref), which lives on
+// /api/auth/sign-in URLs, not here.
+export function readValidatedReturnTo(search: string = window.location.search): string | null {
+  const raw = new URLSearchParams(search).get('returnTo');
+  if (!raw) return null;
+  const url = getAppNavigationUrl(raw);
+  if (!url) return null;
+  const path = normalizeRoutePath(url.pathname);
+  if (path === '/settings' || path.startsWith('/settings/')) return null;
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 export function shouldInterceptAppLinkClick(event: MouseEvent, anchor: HTMLAnchorElement): boolean {
   if (event.defaultPrevented || event.button !== 0) return false;
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;

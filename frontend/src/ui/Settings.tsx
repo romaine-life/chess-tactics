@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
-import { APP_NAVIGATION_EVENT, getAppNavigationUrl, navigateApp, normalizeRoutePath } from './navigation';
+import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
 import { useScreenEntrance } from './shell/useScreenEntrance';
+import { TitleBarSlot } from './shell/TitleBarSlot';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -89,26 +90,6 @@ const TRACKS_PATH = '/settings/audio/tracks';
 
 function isTracksView(pathname: string): boolean {
   return normalizeRoutePath(pathname) === TRACKS_PATH;
-}
-
-// The screen-level "Back" target, written into every settings URL as ?returnTo=<origin>
-// by the title-bar gear (see HeaderAccountCluster.settingsHref) and re-threaded through
-// each intra-settings link below so it survives tab switches. Strictly validated — it
-// becomes the href of the always-visible Back row, i.e. a navigation target: it must
-// RESOLVE same-origin (getAppNavigationUrl, the exact gate the click interceptor applies
-// in App.tsx) and never point back into settings (no self-loops). String prefix checks
-// are NOT enough — the browser normalizes `/\evil.com`, `/<tab>/evil.com` etc. into a
-// protocol-relative host, so we resolve through the URL parser the anchor itself will use
-// and rebuild a clean same-origin path. NOTE: distinct from the auth returnTo (net/auth
-// signInHref) — same param name, but that one lives on /api/auth/sign-in URLs, not here.
-function returnToFromLocation(): string | null {
-  const raw = new URLSearchParams(window.location.search).get('returnTo');
-  if (!raw) return null;
-  const url = getAppNavigationUrl(raw); // null if cross-origin (any host-escape trick) or /api/
-  if (!url) return null;
-  const path = normalizeRoutePath(url.pathname);
-  if (path === '/settings' || path.startsWith('/settings/')) return null;
-  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 // One creator-tools entry — the studio is the single workspace: tiles, units,
@@ -320,9 +301,11 @@ export function Settings(): ReactElement {
   }));
   const [previous, setPrevious] = useState<{ tab: SettingsTab; tracks: boolean } | null>(null);
   const [xfade, setXfade] = useState<'idle' | 'enter' | 'active'>('idle');
-  // Where "Back" leads — the screen the user opened Settings from (null when opened
-  // directly by URL, e.g. a bookmark or the dressing-room iframe embed).
-  const [returnTo, setReturnTo] = useState<string | null>(returnToFromLocation);
+  // The origin the user opened Settings from (null on a direct URL open). Rendered as the
+  // "‹ Back" control portaled into the title bar's trailing actions slot (below), and
+  // THREADED through every in-Settings link (withReturnTo) so the ?returnTo param — and
+  // thus that Back — survives each tab/tracks hop.
+  const [returnTo, setReturnTo] = useState<string | null>(readValidatedReturnTo);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
@@ -355,7 +338,7 @@ export function Settings(): ReactElement {
     const sync = () => {
       setActiveTab(tabFromPath(window.location.pathname));
       setShowTracks(isTracksView(window.location.pathname));
-      setReturnTo(returnToFromLocation());
+      setReturnTo(readValidatedReturnTo());
     };
     window.addEventListener('popstate', sync);
     window.addEventListener(APP_NAVIGATION_EVENT, sync);
@@ -689,6 +672,16 @@ export function Settings(): ReactElement {
 
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
+      {/* Return to where the user opened Settings from. It rides the trailing actions slot
+          with the account/settings cluster (the app's nav home) — the same title-bar spot
+          the Level Editor's back uses — so every return control is in one consistent place;
+          the brand lockup stays a fixed leading anchor. Shown only when the URL carries a
+          valid origin; on a direct open the brand lockup is the way home. */}
+      <TitleBarSlot region="actions">
+        {returnTo ? (
+          <a className="app-header-button" data-testid="settings-back" href={returnTo} title="Back to the previous screen">‹ Back</a>
+        ) : null}
+      </TitleBarSlot>
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
       <AmbienceBackground />
       <div className="settings-screen app-shell-bar-pad">
@@ -710,18 +703,6 @@ export function Settings(): ReactElement {
                 </span>
               </a>
             ))}
-            {/* Screen-level Back — returns to the screen the gear was clicked on (the
-                ?returnTo origin). Settings is reachable from EVERY surface, so it must
-                never be a one-way street; with no recorded origin (direct URL open) it
-                falls back to the main menu. Same rail-tab chrome as the sections. */}
-            <a className="settings-tab settings-back-tab" href={returnTo ?? '/'}>
-              <span className="settings-tab-icon" aria-hidden="true">
-                <img src={asset('sign-out.png')} alt="" />
-              </span>
-              <span>
-                <strong>Back</strong>
-              </span>
-            </a>
           </aside>
 
           <main className="settings-frame settings-main-frame">

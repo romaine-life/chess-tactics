@@ -10103,6 +10103,14 @@ button.tileset-relationship-cell {
   grid-row: 2;
 }
 
+/* Settings carries the return "‹ Back" in its actions slot (portaled by the Settings
+   screen when a valid ?returnTo is present), so its bar needs a 3rd, trailing column for
+   the account cluster: brand · actions · cluster. Two classes out-rank the base
+   .settings-header-frame 2-column grid (the same trick the skirmish/editor bars use). */
+.app-shell-titlebar.settings-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 /* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
    height, always labeled (ADR-0016). The cyan `-active` variant marks a single
    primary action (e.g. Save / Sign In). Used by every app title bar's controls;
@@ -10594,12 +10602,10 @@ button.tileset-relationship-cell {
 /* Recover the continuous-stone flow the retired `fixed` attachment gave: each stacked
    tab samples the vertical slice it would have if one texture sheet ran down the rail.
    Step = the ~98px tab pitch (measured; drifts a few px with the clamp()ed gap/padding,
-   imperceptible for a stone texture). Five rows: the settings rail is four section tabs
-   plus the screen-level Back; the main-menu rail (same chrome) is five mode rows. */
+   imperceptible for a stone texture). The rail is exactly these four tabs in order. */
 .settings-tab:nth-child(2) { background-position-y: -98px; }
 .settings-tab:nth-child(3) { background-position-y: -196px; }
 .settings-tab:nth-child(4) { background-position-y: -294px; }
-.settings-tab:nth-child(5) { background-position-y: -392px; }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;

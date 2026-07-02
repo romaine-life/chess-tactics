@@ -60,3 +60,19 @@ Small, low-risk calls not worth a full record:
   "SETTINGS / General" heading: the brand lockup already shows the screen and the
   active nav button shows the section, and the concept has no such heading. Kept a
   visually-hidden `h2` for screen-reader structure.
+- **2026-07-02 — Settings gets a title-bar "‹ Back" (return-to-origin).** Going to
+  Settings from any surface was a one-way street — only the brand logo (→ home) or the
+  browser Back. Fix: the account-cluster gear records the current location as
+  `?returnTo=<origin>`; Settings renders a "‹ Back" to it, validated same-origin via
+  `readValidatedReturnTo` in `ui/navigation.ts` (resolves through the URL parser so
+  host-escape tricks like `/\host` or tab/CR-injected hosts are rejected — string prefix
+  checks aren't enough) and threaded through its own tab/tracks links so the origin
+  survives every in-Settings hop. Gear href refreshed on pointerdown AND keydown-Enter
+  (screens rewrite their query via `replaceState` without re-rendering the persistent
+  bar; keyboard fires no pointer event). Placement was researched against Apple HIG /
+  Material / GNOME / NN-g — which favor a *leading*-edge back — but we chose the
+  **trailing actions slot** instead: this app's leading edge is the fixed brand anchor
+  (must never move) and its trailing cluster is already the navigation/system home
+  (gear · mute · account), so the Level Editor's existing `‹ Back`/`‹ Catalog` and this
+  one now share one consistent spot. Fits ADR-0042's actions slot (which already lists
+  `‹ Catalog`) with no invariant change.
