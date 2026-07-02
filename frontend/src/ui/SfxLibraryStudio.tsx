@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import type { TerrainType } from '../core/types';
-import { AUTHORED_SAMPLE_KEYS, authoredSampleKeyFor, previewArrival, previewSample, previewTerrain, type SampleKey } from '../sfx';
+import { AUTHORED_SAMPLE_KEYS, auditionSampleRaw, authoredSampleKeyFor, isSampleReady, loadAuthoredSamples, previewArrival, previewSample, previewTerrain, type SampleKey } from '../sfx';
 import { sfxSampleWaveform, sfxSampleWaveformCached } from '../sfxWaveform';
 import { ASSIGNABLE_TERRAINS, SFX_ASSETS, type SfxAsset } from './sfxCatalog';
 
@@ -262,10 +262,63 @@ export function SfxLibraryStudio({
 // across regions. Reached from the catalog's "Assign sounds…" affordance (openViewer('sfx'))
 // or the Viewer-kind dropdown. (First global-config Viewer kind; deliberate — don't "fix" it
 // back into the 260px catalog rail, where the matrix would dominate, against the spec.)
+// Interface-click test + diagnostic. The UI tap is gated in-app by Settings → Audio (Master
+// Audio / Effects Volume / Interface Sounds); the "raw" audition here BYPASSES those gates so
+// you can confirm the sound exists even when your mix is down — and the readout shows which
+// gate would be muting the in-app clicks (the usual reason "I hear nothing").
+const INTERFACE_SETTINGS_KEY = 'chess-tactics-settings-v1';
+function readAudioGates(): { effectsVolume: number; masterAudio: boolean; interfaceSounds: boolean } {
+  try {
+    const p = JSON.parse(window.localStorage.getItem(INTERFACE_SETTINGS_KEY) || '{}') as Record<string, unknown>;
+    return {
+      effectsVolume: typeof p.effectsVolume === 'number' ? p.effectsVolume : 80,
+      masterAudio: p.masterAudio !== false,
+      interfaceSounds: p.interfaceSounds !== false,
+    };
+  } catch { return { effectsVolume: 80, masterAudio: true, interfaceSounds: true }; }
+}
+
+function InterfaceSoundPanel(): ReactElement {
+  const [ready, setReady] = useState<boolean>(() => isSampleReady('click'));
+  const [dur, setDur] = useState<number | null>(null);
+  const [gates, setGates] = useState(() => readAudioGates());
+  useEffect(() => {
+    let alive = true;
+    void loadAuthoredSamples('click').then((bufs) => {
+      if (!alive) return;
+      setReady(bufs.length > 0);
+      setDur(bufs[0] ? +bufs[0].duration.toFixed(2) : null);
+    });
+    return () => { alive = false; };
+  }, []);
+  const heading: CSSProperties = { margin: 0, color: '#72bde8', font: '800 12px/1.3 var(--ds-font-sans, system-ui, sans-serif)', letterSpacing: 0.6, textTransform: 'uppercase' };
+  const ok = (b: boolean) => (b ? '✓' : '✗');
+  return (
+    <div aria-label="Interface click" style={{ display: 'grid', gap: 8, marginBottom: 18 }}>
+      <h2 style={heading}>Interface click (UI feedback)</h2>
+      <p className="tileset-catalog-note" style={{ margin: 0 }}>
+        The tap played on every button/menu click. <strong>Play (raw)</strong> ignores your mix so you can hear the sound itself; <strong>Play (in-game)</strong> respects the Audio settings, exactly like a real click.
+      </p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button type="button" className="tileset-view-action" onClick={() => auditionSampleRaw('click')}>▶ Play (raw)</button>
+        <button type="button" className="tileset-view-action" onClick={() => previewSample('click')}>▶ Play (in-game)</button>
+        <span style={{ color: ready ? '#7bd88f' : '#e6a86b', fontSize: 12 }}>
+          {ready ? `take loaded${dur ? ` · ${dur}s` : ''}` : 'take NOT loaded — hard-reload (Ctrl+Shift+R)'}
+        </span>
+      </div>
+      <p className="tileset-catalog-note" style={{ margin: 0, fontSize: 12 }}>
+        In-app clicks sound only when all of: Master Audio {ok(gates.masterAudio)} · Effects Volume {gates.effectsVolume}% {ok(gates.effectsVolume > 0)} · Interface Sounds {ok(gates.interfaceSounds)}.{' '}
+        <button type="button" className="tileset-view-action" onClick={() => setGates(readAudioGates())}>refresh</button>
+      </p>
+    </div>
+  );
+}
+
 export function SfxViewer({ header }: { header?: ReactNode }): ReactElement {
   return (
     <>
       <section className="al-lab-main" aria-label="Sound assignments">
+        <InterfaceSoundPanel />
         <SfxAssignmentPanel />
       </section>
       <aside className="tileset-view-controls" aria-label="Sound assignment controls">

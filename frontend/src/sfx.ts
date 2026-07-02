@@ -507,6 +507,38 @@ export function previewSample(key: SampleKey, gain = 1): void {
   if (!playSampleSet(key, normGain(gain))) void loadSampleSet(key);
 }
 
+/**
+ * DEV raw audition (Studio test surface): play a set BYPASSING the effects-volume /
+ * master-audio / Interface-Sounds gates, through a private gain → destination path (NOT the
+ * shared master bus). So a muted mix or a zeroed Effects slider can't silence the audition
+ * itself — it's a pure "does this sound exist, and what is it" check, independent of the
+ * player-facing mix. Not for gameplay. No-op (kicking a load) until the set is decoded.
+ */
+export function auditionSampleRaw(key: SampleKey, gain = 0.9): void {
+  const context = ensureContext();
+  if (!context) return;
+  if (context.state === 'suspended') {
+    void context.resume().catch(() => { /* the ▶ click is the gesture; ignore */ });
+  }
+  const set = sampleSets[key];
+  if (!set || set.state !== 'loaded') { void loadSampleSet(key); return; }
+  const ready = set.buffers.filter((b): b is AudioBuffer => b !== null);
+  if (!ready.length) return;
+  const g = context.createGain();
+  g.gain.value = normGain(gain) * set.gain;
+  g.connect(context.destination); // bypass the master (effects-volume) bus
+  const src = context.createBufferSource();
+  src.buffer = ready[Math.floor(Math.random() * ready.length)];
+  src.connect(g);
+  src.start(context.currentTime);
+}
+
+/** Sync check: is a set decoded and ready to play? (Studio status readouts.) */
+export function isSampleReady(key: SampleKey): boolean {
+  const set = sampleSets[key];
+  return !!set && set.state === 'loaded' && set.buffers.some(Boolean);
+}
+
 // ---- catalog / audition accessors ------------------------------------------
 // Surface the authored-sample wiring to the Studio so it can tell which terrains are
 // voiced by recordings and render the real take waveforms.
