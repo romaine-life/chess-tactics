@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodeBoard, decodeBoard, type EditorBoard } from './boardCode';
+import { encodeBoard, decodeBoard, decodeBoardLinkInput, type EditorBoard } from './boardCode';
 
 const base = (over: Partial<EditorBoard> = {}): EditorBoard => ({
   cols: 6, rows: 6, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, ...over,
@@ -40,5 +40,16 @@ describe('boardCode — props wire key (p)', () => {
     const assigned = base({ playerFaction: 'emerald' });
     expect(decodeBoard(encodeBoard(assigned))!.playerFaction).toBe('emerald');
     expect(decodeBoard(encodeBoard(base()))!.playerFaction).toBeUndefined();
+  });
+
+  it('loads a board from a full link, query string, or raw code', () => {
+    const board = base({ cols: 8, rows: 5, cells: { '0,0': 'grass-1' } });
+    const code = encodeBoard(board);
+    expect(decodeBoardLinkInput(`https://example.test/level-editor?board=${code}`)?.cols).toBe(8);
+    expect(decodeBoardLinkInput(`?board=${code}`)?.rows).toBe(5);
+    const decoded = decodeBoardLinkInput(code)!;
+    expect(decoded.cols).toBe(8);
+    expect(decoded.rows).toBe(5);
+    expect(decoded.cells['0,0']).toBe('grass-1');
   });
 });
