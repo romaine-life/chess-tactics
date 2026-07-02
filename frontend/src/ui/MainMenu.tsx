@@ -32,10 +32,7 @@ interface MenuTab { slug: string; label: string; href: string; iconSlug: string 
 // carving is forged.
 const MENU_TABS: MenuTab[] = [
   { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
-  // Settings is excluded from the rail — it now lives in the trailing "settings +
-  // user" chrome cluster (the gear beside the account control), not as a mode tab.
   ...MENU_MODES
-    .filter((mode) => mode.slug !== 'settings')
     .map((mode) => ({
       slug: mode.slug,
       label: mode.label,
