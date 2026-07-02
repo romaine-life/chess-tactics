@@ -4303,7 +4303,7 @@ h1 {
      frame the settings nav uses; gold brackets, cyan when active. Chrome must be
      the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014). */
   border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px stretch;
   border-radius: 0;
   color: var(--skirmish-muted);
   cursor: pointer;
@@ -6406,7 +6406,7 @@ body { font-size: 17px; }
   cursor: pointer;
   appearance: none;
   border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
   image-rendering: pixelated;
   /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
      fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
@@ -10518,7 +10518,7 @@ button.tileset-relationship-cell {
   align-items: center;
   block-size: 46px;
   border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px stretch;
   box-sizing: border-box;
   color: #eef6ff;
   cursor: pointer;
@@ -10535,7 +10535,7 @@ button.tileset-relationship-cell {
 }
 
 .app-header-button-active {
-  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
+  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px stretch;
 }
 
 .app-header-button.is-disabled,
@@ -10684,7 +10684,7 @@ button.tileset-relationship-cell {
   align-items: center;
   block-size: 52px;
   border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
   box-sizing: border-box;
   cursor: pointer;
   display: inline-flex;
