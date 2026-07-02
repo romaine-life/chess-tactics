@@ -6743,7 +6743,7 @@ body { font-size: 17px; }
 
 .tileset-mode-tabs {
   display: grid;
-  grid-auto-columns: minmax(66px, 1fr);
+  grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
   gap: 3px;
   padding: 3px;
@@ -6753,9 +6753,9 @@ body { font-size: 17px; }
 }
 
 .tileset-mode-tabs button {
-  min-width: 64px;
+  min-width: 0;
   min-height: 28px;
-  padding: 5px 12px;
+  padding: 5px 8px;
   font-size: 11px;
   border-color: transparent;
 }
@@ -6827,6 +6827,42 @@ body { font-size: 17px; }
    panel; only its contents reflow. (See docs/studio-control-architecture.md.) */
 .tileset-studio-shell.is-lab {
   grid-template-columns: minmax(0, 1fr) 260px;
+}
+
+/* Narrow effective widths — a genuinely small window OR high browser zoom, which
+   shrinks the CSS viewport. The main pane shrinks toward 0 but the Controls stay a
+   fixed 260px, so below ~560px the panel was pushed past the right edge and clipped
+   (overflow-x:hidden). Stack to a single scrolling column instead — main on top,
+   Controls beneath — so the whole panel stays reachable. Mirrors the .tileset-view-mode
+   breakpoint. Wide layouts are untouched. */
+@media (max-width: 640px) {
+  .tileset-studio-shell.is-catalog,
+  .tileset-studio-shell.is-lab,
+  .tileset-studio-shell.is-viewer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  /* Each pane sizes to its content and the SHELL scrolls, instead of two fixed-height
+     columns fighting over a too-narrow row. */
+  .tileset-studio-shell.is-catalog > *,
+  .tileset-studio-shell.is-lab > *,
+  .tileset-studio-shell.is-viewer > * {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .tileset-studio-shell.is-catalog .tileset-view-controls,
+  .tileset-studio-shell.is-lab .tileset-view-controls,
+  .tileset-studio-shell.is-viewer .tileset-view-controls {
+    overflow-y: visible;
+  }
+  /* In the editing viewers the Controls ARE the task (the stage is just a preview),
+     so surface them first when stacked — otherwise a tall canvas buries them. */
+  .tileset-studio-shell.is-viewer .tileset-view-controls {
+    order: -1;
+  }
 }
 
 .tileset-candidate-shell {
@@ -7370,7 +7406,8 @@ body { font-size: 17px; }
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 10px;
+  padding: 10px 22px 10px 10px;
+  scrollbar-gutter: stable;
 }
 
 .tileset-view-controls h2 {
@@ -8487,6 +8524,14 @@ button.tileset-relationship-cell {
   overflow-wrap: anywhere;
 }
 
+.tileset-control-stack .tileset-mode-tabs button {
+  min-width: 0;
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 11px;
+  line-height: 1;
+}
+
 /* Per-focus layer-visibility toggle (the "vision" eye). Amber when the layer is hidden,
    so it's obvious the board is concealing something rather than empty. */
 .tileset-vision-toggle {
@@ -8534,6 +8579,11 @@ button.tileset-relationship-cell {
 .tileset-inspector-section,
 .tileset-control-stack {
   display: grid;
+  /* Single column pinned to the container width (not max-content) — without this an auto track
+     sizes to the widest child, so one long button/label drags the whole stack past the fixed
+     panel width and its right edge (steppers, reset ↺) gets clipped. min-width:0 alone isn't
+     enough; the grid track has to be told to shrink. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
 }
