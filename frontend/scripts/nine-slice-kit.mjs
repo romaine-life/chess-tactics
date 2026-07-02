@@ -175,29 +175,35 @@ function buildFrameParts(baseCorner, bracketCorner, edge, fill, cfg, W, H, flipS
   const o = np(W, H);
   if (!noFill) tile(o, fill, 0, 0, W, H);
 
+  // INVARIANT: every mirror/rotation happens AFTER scaling, from ONE scaled source
+  // per atom. Floor-sampled nearest-neighbour scaling does not commute with
+  // mirroring, so scaling pre-flipped art makes the four corners (and the four
+  // pipes) drift out of mirror symmetry by 1px at non-integer scales — the
+  // "inconsistently scaled frame" defect that had to be hand-nudged away per corner.
   const topEdge = scalePng(edge, cfg.frameScale);
-  const r = scalePng(rot90(edge), cfg.frameScale), eB = flipV(topEdge);
+  const eB = flipV(topEdge);
+  const r = rot90(topEdge);
   const eR = flipSides ? flipH(r) : r;
   const eL = flipSides ? r : flipH(r);
   const ex = cfg.edge.dx, ey = cfg.edge.dy;
-  // Pipes are an underlay. Keep them spanning the original corner-to-corner interval
-  // even when the frame corners are scaled larger; otherwise max-scale corners can consume
-  // the whole side and a one-pixel corner nudge exposes an empty center seam.
-  const pipeBleed = Math.max(0, Math.round(cfg.frameScale) - 1);
-  for (let d = 0; d <= pipeBleed; d += 1) {
-    tile(o, topEdge, cw, ey + cfg.edgeSides.top.dy - d, W - cw, ey + cfg.edgeSides.top.dy - d + topEdge.height);
-    tile(o, eB, cw, H - eB.height - ey - cfg.edgeSides.bottom.dy + d, W - cw, H - ey - cfg.edgeSides.bottom.dy + d);
-    tile(o, eL, ex + cfg.edgeSides.left.dx + d, ch, ex + cfg.edgeSides.left.dx + d + eL.width, H - ch);
-    tile(o, eR, W - eR.width - ex - cfg.edgeSides.right.dx + d, ch, W - ex - cfg.edgeSides.right.dx + d, H - ch);
-  }
+  // Pipes are an underlay, drawn once at their scaled thickness. At scale 1 they
+  // span corner-to-corner (keeps every scale-1 bake byte-stable). At scale > 1 they
+  // span the FULL side: the scaled corners sit on top, so a nudged corner can never
+  // expose an empty seam behind its arms — the line simply continues underneath.
+  const px0 = cfg.frameScale > 1 ? 0 : cw;
+  const py0 = cfg.frameScale > 1 ? 0 : ch;
+  tile(o, topEdge, px0, ey + cfg.edgeSides.top.dy, W - px0, ey + cfg.edgeSides.top.dy + topEdge.height);
+  tile(o, eB, px0, H - eB.height - ey - cfg.edgeSides.bottom.dy, W - px0, H - ey - cfg.edgeSides.bottom.dy);
+  tile(o, eL, ex + cfg.edgeSides.left.dx, py0, ex + cfg.edgeSides.left.dx + eL.width, H - py0);
+  tile(o, eR, W - eR.width - ex - cfg.edgeSides.right.dx, py0, W - ex - cfg.edgeSides.right.dx, H - py0);
 
   const corner = (img, ox, oy, scale = 1, perCorner = ZERO_BRACKET_CORNERS) => {
-    const dw = Math.max(1, Math.round(img.width * scale));
-    const dh = Math.max(1, Math.round(img.height * scale));
-    compScaled(o, img, ox + perCorner.tl.dx, oy + perCorner.tl.dy, scale);
-    compScaled(o, flipH(img), W - dw - (ox + perCorner.tr.dx), oy + perCorner.tr.dy, scale);
-    compScaled(o, flipV(img), ox + perCorner.bl.dx, H - dh - (oy + perCorner.bl.dy), scale);
-    compScaled(o, flipH(flipV(img)), W - dw - (ox + perCorner.br.dx), H - dh - (oy + perCorner.br.dy), scale);
+    const s = scalePng(img, scale);
+    const dw = s.width, dh = s.height;
+    comp(o, s, ox + perCorner.tl.dx, oy + perCorner.tl.dy);
+    comp(o, flipH(s), W - dw - (ox + perCorner.tr.dx), oy + perCorner.tr.dy);
+    comp(o, flipV(s), ox + perCorner.bl.dx, H - dh - (oy + perCorner.bl.dy));
+    comp(o, flipH(flipV(s)), W - dw - (ox + perCorner.br.dx), H - dh - (oy + perCorner.br.dy));
   };
   corner(baseCorner, cfg.keyline.dx, cfg.keyline.dy, cfg.frameScale, cfg.frameCorners);
   corner(bracketCorner, cfg.bracket.dx, cfg.bracket.dy, cfg.bracketScale, cfg.bracketCorners);

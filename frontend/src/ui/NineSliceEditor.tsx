@@ -356,11 +356,15 @@ function buildFrameCanvas(L: Loaded, edit: EditState, w: number, h: number, carv
   const g = c.getContext('2d')!; g.imageSmoothingEnabled = false;
   // noFill = ornament only (transparent interior) — the "line" frame a surface shows through.
   if (!noFill) tileRect(g, toCanvas(L.fill, L.fill.width, L.fill.height), 0, 0, W, H);
+  // INVARIANT (mirrors the Node bake): every mirror/rotation happens AFTER scaling,
+  // from ONE scaled source per atom — floor-sampled nearest-neighbour scaling does
+  // not commute with mirroring, so scaling pre-flipped art breaks mirror symmetry
+  // by 1px at non-integer scales.
   const topS = scaleCanvas(toCanvas(L.edge, ew, eh), edit.frameScale);
   const botS = flip(topS, topS.width, topS.height, false, true);
-  // Side edges via rot90; flipSides swaps L/R for beveled rails (row) so the bevel
-  // matches the corner at the join instead of reversing — mirrors assemble-frame.
-  const r = scaleCanvas(rot90(L.edge, ew, eh), edit.frameScale);
+  // Side edges via rot90 of the SCALED top; flipSides swaps L/R for beveled rails
+  // (row) so the bevel matches the corner at the join instead of reversing.
+  const r = rot90(topS, topS.width, topS.height);
   const fr = flip(r, r.width, r.height, true, false);
   const rightS = flipSides ? fr : r;
   const leftS = flipSides ? r : fr;
@@ -368,22 +372,22 @@ function buildFrameCanvas(L: Loaded, edit: EditState, w: number, h: number, carv
   const bottomY = edit.edge.dy + edit.edgeSides.bottom.dy;
   const leftX = edit.edge.dx + edit.edgeSides.left.dx;
   const rightX = edit.edge.dx + edit.edgeSides.right.dx;
-  // Pipes are an underlay. Keep them spanning the original corner-to-corner interval
-  // even when the frame corners are scaled larger; otherwise max-scale corners can consume
-  // the whole side and a one-pixel corner nudge exposes an empty center seam.
-  const pipeBleed = Math.max(0, Math.round(edit.frameScale) - 1);
-  for (let d = 0; d <= pipeBleed; d++) {
-    tileH(g, topS, cw, W - cw, topY - d);
-    tileH(g, botS, cw, W - cw, H - botS.height - bottomY + d);
-    tileV(g, leftS, ch, H - ch, leftX + d);
-    tileV(g, rightS, ch, H - ch, W - rightS.width - rightX + d);
-  }
+  // Pipes are an underlay, drawn once at their scaled thickness. At scale 1 they
+  // span corner-to-corner (matches every scale-1 bake byte-for-byte). At scale > 1
+  // they span the FULL side, so a nudged corner sliding over them can never expose
+  // an empty seam behind its arms — the line simply continues underneath.
+  const px0 = edit.frameScale > 1 ? 0 : cw;
+  const py0 = edit.frameScale > 1 ? 0 : ch;
+  tileH(g, topS, px0, W - px0, topY);
+  tileH(g, botS, px0, W - px0, H - botS.height - bottomY);
+  tileV(g, leftS, py0, H - py0, leftX);
+  tileV(g, rightS, py0, H - py0, W - rightS.width - rightX);
   const corner = (art: HTMLCanvasElement, ox: number, oy: number, scale = 1, perCorner: BracketCorners = ZERO_BRACKET_CORNERS) => {
     const tl = scaleCanvas(art, scale);
-    const tr = scaleCanvas(flip(art, cw, ch, true, false), scale);
-    const bl = scaleCanvas(flip(art, cw, ch, false, true), scale);
-    const br = scaleCanvas(flip(art, cw, ch, true, true), scale);
     const dw = tl.width, dh = tl.height;
+    const tr = flip(tl, dw, dh, true, false);
+    const bl = flip(tl, dw, dh, false, true);
+    const br = flip(tl, dw, dh, true, true);
     const p = perCorner;
     g.drawImage(tl, ox + p.tl.dx, oy + p.tl.dy);
     g.drawImage(tr, W - dw - (ox + p.tr.dx), oy + p.tr.dy);
