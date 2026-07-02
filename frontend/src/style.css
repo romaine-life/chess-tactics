@@ -8777,6 +8777,42 @@ button.tileset-relationship-cell {
   top: 0;
 }
 
+/* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet
+   (<tile>-top-anim.png, each frame the full 96x180 tile frame); this rule only advances
+   the frame index via steps() — the same model as .gc-tuft below. Per-cell phase is a
+   negative delay set from --tile-anim-phase (a whole-frame fraction) so open water
+   shimmers loosely instead of pulsing in unison. The animation is !important to clear
+   the global `* { animation: none }` OS-reduce reset (~6055): OS "animations off"
+   (Windows) reports prefers-reduced-motion falsely, and ambient board art is scenery,
+   not a UI transition — the deploy drop (~3842) sets the same precedent. The EXPLICIT
+   in-game reduce-motion choice (:root.reduce-motion) does freeze it, to frame 0 = the
+   exact static art. */
+.tileset-generated-board-tile .tile-layer-top-anim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 96px;
+  height: 180px;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: tile-top-anim var(--tile-anim-dur, 1.6s) steps(var(--tile-anim-frames, 1)) infinite !important;
+  animation-delay: calc(-1 * var(--tile-anim-phase, 0) * var(--tile-anim-dur, 1.6s)) !important;
+  will-change: background-position;
+}
+
+:root.reduce-motion .tileset-generated-board-tile .tile-layer-top-anim {
+  animation: none !important;
+}
+
+@keyframes tile-top-anim {
+  from { background-position-x: 0; }
+  to { background-position-x: var(--tile-anim-travel, 0); }
+}
+
 /* Units and doodads no longer render inside cells here — both boards seat them at grid
    level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
    The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */

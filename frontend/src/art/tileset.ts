@@ -50,6 +50,11 @@ const PRODUCTION_VARIANTS: ProductionVariant[] = Array.from({ length: 8 }, (_, n
   probability: n === 0 ? 1 : 0.8,
 }));
 
+// Water tops are ANIMATED: each variant ships a ripple sheet (`water-<n>-top-anim.png`,
+// frames left-to-right) baked by scripts/build-water-anim.mjs from PixelLab v3 frames
+// generated at the native 96x180 footprint. Other families stay static.
+const WATER_TOP_ANIM_FRAMES = 8;
+
 const surfaceTile = (family: TileFamilyId, variant: ProductionVariant): TileAsset => ({
   id: `${family}-surf-${variant.key}`,
   label: `${terrainLabels[family]} · ${variant.label}`,
@@ -60,6 +65,7 @@ const surfaceTile = (family: TileFamilyId, variant: ProductionVariant): TileAsse
   method: 'Surface (Blender edge + PixelLab top)',
   probability: variant.probability,
   notes: `${terrainLabels[family]} — ${variant.label}: Blender-derived iso edge with a generated pixel-art top (production).`,
+  ...(family === 'water' ? { topAnimFrames: WATER_TOP_ANIM_FRAMES } : {}),
 });
 
 const familyTiles = (family: TileFamilyId): TileAsset[] => PRODUCTION_VARIANTS.map((variant) => surfaceTile(family, variant));

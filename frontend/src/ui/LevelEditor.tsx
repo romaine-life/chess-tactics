@@ -138,7 +138,7 @@ function StudioEditableBoard({
             {/* Fences are PLUMBING-ONLY (no baked mask art yet): don't pass a fence feature to
                 studioCellArt, or featureFrameSrc would 404. They render no image until art ships —
                 see FENCE_ART_PENDING. */}
-            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key]?.kind === 'fence' ? undefined : placedFeatures[key], animationFrame, hidden })}
+            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key]?.kind === 'fence' ? undefined : placedFeatures[key], animationFrame, hidden, x, y })}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
