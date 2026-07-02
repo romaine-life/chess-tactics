@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -181,7 +182,7 @@ export function Campaign(): ReactElement {
       {/* Settings-twin layout, mirroring the main menu: shared app title bar + a rail
           of campaign tabs and a level-select panel over the ambience. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
-        <div className="settings-shell">
+        <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Campaigns">
             {officialCampaigns.length > 0 && (
               <>
@@ -204,7 +205,7 @@ export function Campaign(): ReactElement {
           </aside>
 
           {activeCampaign && <LevelSelect campaign={activeCampaign} progress={progress} />}
-        </div>
+        </ArtRouteChrome>
       </div>
     </div>
   );

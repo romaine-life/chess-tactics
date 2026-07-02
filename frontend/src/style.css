@@ -538,11 +538,8 @@ h1 {
   color: rgba(214, 232, 242, .55);
   text-decoration: none;
   opacity: 1;
-  /* Opacity TRANSITION (not @keyframes) for the first-ever appearance: the
-     global prefers-reduced-motion reset kills keyframe animations, while
-     opacity transitions are the deliberately-surviving path (ADR-0043 §C) —
-     same pattern as .screen-enter. Route swaps never replay it: the label is
-     module-cached, so remounts render already-entered (ADR-0046 B/G, the
+  /* Opacity TRANSITION for the first-ever appearance. Route swaps never replay it:
+     the label is module-cached, so remounts render already-entered (ADR-0046 B/G, the
      backdrop layer stays continuous across navigation). */
   transition:
     opacity var(--ds-duration-fade) var(--ds-ease-standard),
@@ -550,7 +547,7 @@ h1 {
 }
 
 /* One start frame at opacity 0; AmbienceBackground drops this class on the
-   next frame and the transition above plays (mirrors .screen-enter-start). */
+   next frame and the transition above plays. */
 .ambience-credit-start {
   opacity: 0;
 }
@@ -3487,6 +3484,21 @@ h1 {
   z-index: -1;
 }
 
+.skirmish-screen.skirmish-picker-screen::before {
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
+    image-set(
+      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
+      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
+      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
+    ) center / cover no-repeat;
+}
+
 .skirmish-war-room {
   display: grid;
   grid-column: 1;
@@ -3502,6 +3514,144 @@ h1 {
      where they overlap. Cut only at the screen edge (.skirmish-screen: overflow hidden). */
   position: relative;
   z-index: 0;
+}
+
+.skirmish-picker {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-height: 0;
+  overflow: auto;
+  padding: clamp(16px, 2.2vw, 28px);
+  position: relative;
+  z-index: 3;
+}
+
+.skirmish-picker-header {
+  align-items: end;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-inline: auto;
+  max-width: 1180px;
+  width: 100%;
+}
+
+.skirmish-picker-header h1 {
+  color: #f4fbff;
+  font-family: var(--ds-font-display);
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  line-height: 1;
+  margin: 4px 0 0;
+  text-transform: uppercase;
+}
+
+.skirmish-picker-random {
+  min-width: 178px;
+}
+
+.skirmish-map-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  margin-inline: auto;
+  max-width: 1180px;
+  width: 100%;
+}
+
+.skirmish-map-card {
+  background: linear-gradient(180deg, rgba(10, 29, 42, .92), rgba(5, 15, 24, .9));
+  border: 1px solid rgba(149, 216, 234, .2);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 0 16px 30px rgba(0, 0, 0, .26);
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto minmax(120px, 1fr) auto;
+  min-height: 0;
+  padding: 10px;
+}
+
+.skirmish-map-thumb {
+  align-items: center;
+  background: rgba(1, 7, 12, .48);
+  border: 1px solid rgba(149, 216, 234, .16);
+  border-radius: 6px;
+  display: grid;
+  justify-items: center;
+  min-height: 132px;
+  overflow: hidden;
+}
+
+.skirmish-map-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.skirmish-map-copy h2,
+.skirmish-picker-empty-card h2 {
+  color: #f1cf86;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  line-height: 1.15;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.skirmish-map-copy dl {
+  color: var(--skirmish-muted);
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.skirmish-map-copy dl div {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.skirmish-map-copy dt {
+  color: rgba(149, 216, 234, .78);
+  font-size: var(--ds-text-2xs);
+  text-transform: uppercase;
+}
+
+.skirmish-map-copy dd {
+  color: var(--skirmish-ink);
+  font-size: var(--ds-text-xs);
+  margin: 0;
+  text-align: right;
+}
+
+.skirmish-map-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.skirmish-map-actions .ce-link-button {
+  min-height: 38px;
+}
+
+.skirmish-picker-empty {
+  justify-self: center;
+  margin-top: 18px;
+}
+
+.skirmish-picker-empty-card {
+  justify-self: center;
+  max-width: 520px;
+  padding: 18px;
+  text-align: center;
+}
+
+.skirmish-picker-empty-card p {
+  color: var(--skirmish-muted);
+  line-height: 1.45;
+  margin: 8px 0 16px;
 }
 
 .skirmish-topbar {
@@ -5179,9 +5329,8 @@ body { font-size: 17px; }
 }
 
 /* Editor chrome entrance is the SHARED screen-entrance primitive (ADR-0046): CampaignEditor
-   spreads useScreenEntrance()'s class onto .ce-layout + .ce-footer, so only the chrome fades
-   in while the .ce-screen backdrop + rain stay continuous — see `.screen-enter` in the motion
-   block. No bespoke .is-entered rule here anymore (it duplicated the hook). */
+   renders .ce-layout + .ce-footer through ArtRouteChrome, so only the chrome fades in while
+   the .ce-screen backdrop + rain stay continuous. */
 
 /* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
    the fixed bar overlay and pin the layout + footer to rows 2/3 (3-row grid). */
@@ -10655,21 +10804,20 @@ button.tileset-relationship-cell {
   overflow: visible;
 }
 
-/* Screen entrance (ADR-0046): the SHARED entrance fade, applied via the useScreenEntrance()
-   hook to a screen's CHROME ROOT (.settings-shell in both Settings and the main menu) — never
-   the screen's outer element, so the ambience backdrop (a sibling) stays continuous and never
-   re-fades across art-background screens (ADR-0046 B/G). Entrance tier (slow + decelerate).
-   Pure opacity = reduced-motion-safe → not gated (ADR-0043). The hook only engages on a
-   navigation-driven mount; the cold-load menu reveal owns the first paint (no double-fade).
-   This replaces the old settings-only `.settings-art-route .settings-shell` opacity rule. */
+/* Screen entrance (ADR-0046): the SHARED entrance fade, applied through ArtRouteChrome to a
+   screen's CHROME ROOT (.settings-shell in Settings/menu, .skirmish-picker for map select) —
+   never the screen's outer element, so the ambience backdrop (a sibling) stays continuous and
+   never re-fades across art-background screens (ADR-0046 B/G). Entrance tier (slow +
+   decelerate). Pure opacity = reduced-motion-safe -> not gated (ADR-0043). The hook only
+   engages on a navigation-driven mount; the cold-load menu reveal owns the first paint (no
+   double-fade). */
 .screen-enter {
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+  animation: screen-enter-fade var(--ds-duration-fade) var(--ds-ease-standard) both !important;
 }
-/* Initial frame: paint at opacity 0 instantly (no transition), then the hook drops this class
-   next frame so the element transitions 0 -> 1. */
-.screen-enter.screen-enter-start {
-  opacity: 0;
-  transition: none;
+
+@keyframes screen-enter-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 /* Inert while the fade plays (ADR-0046 D): can't trigger a new transition mid-transition. */
 .screen-enter.screen-enter-lock {

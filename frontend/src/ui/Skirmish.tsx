@@ -33,7 +33,8 @@ const OBJECTIVE_COPY = {
 } as const;
 
 export function Skirmish() {
-  const routeParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const routeSearch = window.location.search;
+  const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
   const routeCampaignId = routeParams.get('campaignId');
   const routeLevelId = routeParams.get('levelId');
   const routeMode = routeParams.get('mode');
