@@ -167,12 +167,10 @@ function useAmbienceEffectName(): string | null {
   return name;
 }
 
-// First-EVER appearance fade. Mirrors useScreenEntrance's start-frame pattern
-// (ADR-0046): render one frame at opacity 0 (.ambience-credit-start), then drop
-// the class so the opacity TRANSITION plays. A transition, not @keyframes: the
-// global prefers-reduced-motion reset kills keyframe animations but opacity
-// transitions are the deliberately-surviving path (ADR-0043 §C). After the
-// first appearance the module flag keeps every later mount steady.
+// First-EVER appearance fade: render one frame at opacity 0 (.ambience-credit-start),
+// then drop the class so the opacity transition plays. After that the module flag keeps
+// every later mount steady; route-level chrome entrance is owned separately by
+// ArtRouteChrome/useScreenEntrance.
 function useCreditEntrance(effectName: string | null): boolean {
   const [entered, setEntered] = useState(() => creditHasAppeared);
   useEffect(() => {

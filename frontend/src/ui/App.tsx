@@ -20,6 +20,7 @@ import {
   normalizeRoutePath,
   shouldInterceptAppLinkClick,
 } from './navigation';
+import { isBoardArtRoute, isHeavyRoute } from './routeSurfaces';
 
 // The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc.
 // don't pull the renderer bundle (preserving app.js's lazy-mount behaviour).
@@ -27,6 +28,7 @@ import {
 // hover/focus (see prefetchRoute) and consumed by lazy() at click time — the
 // module registry dedupes, so warming === the click-time download.
 const importSkirmish = () => import('./Skirmish');
+const importSkirmishMapPicker = () => import('./SkirmishMapPicker');
 const importCampaignEditor = () => import('./CampaignEditor');
 const importTilePreview = () => import('./TilePreview');
 const importLevelEditor = () => import('./LevelEditor');
@@ -34,6 +36,7 @@ const importPortraitEditor = () => import('./PortraitEditor');
 const importDoodadEditor = () => import('./DoodadEditor');
 
 const Skirmish = lazy(() => importSkirmish().then((m) => ({ default: m.Skirmish })));
+const SkirmishMapPickerRoute = lazy(() => importSkirmishMapPicker().then((m) => ({ default: m.SkirmishMapPickerRoute })));
 const CampaignEditor = lazy(() => importCampaignEditor().then((m) => ({ default: m.CampaignEditor })));
 const TilesetStudio = lazy(() => importTilePreview().then((m) => ({ default: m.TilesetStudio })));
 const LevelEditor = lazy(() => importLevelEditor().then((m) => ({ default: m.LevelEditor })));
@@ -46,7 +49,8 @@ const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily
 // routes (Campaign, Lobbies, Settings…) return null — they're already in the main
 // bundle, nothing to warm.
 function chunkForPath(path: string): (() => Promise<unknown>) | null {
-  if (path === '/play' || path === '/skirmish') return importSkirmish;
+  if (path === '/play') return importSkirmish;
+  if (path === '/skirmish') return importSkirmishMapPicker;
   if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor') return importTilePreview;
   if (path === '/edit' || path === '/level-editor') return importLevelEditor;
   if (path === '/portrait-editor') return importPortraitEditor;
@@ -66,23 +70,9 @@ function prefetchRoute(path: string): void {
   void thunk();
 }
 
-// The cross-route veil masks the weight of entering/leaving a PIXI BOARD surface
-// (skirmish, level editor) — a plain swap of those feels abrupt, and the dissolve also
-// smooths the big board->menu jump. It is deliberately NOT used for the menu-family
-// panel screens (menu, settings, party, lobbies, campaign EDITOR): they all share the
-// SAME backdrop scene + synced rain, and the veil is a full-screen OPAQUE field — so
-// veiling a hop between them would fade that shared backdrop out and back in, defeating
-// the very continuity it exists for. Those hops stay instant (the menu stays painted
-// until the destination's chunk is ready, then swaps in one commit), leaving the
-// backdrop + rain rock-steady while only the UI changes. Tune membership here.
-const HEAVY_ROUTES = new Set(['/play', '/skirmish', '/edit', '/level-editor']);
-const isHeavyRoute = (path: string): boolean => HEAVY_ROUTES.has(path);
-
-// Routes whose screen drives the board-art reveal gate (render/boardArtReady). Entering
-// one, the veil holds its dissolve until the board's tiles have decoded — so the reveal
-// lands on a complete board, never an empty frame that then popcorns in. Only the live
-// skirmish opts in today; the level/campaign editors keep the plain JS-load veil.
-const BOARD_ART_ROUTES = new Set(['/play', '/skirmish']);
+// Route transition behavior is declared in routeSurfaces.ts (ADR-0049). Heavy routes get
+// the veil; light-art routes keep the shared menu backdrop/rain continuous and fade their
+// own chrome through ArtRouteChrome/LightArtRouteShell.
 
 // Veil timings — keep in lockstep with --route-veil-cover-ms / --route-veil-reveal-ms
 // in style.css (JS drives the route swap; CSS drives the opacity fade).
@@ -132,21 +122,23 @@ export function App(): ReactElement {
   useEffect(() => {
     const onNav = () => {
       const next = normalizeRoutePath(window.location.pathname);
-      if (next === pathRef.current) return;
+      const current = pendingTarget.current ?? pathRef.current;
+      if (next === current) return;
       // Mark that we've navigated, so the destination screen plays its entrance fade
       // (ADR-0046). The very first cold page load never sets this, so the cold-load reveal
       // owns the initial paint without a competing fade.
       markScreenNavigation();
       // Dissolve if EITHER end is heavy — entering one, or leaving one for a light screen.
-      if (isHeavyRoute(next) || isHeavyRoute(pathRef.current)) {
+      if (isHeavyRoute(next) || isHeavyRoute(current)) {
         pendingTarget.current = next; // hold the swap until the field is fully opaque
         coverCommitted.current = false;
         // Entering the board: mark its art pending NOW (before the board mounts) so the
         // veil's reveal gate below waits for the real tiles, not just the JS commit.
-        if (BOARD_ART_ROUTES.has(next)) armBoardArtForNav();
+        if (isBoardArtRoute(next)) armBoardArtForNav();
         setVeil('cover');
       } else {
         // Light hop: keep the current screen painted (no fallback flash), swap when ready.
+        pathRef.current = next;
         startRouteTransition(() => setPath(next));
       }
     };
@@ -194,6 +186,7 @@ export function App(): ReactElement {
       const target = pendingTarget.current;
       if (target != null) {
         coverCommitted.current = true;
+        pathRef.current = target;
         startRouteTransition(() => setPath(target));
       }
     }, VEIL_COVER_MS);
@@ -262,7 +255,8 @@ export function App(): ReactElement {
 }
 
 function renderRoute(path: string): ReactElement {
-  if (path === '/play' || path === '/skirmish') return <Skirmish />;
+  if (path === '/play') return <Skirmish />;
+  if (path === '/skirmish') return <SkirmishMapPickerRoute />;
   if (path === '/tileset-studio') return <TilesetStudio />;
   // /unit-studio is a deep-link into the one Studio with the Units shelf
   // preselected — not a separate surface. Keeps old links working while the
