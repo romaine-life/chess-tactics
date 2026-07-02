@@ -165,6 +165,12 @@ export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => til
 
 export const tileFrameSrc = (asset: TileAsset): string => asset.src;
 
+// The TOP half of a surface tile — the flat diamond alone, no iso side. `src` is the tall
+// 96x180 iso block (art only in the upper diamond), so it shrinks to nothing in a small
+// preview box; the `-top` sibling (every split tile has one) fills a square chip and lets a
+// brush/palette preview FOCUS on the surface itself. Mirrors featureThumbSrc's intent.
+export const tileTopSrc = (asset: TileAsset): string => asset.src.replace(/\.png$/, '-top.png');
+
 // Linear-feature overlays (roads, rivers) live in their OWN registry,
 // deliberately apart from the socket base tiles above: a feature is a transparent
 // ribbon composited OVER any base tile, keyed by its material and 4-bit connection

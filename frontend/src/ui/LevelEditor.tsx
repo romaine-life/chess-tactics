@@ -35,8 +35,8 @@ import {
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureThumbSrc } from '../art/tileset';
-import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_ART_PENDING, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { featureThumbSrc, tileTopSrc } from '../art/tileset';
+import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_ART_PENDING, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
@@ -433,6 +433,11 @@ function FeatureConnections({
   );
 }
 
+// The editor's palette layers. Roads and rivers share one "Paths" layer (both are linear
+// connection features); the brush kind under it decides road vs river. Fence is its own
+// (still art-pending) layer. The layer picker is a dropdown, so the count no longer crowds a row.
+type LayerKey = 'board' | 'tile' | 'paths' | 'fence' | 'unit' | 'doodad' | 'prop' | 'cover';
+
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link) and optionally
@@ -477,7 +482,7 @@ export function LevelEditor(): ReactElement {
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
-  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
+  const [layer, setLayer] = useState<LayerKey>(studioArm.kind ?? 'tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
@@ -1134,22 +1139,34 @@ export function LevelEditor(): ReactElement {
       <aside className="skirmish-hud" aria-label="Editor controls">
         <section className="skirmish-card">
           <h2>Layer</h2>
-          <div className="le-seg">
-            <button type="button" className={`le-seg-btn ${layer === 'board' ? 'active' : ''}`.trim()} onClick={() => { setLayer('board'); setTool('select'); }}>Board</button>
-            <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
-            <button type="button" className={`le-seg-btn ${layer === 'road' ? 'active' : ''}`.trim()} onClick={() => { setLayer('road'); setBrushKind('road'); setTool('brush'); }}>Road</button>
-            <button type="button" className={`le-seg-btn ${layer === 'river' ? 'active' : ''}`.trim()} onClick={() => { setLayer('river'); setBrushKind('river'); setTool('brush'); }}>River</button>
-            <button
-              type="button"
-              className={`le-seg-btn ${layer === 'fence' ? 'active' : ''}`.trim()}
-              disabled={FENCE_ART_PENDING}
-              title={FENCE_ART_PENDING ? 'Fence art is pending — the brush is disabled until the mask set ships.' : 'Paint fences (visual only).'}
-              onClick={() => { if (FENCE_ART_PENDING) return; setLayer('fence'); setBrushKind('fence'); setTool('brush'); }}
-            >Fence</button>
-            <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
-            <button type="button" className={`le-seg-btn ${layer === 'doodad' ? 'active' : ''}`.trim()} onClick={() => { setLayer('doodad'); setBrushKind('doodad'); setTool('brush'); }}>Doodad</button>
-            <button type="button" className={`le-seg-btn ${layer === 'prop' ? 'active' : ''}`.trim()} onClick={() => { setLayer('prop'); setBrushKind('prop'); setTool('brush'); }}>Prop</button>
-            <button type="button" className={`le-seg-btn ${layer === 'cover' ? 'active' : ''}`.trim()} onClick={() => { setLayer('cover'); setBrushKind('cover'); setTool('brush'); }}>Cover</button>
+          <div className="le-layer-select-wrap">
+            <select
+              className="le-layer-select"
+              aria-label="Editor layer"
+              value={layer}
+              onChange={(e) => {
+                const next = e.target.value as LayerKey;
+                setLayer(next);
+                if (next === 'board') { setTool('select'); return; }
+                if (next === 'paths') {
+                  // Keep whichever path kind is already armed (road/river); default to road.
+                  setBrushKind((k) => (k === 'road' || k === 'river' ? k : 'road'));
+                  setTool('brush');
+                  return;
+                }
+                setBrushKind(next);
+                setTool('brush');
+              }}
+            >
+              <option value="board">Board</option>
+              <option value="tile">Tile</option>
+              <option value="paths">Paths</option>
+              <option value="fence" disabled={FENCE_ART_PENDING}>{FENCE_ART_PENDING ? 'Fence (soon)' : 'Fence'}</option>
+              <option value="unit">Unit</option>
+              <option value="doodad">Doodad</option>
+              <option value="prop">Prop</option>
+              <option value="cover">Cover</option>
+            </select>
           </div>
         </section>
 
@@ -1185,7 +1202,7 @@ export function LevelEditor(): ReactElement {
                 ? <span className="le-brush-thumb-pending" aria-hidden="true" /> /* fence art pending — no thumb to request */
                 : featureKind
                 ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
-                : <img src={brushAsset.src} alt="" draggable={false} />}
+                : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
               <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
@@ -1313,25 +1330,43 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : featureKind ? (
           <section className="skirmish-card le-brush-panel">
-            <h2>{featureKind === 'river' ? 'River material' : 'Road material'}</h2>
-            <div className="le-swatches">
-              {featureMaterials(featureKind).map((mat) => (
-                <button
-                  type="button"
-                  key={mat}
-                  className={`le-swatch ${featureBrushMaterial[featureKind] === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
-                  title={FEATURE_MATERIAL_LABELS[mat]}
-                  onClick={() => { setFeatureBrushMaterial((prev) => ({ ...prev, [featureKind]: mat })); setBrushKind(featureKind); setLayer(featureKind); setTool('brush'); }}
-                >
-                  <img src={featureThumbSrc(featureKind, mat)} alt="" draggable={false} />
-                  <small>{FEATURE_MATERIAL_LABELS[mat]}</small>
-                </button>
-              ))}
+            <h2>Path surface</h2>
+            <div className="le-pal-group">
+              <span className="le-pal-grouplabel">Roads</span>
+              <div className="le-swatches">
+                {ROAD_MATERIALS.map((mat) => (
+                  <button
+                    type="button"
+                    key={`road-${mat}`}
+                    className={`le-swatch ${brushKind === 'road' && featureBrushMaterial.road === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    title={FEATURE_MATERIAL_LABELS[mat]}
+                    onClick={() => { setFeatureBrushMaterial((prev) => ({ ...prev, road: mat })); setBrushKind('road'); setLayer('paths'); setTool('brush'); }}
+                  >
+                    <img src={featureThumbSrc('road', mat)} alt="" draggable={false} />
+                    <small>{FEATURE_MATERIAL_LABELS[mat]}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="le-pal-group">
+              <span className="le-pal-grouplabel">River</span>
+              <div className="le-swatches">
+                {RIVER_MATERIALS.map((mat) => (
+                  <button
+                    type="button"
+                    key={`river-${mat}`}
+                    className={`le-swatch ${brushKind === 'river' && featureBrushMaterial.river === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    title={FEATURE_MATERIAL_LABELS[mat]}
+                    onClick={() => { setFeatureBrushMaterial((prev) => ({ ...prev, river: mat })); setBrushKind('river'); setLayer('paths'); setTool('brush'); }}
+                  >
+                    <img src={featureThumbSrc('river', mat)} alt="" draggable={false} />
+                    <small>{FEATURE_MATERIAL_LABELS[mat]}</small>
+                  </button>
+                ))}
+              </div>
             </div>
             <p className="le-board-note">
-              {featureKind === 'river'
-                ? 'Drag to draw a river; each tile picks its own piece (straight, bend, fork) from its river neighbours. Rivers connect only to rivers, never to roads. Erase to cut; the ends re-cap.'
-                : 'Drag to draw a road; each tile picks its own piece (straight, corner, junction) from its road neighbours. Roads of any material connect (the surface just changes per cell), but never to rivers. Erase to cut; the ends re-cap.'}
+              Drag to draw a path; each tile picks its own piece (straight, corner, junction) from its like neighbours. Roads connect to roads and rivers to rivers — never to each other. Erase to cut; the ends re-cap.
             </p>
           </section>
         ) : brushKind === 'tile' ? (
@@ -1359,11 +1394,11 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : null}
 
-        {featureKind && selectedCell && selectedFeature && selectedFeature.kind === featureKind ? (
+        {featureKind && selectedCell && selectedFeature ? (
           <section className="skirmish-card">
-            <h2>{featureKind === 'river' ? 'River connections' : 'Road connections'}</h2>
-            <FeatureConnections cell={selectedCell} kind={featureKind} features={boardFeatures} cuts={featureCuts} exits={featureExits} onToggle={toggleFeatureCut} onToggleExit={toggleFeatureExit} />
-            <p className="le-board-note">Click an edge that has a neighbour to sever or rejoin it. Click an edge with no neighbour — a board boundary or a non-{featureKind} tile — to run the {featureKind} <em>off</em> that edge instead of capping it.</p>
+            <h2>{selectedFeature.kind === 'river' ? 'River connections' : selectedFeature.kind === 'fence' ? 'Fence connections' : 'Road connections'}</h2>
+            <FeatureConnections cell={selectedCell} kind={selectedFeature.kind} features={boardFeatures} cuts={featureCuts} exits={featureExits} onToggle={toggleFeatureCut} onToggleExit={toggleFeatureExit} />
+            <p className="le-board-note">Click an edge that has a neighbour to sever or rejoin it. Click an edge with no neighbour — a board boundary or a non-{selectedFeature.kind} tile — to run the {selectedFeature.kind} <em>off</em> that edge instead of capping it.</p>
           </section>
         ) : null}
 
@@ -1373,7 +1408,7 @@ export function LevelEditor(): ReactElement {
             <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank cells with the current brush.">Empty</button>
             <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole board with the current brush.">Whole</button>
             <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
-            <button type="button" className="le-seg-btn" onClick={clearBoard} title="Remove every tile from the board.">Clear</button>
+            <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile from the board.">Clear</button>
           </div>
         </section>
 
