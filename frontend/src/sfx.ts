@@ -346,6 +346,7 @@ interface SampleSet {
   variants: string[];
   buffers: (AudioBuffer | null)[];
   state: 'idle' | 'loading' | 'loaded' | 'error';
+  promise?: Promise<void>;
 }
 
 const sampleSets: Partial<Record<SampleKey, SampleSet>> = {};
@@ -358,34 +359,40 @@ async function loadSampleSet(key: SampleKey): Promise<void> {
   const context = ensureContext();
   if (!w || !context || typeof w.fetch !== 'function') return;
   let set = sampleSets[key];
-  if (set && (set.state === 'loading' || set.state === 'loaded')) return;
+  if (set?.state === 'loaded') return;
+  if (set?.state === 'loading') return set.promise;
   set = sampleSets[key] = set ?? { key, gain: SAMPLE_GAINS[key] ?? 1, variants: [], buffers: [], state: 'idle' };
   set.state = 'loading';
-  try {
-    const res = await w.fetch(`${SAMPLE_BASE}/${key}/manifest.json`);
-    if (!res.ok) throw new Error(`manifest ${res.status}`);
-    const man = (await res.json()) as { variants?: unknown };
-    const variants = Array.isArray(man.variants)
-      ? man.variants.filter((v): v is string => typeof v === 'string')
-      : [];
-    set.variants = variants;
-    set.buffers = new Array(variants.length).fill(null);
-    await Promise.all(
-      variants.map(async (name, i) => {
-        try {
-          const r = await w.fetch(`${SAMPLE_BASE}/${key}/${name}`);
-          if (!r.ok) return;
-          const ab = await r.arrayBuffer();
-          set!.buffers[i] = await context.decodeAudioData(ab);
-        } catch {
-          /* a single bad/missing take is skipped; others still play */
-        }
-      }),
-    );
-    set.state = set.buffers.some(Boolean) ? 'loaded' : 'error';
-  } catch {
-    set.state = 'error';
-  }
+  set.promise = (async () => {
+    try {
+      const res = await w.fetch(`${SAMPLE_BASE}/${key}/manifest.json`);
+      if (!res.ok) throw new Error(`manifest ${res.status}`);
+      const man = (await res.json()) as { variants?: unknown };
+      const variants = Array.isArray(man.variants)
+        ? man.variants.filter((v): v is string => typeof v === 'string')
+        : [];
+      set.variants = variants;
+      set.buffers = new Array(variants.length).fill(null);
+      await Promise.all(
+        variants.map(async (name, i) => {
+          try {
+            const r = await w.fetch(`${SAMPLE_BASE}/${key}/${name}`);
+            if (!r.ok) return;
+            const ab = await r.arrayBuffer();
+            set.buffers[i] = await context.decodeAudioData(ab);
+          } catch {
+            /* a single bad/missing take is skipped; others still play */
+          }
+        }),
+      );
+      set.state = set.buffers.some(Boolean) ? 'loaded' : 'error';
+    } catch {
+      set.state = 'error';
+    } finally {
+      set.promise = undefined;
+    }
+  })();
+  await set.promise;
 }
 
 // Kick off decoding for every authored set. Called on the first gesture (when a
@@ -479,7 +486,13 @@ export function playInterface(opts?: { gain?: number }): void {
     void context.resume().catch(() => { /* may need a real gesture first */ });
   }
   if (masterGainFor(settings) <= 0) return;
-  if (!playSampleSet('click', normGain(opts?.gain))) void loadSampleSet('click');
+  const gain = normGain(opts?.gain);
+  if (!playSampleSet('click', gain)) {
+    void loadSampleSet('click').then(() => {
+      const latest = effectsSettings();
+      if (latest.interfaceSounds && masterGainFor(latest) > 0) playSampleSet('click', gain);
+    });
+  }
 }
 
 /** Audition alias for playTerrain (the Studio SFX catalog / Settings test). */

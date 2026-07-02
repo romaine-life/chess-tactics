@@ -5,8 +5,9 @@ Game landing/terrain SFX are **authored recordings**, not procedurally synthesiz
 
 ## Pipeline
 
-- `source/` — the raw multi-take recordings (source of truth, kept in git so the
-  delivered takes are reproducible). Each file holds several takes back-to-back.
+- `source/` — the raw multi-take recordings (source of truth, kept locally; `*.mp3`
+  is git-ignored, so only committed non-MP3 takes are delivered by the app image).
+  Each file holds several takes back-to-back.
   - `hay.mp3` → **grass**, `water.mp3` → **water**, `sand.mp3` → **sand**,
     `landing.mp3` → **arrival** (the "unit lands on the board" thump).
   - `ui-click.mp3` → **click** — the interface feedback tap (menu/button clicks). Optional:
@@ -26,7 +27,7 @@ Game landing/terrain SFX are **authored recordings**, not procedurally synthesiz
     # peak-normalize to -1.5 dBFS, 3ms in-fade, 80ms out-fade to zero (kills the road-noise tail)
     peak=$(ffmpeg -i raw.wav -af volumedetect -f null - 2>&1 | sed -n 's/.*max_volume: \(-\?[0-9.]*\) dB.*/\1/p')
     ffmpeg -y -i raw.wav -af "volume=$(awk -v m=$peak 'BEGIN{printf "%.2f",-1.5-m}')dB,afade=t=in:st=0:d=0.003,afade=t=out:st=0.060:d=0.080" \
-      -c:a libmp3lame -q:a 4 frontend/public/assets/sfx/click/v0.mp3
+      -ac 1 -ar 44100 -c:a pcm_s16le frontend/public/assets/sfx/click/v0.wav
     ```
 - `slice-sfx.sh` — slices each source into individual one-shot take variants,
   normalizes (one makeup gain per whole file, preserving take-to-take dynamics),
@@ -50,5 +51,5 @@ recordings are added; drop sliced takes under `assets/sfx/<key>/` and map the te
 The **click** set is consumed by `playInterface()`, fired by a delegated click listener on
 every real control (button/link/switch). It's gated on the **Interface Sounds** toggle
 (Settings → Audio) and rides the effects volume like any other effect. The committed
-`assets/sfx/click/manifest.json` has empty `variants`, so it's silent until a take is added —
-then interface clicks start sounding with no code change.
+`assets/sfx/click/manifest.json` points at `v0.wav` because repo-wide `*.mp3` ignore rules
+would otherwise drop the actual take and leave deployed menu clicks silent.
