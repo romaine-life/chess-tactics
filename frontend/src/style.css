@@ -10594,10 +10594,12 @@ button.tileset-relationship-cell {
 /* Recover the continuous-stone flow the retired `fixed` attachment gave: each stacked
    tab samples the vertical slice it would have if one texture sheet ran down the rail.
    Step = the ~98px tab pitch (measured; drifts a few px with the clamp()ed gap/padding,
-   imperceptible for a stone texture). The rail is exactly these four tabs in order. */
+   imperceptible for a stone texture). Five rows: the settings rail is four section tabs
+   plus the screen-level Back; the main-menu rail (same chrome) is five mode rows. */
 .settings-tab:nth-child(2) { background-position-y: -98px; }
 .settings-tab:nth-child(3) { background-position-y: -196px; }
 .settings-tab:nth-child(4) { background-position-y: -294px; }
+.settings-tab:nth-child(5) { background-position-y: -392px; }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;

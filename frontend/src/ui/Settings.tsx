@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
-import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
+import { APP_NAVIGATION_EVENT, getAppNavigationUrl, navigateApp, normalizeRoutePath } from './navigation';
 import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -89,6 +89,26 @@ const TRACKS_PATH = '/settings/audio/tracks';
 
 function isTracksView(pathname: string): boolean {
   return normalizeRoutePath(pathname) === TRACKS_PATH;
+}
+
+// The screen-level "Back" target, written into every settings URL as ?returnTo=<origin>
+// by the title-bar gear (see HeaderAccountCluster.settingsHref) and re-threaded through
+// each intra-settings link below so it survives tab switches. Strictly validated — it
+// becomes the href of the always-visible Back row, i.e. a navigation target: it must
+// RESOLVE same-origin (getAppNavigationUrl, the exact gate the click interceptor applies
+// in App.tsx) and never point back into settings (no self-loops). String prefix checks
+// are NOT enough — the browser normalizes `/\evil.com`, `/<tab>/evil.com` etc. into a
+// protocol-relative host, so we resolve through the URL parser the anchor itself will use
+// and rebuild a clean same-origin path. NOTE: distinct from the auth returnTo (net/auth
+// signInHref) — same param name, but that one lives on /api/auth/sign-in URLs, not here.
+function returnToFromLocation(): string | null {
+  const raw = new URLSearchParams(window.location.search).get('returnTo');
+  if (!raw) return null;
+  const url = getAppNavigationUrl(raw); // null if cross-origin (any host-escape trick) or /api/
+  if (!url) return null;
+  const path = normalizeRoutePath(url.pathname);
+  if (path === '/settings' || path.startsWith('/settings/')) return null;
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 // One creator-tools entry — the studio is the single workspace: tiles, units,
@@ -300,6 +320,9 @@ export function Settings(): ReactElement {
   }));
   const [previous, setPrevious] = useState<{ tab: SettingsTab; tracks: boolean } | null>(null);
   const [xfade, setXfade] = useState<'idle' | 'enter' | 'active'>('idle');
+  // Where "Back" leads — the screen the user opened Settings from (null when opened
+  // directly by URL, e.g. a bookmark or the dressing-room iframe embed).
+  const [returnTo, setReturnTo] = useState<string | null>(returnToFromLocation);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
@@ -325,12 +348,14 @@ export function Settings(): ReactElement {
 
   useEffect(() => {
     // Bare /settings normalizes to the first section so the URL always names a tab.
+    // The query string rides along — dropping it here would strip ?returnTo and kill Back.
     if (normalizeRoutePath(window.location.pathname) === '/settings') {
-      navigateApp(TAB_PATHS.general, { replace: true, scroll: false });
+      navigateApp(`${TAB_PATHS.general}${window.location.search}`, { replace: true, scroll: false });
     }
     const sync = () => {
       setActiveTab(tabFromPath(window.location.pathname));
       setShowTracks(isTracksView(window.location.pathname));
+      setReturnTo(returnToFromLocation());
     };
     window.addEventListener('popstate', sync);
     window.addEventListener(APP_NAVIGATION_EVENT, sync);
@@ -494,6 +519,12 @@ export function Settings(): ReactElement {
 
   const build = buildSummary();
 
+  // Decorate an intra-settings href so the ?returnTo thread survives every hop —
+  // rail tabs, View Tracks, and the tracks bar's ← Back. Drop it on any one of these
+  // and the screen-level Back silently vanishes after that click.
+  const withReturnTo = (path: string): string =>
+    returnTo ? `${path}?returnTo=${encodeURIComponent(returnTo)}` : path;
+
   // The track currently coming out of the speakers, looked up in the loaded list by
   // the player's broadcast url — drives the permanent "Now Playing" row.
   const nowPlayingTrack = nowPlaying.playing && tracks
@@ -547,7 +578,7 @@ export function Settings(): ReactElement {
             label="Music Volume"
             onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.musicVolume))}
           />
-          <SettingsButton href={TRACKS_PATH} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
+          <SettingsButton href={withReturnTo(TRACKS_PATH)} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Effects">
@@ -666,7 +697,7 @@ export function Settings(): ReactElement {
             {tabs.map((tab) => (
               <a
                 key={tab.id}
-                href={TAB_PATHS[tab.id]}
+                href={withReturnTo(TAB_PATHS[tab.id])}
                 className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
                 aria-current={tab.id === activeTab ? 'page' : undefined}
                 onClick={() => setConfirmingReset(false)}
@@ -679,6 +710,18 @@ export function Settings(): ReactElement {
                 </span>
               </a>
             ))}
+            {/* Screen-level Back — returns to the screen the gear was clicked on (the
+                ?returnTo origin). Settings is reachable from EVERY surface, so it must
+                never be a one-way street; with no recorded origin (direct URL open) it
+                falls back to the main menu. Same rail-tab chrome as the sections. */}
+            <a className="settings-tab settings-back-tab" href={returnTo ?? '/'}>
+              <span className="settings-tab-icon" aria-hidden="true">
+                <img src={asset('sign-out.png')} alt="" />
+              </span>
+              <span>
+                <strong>Back</strong>
+              </span>
+            </a>
           </aside>
 
           <main className="settings-frame settings-main-frame">
@@ -690,7 +733,7 @@ export function Settings(): ReactElement {
               <div className="settings-tracks-bar">
                 <div className="settings-tracks-bar-col">
                   <div className="settings-tracks-bar-actions">
-                    <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+                    <SettingsButton href={withReturnTo(TAB_PATHS.audio)} ariaLabel="Back to Audio settings">← Back</SettingsButton>
                     <SettingsButton onClick={shuffleTracks} ariaLabel="Shuffle and play the soundtrack">⇄ Shuffle</SettingsButton>
                   </div>
                   <section className="settings-row settings-nowplaying-row" aria-label="Now playing">

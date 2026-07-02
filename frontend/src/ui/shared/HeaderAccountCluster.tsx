@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { fetchMe, signInHref, updateDisplayName, type AuthUser } from '../../net/auth';
+import { normalizeRoutePath } from '../navigation';
 import { AccountMenu } from './AccountMenu';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
@@ -10,6 +11,21 @@ import { AccountMenu } from './AccountMenu';
 // for now; this is the canonical cluster for everything else.)
 
 const SETTINGS_ICON = '/assets/ui/main-menu/icons-carved/settings.png';
+
+// The gear's target: send the CURRENT location along as ?returnTo so Settings can
+// offer a real "← Back" to the screen the user left (Settings validates the value;
+// see returnToFromLocation there). On Settings itself the gear stays the documented
+// "back to settings root" hop (#241) and must NOT capture a settings path — it only
+// re-threads whatever returnTo the URL already carries, so the Back survives the hop.
+function settingsHref(): string {
+  const { pathname, search } = window.location;
+  const path = normalizeRoutePath(pathname);
+  if (path === '/settings' || path.startsWith('/settings/')) {
+    const returnTo = new URLSearchParams(search).get('returnTo');
+    return returnTo ? `/settings?returnTo=${encodeURIComponent(returnTo)}` : '/settings';
+  }
+  return `/settings?returnTo=${encodeURIComponent(pathname + search)}`;
+}
 
 // Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
 // chrome can be previewed/screenshotted on any screen without a backend: ?demo=1
@@ -76,7 +92,21 @@ export function HeaderAccountCluster({
           rather than vanishing. .cluster-bgm-slot is display:contents so it adds no gap. */}
       <span className="cluster-bgm-slot" aria-hidden="true" />
       {showSettingsGear ? (
-        <a className="cluster-icon-button" href="/settings" aria-label="Settings" title="Settings">
+        // href refreshed just-in-time (before the click's navigation reads it): screens
+        // like the Studio and the level editor rewrite their query string via replaceState
+        // WITHOUT re-rendering this persistent bar, so a render-time href would send
+        // Settings a stale returnTo and "Back" would restore stale state. Cover both
+        // activation paths: pointerdown (mouse/touch/middle-click open-in-tab, which fires
+        // no click) and keydown Enter (keyboard link activation, which fires no pointer
+        // event) — both run before the resulting click reaches App's interceptor.
+        <a
+          className="cluster-icon-button"
+          href={settingsHref()}
+          onPointerDown={(event) => event.currentTarget.setAttribute('href', settingsHref())}
+          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.setAttribute('href', settingsHref()); }}
+          aria-label="Settings"
+          title="Settings"
+        >
           <img src={SETTINGS_ICON} alt="" />
         </a>
       ) : null}
