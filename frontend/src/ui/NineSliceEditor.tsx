@@ -1272,8 +1272,8 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
             <div style={ST.backingRow}>
               <span style={{ ...ST.sizeLabel, color: '#cfe3ff', minWidth: 52 }}>Backing</span>
               <select value={backing} onChange={(e) => setBacking(e.target.value as 'none' | 'fill' | 'surface')} style={{ ...ST.select, fontSize: 13, flex: 1, minWidth: 0 }}>
-                <option value="none">None — ornament only</option>
-                <option value="fill">Default fill — baked body</option>
+                <option value="none">None</option>
+                <option value="fill">Baked fill</option>
                 <option value="surface">Surface…</option>
               </select>
               <button type="button" style={ST.sb} title="Reset backing to None" aria-label="Reset backing" onClick={() => setBacking('none')}>↺</button>
@@ -1299,17 +1299,20 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
             </div>
           )}
           <div style={ST.offsets}>
-            <div>bracket: dx {edit.bracket.dx}, dy {edit.bracket.dy}</div>
-            <div>bracket corners: TL {edit.bracketCorners.tl.dx},{edit.bracketCorners.tl.dy} TR {edit.bracketCorners.tr.dx},{edit.bracketCorners.tr.dy}</div>
-            <div>bracket corners: BL {edit.bracketCorners.bl.dx},{edit.bracketCorners.bl.dy} BR {edit.bracketCorners.br.dx},{edit.bracketCorners.br.dy}</div>
-            <div>frame: dx {edit.keyline.dx}, dy {edit.keyline.dy}</div>
-            <div>frame corners: TL {edit.frameCorners.tl.dx},{edit.frameCorners.tl.dy} TR {edit.frameCorners.tr.dx},{edit.frameCorners.tr.dy}</div>
-            <div>frame corners: BL {edit.frameCorners.bl.dx},{edit.frameCorners.bl.dy} BR {edit.frameCorners.br.dx},{edit.frameCorners.br.dy}</div>
-            <div>frame sides: T {edit.edgeSides.top.dy} B {edit.edgeSides.bottom.dy} L {edit.edgeSides.left.dx} R {edit.edgeSides.right.dx}</div>
-            <div>bracket size: x{edit.bracketScale.toFixed(2)}</div>
-            <div>frame size: x{edit.frameScale.toFixed(2)}</div>
-            <div>content inset: {edit.content} px</div>
-            <div>fill inset: {edit.fill} px</div>
+            {([
+              ['bracket', `dx ${edit.bracket.dx}, dy ${edit.bracket.dy} · x${edit.bracketScale.toFixed(2)}`],
+              ['bracket corners', `TL ${edit.bracketCorners.tl.dx},${edit.bracketCorners.tl.dy} TR ${edit.bracketCorners.tr.dx},${edit.bracketCorners.tr.dy} BL ${edit.bracketCorners.bl.dx},${edit.bracketCorners.bl.dy} BR ${edit.bracketCorners.br.dx},${edit.bracketCorners.br.dy}`],
+              ['frame', `dx ${edit.keyline.dx}, dy ${edit.keyline.dy} · x${edit.frameScale.toFixed(2)}`],
+              ['frame corners', `TL ${edit.frameCorners.tl.dx},${edit.frameCorners.tl.dy} TR ${edit.frameCorners.tr.dx},${edit.frameCorners.tr.dy} BL ${edit.frameCorners.bl.dx},${edit.frameCorners.bl.dy} BR ${edit.frameCorners.br.dx},${edit.frameCorners.br.dy}`],
+              ['pipes', `dx ${edit.edge.dx}, dy ${edit.edge.dy}`],
+              ['pipe sides', `T ${edit.edgeSides.top.dy} B ${edit.edgeSides.bottom.dy} L ${edit.edgeSides.left.dx} R ${edit.edgeSides.right.dx}`],
+              ['content / fill', `${edit.content}px / ${edit.fill}px`],
+            ] as [string, string][]).map(([k, v]) => (
+              <div key={k} style={ST.offsetRow}>
+                <span style={ST.offsetKey}>{k}</span>
+                <span style={ST.offsetVal}>{v}</span>
+              </div>
+            ))}
           </div>
           <button type="button" style={ST.resetAll} onClick={resetAll}>↺ Reset all adjustments</button>
           {isDev && (
@@ -1318,21 +1321,29 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               {saveMsg && <div style={{ ...ST.hint, color: saveMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{saveMsg}</div>}
             </>
           )}
-          <label style={ST.hint}>Import JSON</label>
-          <textarea
-            value={importJson}
-            onChange={(e) => setImportJson(e.target.value)}
-            placeholder='{"asset":"mode-button",...}'
-            style={ST.export}
-          />
-          <div style={ST.importActions}>
-            <button type="button" style={ST.copy} onClick={() => applyImportJson('current')}>Apply to current</button>
-            <button type="button" style={ST.copy} onClick={() => applyImportJson('named')}>Open named asset</button>
-          </div>
-          {importMsg && <div style={{ ...ST.hint, color: importMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{importMsg}</div>}
-          <label style={ST.hint}>Export JSON</label>
-          <textarea readOnly value={exportJson} style={ST.export} onFocus={(e) => e.currentTarget.select()} />
-          <button type="button" style={ST.copy} onClick={() => navigator.clipboard?.writeText(exportJson)}>Copy JSON</button>
+          <details style={ST.details}>
+            <summary style={ST.summary}>Import JSON</summary>
+            <div style={ST.detailsBody}>
+              <textarea
+                value={importJson}
+                onChange={(e) => setImportJson(e.target.value)}
+                placeholder='{"asset":"mode-button",...}'
+                style={ST.export}
+              />
+              <div style={ST.importActions}>
+                <button type="button" style={ST.copy} onClick={() => applyImportJson('current')}>Apply to current</button>
+                <button type="button" style={ST.copy} onClick={() => applyImportJson('named')}>Open named asset</button>
+              </div>
+              {importMsg && <div style={{ ...ST.hint, color: importMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{importMsg}</div>}
+            </div>
+          </details>
+          <details style={ST.details}>
+            <summary style={ST.summary}>Export JSON</summary>
+            <div style={ST.detailsBody}>
+              <textarea readOnly value={exportJson} style={ST.export} onFocus={(e) => e.currentTarget.select()} />
+              <button type="button" style={ST.copy} onClick={() => navigator.clipboard?.writeText(exportJson)}>Copy JSON</button>
+            </div>
+          </details>
           </div>
         </section>
       </aside>
@@ -1353,7 +1364,7 @@ const ST: Record<string, CSSProperties> = {
   previewLabel: { fontSize: 11, color: '#9fc4d5', letterSpacing: 0.3 },
   consumerPreview: { display: 'grid', placeItems: 'center', minWidth: 300, minHeight: 112, padding: '10px 18px', boxSizing: 'border-box' },
   previewNote: { fontSize: 12, color: '#9fc4d5', textAlign: 'center' },
-  pieceRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))', gap: 6 },
+  pieceRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(62px, 1fr))', gap: 6 },
   pieceBtn: { display: 'grid', placeItems: 'center', minWidth: 0, padding: '8px 6px', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', textTransform: 'none', lineHeight: 1.1, overflow: 'hidden' },
   pieceBtnOn: { background: '#1d5f9e', color: '#fff', borderColor: '#4fbdf0' },
   scopeBox: { display: 'grid', gap: 6, minWidth: 0 },
@@ -1362,9 +1373,9 @@ const ST: Record<string, CSSProperties> = {
   scopeBtn: { display: 'grid', placeItems: 'center', minWidth: 0, minHeight: 0, height: 28, padding: '0 4px', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', fontSize: 11, lineHeight: 1, textTransform: 'none', overflow: 'hidden' },
   scopeBtnOn: { background: '#6b4f1d', color: '#fff2c4', borderColor: '#d5a34a' },
   hint: { fontSize: 13, color: '#9fc4d5', margin: 0, textTransform: 'none', fontWeight: 400, letterSpacing: 0 },
-  dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 56px)', gridAutoRows: '56px', gap: 6, justifyContent: 'center' },
-  nb: { display: 'grid', placeItems: 'center', minHeight: 0, padding: 0, fontFamily: 'system-ui, sans-serif', fontSize: 22, lineHeight: 1, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
-  nbReset: { display: 'grid', placeItems: 'center', minHeight: 0, padding: 0, fontFamily: 'system-ui, sans-serif', fontSize: 18, lineHeight: 1, background: '#17223a', color: '#9fc4d5', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
+  dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 36px)', gridAutoRows: '36px', gap: 4, justifyContent: 'center' },
+  nb: { display: 'grid', placeItems: 'center', minHeight: 0, padding: 0, fontFamily: 'system-ui, sans-serif', fontSize: 16, lineHeight: 1, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
+  nbReset: { display: 'grid', placeItems: 'center', minHeight: 0, padding: 0, fontFamily: 'system-ui, sans-serif', fontSize: 14, lineHeight: 1, background: '#17223a', color: '#9fc4d5', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },
   maxBtn: { display: 'grid', placeItems: 'center', minWidth: 0, padding: '9px 10px', background: '#15324a', color: '#bfe3ff', border: '1px solid #3a7fb0', borderRadius: 6, cursor: 'pointer', fontSize: 12, lineHeight: 1.2, textTransform: 'none' },
   resetAll: { padding: '9px 0', background: '#241a2b', color: '#e6c8ef', border: '1px solid #6b4f78', borderRadius: 6, cursor: 'pointer', fontSize: 13 },
   sizeBox: { display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 0', borderTop: '1px solid #1b2740' },
@@ -1378,8 +1389,14 @@ const ST: Record<string, CSSProperties> = {
   toggle: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#cfe3ff', textTransform: 'none', fontWeight: 400, letterSpacing: 0 },
   statusBox: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, padding: '8px 10px', border: '1px solid', borderRadius: 6, background: '#0a0f1c' },
   statusGrid: { display: 'flex', gap: 14, fontFamily: 'ui-monospace, monospace', fontSize: 13 },
-  offsets: { fontSize: 13, fontFamily: 'ui-monospace, monospace', color: '#dbe9ff', display: 'grid', gap: 2 },
-  export: { width: '100%', minHeight: 130, flexShrink: 0, resize: 'vertical', background: '#0a0f1c', color: '#dbe9ff', border: '1px solid #2a3c5e', borderRadius: 4, fontFamily: 'ui-monospace, monospace', fontSize: 12, padding: 8, boxSizing: 'border-box' },
+  offsets: { display: 'grid', gap: 3, padding: '8px 10px', background: '#0a0f1c', border: '1px solid #1b2740', borderRadius: 6 },
+  offsetRow: { display: 'grid', gridTemplateColumns: '92px minmax(0, 1fr)', columnGap: 8, alignItems: 'baseline' },
+  offsetKey: { fontSize: 11, color: '#7f93ad', lineHeight: 1.35 },
+  offsetVal: { fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#dbe9ff', lineHeight: 1.35, overflowWrap: 'anywhere' },
+  details: { border: '1px solid #1b2740', borderRadius: 6, background: '#0a0f1c', padding: '2px 0' },
+  summary: { fontSize: 12, color: '#9fc4d5', padding: '6px 10px', cursor: 'pointer', userSelect: 'none' },
+  detailsBody: { display: 'grid', gap: 6, padding: '4px 8px 8px' },
+  export: { width: '100%', minHeight: 110, flexShrink: 0, resize: 'vertical', background: '#0a0f1c', color: '#dbe9ff', border: '1px solid #2a3c5e', borderRadius: 4, fontFamily: 'ui-monospace, monospace', fontSize: 12, padding: 8, boxSizing: 'border-box' },
   importActions: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, minWidth: 0 },
   save: { padding: '10px 0', background: '#15532f', color: '#dffbe8', border: '1px solid #43b06a', borderRadius: 4, cursor: 'pointer', fontWeight: 700 },
   copy: { padding: '8px 0', background: '#1d5f9e', color: '#fff', border: '1px solid #4fbdf0', borderRadius: 4, cursor: 'pointer' },
