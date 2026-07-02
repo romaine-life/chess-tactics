@@ -4398,6 +4398,26 @@ h1 {
   text-transform: none;
 }
 .le-layer-select option:disabled { color: rgba(207, 230, 241, .4); }
+.le-board-link-input {
+  appearance: none;
+  background: rgba(3, 12, 19, .74);
+  border: 1px solid rgba(87, 153, 184, .4);
+  border-radius: 5px;
+  box-sizing: border-box;
+  color: #eff9ff;
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  margin-top: 8px;
+  min-height: 38px;
+  outline: none;
+  padding: 0 10px;
+  width: 100%;
+}
+.le-board-link-input::placeholder { color: rgba(207, 230, 241, .52); }
+.le-board-link-input:focus-visible {
+  border-color: rgba(101, 184, 255, .72);
+  box-shadow: 0 0 0 2px rgba(101, 184, 255, .2);
+}
 
 /* active brush picker */
 .le-brush-pick { align-items: center; display: grid; gap: 8px; grid-template-columns: 48px minmax(0, 1fr); margin-top: 6px; }
@@ -4486,6 +4506,35 @@ h1 {
 .le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
+.le-status-card { gap: 10px; }
+.le-status-current {
+  background: rgba(4, 13, 20, .7);
+  border: 1px solid rgba(82, 142, 170, .3);
+  border-radius: 5px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+.le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
+.le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
+.le-status-current.is-ready { border-color: rgba(103, 217, 138, .42); }
+.le-status-current.is-blocked { border-color: rgba(240, 189, 85, .42); }
+.le-status-log { display: grid; gap: 8px; }
+.le-status-entry {
+  background: rgba(3, 12, 19, .58);
+  border-left: 3px solid rgba(143, 182, 198, .55);
+  border-radius: 4px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  padding: 8px;
+}
+.le-status-entry time { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.2; }
+.le-status-entry strong { color: #f3ead8; display: block; font-size: var(--ds-text-sm); line-height: 1.2; }
+.le-status-entry span { color: var(--skirmish-muted); display: block; font-size: var(--ds-text-sm); line-height: 1.35; margin-top: 3px; }
+.le-status-entry.is-success { border-left-color: #67d98a; }
+.le-status-entry.is-warning { border-left-color: #f0bd55; }
+.le-status-entry.is-error { border-left-color: #ff7f70; }
 
 /* road connection editor — clickable diamond edges for the selected road tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
@@ -10288,6 +10337,13 @@ button.tileset-relationship-cell {
 
 .app-header-button-active {
   border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
+}
+
+.app-header-button.is-disabled,
+.app-header-button[aria-disabled="true"] {
+  cursor: help;
+  filter: grayscale(.12);
+  opacity: .55;
 }
 
 .app-header-button:hover {

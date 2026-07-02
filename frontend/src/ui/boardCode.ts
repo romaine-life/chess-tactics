@@ -117,6 +117,25 @@ export function decodeBoard(code: string): EditorBoard | null {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+/** Accept either a full `/level-editor?board=...` URL, a query string, or the raw board code. */
+export function decodeBoardLinkInput(input: string): EditorBoard | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  let code: string | null = null;
+  try {
+    const url = new URL(trimmed, typeof window === 'undefined' ? 'http://local.test' : window.location.origin);
+    code = url.searchParams.get('board');
+  } catch {
+    // Fall through to query-string/raw-code parsing below.
+  }
+  if (!code) {
+    const query = trimmed.startsWith('?') ? trimmed.slice(1) : trimmed.includes('?') ? trimmed.slice(trimmed.indexOf('?') + 1) : trimmed;
+    const params = new URLSearchParams(query);
+    code = params.get('board') ?? (trimmed.startsWith('board=') ? params.get('board') : trimmed);
+  }
+  return code ? decodeBoard(code) : null;
+}
+
 /** Decode the `?board=` URL param at editor mount, if present and valid. */
 export function readBoardParam(): EditorBoard | null {
   if (typeof window === 'undefined') return null;

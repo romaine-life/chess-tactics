@@ -17,7 +17,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
-import { readBoardParam, encodeBoard, type EditorBoard, type FeatureCell } from './boardCode';
+import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   hasDirectionSprite,
@@ -436,7 +436,10 @@ function FeatureConnections({
 // The editor's palette layers. Roads and rivers share one "Paths" layer (both are linear
 // connection features); the brush kind under it decides road vs river. Fence is its own
 // (still art-pending) layer. The layer picker is a dropdown, so the count no longer crowds a row.
-type LayerKey = 'board' | 'tile' | 'paths' | 'fence' | 'unit' | 'doodad' | 'prop' | 'cover';
+type LayerKey = 'board' | 'tile' | 'paths' | 'fence' | 'unit' | 'doodad' | 'prop' | 'cover' | 'status';
+type StatusTone = 'info' | 'success' | 'warning' | 'error';
+type StatusLogEntry = { id: number; tone: StatusTone; message: string; detail?: string; at: string };
+const STATUS_LOG_LIMIT = 24;
 
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
@@ -527,8 +530,19 @@ export function LevelEditor(): ReactElement {
   const [levelName, setLevelName] = useState<string>('Untitled level');
   const [savedSig, setSavedSig] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState('');
+  const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
+  const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
   const [me, setMe] = useState<AuthUser | null>(null);
+  const [boardLinkDraft, setBoardLinkDraft] = useState('');
+
+  const reportStatus = (message: string, tone: StatusTone = 'info', detail?: string): void => {
+    setSaveStatus(message);
+    statusLogSeq.current += 1;
+    const at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const entry: StatusLogEntry = { id: statusLogSeq.current, tone, message, detail, at };
+    setStatusLog((prev) => [entry, ...prev].slice(0, STATUS_LOG_LIMIT));
+  };
 
   // Who's signed in — for the publish confirm/label copy. The server's requireAdmin is the
   // real gate (a non-admin save of an official level fails closed → 403 surfaced below).
@@ -607,6 +621,7 @@ export function LevelEditor(): ReactElement {
     setRedoStack([]);
     currentEditorBoardRef.current = next;
     applyEditorBoard(next);
+    setSaveStatus('');
     if (selection !== undefined) setSelectedCell(selection);
     return true;
   };
@@ -864,7 +879,8 @@ export function LevelEditor(): ReactElement {
   const saveLevel = async (): Promise<void> => {
     if (saving) return;
     if (needsPlayerFaction) {
-      setSaveStatus('Choose player faction.');
+      reportStatus('Save needs a player faction.', 'warning', 'Open Unit > Player and choose the faction the human controls before saving this campaign level.');
+      setLayer('status');
       return;
     }
     const targetId = targetLevelId;
@@ -880,12 +896,12 @@ export function LevelEditor(): ReactElement {
       setSaveStatus('');
       try {
         await saveUserWorkspace();
-        setSaveStatus('Saved to server.');
+        reportStatus('Saved to server.', 'success');
         setSavedSig(currentSig);
       } catch (e) {
         const mapped = mapSaveError(e);
         if ('action' in mapped) { goSignIn(); return; }
-        setSaveStatus(mapped.message);
+        reportStatus(mapped.message, 'error');
       } finally {
         setSaving(false);
       }
@@ -914,16 +930,16 @@ export function LevelEditor(): ReactElement {
     try {
       if (official) {
         const { revision } = await publishOfficialWorkspace();
-        setSaveStatus(`Published (revision ${revision}).`);
+        reportStatus(`Published revision ${revision}.`, 'success');
       } else {
         await saveUserWorkspace();
-        setSaveStatus('Saved to server.');
+        reportStatus('Saved to server.', 'success');
       }
       setSavedSig(currentSig);
     } catch (e) {
       const mapped = mapSaveError(e);
       if ('action' in mapped) { goSignIn(); return; }
-      setSaveStatus(mapped.message);
+      reportStatus(mapped.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -933,6 +949,36 @@ export function LevelEditor(): ReactElement {
   const copyBoardLink = (): void => {
     const code = encodeBoard(currentEditorBoard);
     void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
+    reportStatus('Copied board link.', 'success');
+  };
+  const loadBoardLink = (): void => {
+    setLayer('status');
+    setTool('select');
+    const input = boardLinkDraft.trim();
+    if (!input) {
+      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /level-editor?board=... link or raw board code, then press Load board link.');
+      return;
+    }
+    const decoded = decodeBoardLinkInput(input);
+    if (!decoded) {
+      reportStatus('Could not load board link.', 'error', 'Paste a Level Editor board link that contains ?board=, or paste the raw board code.');
+      return;
+    }
+    const next = cloneEditorBoard(decoded);
+    if (!next.playerFaction || !(UNIT_PALETTES as readonly string[]).includes(next.playerFaction)) next.playerFaction = null;
+    if (savedSig === null) setSavedSig(boardSignature(currentEditorBoardRef.current));
+    const changed = commitEditorBoard(next, null);
+    if (!changed) {
+      reportStatus('Board link already matches this board.', 'info', dirty ? 'There are still unsaved changes.' : 'Save remains unavailable until the board changes.');
+      return;
+    }
+    const detail = isCampaignLevel && !next.playerFaction
+      ? 'Choose a Player faction before saving this campaign level.'
+      : targetLevelId
+      ? `Save will overwrite "${levelName}".`
+      : 'Save will create a workspace level.';
+    setBoardLinkDraft('');
+    reportStatus(`Loaded board link (${next.cols}x${next.rows}).`, 'success', detail);
   };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   // A held unit may drop on an in-bounds cell that has no other unit and isn't under a prop
@@ -1081,7 +1127,32 @@ export function LevelEditor(): ReactElement {
   const isOfficialTarget = targetLevelId ? tierOf(targetLevelId) === 'official' : false;
   const saveLabel = isOfficialTarget ? 'Publish to all players' : 'Save';
   const isAdmin = Boolean(me?.is_admin);
-  const saveStateLabel = saving ? 'Saving…' : needsPlayerFaction ? 'Choose player faction' : dirty ? 'Unsaved' : 'Saved';
+  const canSave = !saving && dirty && !needsPlayerFaction;
+  const saveBlockedMessage = saving
+    ? 'Save is already in progress.'
+    : needsPlayerFaction
+    ? 'Save is blocked because this campaign level needs a Player faction.'
+    : !dirty && targetLevelId
+    ? 'Save is disabled because this level has no unsaved board changes.'
+    : !dirty
+    ? 'Save is disabled because this standalone board has no unsaved changes.'
+    : '';
+  const saveBlockedDetail = saving
+    ? 'Wait for the current save to finish.'
+    : needsPlayerFaction
+    ? 'Open the Unit layer, then choose the faction the human controls in Player.'
+    : !dirty && targetLevelId
+    ? 'Make an edit, or use Board > Load board link to paste a board and overwrite this target.'
+    : !dirty
+    ? 'Make an edit or use Board > Load board link; then Save will create a workspace level.'
+    : '';
+  const explainBlockedSave = (): void => {
+    if (!saveBlockedMessage) return;
+    setLayer('status');
+    setTool('select');
+    reportStatus(saveBlockedMessage, saving ? 'info' : 'warning', saveBlockedDetail);
+  };
+  const saveStateLabel = saving ? 'Saving…' : needsPlayerFaction ? 'Needs Player' : dirty ? 'Unsaved' : 'No changes';
   const saveStateClass = saving ? 'is-saving' : needsPlayerFaction ? 'is-dirty' : dirty ? 'is-dirty' : 'is-clean';
 
   return (
@@ -1109,11 +1180,11 @@ export function LevelEditor(): ReactElement {
             <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
             <button
               type="button"
-              className="app-header-button app-header-button-active"
+              className={`app-header-button app-header-button-active ${canSave ? '' : 'is-disabled'}`.trim()}
               data-testid="le-save"
-              disabled={saving || !dirty || needsPlayerFaction}
-              title={needsPlayerFaction ? 'Assign one faction to the player before saving this campaign level.' : isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.'}
-              onClick={() => { void saveLevel(); }}
+              aria-label={canSave ? saveLabel : `${saveLabel}: ${saveBlockedMessage}`}
+              title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
+              onClick={() => { if (canSave) void saveLevel(); else explainBlockedSave(); }}
             >
               {saveLabel}
             </button>
@@ -1167,6 +1238,7 @@ export function LevelEditor(): ReactElement {
                 const next = e.target.value as LayerKey;
                 setLayer(next);
                 if (next === 'board') { setTool('select'); return; }
+                if (next === 'status') { setTool('select'); return; }
                 if (next === 'paths') {
                   // Keep whichever path kind is already armed (road/river); default to road.
                   setBrushKind((k) => (k === 'road' || k === 'river' ? k : 'road'));
@@ -1185,12 +1257,34 @@ export function LevelEditor(): ReactElement {
               <option value="doodad">Doodad</option>
               <option value="prop">Prop</option>
               <option value="cover">Cover</option>
+              <option value="status">Status</option>
             </select>
           </div>
         </section>
 
         <KitScroll className="le-hud-scroll">
-        {layer === 'board' ? (
+        {layer === 'status' ? (
+          <section className="skirmish-card le-status-card" aria-live="polite">
+            <h2>Status</h2>
+            <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
+              <strong>{canSave ? 'Ready to save' : saveBlockedMessage || saveStateLabel}</strong>
+              {canSave ? <span>{isOfficialTarget ? 'Publishing will update the official campaigns.' : 'The current board has unsaved changes.'}</span> : <span>{saveBlockedDetail}</span>}
+            </div>
+            <div className="le-status-log" role="log" aria-label="Save status log">
+              {statusLog.length ? statusLog.map((entry) => (
+                <article className={`le-status-entry is-${entry.tone}`} key={entry.id}>
+                  <time>{entry.at}</time>
+                  <div>
+                    <strong>{entry.message}</strong>
+                    {entry.detail ? <span>{entry.detail}</span> : null}
+                  </div>
+                </article>
+              )) : (
+                <p className="le-board-note">No status messages yet.</p>
+              )}
+            </div>
+          </section>
+        ) : layer === 'board' ? (
           <section className="skirmish-card">
             <h2>Board</h2>
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
@@ -1198,6 +1292,16 @@ export function LevelEditor(): ReactElement {
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize tiles</button>
             <button type="button" className="le-seg-btn danger" style={{ width: '100%', marginTop: 8 }} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear board</button>
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy board link</button>
+            <input
+              className="le-board-link-input"
+              type="text"
+              value={boardLinkDraft}
+              onChange={(event) => setBoardLinkDraft(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter') loadBoardLink(); }}
+              placeholder="Paste board link"
+              aria-label="Board link"
+            />
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /level-editor?board=... link and replace this editor board with it.">Load board link</button>
           </section>
         ) : (<>
 
@@ -1445,6 +1549,7 @@ export function LevelEditor(): ReactElement {
 
         </>)}
 
+        {layer !== 'status' ? (
         <section className="skirmish-card">
           <h2>View</h2>
           <div className="le-ctrlrow">
@@ -1463,8 +1568,9 @@ export function LevelEditor(): ReactElement {
             />
           </div>
         </section>
+        ) : null}
 
-        {(selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
+        {layer !== 'status' && (selectedUnitAsset || selectedDoodadAsset || selectedProp || selectedAsset || selectedCell) ? (
         <section className="skirmish-card le-details">
           <h2>Details · {selectedUnitAsset ? 'Unit' : selectedDoodadAsset ? 'Doodad' : selectedProp ? 'Prop' : selectedAsset ? 'Tile' : 'Cell'}</h2>
           {selectedUnitAsset && selectedUnit ? (
@@ -1503,9 +1609,11 @@ export function LevelEditor(): ReactElement {
         </section>
         ) : null}
 
+        {layer !== 'status' ? (
         <div className="le-statusline">
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · {boardCols}×{boardRows}
         </div>
+        ) : null}
         </KitScroll>
       </aside>
     </div>
