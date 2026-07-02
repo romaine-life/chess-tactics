@@ -3,7 +3,7 @@
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite } from '../render/BoardStructure';
@@ -45,6 +45,7 @@ import { UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
+import { OBJECTIVE_LABEL } from '../core/objectives';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 
@@ -456,6 +457,15 @@ const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
   if (layer === 'board' || layer === 'status') return 'tile';
   return layer;
+};
+type FactionControl = 'cpu' | 'player';
+const factionControlOptions = (campaign: boolean): Array<{ value: FactionControl; label: string }> => [
+  { value: 'cpu', label: 'CPU' },
+  { value: 'player', label: campaign ? 'Player' : 'Player 1' },
+];
+const formatDifficulty = (difficulty: string | undefined): string => {
+  const value = difficulty?.trim() || 'normal';
+  return value.charAt(0).toUpperCase() + value.slice(1);
 };
 type StatusTone = 'info' | 'success' | 'warning' | 'error';
 type StatusLogEntry = { id: number; tone: StatusTone; message: string; detail?: string; at: string };
@@ -888,10 +898,34 @@ export function LevelEditor(): ReactElement {
   }, []);
 
   const targetLevelId = editingId ?? routeParams.levelId;
+  const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
   const isCampaignLevel = useCampaigns((s) =>
     Boolean(routeParams.campaignId || (targetLevelId && s.campaigns.some((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId)))),
   );
-  const needsPlayerFaction = isCampaignLevel && !playerFaction;
+  const boardFactionCounts = useMemo<Record<UnitPalette, number>>(() => {
+    const counts = Object.fromEntries(UNIT_PALETTES.map((faction) => [faction, 0])) as Record<UnitPalette, number>;
+    for (const unit of Object.values(boardUnits)) counts[unit.faction] += 1;
+    return counts;
+  }, [boardUnits]);
+  const presentFactions = useMemo(
+    () => UNIT_PALETTES.filter((faction) => boardFactionCounts[faction] > 0),
+    [boardFactionCounts],
+  );
+  const playerFactionPresent = Boolean(playerFaction && presentFactions.includes(playerFaction));
+  const needsPlayerFaction = isCampaignLevel && !playerFactionPresent;
+  const levelObjectiveLabel = OBJECTIVE_LABEL[targetLevel?.objective ?? 'capture-all'];
+  const levelDifficultyLabel = formatDifficulty(targetLevel?.difficulty);
+  const controlOptions = useMemo(() => factionControlOptions(isCampaignLevel), [isCampaignLevel]);
+  const setFactionControl = (faction: UnitPalette, control: FactionControl): void => {
+    if (control === 'player') {
+      setPlayerFactionWithHistory(faction);
+      return;
+    }
+    if (playerFaction === faction) setPlayerFactionWithHistory(null);
+  };
+  const onFactionControlChange = (faction: UnitPalette) => (event: ChangeEvent<HTMLSelectElement>): void => {
+    setFactionControl(faction, event.currentTarget.value as FactionControl);
+  };
 
   // Save the painted board. Campaign path: serialize into the resolved level id and write it
   // back into the store, then route by TIER — an official (`off-`) level publishes to all
@@ -900,8 +934,8 @@ export function LevelEditor(): ReactElement {
   const saveLevel = async (): Promise<void> => {
     if (saving) return;
     if (needsPlayerFaction) {
-      reportStatus('Save needs a player faction.', 'warning', 'Open Unit > Player and choose the faction the human controls before saving this campaign level.');
-      setLayer('status');
+      reportStatus('Save needs a player faction.', 'warning', 'Open Board > Level Settings and assign Player to one board faction.');
+      setLayer('board');
       return;
     }
     const targetId = targetLevelId;
@@ -1172,7 +1206,7 @@ export function LevelEditor(): ReactElement {
   const saveBlockedDetail = saving
     ? 'Wait for the current save to finish.'
     : needsPlayerFaction
-    ? 'Open the Unit layer, then choose the faction the human controls in Player.'
+    ? 'Open Board > Level Settings, then assign Player to one board faction.'
     : !dirty && targetLevelId
     ? 'Make an edit, or use Board > Load board link to paste a board and overwrite this target.'
     : !dirty
@@ -1180,7 +1214,7 @@ export function LevelEditor(): ReactElement {
     : '';
   const explainBlockedSave = (): void => {
     if (!saveBlockedMessage) return;
-    setLayer('status');
+    setLayer(needsPlayerFaction ? 'board' : 'status');
     setTool('select');
     reportStatus(saveBlockedMessage, saving ? 'info' : 'warning', saveBlockedDetail);
   };
@@ -1300,13 +1334,16 @@ export function LevelEditor(): ReactElement {
             </div>
           </section>
         ) : layer === 'board' ? (
+          <>
           <section className="skirmish-card">
             <h2>Board</h2>
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize tiles</button>
-            <button type="button" className="le-seg-btn danger" style={{ width: '100%', marginTop: 8 }} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear board</button>
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy board link</button>
+            <div className="le-board-actions">
+              <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
+              <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
+              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy Link</button>
+            </div>
             <input
               className="le-board-link-input"
               type="text"
@@ -1318,6 +1355,41 @@ export function LevelEditor(): ReactElement {
             />
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /level-editor?board=... link and replace this editor board with it.">Load board link</button>
           </section>
+          <section className="skirmish-card le-level-settings">
+            <h2>Level Settings</h2>
+            <dl className="le-settings-list">
+              <div><dt>Rule</dt><dd>{levelObjectiveLabel}</dd></div>
+              <div><dt>Difficulty</dt><dd>{levelDifficultyLabel}</dd></div>
+            </dl>
+            <div className="le-faction-control">
+              <span className="le-settings-label">Player Faction</span>
+              {presentFactions.length ? (
+                <div className="le-faction-assignments">
+                  {presentFactions.map((faction) => (
+                    <label className="le-faction-assignment" key={faction}>
+                      <span className="le-faction-name">
+                        <i className={`le-faction-dot is-${faction}`} aria-hidden="true" />
+                        <span>{LE_FACTION_LABELS[faction]}</span>
+                        <b>{boardFactionCounts[faction]}</b>
+                      </span>
+                      <select
+                        className="le-faction-select"
+                        value={playerFaction === faction ? 'player' : 'cpu'}
+                        aria-label={`${LE_FACTION_LABELS[faction]} control`}
+                        onChange={onFactionControlChange(faction)}
+                      >
+                        {controlOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="le-board-note">Place a unit before assigning control.</p>
+              )}
+              {needsPlayerFaction ? <p className="le-board-warning">Assign Player to one board faction before saving.</p> : null}
+            </div>
+          </section>
+          </>
         ) : (<>
 
         <section className="skirmish-card">
@@ -1365,7 +1437,7 @@ export function LevelEditor(): ReactElement {
 
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
-            <h2>Faction</h2>
+            <h2>Paint Faction</h2>
             <div className="le-seg">
               {UNIT_PALETTES.map((faction) => (
                 <button
@@ -1373,20 +1445,6 @@ export function LevelEditor(): ReactElement {
                   key={faction}
                   className={`le-seg-btn ${unitFaction === faction ? 'active' : ''}`.trim()}
                   onClick={() => setUnitFaction(faction)}
-                >{LE_FACTION_LABELS[faction]}</button>
-              ))}
-            </div>
-            <h2 className="le-card-subhead">Player</h2>
-            <div className="le-seg">
-              {!isCampaignLevel ? (
-                <button type="button" className={`le-seg-btn ${playerFaction === null ? 'active' : ''}`.trim()} onClick={() => setPlayerFactionWithHistory(null)}>None</button>
-              ) : null}
-              {UNIT_PALETTES.map((faction) => (
-                <button
-                  type="button"
-                  key={faction}
-                  className={`le-seg-btn ${playerFaction === faction ? 'active' : ''}`.trim()}
-                  onClick={() => setPlayerFactionWithHistory(faction)}
                 >{LE_FACTION_LABELS[faction]}</button>
               ))}
             </div>
@@ -1566,7 +1624,7 @@ export function LevelEditor(): ReactElement {
 
         {layer !== 'status' ? (
         <section className="skirmish-card">
-          <h2>View</h2>
+          <h2>Display</h2>
           <div className="le-ctrlrow">
             <span className="le-ctrllabel">Footprint</span>
             <Toggle checked={showFootprint} label="Toggle footprint overlay" onChange={setShowFootprint} />
