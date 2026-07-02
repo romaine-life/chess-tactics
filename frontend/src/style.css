@@ -11540,23 +11540,32 @@ button.tileset-relationship-cell {
 /* ============================================================================
    MOBILE SUPPORT — landscape-only phones (added 2026-07-01)
    ----------------------------------------------------------------------------
-   The app is built desktop-first; on a phone it is played in LANDSCAPE. Two media
-   contexts drive everything here, both gated on `pointer: coarse` so a narrow
-   *desktop* window (a mouse reports a fine pointer) is never affected:
+   The app is built desktop-first; on a phone it is played in LANDSCAPE. Three
+   media contexts drive it:
 
-     • portrait + coarse                        -> show the rotate-to-landscape gate
-     • coarse + short viewport (<= 540px tall)  -> the landscape-phone layout
+     • portrait + coarse         -> the rotate-to-landscape gate (touch phones only:
+                                     never nag a desktop user to rotate a window)
+     • max-width <= 960px        -> fix the shared chrome family at ANY narrow width
+     • narrow AND short (<=540h) -> the landscape-phone tweaks (shorter app bar,
+                                     board + HUD side-by-side)
+
+   IMPORTANT: only the rotate GATE is gated on `pointer: coarse`. The layout fix is
+   width-based, NOT pointer-based — the baked desktop offsets break the chrome at any
+   narrow width (a narrow desktop window, or DevTools' plain "Responsive" mode, which
+   reports a fine pointer), so gating the fix on coarse-pointer left those broken. 960
+   is the ceiling because the largest landscape phone (iPhone Pro Max) is 932px wide,
+   while a real desktop layout wants >= ~1000px.
 
    A true OS orientation lock is impossible in a mobile browser (screen.orientation
    .lock is unsupported on iOS Safari), so portrait shows a prompt instead of forcing
-   rotation. The landscape rules NEUTRALISE the desktop dressing-room offsets baked
-   into the shared menu/settings/campaign chrome — a rail `translate(-230px)` and a
-   931px content panel `translate(-270px)` that are never otherwise reset (they push
-   both mostly off a narrow screen) — and re-fit the board + HUD to a short, wide
-   viewport. Layout only; no chrome art is hand-rolled (ADR-0032). Placed last so
-   these overrides win the cascade; the two-class panel reset below is specificity-
-   matched (0,2,0) so it beats the baked `.settings-art-route .settings-main-frame`
-   rule (a single-class override would silently lose — the original bug). */
+   rotation. The layout rules NEUTRALISE the desktop dressing-room offsets baked into
+   the shared menu/settings/campaign chrome — a rail `translate(-230px)` and a 931px
+   content panel `translate(-270px)` that are never otherwise reset (they push both
+   mostly off a narrow screen). Layout only; no chrome art is hand-rolled (ADR-0032).
+   Placed last so these overrides win the cascade; the two-class panel reset below is
+   specificity-matched (0,2,0) so it beats the baked `.settings-art-route
+   .settings-main-frame` rule (a single-class override would silently lose — the
+   original bug). */
 
 /* -- Rotate-to-landscape gate. Hidden everywhere except a touch device in portrait. */
 .rotate-gate { display: none; }
@@ -11586,17 +11595,8 @@ button.tileset-relationship-cell {
 }
 .rotate-gate-copy { margin: 0; color: var(--ds-ink-3, #948C7E); font-size: 1rem; line-height: 1.4; }
 
-/* -- Landscape phone layout. -------------------------------------------------- */
-@media (pointer: coarse) and (max-height: 540px) {
-  /* A shorter app bar reclaims scarce vertical space; every route reserves its header
-     row from this token, so the fixed bar and the reserved track shrink together. */
-  :root { --app-header-h: 60px; }
-
-  /* Title bar: drop the desktop UI-Scale zoom and tighten padding so the brand + account
-     cluster sit comfortably in the shorter bar. */
-  .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
-  .app-shell-titlebar.settings-header-frame { padding-block: 6px; padding-inline: 12px; }
-
+/* -- Narrow-viewport chrome fix (any narrow width — phones AND narrow windows). ---- */
+@media (max-width: 960px) {
   /* --- Shared menu / settings / campaign chrome family --------------------- */
   .settings-screen { inline-size: 100%; min-block-size: 100%; zoom: 1; }
 
@@ -11654,9 +11654,25 @@ button.tileset-relationship-cell {
   .settings-row-value,
   .settings-row-control { grid-column: 1; justify-content: start; text-align: left; }
 
-  /* --- Skirmish: keep the board + HUD side-by-side. The 860px block stacks them, which
+  /* Touch-target floor for the small in-panel controls (WCAG ~44px). */
+  .settings-chrome-button,
+  .app-header-button { min-block-size: 44px; }
+}
+
+/* -- Landscape-phone tweaks (narrow AND short — i.e. a phone held sideways). ------- */
+@media (max-width: 960px) and (max-height: 540px) {
+  /* A shorter app bar reclaims scarce vertical space; every route reserves its header
+     row from this token, so the fixed bar and the reserved track shrink together. */
+  :root { --app-header-h: 60px; }
+
+  /* Title bar: drop the desktop UI-Scale zoom and tighten padding so the brand + account
+     cluster sit comfortably in the shorter bar. */
+  .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
+  .app-shell-titlebar.settings-header-frame { padding-block: 6px; padding-inline: 12px; }
+
+  /* Skirmish: keep the board + HUD side-by-side. The 860px block stacks them, which
      forces an awkward vertical page-scroll on a short landscape screen; the base 2-column
-     layout fits a wide phone far better, just with a slimmer HUD. --- */
+     layout fits a wide phone far better, just with a slimmer HUD. */
   .skirmish-screen {
     grid-template-columns: minmax(0, 1fr) clamp(176px, 30vw, 300px);
     grid-template-rows: var(--app-header-h) minmax(0, 1fr);
@@ -11668,8 +11684,4 @@ button.tileset-relationship-cell {
     height: 100%; max-height: none;
     overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
-
-  /* Touch-target floor for the small in-panel controls (WCAG ~44px). */
-  .settings-chrome-button,
-  .app-header-button { min-block-size: 44px; }
 }
