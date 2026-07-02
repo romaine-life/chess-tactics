@@ -26,9 +26,10 @@
 import type { TerrainType } from './core/types';
 
 // ---- settings contract (shared with Settings.tsx) --------------------------
-// The Settings screen persists a JSON blob under this key; we read the two fields
-// that gate effects. Kept as literals here (not imported from the React UI) so the
-// service has no dependency on the component tree and stays import-safe everywhere.
+// The Settings screen persists a JSON blob under this key; we read the fields that gate
+// effects: masterAudio + effectsVolume (all effects) and interfaceSounds (the UI click
+// only). Kept as literals here (not imported from the React UI) so the service has no
+// dependency on the component tree and stays import-safe everywhere.
 const SETTINGS_KEY = 'chess-tactics-settings-v1';
 
 // The Settings screen dispatches this after it mutates masterAudio / effectsVolume
@@ -38,6 +39,7 @@ export const SFX_SETTINGS_CHANGE_EVENT = 'chess-tactics:settings-change';
 
 const DEFAULT_MASTER_AUDIO = true;
 const DEFAULT_EFFECTS_VOLUME = 80; // 0..100, matches Settings DEFAULT_SETTINGS
+const DEFAULT_INTERFACE_SOUNDS = true; // matches Settings DEFAULT_SETTINGS
 
 // Cap on simultaneously-sounding voices. Past this, the oldest voice is stolen so a
 // burst of moves stays bounded instead of growing the audio graph without limit.
@@ -46,6 +48,9 @@ const MAX_VOICES = 12;
 interface EffectsSettings {
   masterAudio: boolean;
   effectsVolume: number; // 0..100
+  // The Interface Sounds toggle: gates the UI click feedback only (playInterface). Landing
+  // SFX ignore it — they're gated by masterAudio + effectsVolume like always.
+  interfaceSounds: boolean;
 }
 
 // SSR-safe window handle: undefined off the main thread / during build.
@@ -53,21 +58,28 @@ function win(): (Window & typeof globalThis) | undefined {
   return typeof window === 'undefined' ? undefined : window;
 }
 
+const DEFAULT_EFFECTS_SETTINGS: EffectsSettings = {
+  masterAudio: DEFAULT_MASTER_AUDIO,
+  effectsVolume: DEFAULT_EFFECTS_VOLUME,
+  interfaceSounds: DEFAULT_INTERFACE_SOUNDS,
+};
+
 function readEffectsSettings(): EffectsSettings {
   const w = win();
-  if (!w) return { masterAudio: DEFAULT_MASTER_AUDIO, effectsVolume: DEFAULT_EFFECTS_VOLUME };
+  if (!w) return { ...DEFAULT_EFFECTS_SETTINGS };
   try {
     const raw = w.localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { masterAudio: DEFAULT_MASTER_AUDIO, effectsVolume: DEFAULT_EFFECTS_VOLUME };
-    const parsed = JSON.parse(raw) as { masterAudio?: unknown; effectsVolume?: unknown };
+    if (!raw) return { ...DEFAULT_EFFECTS_SETTINGS };
+    const parsed = JSON.parse(raw) as { masterAudio?: unknown; effectsVolume?: unknown; interfaceSounds?: unknown };
     const masterAudio = typeof parsed.masterAudio === 'boolean' ? parsed.masterAudio : DEFAULT_MASTER_AUDIO;
     const volume = typeof parsed.effectsVolume === 'number' && Number.isFinite(parsed.effectsVolume)
       ? Math.min(100, Math.max(0, parsed.effectsVolume))
       : DEFAULT_EFFECTS_VOLUME;
-    return { masterAudio, effectsVolume: volume };
+    const interfaceSounds = typeof parsed.interfaceSounds === 'boolean' ? parsed.interfaceSounds : DEFAULT_INTERFACE_SOUNDS;
+    return { masterAudio, effectsVolume: volume, interfaceSounds };
   } catch {
     // Absent / malformed settings → audible defaults (parity with BGM's readMuted).
-    return { masterAudio: DEFAULT_MASTER_AUDIO, effectsVolume: DEFAULT_EFFECTS_VOLUME };
+    return { ...DEFAULT_EFFECTS_SETTINGS };
   }
 }
 
@@ -190,6 +202,34 @@ function disarmGesture(): void {
   for (const evt of ARM_EVENTS) w.removeEventListener(evt, onGesture);
 }
 
+// ---- interface feedback (UI click) -----------------------------------------
+// One delegated click listener plays the UI click on activation of any real control, so
+// every current + future button/link/switch is covered from a single hook — no per-component
+// wiring. Scoped by selector so clicks on the Pixi board canvas, plain text, panels, etc.
+// never match and gameplay stays silent. The toggle/volume gating lives in playInterface().
+const UI_CONTROL_SELECTOR = 'button, a[href], [role="button"], [role="switch"], [role="tab"], summary';
+
+function onUiClick(event: Event): void {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const control = target.closest(UI_CONTROL_SELECTOR);
+  if (!control) return;
+  // A disabled control doesn't act, so it shouldn't click either.
+  if (control instanceof HTMLButtonElement && control.disabled) return;
+  if (control.getAttribute('aria-disabled') === 'true') return;
+  playInterface();
+}
+
+let uiClickListenerAttached = false;
+
+function attachUiClickListener(): void {
+  const w = win();
+  if (!w || uiClickListenerAttached) return;
+  uiClickListenerAttached = true;
+  // Capture phase so it still fires for controls whose own handler stops propagation.
+  w.addEventListener('click', onUiClick, { passive: true, capture: true });
+}
+
 let settingsListenersAttached = false;
 
 function attachSettingsListeners(): void {
@@ -213,6 +253,7 @@ export function primeSfx(): void {
   const w = win();
   if (!w) return;
   attachSettingsListeners();
+  attachUiClickListener();
   if (armed) return;
   armed = true;
   for (const evt of ARM_EVENTS) w.addEventListener(evt, onGesture, { passive: true });
@@ -276,9 +317,13 @@ const SAMPLE_BASE = '/assets/sfx';
 
 // Per-set level trim. The recordings are peak-normalised (hot, ~-1.5 dBFS), so they
 // play attenuated; tune per set to balance the terrains against each other by ear.
-const SAMPLE_GAINS: Record<string, number> = { grass: 0.5, water: 0.5, sand: 0.6, stone: 0.5, arrival: 0.6 };
+// 'click' is the UI feedback set (played by playInterface, not a landing).
+const SAMPLE_GAINS: Record<string, number> = { grass: 0.5, water: 0.5, sand: 0.6, stone: 0.5, arrival: 0.6, click: 0.5 };
 
-const SAMPLE_KEYS = ['grass', 'water', 'sand', 'stone', 'arrival'] as const;
+// Every decodable authored set. The terrain/landing sets PLUS the interface 'click' (UI
+// feedback). AUTHORED_SAMPLE_KEYS (exported below) is the terrain-facing subset the Studio
+// catalog + assignment panel use — 'click' is excluded there because it's not a landing sound.
+const SAMPLE_KEYS = ['grass', 'water', 'sand', 'stone', 'arrival', 'click'] as const;
 type SampleKey = (typeof SAMPLE_KEYS)[number];
 
 // Which terrains are voiced by an authored set. Every landable terrain is mapped; the
@@ -301,6 +346,7 @@ interface SampleSet {
   variants: string[];
   buffers: (AudioBuffer | null)[];
   state: 'idle' | 'loading' | 'loaded' | 'error';
+  promise?: Promise<void>;
 }
 
 const sampleSets: Partial<Record<SampleKey, SampleSet>> = {};
@@ -313,34 +359,40 @@ async function loadSampleSet(key: SampleKey): Promise<void> {
   const context = ensureContext();
   if (!w || !context || typeof w.fetch !== 'function') return;
   let set = sampleSets[key];
-  if (set && (set.state === 'loading' || set.state === 'loaded')) return;
+  if (set?.state === 'loaded') return;
+  if (set?.state === 'loading') return set.promise;
   set = sampleSets[key] = set ?? { key, gain: SAMPLE_GAINS[key] ?? 1, variants: [], buffers: [], state: 'idle' };
   set.state = 'loading';
-  try {
-    const res = await w.fetch(`${SAMPLE_BASE}/${key}/manifest.json`);
-    if (!res.ok) throw new Error(`manifest ${res.status}`);
-    const man = (await res.json()) as { variants?: unknown };
-    const variants = Array.isArray(man.variants)
-      ? man.variants.filter((v): v is string => typeof v === 'string')
-      : [];
-    set.variants = variants;
-    set.buffers = new Array(variants.length).fill(null);
-    await Promise.all(
-      variants.map(async (name, i) => {
-        try {
-          const r = await w.fetch(`${SAMPLE_BASE}/${key}/${name}`);
-          if (!r.ok) return;
-          const ab = await r.arrayBuffer();
-          set!.buffers[i] = await context.decodeAudioData(ab);
-        } catch {
-          /* a single bad/missing take is skipped; others still play */
-        }
-      }),
-    );
-    set.state = set.buffers.some(Boolean) ? 'loaded' : 'error';
-  } catch {
-    set.state = 'error';
-  }
+  set.promise = (async () => {
+    try {
+      const res = await w.fetch(`${SAMPLE_BASE}/${key}/manifest.json`);
+      if (!res.ok) throw new Error(`manifest ${res.status}`);
+      const man = (await res.json()) as { variants?: unknown };
+      const variants = Array.isArray(man.variants)
+        ? man.variants.filter((v): v is string => typeof v === 'string')
+        : [];
+      set.variants = variants;
+      set.buffers = new Array(variants.length).fill(null);
+      await Promise.all(
+        variants.map(async (name, i) => {
+          try {
+            const r = await w.fetch(`${SAMPLE_BASE}/${key}/${name}`);
+            if (!r.ok) return;
+            const ab = await r.arrayBuffer();
+            set.buffers[i] = await context.decodeAudioData(ab);
+          } catch {
+            /* a single bad/missing take is skipped; others still play */
+          }
+        }),
+      );
+      set.state = set.buffers.some(Boolean) ? 'loaded' : 'error';
+    } catch {
+      set.state = 'error';
+    } finally {
+      set.promise = undefined;
+    }
+  })();
+  await set.promise;
 }
 
 // Kick off decoding for every authored set. Called on the first gesture (when a
@@ -415,6 +467,34 @@ export function playArrival(opts?: { gain?: number }): void {
   if (!playSampleSet('arrival', normGain(opts?.gain))) void loadSampleSet('arrival');
 }
 
+/**
+ * Play the interface feedback click (authored 'click' set) on a control activation.
+ *
+ * Gated on the Interface Sounds toggle FIRST (so turning it off is instant + free), then on
+ * master audio / effects volume like every other effect — UI feedback rides the same effects
+ * bus. No-op — silently kicking off a load — until the 'click' set is decoded; a repo with no
+ * authored recording is simply silent, exactly like an unvoiced terrain.
+ *
+ * @param opts.gain optional per-call multiplier (0..1+) layered onto the voice.
+ */
+export function playInterface(opts?: { gain?: number }): void {
+  const settings = effectsSettings();
+  if (!settings.interfaceSounds) return; // toggle off → no UI feedback at all
+  const context = ensureContext();
+  if (!context || !master) return;
+  if (context.state === 'suspended') {
+    void context.resume().catch(() => { /* may need a real gesture first */ });
+  }
+  if (masterGainFor(settings) <= 0) return;
+  const gain = normGain(opts?.gain);
+  if (!playSampleSet('click', gain)) {
+    void loadSampleSet('click').then(() => {
+      const latest = effectsSettings();
+      if (latest.interfaceSounds && masterGainFor(latest) > 0) playSampleSet('click', gain);
+    });
+  }
+}
+
 /** Audition alias for playTerrain (the Studio SFX catalog / Settings test). */
 export function previewTerrain(terrain: TerrainType): void {
   playTerrain(terrain);
@@ -440,11 +520,46 @@ export function previewSample(key: SampleKey, gain = 1): void {
   if (!playSampleSet(key, normGain(gain))) void loadSampleSet(key);
 }
 
+/**
+ * DEV raw audition (Studio test surface): play a set BYPASSING the effects-volume /
+ * master-audio / Interface-Sounds gates, through a private gain → destination path (NOT the
+ * shared master bus). So a muted mix or a zeroed Effects slider can't silence the audition
+ * itself — it's a pure "does this sound exist, and what is it" check, independent of the
+ * player-facing mix. Not for gameplay. No-op (kicking a load) until the set is decoded.
+ */
+export function auditionSampleRaw(key: SampleKey, gain = 0.9): void {
+  const context = ensureContext();
+  if (!context) return;
+  if (context.state === 'suspended') {
+    void context.resume().catch(() => { /* the ▶ click is the gesture; ignore */ });
+  }
+  const set = sampleSets[key];
+  if (!set || set.state !== 'loaded') { void loadSampleSet(key); return; }
+  const ready = set.buffers.filter((b): b is AudioBuffer => b !== null);
+  if (!ready.length) return;
+  const g = context.createGain();
+  g.gain.value = normGain(gain) * set.gain;
+  g.connect(context.destination); // bypass the master (effects-volume) bus
+  const src = context.createBufferSource();
+  src.buffer = ready[Math.floor(Math.random() * ready.length)];
+  src.connect(g);
+  src.start(context.currentTime);
+}
+
+/** Sync check: is a set decoded and ready to play? (Studio status readouts.) */
+export function isSampleReady(key: SampleKey): boolean {
+  const set = sampleSets[key];
+  return !!set && set.state === 'loaded' && set.buffers.some(Boolean);
+}
+
 // ---- catalog / audition accessors ------------------------------------------
 // Surface the authored-sample wiring to the Studio so it can tell which terrains are
 // voiced by recordings and render the real take waveforms.
 
-export const AUTHORED_SAMPLE_KEYS = SAMPLE_KEYS;
+// The terrain/landing foley sets surfaced to the Studio audition catalog + assignment panel.
+// Excludes the interface 'click' set — that's UI feedback (played by playInterface), not a
+// landing sound assignable to a terrain.
+export const AUTHORED_SAMPLE_KEYS: readonly SampleKey[] = SAMPLE_KEYS.filter((k) => k !== 'click');
 export type { SampleKey };
 
 /** The authored sample key voicing a terrain, or null when it has no recorded set. */
