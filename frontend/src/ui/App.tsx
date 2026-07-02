@@ -239,6 +239,24 @@ export function App(): ReactElement {
         className={`route-veil${veil === 'cover' ? ' is-cover' : ''}${veil === 'reveal' ? ' is-reveal' : ''}`}
         aria-hidden="true"
       />
+      {/* Rotate-to-landscape gate. The app is played in landscape on phones; a true
+          orientation lock is impossible in a mobile browser (screen.orientation.lock is
+          unsupported on iOS Safari), so this overlay is shown — via a CSS media query,
+          not JS — only on a touch device held in portrait, and covers everything (it sits
+          above the fixed title bar). See the "MOBILE SUPPORT" block in style.css. */}
+      <div className="rotate-gate" role="alertdialog" aria-label="Rotate your device to landscape">
+        <div className="rotate-gate-inner">
+          <svg className="rotate-gate-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="19" y="4" width="17" height="30" rx="3" />
+            <line x1="27.5" y1="8.5" x2="27.5" y2="8.5" />
+            <path d="M13 20 A16 16 0 0 0 23 42" />
+            <polyline points="7.5 18.5 13 20 15 14.5" />
+          </svg>
+          <p className="rotate-gate-title">Rotate your device</p>
+          <p className="rotate-gate-copy">Chess Tactics plays in landscape.</p>
+        </div>
+      </div>
     </>
   );
 }
