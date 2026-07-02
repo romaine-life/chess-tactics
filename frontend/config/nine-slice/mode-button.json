@@ -4,10 +4,70 @@
     "dx": 0,
     "dy": 0
   },
-  "bracket": {
-    "dx": -5,
-    "dy": -5
+  "frameCorners": {
+    "tl": {
+      "dx": -1,
+      "dy": -1
+    },
+    "tr": {
+      "dx": 0,
+      "dy": -1
+    },
+    "bl": {
+      "dx": -1,
+      "dy": 0
+    },
+    "br": {
+      "dx": 0,
+      "dy": 0
+    }
   },
+  "edge": {
+    "dx": 0,
+    "dy": 0
+  },
+  "edgeSides": {
+    "top": {
+      "dx": 0,
+      "dy": -1
+    },
+    "bottom": {
+      "dx": 0,
+      "dy": 0
+    },
+    "left": {
+      "dx": -1,
+      "dy": 0
+    },
+    "right": {
+      "dx": 0,
+      "dy": 0
+    }
+  },
+  "frameScale": 1.5,
+  "bracket": {
+    "dx": -6,
+    "dy": -6
+  },
+  "bracketCorners": {
+    "tl": {
+      "dx": -1,
+      "dy": -1
+    },
+    "tr": {
+      "dx": 0,
+      "dy": -1
+    },
+    "bl": {
+      "dx": -1,
+      "dy": 0
+    },
+    "br": {
+      "dx": 0,
+      "dy": 0
+    }
+  },
+  "bracketScale": 1.25,
   "content": 5,
   "fill": 2
 }
