@@ -508,6 +508,59 @@ h1 {
   image-rendering: pixelated;
 }
 
+/* Ambience effect credit — a quiet bottom-right stamp naming the scene the
+   shared rain world is running right now (read live off the vendored client;
+   rendered by AmbienceBackground, so every screen with the shared backdrop
+   carries it). Links to ambience's read-only monitor for the same broadcast.
+   z4: above the screens' z3 UI tier so the corner stays clickable under
+   footers/panels that reach it, still below the near-drop overlay (z5) so the
+   promoted drops cross in front of it like the rest of the chrome. */
+.ambience-credit {
+  position: absolute;
+  /* The ~10px text line alone is far under the 24px minimum hit target (WCAG
+     2.5.8) — a padded flex box supplies the target while the TEXT keeps
+     sitting at the space-3/space-2 corner inset (4px offset + 8px pad = 12px
+     right; 24px box centering ≈ 8px bottom). */
+  right: var(--ds-space-1);
+  bottom: 0;
+  min-height: 24px;
+  padding: 0 var(--ds-space-2);
+  display: inline-flex;
+  align-items: center;
+  z-index: 4;
+  /* .menu-layer (menu/campaign) is pointer-events:none so the rain stays
+     click-through, and the credit would inherit that inertness — opt back in,
+     like .main-menu-twin-screen does for the menu UI. */
+  pointer-events: auto;
+  font-family: var(--ds-font-pixel);
+  font-size: var(--ds-text-2xs);
+  letter-spacing: var(--ds-tracking-tight);
+  color: rgba(214, 232, 242, .55);
+  text-decoration: none;
+  opacity: 1;
+  /* Opacity TRANSITION (not @keyframes) for the first-ever appearance: the
+     global prefers-reduced-motion reset kills keyframe animations, while
+     opacity transitions are the deliberately-surviving path (ADR-0043 §C) —
+     same pattern as .screen-enter. Route swaps never replay it: the label is
+     module-cached, so remounts render already-entered (ADR-0046 B/G, the
+     backdrop layer stays continuous across navigation). */
+  transition:
+    opacity var(--ds-duration-fade) var(--ds-ease-standard),
+    color var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+/* One start frame at opacity 0; AmbienceBackground drops this class on the
+   next frame and the transition above plays (mirrors .screen-enter-start). */
+.ambience-credit-start {
+  opacity: 0;
+}
+
+.ambience-credit:hover,
+.ambience-credit:focus-visible {
+  color: rgba(214, 232, 242, .88);
+  text-decoration: underline;
+}
+
 /* Asset-backed mode button family, assembled from the asset catalog. The
    approved v2 row-art path uses a stateful button-row.main-menu.* sprite whose
    badge/cap, frame, and arrow are authored together; live DOM labels sit in the
