@@ -4,7 +4,7 @@ date: 2026-07-01
 deciders: Nelson, Claude
 ---
 
-# ADR-0048: Game modes are authored win rules + a placement axis; saves gate on playability
+# ADR-0050: Game modes are authored win rules + a placement axis; saves gate on playability
 
 The first gameplay-rules ADR (ADR-0038 covers content tiers; the rest govern UI chrome).
 Builds on the level schema of [ADR-0038](0038-campaigns-are-tiered-game-content.md) and

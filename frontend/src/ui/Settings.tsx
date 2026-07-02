@@ -5,7 +5,7 @@ import { KitScroll } from './KitScroll';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
-import { useScreenEntrance } from './shell/useScreenEntrance';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -312,11 +312,6 @@ export function Settings(): ReactElement {
   // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
   const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
   const [confirmingReset, setConfirmingReset] = useState(false);
-  // Shared screen-entrance fade (ADR-0046): spread onto the chrome root (.settings-shell)
-  // below. Fades the chrome in on a navigation-driven mount, leaving the ambience sibling
-  // continuous; no-ops on a cold load. Replaces the bespoke `entered` state.
-  const entranceClass = useScreenEntrance();
-
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
@@ -661,7 +656,7 @@ export function Settings(): ReactElement {
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
       <AmbienceBackground />
       <div className="settings-screen app-shell-bar-pad">
-        <div className={`settings-shell ${entranceClass}`}>
+        <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
               <a
@@ -728,7 +723,7 @@ export function Settings(): ReactElement {
               </div>
             </KitScroll>
           </main>
-        </div>
+        </ArtRouteChrome>
       </div>
     </section>
   );

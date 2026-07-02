@@ -20,7 +20,7 @@ describe('demo campaign workspace', () => {
 
     for (const level of Object.values(workspace.levels)) {
       expect(validateLevel(level).ok).toBe(true);
-      // Demo fixtures must satisfy the ADR-0048 save gate: re-editing official/demo
+      // Demo fixtures must satisfy the ADR-0050 save gate: re-editing official/demo
       // content in the Level Editor would otherwise be unsavable (all unit sets field
       // both Kings, which is why the King levels are 'rival-kings', not 'capture-king').
       expect(validatePlayability(level).violations).toEqual([]);

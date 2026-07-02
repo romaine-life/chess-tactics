@@ -32,7 +32,7 @@ function countMap<K extends string>(keys: K[]): Partial<Record<K, number>> {
 // player fields a King and the enemy doesn't; both/neither ⇒ 'enemy' (rival-kings /
 // free-skirmish default). Lets the level-select surfaces render King Assault's
 // direction-aware copy ("Protect your King") without instantiating a game. Exported so the
-// campaign play/edit level rows share ONE implementation (ADR-0048: no re-hardcoded labels).
+// campaign play/edit level rows share ONE implementation (ADR-0050: no re-hardcoded labels).
 export function kingSideForLevel(level: Level): 'player' | 'enemy' {
   const hasKing = (side: 'player' | 'enemy'): boolean => {
     if (level.placement === 'random') return Boolean(level.roster?.[side]?.king);

@@ -1,4 +1,4 @@
-// Playability validation (ADR-0048) — the gameplay-rule gate behind the Level Editor's
+// Playability validation (ADR-0050) — the gameplay-rule gate behind the Level Editor's
 // Save button, distinct from `validateLevel`'s structural checks (shapes/enums/bounds).
 // The editor lets the author freely mess the board up while editing; these rules only
 // decide whether the result is SAVEABLE, and every violation is a plain-language line
@@ -91,7 +91,7 @@ function blockedCells(level: Level): Set<string> {
 }
 
 /**
- * The P1–P4 playability rules from ADR-0048. Assumes a STRUCTURALLY valid level
+ * The P1–P4 playability rules from ADR-0050. Assumes a STRUCTURALLY valid level
  * (run `validateLevel` first); returns every violation, not just the first, so the
  * editor can show the author the complete to-fix list at once.
  */

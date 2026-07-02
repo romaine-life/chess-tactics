@@ -16,7 +16,7 @@ export const LEVEL_FORMAT_VERSION = 1;
 export const CAMPAIGN_FORMAT_VERSION = 1;
 
 // Structural bounds only. The old 4×4 floor was an arbitrary guardrail with no technical
-// basis (ADR-0048); tiny boards (1×2) are legitimate for several modes. What actually makes
+// basis (ADR-0050); tiny boards (1×2) are legitimate for several modes. What actually makes
 // a board saveable is `validatePlayability` (core/playability.ts) — the editor's save gate.
 export const BOARD_COLS = { min: 1, max: 16 } as const;
 export const BOARD_ROWS = { min: 1, max: 20 } as const;
@@ -24,7 +24,7 @@ export const BOARD_ROWS = { min: 1, max: 20 } as const;
 export type ZoneType = 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock';
 export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock'] as const satisfies readonly ZoneType[];
 
-// The win-rule MODE ids (ADR-0048). Stored ids stay the legacy objective ids deliberately —
+// The win-rule MODE ids (ADR-0050). Stored ids stay the legacy objective ids deliberately —
 // they exist in the live DB and the baked official.json, and `capture-all` ≡ Last Man
 // Standing / `capture-king` ≡ King Assault semantically, so a rename would buy nothing but
 // a prod data migration. Players only ever see the display names (MODE_NAME in objectives.ts).
@@ -76,7 +76,7 @@ export interface Level {
   // present it is the source of truth for re-seeding the editor (round-trips doodads,
   // cover, roads/rivers and unit facing that `layers` alone can't fully express).
   boardCode?: string;
-  // The ADR-0048 placement axis — an orthogonal toggle on any mode. Absent ⇒ 'fixed'
+  // The ADR-0050 placement axis — an orthogonal toggle on any mode. Absent ⇒ 'fixed'
   // (authored `layers.units` positions, today's behavior), same back-compat pattern as
   // `boardCode`. 'random' means `layers.units` is EMPTY and the game instead deals
   // `roster` onto seeded-random free cells of the pooled player-spawn / enemy-spawn zone
@@ -175,7 +175,7 @@ export function validateLevel(value: unknown): ValidateResult {
     errors.push(`objective must be one of: ${OBJECTIVE_TYPES.join(', ')}`);
   }
 
-  // ADR-0048 optional fields — validated only WHEN PRESENT (back-compat: legacy bodies
+  // ADR-0050 optional fields — validated only WHEN PRESENT (back-compat: legacy bodies
   // omit all three and stay valid). These are STRUCTURAL checks (shape/enum/range); the
   // gameplay rules (roster vs zone capacity etc.) live in validatePlayability.
   if (v.placement !== undefined && v.placement !== 'fixed' && v.placement !== 'random') {

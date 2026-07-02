@@ -13,7 +13,7 @@ import { injectStressLevels } from '../campaign/stressFixture';
 import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { AmbienceBackground } from './AmbienceBackground';
-import { useScreenEntrance } from './shell/useScreenEntrance';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 
 const CE_ICONS = {
   star: '/assets/ui/kit/icons/star.png',
@@ -261,11 +261,6 @@ export function CampaignEditor() {
     return () => shell?.classList.remove('campaign-editor-active');
   }, []);
 
-  // Chrome entrance via the SHARED primitive (ADR-0046): spread onto .ce-layout + .ce-footer
-  // below, so only the chrome fades in over the steady backdrop + rain. Replaces the bespoke
-  // .is-entered state this screen used to hand-roll; no-ops on a cold load.
-  const entranceClass = useScreenEntrance();
-
   useEffect(() => {
     let active = true;
     fetchMe().then((user) => { if (active) setMe(user); });
@@ -449,7 +444,7 @@ export function CampaignEditor() {
         </nav>
       </TitleBarSlot>
 
-      <main className={`ce-layout ${entranceClass}`.trim()}>
+      <ArtRouteChrome as="main" className="ce-layout">
         <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
           <div className="ce-panel-head">
             <h2>Campaigns</h2>
@@ -636,13 +631,13 @@ export function CampaignEditor() {
             <p className="ce-empty ce-empty-large">Select a level.</p>
           )}
         </section>
-      </main>
+      </ArtRouteChrome>
 
-      <footer className={`ce-footer ${entranceClass}`.trim()}>
+      <ArtRouteChrome as="footer" className="ce-footer">
         <AssetButton disabled={!camp || camp.origin === 'official'} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
         <AssetButton danger disabled={!camp || readOnly} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
-      </footer>
+      </ArtRouteChrome>
     </div>
   );
 }

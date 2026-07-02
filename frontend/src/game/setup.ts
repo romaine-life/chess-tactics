@@ -90,7 +90,7 @@ function createFromLevel(level: Level, seed: number): GameState {
     });
   }
 
-  // Random placement (ADR-0048): deal the authored roster onto seeded-random free cells
+  // Random placement (ADR-0050): deal the authored roster onto seeded-random free cells
   // of each side's pooled spawn zones instead of reading authored positions (a playable
   // random level has `layers.units` empty — the editor's playability gate enforces it).
   // Order of operations matters: terrain + the blocking-prop colliders above joined the

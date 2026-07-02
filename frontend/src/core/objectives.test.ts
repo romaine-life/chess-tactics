@@ -32,7 +32,7 @@ describe('evaluateObjective', () => {
 
   it('capture-king with kingSide=player: losing the player King loses instantly, even with pieces left', () => {
     // The player's King fell but a rook survives: the King-holder side loses the moment
-    // its King is gone — this is the direction-aware half of King Assault (ADR-0048).
+    // its King is gone — this is the direction-aware half of King Assault (ADR-0050).
     const kingless = state([piece('pr', 'player', 'rook', 0, 0), piece('ep', 'enemy', 'pawn', 4, 4)]);
     expect(evaluateObjective(kingless, 'capture-king', { kingSide: 'player' })).toBe('enemy');
     // Same board judged with kingSide=enemy semantics reads as a win instead (no enemy King).
@@ -101,7 +101,7 @@ describe('objectiveContextForLevel', () => {
   });
 });
 
-describe('mode vocabulary (ADR-0048)', () => {
+describe('mode vocabulary (ADR-0050)', () => {
   it('MODE_NAME maps every stored id to its owner-facing name', () => {
     expect(MODE_NAME).toEqual({
       'capture-all': 'Last Man Standing',

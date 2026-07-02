@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { AmbienceBackground } from './AmbienceBackground';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 
 const OPTIONS = PLAYABLE_PIECE_TYPES.filter((piece) => piece !== 'pawn');
 
@@ -25,7 +26,7 @@ export function Party() {
     <section className="settings-art-route" aria-label="Party" data-testid="party">
       <AmbienceBackground />
       <div className="settings-screen utility-twin-screen app-shell-bar-pad">
-        <div className="utility-screen utility-party">
+        <ArtRouteChrome className="utility-screen utility-party">
           <section className="utility-panel">
             <p className="utility-lead">Pawn is locked in. Choose two more ({picks.length}/2).</p>
             <div className="utility-squad-grid">
@@ -52,7 +53,7 @@ export function Party() {
             >Deploy</a>
             <a href="/" className="utility-button utility-button-neutral">Menu</a>
           </div>
-        </div>
+        </ArtRouteChrome>
       </div>
     </section>
   );

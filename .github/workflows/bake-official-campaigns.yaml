@@ -30,7 +30,7 @@ jobs:
       OFFICIAL_ID: default
       OFFICIAL_FILE: frontend/public/assets/campaigns/official.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Fetch live official campaigns into the fallback file
         run: |

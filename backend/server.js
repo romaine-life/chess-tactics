@@ -1441,7 +1441,7 @@ function isLevelBody(body) {
   );
 }
 
-// `rival-kings` is the ADR-0048 addition (both sides field a King). The stored objective
+// `rival-kings` is the ADR-0050 addition (both sides field a King). The stored objective
 // ids stay the legacy set deliberately — they exist in the live DB / baked official.json,
 // and a rename would force a prod data migration (docs/migration-policy.md).
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
@@ -1452,7 +1452,7 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
 // frontend `isPlayablePieceType` gate on `Level.roster` (core/level.ts + core/pieces.ts).
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
-// Board floor dropped to 1×1 (ADR-0048): the old 4×4 clamp was an arbitrary guardrail with
+// Board floor dropped to 1×1 (ADR-0050): the old 4×4 clamp was an arbitrary guardrail with
 // no technical basis, and tiny boards are legitimate for several modes. Mirrors the frontend
 // BOARD_COLS / BOARD_ROWS consts in core/level.ts.
 const WORKSPACE_BOARD_COLS = { min: 1, max: 16 };
@@ -1481,13 +1481,13 @@ function validateWorkspaceLevel(level, key) {
   if (board.rows < WORKSPACE_BOARD_ROWS.min || board.rows > WORKSPACE_BOARD_ROWS.max) return `levels.${key}.board.rows is out of range`;
   if (board.heightLevels !== undefined && (!isFiniteInteger(board.heightLevels) || board.heightLevels < 1)) return `levels.${key}.board.heightLevels is invalid`;
 
-  // ADR-0048 placement-axis fields — optional (absent ⇒ 'fixed', same back-compat pattern as
+  // ADR-0050 placement-axis fields — optional (absent ⇒ 'fixed', same back-compat pattern as
   // boardCode / layers.props: legacy bodies omit them and stay valid). These are STRUCTURAL
   // checks only (shape / enum / range), mirroring the frontend's validateLevel. The gameplay
   // rules (roster vs spawn-zone capacity, exactly-one-King, non-empty sides — validatePlayability
   // P1–P4) deliberately do NOT run here: this PUT carries the WHOLE workspace, so one legacy
   // unplayable level would brick saving every other level; the editor's per-level save gate is
-  // the trust boundary for playability (ADR-0048 "Enforcement: the editor gates saves per level;
+  // the trust boundary for playability (ADR-0050 "Enforcement: the editor gates saves per level;
   // the backend stays structural").
   if (level.placement !== undefined && level.placement !== 'fixed' && level.placement !== 'random') {
     return `levels.${key}.placement is invalid`;
@@ -1535,7 +1535,7 @@ function validateWorkspaceLevel(level, key) {
   }
   // Props are an OPTIONAL layer (like the frontend's Level: legacy bodies omit it, so it is NOT
   // in the required-array loop above). Historically the backend never checked it at all while the
-  // frontend's validateLevel did — a known drift (ADR-0048 "props already drifted"). Mirror the
+  // frontend's validateLevel did — a known drift (ADR-0050 "props already drifted"). Mirror the
   // frontend structural check WHEN PRESENT: an array of { string propId, integer x,y in bounds }.
   // An off-board anchor would otherwise stamp off-board rock colliders at game-build time.
   if (layers.props !== undefined) {

@@ -3,13 +3,13 @@
 // doodads, cover, and linear features — roads + rivers). Used both to LOAD a board on mount
 // and to EXPORT the current one.
 //
-// Wire shape (keys kept short): { c:cols, r:rows, f?:fillTileId, t?:{cell:tileId},
+// Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, f?:fillTileId, t?:{cell:tileId},
 //   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fn?:{cell:fenceMaterial}, rc?:[edgeKey],
 //   rx?:[edgeKey], z?:{cell:zoneType} }. `f` fills every cell, then `t` overrides — so a "mostly
 // one tile" board stays tiny. Features split per kind on the wire (rd=roads, rv=rivers, fn=fences)
 // and merge into one `features` map on decode; `rc` (severed edges) and `rx` (forced outward exits)
-// are shared edge lists. `z` is the gameplay-zone channel (ADR-0048): each painted cell -> its zone
+// are shared edge lists. `z` is the gameplay-zone channel (ADR-0050): each painted cell -> its zone
 // type. base64url of the JSON (no padding, +/ -> -_).
 //
 // FORWARD/BACK-COMPAT: `z` (like `p` before it) is emitted only when non-empty, so a zone-free board
@@ -29,6 +29,8 @@ export interface FeatureCell {
 export interface EditorBoard {
   cols: number;
   rows: number;
+  /** Palette faction the human player controls. Undefined/null means choose at play-load time. */
+  playerFaction?: string | null;
   cells: Record<string, string>;
   units: Record<string, { unitId: string; direction: string; faction: string }>;
   doodads: Record<string, { doodadId: string }>;
@@ -38,7 +40,7 @@ export interface EditorBoard {
   features: Record<string, FeatureCell>;
   featureCuts: Record<string, true>;
   featureExits: Record<string, true>;
-  /** Gameplay zones (ADR-0048), keyed by cell "x,y" -> zone type. The editor paints
+  /** Gameplay zones (ADR-0050), keyed by cell "x,y" -> zone type. The editor paints
    * player-spawn / enemy-spawn / objective; the full ZoneType set is stored so the channel
    * stays lossless if the schema's other zone types (enemy-threat, falling-rock) are painted.
    * Optional + back-compat (like `props` before it): a pre-zones board literal simply omits it,
@@ -64,6 +66,7 @@ export function encodeBoard(b: EditorBoard): string {
   const t: Record<string, string> = {};
   for (const [k, id] of Object.entries(b.cells)) if (id !== fill) t[k] = id;
   const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
+  if (b.playerFaction) wire.pf = b.playerFaction;
   if (fill) wire.f = fill;
   if (nonEmpty(t)) wire.t = t;
   if (nonEmpty(b.units)) wire.u = Object.fromEntries(Object.entries(b.units).map(([k, v]) => [k, [v.unitId, v.direction, v.faction]]));
@@ -120,7 +123,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     const zones: EditorBoard['zones'] = {};
     if (w.z) for (const [k, type] of Object.entries(w.z as Record<string, ZoneType>)) zones[k] = type;
     return {
-      cols, rows, cells, units, doodads, props,
+      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       features,
       featureCuts,
@@ -132,6 +135,25 @@ export function decodeBoard(code: string): EditorBoard | null {
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** Accept either a full `/level-editor?board=...` URL, a query string, or the raw board code. */
+export function decodeBoardLinkInput(input: string): EditorBoard | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  let code: string | null = null;
+  try {
+    const url = new URL(trimmed, typeof window === 'undefined' ? 'http://local.test' : window.location.origin);
+    code = url.searchParams.get('board');
+  } catch {
+    // Fall through to query-string/raw-code parsing below.
+  }
+  if (!code) {
+    const query = trimmed.startsWith('?') ? trimmed.slice(1) : trimmed.includes('?') ? trimmed.slice(trimmed.indexOf('?') + 1) : trimmed;
+    const params = new URLSearchParams(query);
+    code = params.get('board') ?? (trimmed.startsWith('board=') ? params.get('board') : trimmed);
+  }
+  return code ? decodeBoard(code) : null;
+}
 
 /** Decode the `?board=` URL param at editor mount, if present and valid. */
 export function readBoardParam(): EditorBoard | null {

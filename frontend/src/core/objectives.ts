@@ -11,12 +11,12 @@ import { livingPieces } from './rules';
 const ROYAL: Piece['type'] = 'king';
 
 // Turn target for a `survive` level that doesn't author one: the schema field is
-// `level.surviveTurns` (optional, ADR-0048); when absent the battle outlasts this
+// `level.surviveTurns` (optional, ADR-0050); when absent the battle outlasts this
 // many player turns, which keeps every pre-field survive level playing unchanged.
 export const DEFAULT_SURVIVE_TURNS = 8;
 
 /**
- * Owner-facing mode names (ADR-0048). THE single source of truth for mode labels —
+ * Owner-facing mode names (ADR-0050). THE single source of truth for mode labels —
  * stored ids stay the legacy objective ids deliberately (renaming would force a prod
  * data migration for zero player-visible gain), and every UI that shows a mode must
  * read these rather than re-hardcoding strings.
@@ -71,7 +71,7 @@ export interface ObjectiveContext {
   /** `reach`: destination cells a living player piece must stand on. */
   reachCells?: readonly Vec[];
   /** `capture-king`: the side fielding THE King (see kingSideOf). Absent ⇒ 'enemy',
-   * which is exactly the pre-ADR-0048 behavior. */
+   * which is exactly the pre-ADR-0050 behavior. */
   kingSide?: 'player' | 'enemy';
 }
 
@@ -89,7 +89,7 @@ export function evaluateObjective(state: GameState, objective: ObjectiveType, ct
     case 'capture-all':
       return enemies.length ? null : 'player';
     case 'capture-king': {
-      // Direction-aware (ADR-0048): the King-holding side loses the MOMENT its King
+      // Direction-aware (ADR-0050): the King-holding side loses the MOMENT its King
       // falls; the kingless side loses only by wipe. ctx.kingSide defaults to 'enemy'
       // (free skirmish / legacy levels), which is the classic hunt-the-King reading.
       if ((ctx.kingSide ?? 'enemy') === 'player') {

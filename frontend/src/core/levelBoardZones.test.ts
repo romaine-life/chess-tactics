@@ -76,7 +76,7 @@ describe('levelBoard — resize pruning of zone tiles', () => {
   });
 });
 
-describe('levelBoard — ADR-0048 mode meta fields', () => {
+describe('levelBoard — ADR-0050 mode meta fields', () => {
   it('writes objective/placement/roster/surviveTurns from meta onto the Level', () => {
     const roster: { player: Roster; enemy: Roster } = { player: { pawn: 3, knight: 1 }, enemy: { pawn: 2 } };
     const level = editorBoardToLevel(board(), {

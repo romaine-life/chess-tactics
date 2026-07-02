@@ -231,7 +231,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // Safety net: a degenerate start with no player move resolves rather than locks.
     const { game } = resolveIfPlayerStuck(created, env);
     const objective: ObjectiveType = opts.level?.objective ?? 'capture-king';
-    // Uniform for level AND free games (ADR-0048): the level's static context (survive
+    // Uniform for level AND free games (ADR-0050): the level's static context (survive
     // clock / reach cells) plus kingSide read off the ACTUAL starting pieces — a free
     // skirmish fields the King on the enemy side, so its copy stays "Capture the enemy
     // King", while a level whose author gave the player the King flips to "Protect".

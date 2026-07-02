@@ -10,7 +10,7 @@ describe('level schema', () => {
     expect(res.ok).toBe(true);
   });
   it('rejects a bad formatVersion and out-of-range board', () => {
-    // 0 cols is below the new 1×1 floor (ADR-0048 dropped the arbitrary 4×4 minimum).
+    // 0 cols is below the new 1×1 floor (ADR-0050 dropped the arbitrary 4×4 minimum).
     const bad = { ...createBlankLevel('l1'), formatVersion: 99, board: { cols: 0, rows: 8, heightLevels: 1 } };
     const res = validateLevel(bad);
     expect(res.ok).toBe(false);
@@ -63,7 +63,7 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(false);
   });
 
-  // ADR-0048 structural checks: mode id, the placement axis fields and zone shape/bounds.
+  // ADR-0050 structural checks: mode id, the placement axis fields and zone shape/bounds.
   it('rejects an unknown objective id but accepts every mode id including rival-kings', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     for (const objective of ['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach'] as const) {

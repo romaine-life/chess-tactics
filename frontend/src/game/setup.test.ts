@@ -116,7 +116,7 @@ describe('createSkirmish', () => {
   });
 });
 
-// ADR-0048 random placement: a level with placement 'random' deals its roster onto
+// ADR-0050 random placement: a level with placement 'random' deals its roster onto
 // seeded-random free cells of the pooled spawn zones instead of reading layers.units.
 describe('createFromLevel — random placement', () => {
   const PLAYER_TILES: Array<[number, number]> = [[0, 7], [1, 7], [2, 7], [3, 7], [0, 6], [1, 6], [2, 6], [3, 6]];

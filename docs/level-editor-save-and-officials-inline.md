@@ -165,14 +165,14 @@ green with rewritten store tests. No remaining `officialMode` references.
     `grass`.
   - `layers.units`: `{x,y,type,side}` (faction→side) + `facing` (8-dir direction).
   - `layers.decals`: `[]` (doodads ride in `boardCode`; decals mapping is Phase 4).
-  - `layers.zones`: **real zones** as of ADR-0048 — `editorBoardToLevel` now
+  - `layers.zones`: **real zones** as of ADR-0050 — `editorBoardToLevel` now
     writes one `Zone` per painted zone type (was hard-coded `[]`). Zones round-trip
     through `boardCode`'s zones channel and drive random-placement spawn pools /
     `reach` objective tiles.
   - `boardCode: encodeBoard(board)`.
   - Clamp `board.cols`/`rows` to 1–16 × 1–20 (the 4×4 floor dropped to 1×1 in
-    ADR-0048 — playability rules P1–P3, not an arbitrary size floor, gate saves);
-    carry name/objective/difficulty/economy/notes from `meta` (plus the ADR-0048
+    ADR-0050 — playability rules P1–P3, not an arbitrary size floor, gate saves);
+    carry name/objective/difficulty/economy/notes from `meta` (plus the ADR-0050
     optional keys `placement`/`roster`/`surviveTurns` when set).
 
 ### 2b. Schema + vocab + backend

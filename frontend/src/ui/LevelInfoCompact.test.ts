@@ -5,7 +5,7 @@ import { MODE_NAME } from '../core/objectives';
 import type { PieceType, Side } from '../core/types';
 
 // These are the shared, no-React helpers the level-select surfaces (Campaign / CampaignEditor)
-// import so the mode label + direction-aware goal copy has ONE implementation (ADR-0048).
+// import so the mode label + direction-aware goal copy has ONE implementation (ADR-0050).
 // Importing the .tsx module is safe under the node test env: we only call the pure functions,
 // never render the component.
 

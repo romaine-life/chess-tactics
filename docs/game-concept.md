@@ -196,7 +196,7 @@ useful raw material, not canon. For future contributors:
   *last-side-standing without check*. The baseline this doc mandates — **real
   check / checkmate** — is **not yet implemented**, and is the foundational
   gameplay work.
-- **Shipped (ADR-0048):** authored **win-rule modes** are now real — the editor
+- **Shipped (ADR-0050):** authored **win-rule modes** are now real — the editor
   selects the objective (Last Man Standing / King Assault / Rival Kings / Survive /
   Reach), an orthogonal **random-placement** toggle (roster + spawn zones) is
   authorable, and saves gate on **playability rules** (each side has a piece; King

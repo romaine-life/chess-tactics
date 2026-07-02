@@ -27,7 +27,8 @@ function ResultStars({ count }: { count: number }) {
 }
 
 export function Skirmish() {
-  const routeParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const routeSearch = window.location.search;
+  const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
   const routeCampaignId = routeParams.get('campaignId');
   const routeLevelId = routeParams.get('levelId');
   const routeMode = routeParams.get('mode');
@@ -48,7 +49,7 @@ export function Skirmish() {
   // the store computes kingSide from the actual starting pieces, so a random-placement
   // King Assault whose roster deals the player the King reads "Protect your King" too, and
   // a free skirmish (no level) still gets a correct goal line. objectiveSummary is the one
-  // source of that copy (ADR-0048 — no re-hardcoded objective strings in the UI).
+  // source of that copy (ADR-0050 — no re-hardcoded objective strings in the UI).
   const objective = useSkirmish((s) => s.objective);
   const kingSide = useSkirmish((s) => s.objectiveCtx.kingSide);
   const objectiveGoal = objectiveSummary(objective, kingSide);

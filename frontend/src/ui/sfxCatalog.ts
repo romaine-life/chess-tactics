@@ -41,4 +41,7 @@ export const SFX_ASSETS: SfxAsset[] = [
   { name: 'stone', terrain: 'stone', sampleKey: 'stone', label: 'Stone', character: 'Recorded footsteps on stone.', build: 'Authored recording · sliced one-shot takes', variantCount: 12 },
   // The "unit lands on the board" thump, layered over the terrain at the deploy roll-call.
   { name: 'arrival', sampleKey: 'arrival', label: 'Arrival', character: 'Unit lands on the board — layered over terrain on deploy.', build: 'Authored recording (landing.mp3)', variantCount: 1 },
+  // Interface feedback — the tap on any button/link/switch (playInterface), gated on the
+  // Interface Sounds toggle. Not a landing, so no terrain. Silent until ui-click.mp3 is added.
+  { name: 'click', sampleKey: 'click', label: 'Interface Click', character: 'UI feedback tap on menu / button / control activation.', build: 'Authored recording (tracked WAV take)', variantCount: 1 },
 ];
