@@ -9,7 +9,7 @@ import { isPassableTerrain } from '../core/terrain';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
-import { defaultFacingForSide } from '../core/pieces';
+import { PLAYABLE_PIECE_TYPES, defaultFacingForSide } from '../core/pieces';
 import { propCells, propDef } from '../core/props';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
@@ -49,7 +49,7 @@ export interface SkirmishOptions {
   level?: Level;
 }
 
-function createFromLevel(level: Level): GameState {
+function createFromLevel(level: Level, seed: number): GameState {
   const pieces: Piece[] = level.layers.units.map((unit, index) => ({
     id: `${unit.side}-${unit.type}-${index}`,
     side: unit.side,
@@ -90,6 +90,59 @@ function createFromLevel(level: Level): GameState {
     });
   }
 
+  // Random placement (ADR-0048): deal the authored roster onto seeded-random free cells
+  // of each side's pooled spawn zones instead of reading authored positions (a playable
+  // random level has `layers.units` empty — the editor's playability gate enforces it).
+  // Order of operations matters: terrain + the blocking-prop colliders above joined the
+  // taken set FIRST, so no piece is ever dealt inside a tree footprint or onto impassable
+  // ground. Restarting with a new seed reshuffles the deal — that's the mode's point.
+  if (level.placement === 'random') {
+    const rng = createRng(seed);
+    const taken = new Set(occupied);
+    for (const c of level.layers.terrain) if (!isPassableTerrain(c.terrain)) taken.add(`${c.x},${c.y}`);
+    for (const side of ['player', 'enemy'] as const) {
+      const zoneType = side === 'player' ? 'player-spawn' : 'enemy-spawn';
+      // Pool the side's spawn tiles (multiple zones of a type pool), deduped, in-bounds,
+      // minus taken cells — the same usable-tile math validatePlayability promised on.
+      const free: Array<{ x: number; y: number }> = [];
+      const seen = new Set<string>();
+      for (const zone of level.layers.zones) {
+        if (zone.type !== zoneType) continue;
+        for (const [x, y] of zone.tiles) {
+          const k = `${x},${y}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          if (taken.has(k)) continue;
+          if (x < 0 || x >= level.board.cols || y < 0 || y >= level.board.rows) continue;
+          free.push({ x, y });
+        }
+      }
+      const roster = level.roster?.[side] ?? {};
+      // Iterate piece types in the canonical order, never Object.keys — object key order
+      // is authoring-insertion order, which would silently change the deal between two
+      // otherwise identical levels. Same seed must always mean the same layout.
+      for (const type of PLAYABLE_PIECE_TYPES) {
+        const count = roster[type] ?? 0;
+        for (let i = 0; i < count && free.length; i += 1) {
+          const cell = free.splice(rng.int(free.length), 1)[0];
+          taken.add(`${cell.x},${cell.y}`);
+          pieces.push({
+            id: `${side}-${type}-${i}`,
+            side,
+            type,
+            x: cell.x,
+            y: cell.y,
+            facing: defaultFacingForSide(side),
+            alive: true,
+            // The dealt cell is the piece's home rank, so a dealt pawn keeps its
+            // double-step — matching the free-skirmish spawn behavior.
+            startY: cell.y,
+          });
+        }
+      }
+    }
+  }
+
   return {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
@@ -113,7 +166,7 @@ function pickEmptyCell(taken: Set<string>, cols: number, ys: readonly number[], 
 }
 
 export function createSkirmish(opts: SkirmishOptions): GameState {
-  if (opts.level) return createFromLevel(opts.level);
+  if (opts.level) return createFromLevel(opts.level, opts.seed);
   const size = opts.size ?? DEFAULT_SIZE;
   const party = opts.party ?? ['knight', 'bishop'];
   const rng = createRng(opts.seed);

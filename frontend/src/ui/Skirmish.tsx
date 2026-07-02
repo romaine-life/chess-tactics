@@ -3,6 +3,7 @@ import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
+import { objectiveSummary } from '../core/objectives';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
@@ -25,13 +26,6 @@ function ResultStars({ count }: { count: number }) {
   );
 }
 
-const OBJECTIVE_COPY = {
-  'capture-all': 'Capture all enemy pieces',
-  'capture-king': 'Capture the enemy King',
-  survive: 'Survive the assault',
-  reach: 'Reach the objective',
-} as const;
-
 export function Skirmish() {
   const routeParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const routeCampaignId = routeParams.get('campaignId');
@@ -50,6 +44,14 @@ export function Skirmish() {
   const [boardSettled, setBoardSettled] = useState(false);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const game = useSkirmish((s) => s.game);
+  // The live objective + which side holds the King come from the STORE (not routeLevel):
+  // the store computes kingSide from the actual starting pieces, so a random-placement
+  // King Assault whose roster deals the player the King reads "Protect your King" too, and
+  // a free skirmish (no level) still gets a correct goal line. objectiveSummary is the one
+  // source of that copy (ADR-0048 — no re-hardcoded objective strings in the UI).
+  const objective = useSkirmish((s) => s.objective);
+  const kingSide = useSkirmish((s) => s.objectiveCtx.kingSide);
+  const objectiveGoal = objectiveSummary(objective, kingSide);
   const turnLabel = game.winner
     ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Player Turn' : 'Enemy Turn';
@@ -144,7 +146,7 @@ export function Skirmish() {
             <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
             <span>
               <strong>Objective</strong>
-              <small>{routeLevel ? OBJECTIVE_COPY[routeLevel.objective] : 'Capture the enemy King'}</small>
+              <small>{objectiveGoal}</small>
             </span>
           </div>
         </div>
@@ -164,7 +166,7 @@ export function Skirmish() {
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Stalemate' : 'Defeat'}</h2>
             {game.winner === 'player' && <ResultStars count={stars} />}
-            <p>{routeLevel.name} — {OBJECTIVE_COPY[routeLevel.objective]}</p>
+            <p>{routeLevel.name} — {objectiveGoal}</p>
             <div className="campaign-result-actions">
               <button type="button" className="app-header-button" onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}

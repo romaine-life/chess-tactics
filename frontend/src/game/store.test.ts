@@ -80,6 +80,24 @@ describe('skirmish store', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, level: createBlankLevel('lvl-7') });
     expect(useSkirmish.getState().levelId).toBe('lvl-7');
   });
+
+  it('newSkirmish computes kingSide uniformly — free games field the King on the enemy side', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    expect(useSkirmish.getState().objectiveCtx.kingSide).toBe('enemy');
+  });
+
+  it('newSkirmish flips kingSide (and the intro copy) when the LEVEL gives the player the King', () => {
+    const level = createBlankLevel('lvl-protect', 'Protect', 8, 8);
+    level.objective = 'capture-king';
+    level.layers.units = [
+      { x: 0, y: 7, type: 'king', side: 'player' },
+      { x: 7, y: 0, type: 'queen', side: 'enemy' },
+    ];
+    useSkirmish.getState().newSkirmish({ seed: 5, level });
+    const s = useSkirmish.getState();
+    expect(s.objectiveCtx.kingSide).toBe('player');
+    expect(s.log[0]).toContain('Protect your King');
+  });
 });
 
 // The skirmish screen remounts whenever you leave and return (route swap), but
@@ -119,13 +137,16 @@ function piece(id: string, side: Side, type: PieceType, x: number, y: number): P
   return { id, side, type, x, y, alive: true, startY: y };
 }
 
-/** Load a hand-built board into the store as the active capture-king skirmish. */
+/** Load a hand-built board into the store as the active capture-king skirmish.
+ * objectiveCtx is reset explicitly (classic enemy-holds-the-King direction) — setState
+ * merges, so a kingSide left behind by an earlier test would otherwise leak in. */
 function loadCaptureKing(pieces: Piece[], selectedId: string): void {
   const game: GameState = { size: { cols: 8, rows: 8 }, pieces, turn: 'player', winner: null };
   useSkirmish.setState({
     game,
     env: { terrain: undefined, lastMove: undefined },
     objective: 'capture-king',
+    objectiveCtx: { kingSide: 'enemy' },
     selectedId,
     focusedId: selectedId,
     log: [],
@@ -158,6 +179,40 @@ describe('skirmish store: capture-king objective', () => {
     const { game } = useSkirmish.getState();
     expect(game.winner).toBeNull();
     expect(game.turn).toBe('enemy'); // handed to the enemy, not resolved
+  });
+});
+
+describe('skirmish store: rival-kings + direction-aware capture-king copy', () => {
+  it('rival-kings: capturing the enemy King wins with the rival-King wording', () => {
+    // The surviving enemy pawn matters: it keeps the core last-side-standing rule out
+    // of the way so the RIVAL-KINGS objective (not a wipe) is what decides the game.
+    const game: GameState = {
+      size: { cols: 8, rows: 8 },
+      pieces: [piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 7, 7), piece('ek', 'enemy', 'king', 0, 5), piece('ep', 'enemy', 'pawn', 7, 2)],
+      turn: 'player',
+      winner: null,
+    };
+    useSkirmish.setState({ game, env: { terrain: undefined, lastMove: undefined }, objective: 'rival-kings', objectiveCtx: {}, selectedId: 'pr', focusedId: 'pr', log: [] });
+    useSkirmish.getState().tryMoveTo(0, 5); // rook takes the rival King
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player');
+    expect(s.log[0]).toBe('Victory — the rival King is captured.');
+  });
+
+  it('capture-king with kingSide=player: losing the King reads as the King falling, not a wipe', () => {
+    // The player King is already gone (only a pawn remains): the player's next move
+    // triggers the objective check, which the King-holder side has already lost.
+    const game: GameState = {
+      size: { cols: 8, rows: 8 },
+      pieces: [piece('pp', 'player', 'pawn', 0, 6), piece('ek', 'enemy', 'king', 7, 0)],
+      turn: 'player',
+      winner: null,
+    };
+    useSkirmish.setState({ game, env: { terrain: undefined, lastMove: undefined }, objective: 'capture-king', objectiveCtx: { kingSide: 'player' }, selectedId: 'pp', focusedId: 'pp', log: [] });
+    useSkirmish.getState().tryMoveTo(0, 5); // any legal pawn step
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('enemy');
+    expect(s.log[0]).toBe('Defeat — your King has fallen.');
   });
 });
 

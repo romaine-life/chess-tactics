@@ -6,13 +6,19 @@
 // Wire shape (keys kept short): { c:cols, r:rows, f?:fillTileId, t?:{cell:tileId},
 //   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fn?:{cell:fenceMaterial}, rc?:[edgeKey],
-//   rx?:[edgeKey] }. `f` fills every cell, then `t` overrides — so a "mostly one tile" board stays
-// tiny. Features split per kind on the wire (rd=roads, rv=rivers, fn=fences) and merge into one
-// `features` map on decode; `rc` (severed edges) and `rx` (forced outward exits) are shared edge
-// lists. base64url of the JSON (no padding, +/ -> -_).
+//   rx?:[edgeKey], z?:{cell:zoneType} }. `f` fills every cell, then `t` overrides — so a "mostly
+// one tile" board stays tiny. Features split per kind on the wire (rd=roads, rv=rivers, fn=fences)
+// and merge into one `features` map on decode; `rc` (severed edges) and `rx` (forced outward exits)
+// are shared edge lists. `z` is the gameplay-zone channel (ADR-0048): each painted cell -> its zone
+// type. base64url of the JSON (no padding, +/ -> -_).
+//
+// FORWARD/BACK-COMPAT: `z` (like `p` before it) is emitted only when non-empty, so a zone-free board
+// encodes byte-identically to a pre-zones code, and an OLD code with no `z` decodes to an empty
+// `zones` map (added the same way facing/props were). No shipped content has zones, so no shim needed.
 
 import type { GroundCoverDensity } from '../core/groundCover';
 import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
+import type { ZoneType } from '../core/level';
 
 /** One painted feature cell: which linear feature it carries and its surface material. */
 export interface FeatureCell {
@@ -32,6 +38,12 @@ export interface EditorBoard {
   features: Record<string, FeatureCell>;
   featureCuts: Record<string, true>;
   featureExits: Record<string, true>;
+  /** Gameplay zones (ADR-0048), keyed by cell "x,y" -> zone type. The editor paints
+   * player-spawn / enemy-spawn / objective; the full ZoneType set is stored so the channel
+   * stays lossless if the schema's other zone types (enemy-threat, falling-rock) are painted.
+   * Optional + back-compat (like `props` before it): a pre-zones board literal simply omits it,
+   * and `decodeBoard` always returns it populated (empty for an old code). */
+  zones?: Record<string, ZoneType>;
 }
 
 const enc = (s: string): string => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -74,6 +86,9 @@ export function encodeBoard(b: EditorBoard): string {
   if (nonEmpty(fn)) wire.fn = fn;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
+  // Zones ride as a bare {cell:zoneType} map — emitted only when non-empty so a zone-free board
+  // is byte-identical to a pre-zones code (same discipline as `p`/props).
+  if (b.zones && nonEmpty(b.zones)) wire.z = b.zones;
   return enc(JSON.stringify(wire));
 }
 
@@ -101,12 +116,16 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (w.rd) for (const [k, m] of Object.entries(w.rd as Record<string, RoadMaterial>)) features[k] = { kind: 'road', material: m };
     if (w.rv) for (const [k, m] of Object.entries(w.rv as Record<string, RiverMaterial>)) features[k] = { kind: 'river', material: m };
     if (w.fn) for (const [k, m] of Object.entries(w.fn as Record<string, FenceMaterial>)) features[k] = { kind: 'fence', material: m };
+    // Zones: an OLD code has no `z`, so this defaults to an empty map — the back-compat contract.
+    const zones: EditorBoard['zones'] = {};
+    if (w.z) for (const [k, type] of Object.entries(w.z as Record<string, ZoneType>)) zones[k] = type;
     return {
       cols, rows, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       features,
       featureCuts,
       featureExits,
+      zones,
     };
   } catch {
     return null;

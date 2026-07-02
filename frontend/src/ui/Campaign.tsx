@@ -10,7 +10,8 @@ import {
   readProgress,
   type CampaignProgress,
 } from '../campaign/progress';
-import { OBJECTIVE_LABEL } from '../core/objectives';
+import { MODE_NAME } from '../core/objectives';
+import { levelObjectiveLine } from './LevelInfoCompact';
 import type { Campaign as CampaignDoc } from '../core/level';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -78,14 +79,19 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
               const prog = progress[ref.levelId];
               const completed = Boolean(prog?.completed);
               const unlocked = isLevelUnlocked(refs, index, progress);
-              const objective = level?.objective ?? ref.objective;
+              // Prefer the loaded level doc so the goal line is direction-aware (King Assault
+              // reads "Protect your King" when the player holds the King). Fall back to the
+              // campaign ref's objective — mode name only — when the doc hasn't hydrated.
+              const goalLine = level
+                ? levelObjectiveLine(level)
+                : ref.objective ? MODE_NAME[ref.objective] : 'Battle';
               const status = completed ? ' · Cleared' : unlocked ? '' : ' · Locked';
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
               return (
                 <section className={`settings-row ${unlocked ? '' : 'is-disabled'}`.trim()} key={ref.levelId}>
                   <div className="settings-row-copy">
                     <h4>{index + 1}. {level?.name ?? `Level ${index + 1}`}</h4>
-                    <p>{objective ? OBJECTIVE_LABEL[objective] : 'Battle'}{status}</p>
+                    <p>{goalLine}{status}</p>
                   </div>
                   <div className="settings-row-value">
                     <Stars count={prog?.stars ?? 0} />

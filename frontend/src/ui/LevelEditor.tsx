@@ -44,6 +44,10 @@ import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
+import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
+import { MODE_NAME, DEFAULT_SURVIVE_TURNS } from '../core/objectives';
+import { validatePlayability } from '../core/playability';
+import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
 
 type BoardUnitPlacement = {
   unitId: string;
@@ -63,6 +67,7 @@ function StudioEditableBoard({
   doodads: placedDoodads,
   props: placedProps = {},
   features: placedFeatures = {},
+  zones: placedZones = {},
   resolveAsset,
   resolveUnit,
   resolveDoodad,
@@ -89,6 +94,8 @@ function StudioEditableBoard({
   props?: Record<string, { propId: string }>;
   /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
   features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
+  /** Gameplay zones (ADR-0048) keyed by cell "x,y" -> zone type — drawn as a tinted diamond. */
+  zones?: Record<string, ZoneType>;
   resolveAsset: (id: string) => StudioAsset | undefined;
   resolveUnit: (id: string) => UnitAsset | undefined;
   resolveDoodad: (id: string) => DoodadAsset | undefined;
@@ -139,6 +146,10 @@ function StudioEditableBoard({
                 studioCellArt, or featureFrameSrc would 404. They render no image until art ships —
                 see FENCE_ART_PENDING. */}
             {studioCellArt({ tileAsset: asset, feature: placedFeatures[key]?.kind === 'fence' ? undefined : placedFeatures[key], animationFrame, hidden })}
+            {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
+                seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
+                which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
+            {placedZones[key] ? <span className={`le-zone-cell le-zone-${LE_ZONE_TINT[placedZones[key]] ?? 'goal'}`} aria-hidden="true" /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             <span
               className="tileset-cell-hit"
@@ -306,9 +317,36 @@ const leSeedBoard = (): Record<string, string> => {
 };
 const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
 
+// The zone types the editor paints (ADR-0048): the two placement pools + the objective/goal zone.
+// The schema has more (enemy-threat/falling-rock) but only these three have consumers today, so
+// only these get brushes. Each carries its owner-facing label and the CSS modifier that tints its
+// board overlay + swatch.
+const LE_ZONE_BRUSHES = [
+  { type: 'player-spawn', label: 'Player placement', tint: 'player' },
+  { type: 'enemy-spawn', label: 'Enemy placement', tint: 'enemy' },
+  { type: 'objective', label: 'Goal', tint: 'goal' },
+] as const satisfies ReadonlyArray<{ type: ZoneType; label: string; tint: string }>;
+const LE_ZONE_TINT: Partial<Record<ZoneType, string>> = Object.fromEntries(LE_ZONE_BRUSHES.map((z) => [z.type, z.tint]));
+const LE_ZONE_LABEL: Partial<Record<ZoneType, string>> = Object.fromEntries(LE_ZONE_BRUSHES.map((z) => [z.type, z.label]));
+
+// A one-line, owner-facing gloss of each mode's win rule (the ADR-0048 table, in plain terms),
+// shown under the mode picker so the author knows what they picked.
+const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
+  'capture-all': 'Win by defeating every enemy piece.',
+  'capture-king': 'One side holds the King; that side loses the moment its King is captured.',
+  'rival-kings': 'Both sides hold a King; the first King captured decides the battle.',
+  survive: 'The player wins by outlasting the set number of turns.',
+  reach: 'A player piece reaching a Goal zone tile wins (defaults to the far edge if none is painted).',
+};
+
 // A stable fingerprint of an editor board, the basis of the real dirty flag: encodeBoard is
 // deterministic + lossless, so two boards encode identically iff they're the same board.
-const boardSignature = (board: EditorBoard): string => encodeBoard(board);
+// The dirty-flag signature of a whole Level: its lossless boardCode PLUS the ADR-0048 mode fields
+// (which don't ride in boardCode). ONE formula, used both for the live current-state signature and
+// for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean and a mode
+// change (not just a board paint) marks it dirty.
+const levelSignature = (level: Level): string =>
+  `${level.boardCode ?? ''}|${level.objective}|${level.placement ?? 'fixed'}|${level.surviveTurns ?? ''}|${JSON.stringify(level.roster ?? {})}`;
 
 // The 4-edge connection control for a selected feature tile. Mirrors the iso diamond:
 // each edge is one cardinal neighbour (grid N/E/S/W = the screen NE/SE/SW/NW edges).
@@ -427,8 +465,8 @@ export function LevelEditor(): ReactElement {
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
-  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence' | 'zone'>(studioArm.kind ?? 'tile');
+  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence' | 'zone' | 'rules'>(studioArm.kind ?? 'tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
@@ -463,6 +501,20 @@ export function LevelEditor(): ReactElement {
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
   const [unitSide, setUnitSide] = useState<'player' | 'enemy'>('player');
+  // Gameplay zones (ADR-0048): a per-cell channel (cell "x,y" -> zone type), painted like cover.
+  // Seeded from a loaded board (boardCode carries them losslessly); the active brush picks which
+  // zone type paints.
+  const [boardZones, setBoardZones] = useState<Record<string, ZoneType>>(loadedBoard?.zones ?? {});
+  const [zoneBrushType, setZoneBrushType] = useState<ZoneType>(LE_ZONE_BRUSHES[0].type);
+
+  // The RULES panel state — the authored win-rule mode + the orthogonal placement axis (ADR-0048).
+  // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
+  // schema defaults so it reads exactly like a blank createBlankLevel.
+  const [objective, setObjective] = useState<ObjectiveType>('capture-all');
+  const [placement, setPlacement] = useState<'fixed' | 'random'>('fixed');
+  const [surviveTurns, setSurviveTurns] = useState<number>(DEFAULT_SURVIVE_TURNS);
+  // Random-placement roster: per side, per playable piece type. An absent count reads as 0.
+  const [roster, setRoster] = useState<{ player: Roster; enemy: Roster }>({ player: {}, enemy: {} });
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
@@ -470,6 +522,10 @@ export function LevelEditor(): ReactElement {
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
   const [levelName, setLevelName] = useState<string>('Untitled level');
   const [savedSig, setSavedSig] = useState<string | null>(null);
+  // Set true once a campaign level has been hydrated into the board state; the baseline effect
+  // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
+  // clean even for a legacy level whose derived boardCode differs from its saved one).
+  const needsBaselineRef = useRef(false);
   const [saveStatus, setSaveStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [me, setMe] = useState<AuthUser | null>(null);
@@ -511,9 +567,18 @@ export function LevelEditor(): ReactElement {
       setBoardFeatures(board.features);
       setFeatureCuts(board.featureCuts);
       setFeatureExits(board.featureExits);
+      setBoardZones(board.zones ?? {});
+      // Restore the mode fields from the Level so the RULES panel opens on what was authored.
+      // Defaults mirror createBlankLevel (fixed placement, capture-all, DEFAULT_SURVIVE_TURNS).
+      setObjective(level.objective);
+      setPlacement(level.placement ?? 'fixed');
+      setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
+      setRoster({ player: level.roster?.player ?? {}, enemy: level.roster?.enemy ?? {} });
       setEditingId(level.id);
       setLevelName(level.name);
-      setSavedSig(boardSignature(board));
+      // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
+      // legacy level (derived boardCode) doesn't spuriously read dirty the instant it loads.
+      needsBaselineRef.current = true;
     })();
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -639,6 +704,13 @@ export function LevelEditor(): ReactElement {
       setBoardCover((prev) => ({ ...prev, [key]: coverBrushDensity }));
       return;
     }
+    if (brushKind === 'zone') {
+      // One zone type per cell (repainting replaces it). Zones sit on TOP of terrain — they don't
+      // gate on tile material, so a placement pool can cover any surface (playability decides
+      // which of those tiles are actually usable).
+      setBoardZones((prev) => (prev[key] === zoneBrushType ? prev : { ...prev, [key]: zoneBrushType }));
+      return;
+    }
     setBoardCells((prev) => ({ ...prev, [key]: brushAsset.id }));
   };
   const eraseCell = (x: number, y: number): void => {
@@ -682,9 +754,10 @@ export function LevelEditor(): ReactElement {
       return;
     }
     if (brushKind === 'cover') return eraseKey(setBoardCover, key);
+    if (brushKind === 'zone') return eraseKey(setBoardZones, key);
     eraseKey(setBoardCells, key);
   };
-  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardProps({}); setBoardCover({}); setBoardFeatures({}); setFeatureCuts({}); setFeatureExits({}); setSelectedCell(null); };
+  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardProps({}); setBoardCover({}); setBoardFeatures({}); setFeatureCuts({}); setFeatureExits({}); setBoardZones({}); setSelectedCell(null); };
   const fillBoard = (mode: 'empty' | 'all'): void =>
     setBoardCells((prev) => {
       const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
@@ -697,20 +770,44 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, features: boardFeatures, featureCuts, featureExits }),
-    [boardCols, boardRows, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardFeatures, featureCuts, featureExits],
+    () => ({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, features: boardFeatures, featureCuts, featureExits, zones: boardZones }),
+    [boardCols, boardRows, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardFeatures, featureCuts, featureExits, boardZones],
   );
+  // The ADR-0048 mode fields the RULES panel authors, packaged for editorBoardToLevel. Only the
+  // toggle + its config live here (objective is always written); placement/roster/surviveTurns are
+  // sent WHEN they diverge from the schema default, so a fixed capture-all board serializes without
+  // them (back-compat) — but the roster/survive values are always carried when their mode is active.
+  const modeMeta = useMemo(() => ({
+    objective,
+    placement: placement === 'random' ? ('random' as const) : undefined,
+    roster: placement === 'random' ? roster : undefined,
+    surviveTurns: objective === 'survive' ? surviveTurns : undefined,
+  }), [objective, placement, roster, surviveTurns]);
+  // The live candidate Level — the exact document a Save would persist — recomputed from the board
+  // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
+  // list judges is precisely what would be written.
+  const candidateLevel = useMemo(
+    () => editorBoardToLevel(currentEditorBoard, { id: editingId ?? 'draft', name: levelName, ...modeMeta }),
+    [currentEditorBoard, editingId, levelName, modeMeta],
+  );
+  // Live playability (ADR-0048): the plain-language violation list the panel shows, and the gate on
+  // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
+  const playability = useMemo(() => validatePlayability(candidateLevel), [candidateLevel]);
   // Real dirty flag: the board has unsaved changes when its signature differs from the one
-  // captured at the last save. A standalone board (never saved) seeds savedSig lazily on
-  // first render below, so it reads clean until the first edit.
-  const currentSig = useMemo(() => boardSignature(currentEditorBoard), [currentEditorBoard]);
+  // captured at the last save. The signature folds in the mode meta (via candidateLevel.boardCode
+  // + the mode fields) so flipping the mode picker / roster also marks the level dirty, not just a
+  // board paint. A standalone board (never saved) seeds savedSig lazily on first render below.
+  const currentSig = useMemo(() => levelSignature(candidateLevel), [candidateLevel]);
   const dirty = savedSig === null ? false : currentSig !== savedSig;
-  // Seed the saved signature once for a board that wasn't hydrated from a campaign level
-  // (a blank or `?board=` board): the first render establishes the clean baseline.
+  // Establish the clean baseline signature. Two ways in: a standalone board (no campaign level)
+  // seeds it on first render; a campaign level seeds it AFTER hydrate has settled the board state
+  // (needsBaselineRef, captured from the live currentSig so it always matches). Depends on
+  // currentSig so the post-hydrate capture fires once the seeded state has flowed through.
   useEffect(() => {
+    if (needsBaselineRef.current) { needsBaselineRef.current = false; setSavedSig(currentSig); return; }
     if (savedSig === null && !routeParams.levelId) setSavedSig(currentSig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentSig]);
 
   // Save the painted board. Campaign path: serialize into the resolved level id and write it
   // back into the store, then route by TIER — an official (`off-`) level publishes to all
@@ -718,13 +815,16 @@ export function LevelEditor(): ReactElement {
   // requireAdmin is the real gate; a non-admin official save fails closed (403 surfaced here).
   const saveLevel = async (): Promise<void> => {
     if (saving) return;
+    // Playability is the save gate (ADR-0048): never persist a rule-violating level. The button is
+    // disabled while violations exist, but re-check here so a programmatic call can't slip past.
+    if (!playability.ok) return;
     const targetId = editingId ?? routeParams.levelId;
     if (!targetId) {
       // Cold path (no campaign level): a standalone board authored outside a campaign.
       // Mint a fresh per-user level id (`l<n>`) and write it into the user workspace — never
       // an `off-` id (INV8). createUnassignedLevel stamps the minted id onto the level and
       // returns it; the editor then tracks that id so subsequent saves write back to it.
-      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelName });
+      const newLevel = editorBoardToLevel(currentEditorBoard, { id: 'new', name: levelName, ...modeMeta });
       const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
       setEditingId(newId);
       setSaving(true);
@@ -749,7 +849,9 @@ export function LevelEditor(): ReactElement {
       id: targetId,
       name: levelName,
       notes: existing?.notes,
-      objective: existing?.objective,
+      // The RULES panel is the source of truth for the mode fields (objective/placement/roster/
+      // surviveTurns) — write what the author set, not the existing level's stale values.
+      ...modeMeta,
       difficulty: existing?.difficulty,
       economy: existing?.economy,
       theme: existing?.theme,
@@ -786,6 +888,20 @@ export function LevelEditor(): ReactElement {
     void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
   };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
+  // Roster stepper: bump one side's count of one piece type, clamped to >= 0. A 0 count is dropped
+  // from the map so the serialized roster carries only real entries (matches validateLevel, which
+  // rejects zero/negative counts and treats an absent type as none).
+  const adjustRoster = (side: 'player' | 'enemy', type: PlayablePieceType, delta: number): void =>
+    setRoster((prev) => {
+      const next = Math.max(0, (prev[side][type] ?? 0) + delta);
+      const sideRoster = { ...prev[side] };
+      if (next === 0) delete sideRoster[type];
+      else sideRoster[type] = next;
+      return { ...prev, [side]: sideRoster };
+    });
+  // One-click "Clear pieces": drop every painted unit, offered next to the "remove the placed
+  // units" violation so switching to random placement is a single action, not manual erasing.
+  const clearUnits = (): void => setBoardUnits((prev) => (Object.keys(prev).length ? {} : prev));
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
   // tiles/units — and a now-offboard selection — whose coordinates fall outside the new
@@ -822,6 +938,9 @@ export function LevelEditor(): ReactElement {
     });
     setBoardCover((prev) => prune(prev));
     setBoardFeatures((prev) => prune(prev));
+    // Zones are a per-cell channel like cover — drop any tile now off the board, so a shrunk
+    // board never keeps a spawn/goal tile hanging past its edge (mirrors the units/props pruning).
+    setBoardZones((prev) => prune(prev));
     // Cuts are keyed by edge ("a|b"); keep only edges whose BOTH endpoints survive.
     setFeatureCuts((prev) => {
       const next: Record<string, true> = {};
@@ -854,6 +973,7 @@ export function LevelEditor(): ReactElement {
   const unitCount = Object.keys(boardUnits).length;
   const doodadCount = Object.keys(boardDoodads).length;
   const propCount = Object.keys(boardProps).length;
+  const zoneCount = Object.keys(boardZones).length;
   const selectedTileId = selectedCell ? boardCells[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedAsset = selectedTileId ? resolveAsset(selectedTileId) : undefined;
   const selectedUnit = selectedCell ? boardUnits[`${selectedCell.x},${selectedCell.y}`] : undefined;
@@ -890,6 +1010,7 @@ export function LevelEditor(): ReactElement {
     return list;
   }, [boardCover, boardCells, coverSeed]);
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
+  const selectedZone = selectedCell ? boardZones[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const toggleFeatureCut = (edge: string): void =>
     setFeatureCuts((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
   const toggleFeatureExit = (edge: string): void =>
@@ -903,8 +1024,19 @@ export function LevelEditor(): ReactElement {
   const isOfficialTarget = targetLevelId ? tierOf(targetLevelId) === 'official' : false;
   const saveLabel = isOfficialTarget ? 'Publish to all players' : 'Save';
   const isAdmin = Boolean(me?.is_admin);
-  const saveStateLabel = saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved';
-  const saveStateClass = saving ? 'is-saving' : dirty ? 'is-dirty' : 'is-clean';
+  // Save (user save AND official publish) is gated on ZERO playability violations (ADR-0048):
+  // the editor gives full freedom to mess the board up, but blocks persisting a rule-breaking
+  // level. It also needs something to save (dirty) and no in-flight save.
+  const canSave = dirty && !saving && playability.ok;
+  const saveStateLabel = saving ? 'Saving…' : !playability.ok ? 'Fix issues to save' : dirty ? 'Unsaved' : 'Saved';
+  const saveStateClass = saving ? 'is-saving' : !playability.ok ? 'is-blocked' : dirty ? 'is-dirty' : 'is-clean';
+  // Test-Play is enabled only for a SAVED (clean, in-store), violation-free level with a resolvable
+  // id: /play resolves the level from the store, so an unsaved board would test-play the stale
+  // saved version. mode=test skips progress recording. See below (button title explains the state).
+  const canTest = Boolean(targetLevelId) && playability.ok && !dirty && savedSig !== null;
+  const testHref = canTest
+    ? `/play?${routeParams.campaignId ? `campaignId=${encodeURIComponent(routeParams.campaignId)}&` : ''}levelId=${encodeURIComponent(targetLevelId as string)}&mode=test`
+    : undefined;
 
   return (
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
@@ -921,13 +1053,40 @@ export function LevelEditor(): ReactElement {
           <nav className="le-topbar-actions" aria-label="Editor actions">
             {cameFromStudio ? <a className="app-header-button le-back-catalog" href="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</a> : null}
             {routeParams.returnTo ? <a className="app-header-button" href={routeParams.returnTo} title="Return to the campaign editor">‹ Back</a> : null}
-            <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
+            {/* Test-Play launches /play in test mode (no progress recorded). Enabled only once the
+                level is SAVED, violation-free, with a resolvable id — /play reads the STORED level,
+                so testing an unsaved board would run the stale saved version. */}
+            {canTest && testHref ? (
+              <a
+                className="app-header-button"
+                data-testid="le-test"
+                href={testHref}
+                title="Play-test this level (progress is not recorded)."
+              >Test</a>
+            ) : (
+              <button
+                type="button"
+                className="app-header-button"
+                data-testid="le-test"
+                disabled
+                title={
+                  !playability.ok ? 'Fix the playability issues below to test-play.'
+                  : dirty ? 'Save the level first — Test plays the saved version.'
+                  : !targetLevelId ? 'Save the level first to test-play it.'
+                  : 'Test-play unavailable.'
+                }
+              >Test</button>
+            )}
             <button
               type="button"
               className="app-header-button app-header-button-active"
               data-testid="le-save"
-              disabled={saving || !dirty}
-              title={isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.'}
+              disabled={!canSave}
+              title={
+                !playability.ok ? 'Resolve the playability issues below before saving.'
+                : isOfficialTarget ? 'Publish this level to every player (admin-gated).'
+                : 'Save this level to your workspace.'
+              }
               onClick={() => { void saveLevel(); }}
             >
               {saveLabel}
@@ -947,6 +1106,7 @@ export function LevelEditor(): ReactElement {
                   doodads={boardDoodads}
                   props={boardProps}
                   features={featureOverlays}
+                  zones={boardZones}
                   resolveAsset={resolveAsset}
                   resolveUnit={resolveUnitAsset}
                   resolveDoodad={resolveDoodadAsset}
@@ -971,7 +1131,7 @@ export function LevelEditor(): ReactElement {
       <aside className="skirmish-hud" aria-label="Editor controls">
         <section className="skirmish-card">
           <h2>Layer</h2>
-          <div className="le-seg">
+          <div className="le-seg le-seg-layers">
             <button type="button" className={`le-seg-btn ${layer === 'board' ? 'active' : ''}`.trim()} onClick={() => { setLayer('board'); setTool('select'); }}>Board</button>
             <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
             <button type="button" className={`le-seg-btn ${layer === 'road' ? 'active' : ''}`.trim()} onClick={() => { setLayer('road'); setBrushKind('road'); setTool('brush'); }}>Road</button>
@@ -987,10 +1147,34 @@ export function LevelEditor(): ReactElement {
             <button type="button" className={`le-seg-btn ${layer === 'doodad' ? 'active' : ''}`.trim()} onClick={() => { setLayer('doodad'); setBrushKind('doodad'); setTool('brush'); }}>Doodad</button>
             <button type="button" className={`le-seg-btn ${layer === 'prop' ? 'active' : ''}`.trim()} onClick={() => { setLayer('prop'); setBrushKind('prop'); setTool('brush'); }}>Prop</button>
             <button type="button" className={`le-seg-btn ${layer === 'cover' ? 'active' : ''}`.trim()} onClick={() => { setLayer('cover'); setBrushKind('cover'); setTool('brush'); }}>Cover</button>
+            <button type="button" className={`le-seg-btn ${layer === 'zone' ? 'active' : ''}`.trim()} onClick={() => { setLayer('zone'); setBrushKind('zone'); setTool('brush'); }}>Zone</button>
+            {/* Rules is not a paint layer — it opens the mode/placement panel. Switch to Select so a
+                stray board click doesn't paint with whatever brush was last armed. */}
+            <button type="button" className={`le-seg-btn ${layer === 'rules' ? 'active' : ''}`.trim()} onClick={() => { setLayer('rules'); setTool('select'); }}>Rules</button>
           </div>
         </section>
 
         <KitScroll className="le-hud-scroll">
+        {/* ALWAYS-VISIBLE playability list (ADR-0048): the owner's core ask. While any violation
+            exists Save is disabled and the level cannot persist. Every line is plain language from
+            core/validatePlayability — described by what the author sees (sides, painted units, spawn
+            zones), never by schema jargon. A "Clear pieces" shortcut rides the "remove the placed
+            units" violation so switching to random placement is one click. */}
+        {!playability.ok ? (
+          <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
+            <h2>Fix before saving</h2>
+            <ul className="le-violation-list">
+              {playability.violations.map((v) => (
+                <li key={v.code} className="le-violation">
+                  <span className="le-violation-msg">{v.message}</span>
+                  {v.code === 'P3_UNITS_NOT_EMPTY' ? (
+                    <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {layer === 'board' ? (
           <section className="skirmish-card">
             <h2>Board</h2>
@@ -998,7 +1182,80 @@ export function LevelEditor(): ReactElement {
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy board link</button>
           </section>
-        ) : (<>
+        ) : layer === 'rules' ? (<>
+          <section className="skirmish-card">
+            <h2>Mode</h2>
+            {/* The win-rule mode picker (ADR-0048). One control, kit segmented buttons; labels are
+                the owner-facing MODE_NAME, not the stored objective ids. */}
+            <div className="le-seg le-seg-wrap">
+              {OBJECTIVE_TYPES.map((mode) => (
+                <button
+                  type="button"
+                  key={mode}
+                  className={`le-seg-btn ${objective === mode ? 'active' : ''}`.trim()}
+                  onClick={() => setObjective(mode)}
+                >{MODE_NAME[mode]}</button>
+              ))}
+            </div>
+            <p className="le-board-note">{MODE_DESCRIPTION[objective]}</p>
+          </section>
+
+          <section className="skirmish-card">
+            <h2>Placement</h2>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Random placement</span>
+              <Toggle
+                checked={placement === 'random'}
+                label="Toggle random placement"
+                onChange={(on) => setPlacement(on ? 'random' : 'fixed')}
+              />
+            </div>
+            <p className="le-board-note">
+              {placement === 'random'
+                ? 'Each side fields the roster below, dealt onto random free tiles of its placement zones at the start of every play. Paint the zones on the Zone layer.'
+                : 'Units play from exactly where they are painted on the board (the Unit layer).'}
+            </p>
+          </section>
+
+          {objective === 'survive' ? (
+            <section className="skirmish-card">
+              <h2>Survive turns</h2>
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Turns to outlast</span>
+                <Stepper
+                  value={surviveTurns}
+                  suffix=""
+                  decreaseLabel="Fewer turns to survive"
+                  increaseLabel="More turns to survive"
+                  onDecrease={() => setSurviveTurns((n) => Math.max(1, n - 1))}
+                  onIncrease={() => setSurviveTurns((n) => n + 1)}
+                />
+              </div>
+              <p className="le-board-note">The player wins by lasting this many of their own turns.</p>
+            </section>
+          ) : null}
+
+          {placement === 'random' ? (
+            (['player', 'enemy'] as const).map((side) => (
+              <section className="skirmish-card" key={side}>
+                <h2>{side === 'player' ? 'Player' : 'Enemy'} roster</h2>
+                {PLAYABLE_PIECE_TYPES.map((type) => (
+                  <div className="le-ctrlrow" key={type}>
+                    <span className="le-ctrllabel">{PIECE_LABEL[type]}</span>
+                    <Stepper
+                      value={roster[side][type] ?? 0}
+                      suffix=""
+                      decreaseLabel={`One fewer ${PIECE_LABEL[type]}`}
+                      increaseLabel={`One more ${PIECE_LABEL[type]}`}
+                      onDecrease={() => adjustRoster(side, type, -1)}
+                      onIncrease={() => adjustRoster(side, type, 1)}
+                    />
+                  </div>
+                ))}
+              </section>
+            ))
+          ) : null}
+        </>) : (<>
 
         <section className="skirmish-card">
           <h2>Tool</h2>
@@ -1015,6 +1272,8 @@ export function LevelEditor(): ReactElement {
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'prop'
                 ? <img src={`/assets/props/${propBrushDef.id}/front.png`} alt="" draggable={false} />
+                : brushKind === 'zone'
+                ? <span className={`le-brush-thumb-zone le-zone-${LE_ZONE_TINT[zoneBrushType] ?? 'goal'}`} aria-hidden="true" />
                 : featureKind === 'fence'
                 ? <span className="le-brush-thumb-pending" aria-hidden="true" /> /* fence art pending — no thumb to request */
                 : featureKind
@@ -1022,8 +1281,8 @@ export function LevelEditor(): ReactElement {
                 : <img src={brushAsset.src} alt="" draggable={false} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : brushKind === 'zone' ? (LE_ZONE_LABEL[zoneBrushType] ?? 'Zone') : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -1038,6 +1297,32 @@ export function LevelEditor(): ReactElement {
             <p className="le-board-note">Brush paints {coverBrushDensity} grass on grass tiles; Erase clears a tile. The tufts scatter from the density.</p>
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
             <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
+          </section>
+        ) : null}
+
+        {brushKind === 'zone' ? (
+          <section className="skirmish-card le-brush-panel">
+            <h2>Zone</h2>
+            {/* Which gameplay zone the brush paints. Player/Enemy placement pools feed random
+                placement; Goal is the objective tile for Reach. Brush paints, Erase clears. */}
+            <div className="le-seg">
+              {LE_ZONE_BRUSHES.map((zone) => (
+                <button
+                  type="button"
+                  key={zone.type}
+                  className={`le-seg-btn ${zoneBrushType === zone.type && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  onClick={() => { setZoneBrushType(zone.type); setBrushKind('zone'); setLayer('zone'); setTool('brush'); }}
+                >
+                  <span className={`le-zone-dot le-zone-${zone.tint}`} aria-hidden="true" />{zone.label}
+                </button>
+              ))}
+            </div>
+            <p className="le-board-note">
+              Placement zones set where each side's random-placement roster can be dealt. The Goal
+              zone is the tile a player piece must reach to win a Reach level. Zones tint the board;
+              they never change the terrain underneath.
+            </p>
+            <p className="le-board-note">{zoneCount} tile{zoneCount === 1 ? '' : 's'} zoned.</p>
           </section>
         ) : null}
 
@@ -1237,6 +1522,7 @@ export function LevelEditor(): ReactElement {
               <div><dt>Type</dt><dd>{leFamilyOfTile(selectedAsset.id)?.label ?? '—'}</dd></div>
               <div><dt>Source</dt><dd>{selectedAsset.id}</dd></div>
               <div><dt>Cell</dt><dd>{selectedCell?.x}, {selectedCell?.y}</dd></div>
+              {selectedZone ? <div><dt>Zone</dt><dd>{LE_ZONE_LABEL[selectedZone] ?? selectedZone}</dd></div> : null}
             </dl>
           ) : (
             <dl>
@@ -1244,13 +1530,14 @@ export function LevelEditor(): ReactElement {
               <div><dt>Units</dt><dd>{unitCount}</dd></div>
               <div><dt>Doodads</dt><dd>{doodadCount}</dd></div>
               <div><dt>Props</dt><dd>{propCount}</dd></div>
+              <div><dt>Zoned</dt><dd>{zoneCount}</dd></div>
             </dl>
           )}
         </section>
         ) : null}
 
         <div className="le-statusline">
-          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · {boardCols}×{boardRows}
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zoned · {boardCols}×{boardRows}
         </div>
         </KitScroll>
       </aside>

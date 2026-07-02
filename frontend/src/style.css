@@ -4319,6 +4319,67 @@ h1 {
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
+/* Save-state chip: blocked (playability violations) reads as a warning distinct from unsaved. */
+.le-topbar .le-save-state.is-blocked { color: #f27a6a; text-shadow: 0 0 8px rgba(242, 122, 106, .3); }
+
+/* ---- Gameplay zones (ADR-0048) ------------------------------------------------------------
+   Zone tint palette — one accent per paintable zone type: player placement (cyan), enemy
+   placement (crimson), goal (gold). Shared by the board overlay diamond, the brush preview,
+   and the swatch dots so a colour always means the same zone. */
+.le-zone-player { --le-zone-accent: 90, 200, 255; }
+.le-zone-enemy { --le-zone-accent: 235, 96, 96; }
+.le-zone-goal { --le-zone-accent: 245, 200, 90; }
+
+/* The on-board zone overlay: a translucent tinted diamond. It COPIES the selection ring's
+   seating exactly — top: --iso-tile-surface-top + the diamond clip-path — so it sits on the
+   tile EQUATOR (y69), never at iso-tile-height/2. That equator seating is the fix for the
+   recurring "board overlay diamonds sit too low" bug (see .tileset-cell-ring). z-index below the
+   selection ring (3) so a selected zoned tile still shows its ring on top. */
+.le-zone-cell {
+  position: absolute;
+  left: 0;
+  top: var(--iso-tile-surface-top);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(var(--le-zone-accent), .28);
+  box-shadow: inset 0 0 0 2px rgba(var(--le-zone-accent), .85);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Zone brush preview (fills the 48px thumb) + the small swatch dot in the zone picker. */
+.le-brush-thumb-zone {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: rgba(var(--le-zone-accent), .3);
+  box-shadow: inset 0 0 0 2px rgba(var(--le-zone-accent), .9);
+}
+.le-zone-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(var(--le-zone-accent), .95);
+  box-shadow: 0 0 0 1px rgba(var(--le-zone-accent), .5);
+}
+
+/* A wrapping segmented row for controls with more items than fit one line (the 5-mode picker). */
+.le-seg-wrap { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: 1fr 1fr; }
+
+/* The Layer picker now has 11 entries — too many for one row. Let it wrap into an even auto-fit
+   grid so every layer (Zone / Rules included) stays reachable without a horizontal overflow. */
+.le-seg-layers { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: repeat(4, 1fr); }
+
+/* ---- Playability violations list (ADR-0048) -----------------------------------------------
+   The always-visible to-fix list. Framed by the shared .skirmish-card (kit panel) like every
+   other section — NOT a hand-rolled box (ADR-0032). A warm accent border marks it as blocking. */
+.le-violations { box-shadow: inset 0 0 0 1px rgba(242, 122, 106, .35); }
+.le-violation-list { display: flex; flex-direction: column; gap: 7px; list-style: none; margin: 0; padding: 0; }
+.le-violation { align-items: center; color: #f4d8d2; display: flex; font-size: var(--ds-text-sm); gap: 8px; justify-content: space-between; line-height: 1.3; }
+.le-violation-msg { flex: 1 1 auto; min-width: 0; }
+.le-violation-action { flex: none; padding: 4px 8px; }
+
 /* Brush palettes render at full height and let the ONE side-panel scrollbar (.le-hud-scroll,
    ADR-0030) do the scrolling — no scroll-within-a-scroll. (Supersedes the earlier per-palette
    scroll region: the whole control column is the single scroll now.) */

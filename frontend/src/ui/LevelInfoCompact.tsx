@@ -1,10 +1,11 @@
 // Compact "Level Info" view that toggles into the level panel's preview slot
 // (same footprint as the board). Surfaces the DERIVED data a level knows about
-// itself — board composition, unit roster by piece, zones — i.e. the things NOT
-// already editable in the settings grid below (objective/difficulty/funds/income
-// stay there; this view deliberately doesn't repeat them, and omits elevation).
+// itself — board composition, unit roster by piece, zones, and its win-rule mode
+// (the Rules row). Its consumer (CampaignEditor's Info tab) is display-only, so
+// there is no editing grid; this is the whole readout, not a header above one.
 import { type ReactElement } from 'react';
-import type { Level, ObjectiveType, ZoneType } from '../core/level';
+import type { Level, Roster as PieceRoster, ZoneType } from '../core/level';
+import { MODE_NAME, objectiveSummary } from '../core/objectives';
 import type { PieceType } from '../core/types';
 
 const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'rock', 'random-rock'];
@@ -18,14 +19,39 @@ const ZONE_LABEL: Record<ZoneType, string> = {
 const TERRAIN_LABEL: Record<string, string> = {
   grass: 'Grass', water: 'Water', bridge: 'Bridge', road: 'Road', stone: 'Stone', rock: 'Rock', cliff: 'Cliff', dirt: 'Dirt', pebble: 'Pebble', sand: 'Sand',
 };
-const OBJECTIVE_LABEL: Record<ObjectiveType, string> = {
-  'capture-all': 'Capture all enemy pieces', 'capture-king': 'Capture the enemy King', survive: 'Survive the assault', reach: 'Reach the objective',
-};
 
 function countMap<K extends string>(keys: K[]): Partial<Record<K, number>> {
   const out: Partial<Record<K, number>> = {};
   for (const k of keys) out[k] = (out[k] ?? 0) + 1;
   return out;
+}
+
+// Which side "owns" the King for a level, mirroring core's kingSideOf(pieces) but read
+// off the LEVEL's own content instead of a live board: authored units when placement is
+// fixed, the roster counts when it's random. Same rule — the player owns it only when the
+// player fields a King and the enemy doesn't; both/neither ⇒ 'enemy' (rival-kings /
+// free-skirmish default). Lets the level-select surfaces render King Assault's
+// direction-aware copy ("Protect your King") without instantiating a game. Exported so the
+// campaign play/edit level rows share ONE implementation (ADR-0048: no re-hardcoded labels).
+export function kingSideForLevel(level: Level): 'player' | 'enemy' {
+  const hasKing = (side: 'player' | 'enemy'): boolean => {
+    if (level.placement === 'random') return Boolean(level.roster?.[side]?.king);
+    return level.layers.units.some((u) => u.side === side && u.type === 'king');
+  };
+  return hasKing('player') && !hasKing('enemy') ? 'player' : 'enemy';
+}
+
+/** The win-rule goal line for a level's Rules row / level-select subtitle — mode name plus
+ * the direction-aware summary (so a player-held-King King Assault reads "Protect your King"). */
+export function levelObjectiveLine(level: Level): string {
+  return `${MODE_NAME[level.objective]} — ${objectiveSummary(level.objective, kingSideForLevel(level))}`;
+}
+
+// A compact "Pawn ×3, Knight ×1" line for a random-placement roster, in board order.
+function rosterSummary(roster: PieceRoster | undefined): string {
+  if (!roster) return 'none';
+  const parts = PIECE_ORDER.filter((p) => roster[p]).map((p) => `${PIECE_LABEL[p]} ×${roster[p]}`);
+  return parts.length ? parts.join(', ') : 'none';
 }
 
 function Roster({ units, tone, label }: { units: Level['layers']['units']; tone: string; label: string }): ReactElement {
@@ -80,8 +106,20 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
 
       <section className="ce-li-zones-row">
         <span className="ce-li-title">Rules</span>
-        <span className="ce-li-zones">{OBJECTIVE_LABEL[level.objective]}{'  ·  '}{level.difficulty}</span>
+        <span className="ce-li-zones">{levelObjectiveLine(level)}{'  ·  '}{level.difficulty}</span>
       </section>
+
+      {level.placement === 'random' ? (
+        // Under random placement the Forces rosters above are empty (units are dealt at game
+        // start from the roster, not authored), so surface the roster counts explicitly —
+        // otherwise the Info tab reads as a level with no pieces.
+        <section className="ce-li-zones-row">
+          <span className="ce-li-title">Placement</span>
+          <span className="ce-li-zones">
+            Random placement  ·  Allies {rosterSummary(level.roster?.player)}  ·  Enemies {rosterSummary(level.roster?.enemy)}
+          </span>
+        </section>
+      ) : null}
     </div>
   );
 }
