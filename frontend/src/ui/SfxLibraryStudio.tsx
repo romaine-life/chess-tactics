@@ -163,10 +163,11 @@ function SfxAssignmentPanel(): ReactElement {
 // the whole point is to hear it. Every effect is authored foley (the recorded take's
 // envelope is the card art). Reuses the shared studio card classes so it matches the grids.
 
-/** Audition an asset live: the arrival thump, or the terrain's recorded landing sound. */
+/** Audition an asset live: the arrival thump, a terrain's landing sound, or any other set. */
 function auditionAsset(asset: SfxAsset): void {
   if (asset.sampleKey === 'arrival') previewArrival();
   else if (asset.terrain) previewTerrain(asset.terrain);
+  else previewSample(asset.sampleKey); // non-terrain sets (e.g. the UI click) play direct
 }
 
 /** Normalized peaks for an asset, from the longest decoded take of its sample set. */
