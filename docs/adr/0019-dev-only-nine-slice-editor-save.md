@@ -85,7 +85,11 @@ keeping one bake implementation and never reaching a production build.
 
 These two are load-bearing, enforced identically in the editor preview and the bake:
 
-1. **Keyline offset is inert.** The border is continuous by construction (atoms +
+1. **Keyline offset is inert.** *(Superseded by
+   [ADR-0050](0050-nine-slice-editor-is-the-devs-calibration-bench.md): the
+   split-layer model made the cool frame layer tunable — corners, pipes, and
+   scales — with symmetry guaranteed by the mirror-after-scale invariant. The
+   original rationale below is kept for history.)* The border is continuous by construction (atoms +
    `flipSides`, per [ADR-0012](0012-nine-slice-frames-are-atom-assembled.md) /
    [ADR-0017](0017-per-asset-flipsides-handedness.md)), so nudging only a corner's
    keyline would diverge from the fixed edges — a state the bake can't reproduce.
