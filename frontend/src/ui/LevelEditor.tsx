@@ -798,6 +798,25 @@ export function LevelEditor(): ReactElement {
   const clearBoard = (): void => {
     commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {} }, null);
   };
+  const clearActiveLayer = (): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    if (brushKind === 'tile') next.cells = {};
+    else if (brushKind === 'unit') next.units = {};
+    else if (brushKind === 'doodad') next.doodads = {};
+    else if (brushKind === 'prop') next.props = {};
+    else if (brushKind === 'cover') next.cover = {};
+    else if (featureKind) {
+      const cleared = new Set<string>();
+      for (const [key, feature] of Object.entries(next.features)) {
+        if (feature.kind !== featureKind) continue;
+        cleared.add(key);
+        delete next.features[key];
+      }
+      for (const edge of Object.keys(next.featureCuts)) if (edge.split('|').some((key) => cleared.has(key))) delete next.featureCuts[edge];
+      for (const edge of Object.keys(next.featureExits)) if (edge.split('|').some((key) => cleared.has(key))) delete next.featureExits[edge];
+    }
+    commitEditorBoard(next, null);
+  };
   const fillBoard = (mode: 'empty' | 'all'): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (mode === 'all') next.cells = {};
@@ -1177,6 +1196,7 @@ export function LevelEditor(): ReactElement {
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize tiles</button>
+            <button type="button" className="le-seg-btn danger" style={{ width: '100%', marginTop: 8 }} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear board</button>
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy board link</button>
           </section>
         ) : (<>
@@ -1406,15 +1426,22 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : null}
 
-        <section className="skirmish-card">
-          <h2>Fill</h2>
-          <div className="le-seg">
-            <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank cells with the current brush.">Empty</button>
-            <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole board with the current brush.">Whole</button>
-            <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
-            <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile from the board.">Clear</button>
-          </div>
-        </section>
+        {brushKind === 'tile' ? (
+          <section className="skirmish-card">
+            <h2>Tile Fill</h2>
+            <div className="le-seg">
+              <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank terrain cells with the current tile brush.">Empty</button>
+              <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole terrain layer with the current tile brush.">Whole</button>
+            </div>
+          </section>
+        ) : null}
+
+        {brushKind !== 'tile' ? (
+          <section className="skirmish-card">
+            <h2>Layer Actions</h2>
+            <button type="button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={`Clear every ${brushKind} placement from this board.`}>Clear {brushKind}</button>
+          </section>
+        ) : null}
 
         </>)}
 
