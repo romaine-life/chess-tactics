@@ -225,6 +225,10 @@ export function CampaignEditor() {
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+  // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
+  // /campaign or /skirmish visit this session — then there's real content at mount and
+  // nothing holds; otherwise hold the fade until the officials merge settles.
+  const [loaded, setLoaded] = useState(() => useCampaigns.getState().campaigns.length > 0);
   const [levelView, setLevelView] = useState<'board' | 'info'>('board');
   // Pan/zoom for the SELECTED-level live viewer (the list rows stay flat baked thumbnails).
   const [viewZoom, setViewZoom] = useState(0.5);
@@ -266,8 +270,16 @@ export function CampaignEditor() {
     fetchMe().then((user) => { if (active) setMe(user); });
     (async () => {
       const store = useCampaigns.getState();
-      // Officials always (for everyone), then the signed-in user's own on top.
-      store.mergeOfficial(await loadOfficialCampaigns());
+      try {
+        // Officials always (for everyone), then the signed-in user's own on top.
+        store.mergeOfficial(await loadOfficialCampaigns());
+      } finally {
+        // The entrance holds on this flag (ADR-0051): without it the chrome fades in
+        // over a false "No campaigns yet." and the list pops in when the fetch lands.
+        // Flip it as soon as the primary content is settled — the user merge below
+        // only layers rows on top.
+        if (active) setLoaded(true);
+      }
       if (!active) return;
       try {
         store.mergeUser(await loadWorkspace());
@@ -444,7 +456,7 @@ export function CampaignEditor() {
         </nav>
       </TitleBarSlot>
 
-      <ArtRouteChrome as="main" className="ce-layout">
+      <ArtRouteChrome as="main" className="ce-layout" ready={loaded}>
         <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
           <div className="ce-panel-head">
             <h2>Campaigns</h2>
@@ -633,7 +645,7 @@ export function CampaignEditor() {
         </section>
       </ArtRouteChrome>
 
-      <ArtRouteChrome as="footer" className="ce-footer">
+      <ArtRouteChrome as="footer" className="ce-footer" ready={loaded}>
         <AssetButton disabled={!camp || camp.origin === 'official'} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
         <AssetButton danger disabled={!camp || readOnly} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>

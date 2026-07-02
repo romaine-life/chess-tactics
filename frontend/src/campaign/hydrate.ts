@@ -25,18 +25,23 @@ export function ensureCampaignsHydrated(): Promise<void> {
   if (hydrated || state.campaigns.length) return Promise.resolve();
   if (inFlight) return inFlight;
   inFlight = (async () => {
-    // 1. Officials — always, for everyone. loadOfficialCampaigns never throws (it
-    //    falls back to the committed static file on any backend failure).
-    useCampaigns.getState().mergeOfficial(await loadOfficialCampaigns());
-    // 2. The signed-in user's own campaigns, merged on top. 401 / unreachable ⇒ skip,
-    //    leaving officials in place.
     try {
-      useCampaigns.getState().mergeUser(await loadWorkspace());
-    } catch {
-      /* not signed in, or no /api proxy (dev) ⇒ officials only */
+      // 1. Officials — always, for everyone. loadOfficialCampaigns never throws (it
+      //    falls back to the committed static file on any backend failure).
+      useCampaigns.getState().mergeOfficial(await loadOfficialCampaigns());
+      // 2. The signed-in user's own campaigns, merged on top. 401 / unreachable ⇒ skip,
+      //    leaving officials in place.
+      try {
+        useCampaigns.getState().mergeUser(await loadWorkspace());
+      } catch {
+        /* not signed in, or no /api proxy (dev) ⇒ officials only */
+      }
+      hydrated = true;
+    } finally {
+      // Never cache a rejected promise: if a merge ever throws, the next visit must
+      // retry instead of every future caller inheriting the poisoned inFlight.
+      inFlight = null;
     }
-    hydrated = true;
-    inFlight = null;
   })();
   return inFlight;
 }

@@ -130,8 +130,21 @@ export function Campaign(): ReactElement {
     return () => shell?.classList.remove('main-menu-active');
   }, []);
 
-  // Load the shared workspace the same way the editor does, so the lists match.
-  useEffect(() => { void ensureCampaignsHydrated(); }, []);
+  // Load the shared workspace the same way the editor does, so the lists match. The
+  // entrance fade HOLDS until this settles (ADR-0046 C.1 / ADR-0051): on a first visit
+  // the store starts empty and the rail/panel would otherwise fade in as a bare frame
+  // with the content popping in whenever the fetch lands. Already-hydrated visits are
+  // ready at mount, so nothing holds. The promise always resolves (officials fall back
+  // to the static file; user-workspace failures are swallowed), and the entrance
+  // primitive's own failsafe backstops anything pathological.
+  const [contentReady, setContentReady] = useState(() => useCampaigns.getState().campaigns.length > 0);
+  useEffect(() => {
+    let active = true;
+    // .catch first: even a failed hydration must flip readiness (show whatever state
+    // exists) rather than hold the chrome invisible until the entrance failsafe.
+    void ensureCampaignsHydrated().catch(() => {}).then(() => { if (active) setContentReady(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const sync = () => setSelectedId(campaignIdFromPath(window.location.pathname));
@@ -194,7 +207,7 @@ export function Campaign(): ReactElement {
       {/* Settings-twin layout, mirroring the main menu: shared app title bar + a rail
           of campaign tabs and a level-select panel over the ambience. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
-        <ArtRouteChrome className="settings-shell">
+        <ArtRouteChrome className="settings-shell" ready={contentReady}>
           <aside className="settings-frame settings-rail-frame" aria-label="Campaigns">
             {officialCampaigns.length > 0 && (
               <>

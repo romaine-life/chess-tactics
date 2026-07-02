@@ -20,7 +20,9 @@ import {
   normalizeRoutePath,
   shouldInterceptAppLinkClick,
 } from './navigation';
-import { isBoardArtRoute, isHeavyRoute } from './routeSurfaces';
+import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey } from './routeSurfaces';
+import { SCREEN_EXIT_MS, setScreenExiting } from './shell/screenExit';
+import { ensureCampaignsHydrated } from '../campaign/hydrate';
 
 // The Pixi-heavy / larger surfaces are code-split so the menu, lobbies, etc.
 // don't pull the renderer bundle (preserving app.js's lazy-mount behaviour).
@@ -65,9 +67,18 @@ function chunkForPath(path: string): (() => Promise<unknown>) | null {
 const prefetched = new Set<() => Promise<unknown>>();
 function prefetchRoute(path: string): void {
   const thunk = chunkForPath(path);
-  if (!thunk || prefetched.has(thunk)) return;
-  prefetched.add(thunk);
-  void thunk();
+  if (thunk && !prefetched.has(thunk)) {
+    prefetched.add(thunk);
+    void thunk();
+  }
+  // Warm route DATA the same way (ADR-0051): the Campaign play screen holds its reveal
+  // on the campaign store hydrating, and the skirmish map picker's "Loading maps."
+  // window shrinks with it — so start that fetch at hover/focus intent; by click time
+  // the store is usually populated. ensureCampaignsHydrated is self-deduping, so
+  // repeat intent events are free.
+  if (path === '/campaign' || path.startsWith('/campaign/') || path === '/skirmish') {
+    void ensureCampaignsHydrated();
+  }
 }
 
 // Route transition behavior is declared in routeSurfaces.ts (ADR-0049). Heavy routes get
@@ -78,6 +89,10 @@ function prefetchRoute(path: string): void {
 // in style.css (JS drives the route swap; CSS drives the opacity fade).
 const VEIL_COVER_MS = 260;
 const VEIL_REVEAL_MS = 340;
+// Cap on the ADR-0051 post-swap exit hold (outgoing chrome invisible while a lazy
+// light destination's chunk downloads) — same never-strand posture as the entrance
+// hold's READY_FAILSAFE_MS.
+const EXIT_HOLD_FAILSAFE_MS = 4000;
 
 // React router replacing app.js's string-HTML router. Same-origin app links are
 // intercepted below so route changes keep the document, React tree, and BGM
@@ -111,6 +126,22 @@ export function App(): ReactElement {
   // mount (e.g. /settings -> /settings/general) would otherwise never satisfy a path
   // equality check and the veil would stay stuck covering.
   const coverCommitted = useRef(false);
+  // Light-hop exit dissolve (ADR-0051): the timer holding the swap while the outgoing
+  // chrome fades, and the post-swap flag that keeps the exit state up until the
+  // incoming screen has committed (so a slow lazy chunk can't flash the faded-out
+  // screen back). Mirrors the veil's pendingTarget/coverCommitted shape. The failsafe
+  // caps that post-swap hold (a cold lazy chunk on a hover-less device could otherwise
+  // strand the player on a bare backdrop indefinitely — the entrance side has the same
+  // posture in READY_FAILSAFE_MS).
+  const exitTimer = useRef(0);
+  const exitSwapCommitted = useRef(false);
+  const exitHoldFailsafe = useRef(0);
+  // The nav handler below is mounted once ([] deps) and must read the CURRENT veil
+  // phase — the exit dissolve may only arm while the veil is idle, and a nav landing
+  // mid-cover must retarget the veil's held swap instead of racing it for
+  // pendingTarget (the race left the veil covering forever).
+  const veilRef = useRef(veil);
+  useLayoutEffect(() => { veilRef.current = veil; }, [veil]);
   const pathRef = useRef(path);
   // Layout effect (not passive): a destination's on-mount redirect runs as a passive
   // effect and dispatches a nav BEFORE a passive pathRef update would run, which made
@@ -128,14 +159,82 @@ export function App(): ReactElement {
       // (ADR-0046). The very first cold page load never sets this, so the cold-load reveal
       // owns the initial paint without a competing fade.
       markScreenNavigation();
+      // A nav while the veil is COVERING: the field owns the transition — no dissolve
+      // choreography applies, and racing the cover timer for pendingTarget must not
+      // happen (an exit timer stealing the target left the veil covering forever).
+      // Before the cover has swapped, just retarget the held swap; after, swap directly
+      // under the (opaque) field — the reveal gate settles on whatever lands last.
+      if (veilRef.current === 'cover') {
+        if (isBoardArtRoute(next)) armBoardArtForNav();
+        if (!coverCommitted.current) {
+          pendingTarget.current = next;
+        } else {
+          pathRef.current = next;
+          startRouteTransition(() => setPath(next));
+        }
+        return;
+      }
+      // A non-heavy nav landing mid-DISSOLVE just retargets the pending swap (queued as
+      // the LAST target, ADR-0046 D — input never drops, and the armed timer can never
+      // fire a stale target over a later navigation). A heavy newcomer instead falls
+      // through: it cancels the dissolve and hands off to the veil.
+      if (exitTimer.current && !isHeavyRoute(next)) {
+        pendingTarget.current = next;
+        return;
+      }
       // Dissolve if EITHER end is heavy — entering one, or leaving one for a light screen.
       if (isHeavyRoute(next) || isHeavyRoute(current)) {
+        // A heavy nav mid-exit-dissolve hands off to the veil: stop the pending light
+        // swap so it can't fire under the cover. The exit CLASS stays on (the chrome is
+        // mid-fade — snapping it back to 1 under a still-transparent veil is a visible
+        // pop); the veil's reveal gate clears it once the field is opaque.
+        if (exitTimer.current) {
+          window.clearTimeout(exitTimer.current);
+          exitTimer.current = 0;
+        }
+        if (exitHoldFailsafe.current) {
+          window.clearTimeout(exitHoldFailsafe.current);
+          exitHoldFailsafe.current = 0;
+        }
+        exitSwapCommitted.current = false;
         pendingTarget.current = next; // hold the swap until the field is fully opaque
         coverCommitted.current = false;
         // Entering the board: mark its art pending NOW (before the board mounts) so the
         // veil's reveal gate below waits for the real tiles, not just the JS commit.
         if (isBoardArtRoute(next)) armBoardArtForNav();
         setVeil('cover');
+      } else if (isLightArtRoute(current) && routeScreenKey(next) !== routeScreenKey(current)) {
+        // Leaving a light-art SCREEN (ADR-0051): dissolve the outgoing chrome, then swap.
+        // Same-screen hops (settings tabs, campaign rail) skip this — the component
+        // instance is preserved and handles its own sub-navigation, so a dissolve would
+        // blink chrome that never remounts.
+        pendingTarget.current = next;
+        // A fresh episode owns the bookkeeping: a still-pending previous swap must not
+        // let the reset effect below clear the exit state mid-dissolve.
+        exitSwapCommitted.current = false;
+        if (exitHoldFailsafe.current) {
+          window.clearTimeout(exitHoldFailsafe.current);
+          exitHoldFailsafe.current = 0;
+        }
+        setScreenExiting(true);
+        exitTimer.current = window.setTimeout(() => {
+          exitTimer.current = 0;
+          const target = pendingTarget.current;
+          pendingTarget.current = null;
+          if (target != null) {
+            exitSwapCommitted.current = true;
+            pathRef.current = target;
+            startRouteTransition(() => setPath(target));
+            // Cap the invisible-and-inert post-swap hold: if the incoming chunk is
+            // still downloading after this, bring the old screen back rather than
+            // stranding the player on a bare backdrop (the swap still lands later).
+            exitHoldFailsafe.current = window.setTimeout(() => {
+              exitHoldFailsafe.current = 0;
+              exitSwapCommitted.current = false;
+              setScreenExiting(false);
+            }, EXIT_HOLD_FAILSAFE_MS);
+          }
+        }, SCREEN_EXIT_MS);
       } else {
         // Light hop: keep the current screen painted (no fallback flash), swap when ready.
         pathRef.current = next;
@@ -199,6 +298,10 @@ export function App(): ReactElement {
   useEffect(() => {
     if (veil === 'cover' && coverCommitted.current && !isPending && !boardArtPending) {
       pendingTarget.current = null;
+      // A dissolve the veil took over mid-fade (heavy nav during a light exit) is
+      // released here, under the fully opaque field — never in the transparent
+      // cover ramp, where dropping the class would visibly snap the chrome back.
+      setScreenExiting(false);
       setVeil('reveal');
     }
   }, [veil, path, isPending, boardArtPending]);
@@ -209,6 +312,22 @@ export function App(): ReactElement {
     const timer = window.setTimeout(() => setVeil('idle'), VEIL_REVEAL_MS);
     return () => window.clearTimeout(timer);
   }, [veil]);
+
+  // Exit dissolve: once the swap has committed AND nothing is still pending (the lazy
+  // chunk loaded, any on-mount sub-route redirect settled), drop the exit state. Held
+  // PAST the swap so a slow chunk can't flash the dissolved screen back to full
+  // opacity while it loads; gated on the committed flag (not a path match) for the
+  // same redirect reason as the veil's coverCommitted.
+  useEffect(() => {
+    if (exitSwapCommitted.current && !isPending) {
+      exitSwapCommitted.current = false;
+      if (exitHoldFailsafe.current) {
+        window.clearTimeout(exitHoldFailsafe.current);
+        exitHoldFailsafe.current = 0;
+      }
+      setScreenExiting(false);
+    }
+  }, [path, isPending]);
 
   return (
     <>

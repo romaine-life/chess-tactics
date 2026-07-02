@@ -1066,6 +1066,11 @@ h1 {
 :root {
   --route-veil-cover-ms: 260ms;
   --route-veil-reveal-ms: 340ms;
+  /* Light-hop exit dissolve (ADR-0051) — the veil-less counterpart of the cover phase:
+     the outgoing chrome fades over this, then the route swaps. Keep in lockstep with
+     SCREEN_EXIT_MS in ui/shell/screenExit.ts. Shorter than the entrance fade on purpose
+     (exits accelerate; arriving matters more than leaving). */
+  --route-exit-ms: 200ms;
   /* cold, rainy dark — never white (white is what reads as "browser loading") */
   --route-veil-field: radial-gradient(130% 130% at 50% 34%, #151c29 0%, #0a0d13 62%, #05070b 100%);
 }
@@ -10992,6 +10997,38 @@ button.tileset-relationship-cell {
 /* Inert while the fade plays (ADR-0046 D): can't trigger a new transition mid-transition. */
 .screen-enter.screen-enter-lock {
   pointer-events: none;
+}
+
+/* Readiness hold (ADR-0046 C.1, ADR-0051): chrome whose content is still arriving sits
+   invisible and inert; the entrance fade only starts once the screen reports ready, so
+   the reveal always shows real content — never an empty frame with the content popping
+   in after. Screens opt in via ArtRouteChrome's `ready` prop. */
+.screen-enter-hold {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Light-hop exit dissolve (ADR-0051): the outgoing screen's chrome fades down, THEN the
+   route swaps (App holds the swap for SCREEN_EXIT_MS in ui/shell/screenExit.ts — keep
+   that and --route-exit-ms in lockstep). This is an ANIMATION, not a transition, on
+   purpose: settled chrome still carries .screen-enter's filled animation, and Chrome
+   does not start a transition off an animation being removed in the same style change
+   (verified live — the transition version faded the menu but froze settled campaign
+   chrome at 1 until the swap). Replacing the animation out-cascades .screen-enter's
+   !important fill by source order. --screen-exit-from is stamped per element by
+   ArtRouteChrome at exit start (the current computed opacity), so an exit interrupting
+   a mid-flight entrance fades from wherever the fade had reached — no up-blip to 1.
+   The duration is route choreography — the veil's bespoke family (ADR-0043
+   out-of-scope), NOT the one-fade-speed law: exits read shorter than entrances across
+   the motion canon. */
+.screen-exit {
+  animation: screen-exit-fade var(--route-exit-ms) var(--ds-ease-linear) both !important;
+  pointer-events: none;
+}
+
+@keyframes screen-exit-fade {
+  from { opacity: var(--screen-exit-from, 1); }
+  to { opacity: 0; }
 }
 
 .settings-rail-frame,
