@@ -13,8 +13,8 @@ import { AccountMenu } from './AccountMenu';
 const SETTINGS_ICON = '/assets/ui/main-menu/icons-carved/settings.png';
 
 // The gear's target: send the CURRENT location along as ?returnTo so Settings can
-// offer a real "← Back" to the screen the user left (Settings validates the value;
-// see returnToFromLocation there). On Settings itself the gear stays the documented
+// offer a real "‹ Back" to the screen the user left (validated via readValidatedReturnTo
+// in ui/navigation.ts). On Settings itself the gear stays the documented
 // "back to settings root" hop (#241) and must NOT capture a settings path — it only
 // re-threads whatever returnTo the URL already carries, so the Back survives the hop.
 function settingsHref(): string {
