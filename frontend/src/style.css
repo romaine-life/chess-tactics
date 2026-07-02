@@ -4322,11 +4322,16 @@ h1 {
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
+/* Editor buttons wear the SHARED kit frame (ADR-0002/0011/0012): the 9-slice border-image
+   button atoms, same art as the Settings action buttons — never hand-rolled gradients.
+   neutral = gold (default/inactive), primary = cyan (active/selected), danger = red (Clear).
+   The icon+label grid layout stays the editor's own; only the frame comes from the kit. */
 .le-seg-btn {
-  background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94));
-  border: 1px solid rgba(82, 142, 170, .34);
-  border-radius: 5px;
-  color: #cfe6f1;
+  appearance: none;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
   cursor: pointer;
   display: grid;
   font: inherit;
@@ -4334,25 +4339,65 @@ h1 {
   gap: 5px;
   grid-auto-flow: column;
   line-height: 1;
-  min-height: 30px;
-  padding: 4px 6px;
+  min-height: 38px;
+  padding: 0 2px;
   place-items: center;
+  text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
 }
 .le-seg-btn:disabled { cursor: default; opacity: .4; }
-.le-seg-btn:not(:disabled):hover {
-  color: #f4fbff;
-}
+.le-seg-btn:not(:disabled):hover { filter: brightness(1.08); }
 .le-seg-btn:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
-.le-seg-btn.active {
-  background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
-  border-color: var(--skirmish-cyan);
-  box-shadow: 0 0 0 1px rgba(56, 215, 255, .3);
-  color: #eafaff;
+.le-seg-btn.active { border-image-source: url("/assets/ui/kit/button-primary.png"); }
+.le-seg-btn.danger { border-image-source: url("/assets/ui/kit/button-danger.png"); }
+
+/* Layer picker — a dropdown (the tab count outgrew a single segmented row). Wears the same
+   kit frame (border-image button atom) as the editor buttons so it reads as one control family,
+   not a lone gradient; the native select keeps its dropdown chevron. */
+/* The 10px kit frame's fill slice paints over the select's own background, and a <select>
+   can't host a reliable ::after — so the dropdown chevron rides on the wrapper, above the frame. */
+.le-layer-select-wrap { position: relative; }
+.le-layer-select-wrap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 12px;
+  height: 8px;
+  transform: translateY(-50%);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
+  pointer-events: none;
 }
+.le-layer-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  min-height: 40px;
+  outline: none;
+  padding: 0 22px 0 6px;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
+  width: 100%;
+}
+.le-layer-select:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+.le-layer-select option {
+  background: #0a1f2e;
+  color: #cfe6f1;
+  text-transform: none;
+}
+.le-layer-select option:disabled { color: rgba(207, 230, 241, .4); }
 
 /* active brush picker */
 .le-brush-pick { align-items: center; display: grid; gap: 8px; grid-template-columns: 48px minmax(0, 1fr); margin-top: 6px; }
@@ -4364,11 +4409,16 @@ h1 {
   height: 44px;
   overflow: hidden;
   place-items: center;
+  position: relative;
   width: 48px;
 }
 /* Fit the brush preview INSIDE the thumb. The old height:90% mis-resolved against the
    auto grid row, so portrait sprites (roads) overflowed to ~88px and clipped. */
 .le-brush-thumb img { display: block; max-width: 100%; max-height: 100%; image-rendering: pixelated; object-fit: contain; }
+/* Tile chip: the surface sprite is a tall 96x180 frame (diamond up top, empty below), so
+   `contain` shrinks it to a low sliver. Fill the chip and frame the diamond so the preview
+   focuses on the surface. object-position pulls the upper diamond into the box center. */
+.le-brush-thumb img.le-thumb-tile { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 26%; }
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
