@@ -25,7 +25,7 @@ type BracketCorners = Record<BracketCorner, Off>;
 type EdgeSide = 'top' | 'bottom' | 'left' | 'right';
 type EdgeSides = Record<EdgeSide, Off>;
 type EditState = { keyline: Off; frameCorners: BracketCorners; edge: Off; edgeSides: EdgeSides; frameScale: number; bracket: Off; bracketCorners: BracketCorners; content: number; fill: number; bracketScale: number };
-type PieceKey = 'frame' | 'bracket';
+type PieceKey = 'frame' | 'bracket' | 'pipes';
 
 type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean };
 
@@ -570,28 +570,59 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   };
   const bracketRange = () => loaded ? boxRange(loaded.accentBox, edit.bracketScale) : null;
   const frameCornerRange = (scale = edit.frameScale) => loaded ? boxRange(loaded.baseBox, scale) : null;
-  const edgeRange = (scale = edit.frameScale, sides = edit.edgeSides) => {
+  // The four scaled pipe canvases, built EXACTLY like buildFrameCanvas does (mirror/
+  // rotate after scaling), so clamp ranges are computed on the same pixels that draw.
+  const scaledPipes = (scale = edit.frameScale) => {
     if (!loaded) return null;
-    const topEdge = scaleCanvas(toCanvas(loaded.edge, loaded.ew, loaded.eh), scale);
-    const bottomEdge = flip(topEdge, topEdge.width, topEdge.height, false, true);
-    const side = scaleCanvas(rot90(loaded.edge, loaded.ew, loaded.eh), scale);
-    const flippedSide = flip(side, side.width, side.height, true, false);
-    const rightEdge = asset.flipSides ? flippedSide : side;
-    const leftEdge = asset.flipSides ? side : flippedSide;
-    const topBox = opaqueBox(topEdge);
-    const bottomBox = opaqueBox(bottomEdge);
-    const leftBox = opaqueBox(leftEdge);
-    const rightBox = opaqueBox(rightEdge);
-    const minDx = Math.max(-leftBox.minX - sides.left.dx, rightBox.maxX - rightEdge.width + 1 - sides.right.dx);
-    const minDy = Math.max(-topBox.minY - sides.top.dy, bottomBox.maxY - bottomEdge.height + 1 - sides.bottom.dy);
+    const top = scaleCanvas(toCanvas(loaded.edge, loaded.ew, loaded.eh), scale);
+    const bottom = flip(top, top.width, top.height, false, true);
+    const r = rot90(top, top.width, top.height);
+    const fr = flip(r, r.width, r.height, true, false);
+    return { top, bottom, right: asset.flipSides ? fr : r, left: asset.flipSides ? r : fr };
+  };
+  const edgeRange = (scale = edit.frameScale, sides = edit.edgeSides) => {
+    const p = scaledPipes(scale);
+    if (!p) return null;
+    const topBox = opaqueBox(p.top);
+    const bottomBox = opaqueBox(p.bottom);
+    const leftBox = opaqueBox(p.left);
+    const rightBox = opaqueBox(p.right);
+    const minDx = Math.max(-leftBox.minX - sides.left.dx, rightBox.maxX - p.right.width + 1 - sides.right.dx);
+    const minDy = Math.max(-topBox.minY - sides.top.dy, bottomBox.maxY - p.bottom.height + 1 - sides.bottom.dy);
     return {
       minDx,
       minDy,
-      maxDx: Math.max(minDx, Math.floor((asset.frame.w - leftEdge.width - rightEdge.width) / 2) - Math.max(sides.left.dx, sides.right.dx)),
-      maxDy: Math.max(minDy, Math.floor((asset.frame.h - topEdge.height - bottomEdge.height) / 2) - Math.max(sides.top.dy, sides.bottom.dy)),
+      maxDx: Math.max(minDx, Math.floor((asset.frame.w - p.left.width - p.right.width) / 2) - Math.max(sides.left.dx, sides.right.dx)),
+      maxDy: Math.max(minDy, Math.floor((asset.frame.h - p.top.height - p.bottom.height) / 2) - Math.max(sides.top.dy, sides.bottom.dy)),
     };
   };
-  const nudgeBracket = (dx: number, dy: number) => {
+  // Per-side range for the stored SUM (global edge + that side's residual): outward
+  // limit = art flush with the footprint edge, inward limit = halfway to the
+  // opposite pipe. Unlike edgeRange (the global clamp), each side is independent.
+  const pipeSideRange = (side: EdgeSide, scale = edit.frameScale) => {
+    const p = scaledPipes(scale);
+    if (!p) return null;
+    const box = opaqueBox(p[side]);
+    if (side === 'top') return { min: -box.minY, max: Math.floor((asset.frame.h - p.top.height - p.bottom.height) / 2) };
+    if (side === 'bottom') return { min: box.maxY - p.bottom.height + 1, max: Math.floor((asset.frame.h - p.top.height - p.bottom.height) / 2) };
+    if (side === 'left') return { min: -box.minX, max: Math.floor((asset.frame.w - p.left.width - p.right.width) / 2) };
+    return { min: box.maxX - p.right.width + 1, max: Math.floor((asset.frame.w - p.left.width - p.right.width) / 2) };
+  };
+  // Arrow deltas arrive in SCREEN space; offsets are stored inward-positive (mirrored
+  // axes negate). Remap so the selected piece always moves in the arrow's screen
+  // direction. 'all' stays symmetric (↓/→ = inward, ↑/← = outward); a side scope's
+  // tangent axis stays a symmetric squeeze/spread of its corner pair.
+  const screenToStored = (scope: BracketScope, dx: number, dy: number): [number, number] => {
+    if (scope === 'tr') return [-dx, dy];
+    if (scope === 'bl') return [dx, -dy];
+    if (scope === 'br') return [-dx, -dy];
+    if (scope === 'bottom') return [dx, -dy];
+    if (scope === 'right') return [-dx, dy];
+    return [dx, dy];
+  };
+  const withAxis = (o: Off, axis: 'dx' | 'dy', v: number): Off => (axis === 'dx' ? { ...o, dx: v } : { ...o, dy: v });
+  const nudgeBracket = (sdx: number, sdy: number) => {
+    const [dx, dy] = screenToStored(layerScope, sdx, sdy);
     const range = bracketRange();
     if (!range) return;
     const scoped = cornersForScope(layerScope);
@@ -612,7 +643,8 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       return { ...cur, bracketCorners: corners };
     });
   };
-  const nudgeFrame = (dx: number, dy: number) => {
+  const nudgeFrame = (sdx: number, sdy: number) => {
+    const [dx, dy] = screenToStored(layerScope, sdx, sdy);
     const cornerRange = frameCornerRange();
     const edgeBaseRange = edgeRange();
     if (!cornerRange || !edgeBaseRange) return;
@@ -632,28 +664,98 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           edge: { dx: clamp(cur.edge.dx + dx, edgeBaseRange.minDx, edgeBaseRange.maxDx), dy: clamp(cur.edge.dy + dy, edgeBaseRange.minDy, edgeBaseRange.maxDy) },
         };
       }
+      if (sideScope.length === 1) {
+        // RIGID side move along the side's normal axis: ONE shared delta, clamped so
+        // both corners AND the pipe can take it — the side moves whole or not at all
+        // (it must never shear apart when one member hits a clamp bound first).
+        const side = sideScope[0];
+        const axis: 'dx' | 'dy' = side === 'top' || side === 'bottom' ? 'dy' : 'dx';
+        const d = axis === 'dy' ? dy : dx;
+        const pr = pipeSideRange(side);
+        if (d !== 0 && pr) {
+          let lo = pr.min - (cur.edge[axis] + edgeSides[side][axis]);
+          let hi = pr.max - (cur.edge[axis] + edgeSides[side][axis]);
+          const cornerLo = axis === 'dx' ? cornerRange.minX : cornerRange.minY;
+          const cornerHi = axis === 'dx' ? cornerRange.maxX : cornerRange.maxY;
+          for (const k of cornerScope) {
+            lo = Math.max(lo, cornerLo - (cur.keyline[axis] + frameCorners[k][axis]));
+            hi = Math.min(hi, cornerHi - (cur.keyline[axis] + frameCorners[k][axis]));
+          }
+          const applied = lo <= hi ? clamp(d, lo, hi) : 0;
+          for (const k of cornerScope) frameCorners[k] = withAxis(frameCorners[k], axis, frameCorners[k][axis] + applied);
+          edgeSides[side] = withAxis(edgeSides[side], axis, edgeSides[side][axis] + applied);
+        }
+        // Tangent axis: symmetric squeeze/spread of the corner pair (pipes are
+        // anchored along their own axis, so there is nothing rigid to move).
+        const tAxis: 'dx' | 'dy' = axis === 'dy' ? 'dx' : 'dy';
+        const t = tAxis === 'dx' ? dx : dy;
+        if (t !== 0) {
+          const tLo = tAxis === 'dx' ? cornerRange.minX : cornerRange.minY;
+          const tHi = tAxis === 'dx' ? cornerRange.maxX : cornerRange.maxY;
+          for (const k of cornerScope) {
+            const actual = clamp(cur.keyline[tAxis] + frameCorners[k][tAxis] + t, tLo, tHi);
+            frameCorners[k] = withAxis(frameCorners[k], tAxis, actual - cur.keyline[tAxis]);
+          }
+        }
+        return { ...cur, frameCorners, edgeSides };
+      }
       for (const k of cornerScope) {
         const actualX = clamp(cur.keyline.dx + frameCorners[k].dx + dx, cornerRange.minX, cornerRange.maxX);
         const actualY = clamp(cur.keyline.dy + frameCorners[k].dy + dy, cornerRange.minY, cornerRange.maxY);
         frameCorners[k] = { dx: actualX - cur.keyline.dx, dy: actualY - cur.keyline.dy };
       }
-      for (const side of sideScope) {
-        if (side === 'top' || side === 'bottom') {
-          edgeSides[side] = { ...edgeSides[side], dy: edgeSides[side].dy + dy };
-        } else {
-          edgeSides[side] = { ...edgeSides[side], dx: edgeSides[side].dx + dx };
-        }
-      }
       return { ...cur, frameCorners, edgeSides };
+    });
+  };
+  // Pipes as their own piece: move ONE pipe (or the global edge under 'all') without
+  // touching any corner — the operation that used to require hand-editing JSON.
+  const nudgePipes = (sdx: number, sdy: number) => {
+    const [dx, dy] = screenToStored(layerScope, sdx, sdy);
+    if (layerScope === 'all') {
+      const range = edgeRange();
+      if (!range) return;
+      update((cur) => ({ ...cur, edge: { dx: clamp(cur.edge.dx + dx, range.minDx, range.maxDx), dy: clamp(cur.edge.dy + dy, range.minDy, range.maxDy) } }));
+      return;
+    }
+    const sideScope = sidesForScope(layerScope);
+    if (!sideScope.length) return;
+    update((cur) => {
+      const edgeSides = cloneEdgeSides(cur.edgeSides);
+      for (const side of sideScope) {
+        const axis: 'dx' | 'dy' = side === 'top' || side === 'bottom' ? 'dy' : 'dx';
+        const d = axis === 'dy' ? dy : dx;
+        if (!d) continue;
+        const pr = pipeSideRange(side);
+        if (!pr) continue;
+        const sum = clamp(cur.edge[axis] + edgeSides[side][axis] + d, pr.min, pr.max);
+        edgeSides[side] = withAxis(edgeSides[side], axis, sum - cur.edge[axis]);
+      }
+      return { ...cur, edgeSides };
     });
   };
   const nudge = (dx: number, dy: number) => {
     if (active === 'bracket') { nudgeBracket(dx, dy); return; }
+    if (active === 'pipes') { nudgePipes(dx, dy); return; }
     nudgeFrame(dx, dy);
   };
   // Send the active piece to its max outward position — flush with the footprint corner.
   const maxOut = () => {
     if (!loaded) return;
+    if (active === 'pipes') {
+      const range = edgeRange();
+      if (!range) return;
+      update((cur) => {
+        if (layerScope === 'all') return { ...cur, edge: { dx: range.minDx, dy: range.minDy }, edgeSides: cloneEdgeSides() };
+        const edgeSides = cloneEdgeSides(cur.edgeSides);
+        for (const side of sidesForScope(layerScope)) {
+          const axis: 'dx' | 'dy' = side === 'top' || side === 'bottom' ? 'dy' : 'dx';
+          const pr = pipeSideRange(side);
+          if (pr) edgeSides[side] = withAxis(edgeSides[side], axis, pr.min - cur.edge[axis]);
+        }
+        return { ...cur, edgeSides };
+      });
+      return;
+    }
     if (active === 'bracket') {
       const range = bracketRange();
       if (!range) return;
@@ -738,6 +840,14 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     for (const k of cornersForScope(layerScope)) frameCorners[k] = baseFrameCorners[k];
     for (const s of sidesForScope(layerScope)) edgeSides[s] = baseEdgeSides[s];
     return { ...cur, frameCorners, edgeSides };
+  });
+  const resetPipes = () => update((cur) => {
+    const base = baselineOf();
+    if (layerScope === 'all') return { ...cur, edge: base.edge, edgeSides: cloneEdgeSides(base.edgeSides) };
+    const edgeSides = cloneEdgeSides(cur.edgeSides);
+    const baseEdgeSides = cloneEdgeSides(base.edgeSides);
+    for (const s of sidesForScope(layerScope)) edgeSides[s] = baseEdgeSides[s];
+    return { ...cur, edgeSides };
   });
   const resetContent = () => update((cur) => ({ ...cur, content: baselineOf().content }));
   const resetFill = () => update((cur) => ({ ...cur, fill: baselineOf().fill }));
@@ -968,11 +1078,18 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     content: edit.content,
     fill: edit.fill,
   }, null, 2);
-  const pieces: PieceKey[] = loaded ? (loaded.hasAccent ? ['bracket', 'frame'] : ['frame']) : [];
-  const pieceLabel = (k: PieceKey) => (k === 'frame' ? 'frame' : 'bracket');
+  const pieces: PieceKey[] = loaded ? (loaded.hasAccent ? ['bracket', 'frame', 'pipes'] : ['frame', 'pipes']) : [];
+  const pieceLabel = (k: PieceKey) => k;
+  // Pipes have one degree of freedom each (their normal axis) — corner scopes don't
+  // apply. The shared grid narrows to all + the four sides for the pipes piece.
+  const scopesForPiece = (k: PieceKey) => (k === 'pipes' ? BRACKET_SCOPES.filter((s) => s.key === 'all' || sidesForScope(s.key).length === 1) : BRACKET_SCOPES);
+  const setActivePiece = (k: PieceKey) => {
+    setActive(k);
+    if (k === 'pipes' && layerScope !== 'all' && sidesForScope(layerScope).length !== 1) setLayerScope('all');
+  };
   const scopeLabel = BRACKET_SCOPES.find((s) => s.key === layerScope)?.label ?? layerScope;
   const activeLabel = layerScope !== 'all' ? `${pieceLabel(active)} ${scopeLabel}` : pieceLabel(active);
-  const resetActive = active === 'frame' ? resetFrame : resetBracket;
+  const resetActive = active === 'frame' ? resetFrame : active === 'pipes' ? resetPipes : resetBracket;
 
   // Save straight to the on-disk config + regenerate the asset, via the dev-only
   // Vite endpoint. import.meta.env.DEV gates the button; the endpoint only exists
@@ -1068,13 +1185,13 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
             </div>
           <div style={ST.pieceRow}>
             {pieces.map((k) => (
-              <button key={k} type="button" onClick={() => setActive(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{pieceLabel(k)}</button>
+              <button key={k} type="button" onClick={() => setActivePiece(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{pieceLabel(k)}</button>
             ))}
           </div>
           <div style={ST.scopeBox}>
             <span style={ST.scopeLabel}>{pieceLabel(active)} scope</span>
             <div style={ST.scopeGrid}>
-              {BRACKET_SCOPES.map((s) => (
+              {scopesForPiece(active).map((s) => (
                 <button
                   key={s.key}
                   type="button"
@@ -1087,7 +1204,12 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               ))}
             </div>
           </div>
-          <p style={ST.hint}>Editing <b>{activeLabel}</b> — arrow keys nudge 1px. Bracket and frame use the same scope, nudge, size, and reset controls.</p>
+          <p style={ST.hint}>
+            Editing <b>{activeLabel}</b> — arrows nudge 1px in screen direction.
+            {layerScope === 'all' && <> On <b>all</b>, ↓/→ push inward and ↑/← outward (symmetric).</>}
+            {active === 'frame' && layerScope !== 'all' && sidesForScope(layerScope).length === 1 && <> A side moves rigid (corners + pipe together); the cross-axis squeezes its corner pair.</>}
+            {active === 'pipes' && <> Moves the straight pipe only — corners stay put.</>}
+          </p>
           <div style={ST.dpad}>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, -1)}>↑</button><div />
             <button type="button" style={ST.nb} onClick={() => nudge(-1, 0)}>←</button>
