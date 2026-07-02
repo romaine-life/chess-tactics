@@ -437,6 +437,26 @@ function FeatureConnections({
 // connection features); the brush kind under it decides road vs river. Fence is its own
 // (still art-pending) layer. The layer picker is a dropdown, so the count no longer crowds a row.
 type LayerKey = 'board' | 'tile' | 'paths' | 'fence' | 'unit' | 'doodad' | 'prop' | 'cover' | 'status';
+type BrushKind = 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence';
+const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }> = [
+  { id: 'board', label: 'Board' },
+  { id: 'tile', label: 'Tile' },
+  { id: 'paths', label: 'Paths' },
+  { id: 'fence', label: FENCE_ART_PENDING ? 'Fence (soon)' : 'Fence' },
+  { id: 'unit', label: 'Unit' },
+  { id: 'doodad', label: 'Doodad' },
+  { id: 'prop', label: 'Prop' },
+  { id: 'cover', label: 'Cover' },
+  { id: 'status', label: 'Status' },
+];
+const isLayerOptionDisabled = (layer: LayerKey): boolean => layer === 'fence' && FENCE_ART_PENDING;
+const defaultLevelEditorLayer = (): LayerKey => LEVEL_EDITOR_LAYER_OPTIONS.find((option) => !isLayerOptionDisabled(option.id))?.id ?? LEVEL_EDITOR_LAYER_OPTIONS[0].id;
+const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'status') ? 'select' : 'brush';
+const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
+  if (layer === 'paths') return 'road';
+  if (layer === 'board' || layer === 'status') return 'tile';
+  return layer;
+};
 type StatusTone = 'info' | 'success' | 'warning' | 'error';
 type StatusLogEntry = { id: number; tone: StatusTone; message: string; detail?: string; at: string };
 const STATUS_LOG_LIMIT = 24;
@@ -445,7 +465,7 @@ export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link) and optionally
   // ?kind=tile|unit|doodad&brush=<id> to pre-arm the brush you clicked in the catalog. Read
-  // once at mount; reached from the main menu these are all absent and we open on tiles.
+  // once at mount; reached from the main menu these are all absent and we open on the first layer.
   const studioArm = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const kindParam = params.get('kind');
@@ -458,6 +478,7 @@ export function LevelEditor(): ReactElement {
     };
   }, []);
   const cameFromStudio = studioArm.fromStudio;
+  const initialLayer: LayerKey = studioArm.kind ?? defaultLevelEditorLayer();
   // The campaign path deep-links here with ?campaignId&levelId (&returnTo): which level to
   // edit, and where "Back" returns after a save. Read once at mount; absent ⇒ a standalone
   // (board-link / blank) board with no campaign target.
@@ -478,14 +499,14 @@ export function LevelEditor(): ReactElement {
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
     (loadedBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(loadedBoard.playerFaction)) ? loadedBoard.playerFaction as UnitPalette : null,
   );
-  const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>('brush');
+  const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence'>(studioArm.kind ?? 'tile');
-  const [layer, setLayer] = useState<LayerKey>(studioArm.kind ?? 'tile');
+  const [brushKind, setBrushKind] = useState<BrushKind>(brushKindForInitialLayer(initialLayer));
+  const [layer, setLayer] = useState<LayerKey>(initialLayer);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
@@ -980,6 +1001,17 @@ export function LevelEditor(): ReactElement {
     setBoardLinkDraft('');
     reportStatus(`Loaded board link (${next.cols}x${next.rows}).`, 'success', detail);
   };
+  const selectLayer = (nextLayer: LayerKey): void => {
+    if (isLayerOptionDisabled(nextLayer)) return;
+    setLayer(nextLayer);
+    setTool(toolForLayer(nextLayer));
+    if (nextLayer === 'paths') {
+      // Keep whichever path kind is already armed (road/river); default to road.
+      setBrushKind((kind) => (kind === 'road' || kind === 'river' ? kind : 'road'));
+      return;
+    }
+    if (nextLayer !== 'board' && nextLayer !== 'status') setBrushKind(nextLayer);
+  };
   const selectCell = (x: number, y: number): void => setSelectedCell({ x, y });
   // A held unit may drop on an in-bounds cell that has no other unit and isn't under a prop
   // footprint — the same collision the unit brush enforces, so a moved unit lands where a
@@ -1234,30 +1266,13 @@ export function LevelEditor(): ReactElement {
               className="le-layer-select"
               aria-label="Editor layer"
               value={layer}
-              onChange={(e) => {
-                const next = e.target.value as LayerKey;
-                setLayer(next);
-                if (next === 'board') { setTool('select'); return; }
-                if (next === 'status') { setTool('select'); return; }
-                if (next === 'paths') {
-                  // Keep whichever path kind is already armed (road/river); default to road.
-                  setBrushKind((k) => (k === 'road' || k === 'river' ? k : 'road'));
-                  setTool('brush');
-                  return;
-                }
-                setBrushKind(next);
-                setTool('brush');
-              }}
+              onChange={(e) => selectLayer(e.target.value as LayerKey)}
             >
-              <option value="board">Board</option>
-              <option value="tile">Tile</option>
-              <option value="paths">Paths</option>
-              <option value="fence" disabled={FENCE_ART_PENDING}>{FENCE_ART_PENDING ? 'Fence (soon)' : 'Fence'}</option>
-              <option value="unit">Unit</option>
-              <option value="doodad">Doodad</option>
-              <option value="prop">Prop</option>
-              <option value="cover">Cover</option>
-              <option value="status">Status</option>
+              {LEVEL_EDITOR_LAYER_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id} disabled={isLayerOptionDisabled(option.id)}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
         </section>
