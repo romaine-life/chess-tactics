@@ -156,9 +156,15 @@ export function Campaign(): ReactElement {
   }, []);
 
   // Once campaigns load, a bare /campaign (or an unknown id) normalizes to the first
-  // campaign so the URL always names a real one.
+  // campaign so the URL always names a real one. Guarded to run only while the app is
+  // still ON a campaign path: the URL-sync listener above also fires when the user
+  // navigates AWAY (selectedId resets to ''), and this screen stays mounted for a beat
+  // (route transition / veil cover) — without the guard, the replace here yanked every
+  // exit (home via the brand, the settings gear, Play) straight back to /campaign/<id>.
   useEffect(() => {
     if (!campaigns.length) return;
+    const path = normalizeRoutePath(window.location.pathname);
+    if (path !== '/campaign' && !path.startsWith('/campaign/')) return;
     if (!campaigns.some((c) => c.id === selectedId)) {
       navigateApp(`/campaign/${campaigns[0].id}`, { replace: true, scroll: false });
     }
