@@ -435,14 +435,9 @@ export function CampaignEditor() {
           <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
         </div>
       </TitleBarSlot>
-      <TitleBarSlot region="actions">
-        <nav className="ce-topbar-actions" aria-label="Editor shortcuts">
-          {isAdmin && officialDirty ? (
-            <button type="button" data-testid="publish-officials" className="app-header-button" onClick={() => void publishOfficialNow()}>Publish to all players</button>
-          ) : null}
-          <button type="button" data-testid="save-workspace" className="app-header-button app-header-button-active" disabled={!userDirty} onClick={() => void saveUserNow()}>Save</button>
-        </nav>
-      </TitleBarSlot>
+      {/* Save · Publish moved OUT of the global title bar into the editor's own locked footer
+          (below), beside the other workspace actions — document verbs belong in the editor, not
+          global chrome. The bar keeps just brand + save-state + account cluster (matching Settings). */}
 
       <ArtRouteChrome as="main" className="ce-layout">
         <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
@@ -453,6 +448,16 @@ export function CampaignEditor() {
           <AssetButton data-testid="new-campaign" className="ce-new-campaign" onClick={() => useCampaigns.getState().newCampaign()}>
             + New Campaign
           </AssetButton>
+          {/* Workspace commits (Save · Publish) live here in the workspace panel — the same panel
+              that hosts New / Import and the "Sign in to save" hint — instead of the global title
+              bar. (Interim placement; the footer redesign is the owner's.) Save keeps its exact
+              gating: rendered always, disabled until there are unsaved changes. */}
+          <div className="ce-workspace-commit">
+            <AssetButton data-testid="save-workspace" disabled={!userDirty} onClick={() => void saveUserNow()}>Save</AssetButton>
+            {isAdmin && officialDirty ? (
+              <AssetButton data-testid="publish-officials" onClick={() => void publishOfficialNow()}>Publish to all players</AssetButton>
+            ) : null}
+          </div>
           <input
             ref={importInputRef}
             className="ce-file-input"
