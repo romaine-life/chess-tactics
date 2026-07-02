@@ -83,6 +83,16 @@ Scope note: this control governs the **background music** specifically (the exis
 `bgm.js` mute state, shared with Settings → Audio → Background Music), not a master/all-audio
 mute. It remains in sync with the Settings toggles via the existing mute key/event.
 
+**Clarification (2026-06-29): "persistent" includes the no-soundtrack case.** The first
+implementation still `display:none`'d the control once `/api/bgm` settled with zero tracks
+— so it vanished in any environment without a configured soundtrack (notably local dev
+without `BGM_DEV_TRACKS=1`, and an empty library). That contradicted this ADR's own thesis:
+a persistent cluster member must keep the cluster's roster identical on every route and in
+every environment, not blink out when the playlist happens to be empty. The control now
+**always renders**; with no tracks it shows **dimmed/inert** (the muted frame, `aria-label`
+/ `title` "Background music — no soundtrack configured") and clicking is a no-op. `renderControl`
+in `bgm.js` no longer hides it; only the icon/label state varies.
+
 ### Consequences
 
 - **Good:** mute is reachable in the same top-right spot on every route (menu, Skirmish,

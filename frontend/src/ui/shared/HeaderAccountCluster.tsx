@@ -71,8 +71,9 @@ export function HeaderAccountCluster({
       {/* Persistent mute control — the vanilla BGM player (bgm.js) re-homes its own
           kit-framed button into THIS boxless slot, so the one mute toggle rides the
           always-on trailing cluster on every route instead of floating bottom-right
-          (ADR-0044). Empty until bgm mounts its button (or hidden when no soundtrack is
-          configured); .cluster-bgm-slot is display:contents so it adds no gap when empty. */}
+          (ADR-0044). Empty only until bgm mounts its button (a microtask after init); the
+          button then stays put — even with no soundtrack configured it shows dimmed/inert
+          rather than vanishing. .cluster-bgm-slot is display:contents so it adds no gap. */}
       <span className="cluster-bgm-slot" aria-hidden="true" />
       {showSettingsGear ? (
         <a className="cluster-icon-button" href="/settings" aria-label="Settings" title="Settings">
