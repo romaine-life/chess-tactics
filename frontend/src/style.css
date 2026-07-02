@@ -8877,16 +8877,16 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   background-repeat: no-repeat;
   pointer-events: none;
-  animation: gc-sway var(--gc-dur, 1.14s) steps(6) infinite;
-  animation-delay: var(--gc-delay, 0s);
+  animation: gc-sway var(--gc-dur, 1.14s) steps(6) infinite !important;
+  animation-delay: var(--gc-delay, 0s) !important;
   will-change: background-position;
 }
 @keyframes gc-sway {
   from { background-position-x: 0; }
   to { background-position-x: var(--gc-travel, 0); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .gc-tuft { animation: none; }
+:root.reduce-motion .gc-tuft {
+  animation: none !important;
 }
 
 .tileset-generated-board-overlay-cell {
