@@ -21,6 +21,7 @@ import { readBoardParam, encodeBoard, type EditorBoard, type FeatureCell } from 
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   hasDirectionSprite,
+  productionUnitAssets,
   rookDirections,
   unitAssets,
   type Direction,
@@ -37,8 +38,10 @@ import {
 import { featureThumbSrc } from '../art/tileset';
 import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_ART_PENDING, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
+import { generateSocketBoard } from '../core/tileBoardGenerator';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
+import { UNIT_PALETTES, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
@@ -327,6 +330,11 @@ const LE_ROWS = 10;
 const leGrassFamily = studioFamilies.find((family) => family.id === 'grass') ?? studioFamilies[0];
 const leDefaultTile = leGrassFamily.assets.find((asset) => asset.kind === 'tile') ?? leGrassFamily.assets[0];
 const leTileGroups = studioFamilies.map((family) => ({ family, tiles: family.assets.filter((asset) => asset.kind === 'tile') }));
+const leTileAssets = leTileGroups.flatMap(({ tiles }) => tiles);
+const leFamilyAssets = studioFamilies.reduce((acc, family) => {
+  acc[family.id] = family.assets.filter((asset) => asset.kind === 'tile');
+  return acc;
+}, {} as Record<TileFamilyId, readonly StudioAsset[]>);
 const leAllTiles = studioFamilies.flatMap((family) => family.assets);
 const leFamilyOfTile = (id: string): StudioFamily | undefined => studioFamilies.find((family) => family.assets.some((asset) => asset.id === id));
 const leSeedBoard = (): Record<string, string> => {
@@ -334,11 +342,19 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile.id;
   return cells;
 };
-const LE_SIDE_FACTION = { player: 'navy-blue', enemy: 'crimson' } as const;
+const LE_FACTION_LABELS: Record<UnitPalette, string> = {
+  'navy-blue': 'Navy',
+  crimson: 'Crimson',
+  golden: 'Golden',
+  emerald: 'Emerald',
+};
+const leUnitAssets = productionUnitAssets.length ? productionUnitAssets : unitAssets;
 
 // A stable fingerprint of an editor board, the basis of the real dirty flag: encodeBoard is
 // deterministic + lossless, so two boards encode identically iff they're the same board.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
+const cloneEditorBoard = (board: EditorBoard): EditorBoard => structuredClone(board) as EditorBoard;
+const HISTORY_LIMIT = 100;
 
 // The 4-edge connection control for a selected feature tile. Mirrors the iso diamond:
 // each edge is one cardinal neighbour (grid N/E/S/W = the screen NE/SE/SW/NW edges).
@@ -451,6 +467,9 @@ export function LevelEditor(): ReactElement {
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => loadedBoard?.cells ?? leSeedBoard());
   const [boardCols, setBoardCols] = useState(loadedBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(loadedBoard?.rows ?? LE_ROWS);
+  const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
+    (loadedBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(loadedBoard.playerFaction)) ? loadedBoard.playerFaction as UnitPalette : null,
+  );
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>('brush');
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
@@ -489,10 +508,12 @@ export function LevelEditor(): ReactElement {
   const [featureExits, setFeatureExits] = useState<Record<string, true>>(loadedBoard?.featureExits ?? {});
   // The active feature kind = the current layer when it's a feature layer, else null.
   const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' || brushKind === 'fence' ? brushKind : null;
-  const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : unitAssets[0].id);
+  const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : leUnitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
-  const [unitSide, setUnitSide] = useState<'player' | 'enemy'>('player');
+  const [unitFaction, setUnitFaction] = useState<UnitPalette>('navy-blue');
+  const [undoStack, setUndoStack] = useState<EditorBoard[]>([]);
+  const [redoStack, setRedoStack] = useState<EditorBoard[]>([]);
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
@@ -541,6 +562,9 @@ export function LevelEditor(): ReactElement {
       setBoardFeatures(board.features);
       setFeatureCuts(board.featureCuts);
       setFeatureExits(board.featureExits);
+      setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
+      setUndoStack([]);
+      setRedoStack([]);
       setEditingId(level.id);
       setLevelName(level.name);
       setSavedSig(boardSignature(board));
@@ -550,18 +574,74 @@ export function LevelEditor(): ReactElement {
   }, []);
 
   const resolveAsset = (id: string): StudioAsset | undefined => leAllTiles.find((asset) => asset.id === id);
+  // The current painted board as a single EditorBoard — the one shape both the board link
+  // and the level save serialize from, so they can never describe different boards.
+  const currentEditorBoard = useMemo<EditorBoard>(
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, features: boardFeatures, featureCuts, featureExits }),
+    [boardCols, boardRows, playerFaction, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardFeatures, featureCuts, featureExits],
+  );
+  const currentEditorBoardRef = useRef(currentEditorBoard);
+  useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
+  const applyEditorBoard = (board: EditorBoard): void => {
+    setBoardCols(board.cols);
+    setBoardRows(board.rows);
+    setBoardCells(board.cells);
+    setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
+    setBoardDoodads(board.doodads);
+    setBoardProps(board.props);
+    setBoardCover(board.cover);
+    setBoardFeatures(board.features);
+    setFeatureCuts(board.featureCuts);
+    setFeatureExits(board.featureExits);
+    setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
+  };
+  const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
+    const current = currentEditorBoardRef.current;
+    if (boardSignature(next) === boardSignature(current)) return false;
+    setUndoStack((prev) => [...prev, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
+    setRedoStack([]);
+    currentEditorBoardRef.current = next;
+    applyEditorBoard(next);
+    if (selection !== undefined) setSelectedCell(selection);
+    return true;
+  };
+  const undoBoard = (): void => {
+    const prev = undoStack[undoStack.length - 1];
+    if (!prev) return;
+    setRedoStack((next) => [cloneEditorBoard(currentEditorBoardRef.current), ...next].slice(0, HISTORY_LIMIT));
+    setUndoStack((next) => next.slice(0, -1));
+    const restored = cloneEditorBoard(prev);
+    currentEditorBoardRef.current = restored;
+    applyEditorBoard(restored);
+    setSelectedCell(null);
+  };
+  const redoBoard = (): void => {
+    const next = redoStack[0];
+    if (!next) return;
+    setUndoStack((prev) => [...prev, cloneEditorBoard(currentEditorBoardRef.current)].slice(-HISTORY_LIMIT));
+    setRedoStack((prev) => prev.slice(1));
+    const restored = cloneEditorBoard(next);
+    currentEditorBoardRef.current = restored;
+    applyEditorBoard(restored);
+    setSelectedCell(null);
+  };
+  const setPlayerFactionWithHistory = (faction: UnitPalette | null): void => {
+    if (playerFaction === faction) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.playerFaction = faction;
+    commitEditorBoard(next);
+  };
   const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
-  const resolveUnitAsset = (id: string): UnitAsset | undefined => unitAssets.find((unit) => unit.id === id);
-  const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? unitAssets[0];
-  const unitFaction: Faction = LE_SIDE_FACTION[unitSide];
+  const resolveUnitAsset = (id: string): UnitAsset | undefined => leUnitAssets.find((unit) => unit.id === id) ?? unitAssets.find((unit) => unit.id === id);
+  const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? leUnitAssets[0];
   // Facing sets the brush direction AND rotates the unit selected on the board (in place).
   const setUnitFacing = (dir: Direction): void => {
     setUnitBrushDirection(dir);
-    setBoardUnits((prev) => {
-      const key = selectedCell ? `${selectedCell.x},${selectedCell.y}` : null;
-      if (!key || !prev[key]) return prev;
-      return { ...prev, [key]: { ...prev[key], direction: dir } };
-    });
+    const key = selectedCell ? `${selectedCell.x},${selectedCell.y}` : null;
+    if (!key || !boardUnits[key] || boardUnits[key].direction === dir) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.units[key] = { ...next.units[key], direction: dir };
+    commitEditorBoard(next);
   };
   // Center hub: spin one step clockwise (rookDirections is N→NE→E…→NW), skipping directions this unit lacks.
   const rotateFacingCw = (): void => {
@@ -631,13 +711,13 @@ export function LevelEditor(): ReactElement {
     return out;
   }, [boardFeatures, featureCuts, featureExits]);
 
-  const eraseKey = <T,>(setter: (updater: (prev: Record<string, T>) => Record<string, T>) => void, key: string): void =>
-    setter((prev) => { if (!(key in prev)) return prev; const next = { ...prev }; delete next[key]; return next; });
   const paintCell = (x: number, y: number): void => {
     const key = `${x},${y}`;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (featureKind) {
       const material = featureBrushMaterial[featureKind];
-      setBoardFeatures((prev) => (prev[key]?.kind === featureKind && prev[key]?.material === material ? prev : { ...prev, [key]: { kind: featureKind, material } }));
+      next.features[key] = { kind: featureKind, material };
+      commitEditorBoard(next);
       return;
     }
     // A unit/doodad/cover must not land on a placed prop's footprint: for a BLOCKING prop the
@@ -646,90 +726,95 @@ export function LevelEditor(): ReactElement {
     // Refuse so the editor matches in-game collision. (Props ↔ features don't gate each other.)
     if ((brushKind === 'unit' || brushKind === 'doodad' || brushKind === 'cover') && occupiedPropCells().has(key)) return;
     if (brushKind === 'unit') {
-      setBoardUnits((prev) => ({ ...prev, [key]: { unitId: unitBrushAsset.id, direction: unitBrushDirection, faction: unitFaction } }));
+      next.units[key] = { unitId: unitBrushAsset.id, direction: unitBrushDirection, faction: unitFaction };
+      commitEditorBoard(next);
       return;
     }
     if (brushKind === 'doodad') {
       // A doodad only lands on a tile of its home terrain; painting elsewhere is a no-op.
       if (!doodadFitsTile(doodadBrushAsset, boardCells[key])) return;
-      setBoardDoodads((prev) => ({ ...prev, [key]: { doodadId: doodadBrushAsset.id } }));
+      next.doodads[key] = { doodadId: doodadBrushAsset.id };
+      commitEditorBoard(next);
       return;
     }
     if (brushKind === 'prop') {
       // A multi-cell prop anchors at the clicked cell and must FIT (bounds + terrain) with no
       // footprint cell overlapping a unit or another prop. Anything else is a no-op.
       if (!canPlaceProp(propBrushDef, x, y)) return;
-      setBoardProps((prev) => ({ ...prev, [key]: { propId: propBrushDef.id } }));
+      next.props[key] = { propId: propBrushDef.id };
+      commitEditorBoard(next);
       return;
     }
     if (brushKind === 'cover') {
       // Cover grows only on a tile whose terrain has a cover set (grass for now).
       const terrain = boardCells[key] ? leFamilyOfTile(boardCells[key])?.id : undefined;
       if (!terrain || !groundCoverSet(terrain as TileFamilyId)) return;
-      setBoardCover((prev) => ({ ...prev, [key]: coverBrushDensity }));
+      next.cover[key] = coverBrushDensity;
+      commitEditorBoard(next);
       return;
     }
-    setBoardCells((prev) => ({ ...prev, [key]: brushAsset.id }));
+    next.cells[key] = brushAsset.id;
+    commitEditorBoard(next);
   };
   const eraseCell = (x: number, y: number): void => {
     const key = `${x},${y}`;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (featureKind) {
-      eraseKey(setBoardFeatures, key);
-      const dropEdgesTouching = (prev: Record<string, true>): Record<string, true> => {
-        const next: Record<string, true> = {};
-        let changed = false;
-        for (const edge of Object.keys(prev)) {
-          if (edge.split('|').includes(key)) changed = true; // an edge touching the erased cell
-          else next[edge] = true;
-        }
-        return changed ? next : prev;
-      };
-      setFeatureCuts(dropEdgesTouching);
-      setFeatureExits(dropEdgesTouching);
+      delete next.features[key];
+      for (const edge of Object.keys(next.featureCuts)) if (edge.split('|').includes(key)) delete next.featureCuts[edge];
+      for (const edge of Object.keys(next.featureExits)) if (edge.split('|').includes(key)) delete next.featureExits[edge];
+      commitEditorBoard(next);
       return;
     }
-    if (brushKind === 'unit') return eraseKey(setBoardUnits, key);
-    if (brushKind === 'doodad') return eraseKey(setBoardDoodads, key);
+    if (brushKind === 'unit') { delete next.units[key]; commitEditorBoard(next); return; }
+    if (brushKind === 'doodad') { delete next.doodads[key]; commitEditorBoard(next); return; }
     if (brushKind === 'prop') {
       // Erase the prop whose FOOTPRINT contains the clicked cell — not only an exact anchor hit,
       // so clicking anywhere on a 2×2 removes it. Reverse-scan so the last-placed (top) prop wins
       // when footprints somehow overlap (they can't via the paint gate, but be defensive).
-      setBoardProps((prev) => {
-        const entries = Object.entries(prev);
-        for (let i = entries.length - 1; i >= 0; i -= 1) {
-          const [anchorKey, placement] = entries[i];
-          const def = resolvePropDef(placement.propId);
-          if (!def) continue;
-          const [ax, ay] = anchorKey.split(',').map(Number);
-          if (propCells(ax, ay, def).some((c) => c.x === x && c.y === y)) {
-            const next = { ...prev };
-            delete next[anchorKey];
-            return next;
-          }
+      const entries = Object.entries(next.props);
+      for (let i = entries.length - 1; i >= 0; i -= 1) {
+        const [anchorKey, placement] = entries[i];
+        const def = resolvePropDef(placement.propId);
+        if (!def) continue;
+        const [ax, ay] = anchorKey.split(',').map(Number);
+        if (propCells(ax, ay, def).some((c) => c.x === x && c.y === y)) {
+          delete next.props[anchorKey];
+          commitEditorBoard(next);
+          return;
         }
-        return prev;
-      });
+      }
       return;
     }
-    if (brushKind === 'cover') return eraseKey(setBoardCover, key);
-    eraseKey(setBoardCells, key);
+    if (brushKind === 'cover') { delete next.cover[key]; commitEditorBoard(next); return; }
+    delete next.cells[key];
+    commitEditorBoard(next);
   };
-  const clearBoard = (): void => { setBoardCells({}); setBoardUnits({}); setBoardDoodads({}); setBoardProps({}); setBoardCover({}); setBoardFeatures({}); setFeatureCuts({}); setFeatureExits({}); setSelectedCell(null); };
-  const fillBoard = (mode: 'empty' | 'all'): void =>
-    setBoardCells((prev) => {
-      const next: Record<string, string> = mode === 'all' ? {} : { ...prev };
+  const clearBoard = (): void => {
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {} }, null);
+  };
+  const fillBoard = (mode: 'empty' | 'all'): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    if (mode === 'all') next.cells = {};
       for (let y = 0; y < boardRows; y += 1) for (let x = 0; x < boardCols; x += 1) {
         const key = `${x},${y}`;
-        if (mode === 'all' || !(key in next)) next[key] = brushAsset.id;
+        if (mode === 'all' || !(key in next.cells)) next.cells[key] = brushAsset.id;
       }
-      return next;
+    commitEditorBoard(next);
+  };
+  const randomizeBoardTiles = (): void => {
+    const seed = (Date.now() ^ (boardCols * 73856093) ^ (boardRows * 19349663)) >>> 0;
+    const generated = generateSocketBoard({
+      assets: leTileAssets,
+      seed,
+      columns: boardCols,
+      rows: boardRows,
+      familyAssets: leFamilyAssets,
     });
-  // The current painted board as a single EditorBoard — the one shape both the board link
-  // and the level save serialize from, so they can never describe different boards.
-  const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, features: boardFeatures, featureCuts, featureExits }),
-    [boardCols, boardRows, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardFeatures, featureCuts, featureExits],
-  );
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.cells = Object.fromEntries(generated.cells.map((cell) => [`${cell.x},${cell.y}`, cell.asset?.id ?? leDefaultTile.id]));
+    commitEditorBoard(next, null);
+  };
   // Real dirty flag: the board has unsaved changes when its signature differs from the one
   // captured at the last save. A standalone board (never saved) seeds savedSig lazily on
   // first render below, so it reads clean until the first edit.
@@ -742,13 +827,23 @@ export function LevelEditor(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const targetLevelId = editingId ?? routeParams.levelId;
+  const isCampaignLevel = useCampaigns((s) =>
+    Boolean(routeParams.campaignId || (targetLevelId && s.campaigns.some((campaign) => campaign.levels.some((ref) => ref.levelId === targetLevelId)))),
+  );
+  const needsPlayerFaction = isCampaignLevel && !playerFaction;
+
   // Save the painted board. Campaign path: serialize into the resolved level id and write it
   // back into the store, then route by TIER — an official (`off-`) level publishes to all
   // players (confirmed); a private/unassigned level saves to the user workspace. The server's
   // requireAdmin is the real gate; a non-admin official save fails closed (403 surfaced here).
   const saveLevel = async (): Promise<void> => {
     if (saving) return;
-    const targetId = editingId ?? routeParams.levelId;
+    if (needsPlayerFaction) {
+      setSaveStatus('Choose player faction.');
+      return;
+    }
+    const targetId = targetLevelId;
     if (!targetId) {
       // Cold path (no campaign level): a standalone board authored outside a campaign.
       // Mint a fresh per-user level id (`l<n>`) and write it into the user workspace — never
@@ -830,15 +925,12 @@ export function LevelEditor(): ReactElement {
     const fromKey = `${from.x},${from.y}`;
     const toKey = `${to.x},${to.y}`;
     if (!boardUnits[fromKey] || !canMoveUnitTo(to.x, to.y)) return;
-    setBoardUnits((prev) => {
-      const placement = prev[fromKey];
-      if (!placement) return prev;
-      const next = { ...prev };
-      delete next[fromKey];
-      next[toKey] = placement;
-      return next;
-    });
-    setSelectedCell(to);
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const placement = next.units[fromKey];
+    if (!placement) return;
+    delete next.units[fromKey];
+    next.units[toKey] = placement;
+    commitEditorBoard(next, to);
   };
   const adjustZoom = (delta: number): void => setViewZoom((z) => Math.min(4, Math.max(0.4, Number((z + delta).toFixed(2)))));
   // Resize the board. Growing exposes new empty (paintable) cells; shrinking prunes any
@@ -855,15 +947,16 @@ export function LevelEditor(): ReactElement {
       for (const key of Object.keys(map)) { if (within(key)) next[key] = map[key]; else dropped = true; }
       return dropped ? next : map;
     };
-    setBoardCells((prev) => prune(prev));
-    setBoardUnits((prev) => prune(prev));
-    setBoardDoodads((prev) => prune(prev));
+    const nextBoard = cloneEditorBoard(currentEditorBoardRef.current);
+    nextBoard.cells = prune(nextBoard.cells);
+    nextBoard.units = prune(nextBoard.units);
+    nextBoard.doodads = prune(nextBoard.doodads);
     // Props are FOOTPRINT-aware: drop a prop if its anchor OR any footprint cell falls outside
     // the new bounds (a 2×2 anchored at the last column would otherwise hang off the edge).
-    setBoardProps((prev) => {
+    {
       const next: Record<string, { propId: string }> = {};
       let dropped = false;
-      for (const [key, placement] of Object.entries(prev)) {
+      for (const [key, placement] of Object.entries(nextBoard.props)) {
         const def = resolvePropDef(placement.propId);
         const [ax, ay] = key.split(',').map(Number);
         const fits = def
@@ -872,36 +965,36 @@ export function LevelEditor(): ReactElement {
         if (fits) next[key] = placement;
         else dropped = true;
       }
-      return dropped ? next : prev;
-    });
-    setBoardCover((prev) => prune(prev));
-    setBoardFeatures((prev) => prune(prev));
+      if (dropped) nextBoard.props = next;
+    }
+    nextBoard.cover = prune(nextBoard.cover);
+    nextBoard.features = prune(nextBoard.features);
     // Cuts are keyed by edge ("a|b"); keep only edges whose BOTH endpoints survive.
-    setFeatureCuts((prev) => {
+    {
       const next: Record<string, true> = {};
       let dropped = false;
-      for (const edge of Object.keys(prev)) {
+      for (const edge of Object.keys(nextBoard.featureCuts)) {
         const [p1, p2] = edge.split('|');
         if (within(p1) && within(p2)) next[edge] = true;
         else dropped = true;
       }
-      return dropped ? next : prev;
-    });
+      if (dropped) nextBoard.featureCuts = next;
+    }
     // Exits point at an OFF-board neighbour (always out of bounds by design), so keep an exit
     // whenever its owning cell — whichever endpoint is still on the board — survives.
-    setFeatureExits((prev) => {
+    {
       const next: Record<string, true> = {};
       let dropped = false;
-      for (const edge of Object.keys(prev)) {
+      for (const edge of Object.keys(nextBoard.featureExits)) {
         const [p1, p2] = edge.split('|');
         if (within(p1) || within(p2)) next[edge] = true;
         else dropped = true;
       }
-      return dropped ? next : prev;
-    });
-    setSelectedCell((sel) => (sel && (sel.x >= nextCols || sel.y >= nextRows) ? null : sel));
-    setBoardCols(nextCols);
-    setBoardRows(nextRows);
+      if (dropped) nextBoard.featureExits = next;
+    }
+    nextBoard.cols = nextCols;
+    nextBoard.rows = nextRows;
+    commitEditorBoard(nextBoard, selectedCell && (selectedCell.x >= nextCols || selectedCell.y >= nextRows) ? null : selectedCell);
   };
 
   const paintedCount = Object.keys(boardCells).length;
@@ -944,21 +1037,28 @@ export function LevelEditor(): ReactElement {
     return list;
   }, [boardCover, boardCells, coverSeed]);
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
-  const toggleFeatureCut = (edge: string): void =>
-    setFeatureCuts((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
-  const toggleFeatureExit = (edge: string): void =>
-    setFeatureExits((prev) => { const next = { ...prev }; if (next[edge]) delete next[edge]; else next[edge] = true; return next; });
+  const toggleFeatureCut = (edge: string): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    if (next.featureCuts[edge]) delete next.featureCuts[edge];
+    else next.featureCuts[edge] = true;
+    commitEditorBoard(next);
+  };
+  const toggleFeatureExit = (edge: string): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    if (next.featureExits[edge]) delete next.featureExits[edge];
+    else next.featureExits[edge] = true;
+    commitEditorBoard(next);
+  };
   const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
 
   // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
   // PUBLISHES to all players; a private/unassigned level just SAVES. A level only resolves a
   // tier once a target id is known (campaign path); a fresh standalone board saves as private.
-  const targetLevelId = editingId ?? routeParams.levelId;
   const isOfficialTarget = targetLevelId ? tierOf(targetLevelId) === 'official' : false;
   const saveLabel = isOfficialTarget ? 'Publish to all players' : 'Save';
   const isAdmin = Boolean(me?.is_admin);
-  const saveStateLabel = saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved';
-  const saveStateClass = saving ? 'is-saving' : dirty ? 'is-dirty' : 'is-clean';
+  const saveStateLabel = saving ? 'Saving…' : needsPlayerFaction ? 'Choose player faction' : dirty ? 'Unsaved' : 'Saved';
+  const saveStateClass = saving ? 'is-saving' : needsPlayerFaction ? 'is-dirty' : dirty ? 'is-dirty' : 'is-clean';
 
   return (
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
@@ -975,13 +1075,20 @@ export function LevelEditor(): ReactElement {
           <nav className="le-topbar-actions" aria-label="Editor actions">
             {cameFromStudio ? <a className="app-header-button le-back-catalog" href="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</a> : null}
             {routeParams.returnTo ? <a className="app-header-button" href={routeParams.returnTo} title="Return to the campaign editor">‹ Back</a> : null}
+            <button
+              type="button"
+              className="app-header-button"
+              onClick={undoBoard}
+              disabled={!undoStack.length}
+              title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
+            >Undo</button>
             <button type="button" className="app-header-button" disabled title="Validation arrives once the editor is hosted.">Test</button>
             <button
               type="button"
               className="app-header-button app-header-button-active"
               data-testid="le-save"
-              disabled={saving || !dirty}
-              title={isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.'}
+              disabled={saving || !dirty || needsPlayerFaction}
+              title={needsPlayerFaction ? 'Assign one faction to the player before saving this campaign level.' : isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.'}
               onClick={() => { void saveLevel(); }}
             >
               {saveLabel}
@@ -1052,6 +1159,7 @@ export function LevelEditor(): ReactElement {
             <h2>Board</h2>
             <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
             <p className="le-board-note">Width × Height in tiles. Shrinking drops tiles &amp; units outside the new bounds.</p>
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize tiles</button>
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy board link</button>
           </section>
         ) : (<>
@@ -1081,7 +1189,7 @@ export function LevelEditor(): ReactElement {
             </span>
             <span className="le-brush-meta">
               <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${unitSide}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -1101,10 +1209,30 @@ export function LevelEditor(): ReactElement {
 
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
-            <h2>Side</h2>
+            <h2>Faction</h2>
             <div className="le-seg">
-              <button type="button" className={`le-seg-btn ${unitSide === 'player' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('player')}>Player</button>
-              <button type="button" className={`le-seg-btn ${unitSide === 'enemy' ? 'active' : ''}`.trim()} onClick={() => setUnitSide('enemy')}>Enemy</button>
+              {UNIT_PALETTES.map((faction) => (
+                <button
+                  type="button"
+                  key={faction}
+                  className={`le-seg-btn ${unitFaction === faction ? 'active' : ''}`.trim()}
+                  onClick={() => setUnitFaction(faction)}
+                >{LE_FACTION_LABELS[faction]}</button>
+              ))}
+            </div>
+            <h2 className="le-card-subhead">Player</h2>
+            <div className="le-seg">
+              {!isCampaignLevel ? (
+                <button type="button" className={`le-seg-btn ${playerFaction === null ? 'active' : ''}`.trim()} onClick={() => setPlayerFactionWithHistory(null)}>None</button>
+              ) : null}
+              {UNIT_PALETTES.map((faction) => (
+                <button
+                  type="button"
+                  key={faction}
+                  className={`le-seg-btn ${playerFaction === faction ? 'active' : ''}`.trim()}
+                  onClick={() => setPlayerFactionWithHistory(faction)}
+                >{LE_FACTION_LABELS[faction]}</button>
+              ))}
             </div>
             <h2 className="le-card-subhead">Facing</h2>
             <FacingCompass
@@ -1115,7 +1243,7 @@ export function LevelEditor(): ReactElement {
             />
             <h2 className="le-card-subhead">Units</h2>
             <div className="le-swatches">
-              {unitAssets.map((unit) => (
+              {leUnitAssets.map((unit) => (
                 <button
                   type="button"
                   key={unit.id}
@@ -1244,6 +1372,7 @@ export function LevelEditor(): ReactElement {
           <div className="le-seg">
             <button type="button" className="le-seg-btn" onClick={() => fillBoard('empty')} title="Fill blank cells with the current brush.">Empty</button>
             <button type="button" className="le-seg-btn" onClick={() => fillBoard('all')} title="Fill the whole board with the current brush.">Whole</button>
+            <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
             <button type="button" className="le-seg-btn" onClick={clearBoard} title="Remove every tile from the board.">Clear</button>
           </div>
         </section>
@@ -1275,7 +1404,8 @@ export function LevelEditor(): ReactElement {
           {selectedUnitAsset && selectedUnit ? (
             <dl>
               <div><dt>Piece</dt><dd>{selectedUnitAsset.label}</dd></div>
-              <div><dt>Side</dt><dd>{selectedUnit.faction === 'crimson' ? 'Enemy' : 'Player'}</dd></div>
+              <div><dt>Faction</dt><dd>{LE_FACTION_LABELS[selectedUnit.faction as UnitPalette] ?? selectedUnit.faction}</dd></div>
+              <div><dt>Control</dt><dd>{playerFaction && selectedUnit.faction === playerFaction ? 'Player' : 'CPU'}</dd></div>
               <div><dt>Facing</dt><dd>{selectedUnit.direction}</dd></div>
             </dl>
           ) : selectedDoodadAsset && selectedDoodad ? (

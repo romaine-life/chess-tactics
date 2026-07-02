@@ -295,6 +295,8 @@ export const unitAssets: UnitAsset[] = [
   ...pixelLibraryUnits,
 ];
 
+export const productionUnitAssets: UnitAsset[] = unitAssets.filter((unit) => unit.factionMode === 'palette' && !unit.speculative);
+
 export const UNIT_METHOD_OPTIONS: { id: string; label: string; sub: string }[] = [
   { id: 'Production', label: 'Production', sub: 'shipped' },
   ...PIXEL_LIBRARIES.map((lib) => ({ id: lib.label, label: lib.label, sub: 'Speculative' })),

@@ -35,4 +35,10 @@ describe('boardCode — props wire key (p)', () => {
     expect(decoded.doodads).toEqual(board.doodads);
     expect(decoded.props).toEqual(board.props);
   });
+
+  it('round-trips the optional player faction without requiring it', () => {
+    const assigned = base({ playerFaction: 'emerald' });
+    expect(decodeBoard(encodeBoard(assigned))!.playerFaction).toBe('emerald');
+    expect(decodeBoard(encodeBoard(base()))!.playerFaction).toBeUndefined();
+  });
 });
