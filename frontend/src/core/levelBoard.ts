@@ -17,6 +17,7 @@ import type { Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, type EditorBoard } from '../ui/boardCode';
 import { studioFamilies } from '../ui/studioBoard';
+import { UNIT_PALETTES } from './pieces';
 import { unitAssets, type Faction } from '../ui/unitCatalog';
 
 // Family → terrain material, mirroring game/setup.ts. The six tile families map 1:1 onto
@@ -40,7 +41,10 @@ const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY
 
 // Side ↔ faction (team palette). The editor paints a faction; the level stores a side.
 const SIDE_TO_FACTION: Record<'player' | 'enemy', Faction> = { player: 'navy-blue', enemy: 'crimson' };
-const factionToSide = (faction: string): Side => (faction === 'crimson' ? 'enemy' : 'player');
+const isFaction = (faction: string | null | undefined): faction is Faction =>
+  Boolean(faction && (UNIT_PALETTES as readonly string[]).includes(faction));
+const sideForFaction = (faction: string, playerFaction: string | null | undefined): Side =>
+  playerFaction && faction === playerFaction ? 'player' : 'enemy';
 
 // Resolve a Studio tile id to its family (so its terrain material is known).
 const familyOfTile = (tileId: string): TileFamilyId | undefined =>
@@ -143,7 +147,20 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     props[`${p.x},${p.y}`] = { propId: p.propId };
   }
 
-  return { cols, rows, cells, units, doodads: {}, props, cover, features, featureCuts: {}, featureExits: {} };
+  const hasAuthoredPlayer = level.layers.units.some((unit) => unit.side === 'player');
+  return {
+    cols,
+    rows,
+    playerFaction: hasAuthoredPlayer ? SIDE_TO_FACTION.player : undefined,
+    cells,
+    units,
+    doodads: {},
+    props,
+    cover,
+    features,
+    featureCuts: {},
+    featureExits: {},
+  };
 }
 
 // Serialize the painted board into a valid `Level`. `boardCode` is stamped for a lossless
@@ -198,7 +215,8 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
     const type = typeOfUnitId(placement.unitId);
     if (!type) continue;
-    units.push({ x, y, type, side: factionToSide(placement.faction), facing: placement.direction as UnitFacing });
+    const side = sideForFaction(placement.faction, isFaction(board.playerFaction) ? board.playerFaction : undefined);
+    units.push({ x, y, type, side, facing: placement.direction as UnitFacing });
   }
 
   // Dual-write props: the durable game channel (layers.props) AND the lossless boardCode 'p' map

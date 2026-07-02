@@ -3,7 +3,7 @@
 // doodads, cover, and linear features — roads + rivers). Used both to LOAD a board on mount
 // and to EXPORT the current one.
 //
-// Wire shape (keys kept short): { c:cols, r:rows, f?:fillTileId, t?:{cell:tileId},
+// Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, f?:fillTileId, t?:{cell:tileId},
 //   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fn?:{cell:fenceMaterial}, rc?:[edgeKey],
 //   rx?:[edgeKey] }. `f` fills every cell, then `t` overrides — so a "mostly one tile" board stays
@@ -23,6 +23,8 @@ export interface FeatureCell {
 export interface EditorBoard {
   cols: number;
   rows: number;
+  /** Palette faction the human player controls. Undefined/null means choose at play-load time. */
+  playerFaction?: string | null;
   cells: Record<string, string>;
   units: Record<string, { unitId: string; direction: string; faction: string }>;
   doodads: Record<string, { doodadId: string }>;
@@ -52,6 +54,7 @@ export function encodeBoard(b: EditorBoard): string {
   const t: Record<string, string> = {};
   for (const [k, id] of Object.entries(b.cells)) if (id !== fill) t[k] = id;
   const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
+  if (b.playerFaction) wire.pf = b.playerFaction;
   if (fill) wire.f = fill;
   if (nonEmpty(t)) wire.t = t;
   if (nonEmpty(b.units)) wire.u = Object.fromEntries(Object.entries(b.units).map(([k, v]) => [k, [v.unitId, v.direction, v.faction]]));
@@ -102,7 +105,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (w.rv) for (const [k, m] of Object.entries(w.rv as Record<string, RiverMaterial>)) features[k] = { kind: 'river', material: m };
     if (w.fn) for (const [k, m] of Object.entries(w.fn as Record<string, FenceMaterial>)) features[k] = { kind: 'fence', material: m };
     return {
-      cols, rows, cells, units, doodads, props,
+      cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       features,
       featureCuts,
