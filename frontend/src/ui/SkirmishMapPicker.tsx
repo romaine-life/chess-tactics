@@ -9,6 +9,7 @@ import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 const OBJECTIVE_COPY = {
   'capture-all': 'Capture all enemy pieces',
   'capture-king': 'Capture the enemy King',
+  'rival-kings': 'Capture the rival King',
   survive: 'Survive the assault',
   reach: 'Reach the objective',
 } as const;

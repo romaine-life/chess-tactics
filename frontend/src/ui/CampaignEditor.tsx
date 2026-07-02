@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
-import { validateLevel, type Campaign, type CampaignLevelRef, type Level, type ObjectiveType } from '../core/level';
+import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
+import { MODE_NAME } from '../core/objectives';
 import { loadWorkspace, loadOfficialCampaigns } from '../net/campaignWorkspace';
 import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
 import { LevelThumbnail } from '../render/LevelThumbnail';
@@ -9,7 +10,7 @@ import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { ViewPane } from './shared/ViewPane';
 import { injectStressLevels } from '../campaign/stressFixture';
-import { LevelInfoCompact } from './LevelInfoCompact';
+import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -21,13 +22,6 @@ const CE_ICONS = {
   delete: '/assets/ui/kit/icons/delete.png',
   lock: '/assets/ui/kit/icons/lock.png',
 } as const;
-
-const objectiveLabel: Record<ObjectiveType, string> = {
-  'capture-all': 'Capture all enemy pieces',
-  'capture-king': 'Capture the enemy King',
-  survive: 'Survive the assault',
-  reach: 'Reach the objective',
-};
 
 function workspaceSignature(ws: { campaigns: Campaign[]; levels: Record<string, Level> }): string {
   return JSON.stringify(ws);
@@ -188,7 +182,10 @@ function LevelRow({
   onMoveDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
-  const objective = levelRef.objective ?? level?.objective ?? 'capture-all';
+  // The full level doc drives a direction-aware goal line (King Assault reads "Protect
+  // your King" when the player holds the King); before it hydrates, fall back to the
+  // ref's objective as a mode name only.
+  const goalLine = level ? levelObjectiveLine(level) : MODE_NAME[levelRef.objective ?? 'capture-all'];
   return (
     <div
       role="button"
@@ -207,7 +204,7 @@ function LevelRow({
       </span>
       <span className="ce-row-copy">
         <strong>{index + 1}. {level?.name ?? levelRef.levelId}</strong>
-        <small>{objectiveLabel[objective]}</small>
+        <small>{goalLine}</small>
       </span>
       <Stars count={levelRef.stars ?? 0} />
       {readOnly ? null : (
@@ -560,7 +557,7 @@ export function CampaignEditor() {
                     </span>
                     <span className="ce-row-copy">
                       <strong>{level.name}</strong>
-                      <small>{objectiveLabel[level.objective]}</small>
+                      <small>{levelObjectiveLine(level)}</small>
                     </span>
                     <span className="ce-row-actions" aria-label="Unassigned level actions">
                       <a className="ce-link-button ce-link-button-ghost" href={editHrefForUnassigned(level.id)}><span>Edit</span></a>

@@ -10,7 +10,7 @@
 //    `boardCode` so the next open is exact, and projecting terrain/units into `layers` so
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
-import type { Level, LevelEconomy, LevelUnit, ObjectiveType } from './level';
+import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, Zone, ZoneType } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
 import type { Side, TerrainCell, TerrainType, UnitFacing } from './types';
@@ -45,6 +45,52 @@ const isFaction = (faction: string | null | undefined): faction is Faction =>
   Boolean(faction && (UNIT_PALETTES as readonly string[]).includes(faction));
 const sideForFaction = (faction: string, playerFaction: string | null | undefined): Side =>
   playerFaction && faction === playerFaction ? 'player' : 'enemy';
+
+// A zone id is derived deterministically from its type (`z-<type>`), so the same painted
+// board always projects the same ids — a resave never churns them, and equality of two saves
+// stays a pure function of what was painted. The editor collapses all cells of one zone type
+// into ONE Zone entry (playability pools per-type anyway, so a single zone per type suffices).
+const zoneId = (type: ZoneType): string => `z-${type}`;
+
+/**
+ * Project the editor's per-cell `zones` channel (cell "x,y" -> zone type) into the schema's
+ * `layers.zones` (one Zone per type, each with its pooled [x,y] tile list, in-bounds only).
+ * Tiles are emitted in row-major order for a stable, diff-friendly serialization.
+ */
+function zonesToLayers(
+  channel: Record<string, ZoneType> | undefined,
+  cols: number,
+  rows: number,
+): Zone[] {
+  if (!channel) return [];
+  const byType = new Map<ZoneType, Array<[number, number]>>();
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const type = channel[`${x},${y}`];
+      if (!type) continue;
+      const list = byType.get(type) ?? [];
+      list.push([x, y]);
+      byType.set(type, list);
+    }
+  }
+  const zones: Zone[] = [];
+  for (const [type, tiles] of byType) zones.push({ id: zoneId(type), type, tiles });
+  return zones;
+}
+
+/** Rebuild the editor's per-cell zones channel from a Level's `layers.zones` (used only on the
+ * layers-derive fallback for legacy levels; the boardCode path carries the channel losslessly).
+ * Out-of-bounds tiles are dropped like units/props. */
+function zonesFromLayers(zones: Zone[] | undefined, cols: number, rows: number): Record<string, ZoneType> {
+  const channel: Record<string, ZoneType> = {};
+  for (const zone of zones ?? []) {
+    for (const [x, y] of zone.tiles) {
+      if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+      channel[`${x},${y}`] = zone.type;
+    }
+  }
+  return channel;
+}
 
 // Resolve a Studio tile id to its family (so its terrain material is known).
 const familyOfTile = (tileId: string): TileFamilyId | undefined =>
@@ -86,6 +132,12 @@ export interface LevelMeta {
   name: string;
   notes?: string;
   objective?: ObjectiveType;
+  // The ADR-0050 placement axis + its config, authored in the editor's RULES panel and written
+  // straight onto the Level. Omitted (undefined) means 'fixed' / no roster / default survive turns
+  // — the back-compat default — so a save from a level that never touched these leaves them absent.
+  placement?: 'fixed' | 'random';
+  roster?: { player: Roster; enemy: Roster };
+  surviveTurns?: number;
   difficulty?: string;
   economy?: LevelEconomy;
   theme?: string;
@@ -147,6 +199,9 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     props[`${p.x},${p.y}`] = { propId: p.propId };
   }
 
+  // Legacy fallback: rebuild the zones channel from layers.zones (the boardCode path above already
+  // carried it losslessly). Out-of-bounds tiles are dropped like units/props.
+  const zones = zonesFromLayers(level.layers.zones, cols, rows);
   const hasAuthoredPlayer = level.layers.units.some((unit) => unit.side === 'player');
   return {
     cols,
@@ -160,13 +215,16 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     features,
     featureCuts: {},
     featureExits: {},
+    zones,
   };
 }
 
 // Serialize the painted board into a valid `Level`. `boardCode` is stamped for a lossless
-// re-open; `layers.terrain` / `layers.units` are projected so the game (which reads
-// `layers`) plays the authored board. Decals/zones stay empty (doodads ride in boardCode;
-// decals mapping is Phase 4).
+// re-open; `layers.terrain` / `layers.units` / `layers.zones` are projected so the game (which
+// reads `layers`, not `boardCode`) plays the authored board — spawn pools and reach targets read
+// real zones now (ADR-0050; the old `zones: []` hard-code is gone). The ADR-0050 mode fields
+// (objective/placement/roster/surviveTurns) are written straight from `meta`. Decals stay empty
+// (doodads ride in boardCode; decals mapping is Phase 4).
 export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   const cols = clamp(board.cols, BOARD_COLS.min, BOARD_COLS.max);
   const rows = clamp(board.rows, BOARD_ROWS.min, BOARD_ROWS.max);
@@ -230,7 +288,11 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     props.push({ x, y, propId: placement.propId });
   }
 
-  return {
+  // Project the painted zones channel into real `layers.zones` — spawn pools (random placement)
+  // and reach targets read these directly. Clamped to the (possibly resized) bounds like units.
+  const zones = zonesToLayers(board.zones, cols, rows);
+
+  const level: Level = {
     formatVersion: LEVEL_FORMAT_VERSION,
     id: meta.id,
     name: meta.name,
@@ -243,6 +305,14 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     economy: meta.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
     theme: meta.theme ?? 'grassland',
     boardCode: encodeBoard({ ...board, cols, rows }),
-    layers: { terrain, decals: [], zones: [], units, props },
+    layers: { terrain, decals: [], zones, units, props },
   };
+  // ADR-0050 mode fields ride as OPTIONAL keys: written only when meta supplies a non-default
+  // value, so a level that never touched the RULES panel serializes without them (back-compat —
+  // an absent field reads as fixed / no roster / DEFAULT_SURVIVE_TURNS). `objective` is required
+  // and always written above; these three are the toggle + its config.
+  if (meta.placement !== undefined) level.placement = meta.placement;
+  if (meta.roster !== undefined) level.roster = meta.roster;
+  if (meta.surviveTurns !== undefined) level.surviveTurns = meta.surviveTurns;
+  return level;
 }
