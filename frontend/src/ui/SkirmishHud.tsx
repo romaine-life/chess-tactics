@@ -80,7 +80,17 @@ function CountPip({ side, count }: { side: Side; count: number }) {
   );
 }
 
-export function SkirmishHud() {
+type SkirmishHudProps = {
+  canStartNewSkirmish?: boolean;
+  onRestartLevel?: (() => void) | null;
+  showRestartLevel?: boolean;
+};
+
+export function SkirmishHud({
+  canStartNewSkirmish = true,
+  onRestartLevel = null,
+  showRestartLevel = false,
+}: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
@@ -279,14 +289,27 @@ export function SkirmishHud() {
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Match</span>
               <div className="skirmish-view-row">
-                <button
-                  type="button"
-                  className="app-header-button"
-                  data-testid="new-skirmish"
-                  onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
-                >
-                  New skirmish
-                </button>
+                {showRestartLevel ? (
+                  <button
+                    type="button"
+                    className="app-header-button"
+                    data-testid="restart-level"
+                    disabled={!onRestartLevel}
+                    onClick={onRestartLevel ?? undefined}
+                  >
+                    Restart level
+                  </button>
+                ) : null}
+                {canStartNewSkirmish ? (
+                  <button
+                    type="button"
+                    className="app-header-button"
+                    data-testid="new-skirmish"
+                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
+                  >
+                    New skirmish
+                  </button>
+                ) : null}
               </div>
             </div>
           </section>

@@ -161,7 +161,11 @@ export function Skirmish() {
           </div>
         </div>
       </section>
-      <SkirmishHud />
+      <SkirmishHud
+        canStartNewSkirmish={!isCampaignPlay}
+        onRestartLevel={isCampaignPlay && routeLevel ? replayLevel : null}
+        showRestartLevel={isCampaignPlay}
+      />
 
       {isCampaignPlay && routeLevel && game.winner && (
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
