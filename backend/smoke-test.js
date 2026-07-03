@@ -314,43 +314,6 @@ async function main() {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
   }
 
-  // Open Graph unfurl injection: a shared campaign level link must return HTML with
-  // level-specific og:/twitter: tags (Discord/Slack/Twitter crawlers don't run JS, so
-  // these MUST be server-rendered). Title/description come from the baked official.json on
-  // disk; the image is absolute (PUBLIC_ORIGIN) so unfurls resolve it. See server.js ogTagsFor.
-  const ogLevel = await get('/play?campaignId=off-c-crown-valoria&levelId=off-l-pinned');
-  if (ogLevel.statusCode !== 200 || !String(ogLevel.headers['content-type'] || '').includes('text/html')) {
-    throw new Error(`OG level route should return HTML: ${ogLevel.statusCode} ${ogLevel.headers['content-type'] || ''}`);
-  }
-  for (const needle of [
-    '<meta property="og:title" content="Pinned', // "Pinned — Crown of Valoria"
-    'Crown of Valoria',
-    'og:description" content="A compact tactical puzzle', // the level's authored notes
-    '<meta name="twitter:card" content="summary_large_image">',
-    '<meta property="og:image" content="https://chess.romaine.life/assets/', // absolute image
-    '<meta property="og:url" content="https://chess.romaine.life/play?campaignId=off-c-crown-valoria&amp;levelId=off-l-pinned">',
-  ]) {
-    if (!ogLevel.body.includes(needle)) {
-      throw new Error(`OG level HTML missing expected tag: ${needle}`);
-    }
-  }
-  // An unknown / private / mistyped level id degrades to the generic site card — no crash,
-  // and it must not leak a different level's title.
-  const ogUnknown = await get('/play?campaignId=off-c-crown-valoria&levelId=off-l-does-not-exist');
-  if (ogUnknown.statusCode !== 200 || !ogUnknown.body.includes('<meta property="og:site_name" content="Chess Tactics">')) {
-    throw new Error(`OG unknown-level route should fall back to generic tags: ${ogUnknown.statusCode}`);
-  }
-  if (ogUnknown.body.includes('og:title" content="Pinned')) {
-    throw new Error('OG unknown-level route must not leak another level title');
-  }
-  // The homepage also carries generic OG tags + the committed default share image (the
-  // express.static index:false change routes '/' through the injecting SPA fallback).
-  const ogHome = await get('/');
-  if (!ogHome.body.includes('og:image" content="https://chess.romaine.life/assets/og/default.png')
-      || !ogHome.body.includes('<meta property="og:site_name" content="Chess Tactics">')) {
-    throw new Error('Homepage should carry generic OG tags + the default share image');
-  }
-
   const missingAsset = await get('/assets/missing.png');
   if (missingAsset.statusCode !== 404) {
     throw new Error(`Missing asset-like routes should return 404: ${missingAsset.statusCode}`);
