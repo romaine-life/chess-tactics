@@ -4,11 +4,28 @@ date: 2026-07-03
 deciders: Nelson, Claude
 ---
 
-# ADR-0055: Victory conditions are a two-list win/lose condition model
+# ADR-0055: Victory conditions are an if-then rule model
 
 A gameplay-rules ADR in the ADR-0050 family: `victory` is the fifth optional rules
 field on the `Level` schema (after `placement`/`roster`/`surviveTurns`/`timeControl`)
 and follows their exact authoring, validation and back-compat patterns.
+
+> **SUPERSEDED SHAPE (final decision).** This ADR was first written around a flat
+> two-list `victory: { win: Condition[]; lose: Condition[] }`. In authoring it, the
+> owner found the two buckets read as *state*, not *intent*, and asked for an
+> "if-this-then-that" model. The shipped shape is therefore an **ordered list of
+> if-then RULES**: `victory?: VictoryRule[]`, each `{ if: VictoryCondition[] (all
+> ANDed), then: 'win' | 'lose' }` — the RTS-editor trigger model. `evaluateVictory`
+> walks rules top-to-bottom and the FIRST whose conditions all hold decides, so
+> precedence is **rule order**; presets seed lose rules above win rules, which
+> reproduces the defeat-first default described below (now visible + reorderable).
+> The `all` condition is gone — a rule's `if` array is the AND. The editor's
+> condition "side" is a dropdown of the board's factions (mapping to player/enemy).
+> The model is phase-ready: a future `then`/condition can move and read a phase with
+> no reshape. The rest of this ADR describes the two-list origin; every "win-list /
+> lose-list" reads as "win-rules / lose-rules" and "defeat-first check order" reads
+> as "lose rules seeded above win rules." No prod migration (this ADR was unmerged
+> when the shape changed).
 
 ## Context and Problem Statement
 
