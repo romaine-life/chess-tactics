@@ -132,6 +132,22 @@ describe('campaign store', () => {
     expect(state.campaigns[1].levels[0].levelId).not.toBe(existingLevelId);
     expect(state.levels[existingLevelId].name).not.toBe('Imported Level');
   });
+
+  it('attaches an unassigned level to an explicit campaign target', () => {
+    useCampaigns.getState().newCampaign();
+    const firstCampaignId = useCampaigns.getState().selectedCampaignId!;
+    useCampaigns.getState().newCampaign();
+    const secondCampaignId = useCampaigns.getState().selectedCampaignId!;
+    const unassignedId = useCampaigns.getState().createUnassignedLevel(makeLevel('draft', 'Draft Board'));
+
+    useCampaigns.getState().attachLevelToCampaign(firstCampaignId, unassignedId);
+
+    const state = useCampaigns.getState();
+    expect(state.campaigns.find((campaign) => campaign.id === firstCampaignId)!.levels).toMatchObject([{ levelId: unassignedId, ordinal: 0 }]);
+    expect(state.campaigns.find((campaign) => campaign.id === secondCampaignId)!.levels).toHaveLength(0);
+    expect(state.selectedCampaignId).toBe(firstCampaignId);
+    expect(state.selectedLevelId).toBe(unassignedId);
+  });
 });
 
 describe('tiered campaigns (ADR-0038)', () => {

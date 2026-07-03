@@ -24,7 +24,6 @@ export interface TileGridProps {
   cells: readonly TileGridCell[];
   className?: string;
   ariaLabel?: string;
-  showFootprint?: boolean;
   boardZoom?: number;
   boardPan?: { x: number; y: number };
   onPointerUp?: PointerEventHandler<HTMLDivElement>;
@@ -45,7 +44,6 @@ export function TileGrid({
   cells,
   className = '',
   ariaLabel = 'Tile board',
-  showFootprint = false,
   boardZoom = 1,
   boardPan = { x: 0, y: 0 },
   onPointerUp,
@@ -57,7 +55,7 @@ export function TileGrid({
 
   return (
     <div
-      className={`tileset-generated-board ${showFootprint ? 'has-footprint' : ''} ${className}`.trim()}
+      className={`tileset-generated-board ${className}`.trim()}
       style={
         {
           '--board-zoom': boardZoom,

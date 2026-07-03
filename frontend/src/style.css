@@ -1154,6 +1154,61 @@ h1 {
   transition-duration: var(--route-veil-reveal-ms);
 }
 
+/* In-game confirmation dialog (ui/shared/ConfirmDialog.tsx) — replaces window.confirm() on
+   player surfaces so an "are you sure?" wears the game's own chrome, not the browser's. The
+   scrim dims + blurs the board (and swallows clicks); the panel wears the SAME kit panel.png
+   9-slice as the HUD, and its buttons are the SAME .le-seg-btn kit frames — nothing here is a
+   hand-rolled border (ADR-0002/0011/0014). */
+.confirm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10000; /* above the route-veil (9999) so a mid-transition veil can't cover it */
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 8, 13, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: confirm-scrim-in 140ms ease both;
+}
+.confirm-panel {
+  box-sizing: border-box;
+  width: min(92vw, 430px);
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  padding: 6px 10px 10px;
+  color: #f3ead8;
+  animation: confirm-panel-in 160ms ease both;
+}
+/* The panel is only a focus anchor (a11y: move focus into the dialog on open), never an
+   interactive control — so it must not paint a focus outline. The kit frame IS its boundary. */
+.confirm-panel:focus,
+.confirm-panel:focus-visible { outline: none; }
+.confirm-panel h2 {
+  color: #94daf5;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.1;
+  margin: 0 0 12px;
+  text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+}
+.confirm-body {
+  font-size: var(--ds-text-sm);
+  line-height: 1.42;
+  margin: 0 0 18px;
+}
+.confirm-actions {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 8px;
+  justify-content: end;
+}
+.confirm-actions .le-seg-btn { min-width: 116px; padding: 0 16px; }
+@keyframes confirm-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes confirm-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
 /* "New version available" prompt — quiet, fixed, non-blocking. Shown only after
    a newer build is detected (src/net/appUpdate.ts). */
 .app-update-banner {
@@ -4788,6 +4843,18 @@ h1 {
    grid so every layer (Zone / Rules included) stays reachable without a horizontal overflow. */
 .le-seg-layers { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: repeat(4, 1fr); }
 
+/* Tool picker: each icon is a self-framed tile (its own navy + gold-corner border), so it needs
+   no outer kit button — the tile IS the square button. No text, tooltip-only. The selected tool
+   swaps to its cyan `-active.png` variant instead of the shared button-primary frame. */
+.le-seg-icons { grid-auto-flow: column; grid-auto-columns: max-content; justify-content: start; gap: 6px; }
+.le-seg-icons .le-seg-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 44px; height: 44px; }
+.le-seg-icons .le-seg-btn .le-ico { width: 100%; height: 100%; }
+.le-seg-icons .le-seg-btn.active { border-image: none; }
+.le-seg-icons .le-seg-btn.active .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-move { background-image: url("/assets/ui/level-editor/icons/move-active.png"); }
+
 /* ---- Playability violations list (ADR-0050) -----------------------------------------------
    The always-visible to-fix list. Framed by the shared .skirmish-card (kit panel) like every
    other section — NOT a hand-rolled box (ADR-0032). A warm accent border marks it as blocking. */
@@ -4874,6 +4941,31 @@ h1 {
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
 .le-status-current.is-ready { border-color: rgba(103, 217, 138, .42); }
 .le-status-current.is-blocked { border-color: rgba(240, 189, 85, .42); }
+.le-material-values {
+  background: rgba(3, 12, 19, .48);
+  border: 1px solid rgba(82, 142, 170, .24);
+  border-radius: 5px;
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+}
+.le-material-values-head { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.le-material-values-head strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
+.le-material-values-head span { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.25; text-align: right; }
+.le-material-values dl { display: grid; gap: 6px; margin: 0; }
+.le-material-values dl div { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
+.le-material-values dt {
+  align-items: center;
+  color: #d6ecf5;
+  display: grid;
+  font-size: var(--ds-text-sm);
+  gap: 7px;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin: 0;
+  min-width: 0;
+}
+.le-material-values dt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.le-material-values dd { color: #9fe0ff; font-size: var(--ds-text-sm); font-weight: 800; margin: 0; }
 .le-status-log { display: grid; gap: 8px; }
 .le-status-entry {
   background: rgba(3, 12, 19, .58);
@@ -4910,6 +5002,7 @@ h1 {
 .le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
 .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
 .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
+.ic-move { background-image: url("/assets/ui/level-editor/icons/move.png"); }
 .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
 .ic-grid { background-image: url("/assets/ui/level-editor/icons/grid.png"); }
 .ic-zone { background-image: url("/assets/ui/level-editor/icons/zone.png"); }
@@ -5959,6 +6052,10 @@ body { font-size: 17px; }
   opacity: .78;
 }
 
+.ce-campaign-row-meta {
+  border-image-source: url("/assets/ui/kit/row.png");
+}
+
 .ce-level-row {
   gap: 8px;
   grid-template-columns: 76px minmax(0, 1fr) auto auto;
@@ -6100,27 +6197,6 @@ body { font-size: 17px; }
 .ce-row-actions {
   display: flex;
   gap: 5px;
-}
-
-/* Unassigned-levels section: a workspace-wide list of orphan levels (referenced by no
-   campaign), shown under the campaign's own levels. Reuses the level-row chrome; its
-   actions stack Edit + Attach vertically so the longer "Attach to this campaign" label
-   fits without crowding the row. */
-.ce-unassigned {
-  display: grid;
-  gap: 0;
-  margin-top: 14px;
-}
-
-.ce-unassigned-row .ce-row-actions {
-  align-items: stretch;
-  flex-direction: column;
-}
-
-.ce-unassigned-row .ce-row-actions .ce-asset-button,
-.ce-unassigned-row .ce-row-actions .ce-link-button {
-  font-size: var(--ds-text-2xs);
-  min-height: 32px;
 }
 
 .ce-campaign-summary {
@@ -6478,6 +6554,50 @@ body { font-size: 17px; }
 
 .ce-preview-actions .ce-link-button {
   min-width: 0;
+}
+
+.ce-preview-actions.has-assign .ce-assign-field {
+  grid-column: 1 / -1;
+}
+
+.ce-assign-field {
+  display: grid;
+  min-width: 0;
+}
+
+.ce-assign-field select {
+  appearance: none;
+  background: transparent;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/field-select.png") 18 fill / 12px stretch;
+  box-sizing: border-box;
+  color: var(--ce-ink);
+  cursor: pointer;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  image-rendering: pixelated;
+  min-height: 40px;
+  min-width: 0;
+  outline: none;
+  padding: 0 12px;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.ce-assign-field select:disabled {
+  cursor: default;
+  filter: grayscale(.7) brightness(.7);
+  opacity: .58;
+}
+
+.ce-assign-field select:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.ce-assign-field option {
+  background: #061019;
+  color: var(--ce-ink);
 }
 
 .ce-link-button-ghost {
@@ -8631,18 +8751,6 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-.tileset-relationship-card.has-footprint .tileset-relationship-cell.is-center::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.72);
-  pointer-events: none;
-}
-
 .tileset-studio-tab-panel {
   display: grid;
   align-content: start;
@@ -9080,24 +9188,6 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
-.tileset-studio-card.has-footprint .tileset-studio-card-image::after {
-  filter: drop-shadow(0 0 0 rgba(104, 198, 255, 0.6));
-}
-
-.tileset-studio-card.has-footprint .tileset-studio-card-image::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: calc(var(--iso-tile-width) * var(--tile-zoom, 1));
-  height: calc(var(--iso-tile-height) * var(--tile-zoom, 1));
-  transform: translate(-50%, -77%);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.82);
-  box-shadow: 0 0 14px rgba(42, 166, 255, 0.22);
-  pointer-events: none;
-}
-
 .tileset-studio-card-meta {
   display: flex;
   align-items: center;
@@ -9399,20 +9489,6 @@ button.tileset-relationship-cell {
   background: rgba(2, 8, 13, 0.72);
   border: 1px solid rgba(111, 210, 255, 0.28);
   border-radius: 3px;
-}
-
-.tileset-generated-board.has-footprint .tileset-generated-board-tile::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  /* Same top-surface plane as the grid diamond, so the footprint guide overlays
-     the tile's top face instead of floating above it. */
-  top: var(--iso-tile-surface-top);
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.28);
-  pointer-events: none;
 }
 
 /* Manual tile placement board (temporary preview-in-context). */

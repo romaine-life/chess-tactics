@@ -3,7 +3,7 @@
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
 // last-side-standing) — but deterministic and immutable.
 
-import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, Vec, Winner } from './types';
+import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, UnitFacing, Vec, Winner } from './types';
 import type { Rng } from './rng';
 import { canTraverse, elevationAt, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
@@ -14,6 +14,17 @@ const KNIGHT: ReadonlyArray<readonly [number, number]> = [
 const DIAG: ReadonlyArray<readonly [number, number]> = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 const ORTHO: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const ALL8: ReadonlyArray<readonly [number, number]> = [...ORTHO, ...DIAG];
+const COMPASS: readonly UnitFacing[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+const FACING_VECTOR: Record<UnitFacing, readonly [number, number]> = {
+  north: [0, -1],
+  'north-east': [1, -1],
+  east: [1, 0],
+  'south-east': [1, 1],
+  south: [0, 1],
+  'south-west': [-1, 1],
+  west: [-1, 0],
+  'north-west': [-1, -1],
+};
 
 const isObstacle = (p: Piece): boolean => p.type === 'rock' || p.type === 'random-rock';
 
@@ -84,6 +95,43 @@ function blockedByTerrain(env: MoveEnv | undefined, originElev: number, x: numbe
   return !!env?.terrain && !canTraverse(env.terrain, originElev, x, y);
 }
 
+function defaultPawnForward(piece: Piece): UnitFacing {
+  return piece.side === 'enemy' ? 'south' : 'north';
+}
+
+function pawnForward(piece: Piece): UnitFacing {
+  return piece.pawnForward ?? defaultPawnForward(piece);
+}
+
+function pawnForwardVector(piece: Piece): readonly [number, number] {
+  return FACING_VECTOR[pawnForward(piece)];
+}
+
+function pawnCaptureVectors(piece: Piece): ReadonlyArray<readonly [number, number]> {
+  const forwardIndex = COMPASS.indexOf(pawnForward(piece));
+  const left = COMPASS[(forwardIndex + COMPASS.length - 1) % COMPASS.length];
+  const right = COMPASS[(forwardIndex + 1) % COMPASS.length];
+  return [FACING_VECTOR[left], FACING_VECTOR[right]];
+}
+
+function onPawnStart(piece: Piece): boolean {
+  return piece.startX === undefined ? piece.y === piece.startY : piece.x === piece.startX && piece.y === piece.startY;
+}
+
+function isPawnDoubleStep(last: LastMove): boolean {
+  const dx = Math.abs(last.from.x - last.to.x);
+  const dy = Math.abs(last.from.y - last.to.y);
+  return (dx === 0 && dy === 2) || (dx === 2 && dy === 0) || (dx === 2 && dy === 2);
+}
+
+function reachedPawnFarEdge(piece: Piece, size: BoardSize): boolean {
+  const [dx, dy] = pawnForwardVector(piece);
+  return (dx < 0 && piece.x === 0) ||
+    (dx > 0 && piece.x === size.cols - 1) ||
+    (dy < 0 && piece.y === 0) ||
+    (dy > 0 && piece.y === size.rows - 1);
+}
+
 function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs: ReadonlyArray<readonly [number, number]>, env: MoveEnv | undefined, originElev: number): Move[] {
   const moves: Move[] = [];
   for (const [dx, dy] of dirs) {
@@ -121,19 +169,21 @@ function stepMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, delt
 }
 
 function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env: MoveEnv | undefined, originElev: number): Move[] {
-  const dir = piece.side === 'player' ? -1 : 1;
+  const [forwardX, forwardY] = pawnForwardVector(piece);
   const moves: Move[] = [];
-  const oneY = piece.y + dir;
-  if (inBounds(piece.x, oneY, size) && !pieceAt(pieces, piece.x, oneY) && !blockedByTerrain(env, originElev, piece.x, oneY)) {
-    moves.push({ x: piece.x, y: oneY });
-    const twoY = piece.y + dir * 2;
-    if (piece.y === piece.startY && inBounds(piece.x, twoY, size) && !pieceAt(pieces, piece.x, twoY) && !blockedByTerrain(env, originElev, piece.x, twoY)) {
-      moves.push({ x: piece.x, y: twoY });
+  const oneX = piece.x + forwardX;
+  const oneY = piece.y + forwardY;
+  if (inBounds(oneX, oneY, size) && !pieceAt(pieces, oneX, oneY) && !blockedByTerrain(env, originElev, oneX, oneY)) {
+    moves.push({ x: oneX, y: oneY });
+    const twoX = piece.x + forwardX * 2;
+    const twoY = piece.y + forwardY * 2;
+    if (onPawnStart(piece) && inBounds(twoX, twoY, size) && !pieceAt(pieces, twoX, twoY) && !blockedByTerrain(env, originElev, twoX, twoY)) {
+      moves.push({ x: twoX, y: twoY });
     }
   }
-  for (const dx of [-1, 1]) {
+  for (const [dx, dy] of pawnCaptureVectors(piece)) {
     const x = piece.x + dx;
-    const y = piece.y + dir;
+    const y = piece.y + dy;
     if (!inBounds(x, y, size)) continue;
     if (blockedByTerrain(env, originElev, x, y)) continue;
     const occ = pieceAt(pieces, x, y);
@@ -144,14 +194,18 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
   if (
     last?.pieceType === 'pawn' &&
     last.side !== piece.side &&
-    Math.abs(last.from.y - last.to.y) === 2 &&
-    last.to.y === piece.y &&
-    Math.abs(last.to.x - piece.x) === 1
+    isPawnDoubleStep(last)
   ) {
-    const x = last.to.x;
-    const y = piece.y + dir;
-    if (inBounds(x, y, size) && !pieceAt(pieces, x, y) && !blockedByTerrain(env, originElev, x, y)) {
-      moves.push({ x, y, capture: last.pieceId, enPassant: true });
+    const target = pieceAt(pieces, last.to.x, last.to.y);
+    for (const [dx, dy] of pawnCaptureVectors(piece)) {
+      const x = piece.x + dx;
+      const y = piece.y + dy;
+      const capturedX = x - forwardX;
+      const capturedY = y - forwardY;
+      if (last.to.x !== capturedX || last.to.y !== capturedY || target?.id !== last.pieceId) continue;
+      if (inBounds(x, y, size) && !pieceAt(pieces, x, y) && !blockedByTerrain(env, originElev, x, y)) {
+        moves.push({ x, y, capture: last.pieceId, enPassant: true });
+      }
     }
   }
   return moves;
@@ -180,11 +234,10 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
 export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize): Vec[] {
   if (!piece || !piece.alive || isObstacle(piece)) return [];
   if (piece.type === 'pawn') {
-    const dir = piece.side === 'player' ? -1 : 1;
     const out: Vec[] = [];
-    for (const dx of [-1, 1]) {
+    for (const [dx, dy] of pawnCaptureVectors(piece)) {
       const x = piece.x + dx;
-      const y = piece.y + dir;
+      const y = piece.y + dy;
       if (inBounds(x, y, size)) out.push({ x, y });
     }
     return out;
@@ -311,8 +364,7 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
     events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
 
     if (piece.type === 'pawn') {
-      const farRank = piece.side === 'player' ? 0 : state.size.rows - 1;
-      if (piece.y === farRank) {
+      if (reachedPawnFarEdge(piece, state.size)) {
         piece.type = 'queen';
         events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
       }

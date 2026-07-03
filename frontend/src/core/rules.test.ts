@@ -42,6 +42,17 @@ describe('pawn movement', () => {
     const m = find(legalMoves(pawn, [pawn, target], SIZE), 3, 5);
     expect(m?.capture).toBe(target.id);
   });
+  it('uses a stable authored forward direction for movement and captures', () => {
+    const pawn = P('player', 'pawn', 2, 6, { startX: 2, startY: 6, facing: 'north', pawnForward: 'east' });
+    const northEastTarget = P('enemy', 'pawn', 3, 5);
+    const southEastTarget = P('enemy', 'pawn', 3, 7);
+    const moves = legalMoves(pawn, [pawn, northEastTarget, southEastTarget], SIZE);
+    expect(has(moves, 3, 6)).toBe(true);
+    expect(has(moves, 4, 6)).toBe(true);
+    expect(has(moves, 2, 5)).toBe(false);
+    expect(find(moves, 3, 5)?.capture).toBe(northEastTarget.id);
+    expect(find(moves, 3, 7)?.capture).toBe(southEastTarget.id);
+  });
   it('can capture en passant immediately after an adjacent pawn double-step', () => {
     const pawn = P('player', 'pawn', 4, 3);
     const target = P('enemy', 'pawn', 3, 3);
@@ -58,6 +69,15 @@ describe('pawn movement', () => {
       lastMove: { pieceId: target.id, pieceType: 'pawn', side: 'enemy', from: { x: 3, y: 2 }, to: { x: 3, y: 3 } },
     });
     expect(find(moves, 3, 2)?.enPassant).toBeUndefined();
+  });
+  it('applies en passant relative to the pawn forward direction', () => {
+    const pawn = P('player', 'pawn', 4, 4, { startX: 4, startY: 4, pawnForward: 'east' });
+    const target = P('enemy', 'pawn', 4, 3, { startX: 4, startY: 1, pawnForward: 'south' });
+    const moves = legalMoves(pawn, [pawn, target], SIZE, {
+      lastMove: { pieceId: target.id, pieceType: 'pawn', side: 'enemy', from: { x: 4, y: 1 }, to: { x: 4, y: 3 } },
+    });
+    const ep = find(moves, 5, 3);
+    expect(ep).toMatchObject({ capture: target.id, enPassant: true });
   });
 });
 
@@ -124,6 +144,13 @@ describe('threats', () => {
     expect(has(sq, 3, 5)).toBe(true);
     expect(has(sq, 5, 5)).toBe(true);
   });
+  it('pawn attacks follow its authored forward direction', () => {
+    const pawn = P('player', 'pawn', 4, 6, { pawnForward: 'east' });
+    const sq = attackedSquares(pawn, [pawn], SIZE);
+    expect(sq).toHaveLength(2);
+    expect(has(sq, 5, 5)).toBe(true);
+    expect(has(sq, 5, 7)).toBe(true);
+  });
   it('enemyThreats unions every living enemy', () => {
     const ep = P('enemy', 'pawn', 4, 2);
     const t = enemyThreats([ep, P('player', 'queen', 0, 0)], SIZE);
@@ -156,11 +183,32 @@ describe('applyMove', () => {
     expect(res.state.pieces.find((p) => p.id === queen.id)?.facing).toBe('north-east');
     expect(state.pieces.find((p) => p.id === queen.id)?.facing).toBe('south');
   });
+  it('keeps a pawn moving in its original forward direction after its sprite turns', () => {
+    const pawn = P('player', 'pawn', 4, 4, { startX: 4, startY: 4, facing: 'east', pawnForward: 'east' });
+    const foePawn = P('enemy', 'pawn', 5, 3);
+    const foeKing = P('enemy', 'king', 7, 0);
+    const state = { size: SIZE, pieces: [pawn, foePawn, foeKing], turn: 'player' as const, winner: null };
+    const res = applyMove(state, pawn.id, { x: 5, y: 3, capture: foePawn.id });
+    const moved = res.state.pieces.find((p) => p.id === pawn.id)!;
+    expect(moved.facing).toBe('north-east');
+    expect(moved.pawnForward).toBe('east');
+    const nextMoves = legalMoves(moved, res.state.pieces, SIZE);
+    expect(has(nextMoves, 6, 3)).toBe(true);
+    expect(has(nextMoves, 6, 2)).toBe(false);
+  });
   it('promotes a pawn reaching the far rank', () => {
     const pawn = P('player', 'pawn', 4, 1);
     const foe = P('enemy', 'queen', 7, 0);
     const state = { size: SIZE, pieces: [pawn, foe], turn: 'player' as const, winner: null };
     const res = applyMove(state, pawn.id, { x: 4, y: 0 });
+    expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
+    expect(res.events.some((e) => e.kind === 'promoted')).toBe(true);
+  });
+  it('promotes a pawn reaching its authored forward edge', () => {
+    const pawn = P('player', 'pawn', 6, 4, { startX: 6, startY: 4, pawnForward: 'east' });
+    const foe = P('enemy', 'queen', 7, 0);
+    const state = { size: SIZE, pieces: [pawn, foe], turn: 'player' as const, winner: null };
+    const res = applyMove(state, pawn.id, { x: 7, y: 4 });
     expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
     expect(res.events.some((e) => e.kind === 'promoted')).toBe(true);
   });

@@ -19,7 +19,6 @@ export interface BoardLabBoardOverlayContext<TAsset extends TileSocketAsset> {
 export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   board: SocketBoardResult<TAsset>;
   assetFrameSrc: (asset: TAsset) => string;
-  showFootprint?: boolean;
   boardZoom?: number;
   boardPan?: { x: number; y: number };
   className?: string;
@@ -32,7 +31,6 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
 export function BoardLabBoard<TAsset extends TileSocketAsset>({
   board,
   assetFrameSrc,
-  showFootprint = false,
   boardZoom = 1,
   boardPan = { x: 0, y: 0 },
   className = '',
@@ -90,7 +88,6 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       cells={cells}
       className={className}
       ariaLabel={ariaLabel}
-      showFootprint={showFootprint}
       boardZoom={boardZoom}
       boardPan={boardPan}
       renderCellOverlay={
