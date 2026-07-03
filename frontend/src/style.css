@@ -4053,6 +4053,8 @@ h1 {
   pointer-events: auto;
   position: absolute;
   top: -4px;
+  /* Don't let a touch-drag on a piece scroll the page — the board owns the gesture. */
+  touch-action: none;
   width: 104px;
   transform: translateX(-4px);
   z-index: 5;
@@ -4133,6 +4135,23 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .82);
 }
 
+/* Drag-to-move: the legal square the held piece is hovering over. Declared last so it wins
+   over .is-move / :hover on the same cell — a bright green "drop here" fill + ring. */
+.skirmish-board-cell-hit.is-drop-hover::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(150, 255, 200, .34), transparent 60%),
+    rgba(70, 240, 170, .32);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-drop-hover::after {
+  opacity: 1;
+  box-shadow:
+    inset 0 0 0 2px rgba(232, 255, 242, .98),
+    inset 0 0 0 4px rgba(26, 150, 100, .5),
+    0 0 16px rgba(90, 255, 190, .7);
+}
+
 /* THE single source of truth for seating a unit sprite on a tile — shared by the game
    board (.skirmish-board-unit) and the Studio editor so a unit sits identically in both.
    Each board adds only its own chrome (move animation/HP, or selection/hit) around this;
@@ -4173,6 +4192,37 @@ h1 {
 .skirmish-board-unit.is-moving {
   filter: drop-shadow(0 12px 11px rgba(0, 0, 0, .38));
   z-index: 30000 !important;
+}
+
+/* Drag-to-move: the piece being carried fades in its home seat (a faint "lifted from here"
+   trace, like lichess/chess.com) while the cursor-following ghost is what you actually drag.
+   No transition so it doesn't glide while held; its hop is also suppressed on landing (JS). */
+.skirmish-board-unit.is-dragging {
+  opacity: .3;
+  transition: none;
+}
+
+.skirmish-board-unit.is-dragging .skirmish-board-hp {
+  opacity: 0;
+}
+
+/* The carried piece, in screen space (position: fixed), portaled to <body>. Its left/top track
+   the pointer; the transform lifts it so it reads as held above the fingertip/cursor. Sized in
+   JS to the piece's on-screen sprite. pointer-events:none keeps drop hit-testing on the cells. */
+.skirmish-drag-ghost {
+  position: fixed;
+  z-index: 60000;
+  pointer-events: none;
+  transform: translate(-50%, -64%);
+  object-fit: contain;
+  filter: drop-shadow(0 15px 13px rgba(0, 0, 0, .5));
+  will-change: left, top;
+}
+
+/* Grabbing cursor for the whole board while a piece is in hand. */
+.skirmish-board-lab.is-dragging,
+.skirmish-board-lab.is-dragging .skirmish-board-cell-hit {
+  cursor: grabbing;
 }
 
 /* A move is a small sequence, not a teleport: anticipation lift → arc through the
