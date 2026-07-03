@@ -31,6 +31,51 @@ export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objec
 export type ObjectiveType = 'capture-all' | 'capture-king' | 'rival-kings' | 'survive' | 'reach';
 export const OBJECTIVE_TYPES = ['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach'] as const satisfies readonly ObjectiveType[];
 
+// ---- Victory conditions (ADR-0054) -----------------------------------------------------------
+// The two-list model that generalises the single `objective` enum: a level can win by ANY of
+// several conditions and lose by ANY of several others, evaluated once per settled turn with the
+// LOSE list checked first (defeat-first). The 5 modes above become PRESETS that expand into these
+// lists (see `victoryRulesForObjective` in core/objectives.ts); `Level.victory` overrides them.
+
+/** The side a victory/defeat condition refers to (neutral pieces never own an outcome). */
+export type ConditionSide = 'player' | 'enemy';
+
+/** Narrows which of a side's pieces a condition counts. Piece TYPE only — there is no per-unit
+ * tagging in this game (no "protect this specific unit"). Absent ⇒ all of the side's pieces. */
+export interface PieceFilter {
+  type?: PieceType;
+}
+
+/**
+ * One win/lose predicate over a settled GameState (ADR-0054). Pure + serializable.
+ * - `eliminate`: `side` has no living piece matching `filter` — filter `{type:'king'}` is a
+ *   royal capture, an absent filter is a full wipe.
+ * - `reach`: a PAWN of `side` reaches the level's objective zone (pawn-only by game rule; a pawn
+ *   that promotes on arrival still counts — see `evaluateVictory`).
+ * - `turnLimit`: player-turns elapsed ≥ `turns`. In the WIN list this reads "outlast N turns"; in
+ *   the LOSE list it is a deadline. The condition is perspective-free — the LIST assigns valence.
+ * - `all`: every sub-condition holds (AND). Top-level win/lose lists are OR; `all` is the single
+ *   nesting level for compound goals ("reach the zone AND survive N turns").
+ */
+export type VictoryCondition =
+  | { kind: 'eliminate'; side: ConditionSide; filter?: PieceFilter }
+  | { kind: 'reach'; side: ConditionSide }
+  | { kind: 'turnLimit'; turns: number }
+  | { kind: 'all'; of: VictoryCondition[] };
+
+/**
+ * A level's authored win/lose logic (ADR-0054). The player WINS the instant any `win` condition
+ * holds and LOSES the instant any `lose` condition holds, checked lose-list-first (defeat-first,
+ * MTG rule 104.3f). Absent on a Level ⇒ derived from the `objective` preset — the same opt-in
+ * back-compat pattern as placement/roster/surviveTurns/timeControl, so every legacy body is
+ * unchanged. When present it OVERRIDES the preset (the `objective` field still supplies the mode
+ * label and outcome copy).
+ */
+export interface VictoryRules {
+  win: VictoryCondition[];
+  lose: VictoryCondition[];
+}
+
 /** Piece counts per side for random placement — playable piece types only (no rocks). */
 export type Roster = Partial<Record<PieceType, number>>;
 
@@ -100,6 +145,11 @@ export interface Level {
   // The battle clock (see TimeControl). Absent ⇒ untimed — the back-compat default, same
   // optional-field pattern as placement/roster/surviveTurns.
   timeControl?: TimeControl;
+  // Authored victory conditions (ADR-0054). Absent ⇒ the `objective` preset defines win/lose
+  // (see victoryRulesForObjective); when present it OVERRIDES the preset — the two-list model
+  // that lets one level combine several win and several lose conditions. Optional + back-compat
+  // like the other rules fields; `objective` stays required (mode label + fallback outcome copy).
+  victory?: VictoryRules;
   layers: {
     terrain: TerrainCell[];
     decals: Decal[];
@@ -161,6 +211,69 @@ export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows 
 
 export type ValidateResult = { ok: true; level: Level } | { ok: false; errors: string[] };
 
+const CONDITION_KINDS = ['eliminate', 'reach', 'turnLimit', 'all'] as const;
+
+/** Structural errors for a single victory condition (ADR-0054). Recurses into `all`. Shape/enum
+ * checks only — the win/lose-non-empty gameplay gate is validatePlayability's P6. */
+function conditionErrors(c: unknown, path: string): string[] {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return [`${path} must be a condition object`];
+  const cond = c as { kind?: unknown };
+  if (typeof cond.kind !== 'string' || !(CONDITION_KINDS as readonly string[]).includes(cond.kind)) {
+    return [`${path}.kind must be one of: ${CONDITION_KINDS.join(', ')}`];
+  }
+  const errs: string[] = [];
+  switch (cond.kind) {
+    case 'eliminate': {
+      const e = cond as { side?: unknown; filter?: unknown };
+      if (e.side !== 'player' && e.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
+      if (e.filter !== undefined) {
+        if (!e.filter || typeof e.filter !== 'object' || Array.isArray(e.filter)) {
+          errs.push(`${path}.filter must be an object`);
+        } else {
+          const t = (e.filter as { type?: unknown }).type;
+          if (t !== undefined && !isPlayablePieceType(t as PieceType)) errs.push(`${path}.filter.type is not a playable piece type`);
+        }
+      }
+      break;
+    }
+    case 'reach': {
+      const r = cond as { side?: unknown };
+      if (r.side !== 'player' && r.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
+      break;
+    }
+    case 'turnLimit': {
+      const t = cond as { turns?: unknown };
+      if (!Number.isInteger(t.turns) || (t.turns as number) < 1) errs.push(`${path}.turns must be a positive integer`);
+      break;
+    }
+    case 'all': {
+      const a = cond as { of?: unknown };
+      if (!Array.isArray(a.of) || a.of.length === 0) {
+        errs.push(`${path}.of must be a non-empty array of conditions`);
+      } else {
+        a.of.forEach((sub, i) => errs.push(...conditionErrors(sub, `${path}.of[${i}]`)));
+      }
+      break;
+    }
+  }
+  return errs;
+}
+
+/** Structural errors for an authored `Level.victory` (ADR-0054). Empty win/lose lists are legal
+ * SHAPE (validatePlayability P6 rejects them as unplayable); this only checks the two lists exist
+ * and every condition is well-formed. */
+function victoryRuleErrors(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ['victory must be an object with win and lose arrays'];
+  const v = value as { win?: unknown; lose?: unknown };
+  const errs: string[] = [];
+  for (const listName of ['win', 'lose'] as const) {
+    const list = v[listName];
+    if (!Array.isArray(list)) errs.push(`victory.${listName} must be an array`);
+    else list.forEach((c, i) => errs.push(...conditionErrors(c, `victory.${listName}[${i}]`)));
+  }
+  return errs;
+}
+
 /** Structural validation at the trust boundary (editor save / DB read). */
 export function validateLevel(value: unknown): ValidateResult {
   const errors: string[] = [];
@@ -203,6 +316,7 @@ export function validateLevel(value: unknown): ValidateResult {
       errors.push('timeControl needs an integer initialSeconds of at least 1 and a non-negative integer incrementSeconds');
     }
   }
+  if (v.victory !== undefined) errors.push(...victoryRuleErrors(v.victory));
   if (v.roster !== undefined) {
     if (!v.roster || typeof v.roster !== 'object' || Array.isArray(v.roster)) {
       errors.push('roster must be an object with player and enemy piece counts');

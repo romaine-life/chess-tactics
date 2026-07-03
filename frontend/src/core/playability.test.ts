@@ -298,3 +298,22 @@ describe('P5 — battle clock', () => {
     }
   });
 });
+
+describe('P6 — authored victory conditions (ADR-0054)', () => {
+  it('accepts an authored victory with at least one win and one lose, and an absent field (preset)', () => {
+    const authored = fixedLevel((l) => {
+      l.victory = { win: [{ kind: 'reach', side: 'player' }, { kind: 'eliminate', side: 'enemy' }], lose: [{ kind: 'eliminate', side: 'player' }] };
+    });
+    expect(validatePlayability(authored)).toEqual({ ok: true, violations: [] });
+    expect(validatePlayability(fixedLevel(() => {})).ok).toBe(true); // no victory → preset
+  });
+
+  it('rejects an empty win list (unwinnable) and an empty lose list (unlosable-by-wipe)', () => {
+    const noWin = fixedLevel((l) => { l.victory = { win: [], lose: [{ kind: 'eliminate', side: 'player' }] }; });
+    expect(codes(noWin)).toEqual(['P6_VICTORY_NO_WIN']);
+    const noLose = fixedLevel((l) => { l.victory = { win: [{ kind: 'eliminate', side: 'enemy' }], lose: [] }; });
+    expect(codes(noLose)).toEqual(['P6_VICTORY_NO_LOSE']);
+    const neither = fixedLevel((l) => { l.victory = { win: [], lose: [] }; });
+    expect(codes(neither)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
+  });
+});

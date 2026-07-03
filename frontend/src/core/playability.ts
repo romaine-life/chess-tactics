@@ -16,7 +16,8 @@ import { propCells, propDef } from './props';
 export interface PlayabilityViolation {
   /** Stable machine id (P1_SIDE_EMPTY, P2_KING_ASSAULT_KINGS, P2_RIVAL_KINGS_KINGS,
    * P3_UNITS_NOT_EMPTY, P3_NO_SPAWN_ZONE, P3_ZONE_CAPACITY, P3_ZONES_OVERLAP,
-   * P4_SURVIVE_TURNS, P5_TIME_CONTROL). The editor keys on messages; tests key on these. */
+   * P4_SURVIVE_TURNS, P5_TIME_CONTROL, P6_VICTORY_NO_WIN, P6_VICTORY_NO_LOSE). The editor keys on
+   * messages; tests key on these. */
   code: string;
   /** Plain language for the editor's violation list — no jargon, sides named
    * "Player side" / "Enemy side", modes named by their display names. */
@@ -206,6 +207,20 @@ export function validatePlayability(level: Level): PlayabilityResult {
         code: 'P5_TIME_CONTROL',
         message: 'The battle clock needs a starting time of at least one second and a non-negative increment.',
       });
+    }
+  }
+
+  // P6 — authored victory (ADR-0054): when a level overrides the `objective` preset with its own
+  // win/lose lists, each list needs at least one condition. An empty WIN list is unwinnable; an
+  // empty LOSE list is unlosable-by-wipe — the footgun the preset default never has (every preset
+  // ships an eliminate(player) loss). Structural SHAPE is validateLevel's job; this is the
+  // gameplay gate, same both-gates pattern as P4/P5. Assumes a structurally valid level.
+  if (level.victory !== undefined) {
+    if (level.victory.win.length === 0) {
+      violations.push({ code: 'P6_VICTORY_NO_WIN', message: 'The authored victory has no win condition — the level cannot be won.' });
+    }
+    if (level.victory.lose.length === 0) {
+      violations.push({ code: 'P6_VICTORY_NO_LOSE', message: 'The authored victory has no lose condition — add at least one (e.g. losing all your pieces).' });
     }
   }
 

@@ -5,8 +5,8 @@
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
-import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
-import type { ObjectiveType } from '../core/level';
+import { evaluateVictory, kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
+import type { ObjectiveType, VictoryRules } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
 import { playArrival, playTerrain } from '../sfx';
 import { createRng } from '../core/rng';
@@ -149,6 +149,12 @@ export interface SkirmishState {
    * reach destination cells, and which side fields THE King (kingSide, computed from
    * the starting pieces for level AND free games alike). */
   objectiveCtx: ObjectiveContext;
+  /** An authored win/lose OVERRIDE for this game (ADR-0054): `level.victory` when the level
+   * carried one, else null to fall back to the `objective` preset (victoryRulesForObjective,
+   * resolved at eval time). Stored as the override — not the resolved rules — so `objective` +
+   * `objectiveCtx` stay the single source of truth for preset games; the eval sites derive the
+   * preset rules each turn, matching how evaluateObjective always worked. */
+  victoryOverride: VictoryRules | null;
   /** Completed player→enemy rounds — the clock the `survive` objective counts. */
   turnsElapsed: number;
   /** True once newSkirmish has built a real game (vs the module-load placeholder). */
@@ -264,7 +270,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // re-check the objective — survive reached, or a player wipe = defeat.
       const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
       if (!game.winner) {
-        const winner = evaluateObjective(game, cur.objective, { ...(cur.objectiveCtx ?? {}), turnsElapsed });
+        const ctx = { ...(cur.objectiveCtx ?? {}), turnsElapsed };
+        const winner = evaluateVictory(game, cur.victoryOverride ?? victoryRulesForObjective(cur.objective, ctx), ctx);
         if (winner) {
           game = { ...game, winner, turn: 'done' };
           msgs.push(objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
@@ -301,6 +308,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   log: [`Skirmish begins — ${objectiveSummary('capture-king')}.`],
   objective: 'capture-king',
   objectiveCtx: {},
+  victoryOverride: null,
   turnsElapsed: 0,
   started: false,
   levelId: null,
@@ -322,6 +330,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       ...(opts.level ? objectiveContextForLevel(opts.level) : {}),
       kingSide: kingSideOf(created.pieces),
     };
+    // The level's authored win/lose lists override the preset (ADR-0054); null ⇒ the eval sites
+    // derive the `objective` preset each turn from objectiveCtx (kingSide / survive target).
+    const victoryOverride: VictoryRules | null = opts.level?.victory ?? null;
     const intro = opts.level
       ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
       : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
@@ -331,7 +342,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const clock: ClockState | null = tc
       ? { remainingMs: tc.initialSeconds * 1000, running: false, incrementMs: tc.incrementSeconds * 1000 }
       : null;
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, clock });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, clock });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -396,7 +407,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // what makes the displayed objective honest. (survive can only be decided once
     // a round elapses, so it's checked after the enemy reply, not here.)
     if (!game.winner) {
-      const winner = evaluateObjective(game, s.objective, { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 });
+      const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
+      const winner = evaluateVictory(game, s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx), ctx);
       if (winner) {
         game = { ...game, winner, turn: 'done' };
         msgs.push(objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));

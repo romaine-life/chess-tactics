@@ -236,7 +236,28 @@ describe('skirmish store: survive + reach objectives', () => {
     expect(useSkirmish.getState().game.winner).toBe('player');
   });
 
-  it('reach: wins the instant a player piece steps onto a target cell', () => {
+  it('reach: a PAWN stepping onto a target cell wins instantly (even as it promotes there)', () => {
+    useSkirmish.setState({
+      // Pawn one step from the target (0,0) is the enemy back rank, so it promotes on arrival —
+      // reach still fires because lastMove records the pre-promotion type (ADR-0054).
+      game: { size: { cols: 8, rows: 8 }, pieces: [piece('pp', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'reach',
+      objectiveCtx: { reachCells: [{ x: 0, y: 0 }] },
+      turnsElapsed: 0,
+      seed: 1,
+      tick: 0,
+      selectedId: 'pp',
+      focusedId: 'pp',
+      log: [],
+    });
+    useSkirmish.getState().tryMoveTo(0, 0); // pawn steps onto the target
+    const { game } = useSkirmish.getState();
+    expect(game.winner).toBe('player');
+    expect(game.turn).toBe('done');
+  });
+
+  it('reach: a NON-pawn on a target cell does NOT win (reach is pawn-only)', () => {
     useSkirmish.setState({
       game: { size: { cols: 8, rows: 8 }, pieces: [piece('pr', 'player', 'rook', 0, 3), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null },
       env: { terrain: undefined, lastMove: undefined },
@@ -249,10 +270,8 @@ describe('skirmish store: survive + reach objectives', () => {
       focusedId: 'pr',
       log: [],
     });
-    useSkirmish.getState().tryMoveTo(0, 0); // rook slides up the file onto the target
-    const { game } = useSkirmish.getState();
-    expect(game.winner).toBe('player');
-    expect(game.turn).toBe('done');
+    useSkirmish.getState().tryMoveTo(0, 0); // rook slides onto the target — no longer a win
+    expect(useSkirmish.getState().game.winner).toBeNull();
   });
 });
 

@@ -44,6 +44,31 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
+  it('accepts a well-formed authored victory, and an absent field (preset) — ADR-0054', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    lvl.victory = {
+      win: [{ kind: 'reach', side: 'player' }, { kind: 'all', of: [{ kind: 'turnLimit', turns: 5 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }] }],
+      lose: [{ kind: 'eliminate', side: 'player' }],
+    };
+    expect(validateLevel(lvl).ok).toBe(true);
+    delete (lvl as { victory?: unknown }).victory; // absent ⇒ valid (the objective preset applies)
+    expect(validateLevel(lvl).ok).toBe(true);
+  });
+
+  it('rejects malformed victory conditions (bad kind/side/turns/filter, empty all, non-array list) — ADR-0054', () => {
+    const bad: unknown[] = [
+      { win: [{ kind: 'nope' }], lose: [] },
+      { win: [{ kind: 'eliminate', side: 'neither' }], lose: [] },
+      { win: [{ kind: 'turnLimit', turns: 0 }], lose: [] },
+      { win: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'rock' } }], lose: [] },
+      { win: [{ kind: 'all', of: [] }], lose: [] },
+      { win: 'nope', lose: [] },
+    ];
+    for (const victory of bad) {
+      expect(validateLevel({ ...createBlankLevel('l1', 'T', 8, 8), victory } as unknown).ok).toBe(false);
+    }
+  });
+
   it('rejects a malformed layers.props entry when present', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     // missing propId / non-numeric coords
