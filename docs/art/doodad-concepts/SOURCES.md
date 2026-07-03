@@ -68,9 +68,13 @@ Output `/assets/props/<propId>/{back,front}.png` (flat sprites use the same imag
 | cottage | house | 2×2       | low-poly mesh render | `lowvpoly stylized home` (user-supplied `/houses`) | stylized as-is |
 | cabin   | house | 2×2       | Codex restyle of capture | `forest-loner` `house_final.fbx` (user-supplied) | photoreal cabin → pixel-art restyle |
 | lodge   | house | 2×2       | Codex restyle of capture | `forest-house` `nice_house.blend` (user-supplied) | photoreal green-roof → pixel-art restyle |
+| rock    | rock  | 1×1       | Codex restyle of capture | `boulder-rock-3d-model-free` `Meshy_AI_Layered_Mossy_Boulder…glb` (user-supplied `/rocks`) | 1×1 blocking obstacle — the placeable rock (mossy layered) |
+| granite | rock  | 1×1       | Codex restyle of capture | `lone-granite-boulder-stone` `round-boulder.fbx` (user-supplied `/rocks`) | 1×1 blocking obstacle — round granite variant |
 
 Source meshes for the houses arrived as zips in the repo-root `houses/` staging folder (outside
-git); the 4th, `dae-diorama-forest-loner`, is a `.rar` and needs an extractor.
+git); the 4th, `dae-diorama-forest-loner`, is a `.rar` and needs an extractor. The two rock meshes
+arrived the same way in `/rocks`. 1×1 props downscale to ~102px wide (half the 2×2 ~210px
+convention — ~10% overhang past the 96px cell diamond).
 
 Fences are NOT props — they are an edge-autotile feature (`featureAutotile.ts`, kind `fence`),
 visual-only in v1; the brush is gated until a 16-mask wood/stone set is baked (via the feature-tile

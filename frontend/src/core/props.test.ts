@@ -31,16 +31,18 @@ describe('props core', () => {
     expect(propDef('not-a-real-prop')).toBeUndefined();
   });
 
-  it('seeds an oak (tree) and a cottage (house), both blocking 2×2', () => {
+  it('seeds oak (tree 2×2), cottage (house 2×2), and rock (rock 1×1), every def blocking with a positive footprint', () => {
     const ids = PROP_DEFS.map((d) => d.id);
     expect(ids).toContain('oak');
     expect(ids).toContain('cottage');
+    expect(ids).toContain('rock');
     expect(propDef('oak')!.kind).toBe('tree');
     expect(propDef('cottage')!.kind).toBe('house');
+    expect(propDef('rock')!).toMatchObject({ kind: 'rock', w: 1, h: 1 });
     for (const d of PROP_DEFS) {
       expect(d.blocking).toBe(true);
-      expect(d.w).toBe(2);
-      expect(d.h).toBe(2);
+      expect(d.w).toBeGreaterThanOrEqual(1);
+      expect(d.h).toBeGreaterThanOrEqual(1);
     }
   });
 });

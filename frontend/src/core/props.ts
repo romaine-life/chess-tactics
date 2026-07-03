@@ -8,7 +8,7 @@
 // Anchor convention: (x,y) is the min-(x,y) cell of the footprint (smallest x AND smallest y).
 // No rotation in v1, so a prop serialises as a single entry at its anchor.
 
-export type PropKind = 'tree' | 'house';
+export type PropKind = 'tree' | 'house' | 'rock';
 
 /** The sprite frame geometry for a prop (pixel dims + the ground-contact anchor pixel). */
 export interface PropSprite {
@@ -74,6 +74,11 @@ export const PROP_DEFS: readonly PropDef[] = [
   // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
   { id: 'cabin', label: 'Log cabin', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], sprite: { w: 220, h: 176, anchorX: 119, anchorY: 156 } },
   { id: 'lodge', label: 'Green-roof house', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], sprite: { w: 210, h: 177, anchorX: 105, anchorY: 175 } },
+  // Rocks — 1×1 blocking boulders: the placeable impassable-cell obstacle (the old editor's rock
+  // terrain swatch, reborn as a prop so the rules engine stays untouched). Same gated Codex
+  // restyle pipeline as cabin/lodge, from the two staged /rocks meshes (see SOURCES.md).
+  { id: 'rock', label: 'Rock', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 102, h: 115, anchorX: 51, anchorY: 113 } },
+  { id: 'granite', label: 'Granite boulder', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 102, h: 93, anchorX: 51, anchorY: 91 } },
 ];
 
 /**
