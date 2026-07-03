@@ -4564,7 +4564,8 @@ h1 {
   border: 14px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
   box-sizing: border-box;
-  gap: var(--ds-stack);
+  /* Sections are separated by the GUTTER, not the within-section stack (ADR-0056). */
+  gap: var(--ds-gutter);
   height: 100%;
   max-height: none;
   min-height: 0;
@@ -4779,7 +4780,9 @@ h1 {
   font-size: .9rem;
   font-weight: 400;
   line-height: 1;
-  margin: 0 0 10px;
+  /* Headings bind DOWNWARD (ADR-0056): stack below to their own content; the larger
+     gutter above them comes from the section gap, never from heading margins. */
+  margin: 0 0 var(--ds-stack);
   text-transform: uppercase;
 }
 
@@ -4825,20 +4828,15 @@ h1 {
 .level-editor-screen .skirmish-hud { grid-area: rail; }
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
-.level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
+.level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: var(--ds-gutter); }
 
 /* Title bar = the standard app bar (ADR-0004/0023/0037): the oak frame, height, grid
    columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
-   on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
-   stats/actions content below are scoped here — three sections: brand · save-state ·
-   labeled header buttons (.app-header-button on the kit gold frame). */
-/* Bar-content rules are scoped to the bar class (.le-topbar), NOT the screen — the
-   bar now lives in the app shell, outside .level-editor-screen, so the stats/actions
-   (portaled into the bar via <TitleBarSlot>) are descendants of .le-topbar there. */
-.le-topbar .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
-.le-topbar .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.le-topbar .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
-.le-topbar .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+   on the element itself. The editor puts NO status in the bar (the level name and
+   save-state cluster were removed — that state lives in the Status layer card); only the
+   return-nav buttons ride it (.app-header-button on the kit gold frame). Bar-content
+   rules are scoped to the bar class (.le-topbar), NOT the screen — the bar lives in the
+   app shell, outside .level-editor-screen. */
 .le-topbar .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
 
 /* segmented switch (layer / tool / fill) */
@@ -4877,15 +4875,25 @@ h1 {
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
-/* Pinned Actions dock in the rail — the workspace verbs (Undo/Test/Save) that moved out of the
-   global title bar. A fixed flex child of .skirmish-hud (above .le-hud-scroll), so it never
-   scrolls; the button row reuses the .le-board-actions 3-col grid. */
-.le-actions-dock .le-board-actions { margin-top: 6px; }
-.le-board-actions { display: grid; gap: 5px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 8px; }
+/* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo), as
+   COMPACT icon-only squares (owner: icons, not letters — the labels ride aria-label +
+   title). Glyphs come from the editor icon set (.le-ico/.ic-*), same treatment as the
+   tool row; press swaps to the set's gold -active variant. Test + Save/Publish are
+   session verbs and live in the Status layer card (.le-status-actions, 2-col grid; the
+   base grid stays 3-col for the Board layer's row). Spacing rides the ADR-0056 ladder —
+   no per-row margin hand-picks. */
+.le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
+.le-board-actions.le-history-actions { display: flex; }
+.le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.le-icon-btn { padding: 0; width: 38px; }
+.le-icon-btn:not(:disabled):active .ic-undo { background-image: url("/assets/ui/level-editor/icons/undo-active.png"); }
+.le-icon-btn:not(:disabled):active .ic-redo { background-image: url("/assets/ui/level-editor/icons/redo-active.png"); }
+/* The status card is a live flex column (ADR-0056) — its gap spaces the row; no extra margin. */
+.le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
 
 /* Level settings live under the Board layer: rule readout + faction-control assignment. */
-.le-settings-list { display: grid; gap: 6px; margin: 0 0 12px; }
+.le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
 .le-settings-list div { align-items: start; display: grid; gap: 8px; grid-template-columns: 74px minmax(0, 1fr); }
 .le-settings-list dt,
 .le-settings-label { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
@@ -4983,7 +4991,9 @@ h1 {
   margin-top: 8px;
   min-height: 38px;
   outline: none;
-  padding: 0 10px;
+  /* Single-line control: horizontal inset on the role token (ADR-0055); vertical
+     centering comes from min-height. */
+  padding: 0 var(--ds-inset);
   width: 100%;
 }
 .le-board-link-input::placeholder { color: rgba(207, 230, 241, .52); }
@@ -5014,9 +5024,6 @@ h1 {
 .le-brush-thumb img.le-thumb-tile { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 26%; }
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
-
-/* Save-state chip: blocked (playability violations) reads as a warning distinct from unsaved. */
-.le-topbar .le-save-state.is-blocked { color: #f27a6a; text-shadow: 0 0 8px rgba(242, 122, 106, .3); }
 
 /* ---- Gameplay zones (ADR-0050) ------------------------------------------------------------
    Zone tint palette — one accent per paintable zone type: player placement (cyan), enemy
@@ -5080,10 +5087,11 @@ h1 {
 .le-seg-icons .le-seg-btn.active .ic-move { background-image: url("/assets/ui/level-editor/icons/move-active.png"); }
 
 /* ---- Playability violations list (ADR-0050) -----------------------------------------------
-   The always-visible to-fix list. Framed by the shared .skirmish-card (kit panel) like every
-   other section — NOT a hand-rolled box (ADR-0032). A warm accent border marks it as blocking. */
-.le-violations { box-shadow: inset 0 0 0 1px rgba(242, 122, 106, .35); }
-.le-violation-list { display: flex; flex-direction: column; gap: 7px; list-style: none; margin: 0; padding: 0; }
+   The to-fix list (Status layer only). A warm accent line marks it as blocking — and because
+   it DRAWS a box around its text, the content is inset by the role token (ADR-0055): text
+   never sits flush against a drawn edge. Frameless cards stay zero-padding. */
+.le-violations { box-shadow: inset 0 0 0 1px rgba(242, 122, 106, .35); padding: var(--ds-inset); }
+.le-violation-list { display: flex; flex-direction: column; gap: var(--ds-stack); list-style: none; margin: 0; padding: 0; }
 .le-violation { align-items: center; color: #f4d8d2; display: flex; font-size: var(--ds-text-sm); gap: 8px; justify-content: space-between; line-height: 1.3; }
 .le-violation-msg { flex: 1 1 auto; min-width: 0; }
 .le-violation-action { flex: none; padding: 4px 8px; }
@@ -5096,7 +5104,7 @@ h1 {
    Cover — never clip their bottom controls. Layer tabs stay fixed above it; this fills the
    remaining panel height and carries the same stack gap the sections had as aside children. */
 .le-hud-scroll { flex: 1 1 auto; min-height: 0; }
-.le-hud-scroll > .kit-scroll-content { display: flex; flex-direction: column; gap: var(--ds-stack); }
+.le-hud-scroll > .kit-scroll-content { display: flex; flex-direction: column; gap: var(--ds-gutter); }
 
 /* kit-scroll — the DRAWN scroll primitive (ADR-0030), rendered by <KitScroll>. The native bar is
    hidden; we draw an ALWAYS-PRESENT rail (a real DOM element the browser can't hide) + a grip thumb
@@ -5149,56 +5157,69 @@ h1 {
 /* Display card controls: a label on the left, the shared kit control on the right. Footprint uses
    the shared <Toggle> and Zoom the shared <Stepper> (.settings-toggle / .settings-stepper) so
    they read the same everywhere; we only lay out the label + control row. */
-.le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
+.le-ctrlrow { align-items: center; display: flex; gap: var(--ds-inline-tight); justify-content: space-between; margin-top: var(--ds-stack); }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
-.le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
-.le-status-card { gap: 10px; }
+.le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: var(--ds-stack) 2px 0; }
+/* A LIVE flex column (ADR-0056): the gap actually applies — it was declared on a block
+   container for this card's whole life and silently did nothing (children sat flush).
+   Gap-driven container ⇒ children carry no vertical margins of their own (flex margins
+   don't collapse; they'd ADD to the gap). */
+.le-status-card { display: flex; flex-direction: column; gap: var(--ds-stack); }
+.le-status-card > h2 { margin: 0; }
+.le-status-log .le-board-note { margin: 0; }
+/* The level's identity (name + OFFICIAL tag) — moved here from the title bar; global
+   chrome carries no editor status. */
+.le-status-level { align-items: baseline; display: flex; gap: var(--ds-inline-tight); min-width: 0; }
+.le-status-level .le-level-name { color: #f0e7d3; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.le-official-tag { color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; }
+/* Drawn text boxes inset their content by the role token (ADR-0055). */
 .le-status-current {
   background: rgba(4, 13, 20, .7);
   border: 1px solid rgba(82, 142, 170, .3);
   border-radius: 5px;
   display: grid;
-  gap: 4px;
-  padding: 10px;
+  gap: var(--ds-inline-tight);
+  padding: var(--ds-inset);
 }
 .le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
 .le-status-current.is-ready { border-color: rgba(103, 217, 138, .42); }
 .le-status-current.is-blocked { border-color: rgba(240, 189, 85, .42); }
+/* Drawn text box → role-token inset + ladder gaps (ADR-0055/0056). */
 .le-material-values {
   background: rgba(3, 12, 19, .48);
   border: 1px solid rgba(82, 142, 170, .24);
   border-radius: 5px;
   display: grid;
-  gap: 8px;
-  padding: 9px 10px;
+  gap: var(--ds-stack);
+  padding: var(--ds-inset);
 }
-.le-material-values-head { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.le-material-values-head { align-items: baseline; display: flex; gap: var(--ds-inline); justify-content: space-between; }
 .le-material-values-head strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-material-values-head span { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.25; text-align: right; }
-.le-material-values dl { display: grid; gap: 6px; margin: 0; }
-.le-material-values dl div { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
+.le-material-values dl { display: grid; gap: var(--ds-inline-tight); margin: 0; }
+.le-material-values dl div { align-items: center; display: grid; gap: var(--ds-inline); grid-template-columns: minmax(0, 1fr) auto; }
 .le-material-values dt {
   align-items: center;
   color: #d6ecf5;
   display: grid;
   font-size: var(--ds-text-sm);
-  gap: 7px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: auto minmax(0, 1fr);
   margin: 0;
   min-width: 0;
 }
 .le-material-values dt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-material-values dd { color: #9fe0ff; font-size: var(--ds-text-sm); font-weight: 800; margin: 0; }
-.le-status-log { display: grid; gap: 8px; }
+.le-status-log { display: grid; gap: var(--ds-stack); }
 .le-status-entry {
   background: rgba(3, 12, 19, .58);
   border-left: 3px solid rgba(143, 182, 198, .55);
   border-radius: 4px;
   display: grid;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: 58px minmax(0, 1fr);
-  padding: 8px;
+  padding: var(--ds-inset);
 }
 .le-status-entry time { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.2; }
 .le-status-entry strong { color: #f3ead8; display: block; font-size: var(--ds-text-sm); line-height: 1.2; }
