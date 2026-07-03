@@ -50,6 +50,13 @@ export type NetMoveSink = (pieceId: string, move: RelayMove) => void;
 let netMoveSink: NetMoveSink | null = null;
 export function setNetMoveSink(sink: NetMoveSink | null): void { netMoveSink = sink; }
 
+/** Relay hook: fired when the local player resigns, so the netplay layer POSTs the
+ *  resignation to the lobby. Like moves, the game only ENDS when the server echoes the
+ *  result back over the lobby channel (concludeNet) — never optimistically. */
+export type NetResignSink = () => void;
+let netResignSink: NetResignSink | null = null;
+export function setNetResignSink(sink: NetResignSink | null): void { netResignSink = sink; }
+
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
 // delay stages that read-beat + thinking pause before the enemy reply resolves.
@@ -255,6 +262,14 @@ export interface SkirmishState {
   /** Apply a move that arrived from the OTHER player over the relay (no AI, no
    *  re-emit). Re-validates legality before applying. */
   applyRemoteMove: (pieceId: string, move: RelayMove) => void;
+  /** Concede a multiplayer match: relay the resignation to the lobby. The game itself
+   *  ends only when the server's terminal result echoes back via `concludeNet`. No-op
+   *  outside netplay or once the game is decided. */
+  resign: () => void;
+  /** End a netplay match by a non-move terminal event (a resignation relayed by the
+   *  server). Sets the winner directly and logs the outcome from this seat. Idempotent —
+   *  a duplicate/redelivered lobby frame is ignored once the game is decided. */
+  concludeNet: (winner: Winner, reason: 'resign') => void;
   /** Rehydrate a match saved to disk (see matchPersistence) — used to resume the
    * live board after a page reload instead of starting a fresh game. */
   resumeMatch: (match: PersistedMatch) => void;
@@ -572,6 +587,30 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   },
 
   applyRemoteMove: (pieceId, move) => { commitNet(pieceId, move); },
+
+  resign: () => {
+    const s = get();
+    // Only meaningful in a live netplay match. The winner isn't set here — the server
+    // echoes the terminal result back over the lobby channel and concludeNet ends the
+    // game on both boards symmetrically (same single-apply discipline as moves).
+    if (!s.net || s.game.winner) return;
+    if (netResignSink) netResignSink();
+  },
+
+  concludeNet: (winner, reason) => {
+    const s = get();
+    if (!s.net || s.game.winner) return; // idempotent: already decided (or not netplay)
+    const localSide = s.net.localSide;
+    const copy = reason === 'resign'
+      ? (winner === localSide ? 'Victory — your opponent resigned.' : 'Defeat — you resigned.')
+      : netOutcomeCopy(winner, localSide);
+    set({
+      game: { ...s.game, winner, turn: 'done' },
+      selectedId: null,
+      focusedId: null,
+      log: [copy, ...s.log].slice(0, 12),
+    });
+  },
 
   resumeMatch: (match) => {
     // A previous game's ticker must never outlive its game.

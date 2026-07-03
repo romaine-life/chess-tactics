@@ -53,3 +53,25 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 - Plain `npx vite` serves reliably. If you use the preview tool's managed server,
   pin an explicit `--port` and matching `port` in `.claude/launch.json` (no
   `autoPort`), or a port mismatch will make a healthy server look dead.
+
+## Verifying backend / multiplayer changes (NO Postgres needed)
+
+The whole lobby/netplay surface (host/join/level/start/moves/resign/leave) lives in an
+in-memory Map — those routes never touch the database, and the server boots and serves
+them even with no DB configured (`server.js` starts anyway and only 503s the *persistence*
+endpoints). So multiplayer features are fully testable locally without Postgres:
+
+```
+cd backend && npm ci        # once per worktree — a fresh worktree has NO backend node_modules
+node netplay-smoke-test.js  # boots the server DB-free, exercises the lobby/netplay lifecycle
+```
+
+`netplay-smoke-test.js` is the go-to for any lobby/netplay change — it runs anywhere in
+seconds. Do NOT say "I couldn't run the smoke test" for a multiplayer change; run this.
+
+The full `smoke-test.js` additionally covers the DB-backed persistence endpoints
+(campaigns, portfolios), so it needs Postgres — it self-provisions from system
+`initdb`/`pg_ctl`/`createdb` if present, else set `DATABASE_URL` to any reachable Postgres.
+On a host without Postgres binaries (this Windows box has none), the full smoke test can't
+run locally — but `netplay-smoke-test.js` covers everything multiplayer, so reach for that.
+Both are wired into `npm test` (netplay first, so netplay regressions fail fast).

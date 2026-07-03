@@ -4677,6 +4677,13 @@ h1 {
   padding: 0 var(--ds-gutter);
 }
 
+/* Resign is a concede/caution action — swap the neutral kit frame for the danger (red)
+   one so it reads as distinct from the other match controls (same treatment as the
+   editor's Delete/Clear buttons). */
+.skirmish-view-row .app-header-button.skirmish-resign-button {
+  border-image-source: url("/assets/ui/kit/button-danger.png");
+}
+
 .skirmish-zoom-readout {
   color: var(--skirmish-ink);
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;

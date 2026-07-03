@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, terminalIfStuck, sideHasLegalMove, shouldStartFreshSkirmish } from './store';
+import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, terminalIfStuck, sideHasLegalMove, shouldStartFreshSkirmish, setNetResignSink } from './store';
 import { livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
@@ -520,5 +520,59 @@ describe('soft-lock guard (no manual End Turn)', () => {
     const trapped = stateOf([piece('p', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 0, 0)], 1, 2);
     expect(resolveIfPlayerStuck({ ...trapped, turn: 'enemy' }, OPEN_ENV).stuck).toBe(false);
     expect(resolveIfPlayerStuck({ ...trapped, winner: 'player', turn: 'done' }, OPEN_ENV).stuck).toBe(false);
+  });
+});
+
+describe('netplay resign', () => {
+  const netMatch = (localSide: Side) =>
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide, level: createBlankLevel('net-1', 'Net'), seed: 7 });
+
+  afterEach(() => setNetResignSink(null));
+
+  it('relays a resignation via the sink but does NOT decide the game locally (server-sequenced)', () => {
+    netMatch('player');
+    let relayed = 0;
+    setNetResignSink(() => { relayed += 1; });
+    useSkirmish.getState().resign();
+    expect(relayed).toBe(1);
+    // The winner is set only when the server's result echoes back (concludeNet) — never optimistically.
+    expect(useSkirmish.getState().game.winner).toBeNull();
+  });
+
+  it('resign is a no-op in single-player and once the game is decided', () => {
+    let relayed = 0;
+    setNetResignSink(() => { relayed += 1; });
+    // Single-player: no net context, so nothing is relayed.
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    useSkirmish.getState().resign();
+    expect(relayed).toBe(0);
+    // Netplay but already decided: a second resign can't re-fire.
+    netMatch('player');
+    useSkirmish.getState().concludeNet('enemy', 'resign');
+    useSkirmish.getState().resign();
+    expect(relayed).toBe(0);
+  });
+
+  it('concludeNet ends the match as a win for the non-resigning seat and is idempotent', () => {
+    // Host seat ('player'); the opponent ('enemy') resigned → we win.
+    netMatch('player');
+    useSkirmish.getState().concludeNet('player', 'resign');
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player');
+    expect(s.game.turn).toBe('done');
+    expect(s.selectedId).toBeNull();
+    expect(s.log[0]).toMatch(/opponent resigned/i);
+    // A redelivered result frame must not overwrite the decided game.
+    useSkirmish.getState().concludeNet('enemy', 'resign');
+    expect(useSkirmish.getState().game.winner).toBe('player');
+  });
+
+  it('concludeNet frames the loss from the resigning seat', () => {
+    // Guest seat ('enemy') that resigned → winner is 'player' (not our side) = defeat copy.
+    netMatch('enemy');
+    useSkirmish.getState().concludeNet('player', 'resign');
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player');
+    expect(s.log[0]).toMatch(/you resigned/i);
   });
 });

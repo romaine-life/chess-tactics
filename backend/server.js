@@ -373,6 +373,8 @@ function publicLobby(lobby, viewerEmail) {
     level_id: lobby.levelId ?? null,
     seed: lobby.seed ?? null,
     move_count: lobby.moves ? lobby.moves.length : 0,
+    // Terminal outcome (resignation) in board terms, or null while the match is live.
+    result: lobby.result ?? null,
     your_side: viewerEmail === lobby.host.email
       ? 'player'
       : (lobby.guest && viewerEmail === lobby.guest.email ? 'enemy' : null),
@@ -1213,6 +1215,11 @@ app.post('/api/lobbies', async (req, res) => {
     levelId: null,
     seed: null,
     moves: [],
+    // Terminal outcome from a non-move event (a player resigning). `null` while the
+    // match is live; once set, both clients read it off the lobby frame and end the
+    // game — so it survives reconnect/late-join the way the move log does. Checkmate/
+    // stalemate/objective ends stay purely client-side (deterministic replay).
+    result: null,
   };
   lobbies.set(id, lobby);
   broadcastLobbies();
@@ -1331,6 +1338,11 @@ app.post('/api/lobbies/:id/start', async (req, res) => {
   // Lock a positive-integer seed for deterministic shared placement (crypto so it
   // is not predictable). Both clients build the identical board from (level, seed).
   lobby.seed = 1 + (crypto.randomInt ? crypto.randomInt(900000) : Math.floor(Math.random() * 900000));
+  // Fresh match: drop any relayed moves and terminal result from a prior game played in
+  // this lobby (a lobby is reusable — e.g. a guest leaves after a match and a new one
+  // joins), so both clients start from an empty log rather than backfilling the old game.
+  lobby.moves = [];
+  lobby.result = null;
   lobby.phase = 'started';
   lobby.updatedAt = new Date().toISOString();
   broadcastLobbies();
@@ -1356,6 +1368,13 @@ app.post('/api/lobbies/:id/moves', async (req, res) => {
   }
   if (lobby.phase !== 'started') {
     res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  // The match is already decided by a resignation — no further moves are relayed. (A
+  // well-behaved client stops sending once its board shows a winner; this guards a
+  // stale/racing POST from re-opening a finished game.)
+  if (lobby.result) {
+    res.status(409).json({ error: 'match_over' });
     return;
   }
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -1389,6 +1408,39 @@ app.post('/api/lobbies/:id/moves', async (req, res) => {
   lobby.updatedAt = new Date().toISOString();
   broadcastToLobby(lobby.id, { type: 'move', move: event });
   res.status(200).json({ move: event });
+});
+
+// Resign the match. Caller must be host/guest; lobby must be started. Records a
+// terminal result (the OTHER side wins) on the lobby and pushes it to both clients
+// over the game channel — they end the game from their own seat's perspective. Unlike
+// a move, resignation isn't turn-gated (a player may resign any time) and it's stored
+// on the lobby (not the move log) so a reconnecting/late client learns the match ended.
+app.post('/api/lobbies/:id/resign', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const isHost = lobby.host.email === user.email;
+  const isGuest = lobby.guest && lobby.guest.email === user.email;
+  if (!isHost && !isGuest) {
+    res.status(409).json({ error: 'not_in_lobby' });
+    return;
+  }
+  if (lobby.phase !== 'started') {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  // Idempotent: a double-tap (or both players racing to resign) keeps the first result.
+  if (!lobby.result) {
+    lobby.result = { winner: isHost ? 'enemy' : 'player', reason: 'resign' };
+    lobby.updatedAt = new Date().toISOString();
+    broadcastLobbyState(lobby);
+    broadcastLobbies();
+  }
+  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
 });
 
 // Backfill relayed moves since index N (reconnect / late join). Same visibility

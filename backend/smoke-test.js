@@ -1203,6 +1203,48 @@ async function main() {
     throw new Error(`Started lobby should expose move_count/level_id: ${startedList.statusCode} ${startedList.body}`);
   }
 
+  // --- Resignation --------------------------------------------------------------
+  // Resigning is a non-move terminal event: it records a result on the lobby (the OTHER
+  // side wins) that both clients read off the lobby frame. Anonymous callers can't resign.
+  const anonResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { 'content-type': 'application/json' }, '{}');
+  if (anonResign.statusCode !== 401) {
+    throw new Error(`Anonymous resign should require sign-in: ${anonResign.statusCode} ${anonResign.body}`);
+  }
+  // Guest ('enemy') resigns → 'player' (the host) wins.
+  const guestResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+  const guestResignBody = JSON.parse(guestResign.body);
+  if (guestResign.statusCode !== 200 || !guestResignBody.lobby.result || guestResignBody.lobby.result.winner !== 'player' || guestResignBody.lobby.result.reason !== 'resign') {
+    throw new Error(`Unexpected resign response: ${guestResign.statusCode} ${guestResign.body}`);
+  }
+  // The result is visible to the other seat too (how the host learns the match ended).
+  const resignedView = await get(`/api/lobbies/${lobbyId}`, { cookie: 'better-auth.session=abc' });
+  const resignedViewBody = JSON.parse(resignedView.body);
+  if (resignedView.statusCode !== 200 || !resignedViewBody.lobby.result || resignedViewBody.lobby.result.winner !== 'player') {
+    throw new Error(`Resigned lobby should expose the result to the host: ${resignedView.statusCode} ${resignedView.body}`);
+  }
+  // The match is over — further moves are rejected rather than re-opening a decided game.
+  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 5, y: 5 } }));
+  if (moveAfterResign.statusCode !== 409 || JSON.parse(moveAfterResign.body).error !== 'match_over') {
+    throw new Error(`Move after resign should 409 match_over: ${moveAfterResign.statusCode} ${moveAfterResign.body}`);
+  }
+  // Idempotent: the host resigning now keeps the first result rather than flipping the winner.
+  const hostResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const hostResignBody = JSON.parse(hostResign.body);
+  if (hostResign.statusCode !== 200 || hostResignBody.lobby.result.winner !== 'player') {
+    throw new Error(`Resign should be idempotent (first result kept): ${hostResign.statusCode} ${hostResign.body}`);
+  }
+  // Re-starting the lobby begins a fresh match: the prior game's move log AND result are
+  // cleared, so a reused lobby never replays the old game or carries a stale outcome.
+  const restart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const restartBody = JSON.parse(restart.body);
+  if (restart.statusCode !== 200 || restartBody.lobby.phase !== 'started' || restartBody.lobby.move_count !== 0 || restartBody.lobby.result !== null) {
+    throw new Error(`Re-start should clear moves + result: ${restart.statusCode} ${restart.body}`);
+  }
+  const restartBackfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
+  if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 0) {
+    throw new Error(`Re-started lobby should have an empty move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
+  }
+
   const redirect = await get('/api/auth/sign-in?returnTo=%2Fplay');
   if (redirect.statusCode !== 302 || !String(redirect.headers.location).startsWith(`http://127.0.0.1:${authPort}/sign-in/microsoft?`)) {
     throw new Error(`Unexpected sign-in redirect: ${redirect.statusCode} ${redirect.headers.location}`);
