@@ -138,6 +138,12 @@ export interface GameState {
    */
   terrain?: TerrainCell[];
   /**
+   * Lossless Level Editor board encoding for authored maps. Gameplay still reads `terrain`
+   * and `props`; the renderer uses this to keep the exact painted tile IDs/features instead
+   * of regenerating visual variants from terrain + seed.
+   */
+  boardCode?: string;
+  /**
    * Multi-cell decorative props (trees, houses). Optional + serializable, mirroring
    * `terrain?`: a legacy/prop-free state simply omits it (= no props). Blocking props are
    * realised as neutral `rock` colliders in `pieces` at build time (see game/setup.ts); this

@@ -162,6 +162,7 @@ function createFromLevel(level: Level, seed: number): GameState {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
     terrain: level.layers.terrain,
+    boardCode: level.boardCode,
     // The render channel: the board draws the tall prop sprite from this list, while the
     // colliders above do the blocking. Defaults to [] so a prop-free level stays prop-free.
     props,
