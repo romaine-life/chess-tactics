@@ -4464,14 +4464,19 @@ h1 {
 
 .skirmish-hud-tab {
   appearance: none;
+  align-items: center;
   background: transparent;
-  /* Grow to fill each row; wraps to a second row past ~3 tabs in the narrow panel. */
-  flex: 1 1 76px;
+  display: flex;
+  justify-content: center;
+  /* Icon-only: equal-share basis (0) keeps all five on ONE compact row instead of
+     stretching to a text width and wrapping to a second row. */
+  flex: 1 1 0;
   /* Kit mode-button frame — atom-assembled (ADR-0012/0016), the SAME tab/header
      frame the settings nav uses; gold brackets, cyan when active. Chrome must be
-     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014). */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014).
+     Slimmed to 7px now the cell only carries a glyph, not a word. */
+  border: 7px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 7px round;
   border-radius: 0;
   color: var(--skirmish-muted);
   cursor: pointer;
@@ -4480,8 +4485,8 @@ h1 {
   image-rendering: pixelated;
   letter-spacing: .04em;
   line-height: 1;
-  min-block-size: 44px;
-  padding: 0 var(--ds-inline);
+  min-block-size: 0;
+  padding: 2px;
   text-transform: uppercase;
 }
 
@@ -4499,6 +4504,24 @@ h1 {
   border-image-source: url("/assets/ui/kit/mode-button-active.png");
   color: #f3fbff;
 }
+
+/* Icon-based tab glyphs — reused curated kit icons (ADR-0011/0032), full-colour on
+   the dark panel like the count-pip rooks. Sized to sit inside the 44px kit frame. */
+.skirmish-tab-icon {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  block-size: 20px;
+  display: block;
+  image-rendering: pixelated;
+  inline-size: 20px;
+}
+
+.skirmish-tab-icon-unit { background-image: url("/assets/ui/kit/icons/unit-studio.png"); }
+.skirmish-tab-icon-roster { background-image: url("/assets/ui/kit/icons/players.png"); }
+.skirmish-tab-icon-log { background-image: url("/assets/ui/kit/icons/info.png"); }
+.skirmish-tab-icon-view { background-image: url("/assets/ui/kit/icons/monitor.png"); }
+.skirmish-tab-icon-controls { background-image: url("/assets/ui/kit/icons/gear.png"); }
 
 .skirmish-hud-panel {
   display: flex;
