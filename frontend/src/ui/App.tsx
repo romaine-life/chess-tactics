@@ -10,7 +10,6 @@ import { ArtworkCompare } from './ArtworkCompare';
 import { TileCompare } from './TileCompare';
 import { SurfaceLab } from './SurfaceLab';
 import { SceneAnimLab } from './SceneAnimLab';
-import { PropLab } from './PropLab';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
@@ -356,6 +355,9 @@ function renderRoute(path: string): ReactElement {
   // the 9-slice editor is an embedded Viewer surface, not its own route. The studio
   // reads ?asset=<frame> off this path and canonicalises the URL to /tileset-studio.
   if (path === '/nine-slice-editor') return <TilesetStudio />;
+  // /prop-lab is the same shape: a deep-link alias that opens the Studio's embedded
+  // prop-seat Viewer (Props category). Not its own route or toolbar (ADR-0058).
+  if (path === '/prop-lab') return <TilesetStudio initialCategory="props" />;
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return <LevelEditor />;
@@ -370,6 +372,5 @@ function renderRoute(path: string): ReactElement {
   if (path === '/tile-compare') return <TileCompare />;
   if (path === '/surface-lab') return <SurfaceLab />;
   if (path === '/scene-anim-lab') return <SceneAnimLab />;
-  if (path === '/prop-lab') return <PropLab />;
   return <MainMenu />;
 }
