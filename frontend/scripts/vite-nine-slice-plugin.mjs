@@ -38,7 +38,7 @@ export function nineSliceDevSave() {
             const out = buildAsset(raw.asset, cfg);
             const css = writeGeneratedCss();
             const entry = logSave('dev-save', raw.asset, cfg, [...out.written, css]);
-            console.log(`[nine-slice] ${entry.ts} dev-save ${raw.asset}: bracket=${JSON.stringify(cfg.bracket)} bracketCorners=${JSON.stringify(cfg.bracketCorners)} frameScale=${cfg.frameScale} frame=${JSON.stringify(cfg.keyline)} frameCorners=${JSON.stringify(cfg.frameCorners)} edge=${JSON.stringify(cfg.edge)} edgeSides=${JSON.stringify(cfg.edgeSides)} content=${cfg.content} -> ${out.written.join(', ')}`);
+            console.log(`[nine-slice] ${entry.ts} dev-save ${raw.asset}: brackets=${JSON.stringify(cfg.brackets)} x${cfg.bracketScale} coolCorners=${JSON.stringify(cfg.coolCorners)} x${cfg.frameScale} pipes=${JSON.stringify(cfg.pipes)} content=${cfg.content} fill=${cfg.fill} -> ${out.written.join(', ')}`);
             send(200, { ok: true, asset: raw.asset, config: `config/nine-slice/${raw.asset}.json`, written: out.written, css, warns: out.warns, note: out.note });
           } catch (e) {
             send(500, { ok: false, error: String(e?.message || e) });

@@ -4,7 +4,30 @@
 // (buildAsset) and the dev-Save endpoint, so this also pins editor↔bake parity.
 import { describe, it, expect } from 'vitest';
 // @ts-ignore — nine-slice-kit is an untyped .mjs build script (cf. main.tsx/bgm.js)
-import { bakeAsset, bakeLine, REGISTRY, LINE_DIR, loadConfig, diffCommitted } from '../../../scripts/nine-slice-kit.mjs';
+import { bakeAsset, bakeLine, REGISTRY, LINE_DIR, loadConfig, normalizeConfig, diffCommitted } from '../../../scripts/nine-slice-kit.mjs';
+
+describe('config shapes (ADR-0050: per-element absolutes; legacy global+residual folds in)', () => {
+  it('legacy shape folds to the same canonical config', () => {
+    const legacy = normalizeConfig({
+      asset: 'mode-button',
+      keyline: { dx: 1, dy: 0 },
+      frameCorners: { tl: { dx: -1, dy: -1 }, tr: { dx: 0, dy: -1 }, bl: { dx: -1, dy: 0 }, br: { dx: 0, dy: 0 } },
+      edge: { dx: 2, dy: 3 },
+      edgeSides: { top: { dy: -1 }, bottom: {}, left: { dx: -2 }, right: {} },
+      bracket: { dx: -6, dy: -6 },
+      bracketCorners: { tl: { dx: 1, dy: 0 }, tr: { dx: 0, dy: 0 }, bl: { dx: 0, dy: 0 }, br: { dx: 0, dy: 0 } },
+      frameScale: 1.5, bracketScale: 1.25, content: 5, fill: 2,
+    });
+    const canonical = normalizeConfig({
+      asset: 'mode-button',
+      coolCorners: { tl: { dx: 0, dy: -1 }, tr: { dx: 1, dy: -1 }, bl: { dx: 0, dy: 0 }, br: { dx: 1, dy: 0 } },
+      pipes: { top: 2, bottom: 3, left: 0, right: 2 },
+      brackets: { tl: { dx: -5, dy: -6 }, tr: { dx: -6, dy: -6 }, bl: { dx: -6, dy: -6 }, br: { dx: -6, dy: -6 } },
+      frameScale: 1.5, bracketScale: 1.25, content: 5, fill: 2,
+    });
+    expect(legacy).toEqual(canonical);
+  });
+});
 
 describe('nine-slice bake parity (committed PNG === fresh bake from config)', () => {
   const ids = Object.keys(REGISTRY);
@@ -19,9 +42,10 @@ describe('nine-slice bake parity (committed PNG === fresh bake from config)', ()
   // every corner 1px at non-integer scales (the defect that once had to be
   // hand-compensated per corner in mode-button.json).
   const opaqueAt = (png: { data: Uint8Array; width: number }, x: number, y: number) => png.data[(y * png.width + x) * 4 + 3] > 40;
+  const B6 = { dx: -6, dy: -6 };
   for (const frameScale of [1.25, 1.5]) {
     it(`mode-button at frameScale ${frameScale}: bake is mirror-symmetric`, () => {
-      const { variants } = bakeAsset('mode-button', { asset: 'mode-button', frameScale, bracketScale: 1.25, bracket: { dx: -6, dy: -6 } });
+      const { variants } = bakeAsset('mode-button', { asset: 'mode-button', frameScale, bracketScale: 1.25, brackets: { tl: B6, tr: B6, bl: B6, br: B6 } });
       const png = variants[0].png;
       let h = 0, v = 0;
       for (let y = 0; y < png.height; y++) for (let x = 0; x < png.width; x++) {

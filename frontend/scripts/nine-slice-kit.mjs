@@ -6,14 +6,22 @@
 // buildAsset(), so there is a SINGLE bake implementation and the editor's offsets
 // can't diverge between tools.
 //
-// What bakes into the PNG vs not:
-//   - bracket offset  -> shifts the warm gold pixels in the corner atom (baked)
-//   - bracketScale   -> scales the warm gold bracket pixels from the outer corner (baked)
-//   - keyline/frameCorners -> shifts the cool pixels inside the corner atom (baked)
-//   - edge/edgeSides       -> shifts the straight frame/edge atoms that connect the corners (baked)
-//   - frameScale           -> scales the cool corner-frame pixels + straight frame/edge atoms (baked)
-//   - content         -> consumption-side (element padding / where text+icons
-//                        start). NOT baked into the PNG; recorded in the config.
+// Config shape (ADR-0050): per-element ABSOLUTES — exactly the render degrees of
+// freedom, nothing layered or dead. All positions are inward-positive in each
+// element's own corner/side space (mirrored axes negate on draw), so a mirror-
+// symmetric frame is one whose values are literally equal.
+//   - brackets     {tl,tr,bl,br} of {dx,dy} -> the warm gold corner pixels (baked)
+//   - coolCorners  {tl,tr,bl,br} of {dx,dy} -> the cool corner-frame pixels (baked)
+//   - pipes        {top,bottom,left,right} one number each -> the straight edge
+//                  runs, along their normal axis only (a pipe tiles its full span,
+//                  so tangent movement is meaningless) (baked)
+//   - bracketScale / frameScale -> scale the gold layer / the cool layer (corner
+//                  pixels + pipe thickness together) (baked)
+//   - content / fill -> consumption-side, human-calibrated (element padding /
+//                  where a backing surface stops). Recorded, never baked.
+// The legacy global+residual shape (keyline/frameCorners, edge/edgeSides,
+// bracket/bracketCorners) is folded into absolutes on read — the renderer only
+// ever saw the sums.
 import { PNG } from 'pngjs';
 import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -42,34 +50,16 @@ const isWarm = (r, g, b, a) => a > 40 && r > b + 15; // gold ramp is warm; keyli
 const loadAtom = (n) => PNG.sync.read(readFileSync(`${ATOMS}${n}.png`));
 const DEFAULT_BRACKET_SCALE = 1;
 const DEFAULT_FRAME_SCALE = 1;
-const ZERO_BRACKET_CORNERS = {
-  tl: { dx: 0, dy: 0 },
-  tr: { dx: 0, dy: 0 },
-  bl: { dx: 0, dy: 0 },
-  br: { dx: 0, dy: 0 },
-};
-const ZERO_EDGE_SIDES = {
-  top: { dx: 0, dy: 0 },
-  bottom: { dx: 0, dy: 0 },
-  left: { dx: 0, dy: 0 },
-  right: { dx: 0, dy: 0 },
-};
-function normalizeBracketCorners(src = {}) {
-  const n = (v) => Number.isFinite(v) ? Number(v) : 0;
+const n0 = (v) => (Number.isFinite(v) ? Number(v) : 0);
+// Fold a (legacy) global offset + per-corner residuals into per-corner absolutes.
+// With a zero global this doubles as the normalizer for the canonical shape.
+function foldCorners(global, per = {}) {
+  const gx = n0(global?.dx), gy = n0(global?.dy);
   return {
-    tl: { dx: n(src.tl?.dx), dy: n(src.tl?.dy) },
-    tr: { dx: n(src.tr?.dx), dy: n(src.tr?.dy) },
-    bl: { dx: n(src.bl?.dx), dy: n(src.bl?.dy) },
-    br: { dx: n(src.br?.dx), dy: n(src.br?.dy) },
-  };
-}
-function normalizeEdgeSides(src = {}) {
-  const n = (v) => Number.isFinite(v) ? Number(v) : 0;
-  return {
-    top: { dx: n(src.top?.dx), dy: n(src.top?.dy) },
-    bottom: { dx: n(src.bottom?.dx), dy: n(src.bottom?.dy) },
-    left: { dx: n(src.left?.dx), dy: n(src.left?.dy) },
-    right: { dx: n(src.right?.dx), dy: n(src.right?.dy) },
+    tl: { dx: gx + n0(per.tl?.dx), dy: gy + n0(per.tl?.dy) },
+    tr: { dx: gx + n0(per.tr?.dx), dy: gy + n0(per.tr?.dy) },
+    bl: { dx: gx + n0(per.bl?.dx), dy: gy + n0(per.bl?.dy) },
+    br: { dx: gx + n0(per.br?.dx), dy: gy + n0(per.br?.dy) },
   };
 }
 const px = (img, x, y) => { const i = (y * img.width + x) * 4; return [img.data[i], img.data[i + 1], img.data[i + 2], img.data[i + 3]]; };
@@ -160,10 +150,8 @@ function splitCorner(corner) {
 
 function inspectCorner(base, bracket, cfg) {
   const o = np(base.width, base.height);
-  const fc = cfg.frameCorners.tl ?? ZERO_BRACKET_CORNERS.tl;
-  compScaled(o, base, cfg.keyline.dx + fc.dx, cfg.keyline.dy + fc.dy, cfg.frameScale);
-  const c = cfg.bracketCorners.tl ?? ZERO_BRACKET_CORNERS.tl;
-  compScaled(o, bracket, cfg.bracket.dx + c.dx, cfg.bracket.dy + c.dy, cfg.bracketScale);
+  compScaled(o, base, cfg.coolCorners.tl.dx, cfg.coolCorners.tl.dy, cfg.frameScale);
+  compScaled(o, bracket, cfg.brackets.tl.dx, cfg.brackets.tl.dy, cfg.bracketScale);
   return o;
 }
 
@@ -185,28 +173,27 @@ function buildFrameParts(baseCorner, bracketCorner, edge, fill, cfg, W, H, flipS
   const r = rot90(topEdge);
   const eR = flipSides ? flipH(r) : r;
   const eL = flipSides ? r : flipH(r);
-  const ex = cfg.edge.dx, ey = cfg.edge.dy;
   // Pipes are an underlay, drawn once at their scaled thickness. At scale 1 they
   // span corner-to-corner (keeps every scale-1 bake byte-stable). At scale > 1 they
   // span the FULL side: the scaled corners sit on top, so a nudged corner can never
   // expose an empty seam behind its arms — the line simply continues underneath.
   const px0 = cfg.frameScale > 1 ? 0 : cw;
   const py0 = cfg.frameScale > 1 ? 0 : ch;
-  tile(o, topEdge, px0, ey + cfg.edgeSides.top.dy, W - px0, ey + cfg.edgeSides.top.dy + topEdge.height);
-  tile(o, eB, px0, H - eB.height - ey - cfg.edgeSides.bottom.dy, W - px0, H - ey - cfg.edgeSides.bottom.dy);
-  tile(o, eL, ex + cfg.edgeSides.left.dx, py0, ex + cfg.edgeSides.left.dx + eL.width, H - py0);
-  tile(o, eR, W - eR.width - ex - cfg.edgeSides.right.dx, py0, W - ex - cfg.edgeSides.right.dx, H - py0);
+  tile(o, topEdge, px0, cfg.pipes.top, W - px0, cfg.pipes.top + topEdge.height);
+  tile(o, eB, px0, H - eB.height - cfg.pipes.bottom, W - px0, H - cfg.pipes.bottom);
+  tile(o, eL, cfg.pipes.left, py0, cfg.pipes.left + eL.width, H - py0);
+  tile(o, eR, W - eR.width - cfg.pipes.right, py0, W - cfg.pipes.right, H - py0);
 
-  const corner = (img, ox, oy, scale = 1, perCorner = ZERO_BRACKET_CORNERS) => {
+  const corner = (img, scale, corners) => {
     const s = scalePng(img, scale);
     const dw = s.width, dh = s.height;
-    comp(o, s, ox + perCorner.tl.dx, oy + perCorner.tl.dy);
-    comp(o, flipH(s), W - dw - (ox + perCorner.tr.dx), oy + perCorner.tr.dy);
-    comp(o, flipV(s), ox + perCorner.bl.dx, H - dh - (oy + perCorner.bl.dy));
-    comp(o, flipH(flipV(s)), W - dw - (ox + perCorner.br.dx), H - dh - (oy + perCorner.br.dy));
+    comp(o, s, corners.tl.dx, corners.tl.dy);
+    comp(o, flipH(s), W - dw - corners.tr.dx, corners.tr.dy);
+    comp(o, flipV(s), corners.bl.dx, H - dh - corners.bl.dy);
+    comp(o, flipH(flipV(s)), W - dw - corners.br.dx, H - dh - corners.br.dy);
   };
-  corner(baseCorner, cfg.keyline.dx, cfg.keyline.dy, cfg.frameScale, cfg.frameCorners);
-  corner(bracketCorner, cfg.bracket.dx, cfg.bracket.dy, cfg.bracketScale, cfg.bracketCorners);
+  corner(baseCorner, cfg.frameScale, cfg.coolCorners);
+  corner(bracketCorner, cfg.bracketScale, cfg.brackets);
   return o;
 }
 // Carve navy bleed outside the rail back to transparent: flood from the canvas
@@ -252,16 +239,24 @@ export function logSave(source, asset, cfg, written) {
 }
 
 export function normalizeConfig(c) {
+  // Returns the CANONICAL shape (see file header): per-element absolutes. A legacy
+  // config (global+residual fields) folds in transparently; a canonical config
+  // passes through. Mixing is resolved per element group: canonical field wins.
+  const scale = (v, fb) => (Number.isFinite(v) ? Math.max(1, Math.min(4, Number(v))) : fb);
   return {
     asset: c.asset,
-    keyline: { dx: c.keyline?.dx ?? 0, dy: c.keyline?.dy ?? 0 },
-    frameCorners: normalizeBracketCorners(c.frameCorners),
-    edge: { dx: c.edge?.dx ?? 0, dy: c.edge?.dy ?? 0 },
-    edgeSides: normalizeEdgeSides(c.edgeSides),
-    frameScale: Number.isFinite(c.frameScale ?? c.edgeScale) ? Math.max(1, Math.min(4, Number(c.frameScale ?? c.edgeScale))) : DEFAULT_FRAME_SCALE,
-    bracket: { dx: c.bracket?.dx ?? 0, dy: c.bracket?.dy ?? 0 },
-    bracketCorners: normalizeBracketCorners(c.bracketCorners),
-    bracketScale: Number.isFinite(c.bracketScale) ? Math.max(1, Math.min(4, Number(c.bracketScale))) : DEFAULT_BRACKET_SCALE,
+    coolCorners: c.coolCorners ? foldCorners(undefined, c.coolCorners) : foldCorners(c.keyline, c.frameCorners),
+    pipes: c.pipes ? {
+      top: n0(c.pipes.top), bottom: n0(c.pipes.bottom), left: n0(c.pipes.left), right: n0(c.pipes.right),
+    } : {
+      top: n0(c.edge?.dy) + n0(c.edgeSides?.top?.dy),
+      bottom: n0(c.edge?.dy) + n0(c.edgeSides?.bottom?.dy),
+      left: n0(c.edge?.dx) + n0(c.edgeSides?.left?.dx),
+      right: n0(c.edge?.dx) + n0(c.edgeSides?.right?.dx),
+    },
+    frameScale: scale(c.frameScale ?? c.edgeScale, DEFAULT_FRAME_SCALE),
+    brackets: c.brackets ? foldCorners(undefined, c.brackets) : foldCorners(c.bracket, c.bracketCorners),
+    bracketScale: scale(c.bracketScale, DEFAULT_BRACKET_SCALE),
     // 0 = no content inset. MUST stay in sync with NineSliceEditor's DEFAULT_CONTENT
     // (src/ui/NineSliceEditor.tsx) so an unsaved asset previews what it would bake.
     content: c.content ?? 0,
