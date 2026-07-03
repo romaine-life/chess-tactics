@@ -3,9 +3,11 @@ import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
+import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
+import { fetchLobby, postMove, fetchMovesSince, subscribeLobbyChannel, type MoveEvent } from '../net/lobbies';
 import type { Level } from '../core/level';
+import type { Side } from '../core/types';
 import { objectiveSummary } from '../core/objectives';
 import { formatClockMs } from '../core/clock';
 import { useCampaigns } from '../campaign/store';
@@ -45,6 +47,9 @@ export function Skirmish() {
   // (defaults to capture-all). Lets a crafted position be handed round as a URL.
   const routeBoard = routeParams.get('board');
   const routeObjective = routeParams.get('obj');
+  // Multiplayer: `?lobby=<id>` enters a lobby's shared board as one of the two seats.
+  const routeLobby = routeParams.get('lobby');
+  const [netError, setNetError] = useState<string | null>(null);
   // Real campaign play (records progress + shows the result flow), as opposed to the
   // editor's "Test Play" (mode=test) or a free skirmish (no campaign/level).
   const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
@@ -77,10 +82,13 @@ export function Skirmish() {
   // remainingMs to the displayed readout, so this subscription re-renders about
   // once a second, not per tick.
   const clock = useSkirmish((s) => s.clock);
+  const net = useSkirmish((s) => s.net);
   const objectiveGoal = objectiveSummary(objective, kingSide);
+  // Status reads from THIS client's seat (single-player: 'player'; netplay: the lobby seat).
+  const localSide: Side = net ? net.localSide : 'player';
   const turnLabel = game.winner
-    ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
-    : game.turn === 'player' ? 'Player Turn' : 'Enemy Turn';
+    ? game.winner === 'draw' ? 'Stalemate' : game.winner === localSide ? 'Victory' : 'Defeat'
+    : game.turn === localSide ? (net ? 'Your Turn' : 'Player Turn') : (net ? 'Opponent Turn' : 'Enemy Turn');
 
   // Stars earned this clear (3 flawless, 2 light losses, 1 any win), from the level's
   // authored player force vs. who's still standing.
@@ -147,6 +155,9 @@ export function Skirmish() {
   }, [game.pieces]);
 
   useEffect(() => {
+    // Multiplayer routes are driven by the netplay effect below, not this single-player
+    // start/resume path — bail so it can't clobber the shared board with a free skirmish.
+    if (routeLobby) return undefined;
     // A manual refresh or the "new version available" reload (net/appUpdate) rebuilds
     // the in-memory store from scratch; without a saved copy that would silently
     // restart a live battle. Turn disk persistence on for real play, off for the
@@ -214,7 +225,105 @@ export function Skirmish() {
       })
       .catch(() => { startOrResume(routeLevelId, null); setBoardSettled(true); });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeObjective, routeCampaignId, routeLevel, routeLevelId]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeObjective, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
+
+  // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
+  // build the SAME (level, seed) game; each side's moves relay through the lobby channel
+  // and apply on the other client (no AI — see store.newNetMatch/applyRemoteMove). Runs
+  // instead of the single-player effect above, which no-ops for lobby routes.
+  useEffect(() => {
+    if (!routeLobby) return undefined;
+    let active = true;
+    let unsubscribe: (() => void) | null = null;
+    setMatchPersistenceEnabled(false);
+
+    // Apply a relayed move iff it's the next one this board expects. `i < moveCount` is an
+    // already-applied move or this client's own echo (ignored); `i > moveCount` means we
+    // missed some — backfill the gap. The `i === moveCount` guard makes every path
+    // idempotent, so streamed frames and backfill can race safely.
+    const applyRelayMove = (m: MoveEvent): void => {
+      const before = useSkirmish.getState().net?.moveCount ?? 0;
+      if (m.i === before) {
+        useSkirmish.getState().applyRemoteMove(m.pieceId, m.move);
+        const after = useSkirmish.getState().net?.moveCount ?? 0;
+        if (after === before) {
+          // The expected next move could NOT be applied (a genuine desync / version skew).
+          // Do not loop re-fetching the same doomed move — halt sync and surface it, so we
+          // never enter the infinite-backfill trap.
+          console.error('[netplay] desync: relayed move', m.i, 'could not apply; halting sync');
+          setNetError('This match lost sync and can’t continue — restart it from the lobby.');
+          if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+          return;
+        }
+        if (active) setNetError(null); // progress resumed — clear any transient send error
+      } else if (m.i > before) {
+        // A real gap (missed frames) — backfill. Only reachable when moveCount is genuinely
+        // behind, never when it's stuck on an un-appliable move (guarded above).
+        fetchMovesSince(routeLobby, before)
+          .then((res) => { if (active) res.moves.forEach(applyRelayMove); })
+          .catch((err) => console.warn('[netplay] move backfill failed', err));
+      }
+      // m.i < before: already applied (duplicate delivery) — ignore.
+    };
+
+    fetchLobby(routeLobby)
+      .then(async ({ lobby }) => {
+        if (!active) return;
+        if (lobby.phase !== 'started' || lobby.level_id === null || lobby.seed === null) {
+          setNetError('This match hasn’t started yet. Returning to lobbies…');
+          window.setTimeout(() => { if (active) navigateApp('/lobbies', { replace: true }); }, 1400);
+          return;
+        }
+        await ensureCampaignsHydrated();
+        if (!active) return;
+        const level = useCampaigns.getState().levels[lobby.level_id] ?? null;
+        if (!level) { setNetError('This match’s level isn’t available on your client.'); return; }
+        const seat: Side = lobby.your_side === 'enemy' ? 'enemy' : 'player';
+        useSkirmish.getState().newNetMatch({ lobbyId: routeLobby, localSide: seat, level, seed: lobby.seed });
+        // Relay this client's local moves to the lobby channel. Server-sequenced: the move
+        // applies here only when it echoes back, so a failed POST is a no-op the seat retries.
+        setNetMoveSink((pieceId, move) => {
+          postMove(routeLobby, pieceId, move).catch((err) => {
+            console.warn('[netplay] relay POST failed', err);
+            if (active) setNetError('Move didn’t send — check your connection and try again.');
+          });
+        });
+        // Catch up on any moves already made (reconnect / entering mid-game), then stream.
+        try {
+          const back = await fetchMovesSince(routeLobby, 0);
+          if (active) back.moves.forEach(applyRelayMove);
+        } catch (err) { console.warn('[netplay] initial backfill failed', err); }
+        if (!active) return;
+        unsubscribe = subscribeLobbyChannel(routeLobby, {
+          onMove: applyRelayMove,
+          onLobby: (l) => {
+            if (!active) return;
+            if (l.phase === 'closed') { setNetError('The other player left the match.'); return; }
+            // Reconnect gap-heal: this snapshot fires on every (re)connect. If the server has
+            // more moves than we've applied, a move frame was missed during a drop — backfill
+            // it (applyRelayMove is idempotent on moveCount, so this races safely).
+            const mc = useSkirmish.getState().net?.moveCount ?? 0;
+            if (l.move_count > mc) {
+              fetchMovesSince(routeLobby, mc)
+                .then((res) => { if (active) res.moves.forEach(applyRelayMove); })
+                .catch((err) => console.warn('[netplay] reconnect backfill failed', err));
+            }
+          },
+        });
+        setBoardSettled(true);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.warn('[netplay] failed to load lobby', err);
+        setNetError('Couldn’t load this lobby.');
+      });
+
+    return () => {
+      active = false;
+      setNetMoveSink(null);
+      if (unsubscribe) unsubscribe();
+    };
+  }, [routeLobby]);
 
   const screenStyle = {
     '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")`,
@@ -252,9 +361,20 @@ export function Skirmish() {
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
-            {boardSettled ? <SkirmishBoard /> : null}
+            {boardSettled ? <SkirmishBoard /> : routeLobby ? (
+              <div className="skirmish-status-chip skirmish-turn-plate" role="status">
+                <strong>{netError ?? 'Connecting…'}</strong>
+                <small>Multiplayer</small>
+              </div>
+            ) : null}
           </div>
         </div>
+        {boardSettled && netError ? (
+          <div className="skirmish-status-chip skirmish-turn-plate" role="status" style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40 }}>
+            <strong>{netError}</strong>
+            <small>Multiplayer</small>
+          </div>
+        ) : null}
       </section>
       <SkirmishHud
         canStartNewSkirmish={!isCampaignPlay}

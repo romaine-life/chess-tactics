@@ -130,6 +130,7 @@ export function SkirmishHud({
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
   const log = useSkirmish((s) => s.log);
+  const net = useSkirmish((s) => s.net);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
@@ -191,9 +192,14 @@ export function SkirmishHud({
   const enemyPieces = livingPieces(game.pieces, 'enemy');
   const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins — capture the enemy King.'];
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
+  // Status reads from THIS client's seat. Single-player: 'you' = 'player'. Netplay:
+  // 'you' = the lobby seat this client controls (host='player', guest='enemy'), so the
+  // guest sees "Victory" when the 'enemy' side wins and "Your turn" on the enemy turn.
+  const localSide: Side = net ? net.localSide : 'player';
+  const opponentTurnLabel = net ? 'Opponent turn' : 'Enemy turn';
   const turnLabel = game.winner
-    ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
-    : game.turn === 'player' ? 'Your turn' : 'Enemy turn';
+    ? game.winner === 'draw' ? 'Stalemate' : game.winner === localSide ? 'Victory' : 'Defeat'
+    : game.turn === localSide ? 'Your turn' : opponentTurnLabel;
 
   return (
     <aside data-testid="skirmish-hud" className="skirmish-hud" aria-label="Skirmish command HUD">
