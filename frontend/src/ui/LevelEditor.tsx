@@ -21,7 +21,7 @@ import { BoardSizePanel } from './shared/BoardSizePanel';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
-import { useScreenEntrance } from './shell/useScreenEntrance';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   hasDirectionSprite,
@@ -1461,10 +1461,9 @@ export function LevelEditor(): ReactElement {
   const testHref = canTest
     ? `/play?${routeParams.campaignId ? `campaignId=${encodeURIComponent(routeParams.campaignId)}&` : ''}levelId=${encodeURIComponent(targetLevelId as string)}&mode=test`
     : undefined;
-  const entranceClass = useScreenEntrance(editorReady);
 
   return (
-    <div className={`skirmish-screen level-editor-screen ${entranceClass}`.trim()} data-testid="level-editor" style={screenStyle}>
+    <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle} ready={editorReady}>
         {confirmDialog}
         {/* The title bar lives in the app shell now; the editor paints its live
             save-state + actions into it via portals (state stays in this component). */}
@@ -2102,6 +2101,6 @@ export function LevelEditor(): ReactElement {
         ) : null}
         </KitScroll>
       </aside>
-    </div>
+    </ArtRouteChrome>
   );
 }
