@@ -564,6 +564,17 @@ h1 {
    footers/panels that reach it, still below the near-drop overlay (z5) so the
    promoted drops cross in front of it like the rest of the chrome. */
 .ambience-credit {
+  /* A <button> since ADR-0052: clear the UA button chrome AND the global `button`
+     base (radius/shadow/line-height); everything else below is the same label
+     styling the anchor version had. min-height/padding/letter-spacing are already
+     declared by this class, so those base leaks can't reach it. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  line-height: inherit;
+  text-shadow: inherit;
   position: absolute;
   /* The ~10px text line alone is far under the 24px minimum hit target (WCAG
      2.5.8) — a padded flex box supplies the target while the TEXT keeps
@@ -1114,6 +1125,11 @@ h1 {
 :root {
   --route-veil-cover-ms: 260ms;
   --route-veil-reveal-ms: 340ms;
+  /* Light-hop exit dissolve (ADR-0051) — the veil-less counterpart of the cover phase:
+     the outgoing chrome fades over this, then the route swaps. Keep in lockstep with
+     SCREEN_EXIT_MS in ui/shell/screenExit.ts. Shorter than the entrance fade on purpose
+     (exits accelerate; arriving matters more than leaving). */
+  --route-exit-ms: 200ms;
   /* cold, rainy dark — never white (white is what reads as "browser loading") */
   --route-veil-field: radial-gradient(130% 130% at 50% 34%, #151c29 0%, #0a0d13 62%, #05070b 100%);
 }
@@ -2757,7 +2773,8 @@ h1 {
 }
 
 .utility-button.is-disabled,
-.utility-button[aria-disabled="true"] {
+.utility-button[aria-disabled="true"],
+.utility-button:disabled {
   filter: grayscale(.4);
   opacity: .48;
   pointer-events: none;
@@ -5765,6 +5782,7 @@ body { font-size: 17px; }
 .ce-footer-link {
   align-items: center;
   background: transparent;
+  cursor: pointer;
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/button-primary.png") 24 fill / 12px round;
   box-sizing: border-box;
@@ -5824,6 +5842,21 @@ body { font-size: 17px; }
 }
 
 .ce-sign-in {
+  /* A <button> since ADR-0052: clear BOTH the UA button chrome AND the global
+     `button { … }` base at the top of this file (its 44px min-height/padding/shadow
+     leaked in — caught by pixel diff); `inherit` restores what the anchor version
+     inherited. Font-size comes from the shared .ce-sign-in/.ce-empty rule above. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: inherit;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  text-shadow: inherit;
   color: var(--ce-cyan-bright);
   text-decoration: none;
 }
@@ -10666,7 +10699,8 @@ button.tileset-relationship-cell {
 }
 
 .app-header-button.is-disabled,
-.app-header-button[aria-disabled="true"] {
+.app-header-button[aria-disabled="true"],
+.app-header-button:disabled {
   cursor: help;
   filter: grayscale(.12);
   opacity: .55;
@@ -10727,6 +10761,20 @@ button.tileset-relationship-cell {
    brand-then-name, so no reordering is needed. Component: src/ui/shared/BrandLockup. */
 .brand-lockup {
   align-items: center;
+  /* Rendered as a <button> since ADR-0052 (the title mark is a game control, not a
+     hyperlink): clear the UA button chrome AND the global `button { … }` base rule
+     (min-height/radius/shadow/tracking), restoring the inheritance the anchor had. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  text-shadow: inherit;
   color: #eef8ff;
   display: inline-grid;
   gap: clamp(10px, 1vw, 16px);
@@ -10809,6 +10857,10 @@ button.tileset-relationship-cell {
    carries a glyph/avatar without the frame dominating. */
 .cluster-icon-button {
   align-items: center;
+  /* Rendered as a <button> since ADR-0052 (the gear): clear the UA button surface so
+     only the kit mode-button frame paints, exactly as the anchor version did. */
+  appearance: none;
+  background: transparent;
   block-size: 52px;
   border: 10px solid transparent;
   border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
@@ -11057,6 +11109,38 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
+/* Readiness hold (ADR-0046 C.1, ADR-0051): chrome whose content is still arriving sits
+   invisible and inert; the entrance fade only starts once the screen reports ready, so
+   the reveal always shows real content — never an empty frame with the content popping
+   in after. Screens opt in via ArtRouteChrome's `ready` prop. */
+.screen-enter-hold {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Light-hop exit dissolve (ADR-0051): the outgoing screen's chrome fades down, THEN the
+   route swaps (App holds the swap for SCREEN_EXIT_MS in ui/shell/screenExit.ts — keep
+   that and --route-exit-ms in lockstep). This is an ANIMATION, not a transition, on
+   purpose: settled chrome still carries .screen-enter's filled animation, and Chrome
+   does not start a transition off an animation being removed in the same style change
+   (verified live — the transition version faded the menu but froze settled campaign
+   chrome at 1 until the swap). Replacing the animation out-cascades .screen-enter's
+   !important fill by source order. --screen-exit-from is stamped per element by
+   ArtRouteChrome at exit start (the current computed opacity), so an exit interrupting
+   a mid-flight entrance fades from wherever the fade had reached — no up-blip to 1.
+   The duration is route choreography — the veil's bespoke family (ADR-0043
+   out-of-scope), NOT the one-fade-speed law: exits read shorter than entrances across
+   the motion canon. */
+.screen-exit {
+  animation: screen-exit-fade var(--route-exit-ms) var(--ds-ease-linear) both !important;
+  pointer-events: none;
+}
+
+@keyframes screen-exit-fade {
+  from { opacity: var(--screen-exit-from, 1); }
+  to { opacity: 0; }
+}
+
 .settings-rail-frame,
 .settings-main-frame {
   min-height: 0;
@@ -11093,6 +11177,10 @@ button.tileset-relationship-cell {
   --settings-tab-icon-size: 64px;
   align-items: center;
   appearance: none;
+  /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
+     get the arrow cursor — restore the exact look/feel the anchor version had. */
+  cursor: pointer;
+  font: inherit;
   overflow: hidden; /* clip the enlarged carved icon at the button edge */
   /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
      mode-button frame). Active swaps the marker, not the frame (below). ADR-0034. */

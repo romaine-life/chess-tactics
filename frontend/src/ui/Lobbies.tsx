@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
+import { fetchMe, goSignIn, isUnauthorized, type AuthUser } from '../net/auth';
 import { HttpError } from '../net/http';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -72,7 +72,7 @@ export function Lobbies() {
         <ArtRouteChrome className="utility-screen utility-lobbies">
           {me && !me.signed_in ? (
             <section className="utility-panel utility-empty-panel">
-              <a href={signInHref()} data-testid="lobbies-sign-in" className="utility-button utility-button-primary">Sign in to host or join</a>
+              <button type="button" data-testid="lobbies-sign-in" className="utility-button utility-button-primary" onClick={() => goSignIn()}>Sign in to host or join</button>
             </section>
           ) : (
             <div className="utility-stack">

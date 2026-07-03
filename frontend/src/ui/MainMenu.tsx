@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactElement } from 're
 import { AmbienceBackground } from './AmbienceBackground';
 import { SceneBackdrop } from './SceneBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { NavButton } from './shared/NavButton';
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -50,15 +51,16 @@ const SETTINGS_ICON = `${ICONS}/settings.png`;
 // A mode entry rendered as a settings-style rail tab (shared baked-skin frame —
 // line frame over the stone surface — carved icon + label). The same chrome the
 // Settings sidebar uses, so the menu and the rest of the app read as one family
-// (retires the bespoke stone slabs).
+// (retires the bespoke stone slabs). A NavButton, not an anchor (ADR-0052): game
+// controls are buttons; the route is the address, not the affordance.
 function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
   return (
-    <a className="settings-tab main-menu-mode-tab" href={tab.href}>
+    <NavButton className="settings-tab main-menu-mode-tab" to={tab.href}>
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
       <span><strong>{tab.label}</strong></span>
-    </a>
+    </NavButton>
   );
 }
 

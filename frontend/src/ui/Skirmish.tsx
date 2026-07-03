@@ -1,6 +1,7 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
+import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
 import { objectiveSummary } from '../core/objectives';
@@ -172,9 +173,9 @@ export function Skirmish() {
               <button type="button" className="app-header-button" onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}
               </button>
-              <a className="app-header-button app-header-button-active" href={`/campaign/${routeCampaignId}`}>
+              <NavButton className="app-header-button app-header-button-active" to={`/campaign/${routeCampaignId}`}>
                 {game.winner === 'player' ? 'Continue' : 'Back to Campaign'}
-              </a>
+              </NavButton>
             </div>
           </div>
         </div>
