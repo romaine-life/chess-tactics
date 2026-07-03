@@ -4,7 +4,7 @@ import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, offi
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
 import { loadWorkspace, loadOfficialCampaigns } from '../net/campaignWorkspace';
-import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
+import { fetchMe, goSignIn, isUnauthorized, type AuthUser } from '../net/auth';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { levelToEditorBoard } from '../core/levelBoard';
@@ -478,7 +478,7 @@ export function CampaignEditor() {
           />
           {status ? <div data-testid="workspace-status" className="ce-status">{status}</div> : null}
           {me && !me.signed_in ? (
-            <a href={signInHref()} data-testid="campaign-sign-in" className="ce-sign-in">Sign in to save</a>
+            <button type="button" data-testid="campaign-sign-in" className="ce-sign-in" onClick={() => goSignIn()}>Sign in to save</button>
           ) : null}
           <div className="ce-campaign-list">
             {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}

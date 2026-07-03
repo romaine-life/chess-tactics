@@ -198,12 +198,12 @@ function SettingsButton({
 }): ReactElement {
   const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
   if (href && external) {
-    // External links stay REAL anchors (ADR-0052): open in a new tab; rel guards
-    // against reverse-tabnabbing.
+    // External destinations still open a new tab — via a button, not an anchor
+    // (ADR-0052): no hover URL leaks into the game shell; noopener guards the opener.
     return (
-      <a className={classes} href={href} aria-label={ariaLabel} target="_blank" rel="noopener noreferrer">
+      <button type="button" className={classes} aria-label={ariaLabel} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
         <span>{children}</span>
-      </a>
+      </button>
     );
   }
   if (href) {

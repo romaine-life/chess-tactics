@@ -39,16 +39,22 @@ primitive; the URL stays fully routable but is never the control's affordance.**
   route-data warm-up, ADR-0051) moved out of App.tsx so NavButton and App's delegates share
   one warm path. App's `lazy()` consumes the same thunks — warming is still the click-time
   download.
-- **The anchor machinery stays** for what remains: App's click interceptor and
-  pointerover/focusin delegates are unchanged, serving the deliberate anchors below.
-- **Deliberate anchors** (the full list — everything else is a button):
-  1. the **brand lockup** (`href="/"`) — a logo linking home is the one conventional
-     hyperlink, and the sole place link affordances are correct;
-  2. **auth sign-in** controls (`/api/auth/sign-in` — a full-page round-trip the interceptor
-     already never intercepts);
-  3. **external links** (SettingsButton's `external` branch, the ambience credit) —
-     `target="_blank" rel="noopener noreferrer"`;
-  4. synthetic **download** anchors (export blobs).
+- **No player-hoverable anchors remain** (amended same-day, owner decision): the first cut
+  kept the brand lockup ("logo links home"), the auth sign-ins, and external links as real
+  anchors — importing a *website* convention into a game shell. All converted:
+  1. the **brand lockup** → NavButton `to="/"` — the title mark is a game control like any
+     other; hovering the most-seen element in the game must not print a URL;
+  2. **auth sign-in** controls → plain buttons calling `goSignIn()` — still the same
+     full-page trip to `/api/auth/sign-in` (NavButton is wrong here: navigateApp refuses
+     `/api/` targets), just no hover URL;
+  3. **external destinations** (SettingsButton's `external` branch, the ambience credit) →
+     plain buttons calling `window.open(href, '_blank', 'noopener,noreferrer')` — same new
+     tab, no hover URL;
+  4. synthetic **download** anchors (export blobs) remain — created programmatically,
+     clicked programmatically, never rendered or hoverable.
+- **The anchor machinery stays** (App's click interceptor + pointerover/focusin delegates):
+  inert today, but it keeps any future anchor — a docs link in a changelog, say — behaving
+  correctly, and it costs nothing.
 - **Native `disabled`** replaces the anchor fakes where controls converted (Party Deploy,
   Campaign Locked); the shared classes gained `:disabled` alongside the kept
   `[aria-disabled]`/`.is-disabled` selectors (other consumers still use those).
@@ -67,9 +73,43 @@ Enter AND Space both activate (anchors were Enter-only).
 
 ## More Information
 
+### Research (2026-07-02, owner-requested — settles the brand-lockup question)
+
+**Live DOM probe of 12 game-first web apps** (immersive shells, not game websites/portals):
+10 of 11 reachable shells expose NO hoverable URL on their logo or menu. Logos are unlinked
+`<img>`/`<div>`s (diep.io, venge.io, slither, zombsroyale, melvor, shapez, GeForce NOW's
+gate); menu verbs are `<button>`s/divs (agar.io, krunker, Cookie Clicker, Universal
+Paperclips); ZombsRoyale paints its entire menu on one canvas. slither even uses `href="#"`
+anchors purely as button chrome — no real URL. Anchors appear only at the shell's edge,
+pointing OUTWARD (legal, Discord, app stores, studio homepages) — A Dark Room has exactly one
+anchor on the whole page (the studio logo, off-site). The lone counter-example is
+xbox.com/play, which behaves as a store portal, not a game shell. The desktop-gaming idiom in
+browsers: URL-on-hover marks the site chrome AROUND a game; everything inside the shell is
+URL-less.
+
+**Canon:** WCAG does not require navigation to be links — SC 4.1.2 needs accurate
+name/role/value, and failure F42 targets non-semantic div-links, not native buttons.
+"Links go places, buttons do things" (Sutton, Eggert, APG) is *advisory* authoring practice
+keyed to URL change; NN/g's own games heuristics point consistency at GAME conventions, not
+web ones; game-a11y practice (Atkinson's proxy UI, Game Accessibility Guidelines) demands
+exposed names/roles, never link roles. Decisive platform signal: Chrome deliberately
+**removed the link-hover URL bubble from installed PWAs** because it "screams web browser" —
+the vendor itself classes link affordances as browser-ness to strip from app-like surfaces.
+NN/g's logo-links-home research is about the BEHAVIOR (mark returns home — preserved) and
+placement, not the HTML element. Honest counterpoint, for the record: the advisory canon
+would still call a URL-changing control a link, and power users lose middle-click-new-tab in
+a plain browser tab — accepted; both cut against immersion by design.
+
+### Implementation notes
+
 - Sits on: navigateApp/`APP_NAVIGATION_EVENT` (ui/navigation.ts) — the router's real input,
   anchor-independent from day one; ADR-0051 (transition choreography rides the same events);
   ADR-0046/0049 (chrome + surfaces).
 - Precedent: the Studio's Lab tab was already `<button onClick={() => navigateApp(...)}>`.
 - The sfx click-sound delegate (`src/sfx.ts` UI_CONTROL_SELECTOR) matches `button` and checks
   `disabled` — conversion-safe, unchanged.
+- Gotcha for future button conversions: the global `button { … }` base rule near the top of
+  style.css (44px min-height, padding, gradient, text-shadow, letter-spacing) leaks into any
+  property a kit class doesn't declare — the `.ce-sign-in` conversion shipped 24px too tall
+  until pixel-diff caught it. A converted text-styled control must also unset
+  min-height/border-radius and `inherit` text-shadow/letter-spacing.

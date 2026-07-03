@@ -516,6 +516,17 @@ h1 {
    footers/panels that reach it, still below the near-drop overlay (z5) so the
    promoted drops cross in front of it like the rest of the chrome. */
 .ambience-credit {
+  /* A <button> since ADR-0052: clear the UA button chrome AND the global `button`
+     base (radius/shadow/line-height); everything else below is the same label
+     styling the anchor version had. min-height/padding/letter-spacing are already
+     declared by this class, so those base leaks can't reach it. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  line-height: inherit;
+  text-shadow: inherit;
   position: absolute;
   /* The ~10px text line alone is far under the 24px minimum hit target (WCAG
      2.5.8) — a padded flex box supplies the target while the TEXT keeps
@@ -5772,6 +5783,21 @@ body { font-size: 17px; }
 }
 
 .ce-sign-in {
+  /* A <button> since ADR-0052: clear BOTH the UA button chrome AND the global
+     `button { … }` base at the top of this file (its 44px min-height/padding/shadow
+     leaked in — caught by pixel diff); `inherit` restores what the anchor version
+     inherited. Font-size comes from the shared .ce-sign-in/.ce-empty rule above. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: inherit;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  text-shadow: inherit;
   color: var(--ce-cyan-bright);
   text-decoration: none;
 }
@@ -10672,6 +10698,20 @@ button.tileset-relationship-cell {
    brand-then-name, so no reordering is needed. Component: src/ui/shared/BrandLockup. */
 .brand-lockup {
   align-items: center;
+  /* Rendered as a <button> since ADR-0052 (the title mark is a game control, not a
+     hyperlink): clear the UA button chrome AND the global `button { … }` base rule
+     (min-height/radius/shadow/tracking), restoring the inheritance the anchor had. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  text-shadow: inherit;
   color: #eef8ff;
   display: inline-grid;
   gap: clamp(10px, 1vw, 16px);

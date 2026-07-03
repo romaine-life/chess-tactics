@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { fetchMe, signInHref, updateDisplayName, type AuthUser } from '../../net/auth';
+import { fetchMe, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { normalizeRoutePath } from '../navigation';
 import { AccountMenu } from './AccountMenu';
 import { NavButton } from './NavButton';
@@ -113,7 +113,9 @@ export function HeaderAccountCluster({
           defaultEditing={editOpen}
         />
       ) : (
-        <a className="app-header-button app-header-button-active" href={signInHref(signInReturnTo)}>Sign In</a>
+        // A button, not an anchor (ADR-0052): the sign-in is still a full-page trip to
+        // the auth backend — goSignIn sets window.location — it just shows no URL.
+        <button type="button" className="app-header-button app-header-button-active" onClick={() => goSignIn(signInReturnTo)}>Sign In</button>
       )}
     </div>
   );

@@ -14,8 +14,10 @@ import { prefetchRoute } from '../routePrefetch';
 // applied. `to` accepts a thunk for targets that must be computed at ACTIVATION time
 // (the title-bar gear's returnTo — this retires the stale-href rewrite hack).
 //
-// What stays a real <a>: the brand lockup ("links home, like a logo should"),
-// /api/auth sign-in round-trips, external links, and synthetic download anchors.
+// NOT for /api/auth sign-ins (full-page trips — plain buttons calling goSignIn; a
+// navigateApp target under /api/ is refused) or external destinations (plain buttons
+// calling window.open with noopener). The only anchors left in the app are synthetic,
+// invisible download anchors — nothing player-hoverable carries an href (ADR-0052).
 
 interface NavButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Same-origin app target (path + optional query/hash), or a thunk resolved at hover/click time. */

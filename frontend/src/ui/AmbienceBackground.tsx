@@ -222,17 +222,18 @@ export function AmbienceBackground(): ReactElement {
     <>
       <div ref={hostRef} style={{ display: 'contents' }} aria-hidden="true" />
       {effectName ? (
-        <a
+        // A button, not an anchor (ADR-0052): still opens the ambience world view in a
+        // new tab, but the game shell shows no URL on hover.
+        <button
+          type="button"
           className={`ambience-credit${creditEntered ? '' : ' ambience-credit-start'}`}
           data-testid="ambience-credit"
-          href={CHESS_WORLD_VIEW_URL}
-          target="_blank"
-          rel="noopener noreferrer"
+          onClick={() => window.open(CHESS_WORLD_VIEW_URL, '_blank', 'noopener,noreferrer')}
           aria-label={`Ambience: ${effectName} — watch this effect live (opens in new tab)`}
           title={`Live from ambience — watch “${effectName}” running (opens in new tab)`}
         >
           {effectName}
-        </a>
+        </button>
       ) : null}
     </>
   );
