@@ -12,6 +12,7 @@ import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
+import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -1386,8 +1387,8 @@ export function LevelEditor(): ReactElement {
               toolbar, not global chrome (the Unity/Unreal/Godot/Blender convention). The bar
               stays brand + return-nav + account cluster, matching Settings. */}
           <nav className="le-topbar-actions" aria-label="Editor navigation">
-            {cameFromStudio ? <a className="app-header-button le-back-catalog" href="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</a> : null}
-            {routeParams.returnTo ? <a className="app-header-button" href={routeParams.returnTo} title="Return to the campaign editor">‹ Back</a> : null}
+            {cameFromStudio ? <NavButton className="app-header-button le-back-catalog" to="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</NavButton> : null}
+            {routeParams.returnTo ? <NavButton className="app-header-button" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</NavButton> : null}
           </nav>
         </TitleBarSlot>
 
@@ -1463,7 +1464,7 @@ export function LevelEditor(): ReactElement {
               title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
             >Undo</button>
             {canTest && testHref ? (
-              <a className="le-seg-btn" data-testid="le-test" href={testHref} title="Play-test this level (progress is not recorded).">Test</a>
+              <NavButton className="le-seg-btn" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
             ) : (
               <button
                 type="button"

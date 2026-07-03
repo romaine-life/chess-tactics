@@ -4,13 +4,14 @@ import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, offi
 import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
 import { loadWorkspace, loadOfficialCampaigns } from '../net/campaignWorkspace';
-import { fetchMe, goSignIn, isUnauthorized, signInHref, type AuthUser } from '../net/auth';
+import { fetchMe, goSignIn, isUnauthorized, type AuthUser } from '../net/auth';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { ViewPane } from './shared/ViewPane';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
+import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -225,6 +226,10 @@ export function CampaignEditor() {
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+  // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
+  // /campaign or /skirmish visit this session — then there's real content at mount and
+  // nothing holds; otherwise hold the fade until the officials merge settles.
+  const [loaded, setLoaded] = useState(() => useCampaigns.getState().campaigns.length > 0);
   const [levelView, setLevelView] = useState<'board' | 'info'>('board');
   // Pan/zoom for the SELECTED-level live viewer (the list rows stay flat baked thumbnails).
   const [viewZoom, setViewZoom] = useState(0.5);
@@ -266,8 +271,16 @@ export function CampaignEditor() {
     fetchMe().then((user) => { if (active) setMe(user); });
     (async () => {
       const store = useCampaigns.getState();
-      // Officials always (for everyone), then the signed-in user's own on top.
-      store.mergeOfficial(await loadOfficialCampaigns());
+      try {
+        // Officials always (for everyone), then the signed-in user's own on top.
+        store.mergeOfficial(await loadOfficialCampaigns());
+      } finally {
+        // The entrance holds on this flag (ADR-0051): without it the chrome fades in
+        // over a false "No campaigns yet." and the list pops in when the fetch lands.
+        // Flip it as soon as the primary content is settled — the user merge below
+        // only layers rows on top.
+        if (active) setLoaded(true);
+      }
       if (!active) return;
       try {
         store.mergeUser(await loadWorkspace());
@@ -439,7 +452,7 @@ export function CampaignEditor() {
           (below), beside the other workspace actions — document verbs belong in the editor, not
           global chrome. The bar keeps just brand + save-state + account cluster (matching Settings). */}
 
-      <ArtRouteChrome as="main" className="ce-layout">
+      <ArtRouteChrome as="main" className="ce-layout" ready={loaded}>
         <aside className="ce-panel ce-campaigns-panel" aria-label="Campaigns">
           <div className="ce-panel-head">
             <h2>Campaigns</h2>
@@ -470,7 +483,7 @@ export function CampaignEditor() {
           />
           {status ? <div data-testid="workspace-status" className="ce-status">{status}</div> : null}
           {me && !me.signed_in ? (
-            <a href={signInHref()} data-testid="campaign-sign-in" className="ce-sign-in">Sign in to save</a>
+            <button type="button" data-testid="campaign-sign-in" className="ce-sign-in" onClick={() => goSignIn()}>Sign in to save</button>
           ) : null}
           <div className="ce-campaign-list">
             {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}
@@ -565,7 +578,7 @@ export function CampaignEditor() {
                       <small>{levelObjectiveLine(level)}</small>
                     </span>
                     <span className="ce-row-actions" aria-label="Unassigned level actions">
-                      <a className="ce-link-button ce-link-button-ghost" href={editHrefForUnassigned(level.id)}><span>Edit</span></a>
+                      <NavButton className="ce-link-button ce-link-button-ghost" to={editHrefForUnassigned(level.id)}><span>Edit</span></NavButton>
                       <AssetButton
                         disabled={!canAttachTo(level)}
                         title={camp ? `Attach to ${camp.name}` : 'Select a campaign to attach this level'}
@@ -629,8 +642,8 @@ export function CampaignEditor() {
           </div>
           {levelDoc && levelRef ? (
             <div className="ce-preview-actions">
-              <a className="ce-link-button" href={editHref}><span>Edit Board</span></a>
-              <a className="ce-link-button ce-link-button-ghost" href={playHref}><span>Test Play</span></a>
+              <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
+              <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
             </div>
           ) : (
             <p className="ce-empty ce-empty-large">Select a level.</p>
@@ -638,7 +651,7 @@ export function CampaignEditor() {
         </section>
       </ArtRouteChrome>
 
-      <ArtRouteChrome as="footer" className="ce-footer">
+      <ArtRouteChrome as="footer" className="ce-footer" ready={loaded}>
         <AssetButton disabled={!camp || camp.origin === 'official'} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
         <AssetButton danger disabled={!camp || readOnly} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
