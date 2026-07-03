@@ -1,5 +1,5 @@
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
-import { OBJECTIVE_TYPES, type ObjectiveType, type Roster, type TimeControl } from '../core/level';
+import { OBJECTIVE_TYPES, type ObjectiveType, type Roster, type TimeControl, type VictoryRules } from '../core/level';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 
 const STORAGE_PREFIX = 'ct:level-editor-draft:v1';
@@ -18,6 +18,8 @@ export interface LevelEditorDraft {
   roster: { player: Roster; enemy: Roster };
   // The battle clock (ADR-0053), or undefined when the level is untimed.
   timeControl?: TimeControl;
+  // Authored victory conditions (ADR-0054), or undefined when the level uses the objective preset.
+  victory?: VictoryRules;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -62,6 +64,7 @@ export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
     surviveTurns: draft.surviveTurns,
     roster: draft.roster,
     timeControl: draft.timeControl,
+    victory: draft.victory,
   });
 }
 
@@ -74,6 +77,14 @@ const cleanTimeControl = (raw: unknown): TimeControl | undefined => {
   if (typeof initialSeconds !== 'number' || !Number.isInteger(initialSeconds) || initialSeconds < 1) return undefined;
   if (typeof incrementSeconds !== 'number' || !Number.isInteger(incrementSeconds) || incrementSeconds < 0) return undefined;
   return { initialSeconds, incrementSeconds };
+};
+
+// A stored victory survives the round-trip only when it carries the two condition arrays; the
+// contents came from our own serialize, so a light shape check is enough — the real gate is
+// validateLevel / validatePlayability at save time.
+const cleanVictory = (raw: unknown): VictoryRules | undefined => {
+  if (!isRecord(raw) || !Array.isArray(raw.win) || !Array.isArray(raw.lose)) return undefined;
+  return { win: raw.win as VictoryRules['win'], lose: raw.lose as VictoryRules['lose'] };
 };
 
 export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
@@ -103,6 +114,7 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
         enemy: cleanRoster(isRecord(value.roster) ? value.roster.enemy : undefined),
       },
       timeControl: cleanTimeControl(value.timeControl),
+      victory: cleanVictory(value.victory),
     };
   } catch {
     return null;

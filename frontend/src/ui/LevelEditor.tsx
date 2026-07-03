@@ -50,11 +50,12 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
+import { VictoryConditionsEditor } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
-import { MODE_NAME, DEFAULT_SURVIVE_TURNS } from '../core/objectives';
+import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type VictoryRules, type ZoneType } from '../core/level';
+import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
@@ -407,7 +408,7 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 // signature and for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean
 // and a mode/name change (not just a board paint) marks it dirty.
 const levelSignature = (level: Level): string =>
-  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '']);
+  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '', level.victory ?? '']);
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -646,6 +647,14 @@ export function LevelEditor(): ReactElement {
   );
   const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
   const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+  // Custom victory (ADR-0054): off ⇒ the mode defines win/lose; on ⇒ the two edited lists override
+  // it. `victory` holds the working lists (seeded from the current mode when the toggle flips on).
+  const [victoryCustom, setVictoryCustom] = useState<boolean>(
+    localDraft ? localDraft.victory !== undefined : initialCampaignLevel?.victory !== undefined,
+  );
+  const [victory, setVictory] = useState<VictoryRules>(
+    localDraft?.victory ?? initialCampaignLevel?.victory ?? victoryRulesForObjective(objective, { surviveTurns }),
+  );
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
@@ -762,6 +771,8 @@ export function LevelEditor(): ReactElement {
       setClockEnabled(level.timeControl !== undefined);
       setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
       setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+      setVictoryCustom(level.victory !== undefined);
+      setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
       setEditingId(level.id);
       setLevelName(level.name);
       // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
@@ -1057,7 +1068,8 @@ export function LevelEditor(): ReactElement {
     roster: placement === 'random' ? roster : undefined,
     surviveTurns: objective === 'survive' ? surviveTurns : undefined,
     timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
-  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
+    victory: victoryCustom ? victory : undefined,
+  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryCustom, victory]);
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
@@ -1100,8 +1112,9 @@ export function LevelEditor(): ReactElement {
       surviveTurns,
       roster,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+      victory: victoryCustom ? victory : undefined,
     });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
+  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryCustom, victory]);
 
   const targetLevelId = editingId ?? routeParams.levelId;
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
@@ -1730,6 +1743,37 @@ export function LevelEditor(): ReactElement {
               ))}
             </div>
             <p className="le-board-note">{MODE_DESCRIPTION[objective]}</p>
+          </section>
+
+          <section className="skirmish-card le-victory-card">
+            <h2>Victory conditions</h2>
+            {/* ADR-0054: off ⇒ the mode above defines win/lose; on ⇒ the two edited lists override it.
+                Turning it on seeds from the current mode (kingSide read off the placed units) so the
+                author starts from the preset, then edits. */}
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Custom win/lose</span>
+              <Toggle
+                checked={victoryCustom}
+                label="Toggle custom victory conditions"
+                onChange={(on) => {
+                  if (on && !victoryCustom) {
+                    const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
+                    setVictory(victoryRulesForObjective(objective, { surviveTurns, kingSide: kingSideOf(seedUnits) }));
+                  }
+                  setVictoryCustom(on);
+                }}
+              />
+            </div>
+            {victoryCustom ? (<>
+              <VictoryConditionsEditor value={victory} onChange={setVictory} />
+              <p className="le-board-note">
+                The player wins the instant any <b>Win</b> condition holds and loses the instant any <b>Lose</b> condition holds; a tie resolves as a loss. The <b>{MODE_NAME[objective]}</b> label above still names the mode.
+              </p>
+            </>) : (
+              <p className="le-board-note">
+                Using the <b>{MODE_NAME[objective]}</b> preset. Turn on to combine your own win and lose conditions — it starts from this mode, then you edit freely.
+              </p>
+            )}
           </section>
 
           <section className="skirmish-card">

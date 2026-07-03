@@ -5001,6 +5001,20 @@ h1 {
 .le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
+
+/* Victory-conditions editor (ADR-0054) — layout only; every control is a kit atom (le-seg-btn /
+   Toggle / Stepper). A hairline top-border separates stacked conditions within a list. */
+.le-victory-list { margin-top: 12px; }
+.le-victory-head { color: #d6ecf5; font-size: var(--ds-text-sm); letter-spacing: .04em; margin: 14px 2px 2px; opacity: .85; text-transform: uppercase; }
+.le-cond { border-top: 1px solid rgba(150, 180, 200, .14); margin-top: 10px; padding-top: 10px; }
+.le-cond:first-of-type { border-top: 0; margin-top: 6px; padding-top: 0; }
+.le-cond-top { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.le-cond-summary { color: #eaf5fb; font-size: var(--ds-text-sm); }
+.le-cond-top .le-cond-remove { min-height: 30px; min-width: 0; padding: 0 12px; }
+.le-cond-params { margin-top: 2px; }
+.le-cond-add { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.le-cond-add .le-seg-btn { min-height: 32px; min-width: 0; padding: 0 12px; }
+.le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
 .le-status-card { gap: 10px; }
 .le-status-current {
   background: rgba(4, 13, 20, .7);

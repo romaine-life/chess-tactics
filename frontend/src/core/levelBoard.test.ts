@@ -120,3 +120,17 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
     expect(levelToEditorBoard(legacy).cells['0,0']).toBeTruthy();
   });
 });
+
+describe('editorBoardToLevel — authored victory (ADR-0054)', () => {
+  it('writes meta.victory onto the level, and omits it when absent (preset)', () => {
+    const victory = {
+      win: [{ kind: 'reach' as const, side: 'player' as const }, { kind: 'eliminate' as const, side: 'enemy' as const }],
+      lose: [{ kind: 'eliminate' as const, side: 'player' as const }],
+    };
+    const withVictory = editorBoardToLevel(filledBoard(4, 4), { id: 'lv1', name: 'V', victory });
+    expect(withVictory.victory).toEqual(victory);
+
+    const preset = editorBoardToLevel(filledBoard(4, 4), { id: 'lv2', name: 'P' });
+    expect(preset.victory).toBeUndefined();
+  });
+});
