@@ -1,8 +1,8 @@
-// Terrain movement effects (issue #44 Track 4): cliffs/rocks block movement and
+// Terrain movement effects (issue #44 Track 4): cliffs/rocks block movement,
 // elevation limits where a piece can step — the isometric multi-height axis from
-// the concepts. Pure + deterministic, built from a level's terrain layer and fed
-// into movement generation as an optional environment so terrain-free callers are
-// completely unaffected.
+// the concepts — and water halts travel through it. Pure + deterministic, built
+// from a level's terrain layer and fed into movement generation as an optional
+// environment so terrain-free callers are completely unaffected.
 
 import type { TerrainCell, TerrainType, Vec } from './types';
 
@@ -30,12 +30,24 @@ export function elevationAt(index: TerrainIndex, x: number, y: number): number {
   return terrainAt(index, x, y)?.elevation ?? 0;
 }
 
-// Tiles a piece can never stand on. Water is just a board surface; `cliff` and
-// `rock` are the blocking terrain families.
+// Tiles a piece can never stand on. `cliff` and `rock` are the blocking
+// terrain families.
 const IMPASSABLE: ReadonlySet<TerrainType> = new Set<TerrainType>(['cliff', 'rock']);
 
 export function isPassableTerrain(t: TerrainType): boolean {
   return !IMPASSABLE.has(t);
+}
+
+// Tiles that halt continued travel. A multi-square move may END on water but
+// never continue past it: entering water stops the move there. Only cells being
+// entered are checked, so a piece standing on water leaves it at full range,
+// and knights (no path, just a landing square) hop straight over.
+const HALTS_TRAVEL: ReadonlySet<TerrainType> = new Set<TerrainType>(['water']);
+
+/** Whether the cell at (x, y) stops a multi-square move that enters it. */
+export function haltsTravel(index: TerrainIndex, x: number, y: number): boolean {
+  const cell = terrainAt(index, x, y);
+  return cell !== null && HALTS_TRAVEL.has(cell.terrain);
 }
 
 /** Max elevation a piece may climb in a single step; greater rises are walls. */

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildTerrainIndex, terrainAt, elevationAt, isPassableTerrain, canTraverse, MAX_CLIMB,
+  buildTerrainIndex, terrainAt, elevationAt, isPassableTerrain, canTraverse, haltsTravel, MAX_CLIMB,
 } from './terrain';
 import { legalMoves } from './rules';
 import type { GameState, Piece, PieceType, Side, TerrainCell } from './types';
@@ -51,12 +51,79 @@ describe('canTraverse', () => {
   it('MAX_CLIMB is one', () => expect(MAX_CLIMB).toBe(1));
 });
 
+describe('haltsTravel', () => {
+  it('halts on water only', () => {
+    const idx = index([{ x: 1, y: 0, terrain: 'water', elevation: 0 }, { x: 2, y: 0, terrain: 'grass', elevation: 0 }]);
+    expect(haltsTravel(idx, 1, 0)).toBe(true);
+    expect(haltsTravel(idx, 2, 0)).toBe(false);
+    expect(haltsTravel(idx, 7, 7)).toBe(false); // unauthored == open ground
+  });
+});
+
 describe('legalMoves with terrain env', () => {
-  it('allows a queen ray through water', () => {
+  it('ends a queen ray on water: the tile is reachable, nothing past it', () => {
     const queen = piece('r', 'player', 'queen', 4, 4);
     const env = { terrain: index([{ x: 4, y: 2, terrain: 'water', elevation: 0 }]) };
     const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
-    expect(up).toEqual([3, 2, 1, 0]);
+    expect(up).toEqual([3, 2]); // reaches the water at y2, never y1/y0
+  });
+
+  it('keeps an enemy beyond water out of a rook\'s reach', () => {
+    const rook = piece('r', 'player', 'rook', 4, 4);
+    const foe = piece('foe', 'enemy', 'pawn', 4, 1);
+    const env = { terrain: index([{ x: 4, y: 2, terrain: 'water', elevation: 0 }]) };
+    const moves = legalMoves(rook, [rook, foe], { cols: 8, rows: 8 }, env);
+    expect(moves.some((m) => m.capture === 'foe')).toBe(false);
+  });
+
+  it('still allows capturing an enemy standing on the water tile itself', () => {
+    const rook = piece('r', 'player', 'rook', 4, 4);
+    const foe = piece('foe', 'enemy', 'pawn', 4, 2);
+    const env = { terrain: index([{ x: 4, y: 2, terrain: 'water', elevation: 0 }]) };
+    const moves = legalMoves(rook, [rook, foe], { cols: 8, rows: 8 }, env);
+    expect(moves.some((m) => m.x === 4 && m.y === 2 && m.capture === 'foe')).toBe(true);
+  });
+
+  it('lets a knight hop over water and land on it', () => {
+    const kn = piece('k', 'player', 'knight', 4, 4);
+    // Ring the knight in water, plus water on one landing square (3,2).
+    const ring = [[3, 3], [4, 3], [5, 3], [3, 4], [5, 4], [3, 5], [4, 5], [5, 5], [3, 2]]
+      .map(([x, y]) => ({ x, y, terrain: 'water' as const, elevation: 0 }));
+    const moves = legalMoves(kn, [kn], { cols: 8, rows: 8 }, { terrain: index(ring) });
+    expect(moves).toHaveLength(8); // all knight steps survive
+    expect(moves.some((m) => m.x === 3 && m.y === 2)).toBe(true); // landing on water is fine
+  });
+
+  it('moves at full range off a water tile', () => {
+    const rook = piece('r', 'player', 'rook', 4, 4);
+    const env = { terrain: index([{ x: 4, y: 4, terrain: 'water', elevation: 0 }]) };
+    const up = legalMoves(rook, [rook], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
+    expect(up).toEqual([3, 2, 1, 0]); // origin water never halts the mover
+  });
+
+  it('wades a river one tile at a time: the next water cell still halts', () => {
+    const rook = piece('r', 'player', 'rook', 4, 4);
+    const env = { terrain: index([
+      { x: 4, y: 4, terrain: 'water', elevation: 0 },
+      { x: 4, y: 3, terrain: 'water', elevation: 0 },
+    ]) };
+    const up = legalMoves(rook, [rook], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
+    expect(up).toEqual([3]); // off its own tile freely, but the next water cell ends the slide
+  });
+
+  it('halts a pawn double-step that passes through water', () => {
+    const pawn = piece('p', 'player', 'pawn', 3, 6);
+    const env = { terrain: index([{ x: 3, y: 5, terrain: 'water', elevation: 0 }]) };
+    const moves = legalMoves(pawn, [pawn], { cols: 8, rows: 8 }, env);
+    expect(moves.some((m) => m.x === 3 && m.y === 5)).toBe(true); // single advance into water
+    expect(moves.some((m) => m.x === 3 && m.y === 4)).toBe(false); // cannot pass through it
+  });
+
+  it('allows a pawn double-step that only lands on water', () => {
+    const pawn = piece('p', 'player', 'pawn', 3, 6);
+    const env = { terrain: index([{ x: 3, y: 4, terrain: 'water', elevation: 0 }]) };
+    const moves = legalMoves(pawn, [pawn], { cols: 8, rows: 8 }, env);
+    expect(moves.some((m) => m.x === 3 && m.y === 4)).toBe(true);
   });
 
   it('removes a knight step that lands on a cliff', () => {
@@ -72,7 +139,8 @@ describe('legalMoves with terrain env', () => {
     const foe = piece('foe', 'enemy', 'pawn', 2, 5);
     const env = { terrain: index([{ x: 3, y: 5, terrain: 'water', elevation: 0 }]) };
     const moves = legalMoves(pawn, [pawn, foe], { cols: 8, rows: 8 }, env);
-    expect(moves).toEqual([{ x: 3, y: 5 }, { x: 3, y: 4 }, { x: 2, y: 5, capture: 'foe' }]);
+    // The single advance enters the water; the double-step would pass through it.
+    expect(moves).toEqual([{ x: 3, y: 5 }, { x: 2, y: 5, capture: 'foe' }]);
   });
 
   it('uses the origin elevation: a piece cannot ray up past a +1 rise', () => {
