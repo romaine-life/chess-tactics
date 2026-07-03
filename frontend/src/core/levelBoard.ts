@@ -13,7 +13,7 @@
 import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, Zone, ZoneType } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
-import type { Side, TerrainCell, TerrainType, UnitFacing } from './types';
+import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, type EditorBoard } from '../ui/boardCode';
 import { studioFamilies } from '../ui/studioBoard';
@@ -150,6 +150,24 @@ export interface LevelMeta {
   // placeholder — without it, republishing a legacy official level (no boardCode) flattens those
   // surfaces to grass for every player (INV7 data-loss). Absent for a brand-new/blank board.
   previousTerrain?: TerrainCell[];
+}
+
+/**
+ * Project live game pieces onto the editor-board units channel — the Game Lab
+ * replay viewer swaps this per step over a `levelToEditorBoard` base so every
+ * ply renders through the same read-only board the editors use. Only living
+ * player/enemy combatants paint (rocks/prop colliders ride the level's own
+ * cells/props channels); a promoted pawn paints as the queen it became.
+ */
+export function unitsForGamePieces(pieces: readonly Piece[]): EditorBoard['units'] {
+  const units: EditorBoard['units'] = {};
+  for (const p of pieces) {
+    if (!p.alive || (p.side !== 'player' && p.side !== 'enemy')) continue;
+    const unitId = unitIdForType(p.type);
+    if (!unitId) continue;
+    units[`${p.x},${p.y}`] = { unitId, direction: p.facing ?? 'south', faction: SIDE_TO_FACTION[p.side] };
+  }
+  return units;
 }
 
 // Re-seed the editor from a saved level. The lossless `boardCode` is preferred (it carries

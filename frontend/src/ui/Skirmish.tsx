@@ -171,6 +171,9 @@ export function Skirmish() {
     const shouldStartFresh = (levelId: string | null): boolean =>
       shouldStartFreshSkirmish(useSkirmish.getState(), levelId);
     const freshSeed = () => Math.floor(Math.random() * 999999) + 1;
+    // Dev A/B lever: `?ai=greedy` pits you against the legacy random-capture
+    // enemy; anything else gets the objective-aware search AI.
+    const ai = new URLSearchParams(window.location.search).get('ai') === 'greedy' ? 'greedy' as const : 'search' as const;
 
     // Enter the board for `levelId`: keep the live in-memory match if it's the one
     // asked for (a route change, not a reload); else resume the match saved to disk
@@ -186,7 +189,7 @@ export function Skirmish() {
           return;
         }
       }
-      newSkirmish({ seed: freshSeed(), level: levelDoc ?? undefined });
+      newSkirmish({ seed: freshSeed(), level: levelDoc ?? undefined, ai });
     };
 
     // A `?board=<code>` link plays an authored position straight away — decode it into a
@@ -198,7 +201,7 @@ export function Skirmish() {
         const objective: ObjectiveType = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
           ? (routeObjective as ObjectiveType) : 'capture-all';
         const level = editorBoardToLevel(decoded, { id: 'board-link', name: 'Board Link', objective });
-        if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level });
+        if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level, ai });
         setBoardSettled(true);
         return;
       }

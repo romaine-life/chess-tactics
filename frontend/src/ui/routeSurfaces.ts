@@ -70,7 +70,8 @@ export function routeScreenKey(pathname: string): string {
     path === '/party' ||
     path === '/artwork-compare' ||
     path === '/tile-compare' ||
-    path === '/surface-lab'
+    path === '/surface-lab' ||
+    path === '/game-lab'
   ) {
     return path;
   }

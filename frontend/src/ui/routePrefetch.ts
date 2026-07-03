@@ -17,6 +17,7 @@ export const importTilePreview = () => import('./TilePreview');
 export const importLevelEditor = () => import('./LevelEditor');
 export const importPortraitEditor = () => import('./PortraitEditor');
 export const importDoodadEditor = () => import('./DoodadEditor');
+export const importGameLab = () => import('./GameLab');
 
 // Mirror of renderRoute's lazy routes: which chunk a path needs, if any. Eager
 // routes (Campaign, Lobbies, Settings…) return null — they're already in the main
@@ -28,6 +29,7 @@ function chunkForPath(path: string): (() => Promise<unknown>) | null {
   if (path === '/edit' || path === '/level-editor') return importLevelEditor;
   if (path === '/portrait-editor') return importPortraitEditor;
   if (path === '/doodad-editor') return importDoodadEditor;
+  if (path === '/game-lab') return importGameLab;
   if (path === '/campaigns-next' || path === '/campaigns') return importCampaignEditor;
   return null;
 }
