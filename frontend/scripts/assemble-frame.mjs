@@ -49,13 +49,13 @@ export function buildFrame(W, H) { return buildFrameFrom(corner, edge, fill, W, 
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   console.log(`
-┌─ assemble-frame · the canonical way to build a scalable 9-slice kit frame (ADR-0012) ─
-│ Source = ATOMS: corner / edge / fill. The ONE corner is mirrored into all four, so
-│ the frame is symmetric BY CONSTRUCTION — a lopsided / "J" corner is impossible.
-│ Codex's generate job is the ATOMS (above all the corner), never the whole frame;
-│ whole-frame generation is retired for chrome. New palette (e.g. steel vs the gold
-│ kit atoms)? Recolor the corner atom first (luminance-matched swap, ADR-0009), then
-│ assemble. Review the result live in /artwork-compare (ADR-0005) before landing.
+┌─ assemble-frame · RETIRED (ADR-0054) — do not build kit frames from here ─
+│ The canonical assembler is now buildFrameParts in scripts/nine-slice-kit.mjs:
+│ split-layer (cool frame + gold bracket), per-element offsets, mirror-AFTER-scale,
+│ and pinned by the bake-parity test. This standalone script predates that model
+│ (single-layer, no scale invariant) and has no importers; it survives only as the
+│ historical reference for ADR-0012's atoms-not-whole-frame decision. To bake a
+│ frame, edit its config in /nine-slice-editor and Save, or run apply-nine-slice.mjs.
 └───────────────────────────────────────────────────────────────────────────────────────
 `);
   const out = `${root}public/assets/ui/kit/_gen/`;

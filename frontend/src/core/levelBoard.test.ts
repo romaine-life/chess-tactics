@@ -3,11 +3,16 @@ import { editorBoardToLevel, levelToEditorBoard } from './levelBoard';
 import type { EditorBoard } from '../ui/boardCode';
 import type { TerrainCell } from './types';
 
-// A blank board (no painted cells) derives every cell to grass — enough to exercise the
+// A blank board (no painted cells) derives every cell to void — enough to exercise the
 // save-time projection without depending on specific Studio tile / unit ids.
 const emptyBoard = (cols: number, rows: number): EditorBoard => ({
   cols, rows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {},
 });
+const filledBoard = (cols: number, rows: number, tileId = 'grass-a'): EditorBoard => {
+  const board = emptyBoard(cols, rows);
+  for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) board.cells[`${x},${y}`] = tileId;
+  return board;
+};
 
 describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
   it('carries non-expressible terrain (bridge) AND elevation through from the pre-save level', () => {
@@ -17,7 +22,7 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
       { x: 0, y: 0, terrain: 'bridge', elevation: 1 },
       { x: 1, y: 0, terrain: 'grass', elevation: 2 },
     ];
-    const level = editorBoardToLevel(emptyBoard(4, 4), { id: 'l1', name: 'T', previousTerrain });
+    const level = editorBoardToLevel(filledBoard(4, 4), { id: 'l1', name: 'T', previousTerrain });
     const at = (x: number, y: number) => level.layers.terrain.find((c) => c.x === x && c.y === y)!;
 
     expect(at(0, 0).terrain).toBe('bridge'); // no family, no feature -> preserved by the guard
@@ -27,21 +32,33 @@ describe('editorBoardToLevel — INV7 round-trip / data-loss guards', () => {
   });
 
   it('projects a road feature overlay back to `road` terrain so the game sees it', () => {
-    const board = emptyBoard(4, 4);
+    const board = filledBoard(4, 4);
     board.features['2,1'] = { kind: 'road', material: 'cobble' };
     const level = editorBoardToLevel(board, { id: 'l2', name: 'R' });
     expect(level.layers.terrain.find((c) => c.x === 2 && c.y === 1)!.terrain).toBe('road');
   });
 
-  it('a fresh board with no previous terrain is flat grass (heightLevels 1) and stamps boardCode', () => {
-    const level = editorBoardToLevel(emptyBoard(4, 4), { id: 'l3', name: 'New' });
+  it('a painted fresh board with no previous terrain is flat grass (heightLevels 1) and stamps boardCode', () => {
+    const level = editorBoardToLevel(filledBoard(4, 4), { id: 'l3', name: 'New' });
     expect(level.board.heightLevels).toBe(1);
     expect(level.layers.terrain.every((c) => c.terrain === 'grass' && c.elevation === 0)).toBe(true);
     expect(typeof level.boardCode).toBe('string');
   });
 
+  it('projects an erased editor cell to void terrain and reopens it as a gap', () => {
+    const board = filledBoard(4, 4);
+    delete board.cells['2,1'];
+
+    const level = editorBoardToLevel(board, { id: 'l9', name: 'Gap' });
+    expect(level.layers.terrain.find((c) => c.x === 2 && c.y === 1)!.terrain).toBe('void');
+
+    const reopened = levelToEditorBoard(level);
+    expect(reopened.cells['2,1']).toBeUndefined();
+    expect(reopened.cells['0,0']).toBeTruthy();
+  });
+
   it('maps only the assigned player faction to player and leaves unassigned maps CPU-only', () => {
-    const board = emptyBoard(4, 4);
+    const board = filledBoard(4, 4);
     board.playerFaction = 'emerald';
     board.units = {
       '0,0': { unitId: 'rook-blender-v4-calibrated', direction: 'south', faction: 'emerald' },
@@ -60,7 +77,7 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
   it('surfaces legacy `road` terrain as a road feature overlay, round-tripping through layers', () => {
     // Save a board with a road overlay, then drop boardCode to force the layers-derive path —
     // the road must come back as a feature, not vanish into grass (the reported bug).
-    const board = emptyBoard(4, 4);
+    const board = filledBoard(4, 4);
     board.features['2,1'] = { kind: 'road', material: 'cobble' };
     const saved = editorBoardToLevel(board, { id: 'l4', name: 'Road' });
     const legacy = { ...saved, boardCode: undefined };
@@ -77,7 +94,7 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
   });
 
   it('derives navy as the player faction for legacy player/enemy levels', () => {
-    const saved = editorBoardToLevel(emptyBoard(4, 4), { id: 'l8', name: 'Legacy' });
+    const saved = editorBoardToLevel(filledBoard(4, 4), { id: 'l8', name: 'Legacy' });
     const legacy = {
       ...saved,
       boardCode: undefined,
@@ -87,5 +104,19 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
       },
     };
     expect(levelToEditorBoard(legacy).playerFaction).toBe('navy-blue');
+  });
+
+  it('derives legacy void terrain as an empty editor cell', () => {
+    const saved = editorBoardToLevel(filledBoard(4, 4), { id: 'l10', name: 'Legacy Gap' });
+    const legacy = {
+      ...saved,
+      boardCode: undefined,
+      layers: {
+        ...saved.layers,
+        terrain: saved.layers.terrain.map((cell) => (cell.x === 1 && cell.y === 2 ? { ...cell, terrain: 'void' as const } : cell)),
+      },
+    };
+    expect(levelToEditorBoard(legacy).cells['1,2']).toBeUndefined();
+    expect(levelToEditorBoard(legacy).cells['0,0']).toBeTruthy();
   });
 });

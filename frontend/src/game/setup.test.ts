@@ -3,12 +3,16 @@ import { createSkirmish } from './setup';
 import { legalMoves, livingPieces } from '../core/rules';
 import { isPassableTerrain } from '../core/terrain';
 import { createBlankLevel, type Level } from '../core/level';
+import { levelToEditorBoard, editorBoardToLevel } from '../core/levelBoard';
+import { encodeBoard, decodeBoard, type EditorBoard } from '../ui/boardCode';
+import { unitAssets } from '../ui/unitCatalog';
+import { applyMove, sideInCheck } from '../core/rules';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import type { TerrainType } from '../core/types';
 import type { TileFamilyId } from '../core/tileSockets';
 
-const terrainToFamily: Record<TerrainType, TileFamilyId> = {
+const terrainToFamily: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
   grass: 'grass',
   road: 'stone',
   stone: 'stone',
@@ -103,7 +107,7 @@ describe('createSkirmish', () => {
   it('authors terrain that resolves to a legal socket board', () => {
     for (const seed of [1, 7, 13, 42, 99]) {
       const s = createSkirmish({ seed });
-      const terrainMap = s.terrain!.map((cell) => terrainToFamily[cell.terrain]);
+      const terrainMap = s.terrain!.map((cell) => cell.terrain === 'void' ? 'grass' : terrainToFamily[cell.terrain]);
       const board = solveSocketBoard({
         assets: tileAssets,
         terrainMap,
@@ -261,5 +265,45 @@ describe('createFromLevel — random placement', () => {
     expect(hasMove(legalMoves(pawn, game.pieces, game.size), 3, 4)).toBe(true);
     expect(hasMove(legalMoves(pawn, game.pieces, game.size), 4, 4)).toBe(true);
     expect(hasMove(legalMoves(pawn, game.pieces, game.size), 2, 3)).toBe(false);
+  });
+});
+
+// The `/play?board=<code>` play-test path: a shared board-code link decodes into a
+// fixed-placement level that createSkirmish plays. This guards that whole data path
+// (encode → decode → editorBoardToLevel → createSkirmish) with a concrete mate position.
+describe('play a board-code link', () => {
+  const unitIdFor = (family: string): string =>
+    (unitAssets.find((u) => u.family === family && !u.speculative) ?? unitAssets.find((u) => u.family === family))!.id;
+
+  it('decodes an authored mate-in-1 board into a playable, correctly-sided level', () => {
+    const king = unitIdFor('king');
+    const rook = unitIdFor('rook');
+    const board: EditorBoard = {
+      ...levelToEditorBoard(createBlankLevel('demo', 'demo', 8, 8)), // grass cells filled
+      playerFaction: 'navy-blue',
+      units: {
+        '0,0': { unitId: king, direction: 'south', faction: 'crimson' },
+        '5,5': { unitId: king, direction: 'north', faction: 'navy-blue' },
+        '1,7': { unitId: rook, direction: 'north', faction: 'navy-blue' },
+        '2,3': { unitId: rook, direction: 'north', faction: 'navy-blue' },
+      },
+    };
+    const decoded = decodeBoard(encodeBoard(board));
+    expect(decoded).toBeTruthy();
+    const level = editorBoardToLevel(decoded!, { id: 'board-link', name: 'demo', objective: 'capture-king' });
+    expect(level.layers.units.find((u) => u.type === 'king' && u.side === 'enemy')).toMatchObject({ x: 0, y: 0 });
+    expect(level.layers.units.filter((u) => u.side === 'player')).toHaveLength(3);
+
+    const game = createSkirmish({ seed: 1, level });
+    expect(game.turn).toBe('player');
+    const env = { terrain: undefined, lastMove: undefined };
+    const mater = game.pieces.find((p) => p.side === 'player' && p.type === 'rook' && p.x === 2 && p.y === 3)!;
+    expect(hasMove(legalMoves(mater, game.pieces, game.size, env), 0, 3)).toBe(true);
+
+    // Rd3→(0,3) is checkmate: the enemy is in check with no legal reply.
+    const after = applyMove(game, mater.id, { x: 0, y: 3 }).state;
+    expect(sideInCheck(after, 'enemy', env)).toBe(true);
+    const enemyReplies = livingPieces(after.pieces, 'enemy').flatMap((p) => legalMoves(p, after.pieces, after.size, env));
+    expect(enemyReplies).toHaveLength(0);
   });
 });

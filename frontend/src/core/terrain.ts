@@ -1,4 +1,4 @@
-// Terrain movement effects (issue #44 Track 4): cliffs/rocks block movement,
+// Terrain movement effects (issue #44 Track 4): cliffs/rocks/voids block movement,
 // elevation limits where a piece can step — the isometric multi-height axis from
 // the concepts — and water halts travel through it. Pure + deterministic, built
 // from a level's terrain layer and fed into movement generation as an optional
@@ -30,9 +30,9 @@ export function elevationAt(index: TerrainIndex, x: number, y: number): number {
   return terrainAt(index, x, y)?.elevation ?? 0;
 }
 
-// Tiles a piece can never stand on. `cliff` and `rock` are the blocking
+// Tiles a piece can never stand on. `cliff`, `rock`, and `void` are the blocking
 // terrain families.
-const IMPASSABLE: ReadonlySet<TerrainType> = new Set<TerrainType>(['cliff', 'rock']);
+const IMPASSABLE: ReadonlySet<TerrainType> = new Set<TerrainType>(['cliff', 'rock', 'void']);
 
 export function isPassableTerrain(t: TerrainType): boolean {
   return !IMPASSABLE.has(t);

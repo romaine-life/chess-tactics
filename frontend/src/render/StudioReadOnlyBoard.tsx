@@ -188,7 +188,6 @@ export function StudioReadOnlyBoard({
   coverSeed = 1234,
   boardZoom = 1,
   boardPan = { x: 0, y: 0 },
-  showFootprint = false,
   className = '',
   ariaLabel = 'Level board',
 }: {
@@ -197,7 +196,6 @@ export function StudioReadOnlyBoard({
   coverSeed?: number;
   boardZoom?: number;
   boardPan?: { x: number; y: number };
-  showFootprint?: boolean;
   className?: string;
   ariaLabel?: string;
 }): ReactElement {
@@ -226,7 +224,6 @@ export function StudioReadOnlyBoard({
       cells={gridCells}
       className={`tileset-placement-board is-readonly ${className}`.trim()}
       ariaLabel={ariaLabel}
-      showFootprint={showFootprint}
       boardZoom={boardZoom}
       boardPan={boardPan}
     >

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildTerrainIndex, terrainAt, elevationAt, isPassableTerrain, canTraverse, haltsTravel, MAX_CLIMB,
 } from './terrain';
-import { legalMoves } from './rules';
+import { attackedSquares, legalMoves } from './rules';
 import type { GameState, Piece, PieceType, Side, TerrainCell } from './types';
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number, extra: Partial<Piece> = {}): Piece {
@@ -26,10 +26,11 @@ describe('terrain index', () => {
 });
 
 describe('isPassableTerrain', () => {
-  it('treats water as walkable and cliff/rock as barriers', () => {
+  it('treats water as walkable and cliff/rock/void as barriers', () => {
     expect(isPassableTerrain('water')).toBe(true);
     expect(isPassableTerrain('cliff')).toBe(false);
     expect(isPassableTerrain('rock')).toBe(false);
+    expect(isPassableTerrain('void')).toBe(false);
     for (const t of ['grass', 'stone', 'road', 'bridge'] as const) expect(isPassableTerrain(t)).toBe(true);
   });
 });
@@ -153,9 +154,68 @@ describe('legalMoves with terrain env', () => {
     expect(up).toEqual([3]);
   });
 
+  it('treats a void as an obstacle for rays', () => {
+    const queen = piece('r', 'player', 'queen', 4, 4);
+    const env = { terrain: index([{ x: 4, y: 2, terrain: 'void', elevation: 0 }]) };
+    const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
+    expect(up).toEqual([3]);
+  });
+
+  it('lets a knight hop over a void but not land on one', () => {
+    const knight = piece('k', 'player', 'knight', 2, 2);
+    const env = { terrain: index([
+      { x: 3, y: 2, terrain: 'void', elevation: 0 },
+      { x: 4, y: 1, terrain: 'void', elevation: 0 },
+    ]) };
+    const moves = legalMoves(knight, [knight], { cols: 8, rows: 8 }, env);
+    expect(moves.some((m) => m.x === 4 && m.y === 3)).toBe(true);
+    expect(moves.some((m) => m.x === 4 && m.y === 1)).toBe(false);
+  });
+
   it('is identical to plain movement when no terrain is supplied', () => {
     const queen = piece('r', 'player', 'queen', 4, 4);
     const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
     expect(up).toEqual([3, 2, 1, 0]);
+  });
+});
+
+describe('threats respect terrain the same way movement does', () => {
+  const BOARD = { cols: 8, rows: 8 };
+
+  it('a terrain wall ends a threat ray, just as it ends a movement ray', () => {
+    const rook = piece('r', 'enemy', 'rook', 0, 4);
+    const wall = { terrain: index([{ x: 2, y: 4, terrain: 'cliff', elevation: 0 }]) };
+    const rakedThroughWall = attackedSquares(rook, [rook], BOARD, wall).filter((s) => s.y === 4).map((s) => s.x).sort((a, b) => a - b);
+    expect(rakedThroughWall).toEqual([1]); // stops before the cliff at x=2
+    const rakedOpen = attackedSquares(rook, [rook], BOARD).filter((s) => s.y === 4).map((s) => s.x);
+    expect(rakedOpen).toContain(5); // without terrain the whole row is threatened
+  });
+
+  it('a king may stand where a terrain wall shields it from an enemy slider', () => {
+    const king = piece('k', 'player', 'king', 4, 4);
+    const rook = piece('r', 'enemy', 'rook', 0, 4); // same row as the king
+    const foeKing = piece('ek', 'enemy', 'king', 7, 0);
+    const wall = { terrain: index([{ x: 2, y: 4, terrain: 'cliff', elevation: 0 }]) };
+    // The wall breaks the rook's line, so (3,4) is safe and the king may step onto it.
+    expect(legalMoves(king, [king, rook, foeKing], BOARD, wall).some((m) => m.x === 3 && m.y === 4)).toBe(true);
+    // Without the wall the rook rakes the whole row and (3,4) is off-limits.
+    expect(legalMoves(king, [king, rook, foeKing], BOARD).some((m) => m.x === 3 && m.y === 4)).toBe(false);
+  });
+
+  it('a threat ray may end on water but never pass it', () => {
+    const rook = piece('r', 'enemy', 'rook', 0, 4);
+    const river = { terrain: index([{ x: 2, y: 4, terrain: 'water', elevation: 0 }]) };
+    const raked = attackedSquares(rook, [rook], BOARD, river).filter((s) => s.y === 4).map((s) => s.x).sort((a, b) => a - b);
+    expect(raked).toEqual([1, 2]); // the water square itself is threatened, nothing beyond
+  });
+
+  it('a king across a river is out of a slider\'s reach — but not on the river itself', () => {
+    const king = piece('k', 'player', 'king', 3, 4); // one square beyond the water
+    const rook = piece('r', 'enemy', 'rook', 0, 4);
+    const foeKing = piece('ek', 'enemy', 'king', 7, 0);
+    const river = { terrain: index([{ x: 2, y: 4, terrain: 'water', elevation: 0 }]) };
+    const moves = legalMoves(king, [king, rook, foeKing], BOARD, river);
+    expect(moves.some((m) => m.x === 3 && m.y === 3)).toBe(true); // beyond the river: free to move
+    expect(moves.some((m) => m.x === 2 && m.y === 4)).toBe(false); // stepping ONTO the river: still raked
   });
 });
