@@ -20,6 +20,7 @@ import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
+import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   hasDirectionSprite,
@@ -50,6 +51,7 @@ import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
+import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 import { validatePlayability } from '../core/playability';
@@ -398,12 +400,12 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 
 // A stable fingerprint of an editor board, the basis of the real dirty flag: encodeBoard is
 // deterministic + lossless, so two boards encode identically iff they're the same board.
-// The dirty-flag signature of a whole Level: its lossless boardCode PLUS the ADR-0050 mode fields
-// (which don't ride in boardCode). ONE formula, used both for the live current-state signature and
-// for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean and a mode
-// change (not just a board paint) marks it dirty.
+// The dirty-flag signature of a whole Level: its name, lossless boardCode, and the ADR-0050 mode
+// fields (which don't ride in boardCode). ONE formula, used both for the live current-state
+// signature and for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean
+// and a mode/name change (not just a board paint) marks it dirty.
 const levelSignature = (level: Level): string =>
-  `${level.boardCode ?? ''}|${level.objective}|${level.placement ?? 'fixed'}|${level.surviveTurns ?? ''}|${JSON.stringify(level.roster ?? {})}`;
+  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}]);
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -554,16 +556,20 @@ export function LevelEditor(): ReactElement {
       campaignId: params.get('campaignId') ?? undefined,
       levelId: params.get('levelId') ?? undefined,
       returnTo: params.get('returnTo') ?? undefined,
+      boardCode: params.get('board') ?? undefined,
     };
   }, []);
   // Optional `?board=<code>` deep-link: decode a whole board to start from (see boardCode.ts).
   // It takes precedence over a campaign level (it's the explicit "inspect this exact board").
   const loadedBoard = useMemo(() => readBoardParam(), []);
-  const [boardCells, setBoardCells] = useState<Record<string, string>>(() => loadedBoard?.cells ?? leSeedBoard());
-  const [boardCols, setBoardCols] = useState(loadedBoard?.cols ?? LE_COLS);
-  const [boardRows, setBoardRows] = useState(loadedBoard?.rows ?? LE_ROWS);
+  const draftKey = useMemo(() => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }), [routeParams.levelId, routeParams.boardCode]);
+  const localDraft = useMemo(() => readLevelEditorDraft(draftKey), [draftKey]);
+  const initialBoard = localDraft?.board ?? loadedBoard;
+  const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
+  const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
+  const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
-    (loadedBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(loadedBoard.playerFaction)) ? loadedBoard.playerFaction as UnitPalette : null,
+    (initialBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(initialBoard.playerFaction)) ? initialBoard.playerFaction as UnitPalette : null,
   );
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
@@ -572,21 +578,21 @@ export function LevelEditor(): ReactElement {
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [brushKind, setBrushKind] = useState<BrushKind>(brushKindForInitialLayer(initialLayer));
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
-  const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
-  const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
+  const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((initialBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
+  const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
-  const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(loadedBoard?.props ?? {});
+  const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(initialBoard?.props ?? {});
   const [propBrushId, setPropBrushId] = useState<string>(PROP_DEFS[0].id);
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
   // and how thick. Tufts are rolled deterministically from this density (see core/groundCover).
-  const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(loadedBoard?.cover ?? {});
+  const [boardCover, setBoardCover] = useState<Record<string, GroundCoverDensity>>(initialBoard?.cover ?? {});
   const [coverBrushDensity, setCoverBrushDensity] = useState<GroundCoverDensity>('sparse');
   const [coverSeed, setCoverSeed] = useState(1234);
   // Roads and rivers are LINEAR features (ribbons you draw), not per-cell terrain materials:
   // store each painted cell's {kind, material}, then derive its connection mask from its
   // SAME-KIND neighbours so the renderer picks straight/corner/T/cross. One unified layer —
   // roads connect to roads, rivers to rivers, never to each other. See core/featureAutotile.ts.
-  const [boardFeatures, setBoardFeatures] = useState<Record<string, FeatureCell>>(loadedBoard?.features ?? {});
+  const [boardFeatures, setBoardFeatures] = useState<Record<string, FeatureCell>>(initialBoard?.features ?? {});
   // The remembered brush material PER kind, so switching Road↔River keeps each picker's choice.
   const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
     road: defaultFeatureMaterial('road'),
@@ -595,11 +601,11 @@ export function LevelEditor(): ReactElement {
   });
   // Manually SEVERED feature connections, keyed by the shared edge between two cells
   // (roadEdgeKey, order-independent). A cut overrides auto-connect for BOTH tiles.
-  const [featureCuts, setFeatureCuts] = useState<Record<string, true>>(loadedBoard?.featureCuts ?? {});
+  const [featureCuts, setFeatureCuts] = useState<Record<string, true>>(initialBoard?.featureCuts ?? {});
   // Forced outward stubs, the mirror of a cut: each keyed edge has NO same-kind neighbour but is
   // pushed to connect anyway, so the ribbon runs off the board edge (or into a non-feature tile)
   // instead of capping. Same edge keying as cuts (roadEdgeKey); the neighbour may be off-board.
-  const [featureExits, setFeatureExits] = useState<Record<string, true>>(loadedBoard?.featureExits ?? {});
+  const [featureExits, setFeatureExits] = useState<Record<string, true>>(initialBoard?.featureExits ?? {});
   // The active feature kind = the current layer when it's a feature layer, else null.
   const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' || brushKind === 'fence' ? brushKind : null;
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : leUnitAssets[0].id);
@@ -611,28 +617,29 @@ export function LevelEditor(): ReactElement {
   // Gameplay zones (ADR-0050): a per-cell channel (cell "x,y" -> zone type), painted like cover.
   // Seeded from a loaded board (boardCode carries them losslessly); the active brush picks which
   // zone type paints.
-  const [boardZones, setBoardZones] = useState<Record<string, ZoneType>>(loadedBoard?.zones ?? {});
+  const [boardZones, setBoardZones] = useState<Record<string, ZoneType>>(initialBoard?.zones ?? {});
   const [zoneBrushType, setZoneBrushType] = useState<ZoneType>(LE_ZONE_BRUSHES[0].type);
 
   // The RULES panel state — the authored win-rule mode + the orthogonal placement axis (ADR-0050).
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
   // schema defaults so it reads exactly like a blank createBlankLevel.
-  const [objective, setObjective] = useState<ObjectiveType>('capture-all');
-  const [placement, setPlacement] = useState<'fixed' | 'random'>('fixed');
-  const [surviveTurns, setSurviveTurns] = useState<number>(DEFAULT_SURVIVE_TURNS);
+  const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? 'capture-all');
+  const [placement, setPlacement] = useState<'fixed' | 'random'>(localDraft?.placement ?? 'fixed');
+  const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
   // Random-placement roster: per side, per playable piece type. An absent count reads as 0.
-  const [roster, setRoster] = useState<{ player: Roster; enemy: Roster }>({ player: {}, enemy: {} });
+  const [roster, setRoster] = useState<{ player: Roster; enemy: Roster }>(localDraft?.roster ?? { player: {}, enemy: {} });
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
   // the title bar; `savedSig` is the board signature at last save, the basis of the dirty chip.
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
-  const [levelName, setLevelName] = useState<string>('Untitled level');
-  const [savedSig, setSavedSig] = useState<string | null>(null);
+  const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? 'Untitled level');
+  const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? null);
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
   // clean even for a legacy level whose derived boardCode differs from its saved one).
   const needsBaselineRef = useRef(false);
+  const [quietDraftRestore] = useState(() => consumeNewBuildReloadIntent());
   const [saveStatus, setSaveStatus] = useState('');
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
@@ -662,6 +669,13 @@ export function LevelEditor(): ReactElement {
     setStatusLog((prev) => [entry, ...prev].slice(0, STATUS_LOG_LIMIT));
   };
 
+  useEffect(() => {
+    if (quietDraftRestore) return;
+    if (!localDraft || (routeParams.levelId && !loadedBoard)) return;
+    reportStatus('Restored unsaved local draft.', 'success', 'This browser saved it before the refresh.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Who's signed in — for the publish confirm/label copy. The server's requireAdmin is the
   // real gate (a non-admin save of an official level fails closed → 403 surfaced below).
   useEffect(() => {
@@ -688,6 +702,12 @@ export function LevelEditor(): ReactElement {
       if (!active || loadedBoard || !routeParams.levelId) return;
       const level = useCampaigns.getState().levels[routeParams.levelId];
       if (!level) return;
+      if (localDraft) {
+        setEditingId(level.id);
+        setSavedSig(levelSignature(level));
+        if (!quietDraftRestore) reportStatus('Restored unsaved local draft.', 'success', `Save will update "${level.name}".`);
+        return;
+      }
       const board = levelToEditorBoard(level);
       setBoardCols(board.cols);
       setBoardRows(board.rows);
@@ -1028,6 +1048,24 @@ export function LevelEditor(): ReactElement {
     if (savedSig === null && !routeParams.levelId) setSavedSig(currentSig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSig]);
+
+  useEffect(() => {
+    if (savedSig === null) return;
+    if (!dirty) {
+      clearLevelEditorDraft(draftKey);
+      return;
+    }
+    writeLevelEditorDraft(draftKey, {
+      savedAt: Date.now(),
+      savedSig,
+      board: currentEditorBoard,
+      levelName,
+      objective,
+      placement,
+      surviveTurns,
+      roster,
+    });
+  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns]);
 
   const targetLevelId = editingId ?? routeParams.levelId;
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));

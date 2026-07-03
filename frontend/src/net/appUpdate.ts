@@ -6,6 +6,9 @@
 // vite:preloadError self-heal in main.tsx is the recovery if they hit it first).
 import { useEffect, useState } from 'react';
 
+const APP_UPDATE_RELOAD_KEY = 'ct:app-update-reload';
+const APP_UPDATE_RELOAD_WINDOW_MS = 30_000;
+
 // Pull the content hash out of a Vite entry-chunk reference, given either a
 // <script> src or the raw index.html. Exported for tests.
 export function extractEntryHash(htmlOrUrl: string): string {
@@ -31,6 +34,43 @@ export async function isNewBuildLive(booted = bootedEntryHash()): Promise<boolea
     return Boolean(live) && live !== booted;
   } catch {
     return false; // network blip — never prompt on a failed check
+  }
+}
+
+function storage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function reloadForNewBuild(): void {
+  const store = storage();
+  try {
+    store?.setItem(APP_UPDATE_RELOAD_KEY, JSON.stringify({ at: Date.now(), path: window.location.pathname }));
+  } catch {
+    /* sessionStorage can be blocked; reloading is still the right action. */
+  }
+  window.location.reload();
+}
+
+export function consumeNewBuildReloadIntent(pathname = typeof window === 'undefined' ? '' : window.location.pathname): boolean {
+  const store = storage();
+  if (!store) return false;
+  try {
+    const raw = store.getItem(APP_UPDATE_RELOAD_KEY);
+    if (!raw) return false;
+    store.removeItem(APP_UPDATE_RELOAD_KEY);
+    const value = JSON.parse(raw) as { at?: unknown; path?: unknown };
+    return typeof value.at === 'number'
+      && Date.now() - value.at <= APP_UPDATE_RELOAD_WINDOW_MS
+      && typeof value.path === 'string'
+      && value.path === pathname;
+  } catch {
+    try { store.removeItem(APP_UPDATE_RELOAD_KEY); } catch { /* ignore */ }
+    return false;
   }
 }
 
