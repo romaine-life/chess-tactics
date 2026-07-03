@@ -66,14 +66,23 @@ rounding a started second UP like OTB digital clocks); the final 20 seconds turn
 the readout `--threat` red. Untimed games render no chip — the bar reads exactly
 as before.
 
-### Authoring: RULES panel "Battle clock" card, ladder steppers
+### Authoring: RULES panel "Battle clock" card, editable ladder steppers
 
-A Toggle ("Timed battle") plus two kit Steppers when on: starting time walks the
-standard chess ladder (30s…60m, default 5:00) and increment walks 0…30s — rungs,
-not free-typed seconds (`core/clock.ts` `CLOCK_INITIAL_SECONDS` /
-`CLOCK_INCREMENT_SECONDS` / `stepLadder`; off-ladder hand-edited values snap to
-the nearest rung). `Stepper` now accepts a pre-formatted string readout for the
-`m:ss` display.
+A Toggle ("Timed battle") plus, when on, two kit Steppers — one for starting time,
+one for increment. The +/- keys walk the standard chess ladders (starting time
+30s…60m, default 5:00; increment 0…30s) for a quick recognizable control
+(`core/clock.ts` `CLOCK_INITIAL_SECONDS` / `CLOCK_INCREMENT_SECONDS` /
+`stepLadder`; a stepper snaps an off-ladder value to its nearest rung before
+moving). The readout *between* the keys is itself editable (`Stepper`'s opt-in
+`edit` prop): click it and type an exact value — `m:ss` or a bare second count
+(`parseClockSeconds`) — so any precise whole-second control is authorable, not
+only the rungs. It commits on Enter/blur, reverts to the last good value on a
+malformed entry, and focus selects-all so a click-and-type replaces cleanly. The
+ladder and the field are one control over one piece of state, so they never
+disagree. `Stepper` without `edit` stays a read-only `<output>` (board zoom, UI
+scale). The schema and both validation gates only require an integer
+`initialSeconds >= 1` / `incrementSeconds >= 0`, so off-ladder values are fully
+valid and savable — the ladder is a convenience, never the limit.
 
 ## Consequences
 

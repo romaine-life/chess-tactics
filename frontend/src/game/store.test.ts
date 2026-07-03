@@ -81,6 +81,49 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().levelId).toBe('lvl-7');
   });
 
+  it('resumeMatch restores a saved board and reads as resumable for its level', () => {
+    // A real (full-board) game stands in for the saved match; label it as a campaign
+    // level so the fresh-vs-resume gate has a levelId to key on.
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    const s = useSkirmish.getState();
+    const saved = {
+      game: s.game, seed: s.seed, tick: s.tick, log: s.log, objective: s.objective,
+      objectiveCtx: s.objectiveCtx, turnsElapsed: s.turnsElapsed, levelId: 'lvl-9', clock: s.clock,
+    };
+    // Simulate a reload wiping the singleton to a different, unrelated game.
+    vi.clearAllTimers();
+    useSkirmish.getState().newSkirmish({ seed: 123 });
+    expect(useSkirmish.getState().levelId).toBeNull();
+
+    useSkirmish.getState().resumeMatch(saved);
+    const r = useSkirmish.getState();
+    expect(r.started).toBe(true);
+    expect(r.levelId).toBe('lvl-9');
+    expect(r.game).toEqual(saved.game);
+    expect(r.selectedId).not.toBeNull(); // a player piece is reselected
+    expect(shouldStartFreshSkirmish(r, 'lvl-9')).toBe(false); // gate now says "resume"
+    expect(shouldStartFreshSkirmish(r, 'other')).toBe(true); // a different level still starts fresh
+  });
+
+  it('resumeMatch re-stages the enemy reply that a reload interrupts', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    const moves = useSkirmish.getState().movesForSelected();
+    useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+    expect(useSkirmish.getState().game.turn).toBe('enemy'); // reply staged on a timer
+
+    const s = useSkirmish.getState();
+    const saved = {
+      game: s.game, seed: s.seed, tick: s.tick, log: s.log, objective: s.objective,
+      objectiveCtx: s.objectiveCtx, turnsElapsed: s.turnsElapsed, levelId: s.levelId, clock: s.clock,
+    };
+    vi.clearAllTimers(); // a page reload kills the pending reply — the soft-lock this guards
+    useSkirmish.getState().resumeMatch(saved);
+    expect(useSkirmish.getState().game.turn).toBe('enemy'); // reply re-staged
+
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game.turn).toBe('player'); // enemy answered; turn handed back
+  });
+
   it('newSkirmish computes kingSide uniformly — free games field the King on the enemy side', () => {
     useSkirmish.getState().newSkirmish({ seed: 5 });
     expect(useSkirmish.getState().objectiveCtx.kingSide).toBe('enemy');
