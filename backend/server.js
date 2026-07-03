@@ -34,6 +34,12 @@ const BGM_CACHE_TTL_MS = 5 * 60 * 1000;
 let bgmCache = { tracks: null, expiry: 0 };
 let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode only)
 
+// Game Lab runs carry whole recorded-game batches (validateLabRun allows up to
+// ~8 MB of JSON), far past the global 256kb ceiling. Mount their larger parser
+// first: once it has consumed the body, the global parser below sees the
+// request as already read and skips it, so every other route keeps the 256kb
+// limit.
+app.use('/api/lab-runs', express.json({ limit: '10mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -147,6 +153,24 @@ const MIGRATIONS = [
         display_name text,
         updated_at   timestamptz NOT NULL DEFAULT now()
       );
+    `,
+  },
+  {
+    version: 6,
+    name: 'game lab runs',
+    // Account-scoped Game Lab run archive: append-only run documents. `meta` is
+    // the small list-view summary (listing never returns `body`); `body` is the
+    // full run payload, fetched per run. The composite index serves the
+    // owner-scoped newest-first listing.
+    sql: `
+      CREATE TABLE IF NOT EXISTS lab_runs (
+        id          text        PRIMARY KEY,
+        owner_email text        NOT NULL,
+        meta        jsonb       NOT NULL,
+        body        jsonb       NOT NULL,
+        created_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS lab_runs_owner_idx ON lab_runs (owner_email, created_at DESC);
     `,
   },
 ];
@@ -1712,6 +1736,111 @@ app.put('/api/campaign-workspace', async (req, res) => {
     res.status(200).json({ ok: true, campaigns: raw.campaigns.length, updated_at: updatedAt });
   } catch (error) {
     dbUnavailable(res, 'campaign workspace write failed', error, 'workspace_unavailable');
+  }
+});
+
+// Game Lab run persistence: account-scoped, append-only run documents in the
+// Postgres `lab_runs` table. `meta` is the small list-view summary; `body` is
+// the full run payload (list responses never include it). Every query filters
+// by owner_email so a user can never read or delete another user's run.
+const LAB_RUN_BODY_MAX_JSON_CHARS = 8_000_000;
+
+function validateLabRun(raw) {
+  if (!raw.meta || typeof raw.meta !== 'object' || Array.isArray(raw.meta)) return 'meta must be an object';
+  if (!raw.body || typeof raw.body !== 'object' || Array.isArray(raw.body)) return 'body must be an object';
+  if (JSON.stringify(raw.body).length > LAB_RUN_BODY_MAX_JSON_CHARS) return 'body_too_large';
+  return null;
+}
+
+async function dbListLabRuns(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, meta, created_at FROM lab_runs WHERE owner_email = $1 ORDER BY created_at DESC LIMIT 100',
+    [ownerEmail],
+  );
+  return rows;
+}
+
+async function dbGetLabRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, meta, body, created_at FROM lab_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rows[0] || null;
+}
+
+async function dbInsertLabRun(ownerEmail, id, meta, body) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO lab_runs (id, owner_email, meta, body)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb)
+     RETURNING created_at`,
+    [id, ownerEmail, JSON.stringify(meta), JSON.stringify(body)],
+  );
+  return rows[0].created_at;
+}
+
+async function dbDeleteLabRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rowCount } = await pool.query(
+    'DELETE FROM lab_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rowCount > 0;
+}
+
+app.get('/api/lab-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ runs: await dbListLabRuns(user.email) });
+  } catch (error) {
+    dbUnavailable(res, 'lab run list failed', error, 'lab_runs_unavailable');
+  }
+});
+
+app.post('/api/lab-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const validationError = validateLabRun(raw);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_lab_run', details: validationError });
+    return;
+  }
+  const id = crypto.randomUUID();
+  try {
+    const createdAt = await dbInsertLabRun(user.email, id, raw.meta, raw.body);
+    res.status(200).json({ ok: true, id, created_at: createdAt });
+  } catch (error) {
+    dbUnavailable(res, 'lab run write failed', error, 'lab_runs_unavailable');
+  }
+});
+
+app.get('/api/lab-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetLabRun(user.email, req.params.id);
+    if (!run) { res.status(404).json({ error: 'run_not_found' }); return; }
+    res.status(200).json({ id: run.id, meta: run.meta, body: run.body, created_at: run.created_at });
+  } catch (error) {
+    dbUnavailable(res, 'lab run read failed', error, 'lab_runs_unavailable');
+  }
+});
+
+// Idempotent: deleting an unknown (or another owner's) run still answers
+// {ok:true} — the owner filter in dbDeleteLabRun means it simply deletes
+// nothing in that case.
+app.delete('/api/lab-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    await dbDeleteLabRun(user.email, req.params.id);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    dbUnavailable(res, 'lab run delete failed', error, 'lab_runs_unavailable');
   }
 });
 
