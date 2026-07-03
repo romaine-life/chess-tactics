@@ -5,7 +5,7 @@
 
 import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, UnitFacing, Vec, Winner } from './types';
 import type { Rng } from './rng';
-import { buildTerrainIndex, canTraverse, elevationAt, type TerrainIndex } from './terrain';
+import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
 
 const KNIGHT: ReadonlyArray<readonly [number, number]> = [
@@ -95,6 +95,11 @@ function blockedByTerrain(env: MoveEnv | undefined, originElev: number, x: numbe
   return !!env?.terrain && !canTraverse(env.terrain, originElev, x, y);
 }
 
+/** Whether terrain in `env` halts a multi-square move that enters (x, y). */
+function haltsTravelAt(env: MoveEnv | undefined, x: number, y: number): boolean {
+  return !!env?.terrain && haltsTravel(env.terrain, x, y);
+}
+
 function defaultPawnForward(piece: Piece): UnitFacing {
   return piece.side === 'enemy' ? 'south' : 'north';
 }
@@ -146,6 +151,7 @@ function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs:
         break;
       }
       moves.push({ x, y });
+      if (haltsTravelAt(env, x, y)) break; // water: the ray may end here, not pass
     }
   }
   return moves;
@@ -177,7 +183,8 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
     moves.push({ x: oneX, y: oneY });
     const twoX = piece.x + forwardX * 2;
     const twoY = piece.y + forwardY * 2;
-    if (onPawnStart(piece) && inBounds(twoX, twoY, size) && !pieceAt(pieces, twoX, twoY) && !blockedByTerrain(env, originElev, twoX, twoY)) {
+    // The double step passes through the one-step square, so water there halts it.
+    if (onPawnStart(piece) && !haltsTravelAt(env, oneX, oneY) && inBounds(twoX, twoY, size) && !pieceAt(pieces, twoX, twoY) && !blockedByTerrain(env, originElev, twoX, twoY)) {
       moves.push({ x: twoX, y: twoY });
     }
   }
@@ -259,8 +266,10 @@ export function sideInCheck(state: GameState, side: Side, env?: MoveEnv): boolea
 
 /**
  * All legal destinations for a piece (excludes obstacles, which never move).
- * Pass `env.terrain` to apply terrain movement effects (cliff/rock barriers and
- * elevation limits); omit it for pure chess movement. Water is passable.
+ * Pass `env.terrain` to apply terrain movement effects (cliff/rock barriers,
+ * elevation limits, and water halting travel — a slide may end on water but
+ * never pass it, knights hop over, and leaving water is unrestricted); omit it
+ * for pure chess movement.
  *
  * A side that fields a king may not make any move that leaves one of its kings
  * in check: the king can't step into check, a pinned piece can't abandon the
@@ -290,10 +299,11 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
 /**
  * Squares a piece threatens (basis for the enemy threat telegraph overlay and
  * for check detection). Pass `env.terrain` to make threats respect the board the
- * same way movement does: a slider's ray stops at a terrain wall and a stepper
- * can't threaten across an impassable/un-climbable tile. Omit it for pure-chess
- * threats. A piece still "controls" the first occupied square on a ray (that
- * piece is threatened), so a king still guards its neighbours for opposition.
+ * same way movement does: a slider's ray stops at a terrain wall (and may end on
+ * but never pass water) and a stepper can't threaten across an impassable/
+ * un-climbable tile. Omit it for pure-chess threats. A piece still "controls"
+ * the first occupied square on a ray (that piece is threatened), so a king
+ * still guards its neighbours for opposition.
  */
 export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Vec[] {
   if (!piece || !piece.alive || isObstacle(piece)) return [];
@@ -325,6 +335,7 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
       if (blockedByTerrain(env, originElev, x, y)) break; // a terrain wall ends the threat ray
       out.push({ x, y });
       if (pieceAt(pieces, x, y)) break;
+      if (haltsTravelAt(env, x, y)) break; // water: threatened itself, nothing beyond
     }
   }
   return out;

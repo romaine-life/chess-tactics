@@ -5,7 +5,7 @@ import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketB
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { BoardSize, GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
 import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
-import { canTraverse, elevationAt } from '../core/terrain';
+import { canTraverse, elevationAt, haltsTravel } from '../core/terrain';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
@@ -238,7 +238,9 @@ function addBlockedStep(
     out.set(`${x},${y}`, { x, y });
     return false;
   }
-  return !occ;
+  // Mirror rules.ts rayMoves: water may be entered but ends the walk, so squares
+  // beyond it are neither reachable nor a "blocked by X" misattribution.
+  return !occ && !(env.terrain && haltsTravel(env.terrain, x, y));
 }
 
 function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env: ReturnType<typeof useSkirmish.getState>['env']): Vec[] {
