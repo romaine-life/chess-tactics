@@ -40,8 +40,8 @@ function SeatNumber({ label, value, onCommit, onReset, atSaved }: {
       <span className="pl-ctl-label">{label}</span>
       <span className="pl-num-row">
         <span className="pl-stepper">
-          <button type="button" className="pl-step" title="−1 (Shift: −10)" aria-label={`decrease ${label}`}
-            onClick={(ev) => onCommit(value - (ev.shiftKey ? 10 : 1))}>−</button>
+          <button type="button" className="pl-step pl-step--minus" title="−1 (Shift: −10)" aria-label={`decrease ${label}`}
+            onClick={(ev) => onCommit(value - (ev.shiftKey ? 10 : 1))} />
           <input
             type="number"
             value={value}
@@ -52,8 +52,8 @@ function SeatNumber({ label, value, onCommit, onReset, atSaved }: {
               if (v !== '' && Number.isFinite(Number(v))) onCommit(Number(v));
             }}
           />
-          <button type="button" className="pl-step" title="+1 (Shift: +10)" aria-label={`increase ${label}`}
-            onClick={(ev) => onCommit(value + (ev.shiftKey ? 10 : 1))}>+</button>
+          <button type="button" className="pl-step pl-step--plus" title="+1 (Shift: +10)" aria-label={`increase ${label}`}
+            onClick={(ev) => onCommit(value + (ev.shiftKey ? 10 : 1))} />
         </span>
         <button type="button" className="pl-mini-reset" title={`Reset ${label} to saved`} aria-label={`reset ${label}`}
           disabled={atSaved} onClick={onReset}>↺</button>
@@ -378,14 +378,25 @@ const PL_CSS = `
 .pl-stepper { flex: 1 1 auto; min-width: 0; display: flex; height: 34px;
   border: 1px solid #2a3c5e; border-radius: 6px; overflow: hidden; background: #101a2e; }
 .pl-stepper input { flex: 1 1 auto; min-width: 0; text-align: center; font: inherit; font-size: 15px;
-  color: #eaf3ff; background: transparent; border: 0; }
+  color: #eaf3ff; background: transparent; border: 0;
+  /* Digits have no descenders, so a centered box floats them ~1px above true middle.
+     Nudge down so the number sits on the same line as the geometric −/+ bars. */
+  transform: translateY(1px); }
 .pl-stepper input::-webkit-outer-spin-button, .pl-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .pl-stepper input[type=number] { appearance: textfield; -moz-appearance: textfield; }
-.pl-step { flex: none; width: 38px; padding: 0; font-size: 18px; line-height: 1; cursor: pointer;
-  background: #16233f; color: #cfe3ff; border: 0; display: grid; place-items: center; }
+/* Draw − and + with pseudo-element bars, not font glyphs: system-font "−" (U+2212) and "+"
+   sit at different heights within the line box, so glyph-centered steppers look misaligned.
+   Geometric bars centered at 50%/50% align to each other and to the number pixel-perfectly. */
+.pl-step { flex: none; width: 38px; padding: 0; cursor: pointer; position: relative;
+  background: #16233f; border: 0; }
 .pl-step:first-child { border-right: 1px solid #2a3c5e; }
 .pl-step:last-child { border-left: 1px solid #2a3c5e; }
-.pl-step:hover { background: #1e3054; color: #eaf3ff; }
+.pl-step:hover { background: #1e3054; }
+.pl-step::before { content: ''; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px;
+  transform: translate(-50%, -50%); background: #cfe3ff; border-radius: 1px; }
+.pl-step--plus::after { content: ''; position: absolute; left: 50%; top: 50%; width: 2px; height: 13px;
+  transform: translate(-50%, -50%); background: #cfe3ff; border-radius: 1px; }
+.pl-step:hover::before, .pl-step--plus:hover::after { background: #eaf3ff; }
 
 /* Slider + a small exact-entry box share the stepper's footprint. */
 .pl-slider { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 34px; }
