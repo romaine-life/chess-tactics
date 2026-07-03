@@ -510,7 +510,7 @@ h1 {
   inline-size: 100%;
   display: grid;
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
-  gap: clamp(6px, .72vw, 12px);
+  gap: clamp(6px, calc(var(--layout-vw, 100vw) * .0072), 12px);
   min-block-size: 0;
   /* .menu-layer.main-menu-layer is pointer-events:none (so the rain stays click-through);
      the old menu re-enabled interaction on .main-menu-left/right. Re-enable it for the whole
@@ -1345,7 +1345,10 @@ h1 {
      only for hero moments. Sized to seat the ~54px content with an ADR-0031
      --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
      + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
-  --app-header-h: clamp(84px, 5vw, 88px);
+  /* vw-relative pieces of the chrome family use --layout-vw (zoom-corrected viewport
+     width, ui/shell/layoutViewport.ts) so browser zoom magnifies them instead of
+     re-flowing; identical to plain vw at 100% zoom. */
+  --app-header-h: clamp(84px, calc(var(--layout-vw, 100vw) * .05), 88px);
   /* motion — duration + easing tokens (ADR-0043, revised by ADR-0046). Map MOTION ROLES
      onto these; don't hand-pick ms per element. Just TWO durations, by design:
        fast = instant feedback (hover / toggle / focus / filter swap),
@@ -10689,7 +10692,7 @@ button.tileset-relationship-cell {
   --settings-action-label: var(--ds-text-sm);
   block-size: 100%;
   display: grid;
-  gap: clamp(6px, .72vw, 12px);
+  gap: clamp(6px, calc(var(--layout-vw, 100vw) * .0072), 12px);
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
   inline-size: 100%;
   max-inline-size: none;
@@ -10821,7 +10824,7 @@ button.tileset-relationship-cell {
   align-items: center;
   block-size: var(--app-header-h);
   display: grid;
-  gap: clamp(10px, 1.1vw, 18px);
+  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .011), 18px);
   /* The DEFAULT bar is two sections: brand (1fr, leading) · account cluster (auto,
      trailing) — the invariant chrome every screen carries (ADR-0042). The cluster is the
      last DOM child, so it lands in this final column flush to the right padding edge.
@@ -10877,18 +10880,18 @@ button.tileset-relationship-cell {
   text-shadow: inherit;
   color: #eef8ff;
   display: inline-grid;
-  gap: clamp(10px, 1vw, 16px);
-  grid-template-columns: clamp(40px, 4vw, 54px) minmax(0, 1fr);
+  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px);
+  grid-template-columns: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px) minmax(0, 1fr);
   min-width: 0;
   text-decoration: none;
 }
 
 .brand-lockup-mark {
   display: block;
-  height: clamp(40px, 4vw, 54px);
+  height: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px);
   image-rendering: auto;
   object-fit: contain;
-  width: clamp(40px, 4vw, 54px);
+  width: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px);
 }
 
 .brand-lockup-copy {
@@ -11179,12 +11182,20 @@ button.tileset-relationship-cell {
      show past the shell edge. Re-tune via the dressing room (MainMenuViewer) — it bakes these
      same shared selectors. */
   grid-template-columns: 487px minmax(0, 1fr);
-  gap: clamp(8px, .85vw, 14px);
+  gap: clamp(8px, calc(var(--layout-vw, 100vw) * .0085), 14px);
   /* Body (rail + content) is a centred contained block beneath the full-bleed top
-     bar, so rows don't stretch the full width while the title bar stays flush. */
-  inline-size: 100%;
-  max-inline-size: max(clamp(900px, 88vw, 1240px), 487px);
-  justify-self: center;
+     bar, so rows don't stretch the full width while the title bar stays flush.
+     Centred with an EXPLICIT margin computed from --layout-vw (the width the window
+     would have at 100% browser zoom — shell/layoutViewport.ts) instead of
+     justify-self:center against the live viewport. At 100% zoom the two are
+     pixel-identical (--layout-vw == 100vw). Under browser zoom the margin — like
+     every other px in this chrome, e.g. the rail's fixed -230px offset below —
+     simply magnifies, so the whole composition scales as ONE piece instead of
+     re-centring against the shrunken viewport and shoving the rail sideways. */
+  --settings-shell-w: max(clamp(900px, calc(var(--layout-vw, 100vw) * .88), 1240px), 487px);
+  inline-size: var(--settings-shell-w);
+  margin-inline-start: max(0px, calc((var(--layout-vw, 100vw) - var(--settings-shell-w)) / 2));
+  justify-self: start;
   min-height: 0;
   overflow: visible;
 }
@@ -11250,8 +11261,8 @@ button.tileset-relationship-cell {
 .settings-rail-frame {
   align-content: start;
   display: grid;
-  gap: clamp(9px, .8vw, 13px);
-  padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
+  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  padding: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px) clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
   /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
      sit identically (the menu is the alignment reference). Re-tune in the dressing room. */
   transform: translate(-230px, -21px);
@@ -11382,7 +11393,7 @@ button.tileset-relationship-cell {
      which must stay put while row 2 scrolls. It collapses to 0 when there's no header. */
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
+  padding: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px) clamp(14px, calc(var(--layout-vw, 100vw) * .015), 24px);
 }
 
 /* Rows-box placement, baked from the Settings dressing room: widened, padding tightened to the
@@ -11401,7 +11412,7 @@ button.tileset-relationship-cell {
 
 .settings-panel-heading {
   align-content: center;
-  block-size: clamp(64px, 6vw, 80px);
+  block-size: clamp(64px, calc(var(--layout-vw, 100vw) * .06), 80px);
   display: grid;
   gap: 3px;
   inline-size: min(100%, 880px);
@@ -11436,7 +11447,7 @@ button.tileset-relationship-cell {
   align-content: start;
   display: grid;
   /* Inter-section spacing — looser than the row gap so groups read as distinct. */
-  gap: clamp(14px, 1.3vw, 22px);
+  gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
   min-width: 0;
   padding-block-end: 4px;
   /* Pure opacity fade (no movement) = reduced-motion-safe, so NOT gated (ADR-0043); many
@@ -11464,7 +11475,7 @@ button.tileset-relationship-cell {
 /* Labeled row groups: an uppercase eyebrow over a tight cluster of rows. */
 .settings-section {
   display: grid;
-  gap: clamp(5px, .5vw, 9px);
+  gap: clamp(5px, calc(var(--layout-vw, 100vw) * .005), 9px);
 }
 
 .settings-section-title {
@@ -12274,7 +12285,12 @@ button.tileset-relationship-cell {
 
   .settings-shell {
     grid-template-columns: 1fr;              /* default single column (the menu is rail-only) */
+    /* Neutralise the desktop centring (explicit width + --layout-vw margin) — the
+       narrow layout is a plain full-width column, exactly as before the zoom fix. */
+    inline-size: 100%;
     max-inline-size: 100%;
+    margin-inline-start: 0;
+    justify-self: stretch;
     gap: 10px;
     overflow: hidden auto;                   /* short viewport scrolls vertically, never sideways */
     -webkit-overflow-scrolling: touch;
