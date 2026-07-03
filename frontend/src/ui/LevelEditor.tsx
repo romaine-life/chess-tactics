@@ -360,6 +360,19 @@ const LE_FACTION_LABELS: Record<UnitPalette, string> = {
   emerald: 'Emerald',
 };
 const leUnitAssets = productionUnitAssets.length ? productionUnitAssets : unitAssets;
+const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
+  pawn: 1,
+  knight: 3,
+  bishop: 3,
+  rook: 5,
+  queen: 9,
+  king: 0,
+};
+const MATERIAL_VALUE_NOTE = 'P=1 / N,B=3 / R=5 / Q=9';
+const materialPointsForUnitId = (unitId: string): number => {
+  const type = (leUnitAssets.find((unit) => unit.id === unitId) ?? unitAssets.find((unit) => unit.id === unitId))?.family;
+  return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
+};
 
 // The zone types the editor paints (ADR-0050): the two placement pools + the objective/goal zone.
 // The schema has more (enemy-threat/falling-rock) but only these three have consumers today, so
@@ -1026,6 +1039,11 @@ export function LevelEditor(): ReactElement {
     for (const unit of Object.values(boardUnits)) counts[unit.faction] += 1;
     return counts;
   }, [boardUnits]);
+  const boardFactionMaterialValues = useMemo<Record<UnitPalette, number>>(() => {
+    const totals = Object.fromEntries(UNIT_PALETTES.map((faction) => [faction, 0])) as Record<UnitPalette, number>;
+    for (const unit of Object.values(boardUnits)) totals[unit.faction] += materialPointsForUnitId(unit.unitId);
+    return totals;
+  }, [boardUnits]);
   const presentFactions = useMemo(
     () => UNIT_PALETTES.filter((faction) => boardFactionCounts[faction] > 0),
     [boardFactionCounts],
@@ -1533,6 +1551,23 @@ export function LevelEditor(): ReactElement {
             <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
               <strong>{canSave ? 'Ready to save' : saveBlockedMessage || saveStateLabel}</strong>
               {canSave ? <span>{isOfficialTarget ? 'Publishing will update the official campaigns.' : 'The current board has unsaved changes.'}</span> : <span>{saveBlockedDetail}</span>}
+            </div>
+            <div className="le-material-values" aria-label="Team material point values">
+              <div className="le-material-values-head">
+                <strong>Material</strong>
+                <span>{MATERIAL_VALUE_NOTE}</span>
+              </div>
+              <dl>
+                {UNIT_PALETTES.map((faction) => (
+                  <div key={faction}>
+                    <dt>
+                      <i className={`le-faction-dot is-${faction}`} aria-hidden="true" />
+                      <span>{LE_FACTION_LABELS[faction]}</span>
+                    </dt>
+                    <dd>{boardFactionMaterialValues[faction]}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
             <div className="le-status-log" role="log" aria-label="Save status log">
               {statusLog.length ? statusLog.map((entry) => (
