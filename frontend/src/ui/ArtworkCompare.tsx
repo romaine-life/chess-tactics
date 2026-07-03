@@ -223,6 +223,13 @@ export function ArtworkCompare(): ReactElement {
   const pickRight = (idx: number) => setCfg((c) => ({ ...c, right: { idx, css: c.opts[idx]?.css ?? '' } }));
   const setLeftCss = (css: string) => setCfg((c) => ({ ...c, left: { ...c.left, css } }));
   const setRightCss = (css: string) => setCfg((c) => ({ ...c, right: { ...c.right, css } }));
+  // Reset to the pane's baseline (ADR-0057): the curated option's baked css, or '' = the
+  // committed app CSS. Drifted css rides the lcss/rcss URL params, so without this the only
+  // revert was picking a different option and back; the URL effect drops the param again.
+  const resetLeftCss = () => setCfg((c) => ({ ...c, left: { ...c.left, css: c.opts[c.left.idx]?.css ?? '' } }));
+  const resetRightCss = () => setCfg((c) => ({ ...c, right: { ...c.right, css: c.opts[c.right.idx]?.css ?? '' } }));
+  const leftDrifted = left.css !== (opts[left.idx]?.css ?? '');
+  const rightDrifted = right.css !== (opts[right.idx]?.css ?? '');
   const reload = () => setReloadKey((k) => k + 1);
 
   const leftLive = useMemo(() => parseSource(opts[left.idx]?.src ?? '').kind === 'live', [opts, left.idx]);
@@ -239,12 +246,18 @@ export function ArtworkCompare(): ReactElement {
 
       <footer className="ac-editor">
         <div className="ac-edit-col">
-          <label className="ac-tag" htmlFor="ac-lcss">LEFT CSS {leftLive ? '' : '(left pane is art — pick a Live option to apply)'}</label>
+          <div className="ac-edit-head">
+            <label className="ac-tag" htmlFor="ac-lcss">LEFT CSS {leftLive ? '' : '(left pane is art — pick a Live option to apply)'}</label>
+            <button type="button" className="ac-reset" onClick={resetLeftCss} disabled={!leftDrifted} title="Restore this pane's baked CSS baseline">↺ Reset</button>
+          </div>
           <textarea id="ac-lcss" value={left.css} onChange={(e) => setLeftCss(e.target.value)} spellCheck={false}
             placeholder=".brand-lockup-mark { height: 46px; width: 46px; }" />
         </div>
         <div className="ac-edit-col">
-          <label className="ac-tag" htmlFor="ac-rcss">RIGHT CSS {rightLive ? '' : '(right pane is art — pick a Live option to apply)'}</label>
+          <div className="ac-edit-head">
+            <label className="ac-tag" htmlFor="ac-rcss">RIGHT CSS {rightLive ? '' : '(right pane is art — pick a Live option to apply)'}</label>
+            <button type="button" className="ac-reset" onClick={resetRightCss} disabled={!rightDrifted} title="Restore this pane's baked CSS baseline">↺ Reset</button>
+          </div>
           <textarea id="ac-rcss" value={right.css} onChange={(e) => setRightCss(e.target.value)} spellCheck={false}
             placeholder=".brand-lockup-mark { height: 50px; width: 50px; }" />
         </div>
@@ -283,6 +296,11 @@ const AC_CSS = `
 .ac-art-img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: pixelated; }
 .ac-editor { flex: 0 0 auto; display: flex; gap: 12px; padding: 10px 12px; background: #0b1220; border-top: 1px solid #1b2740; }
 .ac-edit-col { flex: 1 1 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ac-edit-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ac-reset { flex: none; font-size: 11px; padding: 2px 8px; cursor: pointer;
+  background: #0f1930; color: #cfe3ff; border: 1px solid #2a3c5e; border-radius: 4px; }
+.ac-reset:hover:not(:disabled) { background: #17223a; }
+.ac-reset:disabled { opacity: .4; cursor: default; }
 .ac-editor textarea { width: 100%; height: 60px; resize: vertical; box-sizing: border-box;
   font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.4;
   color: #dbe9ff; background: #0a0f1c; border: 1px solid #2a3c5e; border-radius: 4px; padding: 8px; }

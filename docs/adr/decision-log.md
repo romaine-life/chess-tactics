@@ -81,3 +81,4 @@ Small, low-risk calls not worth a full record:
   (gear · mute · account), so the Level Editor's existing `‹ Back`/`‹ Catalog` and this
   one now share one consistent spot. Fits ADR-0042's actions slot (which already lists
   `‹ Catalog`) with no invariant change.
+| [0057](0057-studio-tuning-surfaces-ship-reset-to-baseline.md) | Every Studio tuning surface ships Reset restoring the COMMITTED baseline at the selected-item grain, beside Save/Copy; baselines derived (import/measure/fetch), never hand-copied without a source note; drafts as overrides where practical so external changes flow through; "zero out" is never Reset; VIEW state (zoom/seed/search/selection) exempt. Audit closed the gaps: NineSliceEditor "Reset to saved config", ArtworkCompare per-pane CSS reset, DoodadEditor Load un-staled (cache: no-store) | accepted | 2026-07-03 |

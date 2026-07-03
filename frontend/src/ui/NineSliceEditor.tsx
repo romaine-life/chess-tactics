@@ -426,6 +426,23 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       setSaveMsg(j.ok ? `saved ${j.config} → ${j.written.join(', ')}${warn} · hard-refresh to see it${j.note ? ` (${j.note})` : ''}` : `error: ${j.error}`);
     } catch (e) { setSaveMsg(`error: ${String(e)}`); }
   };
+  // Reset to the COMMITTED baseline (ADR-0057): re-fetch the on-disk config and apply it.
+  // The d-pad '0' zeroes the knobs, which for most frames is NOT the saved state — this is
+  // the control that actually restores what ships. Zeros only when no config file exists.
+  const revertToSaved = async () => {
+    setSaveMsg('reverting…');
+    try {
+      const r = await fetch(`/__nine-slice/config?asset=${aid}`);
+      const j = await r.json();
+      if (j.ok && j.config) {
+        setEdits((prev) => ({ ...prev, [aid]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL } }));
+        setSaveMsg('reverted to the saved config');
+      } else {
+        setEdits((prev) => ({ ...prev, [aid]: DEFAULT_EDIT }));
+        setSaveMsg('no saved config for this frame — reverted to zeros');
+      }
+    } catch (e) { setSaveMsg(`error: ${String(e)}`); }
+  };
 
   return (
     <>
@@ -467,7 +484,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           <div style={ST.dpad}>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, -1)}>↑</button><div />
             <button type="button" style={ST.nb} onClick={() => nudge(-1, 0)}>←</button>
-            <button type="button" style={ST.nbReset} onClick={reset}>0</button>
+            <button type="button" style={ST.nbReset} onClick={reset} title="Zero all offsets — NOT the saved baseline; use ↺ Reset to saved below">0</button>
             <button type="button" style={ST.nb} onClick={() => nudge(1, 0)}>→</button>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, 1)}>↓</button><div />
           </div>
@@ -533,6 +550,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           {isDev && (
             <>
               <button type="button" style={ST.save} onClick={saveToDisk}>💾 Save to disk + regenerate (dev)</button>
+              <button type="button" style={ST.copy} onClick={revertToSaved} title="Restore this frame's committed config/nine-slice values">↺ Reset to saved config</button>
               {saveMsg && <div style={{ ...ST.hint, color: saveMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{saveMsg}</div>}
             </>
           )}

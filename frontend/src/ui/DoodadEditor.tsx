@@ -120,7 +120,10 @@ export function DoodadEditor(): ReactElement {
     setStatus('loading…');
     try {
       const safe = name.replace(/[^a-z0-9_-]/gi, '-');
-      const res = await fetch(`/assets/doodads/compositions/${safe}.json?t=${String(els.length)}`);
+      // no-store, not a query-string buster: the old `?t=<els.length>` could repeat a prior
+      // value and serve a stale composition right after Save — Load IS this editor's
+      // reset-to-saved (ADR-0057), so it must always read the current file.
+      const res = await fetch(`/assets/doodads/compositions/${safe}.json`, { cache: 'no-store' });
       if (!res.ok) { setStatus(`not found: ${safe}.json`); return; }
       const data = await res.json();
       if (data.tile) setTileId(data.tile);
