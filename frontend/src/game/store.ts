@@ -8,7 +8,7 @@ import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '..
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
-import { playArrival, playTerrain } from '../sfx';
+import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 
@@ -256,7 +256,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       .forEach((pc, i) => {
         const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
         playLandingSfx(env, pc.x, pc.y, delay, 0.7);
-        setTimeout(() => playArrival({ gain: 0.55 }), delay);
+        setTimeout(() => playArrival({ gain: ARRIVAL_BAKED.gain }), delay);
       });
   },
 

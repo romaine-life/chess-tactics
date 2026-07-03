@@ -44,11 +44,14 @@ Chosen: **codify the Reset contract**. Every Studio surface with TUNING state mu
    per-knob ↺ via `SliderRow`'s `dflt` / `ctlReset` primitives in
    `frontend/src/ui/dressing/SliderRow.tsx`, then per-element, then reset-all).
 3. **The baseline must be derived, not transcribed**: import the committed module
-   (PropLab ← `propSeats.json`, PortraitEditor ← `portraitCrops.json`), measure the live
+   (PropLab ← `propSeats.json`, PortraitEditor ← `portraitCrops.json`; SfxLibraryStudio ←
+   `ARRIVAL_BAKED` in `sfx.ts`, the same constant the game consumes), measure the live
    surface (SurfaceDressingRoom), or fetch the on-disk config (NineSliceEditor ←
-   `GET /__nine-slice/config`). A hand-mirrored constant (SfxLibraryStudio's
-   `DEFAULT_ARRIVAL`, PagesLibraryStudio's `MM_LIVE`) is a last resort and must carry a
-   comment naming the shipped source it mirrors — it rots silently otherwise.
+   `GET /__nine-slice/config`). If a baseline can ONLY be a hand-mirrored constant
+   because the shipped value lives somewhere unimportable (CSS source — PagesLibraryStudio's
+   `MM_LIVE` mirrors `style.css`), it must ship a derive-and-compare test that reads the
+   shipped source and fails when they disagree (`ui/dressing/mmLive.test.ts`). A bare
+   mirrored constant with only a comment is not enough — it rots silently.
 4. **Reset must compose with external changes.** Drafts live as OVERRIDES on top of the
    committed baseline where practical (PropLab's model: equal overrides auto-drop, so a
    save from another tab or a git pull flows through instead of being shadowed). At
@@ -68,7 +71,15 @@ Rejected the status quo: it is the loop this ADR exists to end.
   ArtworkCompare gained per-pane "↺ Reset" to the curated/baked CSS baseline, and
   DoodadEditor's Load (its reset-to-saved) now fetches `cache: 'no-store'` so it can no
   longer serve a stale composition right after Save.
-- Cost: new tuning surfaces must wire a baseline source before they ship controls.
+- Good: the two hand-mirrored baselines the audit flagged as rot risks are now closed.
+  The SFX panel's arrival baseline derives from a new `ARRIVAL_BAKED` constant in
+  `sfx.ts` that `playArrival` + the deploy roll-call (`game/store.ts`) actually consume,
+  so it is the single source. The Pages/menu tuner's `MM_LIVE` moved to
+  `ui/dressing/mmLive.ts` with `mmLive.test.ts`, which re-derives every value out of
+  `style.css` and fails CI the moment the shipped rule and the constant disagree.
+- Cost: new tuning surfaces must wire a baseline source before they ship controls. Where
+  a baseline can only be a mirrored constant (can't import the shipped value), it needs
+  a derive-and-compare test like `mmLive.test.ts` so it can't rot silently.
 
 ## Pros and Cons of the Options
 

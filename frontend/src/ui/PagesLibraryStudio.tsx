@@ -7,6 +7,7 @@ import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
 import { ICON_TREATS, iconTreatFilter, type IconTreat } from './dressing/iconTreat';
+import { MM_LIVE } from './dressing/mmLive';
 
 // Read-only "Pages" catalog (ADR-0029): each app screen is a card; "View Selected" opens a
 // live Viewer. Selection is owned by the host (TilePreview). Cards reuse the shared studio
@@ -60,15 +61,13 @@ const STONE_SURFACES = [
 
 // Icon-contrast treatments live in ./dressing/iconTreat (shared with the Settings tuner).
 
-// Live-menu baselines (what actually ships — the settings-twin chrome). A control emits an
-// override ONLY when it differs from these, so an untouched panel renders pixel-identical to the
-// real menu (the dressing-room principle). The menu reuses the Settings-tab chrome: tabs are
-// `.settings-tab.main-menu-mode-tab` in a `.settings-rail-frame` inside `.settings-shell`.
-// These reflect the BAKED menu in style.css, so the tuner opens matching what ships. railW/textX/
-// btnX/btnY are baked onto the SHARED .settings-* rules (width 487, label +37, rail offset
-// -230/-21), so the Settings rail tabs stay faithful too — the bake below targets those same
-// shared selectors. Re-tuning here updates both surfaces; reset returns to these shipped values.
-const MM_LIVE = { btnH: 56, railW: 487, gap: 11, icon: 64, textX: 37, btnX: -230, btnY: -21 } as const;
+// Live-menu baselines (what actually ships — the settings-twin chrome) come from
+// ./dressing/mmLive, whose test derives every value back out of style.css (ADR-0057).
+// A control emits an override ONLY when it differs from these, so an untouched panel
+// renders pixel-identical to the real menu (the dressing-room principle). The menu reuses
+// the Settings-tab chrome: tabs are `.settings-tab.main-menu-mode-tab` in a
+// `.settings-rail-frame` inside `.settings-shell`; the bake targets those SHARED
+// selectors, so re-tuning here updates Settings' rail too and Reset returns to shipped.
 
 // Functional viewer: the LIVE main menu shown by iframing the REAL "/" route (ADR-0029 req 4 —
 // exercise the real component, never a dead image). Iframing — the same shape the Settings dressing

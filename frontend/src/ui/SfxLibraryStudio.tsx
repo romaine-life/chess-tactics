@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import type { TerrainType } from '../core/types';
-import { AUTHORED_SAMPLE_KEYS, auditionSampleRaw, authoredSampleKeyFor, isSampleReady, loadAuthoredSamples, previewArrival, previewSample, previewTerrain, type SampleKey } from '../sfx';
+import { ARRIVAL_BAKED, AUTHORED_SAMPLE_KEYS, auditionSampleRaw, authoredSampleKeyFor, isSampleReady, loadAuthoredSamples, previewArrival, previewSample, previewTerrain, type SampleKey } from '../sfx';
 import { sfxSampleWaveform, sfxSampleWaveformCached } from '../sfxWaveform';
 import { ASSIGNABLE_TERRAINS, SFX_ASSETS, type SfxAsset } from './sfxCatalog';
 
@@ -12,8 +12,9 @@ const ARRIVAL_STORE_KEY = 'chess-tactics-sfx-arrival-v1';
 
 type FiringMode = 'per-unit' | 'once';
 interface ArrivalSettings { sound: string; volume: number; firing: FiringMode }
-// Current baked-in behaviour: the 'arrival' set, ~0.55 call gain, one thump per unit.
-const DEFAULT_ARRIVAL: ArrivalSettings = { sound: 'arrival', volume: 55, firing: 'per-unit' };
+// Baseline DERIVED from the shipped source (ADR-0057): ARRIVAL_BAKED in sfx.ts is what
+// playArrival + the deploy roll-call actually use, so "Reset to current" can't drift.
+const DEFAULT_ARRIVAL: ArrivalSettings = { sound: ARRIVAL_BAKED.sample, volume: Math.round(ARRIVAL_BAKED.gain * 100), firing: ARRIVAL_BAKED.firing };
 
 function defaultAssignments(): Record<string, string> {
   const out: Record<string, string> = {};
