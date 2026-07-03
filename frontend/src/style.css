@@ -6465,6 +6465,7 @@ body { font-size: 17px; }
 .terrain-dirt { background: #7d6a4a; }
 .terrain-pebble { background: #9aa6ad; }
 .terrain-sand { background: #c8b87e; }
+.terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
 .ce-preview-frame {

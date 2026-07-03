@@ -8,7 +8,7 @@ import { solveSocketBoard } from '../core/tileBoardGenerator';
 import type { TerrainType } from '../core/types';
 import type { TileFamilyId } from '../core/tileSockets';
 
-const terrainToFamily: Record<TerrainType, TileFamilyId> = {
+const terrainToFamily: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
   grass: 'grass',
   road: 'stone',
   stone: 'stone',
@@ -103,7 +103,7 @@ describe('createSkirmish', () => {
   it('authors terrain that resolves to a legal socket board', () => {
     for (const seed of [1, 7, 13, 42, 99]) {
       const s = createSkirmish({ seed });
-      const terrainMap = s.terrain!.map((cell) => terrainToFamily[cell.terrain]);
+      const terrainMap = s.terrain!.map((cell) => cell.terrain === 'void' ? 'grass' : terrainToFamily[cell.terrain]);
       const board = solveSocketBoard({
         assets: tileAssets,
         terrainMap,

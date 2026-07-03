@@ -19,7 +19,7 @@ import { featureFrameSrc } from '../art/tileset';
 import { FENCE_ART_PENDING, featureMaskAt, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 
-const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
+const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
   grass: 'grass',
   road: 'stone',
   stone: 'stone',
@@ -31,6 +31,11 @@ const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
   pebble: 'pebble',
   sand: 'sand',
 };
+
+function terrainFamilyForGame(terrain: TerrainType | undefined): TileFamilyId | null {
+  if (!terrain || terrain === 'void') return null;
+  return TERRAIN_TO_FAMILY[terrain];
+}
 
 const tileAssetById = new Map(tileAssets.map((asset) => [asset.id, asset]));
 
@@ -78,7 +83,7 @@ function pieceImageSrc(piece: Piece): string | null {
 }
 
 function terrainMapForGame(game: GameState): TileFamilyId[] {
-  const byKey = new Map((game.terrain ?? []).map((cell) => [`${cell.x},${cell.y}`, TERRAIN_TO_FAMILY[cell.terrain]]));
+  const byKey = new Map((game.terrain ?? []).map((cell) => [`${cell.x},${cell.y}`, terrainFamilyForGame(cell.terrain)]));
   const map: TileFamilyId[] = [];
   for (let y = 0; y < game.size.rows; y += 1) {
     for (let x = 0; x < game.size.cols; x += 1) {
@@ -86,6 +91,10 @@ function terrainMapForGame(game: GameState): TileFamilyId[] {
     }
   }
   return map;
+}
+
+function voidTerrainKeys(game: GameState): Set<string> {
+  return new Set((game.terrain ?? []).filter((cell) => cell.terrain === 'void').map((cell) => `${cell.x},${cell.y}`));
 }
 
 function legacyFeatureMapForGame(game: GameState): Map<string, { kind: FeatureKind; material: FeatureMaterial }> | undefined {
@@ -137,6 +146,17 @@ function resolveSkirmishGroundCover(
   resolveGroundCover(result.cells, seed, (cell) =>
     painted.get(`${cell.x},${cell.y}`) ?? (hasPainted ? null : densityFieldAt(cell.x, cell.y, seed)),
   );
+  const voids = voidTerrainKeys(game);
+  if (voids.size > 0) {
+    for (const cell of result.cells) {
+      if (!voids.has(`${cell.x},${cell.y}`)) continue;
+      cell.asset = undefined;
+      cell.sideAsset = undefined;
+      cell.feature = undefined;
+      cell.groundCover = undefined;
+      cell.missing = undefined;
+    }
+  }
   return result;
 }
 
@@ -494,6 +514,7 @@ export function SkirmishBoard() {
           className="skirmish-board-surface"
           ariaLabel="Skirmish board"
           renderCellOverlay={({ cell }) => {
+            if (!cell.asset && !cell.missing) return null;
             const key = `${cell.x},${cell.y}`;
             const state = [
               moveSet.has(key) ? 'is-move' : '',

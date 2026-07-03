@@ -56,7 +56,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       key: `${cell.x}-${cell.y}`,
       x: cell.x,
       y: cell.y,
-      className: cell.missing ? 'is-missing' : '',
+      className: cell.missing ? 'is-missing' : !cell.asset ? 'is-empty' : '',
       data: {
         'data-asset-id': cell.asset?.id,
         'data-side-id': cell.sideAsset?.id,
@@ -77,9 +77,9 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
             />
           ) : null}
         </>
-      ) : (
+      ) : cell.missing ? (
         <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
-      ),
+      ) : null,
     };
   });
 

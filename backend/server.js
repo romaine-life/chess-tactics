@@ -1445,7 +1445,7 @@ function isLevelBody(body) {
 // ids stay the legacy set deliberately — they exist in the live DB / baked official.json,
 // and a rename would force a prod data migration (docs/migration-policy.md).
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
-const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble']);
+const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble', 'void']);
 const WORKSPACE_ZONE_TYPES = new Set(['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock']);
 const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
 const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
