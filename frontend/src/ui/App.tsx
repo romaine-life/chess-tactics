@@ -9,6 +9,7 @@ import { Settings } from './Settings';
 import { ArtworkCompare } from './ArtworkCompare';
 import { TileCompare } from './TileCompare';
 import { SurfaceLab } from './SurfaceLab';
+import { SceneAnimLab } from './SceneAnimLab';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
@@ -367,5 +368,6 @@ function renderRoute(path: string): ReactElement {
   if (path === '/artwork-compare') return <ArtworkCompare />;
   if (path === '/tile-compare') return <TileCompare />;
   if (path === '/surface-lab') return <SurfaceLab />;
+  if (path === '/scene-anim-lab') return <SceneAnimLab />;
   return <MainMenu />;
 }
