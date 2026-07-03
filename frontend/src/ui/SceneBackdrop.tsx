@@ -42,7 +42,7 @@ export const SCENE_ANIMS: SceneAnim[] = [
     y: 400,
     w: 170,
     h: 256,
-    frames: 11,
+    frames: 12,
     frameMs: 140,
     sheet: '/assets/ui/main-menu/scene-anim/waterfall-right.png',
   },

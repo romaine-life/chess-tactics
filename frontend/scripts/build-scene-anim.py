@@ -100,6 +100,98 @@ def build_mask(static: Image.Image, frames: list[Image.Image], w: int, h: int,
     return mask
 
 
+def bake_scroll(static: Image.Image, mask: list[list[bool]], w: int, h: int,
+                s: int, n: int, out_path) -> None:
+    """Bake a seamless-by-construction scroll loop from the static art itself.
+
+    The pixel-art canon (saint11 / SadfaceRL / Aseprite shift-wrap; same math
+    as engine UV panning): every frame is the SAME art translated down a
+    constant s px with wraparound inside the water, so the wrap step is the
+    identical operation to every interior step — frame n is bit-identical to
+    frame 0 and a loop seam is impossible, not merely unlikely. Falls in
+    pixel art are per-column streaks, so the scroll runs per column:
+
+    per masked vertical run (contiguous masked rows of one column):
+      - period P = the largest divisor of s*n that fits the run (so the run's
+        cycle closes exactly at n frames); runs shorter than 6 px stay static;
+      - the run's own top P rows become the tile; its junction is hidden by
+        crossfading the first few tile rows toward the art that CONTINUES the
+        run below the tile (or toward the tile's own tail when the run is
+        exactly one period long);
+      - frame i paints tile row ((j - s*i) mod P) at run row j (downward
+        flow), tiled over the whole run;
+      - the run's top/bottom few rows fade toward the static art so the
+        scroll never hard-cuts against non-animated pixels.
+
+    Only the art's own water pixels are rearranged — palette and character
+    are automatically the scene's own (no color transfer needed).
+    """
+    static_px = static.load()
+    total = s * n
+    periods = sorted((p for p in range(6, total + 1) if total % p == 0), reverse=True)
+
+    # Collect per-column contiguous masked runs.
+    runs: list[tuple[int, int, int]] = []  # (x, rowStart, length)
+    for x in range(w):
+        y = 0
+        while y < h:
+            if mask[y][x]:
+                a = y
+                while y < h and mask[y][x]:
+                    y += 1
+                runs.append((x, a, y - a))
+            else:
+                y += 1
+
+    scrolled = static_frames = 0
+    # Precompute per-run tiles (list of RGB rows) and metadata.
+    baked_runs = []
+    for x, a, length in runs:
+        period = next((p for p in periods if p <= length), 0)
+        if not period:
+            static_frames += 1
+            continue
+        scrolled += 1
+        tile = [static_px[x, a + r][:3] for r in range(period)]
+        kj = min(4, period // 3)
+        for r in range(kj):
+            # Junction blend: tile row r must follow tile row period-1 as the
+            # scroll wraps. Prefer the art that actually continues the run
+            # below the tile; fall back to the tile's own tail.
+            below = a + period + r
+            other = static_px[x, below][:3] if below < a + length else tile[period - kj + r]
+            u = (r + 1) / (kj + 1)
+            tile[r] = tuple(round(u * tc + (1 - u) * oc) for tc, oc in zip(tile[r], other))
+        baked_runs.append((x, a, length, period, tile))
+
+    sheet = Image.new("RGBA", (w * n, h), (0, 0, 0, 0))
+    for i in range(n):
+        out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        out_px = out.load()
+        for x, a, length, period, tile in baked_runs:
+            k_edge = min(4, length // 4)
+            for j in range(length):
+                src = tile[(j - s * i) % period]
+                edge = min(j, length - 1 - j)
+                if edge < k_edge:
+                    # fade toward the static art at run ends (spatially fixed
+                    # weights — identical construction every frame, so the
+                    # loop closure is unaffected)
+                    t = (edge + 1) / (k_edge + 1)
+                    st = static_px[x, a + j][:3]
+                    src = tuple(round(t * sc + (1 - t) * stc) for sc, stc in zip(src, st))
+                out_px[x, a + j] = (*src, 255)
+        sheet.paste(out, (w * i, 0))
+
+    sheet.save(out_path, optimize=True)
+    per = {}
+    for _, _, _, p, _ in baked_runs:
+        per[p] = per.get(p, 0) + 1
+    print(f"scroll bake: {scrolled} runs scrolled ({static_frames} too short, left static), "
+          f"s={s}px/frame, n={n}, periods {sorted(per.items(), reverse=True)}")
+    print(f"{out_path.name}: {sheet.size[0]}x{sheet.size[1]} — frame {n} == frame 0 by construction")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("run_dir", type=Path)
@@ -107,6 +199,8 @@ def main() -> None:
     parser.add_argument("--out", required=True, help="output sheet name (no extension)")
     parser.add_argument("--zones", default="", help="crop-relative x,y,w,h rects (';'-separated) where motion is allowed")
     parser.add_argument("--skip", default="", help="comma-separated source frame indices to drop (generator fumbles: a frame whose exposure gain is an outlier has usually lost its streak texture — amplifying it doesn't help, dropping it does)")
+    parser.add_argument("--scroll", type=int, default=0, metavar="S", help="SEAMLESS-BY-CONSTRUCTION mode: ignore generated frame content and bake N frames that cyclically scroll the STATIC art's own masked water pixels downward S px/frame (per-column runs, period a divisor of S*N — so frame N is bit-identical to frame 0 and the wrap step is the same translation as every other step). Generated frames are still used to derive the motion mask.")
+    parser.add_argument("--out-frames", type=int, default=12, help="frame count for --scroll mode (12 = steps(12); divisors of S*12 give per-run periods)")
     parser.add_argument("--frames", type=int, default=8)
     parser.add_argument("--edge", type=int, default=6)
     parser.add_argument("--diff", type=int, default=26)
@@ -129,6 +223,9 @@ def main() -> None:
     n = len(frames)  # frames actually baked (source count minus --skip)
     zones = [tuple(int(v) for v in z.split(",")) for z in args.zones.split(";") if z]
     mask = build_mask(static, frames[1:], w, h, args.edge, args.diff, args.bright, zones)
+    if args.scroll:
+        bake_scroll(static, mask, w, h, args.scroll, args.out_frames, OUT_DIR / f"{args.out}.png")
+        return
     moving = sum(1 for row in mask for v in row if v)
     print(f"mask: {moving} moving px ({moving * 100 // (w * h)}% of crop)")
 
