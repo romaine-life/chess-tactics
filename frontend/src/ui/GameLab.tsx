@@ -328,6 +328,15 @@ export function GameLab(): ReactElement {
   const aggregate = useMemo(() => (records ? aggregateRecords(records) : null), [records]);
   const rollup = useMemo(() => (records ? pieceRollup(records) : []), [records]);
 
+  // Reset is disabled when the knobs already sit at the committed baseline (and no
+  // variant is applied), so it never reads as a no-op that "did something".
+  const configIsDefault =
+    config.games === DEFAULT_CONFIG.games &&
+    config.maxDepth === DEFAULT_CONFIG.maxDepth &&
+    config.maxNodes === DEFAULT_CONFIG.maxNodes &&
+    config.seedBase === DEFAULT_CONFIG.seedBase &&
+    variant.unitIndex === 'none';
+
   const filteredRecords = useMemo(() => {
     if (!records) return [];
     if (outcomeFilter === 'all') return records;
@@ -433,7 +442,18 @@ export function GameLab(): ReactElement {
             <span className="game-lab-progress-label">{progress.done}/{progress.total}</span>
           </>
         ) : (
-          <button type="button" onClick={startRun} disabled={!level}>Run games</button>
+          <>
+            <button type="button" onClick={startRun} disabled={!level}>Run games</button>
+            {/* Reset to the committed defaults (ADR-0057: derived baseline, not a
+                zero-out) — restores the run knobs and clears any variant. */}
+            <button
+              type="button"
+              onClick={() => { setConfig(DEFAULT_CONFIG); setVariant({ unitIndex: 'none', action: 'remove' }); }}
+              disabled={configIsDefault}
+            >
+              Reset
+            </button>
+          </>
         )}
         {runError ? <p className="game-lab-error" role="alert">{runError}</p> : null}
       </section>
