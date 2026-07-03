@@ -5,6 +5,16 @@ import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
 import { createBlankLevel } from '../core/level';
 
+// A handful of tests here compute one or two full enemy replies, each of which runs
+// the rung-1 search AI (core/ai searchEnemyMove) synchronously and DELIBERATELY with
+// no wall-clock budget — bounded only by LIVE_SEARCH's 40k-node cap so a seed replays
+// identically on any machine (that determinism is exactly what "is fully deterministic"
+// asserts). A 40k-node search is ~1s/move on a fast core; two of them plus CI's slower,
+// contended cores blow past vitest's 5s default and wedged every deploy (issue: the
+// build-and-deploy "Test app" gate). These tests are compute-heavy by design, not hung,
+// so give the file honest headroom rather than weakening the AI or the determinism check.
+vi.setConfig({ testTimeout: 20_000 });
+
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
 // turn-taking rather than a simultaneous swap. Fake timers (Date included) let us
 // drive both that reply and the battle clock deterministically. The search enemy
