@@ -24,8 +24,11 @@ export function runLabGames(
   const workers: Worker[] = [];
   const records: GameRecord[] = [];
   let cancelled = false;
+  // Hoisted so cancel() can settle the promise — see the LabRunHandle contract.
+  let rejectRun: (reason: Error) => void = () => undefined;
 
   const promise = new Promise<GameRecord[]>((resolve, reject) => {
+    rejectRun = reject;
     let workersDone = 0;
     const finishWorker = (): void => {
       workersDone += 1;
@@ -60,12 +63,16 @@ export function runLabGames(
       worker.postMessage(request);
     }
   });
+  // A rejected run must have a consumer or it surfaces as an unhandled rejection;
+  // GameLab's .catch handles it, and this no-op guard covers a cancel with no await.
+  promise.catch(() => undefined);
 
   return {
     promise,
     cancel: () => {
       cancelled = true;
       workers.forEach((w) => w.terminate());
+      rejectRun(new Error('cancelled'));
     },
   };
 }

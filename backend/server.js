@@ -2010,8 +2010,8 @@ app.put('/api/campaign-workspace', async (req, res) => {
 const LAB_RUN_BODY_MAX_JSON_CHARS = 8_000_000;
 
 function validateLabRun(raw) {
-  if (!raw.meta || typeof raw.meta !== 'object' || Array.isArray(raw.meta)) return 'meta must be an object';
-  if (!raw.body || typeof raw.body !== 'object' || Array.isArray(raw.body)) return 'body must be an object';
+  if (!isObjectRecord(raw.meta)) return 'meta must be an object';
+  if (!isObjectRecord(raw.body)) return 'body must be an object';
   if (JSON.stringify(raw.body).length > LAB_RUN_BODY_MAX_JSON_CHARS) return 'body_too_large';
   return null;
 }

@@ -51,6 +51,21 @@ describe('playLevelGame', () => {
     expect(a).toEqual(b);
   });
 
+  it('resolves a start-of-game stalemate as a draw (mirrors the store)', () => {
+    // 1-wide board: the lone player pawn is blocked head-on by the enemy king and
+    // has no diagonal capture off the edges — zero legal moves at the start. The
+    // store decides this a draw via resolveIfPlayerStuck; self-play must agree.
+    const level = createBlankLevel('lab-stuck', 'Stuck', 1, 2);
+    level.objective = 'capture-all';
+    level.layers.units = [
+      { x: 0, y: 1, type: 'pawn', side: 'player' },
+      { x: 0, y: 0, type: 'king', side: 'enemy' },
+    ];
+    const record = playLevelGame(level, { seed: 1, ...SHORT });
+    expect(record.winner).toBe('draw');
+    expect(record.plies).toBe(0);
+  });
+
   it('records per-piece activity that matches the moves list', { timeout: 60_000 }, () => {
     const record = playLevelGame(duelLevel(), { seed: 3, ...SHORT });
     const totalMoves = record.pieces.reduce((s, p) => s + p.moves, 0);

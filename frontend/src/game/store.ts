@@ -589,6 +589,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       objectiveCtx: match.objectiveCtx,
       log: match.log,
       levelId: match.levelId,
+      // Restore the enemy policy so the ?ai=greedy A/B lever survives a reload
+      // (older snapshots predate the field ⇒ default to the search AI).
+      aiMode: match.aiMode ?? 'search',
       selectedId,
       focusedId: selectedId,
       started: true,

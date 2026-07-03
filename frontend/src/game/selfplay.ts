@@ -12,7 +12,7 @@ import { createFromLevel } from './setup';
 import { searchBestAction, type SearchOptions } from '../core/ai';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
-import { applyMove, sideInCheck, type MoveEnv } from '../core/rules';
+import { applyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { buildTerrainIndex } from '../core/terrain';
 import { createRng } from '../core/rng';
 import type { GameState, Move, PieceType, Side, Vec, Winner } from '../core/types';
@@ -79,10 +79,22 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
   let depthSum = 0;
   let nodes = 0;
 
-  // A degenerate level can be decided before anyone moves (e.g. a runner
-  // authored on a reach cell). Record it honestly as a zero-move game.
-  const preWinner = evaluateObjective(game, objective, { ...ctx, turnsElapsed });
-  if (preWinner) game = { ...game, winner: preWinner, turn: 'done' };
+  // Start-of-game resolution, mirroring the store's newSkirmish order: first a
+  // stuck check (a player with no legal move at the start is a stalemate/checkmate,
+  // exactly as resolveIfPlayerStuck decides it), then the objective, so a degenerate
+  // level (e.g. a runner authored on a reach cell) is recorded as a zero-move game.
+  const startEnv: MoveEnv = { terrain, lastMove: game.lastMove };
+  const playerHasMove = livingPieces(game.pieces, 'player').some(
+    (p) => legalMoves(p, game.pieces, game.size, startEnv).length > 0,
+  );
+  if (game.turn === 'player' && !playerHasMove) {
+    const winner: Winner = sideInCheck(game, 'player', startEnv) ? 'enemy' : 'draw';
+    game = { ...game, winner, turn: 'done' };
+  }
+  if (!game.winner) {
+    const preWinner = evaluateObjective(game, objective, { ...ctx, turnsElapsed });
+    if (preWinner) game = { ...game, winner: preWinner, turn: 'done' };
+  }
 
   while (!game.winner && plies < maxPlies && (game.turn === 'player' || game.turn === 'enemy')) {
     const side: Side = game.turn;
@@ -107,9 +119,11 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
     nodes += chosen.nodes;
     moves.push({ pieceId: chosen.pieceId, side, from, move: chosen.move });
 
-    // A full player→enemy round completes when the turn hands back to the
-    // player — the moment the store advances the survive clock.
-    if (prevTurn === 'enemy' && game.turn === 'player') turnsElapsed += 1;
+    // A full player→enemy round completes when the enemy's move ends its half —
+    // the moment the store advances the survive clock. Count it even when that move
+    // decides the game (turn goes to 'done', not 'player'), so the recorded round
+    // count matches what the live store reports for an enemy-decided game.
+    if (prevTurn === 'enemy' && game.turn !== 'enemy') turnsElapsed += 1;
 
     if (!game.winner) {
       const winner = evaluateObjective(game, objective, { ...ctx, turnsElapsed });

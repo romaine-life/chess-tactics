@@ -178,7 +178,11 @@ export function GameLab(): ReactElement {
 
   const [selectedSeed, setSelectedSeed] = useState<number | null>(() => {
     const raw = readParams().get('game');
-    return raw === null ? null : Number(raw);
+    // Treat a missing OR empty ?game= as "no selection" — Number('') is 0, which
+    // would spuriously auto-open a seed-0 game.
+    if (raw === null || raw === '') return null;
+    const seed = Number(raw);
+    return Number.isFinite(seed) ? seed : null;
   });
   const [ply, setPly] = useState<number>(() => Number(readParams().get('ply') ?? 0) || 0);
   const [outcomeFilter, setOutcomeFilter] = useState<'all' | 'player' | 'enemy' | 'draw'>('all');
@@ -253,11 +257,19 @@ export function GameLab(): ReactElement {
     setRunError(null);
     setSaveState('idle');
     setProgress({ done: 0, total: seeds.length });
-    const handle = runLabGames(applied.level, seeds, search, (_record, done, total) => setProgress({ done, total }));
+    // Coalesce progress updates: a large run finishes hundreds/thousands of games,
+    // and one setState per game would re-render the page that often. Update on a
+    // sparse cadence plus the final game.
+    const step = Math.max(1, Math.floor(seeds.length / 100));
+    const handle = runLabGames(applied.level, seeds, search, (_record, done, total) => {
+      if (done === total || done % step === 0) setProgress({ done, total });
+    });
     handleRef.current = handle;
     handle.promise
       .then((all) => setRecords(all))
-      .catch((error: Error) => setRunError(error.message))
+      // A cancel rejects with 'cancelled' (per the LabRunHandle contract); that's a
+      // user action, not an error to surface. cancelRun already cleared the UI.
+      .catch((error: Error) => { if (error.message !== 'cancelled') setRunError(error.message); })
       .finally(() => {
         handleRef.current = null;
         setProgress(null);

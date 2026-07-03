@@ -201,7 +201,7 @@ export function Skirmish() {
         const objective: ObjectiveType = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
           ? (routeObjective as ObjectiveType) : 'capture-all';
         const level = editorBoardToLevel(decoded, { id: 'board-link', name: 'Board Link', objective });
-        if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level });
+        if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level, ai });
         setBoardSettled(true);
         return;
       }

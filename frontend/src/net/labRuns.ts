@@ -41,32 +41,34 @@ export interface LabRunDoc extends LabRunSummary {
   body: LabRunBody;
 }
 
+// One fetch core for every endpoint (mirrors net/lobbies.ts's `request`): same
+// credentials + JSON + ok-check + HttpError in a single place, so a cross-cutting
+// change (retry, 401 handling, an abort signal) is one edit rather than four.
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) throw new HttpError(`${method} ${path}`, res.status);
+  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+}
+
 export async function listLabRuns(): Promise<LabRunSummary[]> {
-  const res = await fetch('/api/lab-runs', { credentials: 'include' });
-  if (!res.ok) throw new HttpError('list lab runs', res.status);
-  const data = (await res.json()) as { runs?: LabRunSummary[] };
+  const data = await request<{ runs?: LabRunSummary[] }>('GET', '/api/lab-runs');
   return Array.isArray(data.runs) ? data.runs : [];
 }
 
 export async function saveLabRun(meta: LabRunMeta, body: LabRunBody): Promise<{ id: string }> {
-  const res = await fetch('/api/lab-runs', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ meta, body }),
-  });
-  if (!res.ok) throw new HttpError('save lab run', res.status);
-  const data = (await res.json()) as { id: string };
+  const data = await request<{ id: string }>('POST', '/api/lab-runs', { meta, body });
   return { id: data.id };
 }
 
-export async function loadLabRun(id: string): Promise<LabRunDoc> {
-  const res = await fetch(`/api/lab-runs/${encodeURIComponent(id)}`, { credentials: 'include' });
-  if (!res.ok) throw new HttpError('load lab run', res.status);
-  return (await res.json()) as LabRunDoc;
+export function loadLabRun(id: string): Promise<LabRunDoc> {
+  return request<LabRunDoc>('GET', `/api/lab-runs/${encodeURIComponent(id)}`);
 }
 
 export async function deleteLabRun(id: string): Promise<void> {
-  const res = await fetch(`/api/lab-runs/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
-  if (!res.ok) throw new HttpError('delete lab run', res.status);
+  await request<{ ok: boolean }>('DELETE', `/api/lab-runs/${encodeURIComponent(id)}`);
 }
