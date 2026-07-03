@@ -407,13 +407,14 @@ const PL_CSS = `
 .pl-ctl-label em { font-style: normal; color: #eaf3ff; margin-left: 4px; font-variant-numeric: tabular-nums; font-weight: 600; }
 .pl-num-row { display: flex; gap: 8px; align-items: stretch; }
 
-/* 8-direction nudge pad: a 3×3 grid of arrow buttons around an inert centre dot. */
-.pl-pad { display: grid; grid-template-columns: repeat(3, 40px); grid-auto-rows: 32px; gap: 5px; }
-.pl-pad-btn { display: grid; place-items: center; padding: 0; cursor: pointer; color: #bcd4f2;
+/* 8-direction nudge pad: a 3×3 grid of arrow buttons around an inert centre dot. Cells are
+   an explicit border-box size so the 1px border can't push them past the track into overlap. */
+.pl-pad { display: grid; grid-template-columns: repeat(3, 42px); gap: 6px; }
+.pl-pad-btn, .pl-pad-center { box-sizing: border-box; width: 42px; height: 38px; display: grid; place-items: center; }
+.pl-pad-btn { padding: 0; cursor: pointer; color: #bcd4f2;
   background: #16233f; border: 1px solid #2a3c5e; border-radius: 6px; }
 .pl-pad-btn:hover { background: #1e3054; color: #eaf3ff; }
 .pl-pad-btn:active { background: #244071; }
-.pl-pad-center { display: grid; place-items: center; }
 .pl-pad-center::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #33415e; }
 
 /* Anchor X / Y: label-left rows (exact entry — nudging is the pad's job), each with its own
@@ -429,14 +430,14 @@ const PL_CSS = `
 /* Slider + a small exact-entry box. */
 .pl-slider { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 34px; }
 .pl-slider input[type=range] { flex: 1 1 auto; min-width: 0; }
-.pl-scale-exact { flex: none; width: 52px; height: 30px; box-sizing: border-box; text-align: center;
+.pl-scale-exact { flex: none; width: 52px; height: 34px; box-sizing: border-box; text-align: center;
   font: inherit; font-size: 13px; color: #eaf3ff; background: #101a2e; border: 1px solid #2a3c5e; border-radius: 6px; }
 .pl-scale-exact::-webkit-outer-spin-button, .pl-scale-exact::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .pl-scale-exact[type=number] { appearance: textfield; -moz-appearance: textfield; }
 
 /* Per-control ↺ (ADR-0057): resets ONLY this control to its saved value; set apart from
    the stepper and disabled when already saved, so it doubles as a per-control dirty light. */
-.pl-mini-reset { flex: none; width: 34px; height: 34px; padding: 0; font-size: 15px; line-height: 1; cursor: pointer;
+.pl-mini-reset { flex: none; box-sizing: border-box; width: 34px; height: 34px; padding: 0; font-size: 15px; line-height: 1; cursor: pointer;
   background: #0f1930; color: #9fd0ff; border: 1px solid #2a3c5e; border-radius: 6px; display: grid; place-items: center; }
 .pl-mini-reset:hover:not(:disabled) { background: #17233f; color: #d7ecff; }
 .pl-mini-reset:disabled { opacity: 0.3; cursor: default; }
