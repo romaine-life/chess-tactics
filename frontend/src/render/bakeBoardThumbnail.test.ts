@@ -47,6 +47,14 @@ describe('boardContentHash — stability + sensitivity', () => {
     expect(boardContentHash(blank(4, 4))).not.toBe(boardContentHash(blank(8, 4)));
   });
 
+  it('changes when a prop is added, and again when it moves', () => {
+    const before = blank(8, 6);
+    const placed: EditorBoard = { ...blank(8, 6), props: { '3,2': { propId: 'cottage' } } };
+    const moved: EditorBoard = { ...blank(8, 6), props: { '4,2': { propId: 'cottage' } } };
+    expect(boardContentHash(before)).not.toBe(boardContentHash(placed));
+    expect(boardContentHash(placed)).not.toBe(boardContentHash(moved));
+  });
+
   it('changes when a feature (road) is added', () => {
     const before = blank();
     const after: EditorBoard = { ...blank(), features: { '1,1': { kind: 'road', material: 'cobble' } } };
@@ -79,6 +87,15 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
     expect(srcs.some((s) => s.includes('boulder') && s.includes('back'))).toBe(true);
     expect(srcs.some((s) => s.includes('boulder') && s.includes('front'))).toBe(true);
   });
+
+  it('a prop contributes its back AND front halves; unknown prop ids are skipped', () => {
+    const board: EditorBoard = { ...blank(8, 6), props: { '3,2': { propId: 'cottage' } } };
+    const srcs = uniqueDrawSrcs(board);
+    expect(srcs).toContain('/assets/props/cottage/back.png');
+    expect(srcs).toContain('/assets/props/cottage/front.png');
+    const unknown: EditorBoard = { ...blank(8, 6), props: { '3,2': { propId: 'not-a-prop' } } };
+    expect(uniqueDrawSrcs(unknown)).toEqual([]);
+  });
 });
 
 describe('boardDrawOps — z-order matches the live DOM bands', () => {
@@ -95,6 +112,24 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     expect([...z].sort((a, b) => a - b)).toEqual(z);
     expect(Math.max(...z)).toBeGreaterThan(20000);
     expect(Math.min(...z)).toBeLessThan(20000);
+  });
+
+  it('brackets a prop around a unit standing on its front-most footprint cell', () => {
+    // Cottage (2×2) at (3,2) → front cell (4,3) → base 20007: back 20006 < unit 20007 < front 20008.
+    const board: EditorBoard = {
+      ...blank(8, 6),
+      props: { '3,2': { propId: 'cottage' } },
+      units: { '4,3': UNIT },
+    };
+    const ops = boardDrawOps(board);
+    const back = ops.find((op) => op.src === '/assets/props/cottage/back.png');
+    const front = ops.find((op) => op.src === '/assets/props/cottage/front.png');
+    const unit = ops.find((op) => op.contain);
+    expect(back!.z).toBeLessThan(unit!.z);
+    expect(front!.z).toBeGreaterThan(unit!.z);
+    // The frame is the prop's own (177×184 for the cottage), not the 96×180 doodad frame.
+    expect(back!.dw).toBe(177);
+    expect(back!.dh).toBe(184);
   });
 
   it('places a feature overlay just above its own tile (same cell band)', () => {
