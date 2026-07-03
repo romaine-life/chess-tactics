@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, shouldStartFreshSkirmish } from './store';
+import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, terminalIfStuck, sideHasLegalMove, shouldStartFreshSkirmish } from './store';
 import { livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
@@ -331,6 +331,43 @@ describe('skirmish store: battle clock', () => {
   });
 });
 
+describe('checkmate ends the game the instant it is delivered', () => {
+  const OPEN_ENV: MoveEnv = { terrain: undefined, lastMove: undefined };
+
+  it('a player move that mates the enemy wins immediately — no capture, no enemy reply', () => {
+    // Enemy King boxed at (0,0): a player rook already seals column 1, and moving
+    // the second rook onto column 0 (0,3) gives a check the King cannot escape.
+    const game: GameState = {
+      size: { cols: 8, rows: 8 },
+      pieces: [
+        piece('ek', 'enemy', 'king', 0, 0),
+        piece('seal', 'player', 'rook', 1, 7), // covers (1,0) and (1,1)
+        piece('mater', 'player', 'rook', 2, 3), // will slide to (0,3) to mate
+        piece('pk', 'player', 'king', 5, 5),
+      ],
+      turn: 'player',
+      winner: null,
+    };
+    useSkirmish.setState({
+      game, env: OPEN_ENV, selectedId: 'mater', focusedId: 'mater',
+      objective: 'capture-king', objectiveCtx: { kingSide: 'enemy' }, turnsElapsed: 0,
+      clock: null, started: true,
+    });
+
+    useSkirmish.getState().tryMoveTo(0, 3);
+
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player'); // Victory, resolved on the mating move itself
+    expect(s.game.turn).toBe('done');
+    expect(s.game.pieces.find((p) => p.id === 'ek')?.alive).toBe(true); // King never had to be captured
+    expect(s.log[0]).toMatch(/checkmate/i);
+
+    // No enemy reply is pending — the game is already over.
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game.turn).toBe('done');
+  });
+});
+
 describe('soft-lock guard (no manual End Turn)', () => {
   const OPEN_ENV: MoveEnv = { terrain: undefined, lastMove: undefined };
   const stateOf = (pieces: Piece[], cols: number, rows: number): GameState => ({
@@ -395,6 +432,33 @@ describe('soft-lock guard (no manual End Turn)', () => {
     expect(res.checkmate).toBe(false);
     expect(res.game.winner).toBe('draw');
     expect(res.game.turn).toBe('done');
+  });
+
+  it('terminalIfStuck resolves the ENEMY to move: checkmate hands the win to the player', () => {
+    const g = { ...stateOf([
+      piece('ek', 'enemy', 'king', 0, 0),
+      piece('r1', 'player', 'rook', 0, 5), // checks down column 0
+      piece('r2', 'player', 'rook', 1, 5), // seals column 1
+      piece('pk', 'player', 'king', 2, 5),
+    ], 3, 6), turn: 'enemy' as const };
+    expect(sideHasLegalMove(g, 'enemy', OPEN_ENV)).toBe(false);
+    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'player', checkmate: true, side: 'enemy' });
+  });
+
+  it('terminalIfStuck resolves the ENEMY to move: stalemate is a draw', () => {
+    const g = { ...stateOf([
+      piece('ek', 'enemy', 'king', 0, 0),
+      piece('r1', 'player', 'rook', 1, 5), // seals column 1
+      piece('r2', 'player', 'rook', 5, 1), // seals row 1
+      piece('pk', 'player', 'king', 5, 5),
+    ], 6, 6), turn: 'enemy' as const };
+    expect(sideHasLegalMove(g, 'enemy', OPEN_ENV)).toBe(false);
+    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'draw', checkmate: false, side: 'enemy' });
+  });
+
+  it('terminalIfStuck returns null while the side to move can still move', () => {
+    const g = { ...stateOf([piece('ek', 'enemy', 'king', 0, 0), piece('pk', 'player', 'king', 5, 5)], 6, 6), turn: 'enemy' as const };
+    expect(terminalIfStuck(g, OPEN_ENV)).toBeNull();
   });
 
   it('never fires off the player turn or after the game is decided', () => {
