@@ -78,7 +78,10 @@ export const PROP_DEFS: readonly PropDef[] = [
   // terrain swatch, reborn as a prop so the rules engine stays untouched). Same gated Codex
   // restyle pipeline as cabin/lodge, from the two staged /rocks meshes (see SOURCES.md).
   { id: 'rock', label: 'Rock', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 72, h: 81, anchorX: 36, anchorY: 80 } },
-  { id: 'granite', label: 'Granite boulder', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 72, h: 66, anchorX: 36, anchorY: 64 } },
+  // Named 'fieldstone' (not 'granite') to avoid colliding with the obstacle-piece sprite variant
+  // ROCK_VARIANTS=['boulder','granite'] under /assets/units/rock/ (render/SkirmishBoard.tsx) — a
+  // separate system from these placeable props. Both derive from the same round-boulder mesh.
+  { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 72, h: 66, anchorX: 36, anchorY: 64 } },
 ];
 
 /**
