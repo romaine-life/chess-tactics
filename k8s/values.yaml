@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-57bb12ca636b01a29e2cb1ff9932e82f423aafdd08f29e6fb06eb557a781698c"
+  tag: "app-56227eb4859e593a93f33a5b80228b492a16ea405a95fb6aee48e28c0821fac0"
   pullPolicy: IfNotPresent
 
 name: chess-tactics
