@@ -28,6 +28,11 @@ const MARK = PIECE_MARK;
 
 type HudTab = 'unit' | 'roster' | 'log' | 'view' | 'controls';
 
+// Icon-based tab strip: each section is a kit glyph, not a text word. The `label`
+// stays as the accessible name (aria-label) + hover tooltip so the icon never loses
+// its meaning. Glyphs are reused from the curated kit icon set (ADR-0011/0032):
+//   unit = single knight, roster = two pawns (the whole force), log = info feed,
+//   view = display/screen, controls = gear.
 const HUD_TABS: { id: HudTab; label: string }[] = [
   { id: 'unit', label: 'Unit' },
   { id: 'roster', label: 'Roster' },
@@ -213,9 +218,11 @@ export function SkirmishHud({
             aria-selected={tab === t.id}
             aria-controls={`skirmish-panel-${t.id}`}
             className={`skirmish-hud-tab ${tab === t.id ? 'active' : ''}`.trim()}
+            aria-label={t.label}
+            title={t.label}
             onClick={() => setTab(t.id)}
           >
-            {t.label}
+            <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />
           </button>
         ))}
       </div>

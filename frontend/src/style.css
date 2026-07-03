@@ -4464,7 +4464,10 @@ h1 {
 
 .skirmish-hud-tab {
   appearance: none;
+  align-items: center;
   background: transparent;
+  display: flex;
+  justify-content: center;
   /* Grow to fill each row; wraps to a second row past ~3 tabs in the narrow panel. */
   flex: 1 1 76px;
   /* Kit mode-button frame — atom-assembled (ADR-0012/0016), the SAME tab/header
@@ -4499,6 +4502,24 @@ h1 {
   border-image-source: url("/assets/ui/kit/mode-button-active.png");
   color: #f3fbff;
 }
+
+/* Icon-based tab glyphs — reused curated kit icons (ADR-0011/0032), full-colour on
+   the dark panel like the count-pip rooks. Sized to sit inside the 44px kit frame. */
+.skirmish-tab-icon {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  block-size: 26px;
+  display: block;
+  image-rendering: pixelated;
+  inline-size: 26px;
+}
+
+.skirmish-tab-icon-unit { background-image: url("/assets/ui/kit/icons/unit-studio.png"); }
+.skirmish-tab-icon-roster { background-image: url("/assets/ui/kit/icons/players.png"); }
+.skirmish-tab-icon-log { background-image: url("/assets/ui/kit/icons/info.png"); }
+.skirmish-tab-icon-view { background-image: url("/assets/ui/kit/icons/monitor.png"); }
+.skirmish-tab-icon-controls { background-image: url("/assets/ui/kit/icons/gear.png"); }
 
 .skirmish-hud-panel {
   display: flex;
