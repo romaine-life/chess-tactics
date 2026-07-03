@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
+import { installLayoutViewportVar } from './layoutViewport';
 import { useScreenEntrance } from './useScreenEntrance';
 import { isScreenExiting, subscribeScreenExit } from './screenExit';
 
@@ -24,6 +25,9 @@ export function ArtRouteChrome({
   ...props
 }: ArtRouteChromeProps): ReactElement {
   const entranceClass = useScreenEntrance(ready);
+  // Keep --layout-vw (zoom-corrected viewport width) live for the chrome's centring
+  // math — see layoutViewport.ts. Singleton; repeat mounts are no-ops.
+  useEffect(() => { installLayoutViewportVar(); }, []);
   const exiting = useSyncExternalStore(subscribeScreenExit, isScreenExiting);
   // The exit flag stays up past the route swap (until the incoming screen commits), so
   // chrome that MOUNTS under it is the INCOMING screen — it must not wear the exit

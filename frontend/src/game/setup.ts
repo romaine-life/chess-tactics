@@ -52,21 +52,33 @@ export interface SkirmishOptions {
   ai?: 'search' | 'greedy';
 }
 
+function pawnForwardFields(type: PieceType, facing: Piece['facing']): Pick<Piece, 'pawnForward'> {
+  return type === 'pawn' && facing ? { pawnForward: facing } : {};
+}
+
 /** Build the initial GameState for an authored level. Exported for headless
  * self-play (game/selfplay.ts) — the store path reaches it via createSkirmish. */
 export function createFromLevel(level: Level, seed: number): GameState {
-  const pieces: Piece[] = level.layers.units.map((unit, index) => ({
-    id: `${unit.side}-${unit.type}-${index}`,
-    side: unit.side,
-    type: unit.type,
-    x: unit.x,
-    y: unit.y,
+  const pieces: Piece[] = level.layers.units.map((unit, index) => {
     // Honor the authored facing so test-play shows the painted direction; fall back to
-    // the side's default when a level (legacy / facing-free) doesn't carry one.
-    facing: unit.facing ?? defaultFacingForSide(unit.side),
-    alive: true,
-    startY: unit.side === 'player' ? level.board.rows - 1 : 0,
-  }));
+    // the side's default when a level (legacy / facing-free) doesn't carry one. Pawns
+    // also snapshot this as their immutable forward direction for the whole fight.
+    const facing = unit.facing ?? defaultFacingForSide(unit.side);
+    return {
+      id: `${unit.side}-${unit.type}-${index}`,
+      side: unit.side,
+      type: unit.type,
+      x: unit.x,
+      y: unit.y,
+      facing,
+      alive: true,
+      // Fixed campaign levels author the battle's initial position directly, so a pawn's
+      // double-step belongs to the cell it was placed on, matching random/free setup.
+      startX: unit.x,
+      startY: unit.y,
+      ...pawnForwardFields(unit.type, facing),
+    };
+  });
 
   // Realise multi-cell BLOCKING props as single-cell neutral `rock` colliders — one per
   // footprint cell. This is why blocking needs ZERO rules.ts changes: a rock is already an
@@ -90,6 +102,7 @@ export function createFromLevel(level: Level, seed: number): GameState {
         x: cell.x,
         y: cell.y,
         alive: true,
+        startX: -1,
         startY: -1,
       });
     });
@@ -141,7 +154,9 @@ export function createFromLevel(level: Level, seed: number): GameState {
             alive: true,
             // The dealt cell is the piece's home rank, so a dealt pawn keeps its
             // double-step — matching the free-skirmish spawn behavior.
+            startX: cell.x,
             startY: cell.y,
+            ...pawnForwardFields(type, defaultFacingForSide(side)),
           });
         }
       }
@@ -152,6 +167,7 @@ export function createFromLevel(level: Level, seed: number): GameState {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
     terrain: level.layers.terrain,
+    boardCode: level.boardCode,
     // The render channel: the board draws the tall prop sprite from this list, while the
     // colliders above do the blocking. Defaults to [] so a prop-free level stays prop-free.
     props,
@@ -194,7 +210,9 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
         y: cell.y,
         facing: defaultFacingForSide(side),
         alive: true,
+        startX: cell.x,
         startY: cell.y,
+        ...pawnForwardFields(type, defaultFacingForSide(side)),
       });
     });
   };
@@ -209,7 +227,7 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
     const cell = pickEmptyCell(taken, size.cols, midYs, rng);
     if (!cell) break;
     taken.add(`${cell.x},${cell.y}`);
-    pieces.push({ id: `rock-${i}`, side: 'neutral', type: 'rock', x: cell.x, y: cell.y, alive: true, startY: -1 });
+    pieces.push({ id: `rock-${i}`, side: 'neutral', type: 'rock', x: cell.x, y: cell.y, alive: true, startX: -1, startY: -1 });
   }
 
   return { size, pieces, terrain, turn: 'player', winner: null };

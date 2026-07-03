@@ -15,20 +15,25 @@ function sctx(over: Partial<SearchContext> = {}): SearchContext {
   return { objective: 'capture-all', ctx: {}, turnsElapsed: 0, ...over };
 }
 
-const FAST = { maxDepth: 4, timeBudgetMs: 2000 };
+// Node-bounded (no wall clock) so the search is deterministic under any timer setup.
+const FAST = { maxDepth: 4, maxNodes: 50_000 };
 
 describe('searchBestAction', () => {
   it('takes a game-ending King capture over a bigger material haul', () => {
-    // Rook can take the player King (terminal in rival-kings) or a queen (material).
+    // Enemy rook on rank 4 can capture the player King at (7,4) — terminal in
+    // rival-kings — or slide down file 0 to take the queen at (0,0) for material.
+    // The enemy King sits at (7,1), off every player line so the rook isn't pinned
+    // and the enemy isn't in check (both would constrain the choice under the
+    // merge's check rules); the King capture must still win out.
     const s = state([
-      piece('e-rook', 'enemy', 'rook', 4, 0),
-      piece('p-king', 'player', 'king', 4, 6),
+      piece('e-rook', 'enemy', 'rook', 0, 4),
+      piece('p-king', 'player', 'king', 7, 4),
       piece('p-queen', 'player', 'queen', 0, 0),
-      piece('e-king', 'enemy', 'king', 7, 0),
+      piece('e-king', 'enemy', 'king', 7, 1),
     ]);
     const chosen = searchBestAction(s, {}, sctx({ objective: 'rival-kings' }), null, FAST);
     expect(chosen).not.toBeNull();
-    expect(chosen!.move).toMatchObject({ x: 4, y: 6, capture: 'p-king' });
+    expect(chosen!.move).toMatchObject({ x: 7, y: 4, capture: 'p-king' });
   });
 
   it('declines a defended pawn when a free pawn is on offer', () => {
@@ -52,8 +57,8 @@ describe('searchBestAction', () => {
       piece('p-pawn', 'player', 'pawn', 6, 6),
       piece('p-king', 'player', 'king', 7, 7),
     ]);
-    const a = searchBestAction(s, {}, sctx(), createRng(42), { maxDepth: 3, timeBudgetMs: 2000 });
-    const b = searchBestAction(s, {}, sctx(), createRng(42), { maxDepth: 3, timeBudgetMs: 2000 });
+    const a = searchBestAction(s, {}, sctx(), createRng(42), { maxDepth: 3, maxNodes: 50_000 });
+    const b = searchBestAction(s, {}, sctx(), createRng(42), { maxDepth: 3, maxNodes: 50_000 });
     expect(a).toEqual(b);
   });
 
@@ -94,7 +99,7 @@ describe('searchBestAction', () => {
       {},
       sctx({ objective: 'survive', ctx: { surviveTurns: 8 }, turnsElapsed: 0 }),
       null,
-      { maxDepth: 2, timeBudgetMs: 2000 },
+      { maxDepth: 2, maxNodes: 50_000 },
     );
     expect(chosen).not.toBeNull();
     // Octile distance to the nearest player piece (the pawn at (1,6)) must shrink.

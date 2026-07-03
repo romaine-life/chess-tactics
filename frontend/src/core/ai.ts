@@ -16,7 +16,7 @@
 
 import type { GameState, Move, Piece, PieceType, Side, Vec, Winner } from './types';
 import type { MoveEnv } from './rules';
-import { applyMove, attackedSquares, legalMoves, livingPieces } from './rules';
+import { applyMove, attackedSquares, legalMoves, livingPieces, sideInCheck } from './rules';
 import { evaluateObjective, type ObjectiveContext } from './objectives';
 import type { ObjectiveType } from './level';
 import type { Rng } from './rng';
@@ -80,10 +80,15 @@ export interface SearchContext {
 export interface SearchOptions {
   /** Iterative-deepening ceiling (plies). */
   maxDepth?: number;
-  /** Soft think budget; the deepest COMPLETED depth's result is used. */
+  /** Soft wall-clock think budget; the deepest COMPLETED depth's result is used.
+   * OMIT for reproducible search (self-play, the Lab, tests): with no time budget
+   * the search is bounded purely by maxDepth + maxNodes, both deterministic, so a
+   * seed replays identically on any machine. Live play passes a budget for
+   * responsiveness (a live game persists its moves, so its replay is exact
+   * regardless). */
   timeBudgetMs?: number;
-  /** Hard node ceiling — the backstop that bounds work even where the clock is
-   * frozen (fake-timer tests) or a single depth explodes between clock checks. */
+  /** Hard node ceiling — the deterministic backstop that bounds work with no time
+   * budget, and caps a single exploding depth. */
   maxNodes?: number;
   /** Root near-best window: moves scoring within epsilon of best form the pick pool. */
   epsilon?: number;
@@ -91,7 +96,6 @@ export interface SearchOptions {
 }
 
 const DEFAULT_MAX_DEPTH = 6;
-const DEFAULT_TIME_BUDGET_MS = 300;
 const DEFAULT_MAX_NODES = 200_000;
 const DEFAULT_EPSILON = 0.25;
 
@@ -121,12 +125,13 @@ const cheb = (a: Vec, b: Vec): number => {
 
 const isCombatant = (p: Piece): boolean => p.alive && (p.side === 'player' || p.side === 'enemy');
 
-/** Union of squares a side attacks, keyed "x,y" — the eval's danger map. */
-function attackMap(pieces: readonly Piece[], side: Side, size: GameState['size']): Set<string> {
+/** Union of squares a side attacks, keyed "x,y" — the eval's danger map.
+ * Terrain-aware when `env` is given (a slider's threat stops at walls/water). */
+function attackMap(pieces: readonly Piece[], side: Side, size: GameState['size'], env?: MoveEnv): Set<string> {
   const map = new Set<string>();
   for (const p of pieces) {
     if (!p.alive || p.side !== side || p.type === 'rock' || p.type === 'random-rock') continue;
-    for (const sq of attackedSquares(p, pieces, size)) map.add(`${sq.x},${sq.y}`);
+    for (const sq of attackedSquares(p, pieces, size, env)) map.add(`${sq.x},${sq.y}`);
   }
   return map;
 }
@@ -153,7 +158,7 @@ function nearestCellDistance(from: Piece, cells: readonly Vec[]): number {
  * Authored evaluation, from the PLAYER's perspective (positive = good for the
  * player). Material + hanging-piece safety + objective-shaped distance terms.
  */
-export function evaluateGameState(state: GameState, sctx: SearchContext, weights: EvalWeights = DEFAULT_EVAL_WEIGHTS): number {
+export function evaluateGameState(state: GameState, sctx: SearchContext, weights: EvalWeights = DEFAULT_EVAL_WEIGHTS, env?: MoveEnv): number {
   const players = livingPieces(state.pieces, 'player');
   const enemies = livingPieces(state.pieces, 'enemy');
   const values = weights.pieceValues;
@@ -164,8 +169,8 @@ export function evaluateGameState(state: GameState, sctx: SearchContext, weights
 
   // Safety: a piece parked on an attacked square bleeds a fraction of its value —
   // the term that stops horizon-blind piece gifts at the leaves.
-  const playerAttacks = attackMap(state.pieces, 'player', state.size);
-  const enemyAttacks = attackMap(state.pieces, 'enemy', state.size);
+  const playerAttacks = attackMap(state.pieces, 'player', state.size, env);
+  const enemyAttacks = attackMap(state.pieces, 'enemy', state.size, env);
   for (const p of players) {
     if (!enemyAttacks.has(`${p.x},${p.y}`)) continue;
     const defended = playerAttacks.has(`${p.x},${p.y}`);
@@ -282,21 +287,24 @@ function negamax(
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
 
+  const env: MoveEnv = { terrain: s.terrainEnv, lastMove };
   const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
   if (winner) return color * terminalScore(winner, ply);
-  if (depth === 0) return color * evaluateGameState(state, { ...s.sctx, turnsElapsed }, s.weights);
+  if (depth === 0) return color * evaluateGameState(state, { ...s.sctx, turnsElapsed }, s.weights, env);
 
   const side = state.turn as Side;
-  const env: MoveEnv = { terrain: s.terrainEnv, lastMove };
   const entries: { piece: Piece; move: Move }[] = [];
   for (const piece of livingPieces(state.pieces, side)) {
     for (const move of legalMoves(piece, state.pieces, state.size, env)) entries.push({ piece, move });
   }
   if (!entries.length) {
-    // Player stuck = stalemate draw (there is no passing); enemy stuck just
-    // returns the turn, so score the position as it stands.
-    if (side === 'player') return 0;
-    return color * evaluateGameState(state, { ...s.sctx, turnsElapsed }, s.weights);
+    // No legal action: checkmate if the stuck side's King is attacked (a loss
+    // for that side), else stalemate — mirroring the store's terminalIfStuck.
+    if (sideInCheck(state, side, env)) {
+      const mated: Winner = side === 'player' ? 'enemy' : 'player';
+      return color * terminalScore(mated, ply);
+    }
+    return 0;
   }
   entries.sort(
     (a, b) => captureValue(b.move, state.pieces, s.weights.pieceValues) - captureValue(a.move, state.pieces, s.weights.pieceValues),
@@ -334,7 +342,6 @@ export function searchBestAction(
   if (state.turn !== 'player' && state.turn !== 'enemy') return null;
   const weights = opts.weights ?? DEFAULT_EVAL_WEIGHTS;
   const maxDepth = opts.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const timeBudgetMs = opts.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS;
   const epsilon = opts.epsilon ?? DEFAULT_EPSILON;
   const side = state.turn as Side;
 
@@ -348,7 +355,10 @@ export function searchBestAction(
 
   const s: SearchState = {
     nodes: 0,
-    deadline: Date.now() + timeBudgetMs,
+    // No time budget ⇒ Infinity deadline: search is bounded by maxDepth + maxNodes
+    // only, which is deterministic (so a seed replays identically). A finite budget
+    // is a live-play responsiveness cap; frozen-clock tests leave it out.
+    deadline: opts.timeBudgetMs != null ? Date.now() + opts.timeBudgetMs : Infinity,
     maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
     aborted: false,
     weights,

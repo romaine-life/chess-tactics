@@ -1029,10 +1029,69 @@ async function main() {
     throw new Error(`Guest should not be able to start lobby: ${rivalStart.statusCode} ${rivalStart.body}`);
   }
 
+  // Start now requires a level (netplay: both clients build the same board from
+  // the shared (level, seed)). Starting without one is a 409 no_level.
+  const startNoLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  if (startNoLevel.statusCode !== 409 || JSON.parse(startNoLevel.body).error !== 'no_level') {
+    throw new Error(`Start without a level should 409 no_level: ${startNoLevel.statusCode} ${startNoLevel.body}`);
+  }
+
+  // Only the host may pick the level; a missing levelId is a 400.
+  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  if (rivalSetLevel.statusCode !== 403) {
+    throw new Error(`Guest should not be able to set the lobby level: ${rivalSetLevel.statusCode} ${rivalSetLevel.body}`);
+  }
+  const missingLevelId = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  if (missingLevelId.statusCode !== 400 || JSON.parse(missingLevelId.body).error !== 'missing_level_id') {
+    throw new Error(`Setting a level without an id should 400 missing_level_id: ${missingLevelId.statusCode} ${missingLevelId.body}`);
+  }
+  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  const setLevelBody = JSON.parse(setLevel.body);
+  if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-crown-valoria-01' || setLevelBody.lobby.your_side !== 'player') {
+    throw new Error(`Unexpected set-level response: ${setLevel.statusCode} ${setLevel.body}`);
+  }
+
   const started = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
   const startedBody = JSON.parse(started.body);
-  if (started.statusCode !== 200 || startedBody.lobby.phase !== 'started') {
+  if (started.statusCode !== 200 || startedBody.lobby.phase !== 'started' || !Number.isInteger(startedBody.lobby.seed) || startedBody.lobby.seed <= 0) {
     throw new Error(`Unexpected start lobby response: ${started.statusCode} ${started.body}`);
+  }
+
+  // Relay moves. Host ('player') moves first (index 0), then guest ('enemy') at index 1 —
+  // strict one-move-per-turn alternation is enforced server-side (host=even, guest=odd).
+  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 3, y: 4 } }));
+  const hostMoveBody = JSON.parse(hostMove.body);
+  if (hostMove.statusCode !== 200 || hostMoveBody.move.i !== 0 || hostMoveBody.move.side !== 'player' || hostMoveBody.move.pieceId !== 'p-1') {
+    throw new Error(`Unexpected host move response: ${hostMove.statusCode} ${hostMove.body}`);
+  }
+  // Turn integrity: the host cannot move again out of turn (index 1 belongs to the guest).
+  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 1, y: 1 } }));
+  if (outOfTurn.statusCode !== 409 || JSON.parse(outOfTurn.body).error !== 'not_your_turn') {
+    throw new Error(`Out-of-turn move should 409 not_your_turn: ${outOfTurn.statusCode} ${outOfTurn.body}`);
+  }
+  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'e-1', move: { x: 3, y: 4 } }));
+  const guestMoveBody = JSON.parse(guestMove.body);
+  if (guestMove.statusCode !== 200 || guestMoveBody.move.i !== 1 || guestMoveBody.move.side !== 'enemy' || guestMoveBody.move.pieceId !== 'e-1') {
+    throw new Error(`Unexpected guest move response: ${guestMove.statusCode} ${guestMove.body}`);
+  }
+  // Payload validation runs before the turn check, so a malformed move is 400 bad_move.
+  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 'nope' } }));
+  if (badMove.statusCode !== 400 || JSON.parse(badMove.body).error !== 'bad_move') {
+    throw new Error(`Malformed move should 400 bad_move: ${badMove.statusCode} ${badMove.body}`);
+  }
+  const outsiderMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'x-1', move: { x: 1, y: 1 } }));
+  if (outsiderMove.statusCode !== 401) {
+    throw new Error(`Anonymous move should require sign-in: ${outsiderMove.statusCode} ${outsiderMove.body}`);
+  }
+  const backfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
+  const backfillBody = JSON.parse(backfill.body);
+  if (backfill.statusCode !== 200 || backfillBody.moves.length !== 2 || backfillBody.moves[0].pieceId !== 'p-1' || backfillBody.moves[1].pieceId !== 'e-1') {
+    throw new Error(`Unexpected moves backfill: ${backfill.statusCode} ${backfill.body}`);
+  }
+  const startedList = await get('/api/lobbies', { cookie: 'better-auth.session=abc' });
+  const startedListBody = JSON.parse(startedList.body);
+  if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-crown-valoria-01') {
+    throw new Error(`Started lobby should expose move_count/level_id: ${startedList.statusCode} ${startedList.body}`);
   }
 
   const redirect = await get('/api/auth/sign-in?returnTo=%2Fplay');

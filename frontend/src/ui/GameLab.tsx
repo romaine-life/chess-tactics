@@ -33,11 +33,13 @@ import type { PieceType } from '../core/types';
 interface RunConfig {
   games: number;
   maxDepth: number;
-  timeBudgetMs: number;
+  /** Per-decision node ceiling. Node-bounded (not wall-clock) so a run is
+   * reproducible from its seeds on any machine — the whole point of the bench. */
+  maxNodes: number;
   seedBase: number;
 }
 
-const DEFAULT_CONFIG: RunConfig = { games: 100, maxDepth: 4, timeBudgetMs: 80, seedBase: 1 };
+const DEFAULT_CONFIG: RunConfig = { games: 100, maxDepth: 4, maxNodes: 20_000, seedBase: 1 };
 
 /** 'none' = run the level as authored; otherwise index into layers.units. */
 interface VariantConfig {
@@ -195,7 +197,7 @@ export function GameLab(): ReactElement {
           config: {
             games: doc.meta.games,
             maxDepth: doc.body.search.maxDepth ?? DEFAULT_CONFIG.maxDepth,
-            timeBudgetMs: doc.body.search.timeBudgetMs ?? DEFAULT_CONFIG.timeBudgetMs,
+            maxNodes: doc.body.search.maxNodes ?? DEFAULT_CONFIG.maxNodes,
             seedBase: doc.meta.seedBase,
           },
           variant: doc.meta.variant,
@@ -238,7 +240,7 @@ export function GameLab(): ReactElement {
     if (!level || handleRef.current) return;
     const applied = applyVariant(level, variant);
     const seeds = Array.from({ length: config.games }, (_, i) => config.seedBase + i);
-    const search = { maxDepth: config.maxDepth, timeBudgetMs: config.timeBudgetMs };
+    const search = { maxDepth: config.maxDepth, maxNodes: config.maxNodes };
     setRecords(null);
     setRunLevel(applied.level);
     setRunMetaBase({ config: { ...config }, variant: applied.label });
@@ -277,13 +279,13 @@ export function GameLab(): ReactElement {
       enemyWins: agg.enemyWins,
       draws: agg.draws,
       avgPlies: agg.avgPlies,
-      search: { maxDepth: runMetaBase.config.maxDepth, timeBudgetMs: runMetaBase.config.timeBudgetMs },
+      search: { maxDepth: runMetaBase.config.maxDepth, maxNodes: runMetaBase.config.maxNodes },
       seedBase: runMetaBase.config.seedBase,
       variant: runMetaBase.variant,
     };
     const body: LabRunBody = {
       level: runLevel,
-      search: { maxDepth: runMetaBase.config.maxDepth, timeBudgetMs: runMetaBase.config.timeBudgetMs },
+      search: { maxDepth: runMetaBase.config.maxDepth, maxNodes: runMetaBase.config.maxNodes },
       records,
     };
     setSaveState('saving');
@@ -373,9 +375,9 @@ export function GameLab(): ReactElement {
             onChange={(e) => setConfig({ ...config, maxDepth: Math.max(1, Number(e.target.value) || 1) })} />
         </label>
         <label>
-          ms / move
-          <input type="number" min={10} max={2000} value={config.timeBudgetMs} disabled={running}
-            onChange={(e) => setConfig({ ...config, timeBudgetMs: Math.max(10, Number(e.target.value) || 10) })} />
+          nodes / move
+          <input type="number" min={500} max={2_000_000} step={500} value={config.maxNodes} disabled={running}
+            onChange={(e) => setConfig({ ...config, maxNodes: Math.max(500, Number(e.target.value) || 500) })} />
         </label>
         <label>
           Seed base

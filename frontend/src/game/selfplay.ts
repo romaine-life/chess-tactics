@@ -12,7 +12,7 @@ import { createFromLevel } from './setup';
 import { searchBestAction, type SearchOptions } from '../core/ai';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
-import { applyMove, livingPieces, type MoveEnv } from '../core/rules';
+import { applyMove, sideInCheck, type MoveEnv } from '../core/rules';
 import { buildTerrainIndex } from '../core/terrain';
 import { createRng } from '../core/rng';
 import type { GameState, Move, PieceType, Side, Vec, Winner } from '../core/types';
@@ -90,15 +90,11 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
     const chosen = searchBestAction(game, env, { objective, ctx, turnsElapsed }, createRng(seed + tick), opts.search);
     tick += 1;
     if (!chosen) {
-      // No legal action: a stuck player is a stalemate draw (no passing in
-      // chess); a stuck enemy hands the turn back — both mirror the store.
-      if (side === 'player') {
-        game = { ...game, winner: 'draw', turn: 'done' };
-        break;
-      }
-      game = { ...game, turn: 'player' };
-      turnsElapsed += 1;
-      continue;
+      // No legal action: checkmate if the stuck side's King is attacked (a loss
+      // for that side), else stalemate — the store's terminalIfStuck semantics.
+      const winner: Winner = sideInCheck(game, side, env) ? (side === 'player' ? 'enemy' : 'player') : 'draw';
+      game = { ...game, winner, turn: 'done' };
+      break;
     }
 
     const mover = game.pieces.find((p) => p.id === chosen.pieceId);

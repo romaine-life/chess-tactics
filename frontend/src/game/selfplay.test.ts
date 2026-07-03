@@ -6,9 +6,14 @@ import { playLevelGame, replayStates, aggregateRecords } from './selfplay';
 import { createBlankLevel, type Level } from '../core/level';
 import { livingPieces } from '../core/rules';
 
-// Shallow, node-capped search keeps the sweep fast; decisions don't need depth
-// to be *reached*, only to be legal and recorded.
-const FAST = { maxDepth: 2, timeBudgetMs: 500, maxNodes: 20_000 };
+// Shallow, node-bounded (NO wall clock) so self-play is fully deterministic — a
+// seed must replay identically regardless of machine speed. Decisions don't need
+// depth to be *reached*, only to be legal and recorded.
+const FAST = { maxDepth: 2, maxNodes: 20_000 };
+// Cap ply length: weak depth-2 play can otherwise drag a duel toward the 300-ply
+// draw cap, and check-legal move-gen makes each ply costly. A short cap keeps the
+// mechanics tests quick without changing what they verify.
+const SHORT = { search: FAST, maxPlies: 60 };
 
 function loadOfficialLevels(): Level[] {
   const url = new URL('../../public/assets/campaigns/official.json', import.meta.url);
@@ -40,14 +45,14 @@ describe('playLevelGame', () => {
     }
   });
 
-  it('is deterministic per seed', () => {
-    const a = playLevelGame(duelLevel(), { seed: 11, search: FAST });
-    const b = playLevelGame(duelLevel(), { seed: 11, search: FAST });
+  it('is deterministic per seed', { timeout: 60_000 }, () => {
+    const a = playLevelGame(duelLevel(), { seed: 11, ...SHORT });
+    const b = playLevelGame(duelLevel(), { seed: 11, ...SHORT });
     expect(a).toEqual(b);
   });
 
-  it('records per-piece activity that matches the moves list', () => {
-    const record = playLevelGame(duelLevel(), { seed: 3, search: FAST });
+  it('records per-piece activity that matches the moves list', { timeout: 60_000 }, () => {
+    const record = playLevelGame(duelLevel(), { seed: 3, ...SHORT });
     const totalMoves = record.pieces.reduce((s, p) => s + p.moves, 0);
     expect(totalMoves).toBe(record.plies);
     const captures = record.moves.filter((m) => m.move.capture).length;
@@ -56,9 +61,9 @@ describe('playLevelGame', () => {
 });
 
 describe('replayStates', () => {
-  it('rebuilds one state per move plus the start', () => {
+  it('rebuilds one state per move plus the start', { timeout: 60_000 }, () => {
     const level = duelLevel();
-    const record = playLevelGame(level, { seed: 5, search: FAST });
+    const record = playLevelGame(level, { seed: 5, ...SHORT });
     const states = replayStates(level, record);
     expect(states.length).toBe(record.plies + 1);
     // Living combatants never increase as the game replays forward.
@@ -72,9 +77,9 @@ describe('replayStates', () => {
 });
 
 describe('aggregateRecords', () => {
-  it('sums wins, draws, and rates coherently', () => {
+  it('sums wins, draws, and rates coherently', { timeout: 60_000 }, () => {
     const level = duelLevel();
-    const records = [1, 2, 3, 4].map((seed) => playLevelGame(level, { seed, search: FAST }));
+    const records = [1, 2, 3, 4].map((seed) => playLevelGame(level, { seed, ...SHORT }));
     const agg = aggregateRecords(records);
     expect(agg.games).toBe(4);
     expect(agg.playerWins + agg.enemyWins + agg.draws).toBe(4);

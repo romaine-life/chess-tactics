@@ -4,7 +4,7 @@
 // decide whether the result is SAVEABLE, and every violation is a plain-language line
 // the editor renders verbatim. The backend deliberately does NOT mirror these (the
 // whole-workspace PUT carries legacy levels; one broken level must not brick the rest),
-// so this module is the single owner of the P1–P4 rule set. Pure + deterministic.
+// so this module is the single owner of the P1–P5 rule set. Pure + deterministic.
 
 import type { Level, Roster, ZoneType } from './level';
 import type { PieceType } from './types';
@@ -16,7 +16,7 @@ import { propCells, propDef } from './props';
 export interface PlayabilityViolation {
   /** Stable machine id (P1_SIDE_EMPTY, P2_KING_ASSAULT_KINGS, P2_RIVAL_KINGS_KINGS,
    * P3_UNITS_NOT_EMPTY, P3_NO_SPAWN_ZONE, P3_ZONE_CAPACITY, P3_ZONES_OVERLAP,
-   * P4_SURVIVE_TURNS). The editor keys on messages; tests key on these. */
+   * P4_SURVIVE_TURNS, P5_TIME_CONTROL). The editor keys on messages; tests key on these. */
   code: string;
   /** Plain language for the editor's violation list — no jargon, sides named
    * "Player side" / "Enemy side", modes named by their display names. */
@@ -194,6 +194,19 @@ export function validatePlayability(level: Level): PlayabilityResult {
       code: 'P4_SURVIVE_TURNS',
       message: `The ${MODE_NAME.survive} turn target must be a whole number of at least 1.`,
     });
+  }
+
+  // P5 — battle clock: when present, a whole-second starting time of at least 1 and a
+  // non-negative whole-second increment. Repeated from validateLevel (same both-gates
+  // pattern as P4) so the editor's violation list is complete on its own.
+  if (level.timeControl !== undefined) {
+    const { initialSeconds, incrementSeconds } = level.timeControl;
+    if (!Number.isInteger(initialSeconds) || initialSeconds < 1 || !Number.isInteger(incrementSeconds) || incrementSeconds < 0) {
+      violations.push({
+        code: 'P5_TIME_CONTROL',
+        message: 'The battle clock needs a starting time of at least one second and a non-negative increment.',
+      });
+    }
   }
 
   return { ok: violations.length === 0, violations };
