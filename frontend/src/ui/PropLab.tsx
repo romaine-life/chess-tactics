@@ -28,6 +28,31 @@ const ROWS = 7;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// Anchor number field with explicit −/+ steppers (Shift = ×10). The native number-input
+// spinner is hidden: under the app's `color-scheme: dark` Chrome draws it so low-contrast
+// that only the hovered half reads — it looked like a down-only control.
+function SeatNumber({ label, value, onCommit }: { label: string; value: number; onCommit: (n: number) => void }) {
+  return (
+    <label className="pl-num">{label}
+      <span className="pl-num-row">
+        <button type="button" className="pl-step" title="−1 (Shift: −10)" aria-label={`decrease ${label}`}
+          onClick={(ev) => onCommit(value - (ev.shiftKey ? 10 : 1))}>−</button>
+        <input
+          type="number"
+          value={value}
+          onChange={(ev) => {
+            // Guard the empty/mid-edit field: '' coerces to 0 and would teleport the prop.
+            const v = ev.target.value;
+            if (v !== '' && Number.isFinite(Number(v))) onCommit(Number(v));
+          }}
+        />
+        <button type="button" className="pl-step" title="+1 (Shift: +10)" aria-label={`increase ${label}`}
+          onClick={(ev) => onCommit(value + (ev.shiftKey ? 10 : 1))}>+</button>
+      </span>
+    </label>
+  );
+}
+
 export function PropLab(): ReactElement {
   const params = new URLSearchParams(window.location.search);
   const [propId, setPropId] = useState<string>(() => {
@@ -263,14 +288,8 @@ export function PropLab(): ReactElement {
           <p className="pl-hint">Drag the prop, or nudge with arrow keys (Shift = ×10). The blue diamonds are the tiles the prop occupies; the cross is the ground point its anchor seats on.</p>
 
           <div className="pl-fields">
-            {/* Guard the empty/mid-edit field: a cleared number input reads '' → Number('') is 0,
-                which would teleport the prop and could even be saved. Ignore non-finite/empty. */}
-            <label>anchor X
-              <input type="number" value={liveSeat.anchorX} onChange={(ev) => { const v = ev.target.value; if (v !== '' && Number.isFinite(Number(v))) setSeat({ anchorX: Number(v) }); }} />
-            </label>
-            <label>anchor Y
-              <input type="number" value={liveSeat.anchorY} onChange={(ev) => { const v = ev.target.value; if (v !== '' && Number.isFinite(Number(v))) setSeat({ anchorY: Number(v) }); }} />
-            </label>
+            <SeatNumber label="anchor X" value={liveSeat.anchorX} onCommit={(n) => setSeat({ anchorX: n })} />
+            <SeatNumber label="anchor Y" value={liveSeat.anchorY} onCommit={(n) => setSeat({ anchorY: n })} />
           </div>
 
           <label className="pl-scale">Scale {liveSeat.scale.toFixed(2)}×
@@ -335,6 +354,14 @@ const PL_CSS = `
 .pl-fields label { display: grid; gap: 3px; font-size: 12px; color: #9fb6cc; flex: 1; }
 .pl-fields input, .pl-scale input[type=number] { width: 100%; box-sizing: border-box; padding: 6px 8px; background: #101a2e;
   color: #d8eaff; border: 1px solid #2a3c5e; border-radius: 4px; font: inherit; font-size: 13px; }
+/* The −/+ buttons are the stepper; the native spinner reads down-only on the dark scheme. */
+.pl-fields input::-webkit-outer-spin-button, .pl-fields input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pl-fields input[type=number] { appearance: textfield; -moz-appearance: textfield; }
+.pl-num-row { display: flex; gap: 4px; }
+.pl-num-row input { flex: 1; min-width: 0; text-align: center; }
+.pl-step { flex: none; width: 28px; padding: 0; font-size: 15px; line-height: 1; cursor: pointer;
+  background: #111a2c; color: #cfe3ff; border: 1px solid #2a3c5e; border-radius: 4px; }
+.pl-step:hover { background: #17223a; }
 .pl-scale { display: grid; gap: 4px; font-size: 12px; color: #9fb6cc; }
 .pl-scale input[type=range] { width: 100%; }
 .pl-committed { font-size: 11px; color: #5f769b; padding-bottom: 8px; }
