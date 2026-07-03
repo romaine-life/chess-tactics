@@ -85,7 +85,11 @@ keeping one bake implementation and never reaching a production build.
 
 These two are load-bearing, enforced identically in the editor preview and the bake:
 
-1. **Keyline offset is inert.** The border is continuous by construction (atoms +
+1. **Keyline offset is inert.** *(Superseded by
+   [ADR-0054](0054-nine-slice-editor-is-the-devs-calibration-bench.md): the
+   split-layer model made the cool frame layer tunable — corners, pipes, and
+   scales — with symmetry guaranteed by the mirror-after-scale invariant. The
+   original rationale below is kept for history.)* The border is continuous by construction (atoms +
    `flipSides`, per [ADR-0012](0012-nine-slice-frames-are-atom-assembled.md) /
    [ADR-0017](0017-per-asset-flipsides-handedness.md)), so nudging only a corner's
    keyline would diverge from the fixed edges — a state the bake can't reproduce.
@@ -111,8 +115,11 @@ files), so a change is detectable on the filesystem, not just in the browser.
 - Good: **dev-only by construction** — `apply: 'serve'` keeps the write endpoint
   out of production builds; `import.meta.env.DEV` keeps the button out of the
   production UI.
-- Good: scope rules (inert keyline, consumption-side content) are enforced in one
-  place each and warn rather than silently mis-bake.
+- Good: the consumption-side content rule is enforced in one place (baked into
+  CSS, never the PNG). *(The original inert-keyline rule and its bake warning were
+  superseded by [ADR-0054](0054-nine-slice-editor-is-the-devs-calibration-bench.md),
+  which made every element tunable with symmetry guaranteed by construction — there
+  is no keyline warning to emit anymore.)*
 - Cost: a **dev endpoint surface** (`/__nine-slice/save`, `/__nine-slice/config`)
   that must stay serve-only — its safety rests on the `apply: 'serve'` guard.
 - Cost: the editor must **track the registry schema** ([ADR-0016](0016-single-source-nine-slice-registry.md));
