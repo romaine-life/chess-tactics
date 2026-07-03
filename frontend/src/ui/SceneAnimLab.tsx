@@ -12,20 +12,27 @@ import { SCENE_ANIMS } from './SceneBackdrop';
 const SCENE_URL = '/assets/ui/main-menu/background-scene-v1.png';
 const SCENE_W = 1586;
 
-// Bake variants the lab can flip between. `sheet` frames must match `frames`.
-const VARIANTS = [
-  { id: 'scroll', label: 'Scroll bake (current live) — 12 frames', sheet: '/assets/ui/main-menu/scene-anim/waterfall-right.png', frames: 12 },
-  { id: 'ai', label: 'AI frames, color-locked (previous) — 11 frames', sheet: '/assets/ui/main-menu/scene-anim/waterfall-right-ai.png', frames: 11 },
-];
+interface Variant { id: string; label: string; sheet: string; frames: number }
 
-const REGION = SCENE_ANIMS[0]; // waterfall-right rect in scene px
+// Bake variants per region: every region offers its live sheet; the right fall
+// also keeps the retired AI-frames sheet around for comparison.
+function variantsFor(region: (typeof SCENE_ANIMS)[number]): Variant[] {
+  const live = { id: 'live', label: `Live sheet — ${region.frames} frames`, sheet: region.sheet, frames: region.frames };
+  if (region.id === 'waterfall-right') {
+    return [live, { id: 'ai', label: 'AI frames, color-locked (retired) — 11 frames', sheet: '/assets/ui/main-menu/scene-anim/waterfall-right-ai.png', frames: 11 }];
+  }
+  return [live];
+}
 
 export function SceneAnimLab(): ReactElement {
-  const [variantId, setVariantId] = useState(VARIANTS[0].id);
-  const variant = VARIANTS.find((v) => v.id === variantId) ?? VARIANTS[0];
+  const [regionId, setRegionId] = useState(SCENE_ANIMS[0].id);
+  const region = SCENE_ANIMS.find((r) => r.id === regionId) ?? SCENE_ANIMS[0];
+  const variants = variantsFor(region);
+  const [variantId, setVariantId] = useState(variants[0].id);
+  const variant = variants.find((v) => v.id === variantId) ?? variants[0];
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(true);
-  const [frameMs, setFrameMs] = useState(REGION.frameMs);
+  const [frameMs, setFrameMs] = useState(region.frameMs);
   const [zoom, setZoom] = useState(3);
   const [wrapOnly, setWrapOnly] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
@@ -57,7 +64,7 @@ export function SceneAnimLab(): ReactElement {
     setFrame(next);
   };
 
-  const { x, y, w, h } = REGION;
+  const { x, y, w, h } = region;
   const view = useMemo(() => {
     const px = (v: number): string => `${v * zoom}px`;
     const scene: CSSProperties = {
@@ -82,7 +89,7 @@ export function SceneAnimLab(): ReactElement {
 
   return (
     <div style={{ padding: 24, color: '#cfe3f5', fontFamily: 'system-ui, sans-serif', background: '#060a10', minHeight: '100vh' }}>
-      <h1 style={{ fontSize: 18, margin: '0 0 4px' }}>Scene animation lab — right waterfall</h1>
+      <h1 style={{ fontSize: 18, margin: '0 0 4px' }}>Scene animation lab</h1>
       <p style={{ margin: '0 0 16px', color: '#8fb0c9', fontSize: 13 }}>
         Same sheet + scene pixels as the menu, stepped by a controllable clock. Frame 0 wraps to start the next cycle —
         watch the <strong>{n - 1} → 0</strong> transition.
@@ -101,9 +108,20 @@ export function SceneAnimLab(): ReactElement {
 
         <div style={{ display: 'grid', gap: 12, minWidth: 300, fontSize: 14 }}>
           <label>
+            Region<br />
+            <select value={regionId} onChange={(e) => {
+              const next = SCENE_ANIMS.find((r) => r.id === e.target.value) ?? SCENE_ANIMS[0];
+              setRegionId(next.id); setVariantId('live'); setFrameMs(next.frameMs);
+              frameRef.current = 0; setFrame(0);
+            }}>
+              {SCENE_ANIMS.map((r) => <option key={r.id} value={r.id}>{r.id} — {r.frameMs}ms/frame</option>)}
+            </select>
+          </label>
+
+          <label>
             Variant<br />
             <select value={variantId} onChange={(e) => { setVariantId(e.target.value); frameRef.current = 0; setFrame(0); }}>
-              {VARIANTS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+              {variants.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
             </select>
           </label>
 
@@ -120,7 +138,7 @@ export function SceneAnimLab(): ReactElement {
           </label>
 
           <label>
-            Tempo: {frameMs} ms/frame ({(n * frameMs / 1000).toFixed(2)}s loop; menu ships {REGION.frameMs} ms)
+            Tempo: {frameMs} ms/frame ({(n * frameMs / 1000).toFixed(2)}s loop; menu ships {region.frameMs} ms)
             <input type="range" min={40} max={400} step={10} value={frameMs} style={{ width: '100%' }}
               onChange={(e) => setFrameMs(Number(e.target.value))} />
           </label>

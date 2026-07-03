@@ -59,6 +59,11 @@ def build_mask(static: Image.Image, frames: list[Image.Image], w: int, h: int,
             # identical for both — so the structural-drift guard below does it.)
             if max(sr, sg, sb) < bright_thresh:
                 continue
+            if not frames:
+                # Static-only masking (scroll mode without a run dir): zones +
+                # brightness + the despeckle/edge passes below decide alone.
+                mask[y][x] = True
+                continue
             # Structural-drift guard: real water motion sparkles AROUND its
             # static brightness; when the generator instead REPAINTS a bright
             # area dark in (almost) every frame — e.g. extending the treeline
@@ -194,7 +199,8 @@ def bake_scroll(static: Image.Image, mask: list[list[bool]], w: int, h: int,
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("run_dir", type=Path)
+    parser.add_argument("run_dir", type=Path, nargs="?", default=None,
+                        help="PixelLab frames (v0/<i>.png) for AI-frame mode and frame-diff masking. Optional in --scroll mode: without it the mask comes from the static art alone (zones ∧ brightness ∧ despeckle) — no generation involved.")
     parser.add_argument("--rect", required=True, help="X,Y,W,H crop in scene pixels")
     parser.add_argument("--out", required=True, help="output sheet name (no extension)")
     parser.add_argument("--zones", default="", help="crop-relative x,y,w,h rects (';'-separated) where motion is allowed")
@@ -212,13 +218,17 @@ def main() -> None:
 
     skip = {int(v) for v in args.skip.split(",") if v}
     frames: list[Image.Image] = []
-    for i in range(args.frames):
-        if i in skip:
-            continue
-        frame = Image.open(args.run_dir / "v0" / f"{i}.png").convert("RGBA")
-        if frame.size != (w, h):
-            sys.exit(f"frame {i} is {frame.size}, expected {(w, h)} — refusing to rescale pixel art")
-        frames.append(frame)
+    if args.run_dir is None:
+        if not args.scroll:
+            sys.exit("run_dir is required unless --scroll is set (only scroll mode can mask from static art alone)")
+    else:
+        for i in range(args.frames):
+            if i in skip:
+                continue
+            frame = Image.open(args.run_dir / "v0" / f"{i}.png").convert("RGBA")
+            if frame.size != (w, h):
+                sys.exit(f"frame {i} is {frame.size}, expected {(w, h)} — refusing to rescale pixel art")
+            frames.append(frame)
 
     n = len(frames)  # frames actually baked (source count minus --skip)
     zones = [tuple(int(v) for v in z.split(",")) for z in args.zones.split(";") if z]

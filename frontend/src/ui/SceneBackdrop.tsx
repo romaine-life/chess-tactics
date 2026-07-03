@@ -32,8 +32,9 @@ export interface SceneAnim {
   sheet: string;
 }
 
-// Every animated region of the menu scene. Per the color-cycling canon (Mark
-// Ferrari): when more regions land, give them DIFFERENT loop tempos so the
+// Every animated region of the menu scene — all four waterfalls, scroll-baked
+// (build-scene-anim.py --scroll). Per the color-cycling canon (Mark Ferrari):
+// each region runs its OWN loop tempo (1.44s / 1.68s / 1.92s / 2.16s) so the
 // scene never pulses in unison.
 export const SCENE_ANIMS: SceneAnim[] = [
   {
@@ -45,6 +46,36 @@ export const SCENE_ANIMS: SceneAnim[] = [
     frames: 12,
     frameMs: 140,
     sheet: '/assets/ui/main-menu/scene-anim/waterfall-right.png',
+  },
+  {
+    id: 'waterfall-right-lower',
+    x: 1240,
+    y: 600,
+    w: 110,
+    h: 130,
+    frames: 12,
+    frameMs: 120,
+    sheet: '/assets/ui/main-menu/scene-anim/waterfall-right-lower.png',
+  },
+  {
+    id: 'waterfall-left',
+    x: 170,
+    y: 485,
+    w: 90,
+    h: 195,
+    frames: 12,
+    frameMs: 160,
+    sheet: '/assets/ui/main-menu/scene-anim/waterfall-left.png',
+  },
+  {
+    id: 'waterfall-lowerleft',
+    x: 110,
+    y: 770,
+    w: 220,
+    h: 170,
+    frames: 12,
+    frameMs: 180,
+    sheet: '/assets/ui/main-menu/scene-anim/waterfall-lowerleft.png',
   },
 ];
 
