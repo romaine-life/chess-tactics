@@ -21,6 +21,7 @@ import { BoardSizePanel } from './shared/BoardSizePanel';
 import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
+import { useScreenEntrance } from './shell/useScreenEntrance';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import {
   hasDirectionSprite,
@@ -564,7 +565,14 @@ export function LevelEditor(): ReactElement {
   const loadedBoard = useMemo(() => readBoardParam(), []);
   const draftKey = useMemo(() => levelEditorDraftKey({ levelId: routeParams.levelId, boardCode: routeParams.boardCode }), [routeParams.levelId, routeParams.boardCode]);
   const localDraft = useMemo(() => readLevelEditorDraft(draftKey), [draftKey]);
-  const initialBoard = localDraft?.board ?? loadedBoard;
+  const initialCampaignLevel = useMemo(
+    () => (!localDraft && !loadedBoard && routeParams.levelId ? useCampaigns.getState().levels[routeParams.levelId] : undefined),
+    [loadedBoard, localDraft, routeParams.levelId],
+  );
+  const initialCampaignBoard = useMemo(() => initialCampaignLevel ? levelToEditorBoard(initialCampaignLevel) : undefined, [initialCampaignLevel]);
+  const initialBoard = localDraft?.board ?? loadedBoard ?? initialCampaignBoard;
+  const needsCampaignHydration = Boolean(routeParams.levelId && !loadedBoard && !localDraft && !initialCampaignLevel);
+  const [editorReady, setEditorReady] = useState(!needsCampaignHydration);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
   const [boardCols, setBoardCols] = useState(initialBoard?.cols ?? LE_COLS);
   const [boardRows, setBoardRows] = useState(initialBoard?.rows ?? LE_ROWS);
@@ -623,18 +631,18 @@ export function LevelEditor(): ReactElement {
   // The RULES panel state — the authored win-rule mode + the orthogonal placement axis (ADR-0050).
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
   // schema defaults so it reads exactly like a blank createBlankLevel.
-  const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? 'capture-all');
-  const [placement, setPlacement] = useState<'fixed' | 'random'>(localDraft?.placement ?? 'fixed');
-  const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
+  const [objective, setObjective] = useState<ObjectiveType>(localDraft?.objective ?? initialCampaignLevel?.objective ?? 'capture-all');
+  const [placement, setPlacement] = useState<'fixed' | 'random'>(localDraft?.placement ?? initialCampaignLevel?.placement ?? 'fixed');
+  const [surviveTurns, setSurviveTurns] = useState<number>(localDraft?.surviveTurns ?? initialCampaignLevel?.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
   // Random-placement roster: per side, per playable piece type. An absent count reads as 0.
-  const [roster, setRoster] = useState<{ player: Roster; enemy: Roster }>(localDraft?.roster ?? { player: {}, enemy: {} });
+  const [roster, setRoster] = useState<{ player: Roster; enemy: Roster }>(localDraft?.roster ?? { player: initialCampaignLevel?.roster?.player ?? {}, enemy: initialCampaignLevel?.roster?.enemy ?? {} });
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
   // the title bar; `savedSig` is the board signature at last save, the basis of the dirty chip.
   const [editingId, setEditingId] = useState<string | undefined>(routeParams.levelId);
-  const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? 'Untitled level');
-  const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? null);
+  const [levelName, setLevelName] = useState<string>(localDraft?.levelName ?? initialCampaignLevel?.name ?? 'Untitled level');
+  const [savedSig, setSavedSig] = useState<string | null>(localDraft?.savedSig ?? (initialCampaignLevel ? levelSignature(initialCampaignLevel) : null));
   // Set true once a campaign level has been hydrated into the board state; the baseline effect
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
   // clean even for a legacy level whose derived boardCode differs from its saved one).
@@ -698,14 +706,26 @@ export function LevelEditor(): ReactElement {
   useEffect(() => {
     let active = true;
     void (async () => {
-      await ensureCampaignsHydrated();
-      if (!active || loadedBoard || !routeParams.levelId) return;
+      try {
+        await ensureCampaignsHydrated();
+      } catch {
+        // The editor can still show the blank/local board; don't leave the fade held forever.
+      }
+      if (!active) return;
+      if (loadedBoard || !routeParams.levelId) {
+        setEditorReady(true);
+        return;
+      }
       const level = useCampaigns.getState().levels[routeParams.levelId];
-      if (!level) return;
+      if (!level) {
+        setEditorReady(true);
+        return;
+      }
       if (localDraft) {
         setEditingId(level.id);
         setSavedSig(levelSignature(level));
         if (!quietDraftRestore) reportStatus('Restored unsaved local draft.', 'success', `Save will update "${level.name}".`);
+        setEditorReady(true);
         return;
       }
       const board = levelToEditorBoard(level);
@@ -734,6 +754,7 @@ export function LevelEditor(): ReactElement {
       // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
       // legacy level (derived boardCode) doesn't spuriously read dirty the instant it loads.
       needsBaselineRef.current = true;
+      setEditorReady(true);
     })();
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1440,20 +1461,21 @@ export function LevelEditor(): ReactElement {
   const testHref = canTest
     ? `/play?${routeParams.campaignId ? `campaignId=${encodeURIComponent(routeParams.campaignId)}&` : ''}levelId=${encodeURIComponent(targetLevelId as string)}&mode=test`
     : undefined;
+  const entranceClass = useScreenEntrance(editorReady);
 
   return (
-    <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
+    <div className={`skirmish-screen level-editor-screen ${entranceClass}`.trim()} data-testid="level-editor" style={screenStyle}>
         {confirmDialog}
         {/* The title bar lives in the app shell now; the editor paints its live
             save-state + actions into it via portals (state stays in this component). */}
-        <TitleBarSlot region="center">
+        {editorReady ? <TitleBarSlot region="center">
           <div className="le-topbar-stats" aria-label="Level status">
             <span className="le-level-name">{levelName}</span>
             {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
             <span className={`le-save-state ${saveStateClass}`}>{saveStatus || saveStateLabel}</span>
           </div>
-        </TitleBarSlot>
-        <TitleBarSlot region="actions">
+        </TitleBarSlot> : null}
+        {editorReady ? <TitleBarSlot region="actions">
           {/* Only the RETURN nav rides the global title bar now (‹ Catalog / ‹ Back). The
               workspace ACTIONS (Undo · Test · Save) moved into the editor's OWN pinned dock in
               the control rail (.le-actions-dock below) — document verbs belong in the editor's
@@ -1463,7 +1485,7 @@ export function LevelEditor(): ReactElement {
             {cameFromStudio ? <NavButton className="app-header-button le-back-catalog" to="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</NavButton> : null}
             {routeParams.returnTo ? <NavButton className="app-header-button" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</NavButton> : null}
           </nav>
-        </TitleBarSlot>
+        </TitleBarSlot> : null}
 
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
