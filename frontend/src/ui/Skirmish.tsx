@@ -8,6 +8,9 @@ import { objectiveSummary } from '../core/objectives';
 import { formatClockMs } from '../core/clock';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
+import { decodeBoard } from './boardCode';
+import { editorBoardToLevel } from '../core/levelBoard';
+import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
 import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
@@ -34,6 +37,11 @@ export function Skirmish() {
   const routeCampaignId = routeParams.get('campaignId');
   const routeLevelId = routeParams.get('levelId');
   const routeMode = routeParams.get('mode');
+  // Play-test a shared board-code link directly (no save/sign-in): `?board=<code>` decodes an
+  // authored board into a one-off fixed-placement level. `?obj=<mode>` picks the win rule
+  // (defaults to capture-all). Lets a crafted position be handed round as a URL.
+  const routeBoard = routeParams.get('board');
+  const routeObjective = routeParams.get('obj');
   // Real campaign play (records progress + shows the result flow), as opposed to the
   // editor's "Test Play" (mode=test) or a free skirmish (no campaign/level).
   const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
@@ -110,6 +118,20 @@ export function Skirmish() {
       shouldStartFreshSkirmish(useSkirmish.getState(), levelId);
     const freshSeed = () => Math.floor(Math.random() * 999999) + 1;
 
+    // A `?board=<code>` link plays an authored position straight away — decode it into a
+    // fixed-placement level and start fresh. Falls through to the normal flow if it can't decode.
+    if (routeBoard) {
+      const decoded = decodeBoard(routeBoard);
+      if (decoded) {
+        const objective: ObjectiveType = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
+          ? (routeObjective as ObjectiveType) : 'capture-all';
+        const level = editorBoardToLevel(decoded, { id: 'board-link', name: 'Board Link', objective });
+        if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level });
+        setBoardSettled(true);
+        return;
+      }
+    }
+
     if (!routeLevelId || routeLevel) {
       const levelId = routeLevel?.id ?? null;
       if (shouldStartFresh(levelId)) newSkirmish({ seed: freshSeed(), level: routeLevel ?? undefined });
@@ -132,7 +154,7 @@ export function Skirmish() {
       })
       .catch(() => { if (shouldStartFresh(null)) newSkirmish({ seed: freshSeed() }); setBoardSettled(true); });
     return () => { active = false; };
-  }, [newSkirmish, routeCampaignId, routeLevel, routeLevelId]);
+  }, [newSkirmish, routeBoard, routeObjective, routeCampaignId, routeLevel, routeLevelId]);
 
   const screenStyle = {
     '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")`,
