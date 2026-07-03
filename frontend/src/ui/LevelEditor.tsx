@@ -13,6 +13,7 @@ import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard
 import { KitScroll } from './KitScroll';
 import { ViewPane } from './shared/ViewPane';
 import { NavButton } from './shared/NavButton';
+import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -629,6 +630,20 @@ export function LevelEditor(): ReactElement {
   const [saving, setSaving] = useState(false);
   const [me, setMe] = useState<AuthUser | null>(null);
   const [boardLinkDraft, setBoardLinkDraft] = useState('');
+  const { ask, dialog: confirmDialog } = useConfirm();
+
+  // DEV-only preview of the in-game confirm dialog, so its look can be judged live without the
+  // admin + official-target gating that guards the real Publish flow. Stripped from prod builds
+  // (import.meta.env.DEV is false there). /level-editor?confirmPreview=1 → publish (primary),
+  // ?confirmPreview=delete → a destructive prompt (danger).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const flavor = new URLSearchParams(window.location.search).get('confirmPreview');
+    if (!flavor) return;
+    void (flavor === 'delete'
+      ? ask({ title: 'Delete level?', message: <>Delete <b>Bridge Crossing</b>? This removes it from the workspace when you save.</>, confirmLabel: 'Delete', cancelLabel: 'Keep', tone: 'danger' })
+      : ask({ title: 'Publish to all players?', message: 'This updates the official campaigns. Every player will receive these changes the next time they play.', confirmLabel: 'Publish', cancelLabel: 'Cancel' }));
+  }, [ask]);
 
   const reportStatus = (message: string, tone: StatusTone = 'info', detail?: string): void => {
     setSaveStatus(message);
@@ -1092,7 +1107,12 @@ export function LevelEditor(): ReactElement {
     });
     useCampaigns.getState().replaceLevel(level);
     const official = tierOf(level.id) === 'official';
-    if (official && !window.confirm('Publish changes to the official campaigns? Every player will receive them.')) return;
+    if (official && !(await ask({
+      title: 'Publish to all players?',
+      message: 'This updates the official campaigns. Every player will receive these changes the next time they play.',
+      confirmLabel: 'Publish',
+      cancelLabel: 'Cancel',
+    }))) return;
     setSaving(true);
     setSaveStatus('');
     try {
@@ -1371,6 +1391,7 @@ export function LevelEditor(): ReactElement {
 
   return (
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
+        {confirmDialog}
         {/* The title bar lives in the app shell now; the editor paints its live
             save-state + actions into it via portals (state stays in this component). */}
         <TitleBarSlot region="center">

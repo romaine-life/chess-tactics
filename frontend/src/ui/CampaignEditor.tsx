@@ -12,6 +12,7 @@ import { ViewPane } from './shared/ViewPane';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
+import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -226,6 +227,7 @@ export function CampaignEditor() {
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+  const { ask, dialog: confirmDialog } = useConfirm();
   // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
   // /campaign or /skirmish visit this session — then there's real content at mount and
   // nothing holds; otherwise hold the fade until the officials merge settles.
@@ -332,7 +334,12 @@ export function CampaignEditor() {
   // "Publish to all players": a distinct, confirmed, admin-gated write of ONLY the
   // official slice. The server's requireAdmin is the real gate (403 surfaces here).
   const publishOfficialNow = async () => {
-    if (!window.confirm('Publish changes to the official campaigns? Every player will receive them.')) return;
+    if (!(await ask({
+      title: 'Publish to all players?',
+      message: 'This updates the official campaigns. Every player will receive these changes the next time they play.',
+      confirmLabel: 'Publish',
+      cancelLabel: 'Cancel',
+    }))) return;
     try {
       const { revision } = await publishOfficialWorkspace();
       setSavedOfficialSig(officialSliceSignature());
@@ -379,15 +386,27 @@ export function CampaignEditor() {
     setStatus('Exported campaign workspace JSON.');
   };
 
-  const confirmDeleteCampaign = (campaign: Campaign) => {
-    if (window.confirm(`Delete campaign "${campaign.name}"? This removes it from the workspace when you save.`)) {
+  const confirmDeleteCampaign = async (campaign: Campaign) => {
+    if (await ask({
+      title: `Delete campaign?`,
+      message: <>Delete <b>{campaign.name}</b>? This removes it from the workspace when you save.</>,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      tone: 'danger',
+    })) {
       useCampaigns.getState().deleteCampaign(campaign.id);
       setStatus('Campaign deleted. Save to keep this change.');
     }
   };
 
-  const confirmDeleteLevel = (level: Level) => {
-    if (window.confirm(`Delete level "${level.name}"? This removes it from the workspace when you save.`)) {
+  const confirmDeleteLevel = async (level: Level) => {
+    if (await ask({
+      title: `Delete level?`,
+      message: <>Delete <b>{level.name}</b>? This removes it from the workspace when you save.</>,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      tone: 'danger',
+    })) {
       useCampaigns.getState().deleteLevel(level.id);
       setStatus('Level deleted. Save to keep this change.');
     }
@@ -437,6 +456,7 @@ export function CampaignEditor() {
 
   return (
     <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
+      {confirmDialog}
       {/* Same art-directed backdrop + synced rain as the main menu (.ce-screen paints the
           menu scene; this canvas adds the shared rain). Mostly overlapped by the editor
           panels, but it keeps the feel consistent with the rest of the app in the gaps. */}

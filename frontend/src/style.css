@@ -1154,6 +1154,61 @@ h1 {
   transition-duration: var(--route-veil-reveal-ms);
 }
 
+/* In-game confirmation dialog (ui/shared/ConfirmDialog.tsx) — replaces window.confirm() on
+   player surfaces so an "are you sure?" wears the game's own chrome, not the browser's. The
+   scrim dims + blurs the board (and swallows clicks); the panel wears the SAME kit panel.png
+   9-slice as the HUD, and its buttons are the SAME .le-seg-btn kit frames — nothing here is a
+   hand-rolled border (ADR-0002/0011/0014). */
+.confirm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10000; /* above the route-veil (9999) so a mid-transition veil can't cover it */
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 8, 13, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: confirm-scrim-in 140ms ease both;
+}
+.confirm-panel {
+  box-sizing: border-box;
+  width: min(92vw, 430px);
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  padding: 6px 10px 10px;
+  color: #f3ead8;
+  animation: confirm-panel-in 160ms ease both;
+}
+/* The panel is only a focus anchor (a11y: move focus into the dialog on open), never an
+   interactive control — so it must not paint a focus outline. The kit frame IS its boundary. */
+.confirm-panel:focus,
+.confirm-panel:focus-visible { outline: none; }
+.confirm-panel h2 {
+  color: #94daf5;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.1;
+  margin: 0 0 12px;
+  text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+}
+.confirm-body {
+  font-size: var(--ds-text-sm);
+  line-height: 1.42;
+  margin: 0 0 18px;
+}
+.confirm-actions {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 8px;
+  justify-content: end;
+}
+.confirm-actions .le-seg-btn { min-width: 116px; padding: 0 16px; }
+@keyframes confirm-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes confirm-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
 /* "New version available" prompt — quiet, fixed, non-blocking. Shown only after
    a newer build is detected (src/net/appUpdate.ts). */
 .app-update-banner {
