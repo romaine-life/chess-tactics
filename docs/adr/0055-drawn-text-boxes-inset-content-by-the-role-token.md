@@ -4,7 +4,7 @@ date: 2026-07-02
 deciders: Nelson, Claude
 ---
 
-# ADR-0053: Drawn text boxes inset their content by the role token, never flush
+# ADR-0055: Drawn text boxes inset their content by the role token, never flush
 
 ## Context and Problem Statement
 

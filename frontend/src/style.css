@@ -4338,7 +4338,7 @@ h1 {
   border: 14px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
   box-sizing: border-box;
-  /* Sections are separated by the GUTTER, not the within-section stack (ADR-0054). */
+  /* Sections are separated by the GUTTER, not the within-section stack (ADR-0056). */
   gap: var(--ds-gutter);
   height: 100%;
   max-height: none;
@@ -4478,7 +4478,7 @@ h1 {
   font-size: .9rem;
   font-weight: 400;
   line-height: 1;
-  /* Headings bind DOWNWARD (ADR-0054): stack below to their own content; the larger
+  /* Headings bind DOWNWARD (ADR-0056): stack below to their own content; the larger
      gutter above them comes from the section gap, never from heading margins. */
   margin: 0 0 var(--ds-stack);
   text-transform: uppercase;
@@ -4578,7 +4578,7 @@ h1 {
    title). Glyphs come from the editor icon set (.le-ico/.ic-*), same treatment as the
    tool row; press swaps to the set's gold -active variant. Test + Save/Publish are
    session verbs and live in the Status layer card (.le-status-actions, 2-col grid; the
-   base grid stays 3-col for the Board layer's row). Spacing rides the ADR-0054 ladder —
+   base grid stays 3-col for the Board layer's row). Spacing rides the ADR-0056 ladder —
    no per-row margin hand-picks. */
 .le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
 .le-board-actions.le-history-actions { display: flex; }
@@ -4586,7 +4586,7 @@ h1 {
 .le-icon-btn { padding: 0; width: 38px; }
 .le-icon-btn:not(:disabled):active .ic-undo { background-image: url("/assets/ui/level-editor/icons/undo-active.png"); }
 .le-icon-btn:not(:disabled):active .ic-redo { background-image: url("/assets/ui/level-editor/icons/redo-active.png"); }
-/* The status card is a live flex column (ADR-0054) — its gap spaces the row; no extra margin. */
+/* The status card is a live flex column (ADR-0056) — its gap spaces the row; no extra margin. */
 .le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
 
@@ -4689,7 +4689,7 @@ h1 {
   margin-top: 8px;
   min-height: 38px;
   outline: none;
-  /* Single-line control: horizontal inset on the role token (ADR-0053); vertical
+  /* Single-line control: horizontal inset on the role token (ADR-0055); vertical
      centering comes from min-height. */
   padding: 0 var(--ds-inset);
   width: 100%;
@@ -4774,7 +4774,7 @@ h1 {
 
 /* ---- Playability violations list (ADR-0050) -----------------------------------------------
    The to-fix list (Status layer only). A warm accent line marks it as blocking — and because
-   it DRAWS a box around its text, the content is inset by the role token (ADR-0053): text
+   it DRAWS a box around its text, the content is inset by the role token (ADR-0055): text
    never sits flush against a drawn edge. Frameless cards stay zero-padding. */
 .le-violations { box-shadow: inset 0 0 0 1px rgba(242, 122, 106, .35); padding: var(--ds-inset); }
 .le-violation-list { display: flex; flex-direction: column; gap: var(--ds-stack); list-style: none; margin: 0; padding: 0; }
@@ -4846,7 +4846,7 @@ h1 {
 .le-ctrlrow { align-items: center; display: flex; gap: var(--ds-inline-tight); justify-content: space-between; margin-top: var(--ds-stack); }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: var(--ds-stack) 2px 0; }
-/* A LIVE flex column (ADR-0054): the gap actually applies — it was declared on a block
+/* A LIVE flex column (ADR-0056): the gap actually applies — it was declared on a block
    container for this card's whole life and silently did nothing (children sat flush).
    Gap-driven container ⇒ children carry no vertical margins of their own (flex margins
    don't collapse; they'd ADD to the gap). */
@@ -4858,7 +4858,7 @@ h1 {
 .le-status-level { align-items: baseline; display: flex; gap: var(--ds-inline-tight); min-width: 0; }
 .le-status-level .le-level-name { color: #f0e7d3; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .le-official-tag { color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; }
-/* Drawn text boxes inset their content by the role token (ADR-0053). */
+/* Drawn text boxes inset their content by the role token (ADR-0055). */
 .le-status-current {
   background: rgba(4, 13, 20, .7);
   border: 1px solid rgba(82, 142, 170, .3);

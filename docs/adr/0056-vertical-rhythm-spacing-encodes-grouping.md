@@ -4,7 +4,7 @@ date: 2026-07-02
 deciders: Nelson, Claude
 ---
 
-# ADR-0054: Vertical rhythm — spacing encodes grouping (tight < stack < gutter)
+# ADR-0056: Vertical rhythm — spacing encodes grouping (tight < stack < gutter)
 
 ## Context and Problem Statement
 
