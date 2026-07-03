@@ -386,32 +386,80 @@ h1 {
 /* The background scene as a fade-able layer (cold-load reveal step 1, see
    shell/coldReveal). Sits above the floor and BELOW the rain (z2) + UI (z3), exactly
    where the layer's own background used to paint. Hidden until the director opens the
-   'bg' stage, then fades in over the SAME 320ms used by the old menu reveal. */
-.main-menu-layer::after {
-  content: "";
+   'bg' stage, then fades in over the SAME 320ms used by the old menu reveal.
+   REAL elements rather than a ::after (see ui/SceneBackdrop.tsx): the scene canvas
+   reproduces the `center / cover` crop as an element so animated scene regions
+   (waterfalls) can anchor in scene coordinates, sandwiched UNDER the scrim gradients
+   that used to ride the same background stack. */
+.scene-backdrop {
   position: absolute;
   inset: 0;
   z-index: 1;
+  overflow: hidden;
   pointer-events: none;
+  /* Size container so the canvas can compute the cover crop from cq units. */
+  container-type: size;
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+}
+.main-menu-layer:not([data-reveal-bg]) .scene-backdrop { opacity: 0; }
+
+/* Exact `center / cover` as an element: at least as wide and as tall as the
+   backdrop, at the scene's own aspect ratio, centered — identical crop math. */
+.scene-backdrop-canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100cqw, calc(100cqh * (1586 / 991)));
+  aspect-ratio: 1586 / 991;
   /* PNG fallback declaration for browsers without image-set()/type() support. */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat;
+  background: url("/assets/ui/main-menu/background-scene-v1.png") 0 0 / 100% 100% no-repeat;
   /* Preferred: AVIF -> WebP -> PNG. The whole declaration is dropped (falling back to
      the one above) on engines that don't support image-set() type(). */
   background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
     image-set(
       url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
       url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
       url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat;
-  opacity: 1;
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+    ) 0 0 / 100% 100% no-repeat;
 }
-.main-menu-layer:not([data-reveal-bg])::after { opacity: 0; }
+
+/* The two darkening scrims the old pseudo stacked over the scene — now a layer
+   ABOVE the animated regions, so moving water is darkened like the art around it. */
+.scene-backdrop-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46));
+}
+
+/* An animated scene region (menu twin of the board's .tile-layer-top-anim): a
+   BAKED horizontal frame sheet (scripts/build-scene-anim.py), only water pixels
+   opaque, frame 0 = the shipped scene; steps() just advances the frame index.
+   !important clears the global `* { animation: none }` OS-reduce reset (~6477):
+   Windows "animations off" reports prefers-reduced-motion falsely, and ambient
+   scenery must not freeze for those players (deploy-drop/ADR-0048 precedent).
+   The EXPLICIT in-game choice (:root.reduce-motion) does freeze it, to frame 0 =
+   the exact static art. NO image-rendering override: the sheet must be resampled
+   exactly like the scene canvas under it (smooth cover scaling, not pixelated). */
+.scene-backdrop-anim {
+  position: absolute;
+  background-repeat: no-repeat;
+  background-size: calc(var(--scene-anim-frames, 1) * 100%) 100%;
+  animation: scene-anim-flow var(--scene-anim-dur, 1.2s) steps(var(--scene-anim-frames, 1)) infinite !important;
+  will-change: background-position;
+}
+
+:root.reduce-motion .scene-backdrop-anim {
+  animation: none !important;
+}
+
+@keyframes scene-anim-flow {
+  from { background-position-x: 0; }
+  to { background-position-x: var(--scene-anim-travel, 0); }
+}
 
 .main-menu-screen {
   --menu-blue: #1f84f5;

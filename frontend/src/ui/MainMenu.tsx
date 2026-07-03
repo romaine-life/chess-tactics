@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
@@ -116,6 +117,7 @@ export function MainMenu(): ReactElement {
       data-reveal-bg={reveal.has('bg') ? '' : undefined}
       data-reveal-buttons={reveal.has('buttons') && entered ? '' : undefined}
     >
+      <SceneBackdrop />
       <AmbienceBackground />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
