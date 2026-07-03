@@ -11,6 +11,7 @@ import { buildTerrainIndex, terrainAt } from '../core/terrain';
 import { playArrival, playTerrain } from '../sfx';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
+import { persistMatch, type PersistedMatch } from './matchPersistence';
 
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
@@ -159,6 +160,9 @@ export interface SkirmishState {
   /** The battle clock, when the level authored one (null = untimed). */
   clock: ClockState | null;
   newSkirmish: (opts: SkirmishOptions) => void;
+  /** Rehydrate a match saved to disk (see matchPersistence) — used to resume the
+   * live board after a page reload instead of starting a fresh game. */
+  resumeMatch: (match: PersistedMatch) => void;
   select: (id: string | null) => void;
   focus: (id: string | null) => void;
   movesForSelected: () => Move[];
@@ -210,6 +214,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       focusedId: null,
       log: ['Defeat — your clock ran out.', ...cur.log].slice(0, 12),
     });
+    persistMatch(get()); // game decided → drops the saved copy
   };
 
   const tickClock = () => {
@@ -288,6 +293,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // The turn is back with the player — their clock resumes (no-op when untimed
       // or the reply decided the game).
       startClock();
+      // The board settled after the enemy answer (or the reply decided it): persist
+      // the new position, or drop the saved copy if the game just ended.
+      persistMatch(get());
     }, ENEMY_REPLY_DELAY);
   };
 
@@ -349,6 +357,42 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         playLandingSfx(env, pc.x, pc.y, delay, 0.7);
         setTimeout(() => playArrival({ gain: 0.55 }), delay);
       });
+    // Snapshot the fresh board immediately, so a reload before the first move
+    // resumes THIS game rather than re-rolling a different random start.
+    persistMatch(get());
+  },
+
+  resumeMatch: (match) => {
+    // A previous game's ticker must never outlive its game.
+    stopClockTicker();
+    const game = match.game;
+    const env = envFor(game);
+    const selectedId = firstPlayerId(game);
+    set({
+      game,
+      env,
+      seed: match.seed,
+      tick: match.tick,
+      turnsElapsed: match.turnsElapsed,
+      objective: match.objective,
+      objectiveCtx: match.objectiveCtx,
+      log: match.log,
+      levelId: match.levelId,
+      selectedId,
+      focusedId: selectedId,
+      started: true,
+      // Resume with the clock paused; startClock re-arms the deadline from the
+      // banked remainder when it's the player's live turn. A reload isn't thinking
+      // time, so the player keeps the time they had at their last move.
+      clock: match.clock ? { ...match.clock, running: false } : null,
+    });
+    startClock();
+    // If the reload caught the game mid enemy-reply (the player had just moved, the
+    // turn was handed to 'enemy', but the staged setTimeout died with the old page),
+    // re-stage it — otherwise the board soft-locks: player input is locked on the
+    // enemy turn with no reply pending. The enemy is deterministic on (game, seed,
+    // tick), all restored, so the re-staged reply is exactly the one that was lost.
+    if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
   },
 
   select: (id) => {
@@ -414,6 +458,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     });
     // Beats 2–3: a read beat, then the enemy "thinks" and answers.
     if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
+    // Persist the post-move position (turn now 'enemy', or 'done' if this move won).
+    // A reload here resumes mid enemy-turn and re-stages the reply (see resumeMatch),
+    // or — if the move ended the game — persistMatch drops the saved copy.
+    persistMatch(get());
   },
   };
 });
