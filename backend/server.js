@@ -1441,13 +1441,22 @@ function isLevelBody(body) {
   );
 }
 
-const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'survive', 'reach']);
-const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble']);
+// `rival-kings` is the ADR-0050 addition (both sides field a King). The stored objective
+// ids stay the legacy set deliberately — they exist in the live DB / baked official.json,
+// and a rename would force a prod data migration (docs/migration-policy.md).
+const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
+const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble', 'void']);
 const WORKSPACE_ZONE_TYPES = new Set(['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock']);
 const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
 const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
-const WORKSPACE_BOARD_COLS = { min: 4, max: 16 };
-const WORKSPACE_BOARD_ROWS = { min: 4, max: 20 };
+// Playable-only piece types for a random-placement roster (no rocks) — mirrors the
+// frontend `isPlayablePieceType` gate on `Level.roster` (core/level.ts + core/pieces.ts).
+const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+// Board floor dropped to 1×1 (ADR-0050): the old 4×4 clamp was an arbitrary guardrail with
+// no technical basis, and tiny boards are legitimate for several modes. Mirrors the frontend
+// BOARD_COLS / BOARD_ROWS consts in core/level.ts.
+const WORKSPACE_BOARD_COLS = { min: 1, max: 16 };
+const WORKSPACE_BOARD_ROWS = { min: 1, max: 20 };
 
 function isFiniteInteger(value) {
   return Number.isInteger(value) && Number.isFinite(value);
@@ -1471,6 +1480,47 @@ function validateWorkspaceLevel(level, key) {
   if (board.cols < WORKSPACE_BOARD_COLS.min || board.cols > WORKSPACE_BOARD_COLS.max) return `levels.${key}.board.cols is out of range`;
   if (board.rows < WORKSPACE_BOARD_ROWS.min || board.rows > WORKSPACE_BOARD_ROWS.max) return `levels.${key}.board.rows is out of range`;
   if (board.heightLevels !== undefined && (!isFiniteInteger(board.heightLevels) || board.heightLevels < 1)) return `levels.${key}.board.heightLevels is invalid`;
+
+  // ADR-0050 placement-axis fields — optional (absent ⇒ 'fixed', same back-compat pattern as
+  // boardCode / layers.props: legacy bodies omit them and stay valid). These are STRUCTURAL
+  // checks only (shape / enum / range), mirroring the frontend's validateLevel. The gameplay
+  // rules (roster vs spawn-zone capacity, exactly-one-King, non-empty sides — validatePlayability
+  // P1–P4) deliberately do NOT run here: this PUT carries the WHOLE workspace, so one legacy
+  // unplayable level would brick saving every other level; the editor's per-level save gate is
+  // the trust boundary for playability (ADR-0050 "Enforcement: the editor gates saves per level;
+  // the backend stays structural").
+  if (level.placement !== undefined && level.placement !== 'fixed' && level.placement !== 'random') {
+    return `levels.${key}.placement is invalid`;
+  }
+  if (level.surviveTurns !== undefined && (!isFiniteInteger(level.surviveTurns) || level.surviveTurns < 1)) {
+    return `levels.${key}.surviveTurns is invalid`;
+  }
+  if (level.timeControl !== undefined) {
+    const tc = level.timeControl;
+    if (!tc || typeof tc !== 'object' || Array.isArray(tc)
+      || !isFiniteInteger(tc.initialSeconds) || tc.initialSeconds < 1
+      || !isFiniteInteger(tc.incrementSeconds) || tc.incrementSeconds < 0) {
+      return `levels.${key}.timeControl is invalid`;
+    }
+  }
+  if (level.roster !== undefined) {
+    if (!level.roster || typeof level.roster !== 'object' || Array.isArray(level.roster)) {
+      return `levels.${key}.roster is invalid`;
+    }
+    for (const side of ['player', 'enemy']) {
+      const counts = level.roster[side];
+      if (!counts || typeof counts !== 'object' || Array.isArray(counts)) {
+        return `levels.${key}.roster.${side} is invalid`;
+      }
+      for (const [type, count] of Object.entries(counts)) {
+        // Playable piece types only (no rocks) and non-negative integer counts.
+        if (!WORKSPACE_ROSTER_PIECES.has(type) || !isFiniteInteger(count) || count < 0) {
+          return `levels.${key}.roster.${side} contains an invalid piece count`;
+        }
+      }
+    }
+  }
+
   const layers = level.layers;
   if (!layers || typeof layers !== 'object') return `levels.${key}.layers is required`;
   for (const layerName of ['terrain', 'decals', 'zones', 'units']) {
@@ -1488,6 +1538,20 @@ function validateWorkspaceLevel(level, key) {
     for (const tile of zone.tiles) {
       if (!Array.isArray(tile) || tile.length !== 2 || !isFiniteInteger(tile[0]) || !isFiniteInteger(tile[1]) || tile[0] < 0 || tile[0] >= board.cols || tile[1] < 0 || tile[1] >= board.rows) {
         return `levels.${key}.layers.zones contains an out-of-bounds tile`;
+      }
+    }
+  }
+  // Props are an OPTIONAL layer (like the frontend's Level: legacy bodies omit it, so it is NOT
+  // in the required-array loop above). Historically the backend never checked it at all while the
+  // frontend's validateLevel did — a known drift (ADR-0050 "props already drifted"). Mirror the
+  // frontend structural check WHEN PRESENT: an array of { string propId, integer x,y in bounds }.
+  // An off-board anchor would otherwise stamp off-board rock colliders at game-build time.
+  if (layers.props !== undefined) {
+    if (!Array.isArray(layers.props)) return `levels.${key}.layers.props must be an array`;
+    for (const prop of layers.props) {
+      if (!prop || typeof prop.propId !== 'string' || !isFiniteInteger(prop.x) || !isFiniteInteger(prop.y)
+        || prop.x < 0 || prop.x >= board.cols || prop.y < 0 || prop.y >= board.rows) {
+        return `levels.${key}.layers.props contains an invalid prop`;
       }
     }
   }

@@ -1,4 +1,4 @@
-// 9-slice editor — the dev's calibration bench (ADR-0050). Control shape:
+// 9-slice editor — the dev's calibration bench (ADR-0054). Control shape:
 //
 //   LAYER tabs (gold | cool) — the two disjoint pixel layers of the corner atom
 //     (warm gold decoration vs cool frame), each with its own scale knob.
@@ -33,7 +33,7 @@ type Sel = Corner | Side | 'center';
 type Layer = 'gold' | 'cool';
 type Corners = Record<Corner, Off>;
 type Pipes = Record<Side, number>;
-// Per-element ABSOLUTES (ADR-0050) — exactly the render degrees of freedom, matching
+// Per-element ABSOLUTES (ADR-0054) — exactly the render degrees of freedom, matching
 // the kit's canonical config shape. Values are inward-positive in each element's own
 // corner/side space (mirrored axes negate on draw), so a mirror-symmetric frame is
 // one whose stored values are literally equal. Pipes carry ONE number each: their
@@ -1113,7 +1113,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           </>)}
           {tab === 'boxes' && (<>
             <div style={ST.sizeBox}>
-              {/* The two HUMAN-CALIBRATED values code consumes (ADR-0050): the dev lines
+              {/* The two HUMAN-CALIBRATED values code consumes (ADR-0054): the dev lines
                   these boxes up against real pixels; consumers pad/clip by the result.
                   They bake into NO pixels — they ride in the config + generated CSS. */}
               <span style={ST.sectionHead}>Hand-off boxes{asset.theme ? ` · ${asset.label} only` : ''} — you calibrate, code consumes</span>

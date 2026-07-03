@@ -49,7 +49,7 @@ export function buildFrame(W, H) { return buildFrameFrom(corner, edge, fill, W, 
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   console.log(`
-┌─ assemble-frame · RETIRED (ADR-0050) — do not build kit frames from here ─
+┌─ assemble-frame · RETIRED (ADR-0054) — do not build kit frames from here ─
 │ The canonical assembler is now buildFrameParts in scripts/nine-slice-kit.mjs:
 │ split-layer (cool frame + gold bracket), per-element offsets, mirror-AFTER-scale,
 │ and pinned by the bake-parity test. This standalone script predates that model

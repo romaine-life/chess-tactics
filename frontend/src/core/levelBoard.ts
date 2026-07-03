@@ -10,7 +10,7 @@
 //    `boardCode` so the next open is exact, and projecting terrain/units into `layers` so
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
-import type { Level, LevelEconomy, LevelUnit, ObjectiveType } from './level';
+import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, Zone, ZoneType } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
 import type { Side, TerrainCell, TerrainType, UnitFacing } from './types';
@@ -34,10 +34,11 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
 // Terrain the editor can REPRESENT (and thus round-trip), so the save-time guard need not
 // preserve it from the pre-save level: the six tile families above, PLUS `road` — which the
 // editor expresses through its feature-overlay layer (not a tile brush), mapped both ways in
-// the converters below. Terrain with neither a tile family nor a feature — bridge, cliff, rock —
-// stays outside this set: it renders as a grass placeholder and is preserved on save rather than
-// flattened (an INV7 data-loss on legacy officials that predate boardCode).
-const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road']);
+// the converters below, and `void` — which the editor expresses as an intentionally missing
+// tile. Terrain with neither a tile family nor a feature — bridge, cliff, rock — stays outside
+// this set: it renders as a grass placeholder and is preserved on save rather than flattened
+// (an INV7 data-loss on legacy officials that predate boardCode).
+const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road', 'void']);
 
 // Side ↔ faction (team palette). The editor paints a faction; the level stores a side.
 const SIDE_TO_FACTION: Record<'player' | 'enemy', Faction> = { player: 'navy-blue', enemy: 'crimson' };
@@ -45,6 +46,52 @@ const isFaction = (faction: string | null | undefined): faction is Faction =>
   Boolean(faction && (UNIT_PALETTES as readonly string[]).includes(faction));
 const sideForFaction = (faction: string, playerFaction: string | null | undefined): Side =>
   playerFaction && faction === playerFaction ? 'player' : 'enemy';
+
+// A zone id is derived deterministically from its type (`z-<type>`), so the same painted
+// board always projects the same ids — a resave never churns them, and equality of two saves
+// stays a pure function of what was painted. The editor collapses all cells of one zone type
+// into ONE Zone entry (playability pools per-type anyway, so a single zone per type suffices).
+const zoneId = (type: ZoneType): string => `z-${type}`;
+
+/**
+ * Project the editor's per-cell `zones` channel (cell "x,y" -> zone type) into the schema's
+ * `layers.zones` (one Zone per type, each with its pooled [x,y] tile list, in-bounds only).
+ * Tiles are emitted in row-major order for a stable, diff-friendly serialization.
+ */
+function zonesToLayers(
+  channel: Record<string, ZoneType> | undefined,
+  cols: number,
+  rows: number,
+): Zone[] {
+  if (!channel) return [];
+  const byType = new Map<ZoneType, Array<[number, number]>>();
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const type = channel[`${x},${y}`];
+      if (!type) continue;
+      const list = byType.get(type) ?? [];
+      list.push([x, y]);
+      byType.set(type, list);
+    }
+  }
+  const zones: Zone[] = [];
+  for (const [type, tiles] of byType) zones.push({ id: zoneId(type), type, tiles });
+  return zones;
+}
+
+/** Rebuild the editor's per-cell zones channel from a Level's `layers.zones` (used only on the
+ * layers-derive fallback for legacy levels; the boardCode path carries the channel losslessly).
+ * Out-of-bounds tiles are dropped like units/props. */
+function zonesFromLayers(zones: Zone[] | undefined, cols: number, rows: number): Record<string, ZoneType> {
+  const channel: Record<string, ZoneType> = {};
+  for (const zone of zones ?? []) {
+    for (const [x, y] of zone.tiles) {
+      if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+      channel[`${x},${y}`] = zone.type;
+    }
+  }
+  return channel;
+}
 
 // Resolve a Studio tile id to its family (so its terrain material is known).
 const familyOfTile = (tileId: string): TileFamilyId | undefined =>
@@ -65,6 +112,7 @@ const TERRAIN_TO_FAMILY = (Object.entries(FAMILY_TO_TERRAIN) as Array<[TileFamil
   {} as Partial<Record<TerrainType, TileFamilyId>>,
 );
 const tileIdForTerrain = (terrain: TerrainType): string | undefined => {
+  if (terrain === 'void') return undefined;
   const family = TERRAIN_TO_FAMILY[terrain] ?? 'grass';
   return defaultTileOfFamily(family);
 };
@@ -86,6 +134,14 @@ export interface LevelMeta {
   name: string;
   notes?: string;
   objective?: ObjectiveType;
+  // The ADR-0050 placement axis + its config, authored in the editor's RULES panel and written
+  // straight onto the Level. Omitted (undefined) means 'fixed' / no roster / default survive turns
+  // — the back-compat default — so a save from a level that never touched these leaves them absent.
+  placement?: 'fixed' | 'random';
+  roster?: { player: Roster; enemy: Roster };
+  surviveTurns?: number;
+  // The battle clock, authored in the RULES panel. Omitted ⇒ untimed (back-compat).
+  timeControl?: TimeControl;
   difficulty?: string;
   economy?: LevelEconomy;
   theme?: string;
@@ -111,10 +167,15 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   const cells: EditorBoard['cells'] = {};
   const cover: EditorBoard['cover'] = {};
   const features: EditorBoard['features'] = {};
+  const voidCells = new Set<string>();
   const fallbackTile = defaultTileOfFamily('grass');
   for (const cell of level.layers.terrain) {
     if (cell.x < 0 || cell.x >= cols || cell.y < 0 || cell.y >= rows) continue;
     const key = `${cell.x},${cell.y}`;
+    if (cell.terrain === 'void') {
+      voidCells.add(key);
+      continue;
+    }
     cells[key] = tileIdForTerrain(cell.terrain) ?? fallbackTile ?? '';
     if (cell.cover) cover[key] = cell.cover.density;
     // `road` is a game TerrainType but, in the editor, a feature overlay sitting on a (grass)
@@ -124,7 +185,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   // Fill any unauthored cell with grass so the whole board is paintable.
   if (fallbackTile) for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) {
     const key = `${x},${y}`;
-    if (!(key in cells)) cells[key] = fallbackTile;
+    if (!(key in cells) && !voidCells.has(key)) cells[key] = fallbackTile;
   }
 
   const units: EditorBoard['units'] = {};
@@ -147,6 +208,9 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     props[`${p.x},${p.y}`] = { propId: p.propId };
   }
 
+  // Legacy fallback: rebuild the zones channel from layers.zones (the boardCode path above already
+  // carried it losslessly). Out-of-bounds tiles are dropped like units/props.
+  const zones = zonesFromLayers(level.layers.zones, cols, rows);
   const hasAuthoredPlayer = level.layers.units.some((unit) => unit.side === 'player');
   return {
     cols,
@@ -160,13 +224,16 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     features,
     featureCuts: {},
     featureExits: {},
+    zones,
   };
 }
 
 // Serialize the painted board into a valid `Level`. `boardCode` is stamped for a lossless
-// re-open; `layers.terrain` / `layers.units` are projected so the game (which reads
-// `layers`) plays the authored board. Decals/zones stay empty (doodads ride in boardCode;
-// decals mapping is Phase 4).
+// re-open; `layers.terrain` / `layers.units` / `layers.zones` are projected so the game (which
+// reads `layers`, not `boardCode`) plays the authored board — spawn pools and reach targets read
+// real zones now (ADR-0050; the old `zones: []` hard-code is gone). The ADR-0050 mode fields
+// (objective/placement/roster/surviveTurns) are written straight from `meta`. Decals stay empty
+// (doodads ride in boardCode; decals mapping is Phase 4).
 export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   const cols = clamp(board.cols, BOARD_COLS.min, BOARD_COLS.max);
   const rows = clamp(board.rows, BOARD_ROWS.min, BOARD_ROWS.max);
@@ -186,14 +253,14 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
       const tileId = board.cells[key];
       const family = tileId ? familyOfTile(tileId) : undefined;
       // Decorative / unknown families fall back to grass (a playable material).
-      let cellTerrain: TerrainType = family ? FAMILY_TO_TERRAIN[family] ?? 'grass' : 'grass';
+      let cellTerrain: TerrainType = tileId ? (family ? FAMILY_TO_TERRAIN[family] ?? 'grass' : 'grass') : 'void';
       // A road feature overlay IS the cell's terrain in the game's schema — project it back to
       // `road` so roads painted (or loaded) in the editor reach layers.terrain, which the game
       // reads. Erasing the overlay leaves no road feature, so the cell reverts to its tile
       // (grass) — i.e. an admin can actually remove a road.
-      if (board.features[key]?.kind === 'road') {
+      if (tileId && board.features[key]?.kind === 'road') {
         cellTerrain = 'road';
-      } else if (cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) {
+      } else if (tileId && cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) {
         // Preserve terrain the editor can neither paint nor feature-map (bridge/cliff/rock) so a
         // republished legacy official keeps those surfaces instead of flattening them to grass.
         cellTerrain = prev.terrain;
@@ -230,7 +297,11 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     props.push({ x, y, propId: placement.propId });
   }
 
-  return {
+  // Project the painted zones channel into real `layers.zones` — spawn pools (random placement)
+  // and reach targets read these directly. Clamped to the (possibly resized) bounds like units.
+  const zones = zonesToLayers(board.zones, cols, rows);
+
+  const level: Level = {
     formatVersion: LEVEL_FORMAT_VERSION,
     id: meta.id,
     name: meta.name,
@@ -243,6 +314,15 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     economy: meta.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
     theme: meta.theme ?? 'grassland',
     boardCode: encodeBoard({ ...board, cols, rows }),
-    layers: { terrain, decals: [], zones: [], units, props },
+    layers: { terrain, decals: [], zones, units, props },
   };
+  // ADR-0050 mode fields ride as OPTIONAL keys: written only when meta supplies a non-default
+  // value, so a level that never touched the RULES panel serializes without them (back-compat —
+  // an absent field reads as fixed / no roster / DEFAULT_SURVIVE_TURNS). `objective` is required
+  // and always written above; these three are the toggle + its config.
+  if (meta.placement !== undefined) level.placement = meta.placement;
+  if (meta.roster !== undefined) level.roster = meta.roster;
+  if (meta.surviveTurns !== undefined) level.surviveTurns = meta.surviveTurns;
+  if (meta.timeControl !== undefined) level.timeControl = meta.timeControl;
+  return level;
 }

@@ -26,10 +26,11 @@ describe('terrain index', () => {
 });
 
 describe('isPassableTerrain', () => {
-  it('treats water as walkable and cliff/rock as barriers', () => {
+  it('treats water as walkable and cliff/rock/void as barriers', () => {
     expect(isPassableTerrain('water')).toBe(true);
     expect(isPassableTerrain('cliff')).toBe(false);
     expect(isPassableTerrain('rock')).toBe(false);
+    expect(isPassableTerrain('void')).toBe(false);
     for (const t of ['grass', 'stone', 'road', 'bridge'] as const) expect(isPassableTerrain(t)).toBe(true);
   });
 });
@@ -83,6 +84,24 @@ describe('legalMoves with terrain env', () => {
     ]) };
     const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
     expect(up).toEqual([3]);
+  });
+
+  it('treats a void as an obstacle for rays', () => {
+    const queen = piece('r', 'player', 'queen', 4, 4);
+    const env = { terrain: index([{ x: 4, y: 2, terrain: 'void', elevation: 0 }]) };
+    const up = legalMoves(queen, [queen], { cols: 8, rows: 8 }, env).filter((m) => m.x === 4 && m.y < 4).map((m) => m.y);
+    expect(up).toEqual([3]);
+  });
+
+  it('lets a knight hop over a void but not land on one', () => {
+    const knight = piece('k', 'player', 'knight', 2, 2);
+    const env = { terrain: index([
+      { x: 3, y: 2, terrain: 'void', elevation: 0 },
+      { x: 4, y: 1, terrain: 'void', elevation: 0 },
+    ]) };
+    const moves = legalMoves(knight, [knight], { cols: 8, rows: 8 }, env);
+    expect(moves.some((m) => m.x === 4 && m.y === 3)).toBe(true);
+    expect(moves.some((m) => m.x === 4 && m.y === 1)).toBe(false);
   });
 
   it('is identical to plain movement when no terrain is supplied', () => {

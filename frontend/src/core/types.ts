@@ -15,7 +15,7 @@ export type UnitFacing = 'north' | 'north-east' | 'east' | 'south-east' | 'south
  * in `core/level.ts` so both the editor's `Level` and the live `GameState` share
  * one terrain vocabulary; `core/level.ts` re-exports these for back-compat.
  */
-export type TerrainType = 'grass' | 'water' | 'stone' | 'road' | 'bridge' | 'cliff' | 'rock' | 'dirt' | 'pebble' | 'sand';
+export type TerrainType = 'grass' | 'water' | 'stone' | 'road' | 'bridge' | 'cliff' | 'rock' | 'dirt' | 'pebble' | 'sand' | 'void';
 
 export interface Vec {
   x: number;
@@ -47,8 +47,12 @@ export interface Piece {
   alive: boolean;
   /** Board-facing direction for the rendered directional sprite. */
   facing?: UnitFacing;
-  /** Home rank — used for the pawn double-step. */
+  /** Starting column — used with `startY` for directional pawn double-steps. */
+  startX?: number;
+  /** Starting row — used for the pawn double-step. */
   startY: number;
+  /** Original pawn-forward direction. Unlike `facing`, this never changes after setup. */
+  pawnForward?: UnitFacing;
   /**
    * Current hit points. Optional + defaults to 1 everywhere (`pieceHp`), so
    * legacy single-hit capture behaviour is preserved when unset. With hp > 1 a
@@ -129,10 +133,16 @@ export interface GameState {
    * Board terrain layer (one cell per authored tile). Optional + serializable so
    * legacy/terrain-free states stay valid: when absent, every tile is treated as
    * open grass at elevation 0 (see `buildTerrainIndex` / `canTraverse`). Water is
-   * passable terrain; cliff and rock tiles are impassable. Movement generation
+   * passable terrain; cliff, rock, and void tiles are impassable. Movement generation
    * honours this when the layer is indexed into `MoveEnv.terrain`.
    */
   terrain?: TerrainCell[];
+  /**
+   * Lossless Level Editor board encoding for authored maps. Gameplay still reads `terrain`
+   * and `props`; the renderer uses this to keep the exact painted tile IDs/features instead
+   * of regenerating visual variants from terrain + seed.
+   */
+  boardCode?: string;
   /**
    * Multi-cell decorative props (trees, houses). Optional + serializable, mirroring
    * `terrain?`: a legacy/prop-free state simply omits it (= no props). Blocking props are

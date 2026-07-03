@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { NavButton } from './shared/NavButton';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -11,7 +12,8 @@ import {
   readProgress,
   type CampaignProgress,
 } from '../campaign/progress';
-import { OBJECTIVE_LABEL } from '../core/objectives';
+import { MODE_NAME } from '../core/objectives';
+import { levelObjectiveLine } from './LevelInfoCompact';
 import type { Campaign as CampaignDoc } from '../core/level';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -42,16 +44,16 @@ function Stars({ count }: { count: number }): ReactElement {
 // main menu's mode tabs use, so the Campaign screen reads as a twin of the menu.
 function CampaignTab({ campaign, active }: { campaign: CampaignDoc; active: boolean }): ReactElement {
   return (
-    <a
+    <NavButton
       className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
-      href={`/campaign/${campaign.id}`}
+      to={`/campaign/${campaign.id}`}
       aria-current={active ? 'page' : undefined}
     >
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={CAMPAIGN_ICON} alt="" />
       </span>
       <span><strong>{campaign.name}</strong></span>
-    </a>
+    </NavButton>
   );
 }
 
@@ -79,14 +81,19 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
               const prog = progress[ref.levelId];
               const completed = Boolean(prog?.completed);
               const unlocked = isLevelUnlocked(refs, index, progress);
-              const objective = level?.objective ?? ref.objective;
+              // Prefer the loaded level doc so the goal line is direction-aware (King Assault
+              // reads "Protect your King" when the player holds the King). Fall back to the
+              // campaign ref's objective — mode name only — when the doc hasn't hydrated.
+              const goalLine = level
+                ? levelObjectiveLine(level)
+                : ref.objective ? MODE_NAME[ref.objective] : 'Battle';
               const status = completed ? ' · Cleared' : unlocked ? '' : ' · Locked';
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
               return (
                 <section className={`settings-row ${unlocked ? '' : 'is-disabled'}`.trim()} key={ref.levelId}>
                   <div className="settings-row-copy">
                     <h4>{index + 1}. {level?.name ?? `Level ${index + 1}`}</h4>
-                    <p>{objective ? OBJECTIVE_LABEL[objective] : 'Battle'}{status}</p>
+                    <p>{goalLine}{status}</p>
                   </div>
                   <div className="settings-row-value">
                     <Stars count={prog?.stars ?? 0} />
@@ -94,11 +101,11 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
                   <div className="settings-row-control">
                     {unlocked
                       ? (
-                        <a className="app-header-button app-header-button-active" href={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
+                        <NavButton className="app-header-button app-header-button-active" to={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
                           {completed ? 'Replay' : 'Play'}
-                        </a>
+                        </NavButton>
                       )
-                      : <span className="app-header-button" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: 'none' }}>Locked</span>}
+                      : <button type="button" className="app-header-button" disabled>Locked</button>}
                   </div>
                 </section>
               );
@@ -124,8 +131,21 @@ export function Campaign(): ReactElement {
     return () => shell?.classList.remove('main-menu-active');
   }, []);
 
-  // Load the shared workspace the same way the editor does, so the lists match.
-  useEffect(() => { void ensureCampaignsHydrated(); }, []);
+  // Load the shared workspace the same way the editor does, so the lists match. The
+  // entrance fade HOLDS until this settles (ADR-0046 C.1 / ADR-0051): on a first visit
+  // the store starts empty and the rail/panel would otherwise fade in as a bare frame
+  // with the content popping in whenever the fetch lands. Already-hydrated visits are
+  // ready at mount, so nothing holds. The promise always resolves (officials fall back
+  // to the static file; user-workspace failures are swallowed), and the entrance
+  // primitive's own failsafe backstops anything pathological.
+  const [contentReady, setContentReady] = useState(() => useCampaigns.getState().campaigns.length > 0);
+  useEffect(() => {
+    let active = true;
+    // .catch first: even a failed hydration must flip readiness (show whatever state
+    // exists) rather than hold the chrome invisible until the entrance failsafe.
+    void ensureCampaignsHydrated().catch(() => {}).then(() => { if (active) setContentReady(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const sync = () => setSelectedId(campaignIdFromPath(window.location.pathname));
@@ -150,9 +170,15 @@ export function Campaign(): ReactElement {
   }, []);
 
   // Once campaigns load, a bare /campaign (or an unknown id) normalizes to the first
-  // campaign so the URL always names a real one.
+  // campaign so the URL always names a real one. Guarded to run only while the app is
+  // still ON a campaign path: the URL-sync listener above also fires when the user
+  // navigates AWAY (selectedId resets to ''), and this screen stays mounted for a beat
+  // (route transition / veil cover) — without the guard, the replace here yanked every
+  // exit (home via the brand, the settings gear, Play) straight back to /campaign/<id>.
   useEffect(() => {
     if (!campaigns.length) return;
+    const path = normalizeRoutePath(window.location.pathname);
+    if (path !== '/campaign' && !path.startsWith('/campaign/')) return;
     if (!campaigns.some((c) => c.id === selectedId)) {
       navigateApp(`/campaign/${campaigns[0].id}`, { replace: true, scroll: false });
     }
@@ -182,7 +208,7 @@ export function Campaign(): ReactElement {
       {/* Settings-twin layout, mirroring the main menu: shared app title bar + a rail
           of campaign tabs and a level-select panel over the ambience. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
-        <ArtRouteChrome className="settings-shell">
+        <ArtRouteChrome className="settings-shell" ready={contentReady}>
           <aside className="settings-frame settings-rail-frame" aria-label="Campaigns">
             {officialCampaigns.length > 0 && (
               <>

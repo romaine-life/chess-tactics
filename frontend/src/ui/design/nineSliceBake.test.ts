@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 // @ts-ignore — nine-slice-kit is an untyped .mjs build script (cf. main.tsx/bgm.js)
 import { bakeAsset, bakeLine, REGISTRY, LINE_DIR, loadConfig, normalizeConfig, assetsInTheme, diffCommitted } from '../../../scripts/nine-slice-kit.mjs';
 
-describe('theme family (ADR-0050: members share ONE shape, cannot drift)', () => {
+describe('theme family (ADR-0054: members share ONE shape, cannot drift)', () => {
   it('gold family members bake a byte-identical base frame', () => {
     const members = assetsInTheme('gold');
     expect(members.length, 'expected the gold family to have members').toBeGreaterThan(1);
@@ -25,7 +25,7 @@ describe('theme family (ADR-0050: members share ONE shape, cannot drift)', () =>
   });
 });
 
-describe('config shapes (ADR-0050: per-element absolutes; legacy global+residual folds in)', () => {
+describe('config shapes (ADR-0054: per-element absolutes; legacy global+residual folds in)', () => {
   it('legacy shape folds to the same canonical config', () => {
     const legacy = normalizeConfig({
       asset: 'mode-button',

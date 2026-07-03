@@ -6,6 +6,16 @@ const base = (over: Partial<EditorBoard> = {}): EditorBoard => ({
 });
 
 describe('boardCode — props wire key (p)', () => {
+  it('round-trips intentional holes when a board also uses a fill tile', () => {
+    const cells: EditorBoard['cells'] = {};
+    for (let y = 0; y < 6; y += 1) for (let x = 0; x < 6; x += 1) cells[`${x},${y}`] = 'grass-a';
+    delete cells['2,3'];
+
+    const decoded = decodeBoard(encodeBoard(base({ cells })))!;
+    expect(decoded.cells['0,0']).toBe('grass-a');
+    expect(decoded.cells['2,3']).toBeUndefined();
+  });
+
   it('encode -> decode round-trips the props map identically', () => {
     const board = base({ props: { '0,0': { propId: 'oak' }, '3,2': { propId: 'cottage' } } });
     const decoded = decodeBoard(encodeBoard(board))!;

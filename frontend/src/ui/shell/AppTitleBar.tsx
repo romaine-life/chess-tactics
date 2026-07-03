@@ -15,6 +15,12 @@ import { titleBarConfig } from './titleBarConfig';
 // portal it into the center/actions target nodes below — App holds those nodes in
 // state and feeds <TitleBarSlot> via context. The actions slot sits before the cluster,
 // so editor controls coexist with the gear+avatar rather than replacing them.
+//
+// Return-to-origin ("‹ Back") is one of those additive actions-slot items — it lives in
+// the TRAILING control area with the account/settings cluster (the app's navigation home
+// per ADR-0036), NOT before the brand. The brand lockup is a fixed leading anchor and
+// never moves. Both the Settings back and the Level Editor's ‹ Back/‹ Catalog portal into
+// the SAME actions slot, so every return control sits in one consistent place.
 export function AppTitleBar({ path, onCenterNode, onActionsNode, revealTitle }: {
   path: string;
   onCenterNode: (el: HTMLElement | null) => void;

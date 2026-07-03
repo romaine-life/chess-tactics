@@ -3,16 +3,22 @@
 // doodads, cover, and linear features — roads + rivers). Used both to LOAD a board on mount
 // and to EXPORT the current one.
 //
-// Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, f?:fillTileId, t?:{cell:tileId},
+// Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, f?:fillTileId, t?:{cell:tileId}, h?:[cell],
 //   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fn?:{cell:fenceMaterial}, rc?:[edgeKey],
-//   rx?:[edgeKey] }. `f` fills every cell, then `t` overrides — so a "mostly one tile" board stays
-// tiny. Features split per kind on the wire (rd=roads, rv=rivers, fn=fences) and merge into one
-// `features` map on decode; `rc` (severed edges) and `rx` (forced outward exits) are shared edge
-// lists. base64url of the JSON (no padding, +/ -> -_).
+//   rx?:[edgeKey], z?:{cell:zoneType} }. `f` fills every cell, then `t` overrides — so a "mostly
+// one tile" board stays tiny; `h` punches intentional holes back out of that fill. Features split
+// per kind on the wire (rd=roads, rv=rivers, fn=fences) and merge into one `features` map on decode;
+// `rc` (severed edges) and `rx` (forced outward exits) are shared edge lists. `z` is the gameplay-zone
+// channel (ADR-0050): each painted cell -> its zone type. base64url of the JSON (no padding, +/ -> -_).
+//
+// FORWARD/BACK-COMPAT: `z` (like `p` before it) is emitted only when non-empty, so a zone-free board
+// encodes byte-identically to a pre-zones code, and an OLD code with no `z` decodes to an empty
+// `zones` map (added the same way facing/props were). No shipped content has zones, so no shim needed.
 
 import type { GroundCoverDensity } from '../core/groundCover';
 import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
+import type { ZoneType } from '../core/level';
 
 /** One painted feature cell: which linear feature it carries and its surface material. */
 export interface FeatureCell {
@@ -34,6 +40,12 @@ export interface EditorBoard {
   features: Record<string, FeatureCell>;
   featureCuts: Record<string, true>;
   featureExits: Record<string, true>;
+  /** Gameplay zones (ADR-0050), keyed by cell "x,y" -> zone type. The editor paints
+   * player-spawn / enemy-spawn / objective; the full ZoneType set is stored so the channel
+   * stays lossless if the schema's other zone types (enemy-threat, falling-rock) are painted.
+   * Optional + back-compat (like `props` before it): a pre-zones board literal simply omits it,
+   * and `decodeBoard` always returns it populated (empty for an old code). */
+  zones?: Record<string, ZoneType>;
 }
 
 const enc = (s: string): string => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -50,13 +62,24 @@ function dominantTile(cells: Record<string, string>): string | undefined {
 }
 
 export function encodeBoard(b: EditorBoard): string {
-  const fill = dominantTile(b.cells);
+  const totalCells = Math.max(0, b.cols * b.rows);
+  const paintedCells = Object.keys(b.cells).length;
+  const fillCandidate = dominantTile(b.cells);
+  // Sparse boards are often intentional gaps. Only use the fill shortcut once painted cells are
+  // the majority; otherwise the explicit sparse `t` map is smaller and preserves holes naturally.
+  const fill = fillCandidate && paintedCells > totalCells / 2 ? fillCandidate : undefined;
   const t: Record<string, string> = {};
   for (const [k, id] of Object.entries(b.cells)) if (id !== fill) t[k] = id;
+  const h: string[] = [];
+  if (fill) for (let y = 0; y < b.rows; y += 1) for (let x = 0; x < b.cols; x += 1) {
+    const key = `${x},${y}`;
+    if (!(key in b.cells)) h.push(key);
+  }
   const wire: Record<string, unknown> = { c: b.cols, r: b.rows };
   if (b.playerFaction) wire.pf = b.playerFaction;
   if (fill) wire.f = fill;
   if (nonEmpty(t)) wire.t = t;
+  if (h.length) wire.h = h;
   if (nonEmpty(b.units)) wire.u = Object.fromEntries(Object.entries(b.units).map(([k, v]) => [k, [v.unitId, v.direction, v.faction]]));
   if (nonEmpty(b.doodads)) wire.d = Object.fromEntries(Object.entries(b.doodads).map(([k, v]) => [k, v.doodadId]));
   // Props mirror doodads on the wire: anchor cell -> bare propId. Emitted only when nonEmpty so a
@@ -77,6 +100,9 @@ export function encodeBoard(b: EditorBoard): string {
   if (nonEmpty(fn)) wire.fn = fn;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
+  // Zones ride as a bare {cell:zoneType} map — emitted only when non-empty so a zone-free board
+  // is byte-identical to a pre-zones code (same discipline as `p`/props).
+  if (b.zones && nonEmpty(b.zones)) wire.z = b.zones;
   return enc(JSON.stringify(wire));
 }
 
@@ -89,6 +115,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     const cells: Record<string, string> = {};
     if (w.f) for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) cells[`${x},${y}`] = w.f;
     if (w.t) Object.assign(cells, w.t);
+    if (Array.isArray(w.h)) for (const key of w.h) delete cells[String(key)];
     const units: EditorBoard['units'] = {};
     if (w.u) for (const [k, a] of Object.entries(w.u as Record<string, [string, string, string]>)) units[k] = { unitId: a[0], direction: a[1], faction: a[2] };
     const doodads: EditorBoard['doodads'] = {};
@@ -104,12 +131,16 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (w.rd) for (const [k, m] of Object.entries(w.rd as Record<string, RoadMaterial>)) features[k] = { kind: 'road', material: m };
     if (w.rv) for (const [k, m] of Object.entries(w.rv as Record<string, RiverMaterial>)) features[k] = { kind: 'river', material: m };
     if (w.fn) for (const [k, m] of Object.entries(w.fn as Record<string, FenceMaterial>)) features[k] = { kind: 'fence', material: m };
+    // Zones: an OLD code has no `z`, so this defaults to an empty map — the back-compat contract.
+    const zones: EditorBoard['zones'] = {};
+    if (w.z) for (const [k, type] of Object.entries(w.z as Record<string, ZoneType>)) zones[k] = type;
     return {
       cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       features,
       featureCuts,
       featureExits,
+      zones,
     };
   } catch {
     return null;

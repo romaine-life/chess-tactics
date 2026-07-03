@@ -1,8 +1,11 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
+import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
+import { objectiveSummary } from '../core/objectives';
+import { formatClockMs } from '../core/clock';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
@@ -11,7 +14,8 @@ import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { livingPieces } from '../core/rules';
-import { computeStars, recordLevelWin } from '../campaign/progress';
+import { computeStars, nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
+import { navigateApp } from './navigation';
 
 const STAR_ICON = '/assets/ui/kit/icons/star.png';
 
@@ -24,13 +28,6 @@ function ResultStars({ count }: { count: number }) {
     </span>
   );
 }
-
-const OBJECTIVE_COPY = {
-  'capture-all': 'Capture all enemy pieces',
-  'capture-king': 'Capture the enemy King',
-  survive: 'Survive the assault',
-  reach: 'Reach the objective',
-} as const;
 
 export function Skirmish() {
   const routeSearch = window.location.search;
@@ -51,6 +48,22 @@ export function Skirmish() {
   const [boardSettled, setBoardSettled] = useState(false);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const game = useSkirmish((s) => s.game);
+  // Subscribed (not getState) so the victory "Continue" button knows, reactively, whether
+  // a next level exists once the workspace hydrates.
+  const campaigns = useCampaigns((s) => s.campaigns);
+  const levelDocs = useCampaigns((s) => s.levels);
+  // The live objective + which side holds the King come from the STORE (not routeLevel):
+  // the store computes kingSide from the actual starting pieces, so a random-placement
+  // King Assault whose roster deals the player the King reads "Protect your King" too, and
+  // a free skirmish (no level) still gets a correct goal line. objectiveSummary is the one
+  // source of that copy (ADR-0050 — no re-hardcoded objective strings in the UI).
+  const objective = useSkirmish((s) => s.objective);
+  const kingSide = useSkirmish((s) => s.objectiveCtx.kingSide);
+  // The battle clock (null = untimed level / free skirmish). The store quantizes
+  // remainingMs to the displayed readout, so this subscription re-renders about
+  // once a second, not per tick.
+  const clock = useSkirmish((s) => s.clock);
+  const objectiveGoal = objectiveSummary(objective, kingSide);
   const turnLabel = game.winner
     ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
     : game.turn === 'player' ? 'Player Turn' : 'Enemy Turn';
@@ -70,6 +83,32 @@ export function Skirmish() {
 
   const replayLevel = () => {
     if (routeLevel) newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: routeLevel });
+  };
+
+  // The next level in this campaign after the one just cleared (null on the last level or
+  // before the workspace hydrates) — powers the victory "Continue" button.
+  const nextLevel = useMemo(() => {
+    if (!isCampaignPlay || !routeCampaignId || !routeLevel) return null;
+    const camp = campaigns.find((c) => c.id === routeCampaignId);
+    if (!camp) return null;
+    const ref = nextLevelRef(orderedLevels(camp), routeLevel.id);
+    return ref ? levelDocs[ref.levelId] ?? null : null;
+  }, [isCampaignPlay, campaigns, levelDocs, routeCampaignId, routeLevel]);
+
+  // Victory "Continue": drop straight into the next level. The /play route keys on the
+  // pathname only, so a bare search-param nav (levelId=A → levelId=B) would change the URL
+  // without remounting — the board would keep showing the cleared level. So swap the board
+  // in place the same way Replay does, and update the URL (replace, not push, so Back lands
+  // on the campaign rather than a stale board) so a reload/deep-link resolves the new level.
+  const advanceToNextLevel = () => {
+    if (!routeCampaignId || !nextLevel) return;
+    navigateApp(
+      `/play?campaignId=${encodeURIComponent(routeCampaignId)}&levelId=${encodeURIComponent(nextLevel.id)}`,
+      { replace: true },
+    );
+    useCampaigns.getState().selectLevel(nextLevel.id);
+    setRouteLevel(nextLevel);
+    newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: nextLevel });
   };
 
   useEffect(() => {
@@ -136,16 +175,24 @@ export function Skirmish() {
           center section (turn/objective read from the game store, in scope here). The
           brand + account cluster are rendered by the shell bar itself. */}
       <TitleBarSlot region="center">
+        {/* Timed games put the battle clock in the middle; the turn plate and objective
+            chips flank it left and right (they simply sit adjacent when untimed). */}
         <div className="skirmish-topbar-status">
           <div className="skirmish-status-chip skirmish-turn-plate">
             <strong>{turnLabel}</strong>
             <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
           </div>
+          {clock ? (
+            <div className={`skirmish-status-chip skirmish-clock${clock.remainingMs <= 20_000 ? ' is-low' : ''}`}>
+              <strong>{formatClockMs(clock.remainingMs)}</strong>
+              <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
+            </div>
+          ) : null}
           <div className="skirmish-status-chip skirmish-objective">
             <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
             <span>
               <strong>Objective</strong>
-              <small>{routeLevel ? OBJECTIVE_COPY[routeLevel.objective] : 'Capture the enemy King'}</small>
+              <small>{objectiveGoal}</small>
             </span>
           </div>
         </div>
@@ -158,21 +205,31 @@ export function Skirmish() {
           </div>
         </div>
       </section>
-      <SkirmishHud />
+      <SkirmishHud
+        canStartNewSkirmish={!isCampaignPlay}
+        onRestartLevel={isCampaignPlay && routeLevel ? replayLevel : null}
+        showRestartLevel={isCampaignPlay}
+      />
 
       {isCampaignPlay && routeLevel && game.winner && (
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Stalemate' : 'Defeat'}</h2>
             {game.winner === 'player' && <ResultStars count={stars} />}
-            <p>{routeLevel.name} — {OBJECTIVE_COPY[routeLevel.objective]}</p>
+            <p>{routeLevel.name} — {objectiveGoal}</p>
             <div className="campaign-result-actions">
               <button type="button" className="app-header-button" onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}
               </button>
-              <a className="app-header-button app-header-button-active" href={`/campaign/${routeCampaignId}`}>
-                {game.winner === 'player' ? 'Continue' : 'Back to Campaign'}
-              </a>
+              {game.winner === 'player' && nextLevel ? (
+                <button type="button" className="app-header-button app-header-button-active" onClick={advanceToNextLevel}>
+                  Continue
+                </button>
+              ) : (
+                <NavButton className="app-header-button app-header-button-active" to={`/campaign/${routeCampaignId}`}>
+                  Back to Campaign
+                </NavButton>
+              )}
             </div>
           </div>
         </div>

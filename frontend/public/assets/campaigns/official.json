@@ -7,7 +7,7 @@
         {
           "levelId": "off-l-break-line",
           "ordinal": 0,
-          "objective": "capture-king"
+          "objective": "rival-kings"
         },
         {
           "levelId": "off-l-river-crossing",
@@ -22,7 +22,7 @@
         {
           "levelId": "off-l-fortress-gate",
           "ordinal": 3,
-          "objective": "capture-king"
+          "objective": "rival-kings"
         },
         {
           "levelId": "off-l-high-ground",
@@ -33,10 +33,15 @@
           "levelId": "off-l-pinned",
           "ordinal": 5,
           "objective": "capture-all"
+        },
+        {
+          "levelId": "off-l-pawn-compass",
+          "ordinal": 6,
+          "objective": "capture-all"
         }
       ],
       "locked": true,
-      "chapters": 2,
+      "chapters": 3,
       "favorite": false,
       "difficulty": "normal",
       "formatVersion": 1
@@ -1322,7 +1327,7 @@
         "startingFunds": 1000
       },
       "boardCode": "eyJjIjoxMiwiciI6OCwiZiI6ImdyYXNzLXN1cmYtMCIsInQiOnsiOCwwIjoiZGlydC1zdXJmLTYiLCI4LDEiOiJkaXJ0LXN1cmYtNiIsIjgsMiI6ImRpcnQtc3VyZi02IiwiOCwzIjoiZGlydC1zdXJmLTYiLCI4LDQiOiJkaXJ0LXN1cmYtNiIsIjYsNSI6ImRpcnQtc3VyZi02IiwiNyw1IjoiZGlydC1zdXJmLTYiLCI4LDUiOiJkaXJ0LXN1cmYtNiIsIjYsNiI6ImRpcnQtc3VyZi02IiwiNiw3IjoiZGlydC1zdXJmLTYifSwidSI6eyIxLDYiOlsia2luZy1jcm93biIsInNvdXRoIiwibmF2eS1ibHVlIl0sIjIsNSI6WyJyb29rLWJsZW5kZXItdjQtY2FsaWJyYXRlZCIsInNvdXRoIiwibmF2eS1ibHVlIl0sIjQsNiI6WyJrbmlnaHQtZnVyIiwic291dGgiLCJuYXZ5LWJsdWUiXSwiMTAsMSI6WyJraW5nLWNyb3duIiwic291dGgiLCJjcmltc29uIl0sIjksMiI6WyJyb29rLWJsZW5kZXItdjQtY2FsaWJyYXRlZCIsInNvdXRoIiwiY3JpbXNvbiJdLCI3LDEiOlsiYmlzaG9wLW1pdHJlIiwic291dGgiLCJjcmltc29uIl19LCJyZCI6eyI1LDYiOiJjb2JibGUiLCI0LDYiOiJjb2JibGUiLCI2LDYiOiJjb2JibGUiLCIzLDYiOiJjb2JibGUiLCIyLDYiOiJjb2JibGUiLCIxLDYiOiJjb2JibGUiLCIwLDYiOiJjb2JibGUifX0",
-      "objective": "capture-king",
+      "objective": "rival-kings",
       "difficulty": "normal",
       "formatVersion": 1
     },
@@ -3236,7 +3241,7 @@
         "incomePerTurn": 120,
         "startingFunds": 1600
       },
-      "objective": "capture-king",
+      "objective": "rival-kings",
       "difficulty": "hard",
       "formatVersion": 1
     },
@@ -3873,6 +3878,959 @@
       "economy": {
         "incomePerTurn": 160,
         "startingFunds": 1200
+      },
+      "objective": "capture-all",
+      "difficulty": "normal",
+      "formatVersion": 1
+    },
+    "off-l-pawn-compass": {
+      "id": "off-l-pawn-compass",
+      "name": "Pawn Compass",
+      "board": {
+        "cols": 12,
+        "rows": 12,
+        "heightLevels": 1
+      },
+      "notes": "Eight pawns face eight directions; each has an open one-step and double-step lane. The enemy king is boxed in so you can test without an enemy reply changing the board.",
+      "theme": "grassland",
+      "layers": {
+        "units": [
+          {
+            "x": 1,
+            "y": 9,
+            "side": "player",
+            "type": "pawn",
+            "facing": "north"
+          },
+          {
+            "x": 3,
+            "y": 8,
+            "side": "player",
+            "type": "pawn",
+            "facing": "north-east"
+          },
+          {
+            "x": 1,
+            "y": 5,
+            "side": "player",
+            "type": "pawn",
+            "facing": "east"
+          },
+          {
+            "x": 3,
+            "y": 2,
+            "side": "player",
+            "type": "pawn",
+            "facing": "south-east"
+          },
+          {
+            "x": 6,
+            "y": 2,
+            "side": "player",
+            "type": "pawn",
+            "facing": "south"
+          },
+          {
+            "x": 9,
+            "y": 2,
+            "side": "player",
+            "type": "pawn",
+            "facing": "south-west"
+          },
+          {
+            "x": 10,
+            "y": 5,
+            "side": "player",
+            "type": "pawn",
+            "facing": "west"
+          },
+          {
+            "x": 9,
+            "y": 8,
+            "side": "player",
+            "type": "pawn",
+            "facing": "north-west"
+          },
+          {
+            "x": 11,
+            "y": 11,
+            "side": "enemy",
+            "type": "king",
+            "facing": "north"
+          }
+        ],
+        "decals": [],
+        "zones": [],
+        "terrain": [
+          {
+            "x": 0,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 0,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 1,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 2,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 2,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 2,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 2,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 3,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 3,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 3,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 3,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 4,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 4,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 4,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 4,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 5,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 5,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 5,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 5,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 5,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 5,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 5,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 5,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 5,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 5,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 5,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 5,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 6,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 6,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 6,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 7,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 7,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 7,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 7,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 8,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 8,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 8,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 8,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 9,
+            "terrain": "road",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 9,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 10,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 10,
+            "terrain": "rock",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 10,
+            "terrain": "rock",
+            "elevation": 0
+          },
+          {
+            "x": 0,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 1,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 2,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 3,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 4,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 5,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 6,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 7,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 8,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 9,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          },
+          {
+            "x": 10,
+            "y": 11,
+            "terrain": "rock",
+            "elevation": 0
+          },
+          {
+            "x": 11,
+            "y": 11,
+            "terrain": "grass",
+            "elevation": 0
+          }
+        ]
+      },
+      "economy": {
+        "startingFunds": 1200,
+        "incomePerTurn": 150
       },
       "objective": "capture-all",
       "difficulty": "normal",

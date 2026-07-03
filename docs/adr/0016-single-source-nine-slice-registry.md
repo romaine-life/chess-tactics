@@ -100,7 +100,7 @@ scripts are retired in favour of the one `buildAsset()` path.
 - Bake: `frontend/scripts/nine-slice-kit.mjs` (`REG` → `REGISTRY` →
   `buildAsset`); assembler `buildFrameParts` in the same file (split-layer,
   mirror-after-scale — ADR-0012 as amended by
-  [ADR-0050](0050-nine-slice-editor-is-the-devs-calibration-bench.md); the
+  [ADR-0054](0054-nine-slice-editor-is-the-devs-calibration-bench.md); the
   standalone `scripts/assemble-frame.mjs` is retired).
 - Editor: `frontend/src/ui/NineSliceEditor.tsx`. Catalog edit-link:
   `frontend/src/ui/design/AssetLibraryStudio.tsx`.

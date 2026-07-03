@@ -5,7 +5,7 @@
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
-import { evaluateObjective, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
+import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
 import { playArrival, playTerrain } from '../sfx';
@@ -27,18 +27,27 @@ const ENEMY_LANDING_STAGGER = 130;
 const SPAWN_SFX_BASE_DELAY = 220;
 const SPAWN_SFX_STAGGER = 70;
 
-const OBJECTIVE_LOG_COPY = {
-  'capture-all': 'capture all enemy pieces',
-  'capture-king': 'capture the enemy King',
-  survive: 'survive the assault',
-  reach: 'reach the objective',
-} as const;
-
-/** The log line announcing a decided objective. */
-function objectiveOutcomeCopy(objective: ObjectiveType, winner: Winner): string {
-  if (winner !== 'player') return 'Defeat — your force has fallen.';
+/**
+ * The log line announcing a decided objective. Direction-aware via the game's
+ * kingSide (ObjectiveContext): in King Assault the PLAYER may be the King-holder,
+ * and Rival Kings ends on a King capture either way, so the win/loss wording has
+ * to name the right event — a King falling vs a force being routed. The goal-copy
+ * strings themselves come from core/objectives (objectiveSummary/OBJECTIVE_LABEL);
+ * only the outcome framing lives here.
+ */
+function objectiveOutcomeCopy(objective: ObjectiveType, winner: Winner, kingSide: 'player' | 'enemy' = 'enemy'): string {
+  if (winner !== 'player') {
+    // A King-holding player in King Assault — or anyone in Rival Kings — loses the
+    // moment the King falls, not by a wipe; say so.
+    if (objective === 'rival-kings' || (objective === 'capture-king' && kingSide === 'player')) {
+      return 'Defeat — your King has fallen.';
+    }
+    return 'Defeat — your force has fallen.';
+  }
   switch (objective) {
-    case 'capture-king': return 'Victory — the enemy King is captured.';
+    // King-holder wins by routing the kingless side; the hunter wins by the capture.
+    case 'capture-king': return kingSide === 'player' ? 'Victory — the enemy is routed.' : 'Victory — the enemy King is captured.';
+    case 'rival-kings': return 'Victory — the rival King is captured.';
     case 'survive': return 'Victory — you held the line.';
     case 'reach': return 'Victory — the objective is reached.';
     default: return 'Victory — the enemy is routed.';
@@ -113,6 +122,18 @@ function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv)
   return { game, tick, events };
 }
 
+/** The player's battle clock (per-level time control; the enemy is untimed). */
+export interface ClockState {
+  /** Remaining ms. While running this is display-quantized (whole seconds; tenths
+   * under 10s) so subscribers re-render only when the readout changes — the exact
+   * deadline lives outside state and is re-read whenever the clock pauses. */
+  remainingMs: number;
+  /** True while the clock is counting down — the player's live turn only. */
+  running: boolean;
+  /** Fischer increment (ms) banked after every completed player move. */
+  incrementMs: number;
+}
+
 export interface SkirmishState {
   game: GameState;
   /** Indexed terrain for the current game; movement generation reads this. */
@@ -124,8 +145,9 @@ export interface SkirmishState {
   log: string[];
   /** Win condition for this game. A free skirmish defaults to capture-king. */
   objective: ObjectiveType;
-  /** Static objective context for the current level — the survive clock target
-   * and the reach destination cells (empty for capture objectives / skirmish). */
+  /** Static objective context for the current game — the survive clock target, the
+   * reach destination cells, and which side fields THE King (kingSide, computed from
+   * the starting pieces for level AND free games alike). */
   objectiveCtx: ObjectiveContext;
   /** Completed player→enemy rounds — the clock the `survive` objective counts. */
   turnsElapsed: number;
@@ -134,6 +156,8 @@ export interface SkirmishState {
   /** Level this game is testing (null = free skirmish). Lets the screen tell
    * "resume the same board" from "launch a different level". */
   levelId: string | null;
+  /** The battle clock, when the level authored one (null = untimed). */
+  clock: ClockState | null;
   newSkirmish: (opts: SkirmishOptions) => void;
   select: (id: string | null) => void;
   focus: (id: string | null) => void;
@@ -158,6 +182,69 @@ export function shouldStartFreshSkirmish(
 const INITIAL_GAME = createSkirmish({ seed: 1 });
 
 export const useSkirmish = create<SkirmishState>((set, get) => {
+  // ---- Battle clock ----------------------------------------------------------
+  // Standard chess-clock rules for the PLAYER only: the clock runs while it's their
+  // live turn, pauses the moment their move applies (banking the Fischer increment),
+  // and resumes when the enemy reply hands the turn back. The truth is a wall-clock
+  // DEADLINE, not a decremented counter — ticks just re-derive the remainder, so a
+  // throttled background tab can't stretch the player's time. The store is a module
+  // singleton, so the ticker survives route changes exactly like the staged enemy
+  // reply does; time honestly keeps running if the player wanders off mid-turn.
+  let clockDeadline = 0;
+  let clockTicker: ReturnType<typeof setInterval> | null = null;
+
+  const stopClockTicker = () => {
+    if (clockTicker !== null) { clearInterval(clockTicker); clockTicker = null; }
+  };
+
+  // Flag fall: losing on time is a defeat like any other — turn locks, result copy
+  // names the clock.
+  const expireClock = () => {
+    stopClockTicker();
+    const cur = get();
+    if (!cur.clock || cur.game.winner) return;
+    set({
+      game: { ...cur.game, winner: 'enemy', turn: 'done' },
+      clock: { ...cur.clock, remainingMs: 0, running: false },
+      selectedId: null,
+      focusedId: null,
+      log: ['Defeat — your clock ran out.', ...cur.log].slice(0, 12),
+    });
+  };
+
+  const tickClock = () => {
+    const cur = get();
+    if (!cur.clock?.running) { stopClockTicker(); return; }
+    const remaining = clockDeadline - Date.now();
+    if (remaining <= 0) { expireClock(); return; }
+    // Publish only when the READOUT would change (seconds; tenths under 10s), so the
+    // 100ms ticker doesn't re-render subscribers ten times a second.
+    const quantum = remaining < 10_000 ? 100 : 1000;
+    const shown = Math.ceil(remaining / quantum) * quantum;
+    if (shown !== cur.clock.remainingMs) set({ clock: { ...cur.clock, remainingMs: shown } });
+  };
+
+  /** Run the clock — a no-op unless the game is timed, live, and on the player's turn. */
+  const startClock = () => {
+    const cur = get();
+    if (!cur.clock || cur.clock.running || cur.game.winner || cur.game.turn !== 'player') return;
+    clockDeadline = Date.now() + cur.clock.remainingMs;
+    stopClockTicker();
+    clockTicker = setInterval(tickClock, 100);
+    set({ clock: { ...cur.clock, running: true } });
+  };
+
+  /** Pause at the moment the player's move applies, banking the increment. Reads the
+   * exact remainder off the deadline — not the quantized display value — so repeated
+   * pause/resume cycles never drift. */
+  const pauseClockWithIncrement = () => {
+    const cur = get();
+    if (!cur.clock?.running) return;
+    stopClockTicker();
+    const remainingMs = Math.max(0, clockDeadline - Date.now()) + cur.clock.incrementMs;
+    set({ clock: { ...cur.clock, remainingMs, running: false } });
+  };
+
   // Stage the enemy half-turn after a beat so it reads as a reply, not a mirror
   // of the player's click. The turn is already flipped to 'enemy' (which locks
   // player input) before this fires.
@@ -180,7 +267,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         const winner = evaluateObjective(game, cur.objective, { ...(cur.objectiveCtx ?? {}), turnsElapsed });
         if (winner) {
           game = { ...game, winner, turn: 'done' };
-          msgs.push(objectiveOutcomeCopy(cur.objective, winner));
+          msgs.push(objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
         }
       }
       set({
@@ -198,6 +285,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       enemyRes.events
         .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
         .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
+      // The turn is back with the player — their clock resumes (no-op when untimed
+      // or the reply decided the game).
+      startClock();
     }, ENEMY_REPLY_DELAY);
   };
 
@@ -208,25 +298,43 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   focusedId: null,
   seed: 1,
   tick: 0,
-  log: [`Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`],
+  log: [`Skirmish begins — ${objectiveSummary('capture-king')}.`],
   objective: 'capture-king',
   objectiveCtx: {},
   turnsElapsed: 0,
   started: false,
   levelId: null,
+  clock: null,
 
   newSkirmish: (opts) => {
+    // A previous game's ticker must never outlive its game.
+    stopClockTicker();
     const created = createSkirmish(opts);
     const env = envFor(created);
     // Safety net: a degenerate start with no player move resolves rather than locks.
     const { game } = resolveIfPlayerStuck(created, env);
     const objective: ObjectiveType = opts.level?.objective ?? 'capture-king';
-    const objectiveCtx = opts.level ? objectiveContextForLevel(opts.level) : {};
+    // Uniform for level AND free games (ADR-0050): the level's static context (survive
+    // clock / reach cells) plus kingSide read off the ACTUAL starting pieces — a free
+    // skirmish fields the King on the enemy side, so its copy stays "Capture the enemy
+    // King", while a level whose author gave the player the King flips to "Protect".
+    const objectiveCtx: ObjectiveContext = {
+      ...(opts.level ? objectiveContextForLevel(opts.level) : {}),
+      kingSide: kingSideOf(created.pieces),
+    };
     const intro = opts.level
-      ? `Test play begins — objective: ${OBJECTIVE_LOG_COPY[opts.level.objective]}.`
-      : `Skirmish begins — ${OBJECTIVE_LOG_COPY['capture-king']}.`;
+      ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
+      : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
     const selectedId = firstPlayerId(game);
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null });
+    // Arm the battle clock from the level's authored time control (null = untimed).
+    const tc = opts.level?.timeControl;
+    const clock: ClockState | null = tc
+      ? { remainingMs: tc.initialSeconds * 1000, running: false, incrementMs: tc.incrementSeconds * 1000 }
+      : null;
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, clock });
+    // The clock starts with the game — it is the player's move from the first beat
+    // (a degenerate instant-draw start is guarded inside startClock).
+    startClock();
     // "Units come onto the board": a soft staggered roll-call as the player's force
     // deploys. Each unit sounds the terrain it lands on (softer, gain 0.7) layered
     // with the authored "arrival" thump (playArrival) — the landing.mp3 that plays
@@ -270,6 +378,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     if (!p) return;
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
+    // The move is legal and WILL apply — the player's clock stops here, banking the
+    // Fischer increment. It stays paused for the whole enemy reply.
+    pauseClockWithIncrement();
     const playerRes = applyMove(s.game, p.id, mv);
     let game = playerRes.state;
     // Footstep: only when the piece actually relocates (applyMove emits a 'moved'
@@ -288,7 +399,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       const winner = evaluateObjective(game, s.objective, { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 });
       if (winner) {
         game = { ...game, winner, turn: 'done' };
-        msgs.push(objectiveOutcomeCopy(s.objective, winner));
+        msgs.push(objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
       }
     }
     // Beat 1: commit the player's move on its own so it animates and the board

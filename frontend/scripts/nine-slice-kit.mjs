@@ -6,7 +6,7 @@
 // buildAsset(), so there is a SINGLE bake implementation and the editor's offsets
 // can't diverge between tools.
 //
-// Config shape (ADR-0050): per-element ABSOLUTES — exactly the render degrees of
+// Config shape (ADR-0054): per-element ABSOLUTES — exactly the render degrees of
 // freedom, nothing layered or dead. All positions are inward-positive in each
 // element's own corner/side space (mirrored axes negate on draw), so a mirror-
 // symmetric frame is one whose values are literally equal.

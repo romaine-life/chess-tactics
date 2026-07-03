@@ -28,6 +28,11 @@ const MARK = PIECE_MARK;
 
 type HudTab = 'unit' | 'roster' | 'log' | 'view' | 'controls';
 
+// Icon-based tab strip: each section is a kit glyph, not a text word. The `label`
+// stays as the accessible name (aria-label) + hover tooltip so the icon never loses
+// its meaning. Glyphs are reused from the curated kit icon set (ADR-0011/0032):
+//   unit = single knight, roster = two pawns (the whole force), log = info feed,
+//   view = display/screen, controls = gear.
 const HUD_TABS: { id: HudTab; label: string }[] = [
   { id: 'unit', label: 'Unit' },
   { id: 'roster', label: 'Roster' },
@@ -35,6 +40,36 @@ const HUD_TABS: { id: HudTab; label: string }[] = [
   { id: 'view', label: 'View' },
   { id: 'controls', label: 'Controls' },
 ];
+
+// ---- In-match shortcut grid (StarCraft-style "grid" keys) -------------------
+// A 3x5 command card in the Controls tab. Cells map to REAL keyboard positions
+// (Q-W-E-R-T / A-S-D-F-G / Z-X-C-V-B) so the painted grid and the physical keys
+// share one muscle memory; empty cells are open slots for future shortcuts.
+// The same SHORTCUT_BINDINGS table drives both the painted buttons and the global
+// key handler, so a click and its key can never drift apart.
+
+type OverlayFlag = 'showEnemyAttacks' | 'showEnemyMoves' | 'showPlayerAttacks' | 'showPlayerMoves';
+
+type GridAction =
+  | { kind: 'toggle'; flag: OverlayFlag; label: string; hint: string }
+  | { kind: 'zoom'; dir: 1 | -1; label: string; hint: string };
+
+const SHORTCUT_KEY_ROWS: string[][] = [
+  ['q', 'w', 'e', 'r', 't'],
+  ['a', 's', 'd', 'f', 'g'],
+  ['z', 'x', 'c', 'v', 'b'],
+];
+
+const SHORTCUT_BINDINGS: Record<string, GridAction> = {
+  q: { kind: 'toggle', flag: 'showEnemyAttacks', label: 'Opp. attacks', hint: 'Show all enemy attack squares (danger zone)' },
+  w: { kind: 'toggle', flag: 'showEnemyMoves', label: 'Opp. moves', hint: 'Show all enemy legal-move squares' },
+  a: { kind: 'toggle', flag: 'showPlayerAttacks', label: 'Your attacks', hint: 'Show all friendly attack squares' },
+  s: { kind: 'toggle', flag: 'showPlayerMoves', label: 'Your moves', hint: 'Show all friendly legal-move squares' },
+  z: { kind: 'zoom', dir: 1, label: 'Zoom in', hint: 'Zoom the board in' },
+  x: { kind: 'zoom', dir: -1, label: 'Zoom out', hint: 'Zoom the board out' },
+};
+
+const ZOOM_STEP = 0.1;
 
 function unitSprite(piece: Piece | null): string | null {
   if (!piece || piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
@@ -80,7 +115,17 @@ function CountPip({ side, count }: { side: Side; count: number }) {
   );
 }
 
-export function SkirmishHud() {
+type SkirmishHudProps = {
+  canStartNewSkirmish?: boolean;
+  onRestartLevel?: (() => void) | null;
+  showRestartLevel?: boolean;
+};
+
+export function SkirmishHud({
+  canStartNewSkirmish = true,
+  onRestartLevel = null,
+  showRestartLevel = false,
+}: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
@@ -103,10 +148,42 @@ export function SkirmishHud() {
   const showMoves = useSkirmishView((s) => s.showMoves);
   const showEnemyAttacks = useSkirmishView((s) => s.showEnemyAttacks);
   const showBlocked = useSkirmishView((s) => s.showBlocked);
+  const showEnemyMoves = useSkirmishView((s) => s.showEnemyMoves);
+  const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
+  const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
   const zoom = useSkirmishView((s) => s.zoom);
   const toggleOverlay = useSkirmishView((s) => s.toggle);
   const setZoom = useSkirmishView((s) => s.setZoom);
   const resetView = useSkirmishView((s) => s.resetView);
+
+  // Current state of each grid toggle, for the pressed/active look on the cards.
+  const flagValue: Record<OverlayFlag, boolean> = {
+    showEnemyAttacks, showEnemyMoves, showPlayerAttacks, showPlayerMoves,
+  };
+
+  // Global key handler — the grid keys work anywhere on the board, not just while the
+  // Controls tab is open. Reads live view state via getState() so the listener never
+  // goes stale (no re-binding per zoom change). Ignores typing fields and modifier
+  // combos so it never steals browser/OS shortcuts.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      const action = SHORTCUT_BINDINGS[e.key.toLowerCase()];
+      if (!action) return;
+      const view = useSkirmishView.getState();
+      if (action.kind === 'toggle') {
+        if (e.repeat) return; // don't flip the layer repeatedly while the key is held
+        view.toggle(action.flag);
+      } else {
+        view.setZoom(view.zoom + action.dir * ZOOM_STEP);
+      }
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const selected = game.pieces.find((p) => p.id === selectedId && p.alive) ?? null;
   const focused = game.pieces.find((p) => p.id === focusedId && p.alive) ?? selected;
@@ -141,9 +218,11 @@ export function SkirmishHud() {
             aria-selected={tab === t.id}
             aria-controls={`skirmish-panel-${t.id}`}
             className={`skirmish-hud-tab ${tab === t.id ? 'active' : ''}`.trim()}
+            aria-label={t.label}
+            title={t.label}
             onClick={() => setTab(t.id)}
           >
-            {t.label}
+            <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />
           </button>
         ))}
       </div>
@@ -277,16 +356,64 @@ export function SkirmishHud() {
           <section className="skirmish-card skirmish-controls-card" aria-label="Page controls">
             <h2>Controls</h2>
             <div className="skirmish-view-group">
+              <span className="skirmish-eyebrow">Shortcuts</span>
+              <div className="skirmish-grid" role="group" aria-label="Match shortcut grid">
+                {SHORTCUT_KEY_ROWS.flat().map((key) => {
+                  const action = SHORTCUT_BINDINGS[key];
+                  if (!action) {
+                    return (
+                      <span key={key} className="app-header-button skirmish-grid-key is-empty" aria-hidden="true">
+                        <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
+                      </span>
+                    );
+                  }
+                  const isToggle = action.kind === 'toggle';
+                  const active = isToggle ? flagValue[action.flag] : false;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      data-testid={`shortcut-${key}`}
+                      className={`app-header-button skirmish-grid-key ${active ? 'app-header-button-active is-active' : ''}`.trim()}
+                      aria-pressed={isToggle ? active : undefined}
+                      title={action.hint}
+                      onClick={() => {
+                        if (action.kind === 'toggle') toggleOverlay(action.flag);
+                        else setZoom(zoom + action.dir * ZOOM_STEP);
+                      }}
+                    >
+                      <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
+                      <span className="skirmish-grid-label">{action.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="skirmish-grid-hint">Keys work any time during the match.</p>
+            </div>
+            <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Match</span>
               <div className="skirmish-view-row">
-                <button
-                  type="button"
-                  className="app-header-button"
-                  data-testid="new-skirmish"
-                  onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
-                >
-                  New skirmish
-                </button>
+                {showRestartLevel ? (
+                  <button
+                    type="button"
+                    className="app-header-button"
+                    data-testid="restart-level"
+                    disabled={!onRestartLevel}
+                    onClick={onRestartLevel ?? undefined}
+                  >
+                    Restart level
+                  </button>
+                ) : null}
+                {canStartNewSkirmish ? (
+                  <button
+                    type="button"
+                    className="app-header-button"
+                    data-testid="new-skirmish"
+                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
+                  >
+                    New skirmish
+                  </button>
+                ) : null}
               </div>
             </div>
           </section>

@@ -56,7 +56,7 @@ existing one. That is the disease this standard ends.
    produced by **codex img2img generation, verified via an `image_generation_call`
    event** (see [kit-forge.md](kit-forge.md)), or **assembled from codex-generated
    atoms** (`buildFrameParts` in `scripts/nine-slice-kit.mjs`; the standalone
-   `assemble-frame.mjs` is retired — see ADR-0050). The accepted concept art is the style/palette
+   `assemble-frame.mjs` is retired — see ADR-0054). The accepted concept art is the style/palette
    reference fed into generation and the review target — **not** a crop source.
    Do not procedurally redraw chrome in code/CSS, and do not extract whole- or
    per-slice crops from the concept.

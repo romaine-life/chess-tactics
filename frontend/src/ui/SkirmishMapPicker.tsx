@@ -3,12 +3,14 @@ import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { useCampaigns } from '../campaign/store';
 import type { Level } from '../core/level';
 import { LevelThumbnail } from '../render/LevelThumbnail';
+import { NavButton } from './shared/NavButton';
 import { LightArtRouteShell } from './shell/LightArtRouteShell';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 
 const OBJECTIVE_COPY = {
   'capture-all': 'Capture all enemy pieces',
   'capture-king': 'Capture the enemy King',
+  'rival-kings': 'Capture the rival King',
   survive: 'Survive the assault',
   reach: 'Reach the objective',
 } as const;
@@ -39,9 +41,9 @@ function SkirmishMapPickerContent({ levels, loading }: { levels: Level[]; loadin
           <span className="skirmish-eyebrow">Skirmish</span>
           <h1>Choose Map</h1>
         </div>
-        <a className="ce-link-button skirmish-picker-random" href="/play?random=1&returnTo=%2Fskirmish">
+        <NavButton className="ce-link-button skirmish-picker-random" to="/play?random=1&returnTo=%2Fskirmish">
           <span>Random Skirmish</span>
-        </a>
+        </NavButton>
       </div>
 
       {loading ? <p className="ce-empty skirmish-picker-empty">Loading maps.</p> : null}
@@ -49,7 +51,7 @@ function SkirmishMapPickerContent({ levels, loading }: { levels: Level[]; loadin
         <div className="skirmish-card skirmish-picker-empty-card">
           <h2>No saved skirmish maps</h2>
           <p>Save a standalone board in the Level Editor, then it will appear here.</p>
-          <a className="ce-link-button" href="/level-editor"><span>Open Level Editor</span></a>
+          <NavButton className="ce-link-button" to="/level-editor"><span>Open Level Editor</span></NavButton>
         </div>
       ) : null}
 
@@ -71,12 +73,12 @@ function SkirmishMapPickerContent({ levels, loading }: { levels: Level[]; loadin
                 </dl>
               </div>
               <div className="skirmish-map-actions">
-                <a className="ce-link-button ce-link-button-ghost" href={`/edit?levelId=${encodeURIComponent(level.id)}&returnTo=${encodeURIComponent('/skirmish')}`}>
+                <NavButton className="ce-link-button ce-link-button-ghost" to={`/edit?levelId=${encodeURIComponent(level.id)}&returnTo=${encodeURIComponent('/skirmish')}`}>
                   <span>Edit</span>
-                </a>
-                <a className="ce-link-button" href={playSkirmishLevelHref(level.id)}>
+                </NavButton>
+                <NavButton className="ce-link-button" to={playSkirmishLevelHref(level.id)}>
                   <span>Play</span>
-                </a>
+                </NavButton>
               </div>
             </article>
           );

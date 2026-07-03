@@ -144,6 +144,7 @@ export function initBgm() {
     owner: false,      // this tab holds the audio-owner lock (only the owner plays)
     otherTitle: '',    // what the owner tab is playing (for "Playing in another tab")
     otherPlaying: false, // another tab owns and is actively playing
+    otherPaused: false, // another tab owns a selected-but-paused track
   };
 
   const control = buildControl();
@@ -161,8 +162,25 @@ export function initBgm() {
   let pendingAction = null;   // a transport action to run once ownership is grabbed
   if (!locksSupported) state.owner = true;
 
+  function currentUrlForBroadcast() {
+    return (!state.stopped && !state.unavailable && state.currentUrl) ? state.currentUrl : null;
+  }
+
+  function currentTitleForBroadcast() {
+    return currentUrlForBroadcast() ? state.currentTitle : null;
+  }
+
   function announce(type) {
-    if (channel) channel.postMessage({ type, id: tabId, url: state.currentUrl, title: state.currentTitle, playing: !audio.paused });
+    if (!channel) return;
+    const url = currentUrlForBroadcast();
+    channel.postMessage({
+      type,
+      id: tabId,
+      url,
+      title: currentTitleForBroadcast(),
+      playing: Boolean(url) && !audio.paused,
+      paused: Boolean(url) && audio.paused,
+    });
   }
 
   function onBecomeOwner() {
@@ -220,6 +238,7 @@ export function initBgm() {
     if (msg.type === 'owner' || msg.type === 'np') {
       state.otherTitle = msg.title || '';
       state.otherPlaying = !state.owner && Boolean(msg.playing);
+      state.otherPaused = !state.owner && Boolean(msg.paused);
       updateControl();
     }
   };
@@ -519,14 +538,17 @@ export function initBgm() {
   }
 
   // Tell the UI (the Settings soundtrack list) what's playing so it can show ■ Stop
-  // on the current row and ▶ Play on the rest.
+  // on the sounding row, keep muted tracks as paused, and show ▶ Play on the rest.
   function broadcast() {
+    const currentUrl = currentUrlForBroadcast();
     window.dispatchEvent(new CustomEvent(BGM_STATE_EVENT, {
       detail: {
-        playing: !audio.paused && state.owner,
-        currentUrl: state.currentUrl || null,
+        playing: Boolean(currentUrl) && !audio.paused && state.owner,
+        paused: Boolean(currentUrl) && audio.paused && state.owner,
+        currentUrl,
         single: Boolean(state.single),
-        otherTab: !state.owner && state.otherPlaying,
+        otherTab: !state.owner && (state.otherPlaying || state.otherPaused),
+        otherPaused: !state.owner && state.otherPaused,
         otherTitle: state.otherTitle || null,
       },
     }));

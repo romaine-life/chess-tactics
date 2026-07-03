@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
-import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
+import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
+import { NavButton } from './shared/NavButton';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { TitleBarSlot } from './shell/TitleBarSlot';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
@@ -33,6 +35,15 @@ interface BgmTrack {
   url: string;
   artist?: string;
   album?: string;
+}
+
+interface NowPlayingState {
+  playing: boolean;
+  paused: boolean;
+  currentUrl: string | null;
+  otherTab: boolean;
+  otherPaused: boolean;
+  otherTitle: string | null;
 }
 
 interface TabDefinition {
@@ -195,14 +206,21 @@ function SettingsButton({
   external?: boolean;
 }): ReactElement {
   const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
-  if (href) {
-    // External links open in a new tab; rel guards against reverse-tabnabbing.
-    // Internal routes (the default) stay in the SPA.
-    const externalProps = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+  if (href && external) {
+    // External destinations still open a new tab — via a button, not an anchor
+    // (ADR-0052): no hover URL leaks into the game shell; noopener guards the opener.
     return (
-      <a className={classes} href={href} aria-label={ariaLabel} {...externalProps}>
+      <button type="button" className={classes} aria-label={ariaLabel} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
         <span>{children}</span>
-      </a>
+      </button>
+    );
+  }
+  if (href) {
+    // Internal routes are game controls — a NavButton, not a hyperlink (ADR-0052).
+    return (
+      <NavButton className={classes} to={href} aria-label={ariaLabel}>
+        <span>{children}</span>
+      </NavButton>
     );
   }
   return (
@@ -300,6 +318,11 @@ export function Settings(): ReactElement {
   }));
   const [previous, setPrevious] = useState<{ tab: SettingsTab; tracks: boolean } | null>(null);
   const [xfade, setXfade] = useState<'idle' | 'enter' | 'active'>('idle');
+  // The origin the user opened Settings from (null on a direct URL open). Rendered as the
+  // "‹ Back" control portaled into the title bar's trailing actions slot (below), and
+  // THREADED through every in-Settings link (withReturnTo) so the ?returnTo param — and
+  // thus that Back — survives each tab/tracks hop.
+  const [returnTo, setReturnTo] = useState<string | null>(readValidatedReturnTo);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
@@ -309,8 +332,16 @@ export function Settings(): ReactElement {
   // render snapshot (otherwise rapid toggles clobber each other before re-render).
   const disabledRef = useRef<string[]>(disabledUrls);
   // The single BGM player owns playback; we just reflect its broadcast transport
-  // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
-  const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
+  // state so the sounding row shows ■ Stop, paused music stays selected, and the
+  // rest show ▶ Play.
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingState>({
+    playing: false,
+    paused: false,
+    currentUrl: null,
+    otherTab: false,
+    otherPaused: false,
+    otherTitle: null,
+  });
   const [confirmingReset, setConfirmingReset] = useState(false);
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -320,12 +351,14 @@ export function Settings(): ReactElement {
 
   useEffect(() => {
     // Bare /settings normalizes to the first section so the URL always names a tab.
+    // The query string rides along — dropping it here would strip ?returnTo and kill Back.
     if (normalizeRoutePath(window.location.pathname) === '/settings') {
-      navigateApp(TAB_PATHS.general, { replace: true, scroll: false });
+      navigateApp(`${TAB_PATHS.general}${window.location.search}`, { replace: true, scroll: false });
     }
     const sync = () => {
       setActiveTab(tabFromPath(window.location.pathname));
       setShowTracks(isTracksView(window.location.pathname));
+      setReturnTo(readValidatedReturnTo());
     };
     window.addEventListener('popstate', sync);
     window.addEventListener(APP_NAVIGATION_EVENT, sync);
@@ -389,14 +422,17 @@ export function Settings(): ReactElement {
     return () => { active = false; };
   }, [showTracks]);
 
-  // Reflect the BGM player's transport state so the playing row shows ■ Stop.
+  // Reflect the BGM player's transport state so the current row distinguishes
+  // sounding playback from paused/muted playback.
   useEffect(() => {
     const onState = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { playing?: boolean; currentUrl?: string | null; otherTab?: boolean; otherTitle?: string | null };
+      const detail = (event as CustomEvent).detail as Partial<NowPlayingState>;
       setNowPlaying({
         playing: Boolean(detail.playing),
+        paused: Boolean(detail.paused),
         currentUrl: detail.currentUrl ?? null,
         otherTab: Boolean(detail.otherTab),
+        otherPaused: Boolean(detail.otherPaused),
         otherTitle: detail.otherTitle ?? null,
       });
     };
@@ -489,11 +525,21 @@ export function Settings(): ReactElement {
 
   const build = buildSummary();
 
-  // The track currently coming out of the speakers, looked up in the loaded list by
-  // the player's broadcast url — drives the permanent "Now Playing" row.
-  const nowPlayingTrack = nowPlaying.playing && tracks
+  // Decorate an intra-settings href so the ?returnTo thread survives every hop —
+  // rail tabs, View Tracks, and the tracks bar's ← Back. Drop it on any one of these
+  // and the screen-level Back silently vanishes after that click.
+  const withReturnTo = (path: string): string =>
+    returnTo ? `${path}?returnTo=${encodeURIComponent(returnTo)}` : path;
+
+  // The track currently selected in the player, looked up in the loaded list by
+  // the player's broadcast url — drives the permanent "Now Playing" row. Muting
+  // pauses the current track; it does not clear the now-playing identity.
+  const nowPlayingTrack = nowPlaying.currentUrl && tracks
     ? tracks.find((track) => track.url === nowPlaying.currentUrl) ?? null
     : null;
+  const nowPlayingEyebrow = nowPlayingTrack
+    ? [nowPlaying.paused ? 'Paused' : null, nowPlayingTrack.artist].filter(Boolean).join(' · ')
+    : '';
 
   const renderGeneral = () => (
     <>
@@ -542,7 +588,7 @@ export function Settings(): ReactElement {
             label="Music Volume"
             onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.musicVolume))}
           />
-          <SettingsButton href={TRACKS_PATH} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
+          <SettingsButton href={withReturnTo(TRACKS_PATH)} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Effects">
@@ -653,15 +699,25 @@ export function Settings(): ReactElement {
 
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
+      {/* Return to where the user opened Settings from. It rides the trailing actions slot
+          with the account/settings cluster (the app's nav home) — the same title-bar spot
+          the Level Editor's back uses — so every return control is in one consistent place;
+          the brand lockup stays a fixed leading anchor. Shown only when the URL carries a
+          valid origin; on a direct open the brand lockup is the way home. */}
+      <TitleBarSlot region="actions">
+        {returnTo ? (
+          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
+        ) : null}
+      </TitleBarSlot>
       {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
       <AmbienceBackground />
       <div className="settings-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
-              <a
+              <NavButton
                 key={tab.id}
-                href={TAB_PATHS[tab.id]}
+                to={withReturnTo(TAB_PATHS[tab.id])}
                 className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
                 aria-current={tab.id === activeTab ? 'page' : undefined}
                 onClick={() => setConfirmingReset(false)}
@@ -672,7 +728,7 @@ export function Settings(): ReactElement {
                 <span>
                   <strong>{tab.label}</strong>
                 </span>
-              </a>
+              </NavButton>
             ))}
           </aside>
 
@@ -685,7 +741,7 @@ export function Settings(): ReactElement {
               <div className="settings-tracks-bar">
                 <div className="settings-tracks-bar-col">
                   <div className="settings-tracks-bar-actions">
-                    <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+                    <SettingsButton href={withReturnTo(TAB_PATHS.audio)} ariaLabel="Back to Audio settings">← Back</SettingsButton>
                     <SettingsButton onClick={shuffleTracks} ariaLabel="Shuffle and play the soundtrack">⇄ Shuffle</SettingsButton>
                   </div>
                   <section className="settings-row settings-nowplaying-row" aria-label="Now playing">
@@ -693,12 +749,12 @@ export function Settings(): ReactElement {
                       <span className="settings-nowplaying-label">Now Playing</span>
                       {nowPlaying.otherTab ? (
                         <>
-                          <span className="settings-row-eyebrow">Playing in another tab</span>
+                          <span className="settings-row-eyebrow">{nowPlaying.otherPaused ? 'Paused in another tab' : 'Playing in another tab'}</span>
                           <h4 className="settings-nowplaying-empty">{nowPlaying.otherTitle ?? '—'}</h4>
                         </>
                       ) : nowPlayingTrack ? (
                         <>
-                          {nowPlayingTrack.artist ? <span className="settings-row-eyebrow">{nowPlayingTrack.artist}</span> : null}
+                          {nowPlayingEyebrow ? <span className="settings-row-eyebrow">{nowPlayingEyebrow}</span> : null}
                           <h4>{nowPlayingTrack.title}</h4>
                         </>
                       ) : (

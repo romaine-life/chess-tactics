@@ -40,7 +40,7 @@ other three are guaranteed identical.
 
 ## Decision Outcome
 
-> **Entry point superseded by [ADR-0050](0050-nine-slice-editor-is-the-devs-calibration-bench.md).**
+> **Entry point superseded by [ADR-0054](0054-nine-slice-editor-is-the-devs-calibration-bench.md).**
 > The *decision* below — atom assembly, never whole-frame generation — stands. But the
 > canonical assembler is now `buildFrameParts` in `frontend/scripts/nine-slice-kit.mjs`
 > (split-layer, per-element offsets, mirror-after-scale, pinned by the bake-parity
@@ -90,7 +90,7 @@ whole-frame generation, that is a new ADR proposal, not an in-passing choice.
 
 - Assembler: `buildFrameParts` in `frontend/scripts/nine-slice-kit.mjs` (mirrors
   one corner → four, split-layer, mirror-after-scale — see
-  [ADR-0050](0050-nine-slice-editor-is-the-devs-calibration-bench.md)).
+  [ADR-0054](0054-nine-slice-editor-is-the-devs-calibration-bench.md)).
   `scripts/assemble-frame.mjs` was the original entry point and is retired.
 - Worked example: ADR-0009 (`scripts/generate-mode-button.mjs`).
 - Mechanism: ADR-0002 (9-slice `border-image`). Source method: ADR-0011.

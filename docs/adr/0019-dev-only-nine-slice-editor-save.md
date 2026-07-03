@@ -86,7 +86,7 @@ keeping one bake implementation and never reaching a production build.
 These two are load-bearing, enforced identically in the editor preview and the bake:
 
 1. **Keyline offset is inert.** *(Superseded by
-   [ADR-0050](0050-nine-slice-editor-is-the-devs-calibration-bench.md): the
+   [ADR-0054](0054-nine-slice-editor-is-the-devs-calibration-bench.md): the
    split-layer model made the cool frame layer tunable — corners, pipes, and
    scales — with symmetry guaranteed by the mirror-after-scale invariant. The
    original rationale below is kept for history.)* The border is continuous by construction (atoms +
@@ -117,7 +117,7 @@ files), so a change is detectable on the filesystem, not just in the browser.
   production UI.
 - Good: the consumption-side content rule is enforced in one place (baked into
   CSS, never the PNG). *(The original inert-keyline rule and its bake warning were
-  superseded by [ADR-0050](0050-nine-slice-editor-is-the-devs-calibration-bench.md),
+  superseded by [ADR-0054](0054-nine-slice-editor-is-the-devs-calibration-bench.md),
   which made every element tunable with symmetry guaranteed by construction — there
   is no keyline warning to emit anymore.)*
 - Cost: a **dev endpoint surface** (`/__nine-slice/save`, `/__nine-slice/config`)

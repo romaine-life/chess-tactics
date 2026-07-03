@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { fetchMe, signInHref, updateDisplayName, type AuthUser } from '../../net/auth';
+import { fetchMe, goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
+import { normalizeRoutePath } from '../navigation';
 import { AccountMenu } from './AccountMenu';
+import { NavButton } from './NavButton';
 
 // The shared trailing-edge "settings + user" cluster for the standard app title
 // bar (ADR-0023/0036): an icon-only Settings gear next to the account control —
@@ -10,6 +12,21 @@ import { AccountMenu } from './AccountMenu';
 // for now; this is the canonical cluster for everything else.)
 
 const SETTINGS_ICON = '/assets/ui/main-menu/icons-carved/settings.png';
+
+// The gear's target: send the CURRENT location along as ?returnTo so Settings can
+// offer a real "‹ Back" to the screen the user left (validated via readValidatedReturnTo
+// in ui/navigation.ts). On Settings itself the gear stays the documented
+// "back to settings root" hop (#241) and must NOT capture a settings path — it only
+// re-threads whatever returnTo the URL already carries, so the Back survives the hop.
+function settingsHref(): string {
+  const { pathname, search } = window.location;
+  const path = normalizeRoutePath(pathname);
+  if (path === '/settings' || path.startsWith('/settings/')) {
+    const returnTo = new URLSearchParams(search).get('returnTo');
+    return returnTo ? `/settings?returnTo=${encodeURIComponent(returnTo)}` : '/settings';
+  }
+  return `/settings?returnTo=${encodeURIComponent(pathname + search)}`;
+}
 
 // Dev-only signed-in stub (import.meta.env.DEV, stripped from prod) so the account
 // chrome can be previewed/screenshotted on any screen without a backend: ?demo=1
@@ -76,9 +93,14 @@ export function HeaderAccountCluster({
           rather than vanishing. .cluster-bgm-slot is display:contents so it adds no gap. */}
       <span className="cluster-bgm-slot" aria-hidden="true" />
       {showSettingsGear ? (
-        <a className="cluster-icon-button" href="/settings" aria-label="Settings" title="Settings">
+        // A NavButton with a THUNK target: settingsHref() runs at activation time, so the
+        // returnTo it captures is always current — screens like the Studio and the level
+        // editor rewrite their query via replaceState WITHOUT re-rendering this persistent
+        // bar, which is why the anchor this replaced needed a pointerdown/keydown
+        // just-in-time href rewrite hack (ADR-0052 retires it).
+        <NavButton className="cluster-icon-button" to={() => settingsHref()} aria-label="Settings" title="Settings">
           <img src={SETTINGS_ICON} alt="" />
-        </a>
+        </NavButton>
       ) : null}
       {signedIn ? (
         <AccountMenu
@@ -91,7 +113,9 @@ export function HeaderAccountCluster({
           defaultEditing={editOpen}
         />
       ) : (
-        <a className="app-header-button app-header-button-active" href={signInHref(signInReturnTo)}>Sign In</a>
+        // A button, not an anchor (ADR-0052): the sign-in is still a full-page trip to
+        // the auth backend — goSignIn sets window.location — it just shows no URL.
+        <button type="button" className="app-header-button app-header-button-active" onClick={() => goSignIn(signInReturnTo)}>Sign In</button>
       )}
     </div>
   );

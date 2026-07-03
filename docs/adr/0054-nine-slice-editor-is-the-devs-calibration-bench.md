@@ -4,7 +4,7 @@ date: 2026-07-02
 deciders: Nelson, Claude
 ---
 
-# ADR-0050: The 9-slice editor is the dev's calibration bench — agents build the tool, the dev tunes the pixels
+# ADR-0054: The 9-slice editor is the dev's calibration bench — agents build the tool, the dev tunes the pixels
 
 Names the contract behind the dev-only editor of
 [ADR-0019](0019-dev-only-nine-slice-editor-save.md) and updates two of its
