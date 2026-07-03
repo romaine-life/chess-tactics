@@ -4468,13 +4468,15 @@ h1 {
   background: transparent;
   display: flex;
   justify-content: center;
-  /* Grow to fill each row; wraps to a second row past ~3 tabs in the narrow panel. */
-  flex: 1 1 76px;
+  /* Icon-only: equal-share basis (0) keeps all five on ONE compact row instead of
+     stretching to a text width and wrapping to a second row. */
+  flex: 1 1 0;
   /* Kit mode-button frame — atom-assembled (ADR-0012/0016), the SAME tab/header
      frame the settings nav uses; gold brackets, cyan when active. Chrome must be
-     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014). */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014).
+     Slimmed to 7px now the cell only carries a glyph, not a word. */
+  border: 7px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 7px round;
   border-radius: 0;
   color: var(--skirmish-muted);
   cursor: pointer;
@@ -4483,8 +4485,8 @@ h1 {
   image-rendering: pixelated;
   letter-spacing: .04em;
   line-height: 1;
-  min-block-size: 44px;
-  padding: 0 var(--ds-inline);
+  min-block-size: 0;
+  padding: 2px;
   text-transform: uppercase;
 }
 
@@ -4509,10 +4511,10 @@ h1 {
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
-  block-size: 26px;
+  block-size: 20px;
   display: block;
   image-rendering: pixelated;
-  inline-size: 26px;
+  inline-size: 20px;
 }
 
 .skirmish-tab-icon-unit { background-image: url("/assets/ui/kit/icons/unit-studio.png"); }
