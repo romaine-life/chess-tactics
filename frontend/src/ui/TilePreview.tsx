@@ -36,6 +36,7 @@ import { PortraitLab } from './PortraitEditor';
 import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { PropSeatLab } from './PropSeatLab';
 import { PROP_DEFS, type PropDef, type PropKind } from '../core/props';
+import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, type CompareTile } from './TileCompareLab';
 import { DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
@@ -74,13 +75,13 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'tilecompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -109,6 +110,7 @@ interface TilesetStudioRouteState {
   selectedTileSideId?: string;
   selectedFrameName?: string;
   selectedPropName?: string;
+  selectedTileCompareId?: string;
   viewerKind?: ViewerKind;
   labMode: LabMode;
   tileFilter: TileFilter;
@@ -160,7 +162,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -197,12 +199,16 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   // ?prop=<id>. The route writer then canonicalises the URL to /tileset-studio. No separate
   // route, no bespoke toolbar (docs/studio-control-architecture.md, ADR-0058).
   const isPropLabAlias = window.location.pathname === '/prop-lab';
+  // /tile-compare is another deep-link alias into the studio (ADR-0058): the Tile Pipeline
+  // category, Viewer mode, 'tilecompare' kind, ?tile=<id>.
+  const isTileCompareAlias = window.location.pathname === '/tile-compare';
   const prop = params.get('prop') || (isPropLabAlias ? params.get('prop') : null);
+  const tile = params.get('tile');
   const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
-  const studioMode = isNineSliceAlias || isPropLabAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
-  const routeCategory = isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isStudioCategory(cat) ? cat : undefined;
+  const studioMode = isNineSliceAlias || isPropLabAlias || isTileCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
+  const routeCategory = isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isStudioCategory(cat) ? cat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -226,8 +232,9 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
     selectedPropName: prop || undefined,
-    viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias ? 'propseat'
-      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' ? vk : undefined,
+    selectedTileCompareId: tile || undefined,
+    viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare'
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'tilecompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -248,7 +255,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   // Canonicalise to /tileset-studio even when entered via the /nine-slice-editor
   // alias, so the alias is a pure entry point and all subsequent state rides the
   // one studio URL (the embedded 9-slice surface is not its own route).
-  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab') return;
+  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab' && window.location.pathname !== '/tile-compare') return;
   if (route.studioMode === 'catalog') {
     // Tiles is the default, so it stays a clean bare URL; Units/Assets get a
     // ?cat= so the chosen catalog survives a reload and is directly linkable.
@@ -282,6 +289,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'tileside' && route.selectedTileSideId) params.set('side', route.selectedTileSideId);
     else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
     else if (route.viewerKind === 'propseat' && route.selectedPropName) params.set('prop', route.selectedPropName);
+    else if (route.viewerKind === 'tilecompare' && route.selectedTileCompareId) params.set('tile', route.selectedTileCompareId);
   }
   params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
@@ -359,6 +367,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedFrameName, setSelectedFrameName] = useState(initialRoute.selectedFrameName ?? DEFAULT_NINE_SLICE_ASSET);
   // Which prop the embedded prop-seat editor (Viewer 'propseat' kind) is tuning.
   const [selectedPropName, setSelectedPropName] = useState(initialRoute.selectedPropName ?? PROP_DEFS[0].id);
+  // Which pipeline tile the embedded Tile Pipeline compare (Viewer 'tilecompare' kind) shows.
+  const [selectedTileCompareId, setSelectedTileCompareId] = useState(initialRoute.selectedTileCompareId ?? COMPARE_TILES[0].id);
   // Which item the Viewer is showing (independent of the catalog category).
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
@@ -371,6 +381,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   };
   const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
   const [selectedPropKinds, setSelectedPropKinds] = useState<PropKind[]>(['tree', 'house']);
+  const [selectedCompareFamilies, setSelectedCompareFamilies] = useState<string[]>([...COMPARE_TILE_FAMILIES]);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [zoom, setZoom] = useState(1);
   const [, setViewZoom] = useState(1);
@@ -552,6 +563,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedTileSideId,
       selectedFrameName,
       selectedPropName,
+      selectedTileCompareId,
       viewerKind,
       labMode,
       tileFilter,
@@ -565,7 +577,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedTileSideId, selectedFrameName, selectedPropName, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -807,6 +819,40 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     note: 'Inspect a prop to tune how it sits on its tiles, then Save.',
   };
 
+  // Tile Pipeline — the 36 QA tiles (raw PixelLab vs snapped-to-grid). Read-only; Inspect
+  // opens the before/after compare (Viewer 'tilecompare' kind). A distinct QA asset set, NOT
+  // the shipped Tiles catalog — so it never leaks into board generation or the brush.
+  const tileCompareCatalogType: CatalogType<CompareTile> = {
+    id: 'tilecompare',
+    label: 'Tile Pipeline',
+    assets: COMPARE_TILES,
+    card: (t) => ({ img: t.proc, title: t.label, badge: t.id }),
+    sections: (visible) => [{ id: 'tilecompare', label: 'Pipeline tiles', assets: [...visible] }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'tile, family...',
+      match: (t, q) => [t.label, t.family, t.id].join(' ').toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    filters: [
+      {
+        id: 'family',
+        label: 'Family',
+        options: COMPARE_TILE_FAMILIES.map((f) => ({ id: f, label: compareTileCap(f), sub: `${COMPARE_TILES.filter((t) => t.family === f).length}` })),
+        memberOf: (t) => [t.family],
+        selected: selectedCompareFamilies,
+        toggle: (id) => setSelectedCompareFamilies((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])),
+        selectAll: () => setSelectedCompareFamilies([...COMPARE_TILE_FAMILIES]),
+        clear: () => setSelectedCompareFamilies([]),
+      },
+    ],
+    onSelect: (t) => setSelectedTileCompareId(t.id),
+    onView: (t) => { setSelectedTileCompareId(t.id); openViewer('tilecompare'); },
+    selectedId: selectedTileCompareId,
+    note: 'Inspect a tile to see the raw PixelLab vs the snapped-to-grid result side by side.',
+  };
+
   // Artwork browses via a bespoke library component (not a CatalogType), so it wires the
   // shared Filters dropdown directly: one dimension, the manifest Group. memberOf is unused
   // here (CatalogFilters only reads options/selected/toggle); the grid filters in the component.
@@ -945,6 +991,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'props', label: 'Props', hint: 'Browse multi-cell props (trees/houses); Inspect one to tune how it sits on its tiles.',
       main: <CatalogGrid type={propsCatalogType} />,
       controls: <CatalogControls type={propsCatalogType} />,
+    },
+    {
+      id: 'tilecompare', label: 'Tile Pipeline', hint: 'The QA tile set — Inspect one to compare the raw PixelLab tile against the snapped-to-grid result.',
+      main: <CatalogGrid type={tileCompareCatalogType} />,
+      controls: <CatalogControls type={tileCompareCatalogType} />,
     },
     {
       id: 'assets', label: 'Assets', hint: 'Browse the UI-kit asset library.',
@@ -1141,6 +1192,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="portrait">Portrait</option>
         <option value="nineslice">9-Slice</option>
         <option value="propseat">Prop Seat</option>
+        <option value="tilecompare">Tile Pipeline</option>
         <option value="glossary">Glossary</option>
         <option value="surface">Surface</option>
         <option value="scrollbar">Scrollbar</option>
@@ -1207,6 +1259,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <NineSliceLab assetId={selectedFrameName} onAssetId={setSelectedFrameName} header={studioViewerHeader} />
             : viewerKind === 'propseat'
             ? <PropSeatLab propId={selectedPropName} onPropId={setSelectedPropName} header={studioViewerHeader} />
+            : viewerKind === 'tilecompare'
+            ? <TileCompareLab tileId={selectedTileCompareId} onTileId={setSelectedTileCompareId} header={studioViewerHeader} />
             : viewerKind === 'artwork'
               ? <ArtworkLab name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'

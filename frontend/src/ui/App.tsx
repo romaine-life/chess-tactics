@@ -7,7 +7,6 @@ import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
 import { ArtworkCompare } from './ArtworkCompare';
-import { TileCompare } from './TileCompare';
 import { SurfaceLab } from './SurfaceLab';
 import { SceneAnimLab } from './SceneAnimLab';
 import { UpdateBanner } from './UpdateBanner';
@@ -358,6 +357,8 @@ function renderRoute(path: string): ReactElement {
   // /prop-lab is the same shape: a deep-link alias that opens the Studio's embedded
   // prop-seat Viewer (Props category). Not its own route or toolbar (ADR-0058).
   if (path === '/prop-lab') return <TilesetStudio initialCategory="props" />;
+  // /tile-compare: alias into the Studio's Tile Pipeline category (ADR-0058 debt migration).
+  if (path === '/tile-compare') return <TilesetStudio initialCategory="tilecompare" />;
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return <LevelEditor />;
@@ -369,7 +370,6 @@ function renderRoute(path: string): ReactElement {
   if (path === '/party') return <Party />;
   if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
   if (path === '/artwork-compare') return <ArtworkCompare />;
-  if (path === '/tile-compare') return <TileCompare />;
   if (path === '/surface-lab') return <SurfaceLab />;
   if (path === '/scene-anim-lab') return <SceneAnimLab />;
   return <MainMenu />;
