@@ -4820,6 +4820,18 @@ h1 {
    grid so every layer (Zone / Rules included) stays reachable without a horizontal overflow. */
 .le-seg-layers { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: repeat(4, 1fr); }
 
+/* Tool picker: each icon is a self-framed tile (its own navy + gold-corner border), so it needs
+   no outer kit button — the tile IS the square button. No text, tooltip-only. The selected tool
+   swaps to its cyan `-active.png` variant instead of the shared button-primary frame. */
+.le-seg-icons { grid-auto-flow: column; grid-auto-columns: max-content; justify-content: start; gap: 6px; }
+.le-seg-icons .le-seg-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 44px; height: 44px; }
+.le-seg-icons .le-seg-btn .le-ico { width: 100%; height: 100%; }
+.le-seg-icons .le-seg-btn.active { border-image: none; }
+.le-seg-icons .le-seg-btn.active .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-move { background-image: url("/assets/ui/level-editor/icons/move-active.png"); }
+
 /* ---- Playability violations list (ADR-0050) -----------------------------------------------
    The always-visible to-fix list. Framed by the shared .skirmish-card (kit panel) like every
    other section — NOT a hand-rolled box (ADR-0032). A warm accent border marks it as blocking. */
@@ -4942,6 +4954,7 @@ h1 {
 .le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
 .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
 .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
+.ic-move { background-image: url("/assets/ui/level-editor/icons/move.png"); }
 .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
 .ic-grid { background-image: url("/assets/ui/level-editor/icons/grid.png"); }
 .ic-zone { background-image: url("/assets/ui/level-editor/icons/zone.png"); }
@@ -8663,18 +8676,6 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-.tileset-relationship-card.has-footprint .tileset-relationship-cell.is-center::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.72);
-  pointer-events: none;
-}
-
 .tileset-studio-tab-panel {
   display: grid;
   align-content: start;
@@ -9112,24 +9113,6 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
-.tileset-studio-card.has-footprint .tileset-studio-card-image::after {
-  filter: drop-shadow(0 0 0 rgba(104, 198, 255, 0.6));
-}
-
-.tileset-studio-card.has-footprint .tileset-studio-card-image::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: calc(var(--iso-tile-width) * var(--tile-zoom, 1));
-  height: calc(var(--iso-tile-height) * var(--tile-zoom, 1));
-  transform: translate(-50%, -77%);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.82);
-  box-shadow: 0 0 14px rgba(42, 166, 255, 0.22);
-  pointer-events: none;
-}
-
 .tileset-studio-card-meta {
   display: flex;
   align-items: center;
@@ -9431,20 +9414,6 @@ button.tileset-relationship-cell {
   background: rgba(2, 8, 13, 0.72);
   border: 1px solid rgba(111, 210, 255, 0.28);
   border-radius: 3px;
-}
-
-.tileset-generated-board.has-footprint .tileset-generated-board-tile::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  /* Same top-surface plane as the grid diamond, so the footprint guide overlays
-     the tile's top face instead of floating above it. */
-  top: var(--iso-tile-surface-top);
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.28);
-  pointer-events: none;
 }
 
 /* Manual tile placement board (temporary preview-in-context). */

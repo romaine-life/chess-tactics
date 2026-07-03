@@ -80,7 +80,6 @@ function StudioEditableBoard({
   resolveProp,
   tool,
   selectedCell,
-  showFootprint,
   boardZoom,
   boardPan,
   animationFrame,
@@ -110,7 +109,6 @@ function StudioEditableBoard({
   resolveProp: (id: string) => PropDef | undefined;
   tool: 'select' | 'brush' | 'erase' | 'move';
   selectedCell: { x: number; y: number } | null;
-  showFootprint: boolean;
   boardZoom: number;
   boardPan: { x: number; y: number };
   animationFrame: number;
@@ -317,7 +315,6 @@ function StudioEditableBoard({
       cells={cells}
       className={`tileset-placement-board is-tool-${tool}`}
       ariaLabel="Editable tile board"
-      showFootprint={showFootprint}
       boardZoom={boardZoom}
       boardPan={boardPan}
       onPointerUp={endInteraction}
@@ -558,7 +555,6 @@ export function LevelEditor(): ReactElement {
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
-  const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [brushKind, setBrushKind] = useState<BrushKind>(brushKindForInitialLayer(initialLayer));
@@ -1432,7 +1428,6 @@ export function LevelEditor(): ReactElement {
                   resolveProp={resolvePropDef}
                   tool={tool}
                   selectedCell={selectedCell}
-                  showFootprint={showFootprint}
                   boardZoom={viewZoom}
                   boardPan={viewPan}
                   animationFrame={animationFrame}
@@ -1687,11 +1682,11 @@ export function LevelEditor(): ReactElement {
 
         <section className="skirmish-card">
           <h2>Tool</h2>
-          <div className="le-seg">
-            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')}><span className="le-ico ic-eyedropper" aria-hidden="true" />Select</button>
-            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')}><span className="le-ico ic-brush" aria-hidden="true" />Brush</button>
-            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')}><span className="le-ico ic-eraser" aria-hidden="true" />Erase</button>
-            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Drag a placed unit to a new cell — it keeps its piece, side and facing."><span className="le-ico" aria-hidden="true" />Move</button>
+          <div className="le-seg le-seg-icons">
+            <button type="button" className={`le-seg-btn ${tool === 'select' ? 'active' : ''}`.trim()} onClick={() => setTool('select')} title="Select" aria-label="Select"><span className="le-ico ic-eyedropper" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'brush' ? 'active' : ''}`.trim()} onClick={() => setTool('brush')} title="Brush" aria-label="Brush"><span className="le-ico ic-brush" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'erase' ? 'active' : ''}`.trim()} onClick={() => setTool('erase')} title="Erase" aria-label="Erase"><span className="le-ico ic-eraser" aria-hidden="true" /></button>
+            <button type="button" className={`le-seg-btn ${tool === 'move' ? 'active' : ''}`.trim()} onClick={() => setTool('move')} title="Move — drag a placed unit to a new cell; it keeps its piece, side and facing." aria-label="Move"><span className="le-ico ic-move" aria-hidden="true" /></button>
           </div>
           {tool === 'move' ? <p className="le-board-note">Drag a placed unit to a new cell. It keeps its piece, side and facing; you can't drop onto another unit or a prop.</p> : null}
           <div className="le-brush-pick">
@@ -1943,13 +1938,11 @@ export function LevelEditor(): ReactElement {
 
         </>)}
 
-        {layer !== 'status' ? (
+        {/* Board-page-only zoom readout — a whole-workspace setting, not per-brush. Zoom is also
+            reachable anywhere via the mouse wheel over the board. */}
+        {layer === 'board' ? (
         <section className="skirmish-card">
           <h2>Display</h2>
-          <div className="le-ctrlrow">
-            <span className="le-ctrllabel">Footprint</span>
-            <Toggle checked={showFootprint} label="Toggle footprint overlay" onChange={setShowFootprint} />
-          </div>
           <div className="le-ctrlrow">
             <span className="le-ctrllabel">Zoom</span>
             <Stepper
@@ -2005,7 +1998,9 @@ export function LevelEditor(): ReactElement {
         </section>
         ) : null}
 
-        {layer !== 'status' ? (
+        {/* Board-composition tally lives on the Board page only (it's a whole-board readout, not a
+            per-layer control). The Details card above still surfaces the same counts contextually. */}
+        {layer === 'board' ? (
         <div className="le-statusline">
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zoned · {boardCols}×{boardRows}
         </div>
