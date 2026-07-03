@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "shot": "node scripts/shot.mjs",
+    "e2e:lobby": "node scripts/lobby-e2e.mjs",
     "vendor:ambience": "node scripts/vendor-ambience.mjs",
     "optimize:assets": "node scripts/optimize-main-menu-assets.mjs",
     "units:sprites": "node scripts/generate-unit-sprites.mjs",

@@ -948,7 +948,10 @@ const SSE_HEADERS = {
   'Connection': 'keep-alive',
   'X-Accel-Buffering': 'no',
 };
-const SSE_KEEPALIVE_MS = 15000;
+// Kept comfortably under any proxy/gateway timeout. The lobby SSE routes disable
+// Envoy Gateway's default 15s HTTPRoute request timeout (k8s/templates/httproute.yaml);
+// this heartbeat is the belt-and-suspenders for any other idle timer in the path.
+const SSE_KEEPALIVE_MS = 10000;
 
 // Start an SSE response: write headers, kick off a heartbeat, and wire cleanup on
 // close. Returns the interval so the route can clear it in its own close handler.
@@ -1182,6 +1185,12 @@ app.get('/api/lobbies/events', async (req, res) => {
   if (!user) return;
   const heartbeat = startSse(res);
   lobbyListSubscribers.add(res);
+  // Connect-time snapshot: push an immediate change ping so the client refetches the
+  // current list the instant the stream opens (mirrors the per-lobby channel's on-connect
+  // frame at the /:id/events route). Combined with the client's onopen refetch, this makes
+  // every (re)connection self-healing — a mutation missed while the socket was down is
+  // recovered on reconnect instead of being lost until a manual Refresh.
+  sseWrite(res, 'data: {"type":"lobbies-changed"}\n\n');
   req.on('close', () => {
     clearInterval(heartbeat);
     lobbyListSubscribers.delete(res);

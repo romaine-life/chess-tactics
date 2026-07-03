@@ -142,8 +142,13 @@ export function Lobbies() {
       if (u.signed_in) {
         refresh();
         // Live list: refetch on every server-side lobby mutation (create/join/leave/
-        // start/level). THIS is the fix for "host doesn't see the guest join".
+        // start/level) and on every (re)connect. THIS is the fix for "host doesn't see
+        // the guest join".
         unsubscribe = subscribeLobbies(refresh);
+        // The subscription is created AFTER an async round-trip, so the effect's cleanup
+        // may already have run (fast unmount/remount, StrictMode). If so, close it now —
+        // otherwise the cleanup closed over a still-null ref and the stream would leak.
+        if (!active) { unsubscribe(); unsubscribe = null; }
       }
     });
     return () => { active = false; unsubscribe?.(); };
