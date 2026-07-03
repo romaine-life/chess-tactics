@@ -3,8 +3,8 @@
 // new state out). The renderer and HUD subscribe to it; neither mutates state.
 
 import { create } from 'zustand';
-import type { GameEvent, GameState, Move, Winner } from '../core/types';
-import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
+import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
+import { applyMove, enemyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
@@ -90,23 +90,43 @@ function firstPlayerId(game: GameState): string | null {
   return game.pieces.find((p) => p.side === 'player' && p.alive)?.id ?? null;
 }
 
+/** True if any living piece of `side` has at least one legal move. */
+export function sideHasLegalMove(game: GameState, side: Side, env: MoveEnv): boolean {
+  return livingPieces(game.pieces, side).some((p) => legalMoves(p, game.pieces, game.size, env).length > 0);
+}
+
 /** True if any living player piece has at least one legal move. */
 export function playerHasLegalMove(game: GameState, env: MoveEnv): boolean {
-  return livingPieces(game.pieces, 'player').some((p) => legalMoves(p, game.pieces, game.size, env).length > 0);
+  return sideHasLegalMove(game, 'player', env);
 }
 
 /**
- * Resolve a soft-lock: with no manual "end turn" anymore, a player who has zero
- * legal moves would otherwise be stuck forever. There is no voluntary passing in
- * chess, so a player who genuinely cannot move ends the game in a stalemate — a
- * draw. Only acts on the player's undecided turn with no move available;
- * otherwise returns the state unchanged.
+ * The terminal result when the side to move has no legal move: there is no
+ * passing in chess, so the game ends here — a LOSS for that side if its King is
+ * in check (checkmate), otherwise a DRAW (stalemate). A kingless army is never in
+ * check, so it can only stalemate. Returns null when the side can still move, the
+ * game is already decided, or it isn't a live side's turn.
  */
-export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean } {
-  if (game.turn === 'player' && !game.winner && !playerHasLegalMove(game, env)) {
-    return { game: { ...game, winner: 'draw', turn: 'done' }, stuck: true };
-  }
-  return { game, stuck: false };
+export function terminalIfStuck(game: GameState, env: MoveEnv): { winner: Winner; checkmate: boolean; side: Side } | null {
+  const side = game.turn;
+  if ((side !== 'player' && side !== 'enemy') || game.winner) return null;
+  if (sideHasLegalMove(game, side, env)) return null;
+  const checkmate = sideInCheck(game, side, env);
+  const winner: Winner = checkmate ? (side === 'player' ? 'enemy' : 'player') : 'draw';
+  return { winner, checkmate, side };
+}
+
+/**
+ * Resolve a soft-lock on the player's turn (handing control back after the enemy
+ * reply, and as a start-of-game safety net). Delegates to `terminalIfStuck`:
+ * checkmate ⇒ defeat, stalemate ⇒ draw. No-op unless it is the player's
+ * undecided turn with no move available.
+ */
+export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean; checkmate: boolean } {
+  if (game.turn !== 'player') return { game, stuck: false, checkmate: false };
+  const t = terminalIfStuck(game, env);
+  if (!t) return { game, stuck: false, checkmate: false };
+  return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, checkmate: t.checkmate };
 }
 
 /** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
@@ -262,9 +282,13 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
       // With no manual End Turn, a player handed the turn with no legal move would
       // soft-lock — resolve that as a loss (you can't pass in chess).
-      const stuckRes = resolveIfPlayerStuck(enemyRes.game, envFor(enemyRes.game));
+      const afterEnv = envFor(enemyRes.game);
+      const stuckRes = resolveIfPlayerStuck(enemyRes.game, afterEnv);
       let game = stuckRes.game;
-      if (stuckRes.stuck) msgs.push('Stalemate — no legal moves remain. The skirmish is a draw.');
+      if (stuckRes.stuck) msgs.push(stuckRes.checkmate
+        ? 'Checkmate — your King is trapped. Defeat.'
+        : 'Stalemate — no legal moves remain. The skirmish is a draw.');
+      else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
       // A full player→enemy round just elapsed: advance the survive clock, then
       // re-check the objective — survive reached, or a player wipe = defeat.
       const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
@@ -446,12 +470,27 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         msgs.push(objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
       }
     }
+    // Checkmate the player just delivered ends the game immediately: if the enemy
+    // (now to move) has no legal reply, that's checkmate (victory) when its King is
+    // in check, otherwise stalemate (a draw). A non-terminal check is announced.
+    const enemyEnv = envFor(game);
+    if (!game.winner && game.turn === 'enemy') {
+      const term = terminalIfStuck(game, enemyEnv);
+      if (term) {
+        game = { ...game, winner: term.winner, turn: 'done' };
+        msgs.push(term.checkmate
+          ? 'Checkmate — the enemy King has no escape. Victory!'
+          : 'Stalemate — the enemy has no legal move. The skirmish is a draw.');
+      } else if (sideInCheck(game, 'enemy', enemyEnv)) {
+        msgs.push('Check!');
+      }
+    }
     // Beat 1: commit the player's move on its own so it animates and the board
     // reads before the enemy answers. applyMove flips the turn to 'enemy', which
     // also locks further player input until the reply resolves.
     set({
       game,
-      env: envFor(game),
+      env: enemyEnv,
       selectedId: null,
       focusedId: null,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
