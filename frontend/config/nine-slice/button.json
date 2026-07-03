@@ -2,48 +2,48 @@
   "asset": "button",
   "coolCorners": {
     "tl": {
-      "dx": 0,
-      "dy": 0
+      "dx": -1,
+      "dy": -1
     },
     "tr": {
-      "dx": 0,
-      "dy": 0
+      "dx": -1,
+      "dy": -1
     },
     "bl": {
-      "dx": 0,
-      "dy": 0
+      "dx": -1,
+      "dy": -1
     },
     "br": {
-      "dx": 0,
-      "dy": 0
+      "dx": -1,
+      "dy": -1
     }
   },
   "pipes": {
-    "top": 0,
-    "bottom": 0,
-    "left": 0,
-    "right": 0
+    "top": -1,
+    "bottom": -1,
+    "left": -1,
+    "right": -1
   },
-  "frameScale": 1,
+  "frameScale": 1.5,
   "brackets": {
     "tl": {
-      "dx": -5,
-      "dy": -5
+      "dx": -7,
+      "dy": -7
     },
     "tr": {
-      "dx": -5,
-      "dy": -5
+      "dx": -7,
+      "dy": -7
     },
     "bl": {
-      "dx": -5,
-      "dy": -5
+      "dx": -7,
+      "dy": -7
     },
     "br": {
-      "dx": -5,
-      "dy": -5
+      "dx": -7,
+      "dy": -7
     }
   },
-  "bracketScale": 1,
+  "bracketScale": 1.25,
   "content": 5,
   "fill": 0
 }
