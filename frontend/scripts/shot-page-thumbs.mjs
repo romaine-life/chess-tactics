@@ -28,7 +28,6 @@ const PAGES = [
   { name: 'campaign-editor', route: '/campaigns-next' },
   { name: 'level-editor', route: '/edit' },
   { name: 'lobbies', route: '/lobbies' },
-  { name: 'game-lab', route: '/game-lab' },
 ];
 
 // Capture at a full desktop layout (1280x800 CSS px) but render at half DPI, so the saved webp

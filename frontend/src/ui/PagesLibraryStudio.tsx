@@ -1,6 +1,5 @@
 import { useRef, useState, type ReactElement, type ReactNode, type CSSProperties } from 'react';
 import { PAGE_ENTRIES, type PageEntry } from './pagesCatalog';
-import { NavButton } from './shared/NavButton';
 import { SurfaceDressingRoom } from './SurfaceDressingRoom';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 import { useWindowScaledPreview } from './useWindowScaledPreview';
@@ -47,18 +46,6 @@ export function PagesLibraryStudio({
       ))}
       {visible.length === 0 ? <p className="tileset-studio-empty">No page matches.</p> : null}
     </div>
-  );
-}
-
-// ADR-0058: every Pages entry carries a real click-path to its live route, so no
-// page is reachable only by typing its URL. The Studio catalog is the in-app dev
-// launcher; this is the "go there for real" action every Pages viewer renders
-// (navigating leaves the Studio for the actual page via the sanctioned NavButton).
-function PageOpenAction({ page }: { page: PageEntry }): ReactElement {
-  return (
-    <NavButton className="tileset-view-action pages-open" to={page.route}>
-      Open {page.label} ›
-    </NavButton>
   );
 }
 
@@ -319,7 +306,6 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
             ) : null}
             <button type="button" className="tileset-view-action" onClick={copyMenuCss} disabled={!bakeCss}>{copied ? 'Copied CSS ✓' : 'Copy menu CSS'}</button>
             <button type="button" className="tileset-view-action pages-reset" onClick={resetDefaults}>Reset to defaults</button>
-            <PageOpenAction page={page} />
             <dl className="al-meta">
               <div><dt>Page</dt><dd>{page.label}</dd></div>
               <div><dt>Route</dt><dd>{page.route}</dd></div>
@@ -581,7 +567,6 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
             <button type="button" className="tileset-view-action pages-reset" onClick={() => patch(groupDefault(g))}>Reset this element</button>
             <button type="button" className="tileset-view-action" onClick={() => setGroups(ceAllDefaults())}>Reset all</button>
             <button type="button" className="tileset-view-action" onClick={copyCss}>{copied ? 'Copied CSS ✓' : `Copy CSS${tunedCount ? ` (${tunedCount})` : ''}`}</button>
-            <PageOpenAction page={page} />
             <dl className="al-meta">
               <div><dt>Page</dt><dd>{page.label}</dd></div>
               <div><dt>Route</dt><dd>{page.route}</dd></div>
@@ -608,7 +593,6 @@ function PageStubViewer({ page, header }: { page: PageEntry; header?: ReactNode 
           <div className="tileset-control-stack">
             {header}
             <p className="tileset-catalog-note">Live page — tweak controls land here later.</p>
-            <PageOpenAction page={page} />
             <dl className="al-meta">
               <div><dt>Page</dt><dd>{page.label}</dd></div>
               <div><dt>Route</dt><dd>{page.route}</dd></div>

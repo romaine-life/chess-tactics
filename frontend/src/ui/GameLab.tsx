@@ -1,14 +1,18 @@
-// Game Lab (/game-lab): the owner-facing experiment bench for the game AI.
-// Pick a level, run N self-play games in workers, read the aggregate (win rates
-// with error bars, per-piece activity), drill into any single game, and step
-// through it ply-by-ply on the real board renderer. Runs persist per-account
-// (/api/lab-runs) with the LEVEL SNAPSHOT embedded so replays survive later
-// level edits; Export downloads the same document as JSON.
+// Game Lab — the owner-facing experiment bench for the game AI, living INSIDE the
+// one Studio (ADR-0029 / docs/studio-control-architecture.md "Adding to the
+// studio"): a `catalogCategories` entry whose grid is the levels you can
+// experiment on, and whose "View Selected" opens the bench as the `gamelab`
+// Viewer kind. It inherits the Studio topbar/breadcrumb/frame and is reachable by
+// its catalog tab — NOT a standalone route.
 //
-// Dev tooling — deliberately a plain web page (Studio family), not game chrome.
+// In the fixed frame: the run CONFIG is the Controls rail (level readout, games /
+// depth / nodes / seed / variant, Run/Reset, Save/Export, saved runs); the run
+// OUTPUT is the main pane (aggregate + per-piece table, the game list, and the
+// ply-by-ply replay on the real board renderer). Runs persist per-account
+// (/api/lab-runs) with the LEVEL SNAPSHOT embedded so replays survive level edits.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { MODE_NAME } from '../core/objectives';
@@ -46,55 +50,6 @@ const DEFAULT_CONFIG: RunConfig = { games: 100, maxDepth: 4, maxNodes: 20_000, s
 interface VariantConfig {
   unitIndex: number | 'none';
   action: 'remove' | PieceType;
-}
-
-// Dev-page styling rides inline with the component, the same pattern as
-// SurfaceLab's SL_CSS / ArtworkCompare's AC_CSS (Studio pages are plain web
-// pages — no game chrome).
-const GL_CSS = `
-.game-lab { padding: 18px 22px 60px; max-width: 1400px; margin: 0 auto; color: #e8e4da; font: 14px/1.45 system-ui, sans-serif; }
-.game-lab h2 { font-size: 16px; margin: 0 0 10px; }
-.game-lab h3 { font-size: 14px; margin: 16px 0 6px; }
-.game-lab-panel { background: rgba(20, 24, 30, 0.72); border: 1px solid #3a4150; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
-.game-lab-config { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
-.game-lab-config h2 { flex-basis: 100%; margin-bottom: 2px; }
-.game-lab-config label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #b9b2a4; }
-.game-lab-config input, .game-lab-config select, .game-lab select { background: #12151b; color: #e8e4da; border: 1px solid #3a4150; border-radius: 4px; padding: 5px 8px; font-size: 13px; }
-.game-lab-config input[type='number'] { width: 84px; }
-.game-lab button { background: #2a3242; color: #e8e4da; border: 1px solid #4a5468; border-radius: 5px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
-.game-lab button:hover:not(:disabled) { background: #38445c; }
-.game-lab button:disabled { opacity: 0.45; cursor: default; }
-.game-lab progress { width: 220px; height: 14px; }
-.game-lab table { border-collapse: collapse; width: 100%; margin-top: 4px; }
-.game-lab th, .game-lab td { border: 1px solid #333a47; padding: 5px 9px; text-align: left; font-size: 13px; }
-.game-lab th { background: #1a1f28; color: #b9b2a4; font-weight: 600; }
-.game-lab-split { display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: 14px; align-items: start; }
-.game-lab-games table tbody tr { cursor: pointer; }
-.game-lab-games table tbody tr:hover { background: #232a37; }
-.game-lab tr.is-selected { background: #2c3447; }
-.game-lab-games { max-height: 560px; overflow-y: auto; }
-.game-lab-replay-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-.game-lab-replay-controls input[type='range'] { flex: 1; min-width: 160px; }
-.game-lab-ply-label { font-size: 12px; color: #b9b2a4; }
-.game-lab-move-line { font-family: ui-monospace, monospace; font-size: 12px; color: #cfc8b8; margin: 4px 0 10px; }
-.game-lab-board { display: grid; grid-template-rows: minmax(0, 1fr); height: 560px; border: 1px solid #333a47; border-radius: 6px; overflow: hidden; background: #0d1015; }
-.game-lab-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
-.game-lab-hint { color: #8f8878; font-size: 13px; }
-.game-lab-error { color: #e08b8b; font-size: 13px; }
-.game-lab-progress-label { font-size: 12px; color: #b9b2a4; }
-.game-lab-linklike { background: none; border: none; padding: 0; color: #9db8e8; cursor: pointer; font-size: 13px; text-decoration: underline; }
-`;
-
-const readParams = () => new URLSearchParams(window.location.search);
-
-function writeParams(entries: Record<string, string | null>): void {
-  const params = readParams();
-  for (const [key, value] of Object.entries(entries)) {
-    if (value === null || value === '') params.delete(key);
-    else params.set(key, value);
-  }
-  const qs = params.toString();
-  window.history.replaceState({}, '', `/game-lab${qs ? `?${qs}` : ''}`);
 }
 
 /** Apply the variant lever to a level: clone with one authored unit removed or
@@ -152,11 +107,105 @@ function pieceRollup(records: readonly GameRecord[]): Array<{
     .sort((a, b) => a.side.localeCompare(b.side) || a.id.localeCompare(b.id));
 }
 
-export function GameLab(): ReactElement {
+// The main-pane (output) styling; the Controls rail reuses the shared Studio
+// `.tileset-view-controls` chrome, so only the run-form bits and the tables need
+// scoping here.
+const GL_CSS = `
+.game-lab-main { overflow-y: auto; padding: 14px 16px 40px; color: #e8e4da; font: 13px/1.45 system-ui, sans-serif; }
+.game-lab-main h2 { font-size: 15px; margin: 0 0 8px; }
+.game-lab-main h3 { font-size: 13px; margin: 14px 0 6px; color: #b9b2a4; }
+.game-lab-main table { border-collapse: collapse; width: 100%; margin-top: 4px; }
+.game-lab-main th, .game-lab-main td { border: 1px solid #333a47; padding: 4px 8px; text-align: left; font-size: 12px; }
+.game-lab-main th { background: #1a1f28; color: #b9b2a4; font-weight: 600; position: sticky; top: 0; }
+.game-lab-games { max-height: 240px; overflow-y: auto; margin-top: 12px; }
+.game-lab-games tbody tr { cursor: pointer; }
+.game-lab-games tbody tr:hover { background: #232a37; }
+.game-lab-main tr.is-selected { background: #2c3447; }
+.game-lab-replay-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0 8px; }
+.game-lab-replay-controls input[type=range] { flex: 1; min-width: 160px; }
+.game-lab-ply-label, .game-lab-hint { font-size: 12px; color: #8f8878; }
+.game-lab-move-line { font-family: ui-monospace, monospace; font-size: 12px; color: #cfc8b8; margin: 4px 0 10px; }
+.game-lab-board { display: grid; grid-template-rows: minmax(0, 1fr); height: 440px; border: 1px solid #333a47; border-radius: 6px; overflow: hidden; background: #0d1015; }
+.game-lab-controls .gl-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #b9b2a4; margin-bottom: 8px; }
+.game-lab-controls input, .game-lab-controls select { background: #12151b; color: #e8e4da; border: 1px solid #3a4150; border-radius: 4px; padding: 5px 8px; font-size: 13px; }
+.game-lab-controls .gl-run-row { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+.game-lab-controls progress { width: 100%; }
+.game-lab-picked { font-size: 12px; color: #cfc8b8; margin: 0 0 8px; }
+.game-lab-error { color: #e08b8b; font-size: 12px; }
+.game-lab-saved-runs { margin-top: 14px; }
+.game-lab-saved-runs button.linklike { background: none; border: none; padding: 0; color: #9db8e8; cursor: pointer; font-size: 12px; text-decoration: underline; text-align: left; }
+`;
+
+/**
+ * Catalog grid: the levels you can experiment on. Selecting one and hitting
+ * "View Selected" opens the bench (the `gamelab` Viewer kind) for it. Uses the
+ * shared studio card classes so the grid matches every other catalog.
+ */
+export function GameLabCatalog({
+  search,
+  selected,
+  onSelect,
+}: {
+  search: string;
+  selected?: string;
+  onSelect: (levelId: string) => void;
+}): ReactElement {
   const campaigns = useCampaigns((s) => s.campaigns);
   const workspaceLevels = useCampaigns((s) => s.levels);
+  useEffect(() => { void ensureCampaignsHydrated(); }, []);
 
-  const [selectedLevelId, setSelectedLevelId] = useState<string>(() => readParams().get('level') ?? '');
+  const q = search.trim().toLowerCase();
+  const levels = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ id: string; label: string; sub: string }> = [];
+    for (const campaign of campaigns) {
+      for (const ref of campaign.levels) {
+        const lvl = workspaceLevels[ref.levelId];
+        if (!lvl || seen.has(lvl.id)) continue;
+        seen.add(lvl.id);
+        out.push({ id: lvl.id, label: lvl.name, sub: `${campaign.name} · ${MODE_NAME[lvl.objective]}` });
+      }
+    }
+    for (const lvl of Object.values(workspaceLevels)) {
+      if (seen.has(lvl.id)) continue;
+      out.push({ id: lvl.id, label: lvl.name, sub: MODE_NAME[lvl.objective] });
+    }
+    return out.filter((o) => !q || `${o.label} ${o.sub}`.toLowerCase().includes(q));
+  }, [campaigns, workspaceLevels, q]);
+
+  return (
+    <div className="tileset-studio-grid pages-grid" aria-label="Game Lab levels">
+      {levels.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          className={`tileset-studio-card ${o.id === selected ? 'is-selected' : ''}`.trim()}
+          onClick={() => onSelect(o.id)}
+          aria-pressed={o.id === selected}
+          title={`${o.label} — ${o.sub}`}
+        >
+          <span className="tileset-studio-card-meta">
+            <span className="tileset-studio-card-text">
+              <strong>{o.label}</strong>
+              <em>{o.sub}</em>
+            </span>
+          </span>
+        </button>
+      ))}
+      {levels.length === 0 ? <p className="tileset-studio-empty">No level matches.</p> : null}
+    </div>
+  );
+}
+
+/**
+ * The bench for one selected level, rendered in the Studio Viewer frame: main
+ * pane (results + games + replay) plus the shared Controls rail (`header` +
+ * run config). `levelId` comes from the catalog selection.
+ */
+export function GameLabViewer({ levelId, header }: { levelId?: string; header?: ReactNode }): ReactElement {
+  const workspaceLevels = useCampaigns((s) => s.levels);
+  useEffect(() => { void ensureCampaignsHydrated(); }, []);
+
   const [config, setConfig] = useState<RunConfig>(DEFAULT_CONFIG);
   const [variant, setVariant] = useState<VariantConfig>({ unitIndex: 'none', action: 'remove' });
   const [viewZoom, setViewZoom] = useState(0.8);
@@ -174,74 +223,28 @@ export function GameLab(): ReactElement {
   const [savedRuns, setSavedRuns] = useState<LabRunSummary[] | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | string>('idle');
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [loadedRunId, setLoadedRunId] = useState<string | null>(() => readParams().get('run'));
 
-  const [selectedSeed, setSelectedSeed] = useState<number | null>(() => {
-    const raw = readParams().get('game');
-    // Treat a missing OR empty ?game= as "no selection" — Number('') is 0, which
-    // would spuriously auto-open a seed-0 game.
-    if (raw === null || raw === '') return null;
-    const seed = Number(raw);
-    return Number.isFinite(seed) ? seed : null;
-  });
-  const [ply, setPly] = useState<number>(() => Number(readParams().get('ply') ?? 0) || 0);
+  const [selectedSeed, setSelectedSeed] = useState<number | null>(null);
+  const [ply, setPly] = useState<number>(0);
   const [outcomeFilter, setOutcomeFilter] = useState<'all' | 'player' | 'enemy' | 'draw'>('all');
 
   useEffect(() => {
-    void ensureCampaignsHydrated();
     fetchMe().then((me) => setSignedIn(Boolean(me.signed_in))).catch(() => setSignedIn(false));
     listLabRuns().then(setSavedRuns).catch(() => setSavedRuns([]));
   }, []);
 
-  // Deep link: ?run=<id> restores a saved run wholesale (level snapshot included).
+  // Switching the selected level clears the on-screen run — it belonged to the
+  // previous level.
   useEffect(() => {
-    if (!loadedRunId || records) return;
-    loadLabRun(loadedRunId)
-      .then((doc) => {
-        setRecords(doc.body.records);
-        setRunLevel(doc.body.level);
-        setRunMetaBase({
-          config: {
-            games: doc.meta.games,
-            maxDepth: doc.body.search.maxDepth ?? DEFAULT_CONFIG.maxDepth,
-            maxNodes: doc.body.search.maxNodes ?? DEFAULT_CONFIG.maxNodes,
-            seedBase: doc.meta.seedBase,
-          },
-          variant: doc.meta.variant,
-        });
-        setSaveState('saved');
-      })
-      .catch(() => setRunError('Could not load the linked run (signed out, or it was deleted).'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadedRunId]);
+    setRecords(null);
+    setRunLevel(null);
+    setRunMetaBase(null);
+    setSelectedSeed(null);
+    setPly(0);
+    setVariant({ unitIndex: 'none', action: 'remove' });
+  }, [levelId]);
 
-  useEffect(() => {
-    writeParams({
-      level: selectedLevelId || null,
-      run: loadedRunId,
-      game: selectedSeed === null ? null : String(selectedSeed),
-      ply: selectedSeed === null || ply === 0 ? null : String(ply),
-    });
-  }, [selectedLevelId, loadedRunId, selectedSeed, ply]);
-
-  const level = workspaceLevels[selectedLevelId];
-  const levelOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const options: Array<{ id: string; label: string }> = [];
-    for (const campaign of campaigns) {
-      for (const ref of campaign.levels) {
-        const lvl = workspaceLevels[ref.levelId];
-        if (!lvl || seen.has(lvl.id)) continue;
-        seen.add(lvl.id);
-        options.push({ id: lvl.id, label: `${campaign.name} — ${lvl.name} (${MODE_NAME[lvl.objective]})` });
-      }
-    }
-    for (const lvl of Object.values(workspaceLevels)) {
-      if (seen.has(lvl.id)) continue;
-      options.push({ id: lvl.id, label: `${lvl.name} (${MODE_NAME[lvl.objective]})` });
-    }
-    return options;
-  }, [campaigns, workspaceLevels]);
+  const level = levelId ? workspaceLevels[levelId] : undefined;
 
   const startRun = useCallback(() => {
     if (!level || handleRef.current) return;
@@ -253,13 +256,11 @@ export function GameLab(): ReactElement {
     setRunMetaBase({ config: { ...config }, variant: applied.label });
     setSelectedSeed(null);
     setPly(0);
-    setLoadedRunId(null);
     setRunError(null);
     setSaveState('idle');
     setProgress({ done: 0, total: seeds.length });
     // Coalesce progress updates: a large run finishes hundreds/thousands of games,
-    // and one setState per game would re-render the page that often. Update on a
-    // sparse cadence plus the final game.
+    // and one setState per game would re-render the page that often.
     const step = Math.max(1, Math.floor(seeds.length / 100));
     const handle = runLabGames(applied.level, seeds, search, (_record, done, total) => {
       if (done === total || done % step === 0) setProgress({ done, total });
@@ -267,8 +268,7 @@ export function GameLab(): ReactElement {
     handleRef.current = handle;
     handle.promise
       .then((all) => setRecords(all))
-      // A cancel rejects with 'cancelled' (per the LabRunHandle contract); that's a
-      // user action, not an error to surface. cancelRun already cleared the UI.
+      // A cancel rejects with 'cancelled' (per the LabRunHandle contract); not an error.
       .catch((error: Error) => { if (error.message !== 'cancelled') setRunError(error.message); })
       .finally(() => {
         handleRef.current = null;
@@ -305,9 +305,8 @@ export function GameLab(): ReactElement {
     };
     setSaveState('saving');
     saveLabRun(meta, body)
-      .then(({ id }) => {
+      .then(() => {
         setSaveState('saved');
-        setLoadedRunId(id);
         listLabRuns().then(setSavedRuns).catch(() => undefined);
       })
       .catch((error: Error) => setSaveState(`Save failed: ${error.message}`));
@@ -325,11 +324,30 @@ export function GameLab(): ReactElement {
     URL.revokeObjectURL(url);
   }, [records, runLevel, runMetaBase]);
 
+  const loadRun = useCallback((id: string) => {
+    loadLabRun(id)
+      .then((doc) => {
+        setRecords(doc.body.records);
+        setRunLevel(doc.body.level);
+        setRunMetaBase({
+          config: {
+            games: doc.meta.games,
+            maxDepth: doc.body.search.maxDepth ?? DEFAULT_CONFIG.maxDepth,
+            maxNodes: doc.body.search.maxNodes ?? DEFAULT_CONFIG.maxNodes,
+            seedBase: doc.meta.seedBase,
+          },
+          variant: doc.meta.variant,
+        });
+        setSelectedSeed(null);
+        setPly(0);
+        setSaveState('saved');
+      })
+      .catch(() => setRunError('Could not load the run (signed out, or it was deleted).'));
+  }, []);
+
   const aggregate = useMemo(() => (records ? aggregateRecords(records) : null), [records]);
   const rollup = useMemo(() => (records ? pieceRollup(records) : []), [records]);
 
-  // Reset is disabled when the knobs already sit at the committed baseline (and no
-  // variant is applied), so it never reads as a no-op that "did something".
   const configIsDefault =
     config.games === DEFAULT_CONFIG.games &&
     config.maxDepth === DEFAULT_CONFIG.maxDepth &&
@@ -348,8 +366,6 @@ export function GameLab(): ReactElement {
     [records, selectedSeed],
   );
 
-  // Replay: rebuild every board state once per selected game, render the current
-  // ply through the same read-only board the editors use.
   const states = useMemo(
     () => (selectedRecord && runLevel ? replayStates(runLevel, selectedRecord) : null),
     [selectedRecord, runLevel],
@@ -361,11 +377,6 @@ export function GameLab(): ReactElement {
     return { ...baseBoard, units: unitsForGamePieces(states[clampedPly].pieces) };
   }, [baseBoard, states, clampedPly]);
 
-  const openGame = (seed: number): void => {
-    setSelectedSeed(seed);
-    setPly(0);
-  };
-
   const describeMove = (record: GameRecord, index: number): string => {
     const m = record.moves[index];
     const capture = m.move.capture ? ` ×${m.move.capture}` : '';
@@ -375,146 +386,55 @@ export function GameLab(): ReactElement {
   const running = progress !== null;
 
   return (
-    <div className="game-lab">
+    <>
       <style>{GL_CSS}</style>
-      <section className="game-lab-panel game-lab-config" aria-label="Run configuration">
-        <h2>Run</h2>
-        <label>
-          Level
-          <select value={selectedLevelId} onChange={(e) => setSelectedLevelId(e.target.value)} disabled={running}>
-            <option value="">— pick a level —</option>
-            {levelOptions.map((o) => (
-              <option key={o.id} value={o.id}>{o.label}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Games
-          <input type="number" min={1} max={2000} value={config.games} disabled={running}
-            onChange={(e) => setConfig({ ...config, games: Math.max(1, Number(e.target.value) || 1) })} />
-        </label>
-        <label>
-          Depth
-          <input type="number" min={1} max={8} value={config.maxDepth} disabled={running}
-            onChange={(e) => setConfig({ ...config, maxDepth: Math.max(1, Number(e.target.value) || 1) })} />
-        </label>
-        <label>
-          nodes / move
-          <input type="number" min={500} max={2_000_000} step={500} value={config.maxNodes} disabled={running}
-            onChange={(e) => setConfig({ ...config, maxNodes: Math.max(500, Number(e.target.value) || 500) })} />
-        </label>
-        <label>
-          Seed base
-          <input type="number" min={1} value={config.seedBase} disabled={running}
-            onChange={(e) => setConfig({ ...config, seedBase: Math.max(1, Number(e.target.value) || 1) })} />
-        </label>
-        {level && level.layers.units.length > 0 ? (
-          <label>
-            Variant
-            <select
-              value={variant.unitIndex === 'none' ? 'none' : String(variant.unitIndex)}
-              disabled={running}
-              onChange={(e) => setVariant({ ...variant, unitIndex: e.target.value === 'none' ? 'none' : Number(e.target.value) })}
-            >
-              <option value="none">as authored</option>
-              {level.layers.units.map((u, i) => (
-                <option key={`${u.side}-${u.type}-${i}`} value={i}>{`${u.side} ${u.type} @ (${u.x},${u.y})`}</option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        {variant.unitIndex !== 'none' ? (
-          <label>
-            becomes
-            <select value={variant.action} disabled={running}
-              onChange={(e) => setVariant({ ...variant, action: e.target.value as VariantConfig['action'] })}>
-              <option value="remove">removed</option>
-              {PLAYABLE_PIECE_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        {running ? (
+      <section className="al-lab-main game-lab-main" aria-label="Game Lab output">
+        {!level ? (
+          <p className="game-lab-hint">Pick a level from the Game Lab catalog to run experiments on it.</p>
+        ) : !records ? (
+          <p className="game-lab-hint">
+            {running ? `Running games… ${progress.done}/${progress.total}` : `Ready to run games on “${level.name}”. Set the knobs on the right and hit Run games.`}
+          </p>
+        ) : aggregate ? (
           <>
-            <button type="button" onClick={cancelRun}>Cancel</button>
-            <progress value={progress.done} max={progress.total} />
-            <span className="game-lab-progress-label">{progress.done}/{progress.total}</span>
-          </>
-        ) : (
-          <>
-            <button type="button" onClick={startRun} disabled={!level}>Run games</button>
-            {/* Reset to the committed defaults (ADR-0057: derived baseline, not a
-                zero-out) — restores the run knobs and clears any variant. */}
-            <button
-              type="button"
-              onClick={() => { setConfig(DEFAULT_CONFIG); setVariant({ unitIndex: 'none', action: 'remove' }); }}
-              disabled={configIsDefault}
-            >
-              Reset
-            </button>
-          </>
-        )}
-        {runError ? <p className="game-lab-error" role="alert">{runError}</p> : null}
-      </section>
-
-      {aggregate && records ? (
-        <section className="game-lab-panel game-lab-results" aria-label="Run results">
-          <h2>
-            Results{runMetaBase?.variant ? ` — ${runMetaBase.variant}` : ''}
-          </h2>
-          <table>
-            <thead>
-              <tr><th>Games</th><th>Player wins</th><th>Enemy wins</th><th>Draws</th><th>Player win rate</th><th>Avg game length</th><th>Avg search depth</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{aggregate.games}</td>
-                <td>{aggregate.playerWins}</td>
-                <td>{aggregate.enemyWins}</td>
-                <td>{aggregate.draws}</td>
-                <td>{pct(aggregate.playerWinRate)} ± {pct(aggregate.winRateError)}</td>
-                <td>{aggregate.avgPlies.toFixed(1)} plies</td>
-                <td>{aggregate.avgDepth.toFixed(1)}</td>
-              </tr>
-            </tbody>
-          </table>
-          <h3>Pieces</h3>
-          <table>
-            <thead>
-              <tr><th>Piece</th><th>Avg moves / game</th><th>Total captures</th><th>Survival</th><th>Never moved</th></tr>
-            </thead>
-            <tbody>
-              {rollup.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.id}</td>
-                  <td>{p.avgMoves.toFixed(2)}</td>
-                  <td>{p.captures}</td>
-                  <td>{pct(p.survivalRate)}</td>
-                  <td>{pct(p.neverMovedRate)}</td>
+            <h2>Results{runMetaBase?.variant ? ` — ${runMetaBase.variant}` : ''}</h2>
+            <table>
+              <thead>
+                <tr><th>Games</th><th>Player wins</th><th>Enemy wins</th><th>Draws</th><th>Player win rate</th><th>Avg length</th><th>Avg depth</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>{aggregate.games}</td>
+                  <td>{aggregate.playerWins}</td>
+                  <td>{aggregate.enemyWins}</td>
+                  <td>{aggregate.draws}</td>
+                  <td>{pct(aggregate.playerWinRate)} ± {pct(aggregate.winRateError)}</td>
+                  <td>{aggregate.avgPlies.toFixed(1)} plies</td>
+                  <td>{aggregate.avgDepth.toFixed(1)}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="game-lab-actions">
-            <button type="button" onClick={saveRun} disabled={saveState === 'saving' || saveState === 'saved' || signedIn === false}>
-              {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save run'}
-            </button>
-            <button type="button" onClick={exportRun}>Export JSON</button>
-            {signedIn === false ? <span className="game-lab-hint">Sign in to save runs to your account.</span> : null}
-            {typeof saveState === 'string' && saveState.startsWith('Save failed') ? (
-              <span className="game-lab-error">{saveState}</span>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
+              </tbody>
+            </table>
+            <h3>Pieces</h3>
+            <table>
+              <thead>
+                <tr><th>Piece</th><th>Avg moves / game</th><th>Total captures</th><th>Survival</th><th>Never moved</th></tr>
+              </thead>
+              <tbody>
+                {rollup.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.id}</td>
+                    <td>{p.avgMoves.toFixed(2)}</td>
+                    <td>{p.captures}</td>
+                    <td>{pct(p.survivalRate)}</td>
+                    <td>{pct(p.neverMovedRate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-      {records ? (
-        <div className="game-lab-split">
-          <section className="game-lab-panel game-lab-games" aria-label="Games in this run">
-            <h2>Games</h2>
-            <label>
-              Outcome
+            <h3>Games</h3>
+            <label className="game-lab-picked">
+              Outcome{' '}
               <select value={outcomeFilter} onChange={(e) => setOutcomeFilter(e.target.value as typeof outcomeFilter)}>
                 <option value="all">all</option>
                 <option value="player">player wins</option>
@@ -522,40 +442,34 @@ export function GameLab(): ReactElement {
                 <option value="draw">draws</option>
               </select>
             </label>
-            <table>
-              <thead>
-                <tr><th>Seed</th><th>Winner</th><th>Plies</th><th>Rounds</th></tr>
-              </thead>
-              <tbody>
-                {filteredRecords.map((r) => (
-                  <tr
-                    key={r.seed}
-                    className={selectedSeed === r.seed ? 'is-selected' : ''}
-                    onClick={() => openGame(r.seed)}
-                  >
-                    <td>{r.seed}</td>
-                    <td>{r.winner}</td>
-                    <td>{r.plies}</td>
-                    <td>{r.turnsElapsed}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+            <div className="game-lab-games">
+              <table>
+                <thead>
+                  <tr><th>Seed</th><th>Winner</th><th>Plies</th><th>Rounds</th></tr>
+                </thead>
+                <tbody>
+                  {filteredRecords.map((r) => (
+                    <tr
+                      key={r.seed}
+                      className={selectedSeed === r.seed ? 'is-selected' : ''}
+                      onClick={() => { setSelectedSeed(r.seed); setPly(0); }}
+                    >
+                      <td>{r.seed}</td>
+                      <td>{r.winner}</td>
+                      <td>{r.plies}</td>
+                      <td>{r.turnsElapsed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          <section className="game-lab-panel game-lab-replay" aria-label="Replay">
-            <h2>Replay</h2>
+            <h3>Replay</h3>
             {selectedRecord && states && stepBoard ? (
               <>
                 <div className="game-lab-replay-controls">
                   <button type="button" onClick={() => setPly(Math.max(0, clampedPly - 1))} disabled={clampedPly === 0}>‹ Prev</button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={states.length - 1}
-                    value={clampedPly}
-                    onChange={(e) => setPly(Number(e.target.value))}
-                  />
+                  <input type="range" min={0} max={states.length - 1} value={clampedPly} onChange={(e) => setPly(Number(e.target.value))} />
                   <button type="button" onClick={() => setPly(Math.min(states.length - 1, clampedPly + 1))} disabled={clampedPly >= states.length - 1}>Next ›</button>
                   <span className="game-lab-ply-label">
                     Ply {clampedPly}/{states.length - 1} — seed {selectedRecord.seed}, {selectedRecord.winner} wins in {selectedRecord.plies}
@@ -565,16 +479,7 @@ export function GameLab(): ReactElement {
                   {clampedPly === 0 ? 'Starting position' : describeMove(selectedRecord, clampedPly - 1)}
                 </p>
                 <div className="game-lab-board">
-                  <ViewPane
-                    kind="board"
-                    ariaLabel="Replay board"
-                    zoom={viewZoom}
-                    pan={viewPan}
-                    minZoom={0.3}
-                    maxZoom={2}
-                    onZoomChange={setViewZoom}
-                    onPanChange={setViewPan}
-                  >
+                  <ViewPane kind="board" ariaLabel="Replay board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
                     <div className="tileset-view-board-content is-board">
                       <StudioReadOnlyBoard board={stepBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Replay board" />
                     </div>
@@ -584,39 +489,105 @@ export function GameLab(): ReactElement {
             ) : (
               <p className="game-lab-hint">Pick a game from the table to step through it.</p>
             )}
-          </section>
-        </div>
-      ) : null}
-
-      <section className="game-lab-panel game-lab-saved" aria-label="Saved runs">
-        <h2>Saved runs</h2>
-        {savedRuns === null ? (
-          <p className="game-lab-hint">Loading…</p>
-        ) : savedRuns.length === 0 ? (
-          <p className="game-lab-hint">{signedIn === false ? 'Sign in to keep runs across sessions.' : 'No saved runs yet.'}</p>
-        ) : (
-          <table>
-            <thead>
-              <tr><th>Run</th><th>Games</th><th>Player win rate</th><th>Saved</th><th /></tr>
-            </thead>
-            <tbody>
-              {savedRuns.map((run) => (
-                <tr key={run.id} className={loadedRunId === run.id ? 'is-selected' : ''}>
-                  <td><button type="button" className="game-lab-linklike" onClick={() => { setLoadedRunId(run.id); setRecords(null); setSelectedSeed(null); setPly(0); }}>{run.meta.name}</button></td>
-                  <td>{run.meta.games}</td>
-                  <td>{run.meta.games ? pct(run.meta.playerWins / run.meta.games) : '—'}</td>
-                  <td>{new Date(run.created_at).toLocaleString()}</td>
-                  <td>
-                    <button type="button" onClick={() => {
-                      void deleteLabRun(run.id).then(() => listLabRuns().then(setSavedRuns)).catch(() => undefined);
-                    }}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+          </>
+        ) : null}
       </section>
-    </div>
+
+      <aside className="tileset-view-controls game-lab-controls" aria-label="Game Lab controls">
+        <section className="tileset-inspector-section">
+          <h2>Controls</h2>
+          <div className="tileset-control-stack">
+            {header}
+            <p className="game-lab-picked">{level ? `Level: ${level.name} (${MODE_NAME[level.objective]})` : 'No level selected — pick one in the Catalog.'}</p>
+
+            <label className="gl-field">Games
+              <input type="number" min={1} max={2000} value={config.games} disabled={running}
+                onChange={(e) => setConfig({ ...config, games: Math.max(1, Number(e.target.value) || 1) })} />
+            </label>
+            <label className="gl-field">Depth
+              <input type="number" min={1} max={8} value={config.maxDepth} disabled={running}
+                onChange={(e) => setConfig({ ...config, maxDepth: Math.max(1, Number(e.target.value) || 1) })} />
+            </label>
+            <label className="gl-field">nodes / move
+              <input type="number" min={500} max={2_000_000} step={500} value={config.maxNodes} disabled={running}
+                onChange={(e) => setConfig({ ...config, maxNodes: Math.max(500, Number(e.target.value) || 500) })} />
+            </label>
+            <label className="gl-field">Seed base
+              <input type="number" min={1} value={config.seedBase} disabled={running}
+                onChange={(e) => setConfig({ ...config, seedBase: Math.max(1, Number(e.target.value) || 1) })} />
+            </label>
+            {level && level.layers.units.length > 0 ? (
+              <label className="gl-field">Variant
+                <select value={variant.unitIndex === 'none' ? 'none' : String(variant.unitIndex)} disabled={running}
+                  onChange={(e) => setVariant({ ...variant, unitIndex: e.target.value === 'none' ? 'none' : Number(e.target.value) })}>
+                  <option value="none">as authored</option>
+                  {level.layers.units.map((u, i) => (
+                    <option key={`${u.side}-${u.type}-${i}`} value={i}>{`${u.side} ${u.type} @ (${u.x},${u.y})`}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {variant.unitIndex !== 'none' ? (
+              <label className="gl-field">becomes
+                <select value={variant.action} disabled={running}
+                  onChange={(e) => setVariant({ ...variant, action: e.target.value as VariantConfig['action'] })}>
+                  <option value="remove">removed</option>
+                  {PLAYABLE_PIECE_TYPES.map((t) => (<option key={t} value={t}>{t}</option>))}
+                </select>
+              </label>
+            ) : null}
+
+            <div className="gl-run-row">
+              {running ? (
+                <>
+                  <button type="button" onClick={cancelRun}>Cancel</button>
+                  <progress value={progress.done} max={progress.total} />
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={startRun} disabled={!level}>Run games</button>
+                  {/* ADR-0057: reset to the committed defaults (derived baseline, not a zero-out). */}
+                  <button type="button" disabled={configIsDefault}
+                    onClick={() => { setConfig(DEFAULT_CONFIG); setVariant({ unitIndex: 'none', action: 'remove' }); }}>
+                    Reset
+                  </button>
+                </>
+              )}
+            </div>
+            {runError ? <p className="game-lab-error" role="alert">{runError}</p> : null}
+
+            {records ? (
+              <div className="gl-run-row">
+                <button type="button" onClick={saveRun} disabled={saveState === 'saving' || saveState === 'saved' || signedIn === false}>
+                  {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save run'}
+                </button>
+                <button type="button" onClick={exportRun}>Export JSON</button>
+              </div>
+            ) : null}
+            {signedIn === false ? <p className="game-lab-hint">Sign in to save runs to your account.</p> : null}
+            {typeof saveState === 'string' && saveState.startsWith('Save failed') ? <p className="game-lab-error">{saveState}</p> : null}
+
+            <div className="game-lab-saved-runs">
+              <h3 style={{ fontSize: 12, color: '#b9b2a4', margin: '0 0 6px' }}>Saved runs</h3>
+              {savedRuns === null ? (
+                <p className="game-lab-hint">Loading…</p>
+              ) : savedRuns.length === 0 ? (
+                <p className="game-lab-hint">{signedIn === false ? 'Sign in to keep runs across sessions.' : 'No saved runs yet.'}</p>
+              ) : (
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  {savedRuns.map((run) => (
+                    <li key={run.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 4 }}>
+                      <button type="button" className="linklike" onClick={() => loadRun(run.id)}>{run.meta.name}</button>
+                      <button type="button" style={{ fontSize: 11 }}
+                        onClick={() => { void deleteLabRun(run.id).then(() => listLabRuns().then(setSavedRuns)).catch(() => undefined); }}>×</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
+      </aside>
+    </>
   );
 }
