@@ -49,7 +49,7 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, actionsSlot: true };
   }
   if (path === '/campaigns-next' || path === '/campaigns') {
-    return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true, actionsSlot: true };
+    return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
     // screen, so only Settings scales.

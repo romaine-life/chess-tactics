@@ -3688,13 +3688,17 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-/* Editor bars (level + campaign editor) carry a 4th, trailing column for the always-on
-   account/settings cluster (ADR-0042): brand · live save-state · editor actions ·
-   cluster. Two classes out-rank the base .settings-header-frame grid (same trick the
-   skirmish override uses), so the cluster gets its own track instead of overflowing. */
-.app-shell-titlebar.le-topbar,
-.app-shell-titlebar.ce-topbar {
+/* Level Editor bar: 4 columns — brand · live save-state (center) · return-nav (‹ Catalog /
+   ‹ Back, actions slot) · account cluster. Two classes out-rank the base grid so the cluster
+   keeps its own track. (Undo/Test/Save moved into the editor's rail dock, so the actions slot
+   now carries only the return-nav.) */
+.app-shell-titlebar.le-topbar {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+/* Campaign Editor bar: 3 columns — brand · save-state (center) · account cluster. Its actions
+   (Save/Publish) moved into the editor's own footer, so the bar has no actions slot. */
+.app-shell-titlebar.ce-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .skirmish-topbar-status {
@@ -4520,6 +4524,13 @@ h1 {
 }
 .le-seg-btn.active { border-image-source: url("/assets/ui/kit/button-primary.png"); }
 .le-seg-btn.danger { border-image-source: url("/assets/ui/kit/button-danger.png"); }
+/* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
+   disabled control, matching the retired title-bar Save's is-disabled look. */
+.le-seg-btn.is-blocked { opacity: .45; }
+/* Pinned Actions dock in the rail — the workspace verbs (Undo/Test/Save) that moved out of the
+   global title bar. A fixed flex child of .skirmish-hud (above .le-hud-scroll), so it never
+   scrolls; the button row reuses the .le-board-actions 3-col grid. */
+.le-actions-dock .le-board-actions { margin-top: 6px; }
 .le-board-actions { display: grid; gap: 5px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 8px; }
 .le-board-actions .le-seg-btn { min-width: 0; }
 
@@ -6419,6 +6430,10 @@ body { font-size: 17px; }
 .ce-footer .ce-asset-button:not(.is-danger) {
   border-image-source: url("/assets/ui/kit/button-neutral.png");
 }
+
+/* Workspace commits (Save · Publish) at the top of the Campaigns panel — full-width primary
+   buttons matching + New Campaign; the base .ce-asset-button is already button-primary. */
+.ce-workspace-commit { display: grid; gap: 6px; margin: 0 4px 8px; }
 
 @media (max-width: 1180px) {
   .ce-screen {
