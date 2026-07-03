@@ -1922,7 +1922,10 @@ export function LevelEditor(): ReactElement {
 
         </>)}
 
-        {layer !== 'status' ? (
+        {/* Display controls (footprint guide + zoom) live on the Board page only — they're
+            workspace-wide settings, not per-brush, so they don't belong on every layer. Zoom is
+            also reachable anywhere via the mouse wheel over the board. */}
+        {layer === 'board' ? (
         <section className="skirmish-card">
           <h2>Display</h2>
           <div className="le-ctrlrow">
@@ -1984,7 +1987,9 @@ export function LevelEditor(): ReactElement {
         </section>
         ) : null}
 
-        {layer !== 'status' ? (
+        {/* Board-composition tally lives on the Board page only (it's a whole-board readout, not a
+            per-layer control). The Details card above still surfaces the same counts contextually. */}
+        {layer === 'board' ? (
         <div className="le-statusline">
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zoned · {boardCols}×{boardRows}
         </div>
