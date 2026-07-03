@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { propCells, propDef, PROP_DEFS, type PropDef } from './props';
+import propSeats from './propSeats.json';
 
 const sortCells = (cells: Array<{ x: number; y: number }>) =>
   [...cells].sort((a, b) => a.y - b.y || a.x - b.x);
@@ -22,13 +23,25 @@ describe('props core', () => {
   });
 
   it('a 2×1 def returns exactly 2 cells', () => {
-    const def: PropDef = { id: 'x', label: 'X', kind: 'tree', w: 2, h: 1, blocking: true, terrains: ['grass'], sprite: { w: 96, h: 96, anchorX: 48, anchorY: 80 } };
+    const def: PropDef = { id: 'x', label: 'X', kind: 'tree', w: 2, h: 1, blocking: true, terrains: ['grass'], sprite: { w: 96, h: 96, anchorX: 48, anchorY: 80, scale: 1 } };
     expect(propCells(0, 0, def)).toHaveLength(2);
     expect(sortCells(propCells(0, 0, def))).toEqual([{ x: 0, y: 0 }, { x: 1, y: 0 }]);
   });
 
   it('propDef returns undefined for an unknown id (no fallback to [0])', () => {
     expect(propDef('not-a-real-prop')).toBeUndefined();
+  });
+
+  it('every def composes a full seat from propSeats.json, and the file has no orphans', () => {
+    for (const d of PROP_DEFS) {
+      expect(Number.isFinite(d.sprite.anchorX), `${d.id} anchorX`).toBe(true);
+      expect(Number.isFinite(d.sprite.anchorY), `${d.id} anchorY`).toBe(true);
+      expect(d.sprite.scale, `${d.id} scale`).toBeGreaterThan(0);
+    }
+    const defIds = new Set(PROP_DEFS.map((d) => d.id));
+    for (const seatId of Object.keys(propSeats)) {
+      expect(defIds.has(seatId), `propSeats.json entry "${seatId}" has no PROP_DEFS def`).toBe(true);
+    }
   });
 
   it('seeds an oak (tree) and a cottage (house), both blocking 2×2', () => {

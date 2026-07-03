@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, readFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
 import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
@@ -66,6 +66,50 @@ function doodadCompositionSave() {
   };
 }
 
+// Dev-only endpoint: /prop-lab's Save POSTs the EDITED prop seats here and they are MERGED
+// into src/core/propSeats.json — the checked-in single source of truth the game composes
+// into PROP_DEFS. Merge (never replace): props.ts throws at module load for a missing seat,
+// so a whole-file replace from a stale tab (or an empty POST) would white-screen every dev
+// route and silently drop other tabs' saved tuning. Vite's JSON-module HMR then reloads
+// every open board with the new seats.
+function propSeatSave() {
+  return {
+    name: 'prop-seat-save',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__prop-seat/save', (req, res) => {
+        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            const posted = JSON.parse(body);
+            const entries = posted && typeof posted === 'object' && !Array.isArray(posted) ? Object.entries(posted) : [];
+            const ok = entries.length > 0 && entries.every(([id, s]) => /^[a-z0-9_-]+$/i.test(id)
+              && s && typeof s === 'object'
+              && Number.isFinite(s.anchorX) && Number.isFinite(s.anchorY)
+              && Number.isFinite(s.scale) && s.scale > 0);
+            if (!ok) throw new Error('body must be a non-empty { [propId]: { anchorX, anchorY, scale } } map with finite numbers');
+            const rel = 'src/core/propSeats.json';
+            const out = join(process.cwd(), rel);
+            const existing = JSON.parse(await readFile(out, 'utf8'));
+            const merged = { ...existing };
+            for (const [id, s] of entries) merged[id] = { anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale };
+            await writeFile(out, `${JSON.stringify(merged, null, 2)}\n`);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true, path: rel, updated: entries.map(([id]) => id) }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, error: String(err) }));
+          }
+        });
+      });
+    },
+  };
+}
+
 // Dev-only stand-in for the backend's /api/bgm. Local dev has no backend process,
 // so this proxies the DEPLOYED backend's playlist (which lists the blob container
 // live, each track's title/artist/album coming from blob metadata) and serves it
@@ -107,5 +151,5 @@ function bgmDevMock() {
 }
 
 export default defineConfig({
-  plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave(), bgmDevMock()],
+  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), nineSliceDevSave(), bgmDevMock()],
 });

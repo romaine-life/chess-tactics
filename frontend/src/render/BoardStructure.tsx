@@ -57,7 +57,7 @@ function StructureSprite({
   w: number;
   /** Gameplay footprint height in cells. */
   h: number;
-  sprite: { w: number; h: number; anchorX: number; anchorY: number };
+  sprite: { w: number; h: number; anchorX: number; anchorY: number; scale?: number };
   srcFor: (half: 'back' | 'front') => string;
   /** Per-half data-* attributes (e.g. `(half) => ({ 'data-doodad': half })`) for hooks/styling. */
   attrsFor: (half: 'back' | 'front') => Record<string, string>;
@@ -76,12 +76,15 @@ function StructureSprite({
   // contact pixel back by its fraction of the frame: -(anchorX/w) and -(anchorY/h). (For the 1×1
   // doodad, 96×180 @ (48,69), this reproduces the shipped translate(-50%, -38.333%).)
   const { x: translateX, y: translateY } = seatTransformPercent(sprite);
+  // Render scale multiplies the frame box only. The seat translate is a PERCENTAGE of the
+  // element, so the contact pixel stays planted on the ground point at any scale.
+  const scale = sprite.scale ?? 1;
   const common = {
     position: 'absolute' as const,
     left,
     top,
-    width: sprite.w,
-    height: sprite.h,
+    width: sprite.w * scale,
+    height: sprite.h * scale,
     transform: `translate(${translateX}%, ${translateY}%)`,
     pointerEvents: 'none' as const,
   };

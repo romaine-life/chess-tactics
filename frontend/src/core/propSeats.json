@@ -1,0 +1,6 @@
+{
+  "oak": { "anchorX": 96, "anchorY": 255, "scale": 1 },
+  "cottage": { "anchorX": 87, "anchorY": 108, "scale": 1 },
+  "cabin": { "anchorX": 117, "anchorY": 100, "scale": 1 },
+  "lodge": { "anchorX": 103, "anchorY": 126, "scale": 1 }
+}

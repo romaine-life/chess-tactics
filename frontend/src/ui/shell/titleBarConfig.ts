@@ -35,6 +35,7 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
   if (path === '/tile-compare') return { screenName: 'Tile Compare' };
   if (path === '/artwork-compare') return { screenName: 'Artwork Compare' };
   if (path === '/surface-lab') return { screenName: 'Surface Lab' };
+  if (path === '/prop-lab') return { screenName: 'Prop Lab' };
 
   if (path === '/play' || path === '/skirmish') {
     return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true };
