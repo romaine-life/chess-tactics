@@ -5,7 +5,7 @@ import {
   type Level,
   type ObjectiveType,
 } from '../core/level';
-import type { PieceType, Side, TerrainCell, TerrainType } from '../core/types';
+import type { PieceType, Side, TerrainCell, TerrainType, UnitFacing } from '../core/types';
 
 interface DemoLevelSpec {
   id: string;
@@ -43,8 +43,68 @@ function terrainFor(pattern: DemoLevelSpec['terrain']): TerrainCell[] {
   return cells;
 }
 
-function unit(x: number, y: number, type: PieceType, side: Side) {
-  return { x, y, type, side };
+function unit(x: number, y: number, type: PieceType, side: Side, facing?: UnitFacing) {
+  return facing ? { x, y, type, side, facing } : { x, y, type, side };
+}
+
+function emptyTerrain(cols: number, rows: number): TerrainCell[] {
+  const cells: TerrainCell[] = [];
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) cells.push({ x, y, terrain: 'grass', elevation: 0 });
+  }
+  return cells;
+}
+
+function createPawnCompassTerrain(): TerrainCell[] {
+  const cells = emptyTerrain(12, 12);
+  const at = (x: number, y: number): TerrainCell | undefined => cells.find((cell) => cell.x === x && cell.y === y);
+  const set = (x: number, y: number, terrain: TerrainType): void => {
+    const cell = at(x, y);
+    if (cell) cell.terrain = terrain;
+  };
+  const roadCells: Array<[number, number]> = [
+    [1, 9], [1, 8], [1, 7],
+    [3, 8], [4, 7], [5, 6],
+    [1, 5], [2, 5], [3, 5],
+    [3, 2], [4, 3], [5, 4],
+    [6, 2], [6, 3], [6, 4],
+    [9, 2], [8, 3], [7, 4],
+    [10, 5], [9, 5], [8, 5],
+    [9, 8], [8, 7], [7, 6],
+  ];
+  roadCells.forEach(([x, y]) => set(x, y, 'road'));
+  [[10, 10], [11, 10], [10, 11]].forEach(([x, y]) => set(x, y, 'rock'));
+  return cells;
+}
+
+function createPawnCompassLevel(): Level {
+  return {
+    formatVersion: LEVEL_FORMAT_VERSION,
+    id: 'demo-valoria-pawn-compass',
+    name: 'Pawn Compass',
+    notes: 'Eight pawns face eight directions; each has an open one-step and double-step lane. The enemy king is boxed in so you can test without an enemy reply changing the board.',
+    board: { cols: 12, rows: 12, heightLevels: 1 },
+    objective: 'capture-all',
+    difficulty: 'normal',
+    economy: { startingFunds: 1200, incomePerTurn: 150 },
+    theme: 'grassland',
+    layers: {
+      terrain: createPawnCompassTerrain(),
+      decals: [],
+      zones: [],
+      units: [
+        unit(1, 9, 'pawn', 'player', 'north'),
+        unit(3, 8, 'pawn', 'player', 'north-east'),
+        unit(1, 5, 'pawn', 'player', 'east'),
+        unit(3, 2, 'pawn', 'player', 'south-east'),
+        unit(6, 2, 'pawn', 'player', 'south'),
+        unit(9, 2, 'pawn', 'player', 'south-west'),
+        unit(10, 5, 'pawn', 'player', 'west'),
+        unit(9, 8, 'pawn', 'player', 'north-west'),
+        unit(11, 11, 'king', 'enemy', 'north'),
+      ],
+    },
+  };
 }
 
 // Every set fields a King on BOTH sides, so any level built from these can only be
@@ -162,6 +222,11 @@ export function createDemoWorkspace(): { campaigns: Campaign[]; levels: Record<s
         completed: levelSpec.completed,
       };
     });
+    if (campaignSpec.id === DEMO_SELECTED_CAMPAIGN_ID) {
+      const pawnCompass = createPawnCompassLevel();
+      levels[pawnCompass.id] = pawnCompass;
+      refs.push({ levelId: pawnCompass.id, ordinal: refs.length, objective: pawnCompass.objective, stars: 0, completed: undefined });
+    }
     return {
       formatVersion: CAMPAIGN_FORMAT_VERSION,
       id: campaignSpec.id,
