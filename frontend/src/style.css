@@ -11866,6 +11866,42 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
+/* Editable readout (opt-in via <Stepper edit>): the value between the +/- keys becomes
+   a typeable field — click it and type an exact value; the keys still walk the ladder.
+   The BOX is this wrapper, a fixed width so it's identical on every row and the +/- keys
+   line up column-for-column. The input sits borderless inside it, and any unit (e.g. "s")
+   rides INSIDE the same box — putting it outside would widen one row and break alignment. */
+.settings-stepper-field {
+  align-items: center;
+  background: rgba(3, 12, 19, .55);
+  border: 1px solid rgba(87, 153, 184, .38);
+  border-radius: 5px;
+  box-sizing: border-box;
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  padding: 4px 8px;
+  width: 78px;
+}
+.settings-stepper-field:focus-within {
+  border-color: rgba(101, 184, 255, .72);
+  box-shadow: 0 0 0 2px rgba(101, 184, 255, .2);
+}
+.settings-stepper-input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: #f8fcff;
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+}
+.settings-stepper-input:focus-visible { outline: none; }
+.settings-stepper-unit { color: #9fbdcb; flex: 0 0 auto; font-size: var(--ds-text-sm); }
+
 /* Volume slider — ADR-0025 natural palette, NOT a forced UI-blue: a dark STONE
    channel that fills warm BRONZE up to a beveled bronze handle (the kit gold/bronze
    ramp — the same warm material as the brackets and the bell). Flat CSS for now;
