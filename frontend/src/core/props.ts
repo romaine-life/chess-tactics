@@ -77,8 +77,8 @@ export const PROP_DEFS: readonly PropDef[] = [
   // Rocks — 1×1 blocking boulders: the placeable impassable-cell obstacle (the old editor's rock
   // terrain swatch, reborn as a prop so the rules engine stays untouched). Same gated Codex
   // restyle pipeline as cabin/lodge, from the two staged /rocks meshes (see SOURCES.md).
-  { id: 'rock', label: 'Rock', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 102, h: 115, anchorX: 51, anchorY: 113 } },
-  { id: 'granite', label: 'Granite boulder', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 102, h: 93, anchorX: 51, anchorY: 91 } },
+  { id: 'rock', label: 'Rock', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 72, h: 81, anchorX: 36, anchorY: 80 } },
+  { id: 'granite', label: 'Granite boulder', kind: 'rock', w: 1, h: 1, blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], sprite: { w: 72, h: 66, anchorX: 36, anchorY: 64 } },
 ];
 
 /**
