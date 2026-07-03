@@ -41,6 +41,17 @@ spec:
           image: {{ $imageRef | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            # Pins the app's own public origin so backend/server.js requestOrigin()
+            # never falls back to reflecting the client-controllable Host /
+            # X-Forwarded-Host header (which would let a crafted header influence the
+            # OAuth callback origin — a host-spoofing / open-redirect-adjacent vector).
+            # hostname is the single served-hostname source of truth (cert dnsNames,
+            # XListenerSet listener, HTTPRoute match all key off it), so this is the
+            # correct per-lane public origin in prod, test slots, and the live-preview
+            # edge alike. `required` because the deployment renders under renderHot,
+            # where the warm-lane hostname guards do not run.
+            - name: PUBLIC_ORIGIN
+              value: {{ printf "https://%s" (required "hostname is required" .Values.hostname) | quote }}
             {{- if .Values.adminEmails }}
             # ADR-0038: who may author/publish the global OFFICIAL campaign tier.
             - name: ADMIN_EMAILS
