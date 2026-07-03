@@ -4,6 +4,8 @@ import { SkirmishHud } from './SkirmishHud';
 import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
+import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
+import type { Level } from '../core/level';
 import { objectiveSummary } from '../core/objectives';
 import { formatClockMs } from '../core/clock';
 import { useCampaigns } from '../campaign/store';
@@ -38,6 +40,9 @@ export function Skirmish() {
   // Real campaign play (records progress + shows the result flow), as opposed to the
   // editor's "Test Play" (mode=test) or a free skirmish (no campaign/level).
   const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
+  // The Level Editor's "Test Play" is ephemeral author iteration — never persisted or
+  // resumed (a stale snapshot after an edit would mislead), unlike real play below.
+  const isTestPlay = routeMode === 'test';
   const [routeLevel, setRouteLevel] = useState(() => (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null));
   // The board mounts only once this screen has DECIDED which game to play (fresh vs resume).
   // The store ships a populated placeholder game (store.ts INITIAL_GAME), so mounting the
@@ -47,6 +52,7 @@ export function Skirmish() {
   // fresh, for the game we actually play.
   const [boardSettled, setBoardSettled] = useState(false);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
+  const resumeMatch = useSkirmish((s) => s.resumeMatch);
   const game = useSkirmish((s) => s.game);
   // Subscribed (not getState) so the victory "Continue" button knows, reactively, whether
   // a next level exists once the workspace hydrates.
@@ -133,6 +139,12 @@ export function Skirmish() {
   }, [game.pieces]);
 
   useEffect(() => {
+    // A manual refresh or the "new version available" reload (net/appUpdate) rebuilds
+    // the in-memory store from scratch; without a saved copy that would silently
+    // restart a live battle. Turn disk persistence on for real play, off for the
+    // editor's ephemeral Test Play.
+    setMatchPersistenceEnabled(!isTestPlay);
+
     // Returning here from the menu (or any other screen) should resume, not
     // restart: the store is a singleton that already holds the live board. Only
     // build a fresh game when there isn't a matching in-progress one — i.e. the
@@ -141,9 +153,25 @@ export function Skirmish() {
       shouldStartFreshSkirmish(useSkirmish.getState(), levelId);
     const freshSeed = () => Math.floor(Math.random() * 999999) + 1;
 
+    // Enter the board for `levelId`: keep the live in-memory match if it's the one
+    // asked for (a route change, not a reload); else resume the match saved to disk
+    // for this level if one survived a reload; else start fresh. The saved board is
+    // self-contained (full position), so resume needs no level document — only the
+    // levelId must match the one being entered.
+    const startOrResume = (levelId: string | null, levelDoc: Level | null): void => {
+      if (!shouldStartFresh(levelId)) return; // singleton already holds this battle
+      if (!isTestPlay) {
+        const saved = loadMatch();
+        if (saved && saved.levelId === levelId && saved.game.winner === null) {
+          resumeMatch(saved);
+          return;
+        }
+      }
+      newSkirmish({ seed: freshSeed(), level: levelDoc ?? undefined });
+    };
+
     if (!routeLevelId || routeLevel) {
-      const levelId = routeLevel?.id ?? null;
-      if (shouldStartFresh(levelId)) newSkirmish({ seed: freshSeed(), level: routeLevel ?? undefined });
+      startOrResume(routeLevel?.id ?? null, routeLevel);
       setBoardSettled(true);
       return;
     }
@@ -158,12 +186,12 @@ export function Skirmish() {
         useCampaigns.getState().selectLevel(routeLevelId);
         const level = useCampaigns.getState().levels[routeLevelId] ?? null;
         setRouteLevel(level);
-        if (shouldStartFresh(level?.id ?? null)) newSkirmish({ seed: freshSeed(), level: level ?? undefined });
+        startOrResume(level?.id ?? null, level);
         setBoardSettled(true);
       })
-      .catch(() => { if (shouldStartFresh(null)) newSkirmish({ seed: freshSeed() }); setBoardSettled(true); });
+      .catch(() => { startOrResume(routeLevelId, null); setBoardSettled(true); });
     return () => { active = false; };
-  }, [newSkirmish, routeCampaignId, routeLevel, routeLevelId]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeCampaignId, routeLevel, routeLevelId]);
 
   const screenStyle = {
     '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")`,
