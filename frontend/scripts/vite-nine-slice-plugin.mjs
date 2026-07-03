@@ -4,7 +4,7 @@
 // `apply: 'serve'` means this middleware exists ONLY while `vite` is serving (dev
 // mode). It is never part of a production build, so the write endpoint can't ship.
 // The editor pairs this with import.meta.env.DEV to only show the button in dev.
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { buildAsset, buildFamily, saveTheme, themeOf, assetsInTheme, normalizeConfigForAsset, writeGeneratedCss, loadConfig, logSave, CONFIG_DIR, REGISTRY } from './nine-slice-kit.mjs';
 
 // The family a themed asset belongs to (member ids + labels), so the editor can say
@@ -50,6 +50,14 @@ export function nineSliceDevSave() {
               // Family save: the SHARED shape goes to the one theme file (every member
               // reads it); only this member's boxes go to its own file. Then rebake the
               // whole family so they stay in lockstep — you can't save one out of step.
+              // Atomicity guard: verify every member's boxes file is readable BEFORE
+              // mutating the shared theme, so a broken member can't leave the family
+              // half-updated (shape changed on disk but PNGs not rebaked).
+              for (const id of assetsInTheme(theme)) {
+                if (id === raw.asset) continue; // this member's file is (re)written below
+                try { JSON.parse(readFileSync(`${CONFIG_DIR}${id}.json`, 'utf8')); }
+                catch (e) { return send(500, { ok: false, error: `family member "${id}" config is unreadable (${String(e?.message || e)}) — nothing written` }); }
+              }
               saveTheme(theme, cfg);
               writeFileSync(`${CONFIG_DIR}${raw.asset}.json`, `${JSON.stringify({ asset: raw.asset, content: cfg.content, fill: cfg.fill }, null, 2)}\n`);
               written = buildFamily(theme);

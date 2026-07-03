@@ -914,7 +914,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
       const j = await r.json();
       if (j.ok) baselineRef.current[aid] = edit; // the just-saved config is the new reset baseline
-      const scope = j.theme ? `${j.theme} family (${j.written.length} files)` : j.asset;
+      const scope = j.theme ? `${j.theme} family (${j.family?.members?.length ?? family.length} frames)` : j.asset;
       // The endpoint pushes a live page reload after a save, so the app shows it
       // everywhere on navigation — this message is a brief confirmation before that.
       setSaveMsg(j.ok ? `saved ${scope} · applying live across the app…` : `error: ${j.error}`);
