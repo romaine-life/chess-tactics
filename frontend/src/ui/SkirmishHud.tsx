@@ -10,6 +10,7 @@ import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 // never re-derived per surface. See docs/portrait-contract.md.
 import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
+import { useConfirm } from './shared/ConfirmDialog';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -132,8 +133,13 @@ export function SkirmishHud({
   const log = useSkirmish((s) => s.log);
   const net = useSkirmish((s) => s.net);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
+  const resign = useSkirmish((s) => s.resign);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
+
+  // Resign is irreversible and hands the opponent the win — gate it behind a confirm
+  // (the kit-framed one, not window.confirm, so it stays in-world). See ConfirmDialog.
+  const { ask, dialog } = useConfirm();
 
   const [tab, setTab] = useState<HudTab>('unit');
 
@@ -203,6 +209,8 @@ export function SkirmishHud({
 
   return (
     <aside data-testid="skirmish-hud" className="skirmish-hud" aria-label="Skirmish command HUD">
+      {/* Portals to <body>; render anywhere. Only visible while a resign confirm is open. */}
+      {dialog}
       <section className="skirmish-score-panel" aria-label="Turn summary">
         <div>
           <span className="skirmish-eyebrow">Status</span>
@@ -410,7 +418,9 @@ export function SkirmishHud({
                     Restart level
                   </button>
                 ) : null}
-                {canStartNewSkirmish ? (
+                {/* "New skirmish" resets the local board, which would desync a shared
+                    netplay match — offer it only in single-player. */}
+                {canStartNewSkirmish && !net ? (
                   <button
                     type="button"
                     className="app-header-button"
@@ -418,6 +428,27 @@ export function SkirmishHud({
                     onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
                   >
                     New skirmish
+                  </button>
+                ) : null}
+                {/* Concede a live multiplayer match (hands the opponent the win). Hidden
+                    once the game is decided and in single-player (there's no opponent to
+                    concede to — you'd just start a new skirmish). */}
+                {net && !game.winner ? (
+                  <button
+                    type="button"
+                    className="app-header-button skirmish-resign-button"
+                    data-testid="resign"
+                    onClick={async () => {
+                      const ok = await ask({
+                        title: 'Resign the match?',
+                        message: 'Your opponent is awarded the win. This can’t be undone.',
+                        confirmLabel: 'Resign',
+                        tone: 'danger',
+                      });
+                      if (ok) resign();
+                    }}
+                  >
+                    Resign
                   </button>
                 ) : null}
               </div>

@@ -24,6 +24,11 @@ export interface Lobby {
   seed: number | null;
   move_count: number;
   your_side: 'player' | 'enemy' | null;
+  // Terminal outcome from a non-move event (a player resigned), in board terms, or null
+  // while the match is live. Clients end the game off this — it rides the lobby frame so
+  // it survives reconnect/late-join. Checkmate/stalemate/objective ends never set it (they
+  // resolve identically on both boards from the deterministic move replay).
+  result: { winner: 'player' | 'enemy'; reason: 'resign' } | null;
 }
 
 export interface LobbyList {
@@ -83,6 +88,13 @@ export function setLobbyLevel(id: string, levelId: string): Promise<{ lobby: Lob
 
 export function postMove(id: string, pieceId: string, move: MoveEvent['move']): Promise<{ move: MoveEvent }> {
   return request<{ move: MoveEvent }>('POST', `/api/lobbies/${encodeURIComponent(id)}/moves`, { pieceId, move });
+}
+
+// Concede the match. The server records the terminal result (the other side wins) and
+// pushes it to both clients over the lobby channel; this seat ends the game when that
+// frame arrives (see Skirmish's onLobby), not optimistically — mirroring the move relay.
+export function resignLobby(id: string): Promise<{ lobby: Lobby }> {
+  return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/resign`);
 }
 
 export function fetchMovesSince(id: string, since: number): Promise<{ moves: MoveEvent[] }> {

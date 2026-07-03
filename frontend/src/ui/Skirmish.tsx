@@ -3,9 +3,9 @@ import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink } from '../game/store';
+import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
-import { fetchLobby, postMove, fetchMovesSince, subscribeLobbyChannel, type MoveEvent } from '../net/lobbies';
+import { fetchLobby, postMove, resignLobby, leaveLobby, fetchMovesSince, subscribeLobbyChannel, type MoveEvent } from '../net/lobbies';
 import type { Level } from '../core/level';
 import type { Side } from '../core/types';
 import { objectiveSummary } from '../core/objectives';
@@ -50,6 +50,9 @@ export function Skirmish() {
   // Multiplayer: `?lobby=<id>` enters a lobby's shared board as one of the two seats.
   const routeLobby = routeParams.get('lobby');
   const [netError, setNetError] = useState<string | null>(null);
+  // Netplay has no campaign result flow, so a decided match shows its own result card.
+  // "View board" dismisses it to review the final position (re-armed for the next match).
+  const [netResultDismissed, setNetResultDismissed] = useState(false);
   // Real campaign play (records progress + shows the result flow), as opposed to the
   // editor's "Test Play" (mode=test) or a free skirmish (no campaign/level).
   const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
@@ -90,6 +93,15 @@ export function Skirmish() {
     ? game.winner === 'draw' ? 'Stalemate' : game.winner === localSide ? 'Victory' : 'Defeat'
     : game.turn === localSide ? (net ? 'Your Turn' : 'Player Turn') : (net ? 'Opponent Turn' : 'Enemy Turn');
 
+  // Leave a decided netplay match and return to the lobby list. Host leaving closes the
+  // lobby (which returns the guest too via the onLobby 'closed' path); guest leaving frees
+  // the seat. The leave is best-effort — the player wants out now and the list self-heals
+  // from the server broadcast — so navigate immediately rather than awaiting it.
+  const returnToLobbies = () => {
+    if (net) leaveLobby(net.lobbyId).catch((err) => console.warn('[netplay] leave on match end failed', err));
+    navigateApp('/lobbies', { replace: true });
+  };
+
   // Stars earned this clear (3 flawless, 2 light losses, 1 any win), from the level's
   // authored player force vs. who's still standing.
   const stars = useMemo(() => {
@@ -102,6 +114,10 @@ export function Skirmish() {
   useEffect(() => {
     if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id, stars);
   }, [isCampaignPlay, routeLevel, game.winner, stars]);
+
+  // Re-arm the netplay result card whenever a fresh game is built (winner clears), so a
+  // dismissal from the previous match doesn't suppress the next one's result.
+  useEffect(() => { if (!game.winner) setNetResultDismissed(false); }, [game.winner]);
 
   const replayLevel = () => {
     if (routeLevel) newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: routeLevel });
@@ -291,12 +307,24 @@ export function Skirmish() {
             if (active) setNetError('Move didn’t send — check your connection and try again.');
           });
         });
+        // Relay a resignation the same way: the game ends only when the server's result
+        // frame echoes back (onLobby → concludeNet), so a failed POST is a retryable no-op.
+        setNetResignSink(() => {
+          resignLobby(routeLobby).catch((err) => {
+            console.warn('[netplay] resign POST failed', err);
+            if (active) setNetError('Couldn’t send your resignation — try again.');
+          });
+        });
         // Catch up on any moves already made (reconnect / entering mid-game), then stream.
         try {
           const back = await fetchMovesSince(routeLobby, 0);
           if (active) back.moves.forEach(applyRelayMove);
         } catch (err) { console.warn('[netplay] initial backfill failed', err); }
         if (!active) return;
+        // If the match was already conceded before we entered (late join / reload after a
+        // resign), the lobby snapshot carries the terminal result — end the game now. The
+        // SSE connect frame re-delivers it too, but concludeNet is idempotent.
+        if (lobby.result) useSkirmish.getState().concludeNet(lobby.result.winner, lobby.result.reason);
         unsubscribe = subscribeLobbyChannel(routeLobby, {
           onMove: applyRelayMove,
           onLobby: (l) => {
@@ -319,6 +347,9 @@ export function Skirmish() {
                 .then((res) => { if (active) res.moves.forEach(applyRelayMove); })
                 .catch((err) => console.warn('[netplay] reconnect backfill failed', err));
             }
+            // A player resigned: the lobby frame carries the terminal result. End the game
+            // from this seat (concludeNet is idempotent, so a redelivered frame is harmless).
+            if (l.result) useSkirmish.getState().concludeNet(l.result.winner, l.result.reason);
           },
         });
         setBoardSettled(true);
@@ -332,6 +363,7 @@ export function Skirmish() {
     return () => {
       active = false;
       setNetMoveSink(null);
+      setNetResignSink(null);
       if (unsubscribe) unsubscribe();
     };
   }, [routeLobby]);
@@ -380,7 +412,9 @@ export function Skirmish() {
             ) : null}
           </div>
         </div>
-        {boardSettled && netError ? (
+        {/* Transient connection errors sit bottom-center — but once the match is decided
+            they're moot, and the post-game chip owns that spot, so suppress them then. */}
+        {boardSettled && netError && !game.winner ? (
           <div className="skirmish-status-chip skirmish-turn-plate" role="status" style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40 }}>
             <strong>{netError}</strong>
             <small>Multiplayer</small>
@@ -414,6 +448,43 @@ export function Skirmish() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Netplay has no campaign result flow: a decided match gets its own result card with
+          the way out (leaving via the app-shell nav was the only prior option). "View board"
+          dismisses it to review the final position, leaving the persistent exit chip below. */}
+      {net && game.winner && !netResultDismissed && (
+        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Match result" data-testid="netplay-result">
+          <div className="settings-frame campaign-result-panel">
+            <h2>{turnLabel}</h2>
+            <p>Multiplayer skirmish — {objectiveGoal}</p>
+            <div className="campaign-result-actions">
+              <button type="button" className="app-header-button" data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
+                View board
+              </button>
+              <button type="button" className="app-header-button app-header-button-active" data-testid="netplay-return" onClick={returnToLobbies}>
+                Return to lobbies
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Persistent, non-blocking exit once the result card is dismissed — so reviewing the
+          final board never strands the player without a way back to the lobby list. */}
+      {net && game.winner && netResultDismissed && (
+        <div
+          role="status"
+          style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40, display: 'flex', alignItems: 'center', gap: 12 }}
+        >
+          <div className="skirmish-status-chip skirmish-turn-plate">
+            <strong>{turnLabel}</strong>
+            <small>Match complete</small>
+          </div>
+          <button type="button" className="app-header-button app-header-button-active" data-testid="netplay-return-persistent" onClick={returnToLobbies}>
+            Return to lobbies
+          </button>
         </div>
       )}
     </div>
