@@ -37,6 +37,15 @@ interface BgmTrack {
   album?: string;
 }
 
+interface NowPlayingState {
+  playing: boolean;
+  paused: boolean;
+  currentUrl: string | null;
+  otherTab: boolean;
+  otherPaused: boolean;
+  otherTitle: string | null;
+}
+
 interface TabDefinition {
   id: SettingsTab;
   label: string;
@@ -323,8 +332,16 @@ export function Settings(): ReactElement {
   // render snapshot (otherwise rapid toggles clobber each other before re-render).
   const disabledRef = useRef<string[]>(disabledUrls);
   // The single BGM player owns playback; we just reflect its broadcast transport
-  // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
-  const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
+  // state so the sounding row shows ■ Stop, paused music stays selected, and the
+  // rest show ▶ Play.
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingState>({
+    playing: false,
+    paused: false,
+    currentUrl: null,
+    otherTab: false,
+    otherPaused: false,
+    otherTitle: null,
+  });
   const [confirmingReset, setConfirmingReset] = useState(false);
   useEffect(() => {
     const shell = document.querySelector('.shell');
@@ -405,14 +422,17 @@ export function Settings(): ReactElement {
     return () => { active = false; };
   }, [showTracks]);
 
-  // Reflect the BGM player's transport state so the playing row shows ■ Stop.
+  // Reflect the BGM player's transport state so the current row distinguishes
+  // sounding playback from paused/muted playback.
   useEffect(() => {
     const onState = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { playing?: boolean; currentUrl?: string | null; otherTab?: boolean; otherTitle?: string | null };
+      const detail = (event as CustomEvent).detail as Partial<NowPlayingState>;
       setNowPlaying({
         playing: Boolean(detail.playing),
+        paused: Boolean(detail.paused),
         currentUrl: detail.currentUrl ?? null,
         otherTab: Boolean(detail.otherTab),
+        otherPaused: Boolean(detail.otherPaused),
         otherTitle: detail.otherTitle ?? null,
       });
     };
@@ -511,11 +531,15 @@ export function Settings(): ReactElement {
   const withReturnTo = (path: string): string =>
     returnTo ? `${path}?returnTo=${encodeURIComponent(returnTo)}` : path;
 
-  // The track currently coming out of the speakers, looked up in the loaded list by
-  // the player's broadcast url — drives the permanent "Now Playing" row.
-  const nowPlayingTrack = nowPlaying.playing && tracks
+  // The track currently selected in the player, looked up in the loaded list by
+  // the player's broadcast url — drives the permanent "Now Playing" row. Muting
+  // pauses the current track; it does not clear the now-playing identity.
+  const nowPlayingTrack = nowPlaying.currentUrl && tracks
     ? tracks.find((track) => track.url === nowPlaying.currentUrl) ?? null
     : null;
+  const nowPlayingEyebrow = nowPlayingTrack
+    ? [nowPlaying.paused ? 'Paused' : null, nowPlayingTrack.artist].filter(Boolean).join(' · ')
+    : '';
 
   const renderGeneral = () => (
     <>
@@ -725,12 +749,12 @@ export function Settings(): ReactElement {
                       <span className="settings-nowplaying-label">Now Playing</span>
                       {nowPlaying.otherTab ? (
                         <>
-                          <span className="settings-row-eyebrow">Playing in another tab</span>
+                          <span className="settings-row-eyebrow">{nowPlaying.otherPaused ? 'Paused in another tab' : 'Playing in another tab'}</span>
                           <h4 className="settings-nowplaying-empty">{nowPlaying.otherTitle ?? '—'}</h4>
                         </>
                       ) : nowPlayingTrack ? (
                         <>
-                          {nowPlayingTrack.artist ? <span className="settings-row-eyebrow">{nowPlayingTrack.artist}</span> : null}
+                          {nowPlayingEyebrow ? <span className="settings-row-eyebrow">{nowPlayingEyebrow}</span> : null}
                           <h4>{nowPlayingTrack.title}</h4>
                         </>
                       ) : (
