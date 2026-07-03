@@ -25,6 +25,7 @@ import { SCREEN_EXIT_MS, setScreenExiting } from './shell/screenExit';
 import {
   importCampaignEditor,
   importDoodadEditor,
+  importGameLab,
   importLevelEditor,
   importPortraitEditor,
   importSkirmish,
@@ -45,6 +46,7 @@ const TilesetStudio = lazy(() => importTilePreview().then((m) => ({ default: m.T
 const LevelEditor = lazy(() => importLevelEditor().then((m) => ({ default: m.LevelEditor })));
 const PortraitEditor = lazy(() => importPortraitEditor().then((m) => ({ default: m.PortraitEditor })));
 const DoodadEditor = lazy(() => importDoodadEditor().then((m) => ({ default: m.DoodadEditor })));
+const GameLab = lazy(() => importGameLab().then((m) => ({ default: m.GameLab })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 
@@ -367,5 +369,6 @@ function renderRoute(path: string): ReactElement {
   if (path === '/artwork-compare') return <ArtworkCompare />;
   if (path === '/tile-compare') return <TileCompare />;
   if (path === '/surface-lab') return <SurfaceLab />;
+  if (path === '/game-lab') return <GameLab />;
   return <MainMenu />;
 }

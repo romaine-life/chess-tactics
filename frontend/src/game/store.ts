@@ -5,11 +5,12 @@
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
+import { searchEnemyMove } from '../core/ai';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
 import { playArrival, playTerrain } from '../sfx';
-import { createRng } from '../core/rng';
+import { createRng, type Rng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
@@ -108,11 +109,22 @@ export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: Gam
   return { game, stuck: false };
 }
 
+/** How an enemy decision is made: same call shape as the core's `enemyMove`. */
+type EnemyPolicy = (game: GameState, rng: Rng, env: MoveEnv) => { pieceId: string; move: Move } | null;
+
+/** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). */
+export type AiMode = 'search' | 'greedy';
+
+// Live think budget for the search enemy. The reply is staged ENEMY_REPLY_DELAY
+// after the player's move — the "enemy thinks" beat — so a ~quarter-second
+// synchronous search fits inside the game's own tempo.
+const LIVE_SEARCH = { timeBudgetMs: 250, maxDepth: 6 };
+
 /** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
-function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv): { game: GameState; tick: number; events: GameEvent[] } {
+function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv, pick: EnemyPolicy): { game: GameState; tick: number; events: GameEvent[] } {
   const events: GameEvent[] = [];
   while (game.turn === 'enemy' && !game.winner) {
-    const move = enemyMove(game, createRng(seed + tick), env);
+    const move = pick(game, createRng(seed + tick), env);
     tick += 1;
     if (!move) { game = { ...game, turn: 'player' }; break; }
     const res = applyMove(game, move.pieceId, move.move);
@@ -144,6 +156,10 @@ export interface SkirmishState {
   /** Level this game is testing (null = free skirmish). Lets the screen tell
    * "resume the same board" from "launch a different level". */
   levelId: string | null;
+  /** Enemy decision policy for this game. 'search' is the rung-1 objective-aware
+   * search AI (core/ai); 'greedy' keeps the legacy capture-else-random policy
+   * reachable for A/B feel comparison via `?ai=greedy`. */
+  aiMode: AiMode;
   newSkirmish: (opts: SkirmishOptions) => void;
   select: (id: string | null) => void;
   focus: (id: string | null) => void;
@@ -176,7 +192,17 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       const cur = get();
       // Bail if a new game reset the turn, or it somehow already resolved.
       if (cur.game.turn !== 'enemy' || cur.game.winner) return;
-      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game));
+      // The search enemy needs the objective framing so it plays the MODE (hunt
+      // the King, rush the survive clock, garrison the reach zone) — that's the
+      // whole point of the rung-1 AI. The greedy policy ignores it.
+      const pick: EnemyPolicy = cur.aiMode === 'greedy'
+        ? enemyMove
+        : (g, rng, env) => searchEnemyMove(g, rng, env, {
+            objective: cur.objective,
+            ctx: cur.objectiveCtx ?? {},
+            turnsElapsed: cur.turnsElapsed ?? 0,
+          }, LIVE_SEARCH);
+      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game), pick);
       const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
       // With no manual End Turn, a player handed the turn with no legal move would
       // soft-lock — resolve that as a loss (you can't pass in chess).
@@ -224,6 +250,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   turnsElapsed: 0,
   started: false,
   levelId: null,
+  aiMode: 'search',
 
   newSkirmish: (opts) => {
     const created = createSkirmish(opts);
@@ -243,7 +270,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
       : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
     const selectedId = firstPlayerId(game);
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null });
+    // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
+    // preserves the A/B lever the route set on entry).
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode });
     // "Units come onto the board": a soft staggered roll-call as the player's force
     // deploys. Each unit sounds the terrain it lands on (softer, gain 0.7) layered
     // with the authored "arrival" thump (playArrival) — the landing.mp3 that plays

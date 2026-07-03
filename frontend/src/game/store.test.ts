@@ -8,7 +8,9 @@ import { createBlankLevel } from '../core/level';
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
 // turn-taking rather than a simultaneous swap. Fake timers let us drive that
 // reply deterministically and keep pending timeouts from leaking between tests.
-beforeEach(() => vi.useFakeTimers());
+// Fake ONLY the timer functions: the search enemy budgets its thinking with
+// Date.now(), and a frozen clock would let every reply run to full depth.
+beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] }));
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();

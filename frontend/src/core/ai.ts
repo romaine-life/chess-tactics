@@ -1,0 +1,411 @@
+// Rung-1 game AI (issue #25): iterative-deepening alpha-beta search over the pure
+// rules engine, scored by an authored, objective-aware evaluation.
+//
+// Design constraints, in order:
+// - The opponent must visibly play the MODE: hunt the King in King Assault, rush
+//   the player in Survive, garrison the zone in Reach. Objective terms in the
+//   eval do that; search makes the play tactically sound.
+// - Deterministic per seed: the only randomness is the seeded near-best pick at
+//   the root (moves within `epsilon` of the best score), so self-play runs are
+//   reproducible and live games replay from their seed.
+// - Every weight lives in EvalWeights so a future tuning pass (Texel/SPSA — the
+//   ladder's rung 2) can fit them from self-play instead of hand-guessing.
+//
+// Search only discovers value inside its horizon; everything longer-range must be
+// an eval term. Keep terms cheap: eval runs at every leaf.
+
+import type { GameState, Move, Piece, PieceType, Side, Vec, Winner } from './types';
+import type { MoveEnv } from './rules';
+import { applyMove, attackedSquares, legalMoves, livingPieces } from './rules';
+import { evaluateObjective, type ObjectiveContext } from './objectives';
+import type { ObjectiveType } from './level';
+import type { Rng } from './rng';
+
+/**
+ * Every number the evaluation uses. Hand-seeded defaults; the whole point of the
+ * indirection is that a tuner (or a curious owner) can refit them per board.
+ */
+export interface EvalWeights {
+  /** Fighting worth per piece type. The King is a piece here, NOT infinity — royal
+   * loss is terminal via the objective, so material only prices his sword arm. */
+  pieceValues: Record<PieceType, number>;
+  /** Fraction of a piece's value lost by standing attacked and undefended. */
+  hangingUndefended: number;
+  /** Fraction lost when attacked but defended (a trade threat, not a gift). */
+  hangingDefended: number;
+  /** Per-square pull toward each side's aggression target. */
+  advance: number;
+  /** Per-square pull keeping the King-holder's pieces near their King. */
+  guard: number;
+  /** Per-square value of the best runner's progress toward a reach cell. */
+  reachProgress: number;
+  /** Per-square pull keeping enemies garrisoned near the reach zone. */
+  reachGarrison: number;
+  /** Enemy aggression in `survive` — the attacker is racing the clock. */
+  surviveUrgency: number;
+  /** Player-side value of each survive round already banked. */
+  surviveClock: number;
+}
+
+export const DEFAULT_EVAL_WEIGHTS: EvalWeights = {
+  pieceValues: {
+    pawn: 1,
+    knight: 3,
+    bishop: 3,
+    rook: 5,
+    queen: 9,
+    king: 4,
+    rock: 0,
+    'random-rock': 0,
+  },
+  hangingUndefended: 0.5,
+  hangingDefended: 0.1,
+  advance: 0.05,
+  guard: 0.04,
+  reachProgress: 0.25,
+  reachGarrison: 0.08,
+  surviveUrgency: 0.12,
+  surviveClock: 0.3,
+};
+
+/** Objective framing the search needs beyond the raw state. */
+export interface SearchContext {
+  objective: ObjectiveType;
+  /** Static objective context (survive clock target, reach cells, kingSide). */
+  ctx: ObjectiveContext;
+  /** Player→enemy rounds already elapsed (the survive clock's current reading). */
+  turnsElapsed: number;
+}
+
+export interface SearchOptions {
+  /** Iterative-deepening ceiling (plies). */
+  maxDepth?: number;
+  /** Soft think budget; the deepest COMPLETED depth's result is used. */
+  timeBudgetMs?: number;
+  /** Hard node ceiling — the backstop that bounds work even where the clock is
+   * frozen (fake-timer tests) or a single depth explodes between clock checks. */
+  maxNodes?: number;
+  /** Root near-best window: moves scoring within epsilon of best form the pick pool. */
+  epsilon?: number;
+  weights?: EvalWeights;
+}
+
+const DEFAULT_MAX_DEPTH = 6;
+const DEFAULT_TIME_BUDGET_MS = 300;
+const DEFAULT_MAX_NODES = 200_000;
+const DEFAULT_EPSILON = 0.25;
+
+/** Terminal score magnitude; ply-adjusted so faster wins (and later losses) rank higher. */
+const WIN_SCORE = 10_000;
+
+export interface ChosenAction {
+  pieceId: string;
+  move: Move;
+  /** Player-positive score of the chosen line at the deepest completed depth. */
+  score: number;
+  /** Deepest fully completed search depth. */
+  depth: number;
+  /** Nodes expanded across all completed depths. */
+  nodes: number;
+}
+
+// Octile distance: Chebyshev plus a fractional off-axis component. Pure Chebyshev
+// is gradient-blind for a piece approaching on the long axis (a rook sliding
+// toward a diagonal target never changes max(dx, dy)); the 0.41·min term keeps
+// every approach move worth something.
+const cheb = (a: Vec, b: Vec): number => {
+  const dx = Math.abs(a.x - b.x);
+  const dy = Math.abs(a.y - b.y);
+  return Math.max(dx, dy) + 0.41 * Math.min(dx, dy);
+};
+
+const isCombatant = (p: Piece): boolean => p.alive && (p.side === 'player' || p.side === 'enemy');
+
+/** Union of squares a side attacks, keyed "x,y" — the eval's danger map. */
+function attackMap(pieces: readonly Piece[], side: Side, size: GameState['size']): Set<string> {
+  const map = new Set<string>();
+  for (const p of pieces) {
+    if (!p.alive || p.side !== side || p.type === 'rock' || p.type === 'random-rock') continue;
+    for (const sq of attackedSquares(p, pieces, size)) map.add(`${sq.x},${sq.y}`);
+  }
+  return map;
+}
+
+function nearestDistance(from: Piece, targets: readonly Piece[]): number {
+  let best = Infinity;
+  for (const t of targets) {
+    const d = cheb(from, t);
+    if (d < best) best = d;
+  }
+  return best === Infinity ? 0 : best;
+}
+
+function nearestCellDistance(from: Piece, cells: readonly Vec[]): number {
+  let best = Infinity;
+  for (const c of cells) {
+    const d = cheb(from, c);
+    if (d < best) best = d;
+  }
+  return best === Infinity ? 0 : best;
+}
+
+/**
+ * Authored evaluation, from the PLAYER's perspective (positive = good for the
+ * player). Material + hanging-piece safety + objective-shaped distance terms.
+ */
+export function evaluateGameState(state: GameState, sctx: SearchContext, weights: EvalWeights = DEFAULT_EVAL_WEIGHTS): number {
+  const players = livingPieces(state.pieces, 'player');
+  const enemies = livingPieces(state.pieces, 'enemy');
+  const values = weights.pieceValues;
+
+  let score = 0;
+  for (const p of players) score += values[p.type];
+  for (const e of enemies) score -= values[e.type];
+
+  // Safety: a piece parked on an attacked square bleeds a fraction of its value —
+  // the term that stops horizon-blind piece gifts at the leaves.
+  const playerAttacks = attackMap(state.pieces, 'player', state.size);
+  const enemyAttacks = attackMap(state.pieces, 'enemy', state.size);
+  for (const p of players) {
+    if (!enemyAttacks.has(`${p.x},${p.y}`)) continue;
+    const defended = playerAttacks.has(`${p.x},${p.y}`);
+    score -= values[p.type] * (defended ? weights.hangingDefended : weights.hangingUndefended);
+  }
+  for (const e of enemies) {
+    if (!playerAttacks.has(`${e.x},${e.y}`)) continue;
+    const defended = enemyAttacks.has(`${e.x},${e.y}`);
+    score += values[e.type] * (defended ? weights.hangingDefended : weights.hangingUndefended);
+  }
+
+  // Objective terms: distance gradients that point each side at what the MODE
+  // says matters. These are what make the opponent visibly play the objective.
+  const { objective, ctx } = sctx;
+  const playerKing = players.find((p) => p.type === 'king');
+  const enemyKing = enemies.find((p) => p.type === 'king');
+
+  if (objective === 'capture-king') {
+    if ((ctx.kingSide ?? 'enemy') === 'enemy') {
+      // Player hunts the enemy King; the enemy guards him.
+      if (enemyKing) {
+        for (const p of players) score -= weights.advance * cheb(p, enemyKing);
+        for (const e of enemies) {
+          if (e !== enemyKing) score += weights.guard * cheb(e, enemyKing);
+        }
+      }
+    } else if (playerKing) {
+      // Mirrored: enemy hunts the player's King; the player guards him.
+      for (const e of enemies) score += weights.advance * cheb(e, playerKing);
+      for (const p of players) {
+        if (p !== playerKing) score -= weights.guard * cheb(p, playerKing);
+      }
+    }
+  } else if (objective === 'rival-kings') {
+    if (enemyKing) for (const p of players) score -= weights.advance * cheb(p, enemyKing);
+    if (playerKing) for (const e of enemies) score += weights.advance * cheb(e, playerKing);
+  } else if (objective === 'survive') {
+    // The enemy is the one racing the clock: strong pull onto the player's force.
+    for (const e of enemies) score += weights.surviveUrgency * nearestDistance(e, players);
+    // Each banked round is worth something even before the clock terminates.
+    score += weights.surviveClock * Math.min(sctx.turnsElapsed, ctx.surviveTurns ?? sctx.turnsElapsed);
+  } else if (objective === 'reach') {
+    const cells = ctx.reachCells ?? [];
+    if (cells.length) {
+      // Only the best runner's progress counts — the mode is one breakthrough.
+      let runner = Infinity;
+      for (const p of players) runner = Math.min(runner, nearestCellDistance(p, cells));
+      if (runner !== Infinity) score -= weights.reachProgress * runner;
+      // Garrison: enemies want to stand between the runner and the zone.
+      for (const e of enemies) score += weights.reachGarrison * nearestCellDistance(e, cells);
+    }
+    for (const e of enemies) score += 0.5 * weights.advance * nearestDistance(e, players);
+  } else {
+    // capture-all (and the default): mutual aggression — close distance, force trades.
+    for (const p of players) score -= weights.advance * nearestDistance(p, enemies);
+    for (const e of enemies) score += weights.advance * nearestDistance(e, players);
+  }
+
+  return score;
+}
+
+interface RootEntry {
+  piece: Piece;
+  move: Move;
+  score: number;
+}
+
+interface SearchState {
+  nodes: number;
+  deadline: number;
+  maxNodes: number;
+  aborted: boolean;
+  weights: EvalWeights;
+  terrainEnv: MoveEnv['terrain'];
+  sctx: SearchContext;
+}
+
+function outOfBudget(s: SearchState): boolean {
+  if (s.nodes >= s.maxNodes || ((s.nodes & 1023) === 0 && Date.now() > s.deadline)) {
+    s.aborted = true;
+    return true;
+  }
+  return false;
+}
+
+function terminalScore(winner: Winner, ply: number): number {
+  if (winner === 'player') return WIN_SCORE - ply;
+  if (winner === 'enemy') return -(WIN_SCORE - ply);
+  return 0; // draw
+}
+
+function captureValue(move: Move, pieces: readonly Piece[], values: Record<PieceType, number>): number {
+  if (!move.capture) return -1;
+  const target = pieces.find((p) => p.id === move.capture);
+  return target ? values[target.type] : -1;
+}
+
+/**
+ * Negamax with alpha-beta. Returns the state's value from the PLAYER perspective
+ * times the side-to-move color, per negamax convention. `turnsElapsed` advances
+ * when a move hands the turn from enemy back to player (a full round), which is
+ * exactly when the store's survive clock ticks.
+ */
+function negamax(
+  s: SearchState,
+  state: GameState,
+  lastMove: GameState['lastMove'],
+  depth: number,
+  ply: number,
+  alpha: number,
+  beta: number,
+  turnsElapsed: number,
+): number {
+  if (outOfBudget(s)) return 0;
+  const color = state.turn === 'player' ? 1 : -1;
+
+  const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
+  if (winner) return color * terminalScore(winner, ply);
+  if (depth === 0) return color * evaluateGameState(state, { ...s.sctx, turnsElapsed }, s.weights);
+
+  const side = state.turn as Side;
+  const env: MoveEnv = { terrain: s.terrainEnv, lastMove };
+  const entries: { piece: Piece; move: Move }[] = [];
+  for (const piece of livingPieces(state.pieces, side)) {
+    for (const move of legalMoves(piece, state.pieces, state.size, env)) entries.push({ piece, move });
+  }
+  if (!entries.length) {
+    // Player stuck = stalemate draw (there is no passing); enemy stuck just
+    // returns the turn, so score the position as it stands.
+    if (side === 'player') return 0;
+    return color * evaluateGameState(state, { ...s.sctx, turnsElapsed }, s.weights);
+  }
+  entries.sort(
+    (a, b) => captureValue(b.move, state.pieces, s.weights.pieceValues) - captureValue(a.move, state.pieces, s.weights.pieceValues),
+  );
+
+  let best = -Infinity;
+  for (const entry of entries) {
+    s.nodes += 1;
+    const res = applyMove(state, entry.piece.id, entry.move);
+    const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
+    const v = -negamax(s, res.state, res.state.lastMove, depth - 1, ply + 1, -beta, -alpha, turnsElapsed + (roundDone ? 1 : 0));
+    if (s.aborted) return 0;
+    if (v > best) best = v;
+    if (v > alpha) alpha = v;
+    if (alpha >= beta) break;
+  }
+  return best;
+}
+
+/**
+ * Pick the side-to-move's action: iterative-deepening alpha-beta, then a seeded
+ * pick among root moves within `epsilon` of the best score (pass `rng: null` for
+ * strict argmax). Returns null when the side to move has no legal action.
+ *
+ * Root moves are each searched with a full window so near-best scores are exact —
+ * that costs the root-level cutoff but keeps the epsilon pool honest.
+ */
+export function searchBestAction(
+  state: GameState,
+  env: MoveEnv,
+  sctx: SearchContext,
+  rng: Rng | null,
+  opts: SearchOptions = {},
+): ChosenAction | null {
+  if (state.turn !== 'player' && state.turn !== 'enemy') return null;
+  const weights = opts.weights ?? DEFAULT_EVAL_WEIGHTS;
+  const maxDepth = opts.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const timeBudgetMs = opts.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS;
+  const epsilon = opts.epsilon ?? DEFAULT_EPSILON;
+  const side = state.turn as Side;
+
+  let roots: RootEntry[] = [];
+  for (const piece of livingPieces(state.pieces, side)) {
+    for (const move of legalMoves(piece, state.pieces, state.size, env)) {
+      roots.push({ piece, move, score: captureValue(move, state.pieces, weights.pieceValues) });
+    }
+  }
+  if (!roots.length) return null;
+
+  const s: SearchState = {
+    nodes: 0,
+    deadline: Date.now() + timeBudgetMs,
+    maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
+    aborted: false,
+    weights,
+    terrainEnv: env.terrain,
+    sctx,
+  };
+
+  let completed: RootEntry[] | null = null;
+  let completedDepth = 0;
+
+  for (let depth = 1; depth <= maxDepth; depth += 1) {
+    // Previous depth's scores order this one (stable: score desc, then position).
+    roots = [...roots].sort((a, b) => b.score - a.score || a.move.y - b.move.y || a.move.x - b.move.x || a.piece.id.localeCompare(b.piece.id));
+    const scored: RootEntry[] = [];
+    for (const root of roots) {
+      s.nodes += 1;
+      const res = applyMove(state, root.piece.id, root.move);
+      const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
+      const v = -negamax(s, res.state, res.state.lastMove, depth - 1, 1, -Infinity, Infinity, sctx.turnsElapsed + (roundDone ? 1 : 0));
+      if (s.aborted) break;
+      scored.push({ ...root, score: v });
+    }
+    if (s.aborted || scored.length !== roots.length) break;
+    roots = scored;
+    completed = scored;
+    completedDepth = depth;
+  }
+
+  if (!completed) {
+    // Budget too tight for even depth 1: fall back to the ordering heuristic.
+    completed = roots;
+    completedDepth = 0;
+  }
+
+  const pool = [...completed].sort(
+    (a, b) => b.score - a.score || a.move.y - b.move.y || a.move.x - b.move.x || a.piece.id.localeCompare(b.piece.id),
+  );
+  const best = pool[0];
+  // Scores are side-to-move-positive at the root; normalize the report to
+  // player-positive so callers read one convention.
+  const near = pool.filter((e) => best.score - e.score <= epsilon);
+  const picked = rng && near.length > 1 ? rng.pick(near) : near[0];
+  const playerPositive = side === 'player' ? picked.score : -picked.score;
+  return { pieceId: picked.piece.id, move: picked.move, score: playerPositive, depth: completedDepth, nodes: s.nodes };
+}
+
+/**
+ * Drop-in replacement for the store's greedy `enemyMove`: same call shape plus
+ * the objective framing. Deterministic per rng seed.
+ */
+export function searchEnemyMove(
+  state: GameState,
+  rng: Rng,
+  env: MoveEnv,
+  sctx: SearchContext,
+  opts?: SearchOptions,
+): { pieceId: string; move: Move } | null {
+  const chosen = searchBestAction(state, env, sctx, rng, opts);
+  return chosen ? { pieceId: chosen.pieceId, move: chosen.move } : null;
+}

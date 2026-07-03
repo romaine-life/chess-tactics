@@ -104,10 +104,13 @@ export function Skirmish() {
     const shouldStartFresh = (levelId: string | null): boolean =>
       shouldStartFreshSkirmish(useSkirmish.getState(), levelId);
     const freshSeed = () => Math.floor(Math.random() * 999999) + 1;
+    // Dev A/B lever: `?ai=greedy` pits you against the legacy random-capture
+    // enemy; anything else gets the objective-aware search AI.
+    const ai = new URLSearchParams(window.location.search).get('ai') === 'greedy' ? 'greedy' as const : 'search' as const;
 
     if (!routeLevelId || routeLevel) {
       const levelId = routeLevel?.id ?? null;
-      if (shouldStartFresh(levelId)) newSkirmish({ seed: freshSeed(), level: routeLevel ?? undefined });
+      if (shouldStartFresh(levelId)) newSkirmish({ seed: freshSeed(), level: routeLevel ?? undefined, ai });
       setBoardSettled(true);
       return;
     }
@@ -122,10 +125,10 @@ export function Skirmish() {
         useCampaigns.getState().selectLevel(routeLevelId);
         const level = useCampaigns.getState().levels[routeLevelId] ?? null;
         setRouteLevel(level);
-        if (shouldStartFresh(level?.id ?? null)) newSkirmish({ seed: freshSeed(), level: level ?? undefined });
+        if (shouldStartFresh(level?.id ?? null)) newSkirmish({ seed: freshSeed(), level: level ?? undefined, ai });
         setBoardSettled(true);
       })
-      .catch(() => { if (shouldStartFresh(null)) newSkirmish({ seed: freshSeed() }); setBoardSettled(true); });
+      .catch(() => { if (shouldStartFresh(null)) newSkirmish({ seed: freshSeed(), ai }); setBoardSettled(true); });
     return () => { active = false; };
   }, [newSkirmish, routeCampaignId, routeLevel, routeLevelId]);
 
