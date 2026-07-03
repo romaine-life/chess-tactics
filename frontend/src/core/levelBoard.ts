@@ -34,10 +34,11 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
 // Terrain the editor can REPRESENT (and thus round-trip), so the save-time guard need not
 // preserve it from the pre-save level: the six tile families above, PLUS `road` — which the
 // editor expresses through its feature-overlay layer (not a tile brush), mapped both ways in
-// the converters below. Terrain with neither a tile family nor a feature — bridge, cliff, rock —
-// stays outside this set: it renders as a grass placeholder and is preserved on save rather than
-// flattened (an INV7 data-loss on legacy officials that predate boardCode).
-const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road']);
+// the converters below, and `void` — which the editor expresses as an intentionally missing
+// tile. Terrain with neither a tile family nor a feature — bridge, cliff, rock — stays outside
+// this set: it renders as a grass placeholder and is preserved on save rather than flattened
+// (an INV7 data-loss on legacy officials that predate boardCode).
+const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road', 'void']);
 
 // Side ↔ faction (team palette). The editor paints a faction; the level stores a side.
 const SIDE_TO_FACTION: Record<'player' | 'enemy', Faction> = { player: 'navy-blue', enemy: 'crimson' };
@@ -111,6 +112,7 @@ const TERRAIN_TO_FAMILY = (Object.entries(FAMILY_TO_TERRAIN) as Array<[TileFamil
   {} as Partial<Record<TerrainType, TileFamilyId>>,
 );
 const tileIdForTerrain = (terrain: TerrainType): string | undefined => {
+  if (terrain === 'void') return undefined;
   const family = TERRAIN_TO_FAMILY[terrain] ?? 'grass';
   return defaultTileOfFamily(family);
 };
@@ -163,10 +165,15 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   const cells: EditorBoard['cells'] = {};
   const cover: EditorBoard['cover'] = {};
   const features: EditorBoard['features'] = {};
+  const voidCells = new Set<string>();
   const fallbackTile = defaultTileOfFamily('grass');
   for (const cell of level.layers.terrain) {
     if (cell.x < 0 || cell.x >= cols || cell.y < 0 || cell.y >= rows) continue;
     const key = `${cell.x},${cell.y}`;
+    if (cell.terrain === 'void') {
+      voidCells.add(key);
+      continue;
+    }
     cells[key] = tileIdForTerrain(cell.terrain) ?? fallbackTile ?? '';
     if (cell.cover) cover[key] = cell.cover.density;
     // `road` is a game TerrainType but, in the editor, a feature overlay sitting on a (grass)
@@ -176,7 +183,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   // Fill any unauthored cell with grass so the whole board is paintable.
   if (fallbackTile) for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) {
     const key = `${x},${y}`;
-    if (!(key in cells)) cells[key] = fallbackTile;
+    if (!(key in cells) && !voidCells.has(key)) cells[key] = fallbackTile;
   }
 
   const units: EditorBoard['units'] = {};
@@ -244,14 +251,14 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
       const tileId = board.cells[key];
       const family = tileId ? familyOfTile(tileId) : undefined;
       // Decorative / unknown families fall back to grass (a playable material).
-      let cellTerrain: TerrainType = family ? FAMILY_TO_TERRAIN[family] ?? 'grass' : 'grass';
+      let cellTerrain: TerrainType = tileId ? (family ? FAMILY_TO_TERRAIN[family] ?? 'grass' : 'grass') : 'void';
       // A road feature overlay IS the cell's terrain in the game's schema — project it back to
       // `road` so roads painted (or loaded) in the editor reach layers.terrain, which the game
       // reads. Erasing the overlay leaves no road feature, so the cell reverts to its tile
       // (grass) — i.e. an admin can actually remove a road.
-      if (board.features[key]?.kind === 'road') {
+      if (tileId && board.features[key]?.kind === 'road') {
         cellTerrain = 'road';
-      } else if (cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) {
+      } else if (tileId && cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) {
         // Preserve terrain the editor can neither paint nor feature-map (bridge/cliff/rock) so a
         // republished legacy official keeps those surfaces instead of flattening them to grass.
         cellTerrain = prev.terrain;
