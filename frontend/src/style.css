@@ -6004,6 +6004,10 @@ body { font-size: 17px; }
   opacity: .78;
 }
 
+.ce-campaign-row-meta {
+  border-image-source: url("/assets/ui/kit/row.png");
+}
+
 .ce-level-row {
   gap: 8px;
   grid-template-columns: 76px minmax(0, 1fr) auto auto;
@@ -6145,27 +6149,6 @@ body { font-size: 17px; }
 .ce-row-actions {
   display: flex;
   gap: 5px;
-}
-
-/* Unassigned-levels section: a workspace-wide list of orphan levels (referenced by no
-   campaign), shown under the campaign's own levels. Reuses the level-row chrome; its
-   actions stack Edit + Attach vertically so the longer "Attach to this campaign" label
-   fits without crowding the row. */
-.ce-unassigned {
-  display: grid;
-  gap: 0;
-  margin-top: 14px;
-}
-
-.ce-unassigned-row .ce-row-actions {
-  align-items: stretch;
-  flex-direction: column;
-}
-
-.ce-unassigned-row .ce-row-actions .ce-asset-button,
-.ce-unassigned-row .ce-row-actions .ce-link-button {
-  font-size: var(--ds-text-2xs);
-  min-height: 32px;
 }
 
 .ce-campaign-summary {
@@ -6523,6 +6506,50 @@ body { font-size: 17px; }
 
 .ce-preview-actions .ce-link-button {
   min-width: 0;
+}
+
+.ce-preview-actions.has-assign .ce-assign-field {
+  grid-column: 1 / -1;
+}
+
+.ce-assign-field {
+  display: grid;
+  min-width: 0;
+}
+
+.ce-assign-field select {
+  appearance: none;
+  background: transparent;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/field-select.png") 18 fill / 12px stretch;
+  box-sizing: border-box;
+  color: var(--ce-ink);
+  cursor: pointer;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  image-rendering: pixelated;
+  min-height: 40px;
+  min-width: 0;
+  outline: none;
+  padding: 0 12px;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.ce-assign-field select:disabled {
+  cursor: default;
+  filter: grayscale(.7) brightness(.7);
+  opacity: .58;
+}
+
+.ce-assign-field select:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.ce-assign-field option {
+  background: #061019;
+  color: var(--ce-ink);
 }
 
 .ce-link-button-ghost {
