@@ -623,7 +623,6 @@ export function LevelEditor(): ReactElement {
   // below then captures the clean signature from the SETTLED state (so the just-loaded level reads
   // clean even for a legacy level whose derived boardCode differs from its saved one).
   const needsBaselineRef = useRef(false);
-  const [saveStatus, setSaveStatus] = useState('');
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
@@ -631,7 +630,6 @@ export function LevelEditor(): ReactElement {
   const [boardLinkDraft, setBoardLinkDraft] = useState('');
 
   const reportStatus = (message: string, tone: StatusTone = 'info', detail?: string): void => {
-    setSaveStatus(message);
     statusLogSeq.current += 1;
     const at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const entry: StatusLogEntry = { id: statusLogSeq.current, tone, message, detail, at };
@@ -725,7 +723,6 @@ export function LevelEditor(): ReactElement {
     setRedoStack([]);
     currentEditorBoardRef.current = next;
     applyEditorBoard(next);
-    setSaveStatus('');
     if (selection !== undefined) setSelectedCell(selection);
     return true;
   };
@@ -1065,7 +1062,6 @@ export function LevelEditor(): ReactElement {
       const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
       setEditingId(newId);
       setSaving(true);
-      setSaveStatus('');
       try {
         await saveUserWorkspace();
         reportStatus('Saved to server.', 'success');
@@ -1100,7 +1096,6 @@ export function LevelEditor(): ReactElement {
     const official = tierOf(level.id) === 'official';
     if (official && !window.confirm('Publish changes to the official campaigns? Every player will receive them.')) return;
     setSaving(true);
-    setSaveStatus('');
     try {
       if (official) {
         const { revision } = await publishOfficialWorkspace();
@@ -1365,9 +1360,9 @@ export function LevelEditor(): ReactElement {
     setTool('select');
     reportStatus(saveBlockedMessage, saving ? 'info' : 'warning', saveBlockedDetail);
   };
-  // Save-state chip priority: saving → blocked-by-violations → needs-player → dirty → clean.
+  // Save-state label priority (Status card fallback): saving → blocked-by-violations →
+  // needs-player → dirty → clean.
   const saveStateLabel = saving ? 'Saving…' : !playability.ok ? 'Fix issues to save' : needsPlayerFaction ? 'Needs Player' : dirty ? 'Unsaved' : 'No changes';
-  const saveStateClass = saving ? 'is-saving' : !playability.ok ? 'is-blocked' : needsPlayerFaction ? 'is-dirty' : dirty ? 'is-dirty' : 'is-clean';
   // Test-Play is enabled only for a SAVED (clean, in-store), violation-free level with a resolvable
   // id: /play resolves the level from the store, so an unsaved board would test-play the stale
   // saved version. mode=test skips progress recording. See below (button title explains the state).
@@ -1378,15 +1373,10 @@ export function LevelEditor(): ReactElement {
 
   return (
     <div className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle}>
-        {/* The title bar lives in the app shell now; the editor paints its live
-            save-state + actions into it via portals (state stays in this component). */}
-        <TitleBarSlot region="center">
-          <div className="le-topbar-stats" aria-label="Level status">
-            <span className="le-level-name">{levelName}</span>
-            {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
-            <span className={`le-save-state ${saveStateClass}`}>{saveStatus || saveStateLabel}</span>
-          </div>
-        </TitleBarSlot>
+        {/* The title bar carries NO editor status (no level name, no save-state chip) — the
+            owner removed the center cluster: that's ambient chrome noise while editing, and
+            everything it said lives in the Status layer for whoever goes looking. Only the
+            return nav rides the bar (below). */}
         <TitleBarSlot region="actions">
           {/* Only the RETURN nav rides the global title bar now (‹ Catalog / ‹ Back). The
               workspace ACTIONS live in the editor's OWN chrome — Undo/Redo in the pinned
@@ -1487,11 +1477,12 @@ export function LevelEditor(): ReactElement {
               level cannot persist. The list lives HERE, in the Status layer with the Save it
               gates — it began as an always-visible rail fixture, but the owner demoted it (it
               crowded every layer while editing; a blank board starts violating, so it was
-              permanent). The universal title-bar chip ("Fix issues to save") still flags the
-              state from any layer. Every line is plain language from core/validatePlayability —
-              described by what the author sees (sides, painted units, spawn zones), never by
-              schema jargon. A "Clear pieces" shortcut rides the "remove the placed units"
-              violation so switching to random placement is one click. */}
+              permanent). There is deliberately NO ambient signal elsewhere — the state is
+              discovered when the author comes to save. Every line is plain language from
+              core/validatePlayability — described by what the author sees (sides, painted
+              units, spawn zones), never by schema jargon. A "Clear pieces" shortcut rides the
+              "remove the placed units" violation so switching to random placement is one
+              click. */}
           {!playability.ok ? (
             <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
               <h2>Fix before saving</h2>
@@ -1509,6 +1500,11 @@ export function LevelEditor(): ReactElement {
           ) : null}
           <section className="skirmish-card le-status-card" aria-live="polite">
             <h2>Status</h2>
+            {/* The level's identity lives here now, not in the title bar. */}
+            <div className="le-status-level" aria-label="Level">
+              <span className="le-level-name">{levelName}</span>
+              {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
+            </div>
             <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
               <strong>{canSave ? 'Ready to save' : saveBlockedMessage || saveStateLabel}</strong>
               {canSave ? <span>{isOfficialTarget ? 'Publishing will update the official campaigns.' : 'The current board has unsaved changes.'}</span> : <span>{saveBlockedDetail}</span>}

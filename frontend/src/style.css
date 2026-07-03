@@ -4527,16 +4527,11 @@ h1 {
 
 /* Title bar = the standard app bar (ADR-0004/0023/0037): the oak frame, height, grid
    columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
-   on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
-   stats/actions content below are scoped here — three sections: brand · save-state ·
-   labeled header buttons (.app-header-button on the kit gold frame). */
-/* Bar-content rules are scoped to the bar class (.le-topbar), NOT the screen — the
-   bar now lives in the app shell, outside .level-editor-screen, so the stats/actions
-   (portaled into the bar via <TitleBarSlot>) are descendants of .le-topbar there. */
-.le-topbar .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
-.le-topbar .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.le-topbar .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
-.le-topbar .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+   on the element itself. The editor puts NO status in the bar (the level name and
+   save-state cluster were removed — that state lives in the Status layer card); only the
+   return-nav buttons ride it (.app-header-button on the kit gold frame). Bar-content
+   rules are scoped to the bar class (.le-topbar), NOT the screen — the bar lives in the
+   app shell, outside .level-editor-screen. */
 .le-topbar .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
 
 /* segmented switch (layer / tool / fill) */
@@ -4687,7 +4682,9 @@ h1 {
   margin-top: 8px;
   min-height: 38px;
   outline: none;
-  padding: 0 10px;
+  /* Single-line control: horizontal inset on the role token (ADR-0053); vertical
+     centering comes from min-height. */
+  padding: 0 var(--ds-inset);
   width: 100%;
 }
 .le-board-link-input::placeholder { color: rgba(207, 230, 241, .52); }
@@ -4718,9 +4715,6 @@ h1 {
 .le-brush-thumb img.le-thumb-tile { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 26%; }
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
-
-/* Save-state chip: blocked (playability violations) reads as a warning distinct from unsaved. */
-.le-topbar .le-save-state.is-blocked { color: #f27a6a; text-shadow: 0 0 8px rgba(242, 122, 106, .3); }
 
 /* ---- Gameplay zones (ADR-0050) ------------------------------------------------------------
    Zone tint palette — one accent per paintable zone type: player placement (cyan), enemy
@@ -4772,10 +4766,11 @@ h1 {
 .le-seg-layers { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: repeat(4, 1fr); }
 
 /* ---- Playability violations list (ADR-0050) -----------------------------------------------
-   The always-visible to-fix list. Framed by the shared .skirmish-card (kit panel) like every
-   other section — NOT a hand-rolled box (ADR-0032). A warm accent border marks it as blocking. */
-.le-violations { box-shadow: inset 0 0 0 1px rgba(242, 122, 106, .35); }
-.le-violation-list { display: flex; flex-direction: column; gap: 7px; list-style: none; margin: 0; padding: 0; }
+   The to-fix list (Status layer only). A warm accent line marks it as blocking — and because
+   it DRAWS a box around its text, the content is inset by the role token (ADR-0053): text
+   never sits flush against a drawn edge. Frameless cards stay zero-padding. */
+.le-violations { box-shadow: inset 0 0 0 1px rgba(242, 122, 106, .35); padding: var(--ds-inset); }
+.le-violation-list { display: flex; flex-direction: column; gap: var(--ds-stack); list-style: none; margin: 0; padding: 0; }
 .le-violation { align-items: center; color: #f4d8d2; display: flex; font-size: var(--ds-text-sm); gap: 8px; justify-content: space-between; line-height: 1.3; }
 .le-violation-msg { flex: 1 1 auto; min-width: 0; }
 .le-violation-action { flex: none; padding: 4px 8px; }
@@ -4844,28 +4839,34 @@ h1 {
 .le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
-.le-status-card { gap: 10px; }
+.le-status-card { gap: var(--ds-stack); }
+/* The level's identity (name + OFFICIAL tag) — moved here from the title bar; global
+   chrome carries no editor status. */
+.le-status-level { align-items: baseline; display: flex; gap: var(--ds-inline-tight); min-width: 0; }
+.le-status-level .le-level-name { color: #f0e7d3; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.le-official-tag { color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; }
+/* Drawn text boxes inset their content by the role token (ADR-0053). */
 .le-status-current {
   background: rgba(4, 13, 20, .7);
   border: 1px solid rgba(82, 142, 170, .3);
   border-radius: 5px;
   display: grid;
   gap: 4px;
-  padding: 10px;
+  padding: var(--ds-inset);
 }
 .le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
 .le-status-current.is-ready { border-color: rgba(103, 217, 138, .42); }
 .le-status-current.is-blocked { border-color: rgba(240, 189, 85, .42); }
-.le-status-log { display: grid; gap: 8px; }
+.le-status-log { display: grid; gap: var(--ds-stack); }
 .le-status-entry {
   background: rgba(3, 12, 19, .58);
   border-left: 3px solid rgba(143, 182, 198, .55);
   border-radius: 4px;
   display: grid;
-  gap: 8px;
+  gap: var(--ds-inline-tight);
   grid-template-columns: 58px minmax(0, 1fr);
-  padding: 8px;
+  padding: var(--ds-inset);
 }
 .le-status-entry time { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.2; }
 .le-status-entry strong { color: #f3ead8; display: block; font-size: var(--ds-text-sm); line-height: 1.2; }

@@ -127,8 +127,9 @@ The Level Editor validates live while editing — the user can freely produce a 
 board; violations render as a plain-language list and **Save is disabled while any
 exist**. (The list first shipped as an always-visible rail fixture; the owner demoted
 it on 2026-07-02 — a blank board starts violating, so it permanently crowded every
-layer. It now renders in the Status layer beside the Save it gates, with the title-bar
-save-state chip — "Fix issues to save" — as the universal signal.) The backend deliberately does **NOT** enforce playability: the
+layer. It now renders in the Status layer beside the Save it gates. The title-bar
+save-state chip was removed the same day: no ambient editor status rides global
+chrome — the author discovers the state when they come to save.) The backend deliberately does **NOT** enforce playability: the
 workspace PUT carries *all* levels, so a legacy unplayable level would brick saving
 every other level. The trust boundary for playability is the editor's per-level gate;
 the backend keeps enforcing structure/enums/bounds. (Known gap, accepted: a hand-crafted
