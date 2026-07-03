@@ -298,7 +298,15 @@ export function Skirmish() {
           onMove: applyRelayMove,
           onLobby: (l) => {
             if (!active) return;
-            if (l.phase === 'closed') { setNetError('The other player left the match.'); return; }
+            if (l.phase === 'closed') {
+              // The lobby is gone (host left / closed). Don't just banner and strand the
+              // guest on a dead board — tear down the stream and return them to the lobby
+              // list, mirroring the "not started yet" bail-out above.
+              setNetError('The other player left the match. Returning to lobbies…');
+              if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+              window.setTimeout(() => { if (active) navigateApp('/lobbies', { replace: true }); }, 1600);
+              return;
+            }
             // Reconnect gap-heal: this snapshot fires on every (re)connect. If the server has
             // more moves than we've applied, a move frame was missed during a drop — backfill
             // it (applyRelayMove is idempotent on moveCount, so this races safely).
