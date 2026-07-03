@@ -1495,6 +1495,14 @@ function validateWorkspaceLevel(level, key) {
   if (level.surviveTurns !== undefined && (!isFiniteInteger(level.surviveTurns) || level.surviveTurns < 1)) {
     return `levels.${key}.surviveTurns is invalid`;
   }
+  if (level.timeControl !== undefined) {
+    const tc = level.timeControl;
+    if (!tc || typeof tc !== 'object' || Array.isArray(tc)
+      || !isFiniteInteger(tc.initialSeconds) || tc.initialSeconds < 1
+      || !isFiniteInteger(tc.incrementSeconds) || tc.incrementSeconds < 0) {
+      return `levels.${key}.timeControl is invalid`;
+    }
+  }
   if (level.roster !== undefined) {
     if (!level.roster || typeof level.roster !== 'object' || Array.isArray(level.roster)) {
       return `levels.${key}.roster is invalid`;

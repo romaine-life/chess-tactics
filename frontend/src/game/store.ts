@@ -122,6 +122,18 @@ function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv)
   return { game, tick, events };
 }
 
+/** The player's battle clock (per-level time control; the enemy is untimed). */
+export interface ClockState {
+  /** Remaining ms. While running this is display-quantized (whole seconds; tenths
+   * under 10s) so subscribers re-render only when the readout changes — the exact
+   * deadline lives outside state and is re-read whenever the clock pauses. */
+  remainingMs: number;
+  /** True while the clock is counting down — the player's live turn only. */
+  running: boolean;
+  /** Fischer increment (ms) banked after every completed player move. */
+  incrementMs: number;
+}
+
 export interface SkirmishState {
   game: GameState;
   /** Indexed terrain for the current game; movement generation reads this. */
@@ -144,6 +156,8 @@ export interface SkirmishState {
   /** Level this game is testing (null = free skirmish). Lets the screen tell
    * "resume the same board" from "launch a different level". */
   levelId: string | null;
+  /** The battle clock, when the level authored one (null = untimed). */
+  clock: ClockState | null;
   newSkirmish: (opts: SkirmishOptions) => void;
   select: (id: string | null) => void;
   focus: (id: string | null) => void;
@@ -168,6 +182,69 @@ export function shouldStartFreshSkirmish(
 const INITIAL_GAME = createSkirmish({ seed: 1 });
 
 export const useSkirmish = create<SkirmishState>((set, get) => {
+  // ---- Battle clock ----------------------------------------------------------
+  // Standard chess-clock rules for the PLAYER only: the clock runs while it's their
+  // live turn, pauses the moment their move applies (banking the Fischer increment),
+  // and resumes when the enemy reply hands the turn back. The truth is a wall-clock
+  // DEADLINE, not a decremented counter — ticks just re-derive the remainder, so a
+  // throttled background tab can't stretch the player's time. The store is a module
+  // singleton, so the ticker survives route changes exactly like the staged enemy
+  // reply does; time honestly keeps running if the player wanders off mid-turn.
+  let clockDeadline = 0;
+  let clockTicker: ReturnType<typeof setInterval> | null = null;
+
+  const stopClockTicker = () => {
+    if (clockTicker !== null) { clearInterval(clockTicker); clockTicker = null; }
+  };
+
+  // Flag fall: losing on time is a defeat like any other — turn locks, result copy
+  // names the clock.
+  const expireClock = () => {
+    stopClockTicker();
+    const cur = get();
+    if (!cur.clock || cur.game.winner) return;
+    set({
+      game: { ...cur.game, winner: 'enemy', turn: 'done' },
+      clock: { ...cur.clock, remainingMs: 0, running: false },
+      selectedId: null,
+      focusedId: null,
+      log: ['Defeat — your clock ran out.', ...cur.log].slice(0, 12),
+    });
+  };
+
+  const tickClock = () => {
+    const cur = get();
+    if (!cur.clock?.running) { stopClockTicker(); return; }
+    const remaining = clockDeadline - Date.now();
+    if (remaining <= 0) { expireClock(); return; }
+    // Publish only when the READOUT would change (seconds; tenths under 10s), so the
+    // 100ms ticker doesn't re-render subscribers ten times a second.
+    const quantum = remaining < 10_000 ? 100 : 1000;
+    const shown = Math.ceil(remaining / quantum) * quantum;
+    if (shown !== cur.clock.remainingMs) set({ clock: { ...cur.clock, remainingMs: shown } });
+  };
+
+  /** Run the clock — a no-op unless the game is timed, live, and on the player's turn. */
+  const startClock = () => {
+    const cur = get();
+    if (!cur.clock || cur.clock.running || cur.game.winner || cur.game.turn !== 'player') return;
+    clockDeadline = Date.now() + cur.clock.remainingMs;
+    stopClockTicker();
+    clockTicker = setInterval(tickClock, 100);
+    set({ clock: { ...cur.clock, running: true } });
+  };
+
+  /** Pause at the moment the player's move applies, banking the increment. Reads the
+   * exact remainder off the deadline — not the quantized display value — so repeated
+   * pause/resume cycles never drift. */
+  const pauseClockWithIncrement = () => {
+    const cur = get();
+    if (!cur.clock?.running) return;
+    stopClockTicker();
+    const remainingMs = Math.max(0, clockDeadline - Date.now()) + cur.clock.incrementMs;
+    set({ clock: { ...cur.clock, remainingMs, running: false } });
+  };
+
   // Stage the enemy half-turn after a beat so it reads as a reply, not a mirror
   // of the player's click. The turn is already flipped to 'enemy' (which locks
   // player input) before this fires.
@@ -208,6 +285,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       enemyRes.events
         .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
         .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
+      // The turn is back with the player — their clock resumes (no-op when untimed
+      // or the reply decided the game).
+      startClock();
     }, ENEMY_REPLY_DELAY);
   };
 
@@ -224,8 +304,11 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   turnsElapsed: 0,
   started: false,
   levelId: null,
+  clock: null,
 
   newSkirmish: (opts) => {
+    // A previous game's ticker must never outlive its game.
+    stopClockTicker();
     const created = createSkirmish(opts);
     const env = envFor(created);
     // Safety net: a degenerate start with no player move resolves rather than locks.
@@ -243,7 +326,15 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
       : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
     const selectedId = firstPlayerId(game);
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null });
+    // Arm the battle clock from the level's authored time control (null = untimed).
+    const tc = opts.level?.timeControl;
+    const clock: ClockState | null = tc
+      ? { remainingMs: tc.initialSeconds * 1000, running: false, incrementMs: tc.incrementSeconds * 1000 }
+      : null;
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, clock });
+    // The clock starts with the game — it is the player's move from the first beat
+    // (a degenerate instant-draw start is guarded inside startClock).
+    startClock();
     // "Units come onto the board": a soft staggered roll-call as the player's force
     // deploys. Each unit sounds the terrain it lands on (softer, gain 0.7) layered
     // with the authored "arrival" thump (playArrival) — the landing.mp3 that plays
@@ -287,6 +378,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     if (!p) return;
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
+    // The move is legal and WILL apply — the player's clock stops here, banking the
+    // Fischer increment. It stays paused for the whole enemy reply.
+    pauseClockWithIncrement();
     const playerRes = applyMove(s.game, p.id, mv);
     let game = playerRes.state;
     // Footstep: only when the piece actually relocates (applyMove emits a 'moved'

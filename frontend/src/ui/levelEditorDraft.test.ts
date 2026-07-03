@@ -57,6 +57,27 @@ describe('level editor draft codec', () => {
     expect(encodeBoard(parsed.board)).toBe(encodeBoard(baseDraft().board));
   });
 
+  it('round-trips an authored battle clock, and stays untimed when absent', () => {
+    const timed = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({ timeControl: { initialSeconds: 300, incrementSeconds: 2 } })))!;
+    expect(timed.timeControl).toEqual({ initialSeconds: 300, incrementSeconds: 2 });
+    const untimed = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft()))!;
+    expect(untimed.timeControl).toBeUndefined();
+  });
+
+  it('drops an out-of-range or malformed time control (restores untimed)', () => {
+    const withTc = (timeControl: unknown): LevelEditorDraft => {
+      const raw = JSON.parse(serializeLevelEditorDraft(baseDraft())) as Record<string, unknown>;
+      raw.timeControl = timeControl;
+      return parseLevelEditorDraft(JSON.stringify(raw))!;
+    };
+    expect(withTc({ initialSeconds: 0, incrementSeconds: 0 }).timeControl).toBeUndefined();
+    expect(withTc({ initialSeconds: 2.5, incrementSeconds: 0 }).timeControl).toBeUndefined();
+    expect(withTc({ initialSeconds: 300, incrementSeconds: -1 }).timeControl).toBeUndefined();
+    expect(withTc({ initialSeconds: 300 }).timeControl).toBeUndefined();
+    expect(withTc('blitz').timeControl).toBeUndefined();
+    expect(withTc({ initialSeconds: 180, incrementSeconds: 5 }).timeControl).toEqual({ initialSeconds: 180, incrementSeconds: 5 });
+  });
+
   it('returns null for corrupt JSON or an undecodable board code', () => {
     expect(parseLevelEditorDraft('not json')).toBeNull();
     expect(parseLevelEditorDraft(JSON.stringify({ v: 1, savedSig: 'x', boardCode: 'nope' }))).toBeNull();

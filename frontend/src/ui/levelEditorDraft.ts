@@ -1,5 +1,5 @@
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
-import { OBJECTIVE_TYPES, type ObjectiveType, type Roster } from '../core/level';
+import { OBJECTIVE_TYPES, type ObjectiveType, type Roster, type TimeControl } from '../core/level';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 
 const STORAGE_PREFIX = 'ct:level-editor-draft:v1';
@@ -16,6 +16,8 @@ export interface LevelEditorDraft {
   placement: PlacementMode;
   surviveTurns: number;
   roster: { player: Roster; enemy: Roster };
+  // The battle clock (ADR-0053), or undefined when the level is untimed.
+  timeControl?: TimeControl;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -59,8 +61,20 @@ export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
     placement: draft.placement,
     surviveTurns: draft.surviveTurns,
     roster: draft.roster,
+    timeControl: draft.timeControl,
   });
 }
+
+// A stored time control survives the round-trip only when both fields are whole numbers in range
+// (integer initialSeconds ≥ 1, integer incrementSeconds ≥ 0 — the ADR-0053 schema); anything else
+// restores as untimed rather than seeding an invalid clock.
+const cleanTimeControl = (raw: unknown): TimeControl | undefined => {
+  if (!isRecord(raw)) return undefined;
+  const { initialSeconds, incrementSeconds } = raw;
+  if (typeof initialSeconds !== 'number' || !Number.isInteger(initialSeconds) || initialSeconds < 1) return undefined;
+  if (typeof incrementSeconds !== 'number' || !Number.isInteger(incrementSeconds) || incrementSeconds < 0) return undefined;
+  return { initialSeconds, incrementSeconds };
+};
 
 export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
   try {
@@ -88,6 +102,7 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
         player: cleanRoster(isRecord(value.roster) ? value.roster.player : undefined),
         enemy: cleanRoster(isRecord(value.roster) ? value.roster.enemy : undefined),
       },
+      timeControl: cleanTimeControl(value.timeControl),
     };
   } catch {
     return null;
