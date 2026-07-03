@@ -42,6 +42,9 @@ export interface CampaignState {
   // Campaign Editor's "Unassigned levels" section (Phase 3) to adopt a level authored cold in
   // the Level Editor. No-op if no campaign is selected or the level is already referenced.
   attachLevel: (levelId: string) => void;
+  // Same adoption flow, but with an explicit target campaign. Used when the unassigned
+  // collection is selected as its own meta-campaign in the editor rail.
+  attachLevelToCampaign: (campaignId: string, levelId: string) => void;
   deleteLevel: (levelId: string) => void;
   moveLevel: (levelId: string, dir: -1 | 1) => void;
   selectLevel: (levelId: string) => void;
@@ -138,6 +141,20 @@ const importableWorkspace = (ws: { campaigns: Campaign[]; levels: Record<string,
   const levels = Object.fromEntries(Object.entries(ws.levels ?? {}).map(([id, level]) => [id, withLevelDefaults(level)]));
   const campaigns = (ws.campaigns ?? []).map(withCampaignDefaults);
   return { campaigns, levels, counter: nextCounterFrom(campaigns, levels) };
+};
+
+const attachLevelToCampaignState = (s: CampaignState, campaignId: string, levelId: string): Partial<CampaignState> => {
+  const camp = s.campaigns.find((c) => c.id === campaignId);
+  // Adopt an existing level into the target campaign: a missing campaign, a missing level, or
+  // an already-referenced one is a no-op. The new ref appends at the end (next ordinal) and
+  // seeds its objective from the level's own so the row reads correctly straight away.
+  if (!camp || !s.levels[levelId] || camp.levels.some((r) => r.levelId === levelId)) return {};
+  const ref: CampaignLevelRef = { levelId, ordinal: camp.levels.length, objective: s.levels[levelId].objective };
+  return {
+    campaigns: s.campaigns.map((c) => (c.id === camp.id ? { ...c, levels: [...c.levels, ref] } : c)),
+    selectedCampaignId: camp.id,
+    selectedLevelId: levelId,
+  };
 };
 
 export const useCampaigns = create<CampaignState>((set, get) => ({
@@ -310,16 +327,10 @@ export const useCampaigns = create<CampaignState>((set, get) => ({
 
   attachLevel: (levelId) => set((s) => {
     const camp = selected(s);
-    // Adopt an existing level into the selected campaign: no campaign, a missing level, or an
-    // already-referenced one is a no-op. The new ref appends at the end (next ordinal) and
-    // seeds its objective from the level's own so the row reads correctly straight away.
-    if (!camp || !s.levels[levelId] || camp.levels.some((r) => r.levelId === levelId)) return {};
-    const ref: CampaignLevelRef = { levelId, ordinal: camp.levels.length, objective: s.levels[levelId].objective };
-    return {
-      campaigns: s.campaigns.map((c) => (c.id === camp.id ? { ...c, levels: [...c.levels, ref] } : c)),
-      selectedLevelId: levelId,
-    };
+    return camp ? attachLevelToCampaignState(s, camp.id, levelId) : {};
   }),
+
+  attachLevelToCampaign: (campaignId, levelId) => set((s) => attachLevelToCampaignState(s, campaignId, levelId)),
 
   deleteLevel: (levelId) => set((s) => {
     const camp = selected(s);

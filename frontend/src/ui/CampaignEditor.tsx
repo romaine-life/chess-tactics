@@ -12,6 +12,7 @@ import { ViewPane } from './shared/ViewPane';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
+import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { AmbienceBackground } from './AmbienceBackground';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -23,6 +24,10 @@ const CE_ICONS = {
   delete: '/assets/ui/kit/icons/delete.png',
   lock: '/assets/ui/kit/icons/lock.png',
 } as const;
+
+type CampaignCollection = 'campaign' | 'unassigned';
+
+const CAMPAIGN_EDITOR_RETURN_TO = '/campaigns-next';
 
 function workspaceSignature(ws: { campaigns: Campaign[]; levels: Record<string, Level> }): string {
   return JSON.stringify(ws);
@@ -158,6 +163,37 @@ function CampaignRow({
   );
 }
 
+function UnassignedCampaignRow({
+  count,
+  active,
+  onSelect,
+}: {
+  count: number;
+  active: boolean;
+  onSelect: () => void;
+}): ReactElement {
+  const levelCount = `${count} level${count === 1 ? '' : 's'}`;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={`ce-campaign-row ce-campaign-row-meta ${active ? 'is-selected' : ''}`.trim()}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      <span className="ce-row-copy">
+        <strong>Unassigned levels</strong>
+        <small>{levelCount}</small>
+      </span>
+    </div>
+  );
+}
+
 function CeIcon({ icon }: { icon: keyof typeof CE_ICONS }): ReactElement {
   return <img className="ce-icon-img" src={CE_ICONS[icon]} alt="" aria-hidden="true" draggable={false} />;
 }
@@ -226,6 +262,8 @@ export function CampaignEditor() {
   const selectedLevelId = useCampaigns((s) => s.selectedLevelId);
   const [status, setStatus] = useState('');
   const [me, setMe] = useState<AuthUser | null>(null);
+  const [selectedCollection, setSelectedCollection] = useState<CampaignCollection>('campaign');
+  const { ask, dialog: confirmDialog } = useConfirm();
   // Entrance readiness (ADR-0051): the shared store may already hold campaigns from a
   // /campaign or /skirmish visit this session — then there's real content at mount and
   // nothing holds; otherwise hold the fade until the officials merge settles.
@@ -332,7 +370,12 @@ export function CampaignEditor() {
   // "Publish to all players": a distinct, confirmed, admin-gated write of ONLY the
   // official slice. The server's requireAdmin is the real gate (403 surfaces here).
   const publishOfficialNow = async () => {
-    if (!window.confirm('Publish changes to the official campaigns? Every player will receive them.')) return;
+    if (!(await ask({
+      title: 'Publish to all players?',
+      message: 'This updates the official campaigns. Every player will receive these changes the next time they play.',
+      confirmLabel: 'Publish',
+      cancelLabel: 'Cancel',
+    }))) return;
     try {
       const { revision } = await publishOfficialWorkspace();
       setSavedOfficialSig(officialSliceSignature());
@@ -356,6 +399,7 @@ export function CampaignEditor() {
       const importedCampaigns = parsed.campaigns!;
       const importedLevels = parsed.levels!;
       useCampaigns.getState().importWorkspace({ campaigns: importedCampaigns, levels: importedLevels });
+      setSelectedCollection('campaign');
       setStatus(`Imported ${importedCampaigns.length} campaign${importedCampaigns.length === 1 ? '' : 's'}. Save to keep them.`);
     } catch (error) {
       setStatus(`Import failed: ${(error as Error).message}`);
@@ -379,22 +423,52 @@ export function CampaignEditor() {
     setStatus('Exported campaign workspace JSON.');
   };
 
-  const confirmDeleteCampaign = (campaign: Campaign) => {
-    if (window.confirm(`Delete campaign "${campaign.name}"? This removes it from the workspace when you save.`)) {
+  const confirmDeleteCampaign = async (campaign: Campaign) => {
+    if (await ask({
+      title: `Delete campaign?`,
+      message: <>Delete <b>{campaign.name}</b>? This removes it from the workspace when you save.</>,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      tone: 'danger',
+    })) {
       useCampaigns.getState().deleteCampaign(campaign.id);
       setStatus('Campaign deleted. Save to keep this change.');
     }
   };
 
-  const confirmDeleteLevel = (level: Level) => {
-    if (window.confirm(`Delete level "${level.name}"? This removes it from the workspace when you save.`)) {
+  const confirmDeleteLevel = async (level: Level) => {
+    if (await ask({
+      title: `Delete level?`,
+      message: <>Delete <b>{level.name}</b>? This removes it from the workspace when you save.</>,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      tone: 'danger',
+    })) {
       useCampaigns.getState().deleteLevel(level.id);
       setStatus('Level deleted. Save to keep this change.');
     }
   };
 
   const isAdmin = Boolean(me?.is_admin);
-  const camp = campaigns.find((c) => c.id === selectedCampaignId) ?? null;
+  const isUnassignedSelected = selectedCollection === 'unassigned';
+  // Unassigned levels: store level docs referenced by NO campaign — typically a board authored
+  // cold in the Level Editor (createUnassignedLevel) before it is filed into a campaign. They
+  // live in the workspace and round-trip through campaign_workspaces just like any other level.
+  const referencedLevelIds = useMemo(
+    () => new Set(campaigns.flatMap((c) => c.levels.map((r) => r.levelId))),
+    [campaigns],
+  );
+  const unassignedLevels = useMemo(
+    () => Object.values(levels)
+      .filter((level) => !referencedLevelIds.has(level.id))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id)),
+    [levels, referencedLevelIds],
+  );
+  const unassignedLevelRefs = useMemo<CampaignLevelRef[]>(
+    () => unassignedLevels.map((level, index) => ({ levelId: level.id, ordinal: index, objective: level.objective })),
+    [unassignedLevels],
+  );
+  const camp = isUnassignedSelected ? null : campaigns.find((c) => c.id === selectedCampaignId) ?? null;
   const campIsOfficial = camp?.origin === 'official';
   // readOnly is UI-derived, never trusted from a baked tag: an official campaign is
   // read-only ONLY for non-admins. Admins edit officials in place. This drives every
@@ -407,36 +481,73 @@ export function CampaignEditor() {
   // Editor derive theirs (prefers boardCode, falls back to layers) — so what the viewer shows,
   // a row's baked thumbnail, and the editor all agree.
   const viewerBoard = useMemo(() => (levelDoc ? levelToEditorBoard(levelDoc) : null), [levelDoc]);
-  const levelRef = camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
+  const levelRef = !isUnassignedSelected && camp && selectedLevelId ? camp.levels.find((r) => r.levelId === selectedLevelId) : null;
   const selectedLevelIndex = orderedLevels.findIndex((r) => r.levelId === selectedLevelId);
-  const totalLevels = orderedLevels.length;
+  const selectedUnassignedLevelIndex = unassignedLevels.findIndex((level) => level.id === selectedLevelId);
+  const selectedVisibleLevelIndex = isUnassignedSelected ? selectedUnassignedLevelIndex : selectedLevelIndex;
   const enemyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'enemy').length ?? 0;
   const allyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'player').length ?? 0;
-  const editHref = camp && levelDoc ? `/edit?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent('/campaigns-next')}` : '/edit';
-  const playHref = camp && levelDoc ? `/play?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent('/campaigns-next')}` : '/play';
-
-  // Unassigned levels: store level docs referenced by NO campaign — typically a board authored
-  // cold in the Level Editor (createUnassignedLevel) before it is filed into a campaign. They
-  // live in the workspace and round-trip through campaign_workspaces just like any other level.
-  const referencedLevelIds = useMemo(
-    () => new Set(campaigns.flatMap((c) => c.levels.map((r) => r.levelId))),
-    [campaigns],
-  );
-  const unassignedLevels = useMemo(
-    () => Object.values(levels).filter((level) => !referencedLevelIds.has(level.id)),
-    [levels, referencedLevelIds],
-  );
-  // "Attach to this campaign" pushes a ref onto the selected campaign. Only enabled when a
-  // campaign is selected, it is editable (not a non-admin official), AND the level shares its
-  // tier — never mix an `off-` level into a private campaign (it would write an off- reference
-  // into the per-user workspace, INV1/INV8) or vice-versa.
-  const canAttachTo = (level: Level): boolean =>
-    Boolean(camp) && !readOnly && tierOf(level.id) === tierOf(camp!.id);
+  const selectedLevelTitle = levelDoc
+    ? selectedVisibleLevelIndex >= 0
+      ? `Level ${selectedVisibleLevelIndex + 1}: ${levelDoc.name}`
+      : levelDoc.name
+    : 'Selected Level';
   const editHrefForUnassigned = (levelId: string): string =>
-    `/edit?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent('/campaigns-next')}`;
+    `/edit?levelId=${encodeURIComponent(levelId)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`;
+  const editHref = levelDoc
+    ? isUnassignedSelected
+      ? editHrefForUnassigned(levelDoc.id)
+      : camp
+        ? `/edit?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
+        : '/edit'
+    : '/edit';
+  const playHref = levelDoc
+    ? isUnassignedSelected
+      ? `/play?levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
+      : camp
+        ? `/play?campaignId=${encodeURIComponent(camp.id)}&levelId=${encodeURIComponent(levelDoc.id)}&mode=test&returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`
+        : '/play'
+    : '/play';
+  const editableCampaignsForLevel = useMemo(
+    () => (isUnassignedSelected && levelDoc
+      ? campaigns.filter((campaign) => !(campaign.origin === 'official' && !isAdmin) && tierOf(levelDoc.id) === tierOf(campaign.id))
+      : []),
+    [campaigns, isAdmin, isUnassignedSelected, levelDoc],
+  );
+
+  useEffect(() => {
+    if (!isUnassignedSelected) return;
+    if (selectedLevelId && unassignedLevels.some((level) => level.id === selectedLevelId)) return;
+    const first = unassignedLevels[0];
+    if (first) useCampaigns.getState().selectLevel(first.id);
+    else useCampaigns.setState({ selectedLevelId: null });
+  }, [isUnassignedSelected, selectedLevelId, unassignedLevels]);
+
+  const selectCampaignCollection = (campaignId: string) => {
+    setSelectedCollection('campaign');
+    useCampaigns.getState().selectCampaign(campaignId);
+  };
+
+  const selectUnassignedCollection = () => {
+    setSelectedCollection('unassigned');
+    const selectedIsStillUnassigned = selectedLevelId && unassignedLevels.some((level) => level.id === selectedLevelId);
+    const nextLevelId = selectedIsStillUnassigned ? selectedLevelId : unassignedLevels[0]?.id;
+    if (nextLevelId) useCampaigns.getState().selectLevel(nextLevelId);
+    else useCampaigns.setState({ selectedLevelId: null });
+  };
+
+  const assignSelectedUnassignedLevel = (campaignId: string) => {
+    if (!levelDoc) return;
+    const target = campaigns.find((campaign) => campaign.id === campaignId);
+    if (!target) return;
+    useCampaigns.getState().attachLevelToCampaign(campaignId, levelDoc.id);
+    setSelectedCollection('campaign');
+    setStatus(`Attached "${levelDoc.name}" to ${target.name}. Save to keep this change.`);
+  };
 
   return (
     <div className="ce-screen app-shell-bar-pad" data-testid="campaign-editor">
+      {confirmDialog}
       {/* Same art-directed backdrop + synced rain as the main menu (.ce-screen paints the
           menu scene; this canvas adds the shared rain). Mostly overlapped by the editor
           panels, but it keeps the feel consistent with the rest of the app in the gaps. */}
@@ -458,7 +569,14 @@ export function CampaignEditor() {
             <h2>Campaigns</h2>
             <span>{ownCount} / 20</span>
           </div>
-          <AssetButton data-testid="new-campaign" className="ce-new-campaign" onClick={() => useCampaigns.getState().newCampaign()}>
+          <AssetButton
+            data-testid="new-campaign"
+            className="ce-new-campaign"
+            onClick={() => {
+              useCampaigns.getState().newCampaign();
+              setSelectedCollection('campaign');
+            }}
+          >
             + New Campaign
           </AssetButton>
           {/* Workspace commits (Save · Publish) live here in the workspace panel — the same panel
@@ -492,15 +610,20 @@ export function CampaignEditor() {
                 key={campaign.id}
                 campaign={campaign}
                 index={index}
-                active={campaign.id === selectedCampaignId}
+                active={!isUnassignedSelected && campaign.id === selectedCampaignId}
                 isAdmin={isAdmin}
-                onSelect={() => useCampaigns.getState().selectCampaign(campaign.id)}
+                onSelect={() => selectCampaignCollection(campaign.id)}
                 onFavorite={(event) => {
                   event.stopPropagation();
                   useCampaigns.getState().toggleCampaignFavorite(campaign.id);
                 }}
               />
             ))}
+            <UnassignedCampaignRow
+              count={unassignedLevels.length}
+              active={isUnassignedSelected}
+              onSelect={selectUnassignedCollection}
+            />
           </div>
           <AssetButton className="ce-import-campaign" onClick={() => importInputRef.current?.click()}>
             Import Campaign
@@ -508,7 +631,35 @@ export function CampaignEditor() {
         </aside>
 
         <section className="ce-panel ce-details-panel" aria-label="Campaign details and levels">
-          {camp ? (
+          {isUnassignedSelected ? (
+            <>
+              <div className="ce-section-title">
+                <h2>Unassigned Levels</h2>
+                <span>{unassignedLevels.length}</span>
+              </div>
+              <div className="ce-levels-head">
+                <h2>Levels</h2>
+                <NavButton className="ce-link-button" to={`/edit?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_RETURN_TO)}`}><span>+ New Board</span></NavButton>
+              </div>
+              <div className="ce-level-list" data-testid="unassigned-levels">
+                {unassignedLevelRefs.length === 0 ? <p className="ce-empty">No unassigned levels.</p> : null}
+                {unassignedLevelRefs.map((ref, index) => (
+                  <LevelRow
+                    key={ref.levelId}
+                    levelRef={ref}
+                    level={levels[ref.levelId]}
+                    index={index}
+                    active={ref.levelId === selectedLevelId}
+                    readOnly
+                    onSelect={() => useCampaigns.getState().selectLevel(ref.levelId)}
+                    onMoveUp={(event) => { event.stopPropagation(); }}
+                    onMoveDown={(event) => { event.stopPropagation(); }}
+                    onDelete={(event) => { event.stopPropagation(); }}
+                  />
+                ))}
+              </div>
+            </>
+          ) : camp ? (
             <>
               <div className="ce-section-title">
                 <h2>Campaign Details</h2>
@@ -560,46 +711,11 @@ export function CampaignEditor() {
           ) : (
             <p className="ce-empty ce-empty-large">Select or create a campaign.</p>
           )}
-
-          {unassignedLevels.length > 0 ? (
-            <div className="ce-unassigned" data-testid="unassigned-levels">
-              <div className="ce-section-title">
-                <h2>Unassigned levels</h2>
-                <span>{unassignedLevels.length}</span>
-              </div>
-              <div className="ce-level-list">
-                {unassignedLevels.map((level) => (
-                  <div key={level.id} className="ce-level-row ce-unassigned-row">
-                    <span className="ce-level-thumb" aria-hidden="true">
-                      <LevelThumbnail level={level} width={46} height={32} />
-                    </span>
-                    <span className="ce-row-copy">
-                      <strong>{level.name}</strong>
-                      <small>{levelObjectiveLine(level)}</small>
-                    </span>
-                    <span className="ce-row-actions" aria-label="Unassigned level actions">
-                      <NavButton className="ce-link-button ce-link-button-ghost" to={editHrefForUnassigned(level.id)}><span>Edit</span></NavButton>
-                      <AssetButton
-                        disabled={!canAttachTo(level)}
-                        title={camp ? `Attach to ${camp.name}` : 'Select a campaign to attach this level'}
-                        onClick={() => {
-                          useCampaigns.getState().attachLevel(level.id);
-                          setStatus(`Attached "${level.name}" to ${camp?.name ?? 'the campaign'}. Save to keep this change.`);
-                        }}
-                      >
-                        Attach to this campaign
-                      </AssetButton>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </section>
 
         <section className="ce-panel ce-level-panel" aria-label="Selected level">
           <div className="ce-selected-head">
-            <h2>{levelDoc ? `Level ${selectedLevelIndex + 1}: ${levelDoc.name}` : 'Selected Level'}</h2>
+            <h2>{selectedLevelTitle}</h2>
             {levelDoc ? (
               <div className="ce-force-readout" aria-label="Level forces">
                 <span className="ce-force ce-force-ally"><img src="/assets/ui/main-menu/profile-rook-blue.png" alt="" />Allies <strong>{allyCount}</strong></span>
@@ -640,10 +756,29 @@ export function CampaignEditor() {
               <div className="level-preview-empty" aria-label="No level preview"><span>Select a level.</span></div>
             )}
           </div>
-          {levelDoc && levelRef ? (
-            <div className="ce-preview-actions">
+          {levelDoc && (levelRef || isUnassignedSelected) ? (
+            <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
               <NavButton className="ce-link-button" to={editHref}><span>Edit Board</span></NavButton>
               <NavButton className="ce-link-button ce-link-button-ghost" to={playHref}><span>Test Play</span></NavButton>
+              {isUnassignedSelected ? (
+                <label className="ce-assign-field">
+                  <span className="sr-only">Assign to campaign</span>
+                  <select
+                    value=""
+                    disabled={editableCampaignsForLevel.length === 0}
+                    title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
+                    onChange={(event) => {
+                      const campaignId = event.currentTarget.value;
+                      if (campaignId) assignSelectedUnassignedLevel(campaignId);
+                    }}
+                  >
+                    <option value="">{editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign'}</option>
+                    {editableCampaignsForLevel.map((campaign) => (
+                      <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
           ) : (
             <p className="ce-empty ce-empty-large">Select a level.</p>
@@ -652,7 +787,16 @@ export function CampaignEditor() {
       </ArtRouteChrome>
 
       <ArtRouteChrome as="footer" className="ce-footer" ready={loaded}>
-        <AssetButton disabled={!camp || camp.origin === 'official'} onClick={() => camp && useCampaigns.getState().duplicateCampaign(camp.id)}>Duplicate</AssetButton>
+        <AssetButton
+          disabled={!camp || camp.origin === 'official'}
+          onClick={() => {
+            if (!camp) return;
+            useCampaigns.getState().duplicateCampaign(camp.id);
+            setSelectedCollection('campaign');
+          }}
+        >
+          Duplicate
+        </AssetButton>
         <AssetButton className="ce-footer-secondary" disabled={!campaigns.length} onClick={exportWorkspace}>Export</AssetButton>
         <AssetButton danger disabled={!camp || readOnly} onClick={() => camp && confirmDeleteCampaign(camp)}>Delete Campaign</AssetButton>
       </ArtRouteChrome>

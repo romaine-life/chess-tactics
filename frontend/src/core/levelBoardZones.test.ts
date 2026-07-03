@@ -77,24 +77,28 @@ describe('levelBoard — resize pruning of zone tiles', () => {
 });
 
 describe('levelBoard — ADR-0050 mode meta fields', () => {
-  it('writes objective/placement/roster/surviveTurns from meta onto the Level', () => {
+  it('writes objective/placement/roster/surviveTurns/timeControl from meta onto the Level', () => {
     const roster: { player: Roster; enemy: Roster } = { player: { pawn: 3, knight: 1 }, enemy: { pawn: 2 } };
     const level = editorBoardToLevel(board(), {
       id: 'l5', name: 'M', objective: 'survive', placement: 'random', roster, surviveTurns: 12,
+      timeControl: { initialSeconds: 300, incrementSeconds: 2 },
     });
     expect(level.objective).toBe('survive');
     expect(level.placement).toBe('random');
     expect(level.roster).toEqual(roster);
     expect(level.surviveTurns).toBe(12);
+    expect(level.timeControl).toEqual({ initialSeconds: 300, incrementSeconds: 2 });
   });
 
   it('omits the optional mode fields when meta leaves them undefined (back-compat)', () => {
-    // A level that never touched the RULES panel serializes WITHOUT placement/roster/surviveTurns,
-    // so an absent field reads as fixed / no roster / DEFAULT_SURVIVE_TURNS — same as a legacy body.
+    // A level that never touched the RULES panel serializes WITHOUT placement/roster/surviveTurns/
+    // timeControl, so an absent field reads as fixed / no roster / DEFAULT_SURVIVE_TURNS / untimed
+    // — same as a legacy body.
     const level = editorBoardToLevel(board(), { id: 'l6', name: 'Plain' });
     expect(level.objective).toBe('capture-all'); // default, always written
     expect('placement' in level).toBe(false);
     expect('roster' in level).toBe(false);
     expect('surviveTurns' in level).toBe(false);
+    expect('timeControl' in level).toBe(false);
   });
 });

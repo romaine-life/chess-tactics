@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { extractEntryHash, isNewBuildLive } from './appUpdate';
+import { consumeNewBuildReloadIntent, extractEntryHash, isNewBuildLive, reloadForNewBuild } from './appUpdate';
 
 const mockIndex = (hash: string, ok = true) =>
   vi.fn(async () => ({ ok, text: async () => `<script type="module" src="/assets/index-${hash}.js"></script>` }) as unknown as Response);
@@ -29,7 +29,7 @@ describe('extractEntryHash', () => {
 });
 
 describe('isNewBuildLive', () => {
-  afterEach(() => { vi.restoreAllMocks(); });
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
   it('is true when the live index references a different entry hash', async () => {
     vi.stubGlobal('fetch', mockIndex('bbbbbbbb'));
@@ -51,5 +51,47 @@ describe('isNewBuildLive', () => {
     expect(await isNewBuildLive('aaaaaaaa')).toBe(false);
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
     expect(await isNewBuildLive('aaaaaaaa')).toBe(false);
+  });
+});
+
+const memoryStorage = (): Storage => {
+  const data = new Map<string, string>();
+  return {
+    get length() { return data.size; },
+    clear: () => data.clear(),
+    getItem: (key) => data.get(key) ?? null,
+    key: (index) => Array.from(data.keys())[index] ?? null,
+    removeItem: (key) => { data.delete(key); },
+    setItem: (key, value) => { data.set(key, String(value)); },
+  };
+};
+
+describe('new-build reload intent', () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it('marks the current path before reloading and consumes it once', () => {
+    const sessionStorage = memoryStorage();
+    const reload = vi.fn();
+    vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    vi.stubGlobal('window', { location: { pathname: '/level-editor', reload }, sessionStorage });
+
+    reloadForNewBuild();
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(consumeNewBuildReloadIntent('/level-editor')).toBe(true);
+    expect(consumeNewBuildReloadIntent('/level-editor')).toBe(false);
+  });
+
+  it('does not consume stale or different-path reload markers', () => {
+    const sessionStorage = memoryStorage();
+    const now = vi.spyOn(Date, 'now');
+    vi.stubGlobal('window', { location: { pathname: '/level-editor', reload: vi.fn() }, sessionStorage });
+    sessionStorage.setItem('ct:app-update-reload', JSON.stringify({ at: 1_000, path: '/settings' }));
+    now.mockReturnValue(2_000);
+    expect(consumeNewBuildReloadIntent('/level-editor')).toBe(false);
+
+    sessionStorage.setItem('ct:app-update-reload', JSON.stringify({ at: 1_000, path: '/level-editor' }));
+    now.mockReturnValue(60_000);
+    expect(consumeNewBuildReloadIntent('/level-editor')).toBe(false);
   });
 });
