@@ -24,24 +24,24 @@
     "left": -1,
     "right": -1
   },
-  "frameScale": 1.5,
+  "frameScale": 2.5,
   "brackets": {
     "tl": {
-      "dx": -7,
-      "dy": -7
+      "dx": -9,
+      "dy": -9
     },
     "tr": {
-      "dx": -7,
-      "dy": -7
+      "dx": -9,
+      "dy": -9
     },
     "bl": {
-      "dx": -7,
-      "dy": -7
+      "dx": -9,
+      "dy": -9
     },
     "br": {
-      "dx": -7,
-      "dy": -7
+      "dx": -9,
+      "dy": -9
     }
   },
-  "bracketScale": 1.25
+  "bracketScale": 1.75
 }
