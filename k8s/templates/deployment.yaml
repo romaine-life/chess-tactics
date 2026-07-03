@@ -52,6 +52,27 @@ spec:
             # where the warm-lane hostname guards do not run.
             - name: PUBLIC_ORIGIN
               value: {{ printf "https://%s" (required "hostname is required" .Values.hostname) | quote }}
+            {{- with .Values.build }}
+            # Human-facing build provenance for Settings → About (/api/build-info).
+            # Written into values.yaml by build-and-deploy.yaml at deploy time; empty
+            # on non-main lanes, where each `if` below renders nothing.
+            {{- if .prTitle }}
+            - name: BUILD_PR_TITLE
+              value: {{ .prTitle | quote }}
+            {{- end }}
+            {{- if .prNumber }}
+            - name: BUILD_PR_NUMBER
+              value: {{ .prNumber | quote }}
+            {{- end }}
+            {{- if .prUrl }}
+            - name: BUILD_PR_URL
+              value: {{ .prUrl | quote }}
+            {{- end }}
+            {{- if .commit }}
+            - name: BUILD_COMMIT
+              value: {{ .commit | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.adminEmails }}
             # ADR-0038: who may author/publish the global OFFICIAL campaign tier.
             - name: ADMIN_EMAILS
