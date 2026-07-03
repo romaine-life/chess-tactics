@@ -4918,6 +4918,31 @@ h1 {
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
 .le-status-current.is-ready { border-color: rgba(103, 217, 138, .42); }
 .le-status-current.is-blocked { border-color: rgba(240, 189, 85, .42); }
+.le-material-values {
+  background: rgba(3, 12, 19, .48);
+  border: 1px solid rgba(82, 142, 170, .24);
+  border-radius: 5px;
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+}
+.le-material-values-head { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.le-material-values-head strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
+.le-material-values-head span { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.25; text-align: right; }
+.le-material-values dl { display: grid; gap: 6px; margin: 0; }
+.le-material-values dl div { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
+.le-material-values dt {
+  align-items: center;
+  color: #d6ecf5;
+  display: grid;
+  font-size: var(--ds-text-sm);
+  gap: 7px;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin: 0;
+  min-width: 0;
+}
+.le-material-values dt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.le-material-values dd { color: #9fe0ff; font-size: var(--ds-text-sm); font-weight: 800; margin: 0; }
 .le-status-log { display: grid; gap: 8px; }
 .le-status-entry {
   background: rgba(3, 12, 19, .58);
