@@ -28,36 +28,52 @@ const ROWS = 7;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-// Anchor number field with explicit −/+ steppers (Shift = ×10) and a per-control ↺ that
-// resets JUST this field to its saved value (ADR-0057: every control resets on its own).
-// The native number-input spinner is hidden: under the app's `color-scheme: dark` Chrome
-// draws it so low-contrast that only the hovered half reads — it looked down-only.
+// The 8-direction nudge pad, row-major (null = the inert centre dot). vx/vy are SCREEN
+// deltas (vx>0 = right, vy>0 = down); `nudge` maps them to anchor deltas. `deg` rotates
+// one up-pointing arrow to the compass direction, so all eight arrows are one crisp shape.
+const NUDGE_PAD: Array<{ key: string; name: string; vx: number; vy: number; deg: number } | null> = [
+  { key: 'nw', name: 'up-left', vx: -1, vy: -1, deg: 315 },
+  { key: 'n', name: 'up', vx: 0, vy: -1, deg: 0 },
+  { key: 'ne', name: 'up-right', vx: 1, vy: -1, deg: 45 },
+  { key: 'w', name: 'left', vx: -1, vy: 0, deg: 270 },
+  null,
+  { key: 'e', name: 'right', vx: 1, vy: 0, deg: 90 },
+  { key: 'sw', name: 'down-left', vx: -1, vy: 1, deg: 225 },
+  { key: 's', name: 'down', vx: 0, vy: 1, deg: 180 },
+  { key: 'se', name: 'down-right', vx: 1, vy: 1, deg: 135 },
+];
+
+// One up-pointing arrow, drawn (not a font glyph) so every rotation is pixel-identical.
+function DirArrow({ deg }: { deg: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style={{ display: 'block', transform: `rotate(${deg}deg)` }}>
+      <path d="M12 4 L19 13 L14.5 13 L14.5 20 L9.5 20 L9.5 13 L5 13 Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+// Anchor value row: a left label, an exact-entry number box (nudging is the pad's job), and
+// a per-control ↺ that resets JUST this axis to its saved value (ADR-0057). The native number
+// spinner is hidden — under `color-scheme: dark` Chrome draws it near-invisible and down-only.
 function SeatNumber({ label, value, onCommit, onReset, atSaved }: {
   label: string; value: number; onCommit: (n: number) => void; onReset: () => void; atSaved: boolean;
 }) {
   return (
-    <div className="pl-num">
-      <span className="pl-ctl-label">{label}</span>
-      <span className="pl-num-row">
-        <span className="pl-stepper">
-          <button type="button" className="pl-step pl-step--minus" title="−1 (Shift: −10)" aria-label={`decrease ${label}`}
-            onClick={(ev) => onCommit(value - (ev.shiftKey ? 10 : 1))} />
-          <input
-            type="number"
-            value={value}
-            aria-label={label}
-            onChange={(ev) => {
-              // Guard the empty/mid-edit field: '' coerces to 0 and would teleport the prop.
-              const v = ev.target.value;
-              if (v !== '' && Number.isFinite(Number(v))) onCommit(Number(v));
-            }}
-          />
-          <button type="button" className="pl-step pl-step--plus" title="+1 (Shift: +10)" aria-label={`increase ${label}`}
-            onClick={(ev) => onCommit(value + (ev.shiftKey ? 10 : 1))} />
-        </span>
-        <button type="button" className="pl-mini-reset" title={`Reset ${label} to saved`} aria-label={`reset ${label}`}
-          disabled={atSaved} onClick={onReset}>↺</button>
-      </span>
+    <div className="pl-axis">
+      <span className="pl-axis-name">{label}</span>
+      <input
+        type="number"
+        className="pl-axis-input"
+        value={value}
+        aria-label={label}
+        onChange={(ev) => {
+          // Guard the empty/mid-edit field: '' coerces to 0 and would teleport the prop.
+          const v = ev.target.value;
+          if (v !== '' && Number.isFinite(Number(v))) onCommit(Number(v));
+        }}
+      />
+      <button type="button" className="pl-mini-reset" title={`Reset ${label} to saved`} aria-label={`reset ${label}`}
+        disabled={atSaved} onClick={onReset}>↺</button>
     </div>
   );
 }
@@ -139,24 +155,28 @@ export function PropLab(): ReactElement {
   const groundLeft = base0.left + (((def.w - 1) - (def.h - 1)) / 2) * TILE_TEMPLATE.stepX;
   const groundTop = base0.top + (((def.w - 1) + (def.h - 1)) / 2) * TILE_TEMPLATE.stepY;
 
-  // Visual-direction nudges: the anchor is where the frame TOUCHES the fixed ground point,
-  // so moving the sprite right/down means pulling the anchor left/up within the frame.
+  // Visual-direction nudge: move the sprite by (vx, vy) SCREEN steps (vx>0 right, vy>0 down).
+  // The anchor is where the frame TOUCHES the fixed ground point, so moving the sprite right/
+  // down means pulling the anchor LEFT/UP within the frame — hence anchor -= v. Shared by the
+  // pad and the arrow keys so both agree.
+  const nudge = (vx: number, vy: number, step: number) => {
+    setStatus('');
+    setOverrides((o) => {
+      const cur = o[propId] ?? (COMMITTED_SEATS as Seats)[propId];
+      return { ...o, [propId]: { ...cur, anchorX: cur.anchorX - vx * step, anchorY: cur.anchorY - vy * step } };
+    });
+  };
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       const t = document.activeElement?.tagName;
       if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
-      const step = ev.shiftKey ? 10 : 1;
       const move: Record<string, [number, number]> = {
-        ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step],
+        ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
       };
-      const delta = move[ev.key];
-      if (!delta) return;
+      const dir = move[ev.key];
+      if (!dir) return;
       ev.preventDefault();
-      setStatus('');
-      setOverrides((o) => {
-        const cur = o[propId] ?? (COMMITTED_SEATS as Seats)[propId];
-        return { ...o, [propId]: { ...cur, anchorX: cur.anchorX + delta[0], anchorY: cur.anchorY + delta[1] } };
-      });
+      nudge(dir[0], dir[1], ev.shiftKey ? 10 : 1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -294,13 +314,27 @@ export function PropLab(): ReactElement {
 
         <aside className="pl-panel">
           <h2>{def.label}</h2>
-          <p className="pl-hint">Drag the prop, or nudge with arrow keys (Shift = ×10). The blue diamonds are the tiles the prop occupies; the cross is the ground point its anchor seats on.</p>
+          <p className="pl-hint">Nudge with the pad (or arrow keys), or drag the prop. The blue diamonds are the tiles the prop occupies; the cross is the ground point its anchor seats on.</p>
 
           <div className="pl-controls">
-            <SeatNumber label="Anchor X" value={liveSeat.anchorX} onCommit={(n) => setSeat({ anchorX: n })}
-              onReset={() => setSeat({ anchorX: committed.anchorX })} atSaved={liveSeat.anchorX === committed.anchorX} />
-            <SeatNumber label="Anchor Y" value={liveSeat.anchorY} onCommit={(n) => setSeat({ anchorY: n })}
-              onReset={() => setSeat({ anchorY: committed.anchorY })} atSaved={liveSeat.anchorY === committed.anchorY} />
+            <div className="pl-num">
+              <span className="pl-ctl-label">Nudge <em>Shift = ×10</em></span>
+              <div className="pl-pad">
+                {NUDGE_PAD.map((d, i) => d
+                  ? (
+                    <button key={d.key} type="button" className="pl-pad-btn" title={`Nudge ${d.name} (Shift = ×10)`} aria-label={`nudge ${d.name}`}
+                      onClick={(ev) => nudge(d.vx, d.vy, ev.shiftKey ? 10 : 1)}><DirArrow deg={d.deg} /></button>
+                  )
+                  : <span key={`c${i}`} className="pl-pad-center" aria-hidden="true" />)}
+              </div>
+            </div>
+
+            <div className="pl-axes">
+              <SeatNumber label="Anchor X" value={liveSeat.anchorX} onCommit={(n) => setSeat({ anchorX: n })}
+                onReset={() => setSeat({ anchorX: committed.anchorX })} atSaved={liveSeat.anchorX === committed.anchorX} />
+              <SeatNumber label="Anchor Y" value={liveSeat.anchorY} onCommit={(n) => setSeat({ anchorY: n })}
+                onReset={() => setSeat({ anchorY: committed.anchorY })} atSaved={liveSeat.anchorY === committed.anchorY} />
+            </div>
 
             <div className="pl-num">
               <span className="pl-ctl-label">Scale <em>{liveSeat.scale.toFixed(2)}×</em></span>
@@ -365,40 +399,34 @@ const PL_CSS = `
 .pl-panel h2 { margin: 0; font-size: 16px; color: #eaf3ff; }
 .pl-hint { margin: 0; font-size: 12px; color: #8197ad; line-height: 1.45; }
 
-/* One control per full-width row (ADR-0057 per-control grain): a label, then a row of
-   [stepper | reset]. Every interactive element is CTL_H tall so the column reads as a
-   tidy stack rather than a cramped 2-up grid. */
-.pl-controls { display: grid; gap: 14px; }
-.pl-num { display: grid; gap: 6px; }
+/* Control stack: each control is a labelled block. Interactive rows are 34px tall so the
+   column reads as a tidy stack (ADR-0057 per-control grain — every control has its own ↺). */
+.pl-controls { display: grid; gap: 16px; }
+.pl-num { display: grid; gap: 6px; min-width: 0; }
 .pl-ctl-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8fa8cc; }
-.pl-ctl-label em { font-style: normal; color: #eaf3ff; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.pl-ctl-label em { font-style: normal; color: #eaf3ff; margin-left: 4px; font-variant-numeric: tabular-nums; font-weight: 600; }
 .pl-num-row { display: flex; gap: 8px; align-items: stretch; }
 
-/* − [ input ] + as one seamless segmented stepper. */
-.pl-stepper { flex: 1 1 auto; min-width: 0; display: flex; height: 34px;
-  border: 1px solid #2a3c5e; border-radius: 6px; overflow: hidden; background: #101a2e; }
-.pl-stepper input { flex: 1 1 auto; min-width: 0; text-align: center; font: inherit; font-size: 15px;
-  color: #eaf3ff; background: transparent; border: 0;
-  /* Digits have no descenders, so a centered box floats them ~1px above true middle.
-     Nudge down so the number sits on the same line as the geometric −/+ bars. */
-  transform: translateY(1px); }
-.pl-stepper input::-webkit-outer-spin-button, .pl-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.pl-stepper input[type=number] { appearance: textfield; -moz-appearance: textfield; }
-/* Draw − and + with pseudo-element bars, not font glyphs: system-font "−" (U+2212) and "+"
-   sit at different heights within the line box, so glyph-centered steppers look misaligned.
-   Geometric bars centered at 50%/50% align to each other and to the number pixel-perfectly. */
-.pl-step { flex: none; width: 38px; padding: 0; cursor: pointer; position: relative;
-  background: #16233f; border: 0; }
-.pl-step:first-child { border-right: 1px solid #2a3c5e; }
-.pl-step:last-child { border-left: 1px solid #2a3c5e; }
-.pl-step:hover { background: #1e3054; }
-.pl-step::before { content: ''; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px;
-  transform: translate(-50%, -50%); background: #cfe3ff; border-radius: 1px; }
-.pl-step--plus::after { content: ''; position: absolute; left: 50%; top: 50%; width: 2px; height: 13px;
-  transform: translate(-50%, -50%); background: #cfe3ff; border-radius: 1px; }
-.pl-step:hover::before, .pl-step--plus:hover::after { background: #eaf3ff; }
+/* 8-direction nudge pad: a 3×3 grid of arrow buttons around an inert centre dot. */
+.pl-pad { display: grid; grid-template-columns: repeat(3, 40px); grid-auto-rows: 32px; gap: 5px; }
+.pl-pad-btn { display: grid; place-items: center; padding: 0; cursor: pointer; color: #bcd4f2;
+  background: #16233f; border: 1px solid #2a3c5e; border-radius: 6px; }
+.pl-pad-btn:hover { background: #1e3054; color: #eaf3ff; }
+.pl-pad-btn:active { background: #244071; }
+.pl-pad-center { display: grid; place-items: center; }
+.pl-pad-center::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #33415e; }
 
-/* Slider + a small exact-entry box share the stepper's footprint. */
+/* Anchor X / Y: label-left rows (exact entry — nudging is the pad's job), each with its own
+   reset so the ↺ unambiguously belongs to that axis. */
+.pl-axes { display: grid; gap: 8px; }
+.pl-axis { display: grid; grid-template-columns: 68px 1fr 34px; gap: 8px; align-items: center; }
+.pl-axis-name { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8fa8cc; }
+.pl-axis-input { min-width: 0; height: 34px; box-sizing: border-box; text-align: center;
+  font: inherit; font-size: 15px; color: #eaf3ff; background: #101a2e; border: 1px solid #2a3c5e; border-radius: 6px; }
+.pl-axis-input::-webkit-outer-spin-button, .pl-axis-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pl-axis-input[type=number] { appearance: textfield; -moz-appearance: textfield; }
+
+/* Slider + a small exact-entry box. */
 .pl-slider { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 34px; }
 .pl-slider input[type=range] { flex: 1 1 auto; min-width: 0; }
 .pl-scale-exact { flex: none; width: 52px; height: 30px; box-sizing: border-box; text-align: center;
