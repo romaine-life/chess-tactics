@@ -3870,6 +3870,29 @@ h1 {
   text-align: center;
 }
 
+/* Battle-clock chip: sits between the turn plate and the objective on timed games,
+   same two-line centered stack as the turn plate. The time line needs a stable
+   width (digits tick every second) so the flanking chips don't breathe with it;
+   tabular figures are a best-effort on the pixel font stack. */
+.skirmish-clock {
+  align-content: center;
+  display: grid;
+  gap: 0;
+  justify-items: center;
+  min-inline-size: 112px;
+  text-align: center;
+}
+
+.skirmish-clock strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The final seconds read as danger — the telegraph palette's threat tone, the same
+   urgency channel the board uses. */
+.skirmish-topbar .skirmish-clock.is-low strong {
+  color: var(--threat);
+}
+
 .skirmish-field {
   display: grid;
   min-height: 0;

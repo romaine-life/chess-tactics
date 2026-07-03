@@ -256,6 +256,81 @@ describe('skirmish store: survive + reach objectives', () => {
   });
 });
 
+// The battle clock: standard chess-clock rules for the player only. Runs on the
+// player's live turn, pauses (banking the Fischer increment) the moment their move
+// applies, resumes when the enemy reply hands the turn back, and a flag fall is a
+// defeat. Driven entirely by fake timers (the ticker + Date are both faked).
+describe('skirmish store: battle clock', () => {
+  /** A playable timed level: one player rook vs a far-away enemy king. */
+  const timedLevel = (initialSeconds: number, incrementSeconds = 0) => {
+    const level = createBlankLevel('lvl-clock', 'Timed', 8, 8);
+    level.layers.units = [
+      { x: 0, y: 7, type: 'rook', side: 'player' },
+      { x: 7, y: 0, type: 'king', side: 'enemy' },
+    ];
+    level.timeControl = { initialSeconds, incrementSeconds };
+    return level;
+  };
+
+  const clock = () => useSkirmish.getState().clock;
+
+  it('stays untimed for a free skirmish and for a level without a time control', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    expect(clock()).toBeNull();
+    useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60) });
+    expect(clock()).not.toBeNull();
+    // A new untimed game must clear the previous game's clock.
+    useSkirmish.getState().newSkirmish({ seed: 6 });
+    expect(clock()).toBeNull();
+  });
+
+  it('arms the clock running from the first (player) turn', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60, 5) });
+    expect(clock()).toEqual({ remainingMs: 60_000, running: true, incrementMs: 5_000 });
+  });
+
+  it('counts down on the player turn and freezes for the whole enemy reply', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60) });
+    vi.advanceTimersByTime(3_000);
+    expect(clock()!.remainingMs).toBe(57_000);
+
+    const moves = useSkirmish.getState().movesForSelected();
+    expect(moves.length).toBeGreaterThan(0);
+    useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+    expect(clock()!.running).toBe(false);
+    const paused = clock()!.remainingMs;
+
+    // Inside the staged enemy-reply beat: no time drains off the player's bank.
+    vi.advanceTimersByTime(400);
+    expect(clock()!.remainingMs).toBe(paused);
+
+    // The reply resolves (520ms beat) and the player's clock resumes.
+    vi.advanceTimersByTime(200);
+    expect(useSkirmish.getState().game.turn).toBe('player');
+    expect(clock()!.running).toBe(true);
+  });
+
+  it('banks the Fischer increment when a move completes', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60, 5) });
+    vi.advanceTimersByTime(2_000); // 58s left on the deadline
+    const moves = useSkirmish.getState().movesForSelected();
+    useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+    expect(clock()!.remainingMs).toBe(58_000 + 5_000);
+  });
+
+  it('flag fall: reaching zero on the player turn is a defeat on time', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(1) });
+    vi.advanceTimersByTime(1_100);
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('enemy');
+    expect(s.game.turn).toBe('done');
+    expect(s.clock).toEqual({ remainingMs: 0, running: false, incrementMs: 0 });
+    expect(s.log[0]).toMatch(/clock ran out/i);
+    // Input is locked exactly like any other decided game.
+    expect(useSkirmish.getState().movesForSelected()).toEqual([]);
+  });
+});
+
 describe('soft-lock guard (no manual End Turn)', () => {
   const OPEN_ENV: MoveEnv = { terrain: undefined, lastMove: undefined };
   const stateOf = (pieces: Piece[], cols: number, rows: number): GameState => ({

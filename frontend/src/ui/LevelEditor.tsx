@@ -51,6 +51,7 @@ import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } fro
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS } from '../core/objectives';
+import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
 
@@ -392,7 +393,7 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 // for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean and a mode
 // change (not just a board paint) marks it dirty.
 const levelSignature = (level: Level): string =>
-  `${level.boardCode ?? ''}|${level.objective}|${level.placement ?? 'fixed'}|${level.surviveTurns ?? ''}|${JSON.stringify(level.roster ?? {})}`;
+  `${level.boardCode ?? ''}|${level.objective}|${level.placement ?? 'fixed'}|${level.surviveTurns ?? ''}|${JSON.stringify(level.roster ?? {})}|${level.timeControl ? `${level.timeControl.initialSeconds}+${level.timeControl.incrementSeconds}` : ''}`;
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -612,6 +613,11 @@ export function LevelEditor(): ReactElement {
   const [surviveTurns, setSurviveTurns] = useState<number>(DEFAULT_SURVIVE_TURNS);
   // Random-placement roster: per side, per playable piece type. An absent count reads as 0.
   const [roster, setRoster] = useState<{ player: Roster; enemy: Roster }>({ player: {}, enemy: {} });
+  // The battle clock — off by default; when on, the level carries a TimeControl and the
+  // skirmish runs the player's chess clock (the enemy is untimed).
+  const [clockEnabled, setClockEnabled] = useState(false);
+  const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(DEFAULT_TIME_CONTROL.initialSeconds);
+  const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(DEFAULT_TIME_CONTROL.incrementSeconds);
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
@@ -685,6 +691,9 @@ export function LevelEditor(): ReactElement {
       setPlacement(level.placement ?? 'fixed');
       setSurviveTurns(level.surviveTurns ?? DEFAULT_SURVIVE_TURNS);
       setRoster({ player: level.roster?.player ?? {}, enemy: level.roster?.enemy ?? {} });
+      setClockEnabled(level.timeControl !== undefined);
+      setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
+      setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
       setEditingId(level.id);
       setLevelName(level.name);
       // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
@@ -978,7 +987,8 @@ export function LevelEditor(): ReactElement {
     placement: placement === 'random' ? ('random' as const) : undefined,
     roster: placement === 'random' ? roster : undefined,
     surviveTurns: objective === 'survive' ? surviveTurns : undefined,
-  }), [objective, placement, roster, surviveTurns]);
+    timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
@@ -1621,6 +1631,47 @@ export function LevelEditor(): ReactElement {
               {placement === 'random'
                 ? 'Each side fields the roster below, dealt onto random free tiles of its placement zones at the start of every play. Paint the zones on the Zone layer.'
                 : 'Units play from exactly where they are painted on the board (the Unit layer).'}
+            </p>
+          </section>
+
+          <section className="skirmish-card">
+            <h2>Battle clock</h2>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Timed battle</span>
+              <Toggle
+                checked={clockEnabled}
+                label="Toggle the battle clock"
+                onChange={setClockEnabled}
+              />
+            </div>
+            {clockEnabled ? (<>
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Starting time</span>
+                <Stepper
+                  value={formatClockSeconds(clockInitialSeconds)}
+                  suffix=""
+                  decreaseLabel="Less starting time"
+                  increaseLabel="More starting time"
+                  onDecrease={() => setClockInitialSeconds((v) => stepLadder(CLOCK_INITIAL_SECONDS, v, -1))}
+                  onIncrease={() => setClockInitialSeconds((v) => stepLadder(CLOCK_INITIAL_SECONDS, v, 1))}
+                />
+              </div>
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Increment</span>
+                <Stepper
+                  value={clockIncrementSeconds}
+                  suffix="s"
+                  decreaseLabel="Smaller increment per move"
+                  increaseLabel="Larger increment per move"
+                  onDecrease={() => setClockIncrementSeconds((v) => stepLadder(CLOCK_INCREMENT_SECONDS, v, -1))}
+                  onIncrease={() => setClockIncrementSeconds((v) => stepLadder(CLOCK_INCREMENT_SECONDS, v, 1))}
+                />
+              </div>
+            </>) : null}
+            <p className="le-board-note">
+              {clockEnabled
+                ? 'The player’s clock counts down only on their own turn and each completed move banks the increment. Reaching zero loses the battle. The enemy is not timed.'
+                : 'Untimed — the player can think as long as they like.'}
             </p>
           </section>
 

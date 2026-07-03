@@ -5,6 +5,7 @@ import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish } from '../game/store';
 import { objectiveSummary } from '../core/objectives';
+import { formatClockMs } from '../core/clock';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
@@ -53,6 +54,10 @@ export function Skirmish() {
   // source of that copy (ADR-0050 — no re-hardcoded objective strings in the UI).
   const objective = useSkirmish((s) => s.objective);
   const kingSide = useSkirmish((s) => s.objectiveCtx.kingSide);
+  // The battle clock (null = untimed level / free skirmish). The store quantizes
+  // remainingMs to the displayed readout, so this subscription re-renders about
+  // once a second, not per tick.
+  const clock = useSkirmish((s) => s.clock);
   const objectiveGoal = objectiveSummary(objective, kingSide);
   const turnLabel = game.winner
     ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
@@ -139,11 +144,19 @@ export function Skirmish() {
           center section (turn/objective read from the game store, in scope here). The
           brand + account cluster are rendered by the shell bar itself. */}
       <TitleBarSlot region="center">
+        {/* Timed games put the battle clock in the middle; the turn plate and objective
+            chips flank it left and right (they simply sit adjacent when untimed). */}
         <div className="skirmish-topbar-status">
           <div className="skirmish-status-chip skirmish-turn-plate">
             <strong>{turnLabel}</strong>
             <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
           </div>
+          {clock ? (
+            <div className={`skirmish-status-chip skirmish-clock${clock.remainingMs <= 20_000 ? ' is-low' : ''}`}>
+              <strong>{formatClockMs(clock.remainingMs)}</strong>
+              <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
+            </div>
+          ) : null}
           <div className="skirmish-status-chip skirmish-objective">
             <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
             <span>

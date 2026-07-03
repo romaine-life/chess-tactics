@@ -12,7 +12,8 @@ export function Stepper({
   onDecrease,
   onIncrease,
 }: {
-  value: number;
+  /** The readout: a plain number, or a pre-formatted string (e.g. the clock's "5:00"). */
+  value: number | string;
   suffix: string;
   decreaseLabel: string;
   increaseLabel: string;

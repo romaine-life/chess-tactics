@@ -34,6 +34,14 @@ export const OBJECTIVE_TYPES = ['capture-all', 'capture-king', 'rival-kings', 's
 /** Piece counts per side for random placement — playable piece types only (no rocks). */
 export type Roster = Partial<Record<PieceType, number>>;
 
+/** The battle clock's authored time control — a standard chess clock for the PLAYER only
+ * (the enemy is untimed): a starting bank plus a Fischer increment banked after every
+ * completed player move. Whole seconds; the game converts to ms at clock start. */
+export interface TimeControl {
+  initialSeconds: number;
+  incrementSeconds: number;
+}
+
 export interface Decal {
   x: number;
   y: number;
@@ -89,6 +97,9 @@ export interface Level {
   // DEFAULT_SURVIVE_TURNS (core/objectives.ts) so every existing survive level keeps
   // playing exactly as before.
   surviveTurns?: number;
+  // The battle clock (see TimeControl). Absent ⇒ untimed — the back-compat default, same
+  // optional-field pattern as placement/roster/surviveTurns.
+  timeControl?: TimeControl;
   layers: {
     terrain: TerrainCell[];
     decals: Decal[];
@@ -183,6 +194,14 @@ export function validateLevel(value: unknown): ValidateResult {
   }
   if (v.surviveTurns !== undefined && (!Number.isInteger(v.surviveTurns) || v.surviveTurns < 1)) {
     errors.push('surviveTurns must be a positive integer');
+  }
+  if (v.timeControl !== undefined) {
+    const tc = v.timeControl as Partial<TimeControl> | null;
+    if (!tc || typeof tc !== 'object' || Array.isArray(tc)
+      || !Number.isInteger(tc.initialSeconds) || (tc.initialSeconds as number) < 1
+      || !Number.isInteger(tc.incrementSeconds) || (tc.incrementSeconds as number) < 0) {
+      errors.push('timeControl needs an integer initialSeconds of at least 1 and a non-negative integer incrementSeconds');
+    }
   }
   if (v.roster !== undefined) {
     if (!v.roster || typeof v.roster !== 'object' || Array.isArray(v.roster)) {
