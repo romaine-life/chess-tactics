@@ -1350,7 +1350,7 @@ export function LevelEditor(): ReactElement {
   const saveBlockedDetail = saving
     ? 'Wait for the current save to finish.'
     : !playability.ok
-    ? 'Resolve the playability issues listed in the Rules panel, then Save.'
+    ? 'Resolve the issues in the Fix-before-saving list above, then Save.'
     : needsPlayerFaction
     ? 'Open Board > Level Settings, then assign Player to one board faction.'
     : !dirty && targetLevelId
@@ -1360,7 +1360,8 @@ export function LevelEditor(): ReactElement {
     : '';
   const explainBlockedSave = (): void => {
     if (!saveBlockedMessage) return;
-    setLayer(!playability.ok ? 'rules' : needsPlayerFaction ? 'board' : 'status');
+    // Playability blocks stay on 'status': the Fix-before-saving list renders there, beside Save.
+    setLayer(needsPlayerFaction && playability.ok ? 'board' : 'status');
     setTool('select');
     reportStatus(saveBlockedMessage, saving ? 'info' : 'warning', saveBlockedDetail);
   };
@@ -1480,27 +1481,32 @@ export function LevelEditor(): ReactElement {
         </section>
 
         <KitScroll className="le-hud-scroll">
-        {/* ALWAYS-VISIBLE playability list (ADR-0050): the owner's core ask. While any violation
-            exists Save is disabled and the level cannot persist. Every line is plain language from
-            core/validatePlayability — described by what the author sees (sides, painted units, spawn
-            zones), never by schema jargon. A "Clear pieces" shortcut rides the "remove the placed
-            units" violation so switching to random placement is one click. */}
-        {!playability.ok ? (
-          <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
-            <h2>Fix before saving</h2>
-            <ul className="le-violation-list">
-              {playability.violations.map((v) => (
-                <li key={v.code} className="le-violation">
-                  <span className="le-violation-msg">{v.message}</span>
-                  {v.code === 'P3_UNITS_NOT_EMPTY' ? (
-                    <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
         {layer === 'status' ? (
+          <>
+          {/* Playability list (ADR-0050): while any violation exists Save is disabled and the
+              level cannot persist. The list lives HERE, in the Status layer with the Save it
+              gates — it began as an always-visible rail fixture, but the owner demoted it (it
+              crowded every layer while editing; a blank board starts violating, so it was
+              permanent). The universal title-bar chip ("Fix issues to save") still flags the
+              state from any layer. Every line is plain language from core/validatePlayability —
+              described by what the author sees (sides, painted units, spawn zones), never by
+              schema jargon. A "Clear pieces" shortcut rides the "remove the placed units"
+              violation so switching to random placement is one click. */}
+          {!playability.ok ? (
+            <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
+              <h2>Fix before saving</h2>
+              <ul className="le-violation-list">
+                {playability.violations.map((v) => (
+                  <li key={v.code} className="le-violation">
+                    <span className="le-violation-msg">{v.message}</span>
+                    {v.code === 'P3_UNITS_NOT_EMPTY' ? (
+                      <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <section className="skirmish-card le-status-card" aria-live="polite">
             <h2>Status</h2>
             <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
@@ -1521,7 +1527,7 @@ export function LevelEditor(): ReactElement {
                   data-testid="le-test"
                   disabled
                   title={
-                    !playability.ok ? 'Fix the playability issues below to test-play.'
+                    !playability.ok ? 'Fix the playability issues listed above to test-play.'
                     : dirty ? 'Save the level first — Test plays the saved version.'
                     : !targetLevelId ? 'Save the level first to test-play it.'
                     : 'Test-play unavailable.'
@@ -1551,6 +1557,7 @@ export function LevelEditor(): ReactElement {
               )}
             </div>
           </section>
+          </>
         ) : layer === 'board' ? (
           <>
           <section className="skirmish-card">
