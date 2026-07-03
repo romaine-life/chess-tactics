@@ -1455,18 +1455,20 @@ export function LevelEditor(): ReactElement {
           <div className="le-board-actions le-history-actions">
             <button
               type="button"
-              className="le-seg-btn"
+              className="le-seg-btn le-icon-btn"
               onClick={undoBoard}
               disabled={!undoStack.length}
+              aria-label="Undo"
               title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
-            >Undo</button>
+            ><span className="le-ico ic-undo" aria-hidden="true" /></button>
             <button
               type="button"
-              className="le-seg-btn"
+              className="le-seg-btn le-icon-btn"
               onClick={redoBoard}
               disabled={!redoStack.length}
+              aria-label="Redo"
               title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
-            >Redo</button>
+            ><span className="le-ico ic-redo" aria-hidden="true" /></button>
           </div>
         </section>
 

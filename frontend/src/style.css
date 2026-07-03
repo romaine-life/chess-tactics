@@ -4573,14 +4573,19 @@ h1 {
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
-/* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo). A fixed
-   flex child of .skirmish-hud (above .le-hud-scroll), so it never scrolls. Test + Save/Publish
-   are session verbs and live in the Status layer card (.le-status-actions). Both rows reuse
-   the .le-board-actions grid with a 2-col override (the base grid stays 3-col for the Board
-   layer's row). Spacing rides the ADR-0054 ladder — no per-row margin hand-picks. */
+/* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo), as
+   COMPACT icon-only squares (owner: icons, not letters — the labels ride aria-label +
+   title). Glyphs come from the editor icon set (.le-ico/.ic-*), same treatment as the
+   tool row; press swaps to the set's gold -active variant. Test + Save/Publish are
+   session verbs and live in the Status layer card (.le-status-actions, 2-col grid; the
+   base grid stays 3-col for the Board layer's row). Spacing rides the ADR-0054 ladder —
+   no per-row margin hand-picks. */
 .le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
-.le-board-actions.le-history-actions,
+.le-board-actions.le-history-actions { display: flex; }
 .le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.le-icon-btn { padding: 0; width: 38px; }
+.le-icon-btn:not(:disabled):active .ic-undo { background-image: url("/assets/ui/level-editor/icons/undo-active.png"); }
+.le-icon-btn:not(:disabled):active .ic-redo { background-image: url("/assets/ui/level-editor/icons/redo-active.png"); }
 /* The status card is a live flex column (ADR-0054) — its gap spaces the row; no extra margin. */
 .le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
