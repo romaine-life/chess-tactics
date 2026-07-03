@@ -36,25 +36,29 @@ function SeatNumber({ label, value, onCommit, onReset, atSaved }: {
   label: string; value: number; onCommit: (n: number) => void; onReset: () => void; atSaved: boolean;
 }) {
   return (
-    <label className="pl-num">{label}
+    <div className="pl-num">
+      <span className="pl-ctl-label">{label}</span>
       <span className="pl-num-row">
-        <button type="button" className="pl-step" title="−1 (Shift: −10)" aria-label={`decrease ${label}`}
-          onClick={(ev) => onCommit(value - (ev.shiftKey ? 10 : 1))}>−</button>
-        <input
-          type="number"
-          value={value}
-          onChange={(ev) => {
-            // Guard the empty/mid-edit field: '' coerces to 0 and would teleport the prop.
-            const v = ev.target.value;
-            if (v !== '' && Number.isFinite(Number(v))) onCommit(Number(v));
-          }}
-        />
-        <button type="button" className="pl-step" title="+1 (Shift: +10)" aria-label={`increase ${label}`}
-          onClick={(ev) => onCommit(value + (ev.shiftKey ? 10 : 1))}>+</button>
+        <span className="pl-stepper">
+          <button type="button" className="pl-step" title="−1 (Shift: −10)" aria-label={`decrease ${label}`}
+            onClick={(ev) => onCommit(value - (ev.shiftKey ? 10 : 1))}>−</button>
+          <input
+            type="number"
+            value={value}
+            aria-label={label}
+            onChange={(ev) => {
+              // Guard the empty/mid-edit field: '' coerces to 0 and would teleport the prop.
+              const v = ev.target.value;
+              if (v !== '' && Number.isFinite(Number(v))) onCommit(Number(v));
+            }}
+          />
+          <button type="button" className="pl-step" title="+1 (Shift: +10)" aria-label={`increase ${label}`}
+            onClick={(ev) => onCommit(value + (ev.shiftKey ? 10 : 1))}>+</button>
+        </span>
         <button type="button" className="pl-mini-reset" title={`Reset ${label} to saved`} aria-label={`reset ${label}`}
           disabled={atSaved} onClick={onReset}>↺</button>
       </span>
-    </label>
+    </div>
   );
 }
 
@@ -292,34 +296,33 @@ export function PropLab(): ReactElement {
           <h2>{def.label}</h2>
           <p className="pl-hint">Drag the prop, or nudge with arrow keys (Shift = ×10). The blue diamonds are the tiles the prop occupies; the cross is the ground point its anchor seats on.</p>
 
-          <div className="pl-fields">
-            <SeatNumber label="anchor X" value={liveSeat.anchorX} onCommit={(n) => setSeat({ anchorX: n })}
+          <div className="pl-controls">
+            <SeatNumber label="Anchor X" value={liveSeat.anchorX} onCommit={(n) => setSeat({ anchorX: n })}
               onReset={() => setSeat({ anchorX: committed.anchorX })} atSaved={liveSeat.anchorX === committed.anchorX} />
-            <SeatNumber label="anchor Y" value={liveSeat.anchorY} onCommit={(n) => setSeat({ anchorY: n })}
+            <SeatNumber label="Anchor Y" value={liveSeat.anchorY} onCommit={(n) => setSeat({ anchorY: n })}
               onReset={() => setSeat({ anchorY: committed.anchorY })} atSaved={liveSeat.anchorY === committed.anchorY} />
-          </div>
 
-          <label className="pl-scale">Scale {liveSeat.scale.toFixed(2)}×
-            <span className="pl-scale-row">
-              <input
-                type="range" min={0.25} max={2} step={0.01} value={liveSeat.scale}
-                onChange={(ev) => setSeat({ scale: round2(Number(ev.target.value)) })}
-              />
-              <button type="button" className="pl-mini-reset" title="Reset scale to saved" aria-label="reset scale"
-                disabled={liveSeat.scale === committed.scale} onClick={() => setSeat({ scale: committed.scale })}>↺</button>
-            </span>
-          </label>
-          <div className="pl-fields">
-            <label>exact
-              <input
-                type="number" min={0.25} max={2} step={0.01} value={liveSeat.scale}
-                onChange={(ev) => { const v = Number(ev.target.value); if (Number.isFinite(v) && v > 0) setSeat({ scale: round2(v) }); }}
-              />
-            </label>
-            <div className="pl-committed">
-              saved: ({committed.anchorX}, {committed.anchorY}) @ {committed.scale.toFixed(2)}×
+            <div className="pl-num">
+              <span className="pl-ctl-label">Scale <em>{liveSeat.scale.toFixed(2)}×</em></span>
+              <span className="pl-num-row">
+                <span className="pl-slider">
+                  <input
+                    type="range" min={0.25} max={2} step={0.01} value={liveSeat.scale} aria-label="Scale"
+                    onChange={(ev) => setSeat({ scale: round2(Number(ev.target.value)) })}
+                  />
+                  <input
+                    type="number" min={0.25} max={2} step={0.05} value={liveSeat.scale} aria-label="Scale exact"
+                    className="pl-scale-exact"
+                    onChange={(ev) => { const v = Number(ev.target.value); if (Number.isFinite(v) && v > 0) setSeat({ scale: round2(v) }); }}
+                  />
+                </span>
+                <button type="button" className="pl-mini-reset" title="Reset scale to saved" aria-label="reset scale"
+                  disabled={liveSeat.scale === committed.scale} onClick={() => setSeat({ scale: committed.scale })}>↺</button>
+              </span>
             </div>
           </div>
+
+          <p className="pl-committed">saved: ({committed.anchorX}, {committed.anchorY}) @ {committed.scale.toFixed(2)}×</p>
 
           <div className="pl-actions">
             <button type="button" className="pl-btn pl-btn--primary" onClick={save} disabled={!dirty}>Save to disk</button>
@@ -361,28 +364,45 @@ const PL_CSS = `
   display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
 .pl-panel h2 { margin: 0; font-size: 16px; color: #eaf3ff; }
 .pl-hint { margin: 0; font-size: 12px; color: #8197ad; line-height: 1.45; }
-.pl-fields { display: flex; gap: 8px; align-items: end; }
-.pl-fields label { display: grid; gap: 3px; font-size: 12px; color: #9fb6cc; flex: 1; }
-.pl-fields input, .pl-scale input[type=number] { width: 100%; box-sizing: border-box; padding: 6px 8px; background: #101a2e;
-  color: #d8eaff; border: 1px solid #2a3c5e; border-radius: 4px; font: inherit; font-size: 13px; }
-/* The −/+ buttons are the stepper; the native spinner reads down-only on the dark scheme. */
-.pl-fields input::-webkit-outer-spin-button, .pl-fields input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.pl-fields input[type=number] { appearance: textfield; -moz-appearance: textfield; }
-.pl-num-row { display: flex; gap: 4px; }
-.pl-num-row input { flex: 1; min-width: 0; text-align: center; }
-.pl-step { flex: none; width: 28px; padding: 0; font-size: 15px; line-height: 1; cursor: pointer;
-  background: #111a2c; color: #cfe3ff; border: 1px solid #2a3c5e; border-radius: 4px; }
-.pl-step:hover { background: #17223a; }
-/* Per-control ↺ (ADR-0057): resets just this control to its saved value; disabled when
-   already saved so it doubles as a per-control dirty indicator. */
-.pl-mini-reset { flex: none; width: 26px; padding: 0; font-size: 13px; line-height: 1; cursor: pointer;
-  background: #0f1930; color: #9fd0ff; border: 1px solid #2a3c5e; border-radius: 4px; }
-.pl-mini-reset:hover:not(:disabled) { background: #17223a; }
-.pl-mini-reset:disabled { opacity: 0.35; cursor: default; }
-.pl-scale { display: grid; gap: 4px; font-size: 12px; color: #9fb6cc; }
-.pl-scale-row { display: flex; gap: 6px; align-items: center; }
-.pl-scale-row input[type=range] { flex: 1; min-width: 0; }
-.pl-committed { font-size: 11px; color: #5f769b; padding-bottom: 8px; }
+
+/* One control per full-width row (ADR-0057 per-control grain): a label, then a row of
+   [stepper | reset]. Every interactive element is CTL_H tall so the column reads as a
+   tidy stack rather than a cramped 2-up grid. */
+.pl-controls { display: grid; gap: 14px; }
+.pl-num { display: grid; gap: 6px; }
+.pl-ctl-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8fa8cc; }
+.pl-ctl-label em { font-style: normal; color: #eaf3ff; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.pl-num-row { display: flex; gap: 8px; align-items: stretch; }
+
+/* − [ input ] + as one seamless segmented stepper. */
+.pl-stepper { flex: 1 1 auto; min-width: 0; display: flex; height: 34px;
+  border: 1px solid #2a3c5e; border-radius: 6px; overflow: hidden; background: #101a2e; }
+.pl-stepper input { flex: 1 1 auto; min-width: 0; text-align: center; font: inherit; font-size: 15px;
+  color: #eaf3ff; background: transparent; border: 0; }
+.pl-stepper input::-webkit-outer-spin-button, .pl-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pl-stepper input[type=number] { appearance: textfield; -moz-appearance: textfield; }
+.pl-step { flex: none; width: 38px; padding: 0; font-size: 18px; line-height: 1; cursor: pointer;
+  background: #16233f; color: #cfe3ff; border: 0; display: grid; place-items: center; }
+.pl-step:first-child { border-right: 1px solid #2a3c5e; }
+.pl-step:last-child { border-left: 1px solid #2a3c5e; }
+.pl-step:hover { background: #1e3054; color: #eaf3ff; }
+
+/* Slider + a small exact-entry box share the stepper's footprint. */
+.pl-slider { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 34px; }
+.pl-slider input[type=range] { flex: 1 1 auto; min-width: 0; }
+.pl-scale-exact { flex: none; width: 52px; height: 30px; box-sizing: border-box; text-align: center;
+  font: inherit; font-size: 13px; color: #eaf3ff; background: #101a2e; border: 1px solid #2a3c5e; border-radius: 6px; }
+.pl-scale-exact::-webkit-outer-spin-button, .pl-scale-exact::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pl-scale-exact[type=number] { appearance: textfield; -moz-appearance: textfield; }
+
+/* Per-control ↺ (ADR-0057): resets ONLY this control to its saved value; set apart from
+   the stepper and disabled when already saved, so it doubles as a per-control dirty light. */
+.pl-mini-reset { flex: none; width: 34px; height: 34px; padding: 0; font-size: 15px; line-height: 1; cursor: pointer;
+  background: #0f1930; color: #9fd0ff; border: 1px solid #2a3c5e; border-radius: 6px; display: grid; place-items: center; }
+.pl-mini-reset:hover:not(:disabled) { background: #17233f; color: #d7ecff; }
+.pl-mini-reset:disabled { opacity: 0.3; cursor: default; }
+
+.pl-committed { margin: 0; font-size: 11px; color: #6b83a8; font-variant-numeric: tabular-nums; }
 .pl-actions { display: flex; gap: 6px; }
 .pl-btn { flex: 1; padding: 7px 8px; font-size: 12px; font-family: inherit; cursor: pointer;
   background: #111a2c; color: #cfe3ff; border: 1px solid #2a3c5e; border-radius: 5px; }
