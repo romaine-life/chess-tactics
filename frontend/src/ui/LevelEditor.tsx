@@ -79,7 +79,6 @@ function StudioEditableBoard({
   resolveProp,
   tool,
   selectedCell,
-  showFootprint,
   boardZoom,
   boardPan,
   animationFrame,
@@ -109,7 +108,6 @@ function StudioEditableBoard({
   resolveProp: (id: string) => PropDef | undefined;
   tool: 'select' | 'brush' | 'erase' | 'move';
   selectedCell: { x: number; y: number } | null;
-  showFootprint: boolean;
   boardZoom: number;
   boardPan: { x: number; y: number };
   animationFrame: number;
@@ -316,7 +314,6 @@ function StudioEditableBoard({
       cells={cells}
       className={`tileset-placement-board is-tool-${tool}`}
       ariaLabel="Editable tile board"
-      showFootprint={showFootprint}
       boardZoom={boardZoom}
       boardPan={boardPan}
       onPointerUp={endInteraction}
@@ -557,7 +554,6 @@ export function LevelEditor(): ReactElement {
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
-  const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
   const [brushKind, setBrushKind] = useState<BrushKind>(brushKindForInitialLayer(initialLayer));
@@ -1411,7 +1407,6 @@ export function LevelEditor(): ReactElement {
                   resolveProp={resolvePropDef}
                   tool={tool}
                   selectedCell={selectedCell}
-                  showFootprint={showFootprint}
                   boardZoom={viewZoom}
                   boardPan={viewPan}
                   animationFrame={animationFrame}
@@ -1922,13 +1917,11 @@ export function LevelEditor(): ReactElement {
 
         </>)}
 
-        {layer !== 'status' ? (
+        {/* Board-page-only zoom readout — a whole-workspace setting, not per-brush. Zoom is also
+            reachable anywhere via the mouse wheel over the board. */}
+        {layer === 'board' ? (
         <section className="skirmish-card">
           <h2>Display</h2>
-          <div className="le-ctrlrow">
-            <span className="le-ctrllabel">Footprint</span>
-            <Toggle checked={showFootprint} label="Toggle footprint overlay" onChange={setShowFootprint} />
-          </div>
           <div className="le-ctrlrow">
             <span className="le-ctrllabel">Zoom</span>
             <Stepper
@@ -1984,7 +1977,9 @@ export function LevelEditor(): ReactElement {
         </section>
         ) : null}
 
-        {layer !== 'status' ? (
+        {/* Board-composition tally lives on the Board page only (it's a whole-board readout, not a
+            per-layer control). The Details card above still surfaces the same counts contextually. */}
+        {layer === 'board' ? (
         <div className="le-statusline">
           {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zoned · {boardCols}×{boardRows}
         </div>
