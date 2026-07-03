@@ -58,6 +58,16 @@ export const SCENE_ANIMS: SceneAnim[] = [
     sheet: '/assets/ui/main-menu/scene-anim/waterfall-right-lower.png',
   },
   {
+    id: 'waterfall-right-mid',
+    x: 1180,
+    y: 500,
+    w: 60,
+    h: 120,
+    frames: 12,
+    frameMs: 150,
+    sheet: '/assets/ui/main-menu/scene-anim/waterfall-right-mid.png',
+  },
+  {
     id: 'waterfall-left',
     x: 170,
     y: 485,
