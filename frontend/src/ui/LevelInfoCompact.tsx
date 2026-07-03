@@ -18,6 +18,7 @@ const ZONE_LABEL: Record<ZoneType, string> = {
 };
 const TERRAIN_LABEL: Record<string, string> = {
   grass: 'Grass', water: 'Water', bridge: 'Bridge', road: 'Road', stone: 'Stone', rock: 'Rock', cliff: 'Cliff', dirt: 'Dirt', pebble: 'Pebble', sand: 'Sand',
+  void: 'Gap',
 };
 
 function countMap<K extends string>(keys: K[]): Partial<Record<K, number>> {
@@ -71,7 +72,7 @@ function Roster({ units, tone, label }: { units: Level['layers']['units']; tone:
 export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
   const { cols, rows } = level.board;
   const total = cols * rows;
-  const filled = level.layers.terrain.length;
+  const filled = level.layers.terrain.filter((tile) => tile.terrain !== 'void').length;
   const terrainMix = Object.entries(countMap(level.layers.terrain.map((t) => t.terrain))).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
   const allies = level.layers.units.filter((u) => u.side === 'player');
   const enemies = level.layers.units.filter((u) => u.side === 'enemy');

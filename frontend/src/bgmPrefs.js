@@ -17,7 +17,8 @@ export const BGM_DISABLED_CHANGE_EVENT = 'chess-tactics:bgm-disabled-change';
 export const BGM_COMMAND_EVENT = 'chess-tactics:bgm-command';
 
 // The player broadcasts its transport state back so the UI can light the right row.
-// detail: { playing: boolean, currentUrl: string|null, single: boolean }.
+// detail: { playing: boolean, paused: boolean, currentUrl: string|null, single: boolean,
+//           otherTab: boolean, otherPaused: boolean, otherTitle: string|null }.
 export const BGM_STATE_EVENT = 'chess-tactics:bgm-state';
 
 // The set is stored as the list of track urls that are turned OFF (excluded). A

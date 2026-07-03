@@ -276,3 +276,25 @@ describe('P4 — survive turn target', () => {
     }
   });
 });
+
+describe('P5 — battle clock', () => {
+  it('accepts a whole-second control and an absent field (untimed)', () => {
+    expect(validatePlayability(fixedLevel((l) => { l.timeControl = { initialSeconds: 300, incrementSeconds: 2 }; })).ok).toBe(true);
+    expect(validatePlayability(fixedLevel((l) => { l.timeControl = { initialSeconds: 1, incrementSeconds: 0 }; })).ok).toBe(true);
+    expect(validatePlayability(fixedLevel(() => {})).ok).toBe(true);
+  });
+
+  it('rejects a zero/fractional starting time and a negative increment', () => {
+    const bad: Array<{ initialSeconds: number; incrementSeconds: number }> = [
+      { initialSeconds: 0, incrementSeconds: 0 },
+      { initialSeconds: 2.5, incrementSeconds: 0 },
+      { initialSeconds: 300, incrementSeconds: -1 },
+      { initialSeconds: 300, incrementSeconds: 0.5 },
+    ];
+    for (const timeControl of bad) {
+      const level = fixedLevel((l) => { l.timeControl = timeControl; });
+      expect(codes(level)).toEqual(['P5_TIME_CONTROL']);
+      expect(messages(level)[0]).toContain('clock');
+    }
+  });
+});

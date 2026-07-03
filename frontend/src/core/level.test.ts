@@ -103,6 +103,18 @@ describe('level schema', () => {
     expect(validateLevel({ ...lvl, surviveTurns: -3 }).ok).toBe(false);
   });
 
+  it('timeControl: integer initialSeconds >= 1 and incrementSeconds >= 0 when present', () => {
+    const lvl = createBlankLevel('l1', 'T', 8, 8);
+    expect(validateLevel({ ...lvl, timeControl: { initialSeconds: 300, incrementSeconds: 2 } }).ok).toBe(true);
+    expect(validateLevel({ ...lvl, timeControl: { initialSeconds: 300, incrementSeconds: 0 } }).ok).toBe(true);
+    expect(validateLevel({ ...lvl, timeControl: { initialSeconds: 0, incrementSeconds: 2 } }).ok).toBe(false);
+    expect(validateLevel({ ...lvl, timeControl: { initialSeconds: 2.5, incrementSeconds: 0 } }).ok).toBe(false);
+    expect(validateLevel({ ...lvl, timeControl: { initialSeconds: 300, incrementSeconds: -1 } }).ok).toBe(false);
+    expect(validateLevel({ ...lvl, timeControl: { initialSeconds: 300 } as never }).ok).toBe(false);
+    expect(validateLevel({ ...lvl, timeControl: 'blitz' as never }).ok).toBe(false);
+    expect(validateLevel({ ...lvl, timeControl: null as never }).ok).toBe(false);
+  });
+
   it('zones: well-formed entries pass; bad id/type/tiles shapes fail', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     lvl.layers.zones = [{ id: 'z1', type: 'player-spawn', tiles: [[0, 7], [1, 7]] }];

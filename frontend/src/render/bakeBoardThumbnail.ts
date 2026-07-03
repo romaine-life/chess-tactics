@@ -9,7 +9,9 @@
 //   - tile srcs from the studio tileset (assetFrameSrc over studioFamilies, same as the editor),
 //   - feature (road/river) masks from featureMaskAt + featureFrameSrc,
 //   - unit sprites from the unit roster (UnitAsset.sprite, ultimately pieceSpritePath),
-//   - doodad halves from the doodad catalog.
+//   - doodad halves from the doodad catalog,
+//   - multi-cell prop halves (trees/houses) via the shared BoardStructure seat geometry
+//     (structureSeatPoint + propZBracket — the same math <PropSprite> renders with).
 // The render happens at the board's NATIVE tile pixel size and is z-sorted exactly like the
 // DOM (tiles by x+y; doodad-back / unit / doodad-front bracket at +20000); the display layer
 // (LevelThumbnail) downscales the result with nearest-neighbour.
@@ -32,6 +34,8 @@ import {
 } from '../ui/unitCatalog';
 import { DOODAD_ASSETS, type DoodadAsset } from '../ui/doodadCatalog';
 import { featureMaskAt, type FeatureKind } from '../core/featureAutotile';
+import { propHalfSrc, propZBracket, structureSeatPoint } from './BoardStructure';
+import { propDef } from '../core/props';
 import type { EditorBoard } from '../ui/boardCode';
 
 // --- Editor render geometry (mirrors style.css, kept in ONE place) -----------------------
@@ -146,6 +150,22 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
     }
   }
 
+  // Multi-cell props (trees/houses): back/front halves bracketing the unit band exactly like
+  // <PropSprite> — seated at the footprint's ground centre, z off the front-most footprint cell.
+  // The DOM pulls the frame back by translate(-anchorX/w%, -anchorY/h%) of its own size, i.e.
+  // the frame origin is the seat point minus the contact-anchor pixel.
+  for (const [key, placement] of Object.entries(board.props ?? {})) {
+    const def = propDef(placement.propId);
+    if (!def) continue; // unknown prop id — skip, like the live renderer and collision bridge
+    const [ax, ay] = key.split(',').map(Number);
+    const { left, top } = structureSeatPoint({ x: ax, y: ay }, def.w, def.h);
+    const dx = left - def.sprite.anchorX;
+    const dy = top - def.sprite.anchorY;
+    const { back, front } = propZBracket(ax, ay, def.w, def.h);
+    ops.push({ src: propHalfSrc(placement.propId, 'back'), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: back });
+    ops.push({ src: propHalfSrc(placement.propId, 'front'), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: front });
+  }
+
   ops.sort((a, b) => a.z - b.z);
   return ops;
 }
@@ -173,6 +193,7 @@ export function boardContentHash(board: EditorBoard): string {
     `t:${sortedEntries(board.cells)}`,
     `u:${sortedEntries(board.units)}`,
     `d:${sortedEntries(board.doodads)}`,
+    `p:${sortedEntries(board.props ?? {})}`,
     `v:${sortedEntries(board.cover)}`,
     `f:${sortedEntries(board.features)}`,
     `x:${Object.keys(board.featureCuts).sort().join(',')}`,
