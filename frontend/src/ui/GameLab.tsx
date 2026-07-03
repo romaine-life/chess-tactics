@@ -27,6 +27,7 @@ import {
 } from '../net/labRuns';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
+import { ViewPane } from './shared/ViewPane';
 import { fetchMe } from '../net/auth';
 import type { PieceType } from '../core/types';
 
@@ -76,7 +77,7 @@ const GL_CSS = `
 .game-lab-replay-controls input[type='range'] { flex: 1; min-width: 160px; }
 .game-lab-ply-label { font-size: 12px; color: #b9b2a4; }
 .game-lab-move-line { font-family: ui-monospace, monospace; font-size: 12px; color: #cfc8b8; margin: 4px 0 10px; }
-.game-lab-board { overflow: auto; max-height: 620px; border: 1px solid #333a47; border-radius: 6px; padding: 10px; background: #0d1015; }
+.game-lab-board { display: grid; grid-template-rows: minmax(0, 1fr); height: 560px; border: 1px solid #333a47; border-radius: 6px; overflow: hidden; background: #0d1015; }
 .game-lab-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 .game-lab-hint { color: #8f8878; font-size: 13px; }
 .game-lab-error { color: #e08b8b; font-size: 13px; }
@@ -158,6 +159,8 @@ export function GameLab(): ReactElement {
   const [selectedLevelId, setSelectedLevelId] = useState<string>(() => readParams().get('level') ?? '');
   const [config, setConfig] = useState<RunConfig>(DEFAULT_CONFIG);
   const [variant, setVariant] = useState<VariantConfig>({ unitIndex: 'none', action: 'remove' });
+  const [viewZoom, setViewZoom] = useState(0.8);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
 
   // The run currently on screen. runLevel is the SNAPSHOT the games were played
   // on (variant applied) — never the live workspace level, which may drift.
@@ -530,7 +533,20 @@ export function GameLab(): ReactElement {
                   {clampedPly === 0 ? 'Starting position' : describeMove(selectedRecord, clampedPly - 1)}
                 </p>
                 <div className="game-lab-board">
-                  <StudioReadOnlyBoard board={stepBoard} ariaLabel="Replay board" />
+                  <ViewPane
+                    kind="board"
+                    ariaLabel="Replay board"
+                    zoom={viewZoom}
+                    pan={viewPan}
+                    minZoom={0.3}
+                    maxZoom={2}
+                    onZoomChange={setViewZoom}
+                    onPanChange={setViewPan}
+                  >
+                    <div className="tileset-view-board-content is-board">
+                      <StudioReadOnlyBoard board={stepBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Replay board" />
+                    </div>
+                  </ViewPane>
                 </div>
               </>
             ) : (
