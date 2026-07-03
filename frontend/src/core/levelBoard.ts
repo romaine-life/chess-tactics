@@ -142,7 +142,7 @@ export interface LevelMeta {
   surviveTurns?: number;
   // The battle clock, authored in the RULES panel. Omitted ⇒ untimed (back-compat).
   timeControl?: TimeControl;
-  // Authored win/lose lists (ADR-0054). Omitted ⇒ the `objective` preset defines the outcome
+  // Authored win/lose lists (ADR-0055). Omitted ⇒ the `objective` preset defines the outcome
   // (the RULES panel's "Custom win/lose" toggle is off) — the same back-compat default as above.
   victory?: VictoryRules;
   difficulty?: string;

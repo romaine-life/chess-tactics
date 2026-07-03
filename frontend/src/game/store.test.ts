@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, shouldStartFreshSkirmish } from './store';
+import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, terminalIfStuck, sideHasLegalMove, shouldStartFreshSkirmish } from './store';
 import { livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
@@ -79,6 +79,49 @@ describe('skirmish store', () => {
 
     useSkirmish.getState().newSkirmish({ seed: 5, level: createBlankLevel('lvl-7') });
     expect(useSkirmish.getState().levelId).toBe('lvl-7');
+  });
+
+  it('resumeMatch restores a saved board and reads as resumable for its level', () => {
+    // A real (full-board) game stands in for the saved match; label it as a campaign
+    // level so the fresh-vs-resume gate has a levelId to key on.
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    const s = useSkirmish.getState();
+    const saved = {
+      game: s.game, seed: s.seed, tick: s.tick, log: s.log, objective: s.objective,
+      objectiveCtx: s.objectiveCtx, victoryOverride: s.victoryOverride, turnsElapsed: s.turnsElapsed, levelId: 'lvl-9', clock: s.clock,
+    };
+    // Simulate a reload wiping the singleton to a different, unrelated game.
+    vi.clearAllTimers();
+    useSkirmish.getState().newSkirmish({ seed: 123 });
+    expect(useSkirmish.getState().levelId).toBeNull();
+
+    useSkirmish.getState().resumeMatch(saved);
+    const r = useSkirmish.getState();
+    expect(r.started).toBe(true);
+    expect(r.levelId).toBe('lvl-9');
+    expect(r.game).toEqual(saved.game);
+    expect(r.selectedId).not.toBeNull(); // a player piece is reselected
+    expect(shouldStartFreshSkirmish(r, 'lvl-9')).toBe(false); // gate now says "resume"
+    expect(shouldStartFreshSkirmish(r, 'other')).toBe(true); // a different level still starts fresh
+  });
+
+  it('resumeMatch re-stages the enemy reply that a reload interrupts', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    const moves = useSkirmish.getState().movesForSelected();
+    useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+    expect(useSkirmish.getState().game.turn).toBe('enemy'); // reply staged on a timer
+
+    const s = useSkirmish.getState();
+    const saved = {
+      game: s.game, seed: s.seed, tick: s.tick, log: s.log, objective: s.objective,
+      objectiveCtx: s.objectiveCtx, victoryOverride: s.victoryOverride, turnsElapsed: s.turnsElapsed, levelId: s.levelId, clock: s.clock,
+    };
+    vi.clearAllTimers(); // a page reload kills the pending reply — the soft-lock this guards
+    useSkirmish.getState().resumeMatch(saved);
+    expect(useSkirmish.getState().game.turn).toBe('enemy'); // reply re-staged
+
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game.turn).toBe('player'); // enemy answered; turn handed back
   });
 
   it('newSkirmish computes kingSide uniformly — free games field the King on the enemy side', () => {
@@ -239,7 +282,7 @@ describe('skirmish store: survive + reach objectives', () => {
   it('reach: a PAWN stepping onto a target cell wins instantly (even as it promotes there)', () => {
     useSkirmish.setState({
       // Pawn one step from the target (0,0) is the enemy back rank, so it promotes on arrival —
-      // reach still fires because lastMove records the pre-promotion type (ADR-0054).
+      // reach still fires because lastMove records the pre-promotion type (ADR-0055).
       game: { size: { cols: 8, rows: 8 }, pieces: [piece('pp', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null },
       env: { terrain: undefined, lastMove: undefined },
       objective: 'reach',
@@ -350,6 +393,43 @@ describe('skirmish store: battle clock', () => {
   });
 });
 
+describe('checkmate ends the game the instant it is delivered', () => {
+  const OPEN_ENV: MoveEnv = { terrain: undefined, lastMove: undefined };
+
+  it('a player move that mates the enemy wins immediately — no capture, no enemy reply', () => {
+    // Enemy King boxed at (0,0): a player rook already seals column 1, and moving
+    // the second rook onto column 0 (0,3) gives a check the King cannot escape.
+    const game: GameState = {
+      size: { cols: 8, rows: 8 },
+      pieces: [
+        piece('ek', 'enemy', 'king', 0, 0),
+        piece('seal', 'player', 'rook', 1, 7), // covers (1,0) and (1,1)
+        piece('mater', 'player', 'rook', 2, 3), // will slide to (0,3) to mate
+        piece('pk', 'player', 'king', 5, 5),
+      ],
+      turn: 'player',
+      winner: null,
+    };
+    useSkirmish.setState({
+      game, env: OPEN_ENV, selectedId: 'mater', focusedId: 'mater',
+      objective: 'capture-king', objectiveCtx: { kingSide: 'enemy' }, turnsElapsed: 0,
+      clock: null, started: true,
+    });
+
+    useSkirmish.getState().tryMoveTo(0, 3);
+
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player'); // Victory, resolved on the mating move itself
+    expect(s.game.turn).toBe('done');
+    expect(s.game.pieces.find((p) => p.id === 'ek')?.alive).toBe(true); // King never had to be captured
+    expect(s.log[0]).toMatch(/checkmate/i);
+
+    // No enemy reply is pending — the game is already over.
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game.turn).toBe('done');
+  });
+});
+
 describe('soft-lock guard (no manual End Turn)', () => {
   const OPEN_ENV: MoveEnv = { terrain: undefined, lastMove: undefined };
   const stateOf = (pieces: Piece[], cols: number, rows: number): GameState => ({
@@ -378,6 +458,69 @@ describe('soft-lock guard (no manual End Turn)', () => {
     const res = resolveIfPlayerStuck(free, OPEN_ENV);
     expect(res.stuck).toBe(false);
     expect(res.game).toBe(free); // unchanged reference
+  });
+
+  it('a checkmated player (king in check with no escape) loses, not draws', () => {
+    // King cornered at (0,0): one rook checks down column 0, another seals column 1,
+    // so every escape square is attacked and there is no piece to interpose.
+    const mated = stateOf([
+      piece('pk', 'player', 'king', 0, 0),
+      piece('r1', 'enemy', 'rook', 0, 5),
+      piece('r2', 'enemy', 'rook', 1, 5),
+      piece('ek', 'enemy', 'king', 2, 5),
+    ], 3, 6);
+    expect(playerHasLegalMove(mated, OPEN_ENV)).toBe(false);
+
+    const res = resolveIfPlayerStuck(mated, OPEN_ENV);
+    expect(res.stuck).toBe(true);
+    expect(res.checkmate).toBe(true);
+    expect(res.game.winner).toBe('enemy');
+    expect(res.game.turn).toBe('done');
+  });
+
+  it('a stalemated player (king has no move but is NOT in check) still draws', () => {
+    // King at (0,0) is not attacked, but a rook seals column 1 and a rook seals row 1,
+    // covering every neighbour — no legal move, yet no check: stalemate, not mate.
+    const stuck = stateOf([
+      piece('pk', 'player', 'king', 0, 0),
+      piece('r1', 'enemy', 'rook', 1, 5),
+      piece('r2', 'enemy', 'rook', 5, 1),
+      piece('ek', 'enemy', 'king', 5, 5),
+    ], 6, 6);
+    expect(playerHasLegalMove(stuck, OPEN_ENV)).toBe(false);
+
+    const res = resolveIfPlayerStuck(stuck, OPEN_ENV);
+    expect(res.stuck).toBe(true);
+    expect(res.checkmate).toBe(false);
+    expect(res.game.winner).toBe('draw');
+    expect(res.game.turn).toBe('done');
+  });
+
+  it('terminalIfStuck resolves the ENEMY to move: checkmate hands the win to the player', () => {
+    const g = { ...stateOf([
+      piece('ek', 'enemy', 'king', 0, 0),
+      piece('r1', 'player', 'rook', 0, 5), // checks down column 0
+      piece('r2', 'player', 'rook', 1, 5), // seals column 1
+      piece('pk', 'player', 'king', 2, 5),
+    ], 3, 6), turn: 'enemy' as const };
+    expect(sideHasLegalMove(g, 'enemy', OPEN_ENV)).toBe(false);
+    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'player', checkmate: true, side: 'enemy' });
+  });
+
+  it('terminalIfStuck resolves the ENEMY to move: stalemate is a draw', () => {
+    const g = { ...stateOf([
+      piece('ek', 'enemy', 'king', 0, 0),
+      piece('r1', 'player', 'rook', 1, 5), // seals column 1
+      piece('r2', 'player', 'rook', 5, 1), // seals row 1
+      piece('pk', 'player', 'king', 5, 5),
+    ], 6, 6), turn: 'enemy' as const };
+    expect(sideHasLegalMove(g, 'enemy', OPEN_ENV)).toBe(false);
+    expect(terminalIfStuck(g, OPEN_ENV)).toEqual({ winner: 'draw', checkmate: false, side: 'enemy' });
+  });
+
+  it('terminalIfStuck returns null while the side to move can still move', () => {
+    const g = { ...stateOf([piece('ek', 'enemy', 'king', 0, 0), piece('pk', 'player', 'king', 5, 5)], 6, 6), turn: 'enemy' as const };
+    expect(terminalIfStuck(g, OPEN_ENV)).toBeNull();
   });
 
   it('never fires off the player turn or after the game is decided', () => {

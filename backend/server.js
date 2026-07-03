@@ -1452,10 +1452,10 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
 // frontend `isPlayablePieceType` gate on `Level.roster` (core/level.ts + core/pieces.ts).
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
-// ADR-0054 victory-condition kinds — mirror of core/level.ts VictoryCondition.
+// ADR-0055 victory-condition kinds — mirror of core/level.ts VictoryCondition.
 const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit', 'all']);
 
-/** Structural check for one ADR-0054 victory condition; recurses into `all`. Returns an error
+/** Structural check for one ADR-0055 victory condition; recurses into `all`. Returns an error
  * string or null. Shape/enum only, mirroring the frontend's conditionErrors (core/level.ts). */
 function validateWorkspaceCondition(c, label) {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return `${label} must be a condition object`;
@@ -1480,7 +1480,7 @@ function validateWorkspaceCondition(c, label) {
   return null;
 }
 
-/** Structural check for an authored `Level.victory` (ADR-0054). Empty win/lose lists are legal
+/** Structural check for an authored `Level.victory` (ADR-0055). Empty win/lose lists are legal
  * shape here (the editor's validatePlayability P6 gates them); this only checks the two lists
  * exist and every condition is well-formed. Returns an error string or null. */
 function validateWorkspaceVictory(victory, key) {
@@ -1546,7 +1546,7 @@ function validateWorkspaceLevel(level, key) {
       return `levels.${key}.timeControl is invalid`;
     }
   }
-  // ADR-0054 authored victory — optional, structural mirror of the frontend's validateLevel
+  // ADR-0055 authored victory — optional, structural mirror of the frontend's validateLevel
   // (shape/enum only; the win/lose-non-empty gate stays editor-side, like P1–P6). Absent ⇒ the
   // objective preset defines win/lose; legacy bodies omit it and stay valid.
   if (level.victory !== undefined) {

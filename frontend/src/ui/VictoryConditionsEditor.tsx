@@ -4,7 +4,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 
-// The Level Editor's authoring surface for ADR-0054 victory conditions: two editable lists (win /
+// The Level Editor's authoring surface for ADR-0055 victory conditions: two editable lists (win /
 // lose) of VictoryConditions. The player wins the instant ANY win condition holds and loses the
 // instant ANY lose condition holds (defeat-first). Rendered inside the RULES panel only when the
 // author turns on "Custom win/lose"; otherwise the `objective` preset defines the outcome.

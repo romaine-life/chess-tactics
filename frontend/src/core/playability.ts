@@ -210,7 +210,7 @@ export function validatePlayability(level: Level): PlayabilityResult {
     }
   }
 
-  // P6 — authored victory (ADR-0054): when a level overrides the `objective` preset with its own
+  // P6 — authored victory (ADR-0055): when a level overrides the `objective` preset with its own
   // win/lose lists, each list needs at least one condition. An empty WIN list is unwinnable; an
   // empty LOSE list is unlosable-by-wipe — the footgun the preset default never has (every preset
   // ships an eliminate(player) loss). Structural SHAPE is validateLevel's job; this is the

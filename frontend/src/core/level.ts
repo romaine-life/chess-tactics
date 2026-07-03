@@ -31,7 +31,7 @@ export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objec
 export type ObjectiveType = 'capture-all' | 'capture-king' | 'rival-kings' | 'survive' | 'reach';
 export const OBJECTIVE_TYPES = ['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach'] as const satisfies readonly ObjectiveType[];
 
-// ---- Victory conditions (ADR-0054) -----------------------------------------------------------
+// ---- Victory conditions (ADR-0055) -----------------------------------------------------------
 // The two-list model that generalises the single `objective` enum: a level can win by ANY of
 // several conditions and lose by ANY of several others, evaluated once per settled turn with the
 // LOSE list checked first (defeat-first). The 5 modes above become PRESETS that expand into these
@@ -47,7 +47,7 @@ export interface PieceFilter {
 }
 
 /**
- * One win/lose predicate over a settled GameState (ADR-0054). Pure + serializable.
+ * One win/lose predicate over a settled GameState (ADR-0055). Pure + serializable.
  * - `eliminate`: `side` has no living piece matching `filter` — filter `{type:'king'}` is a
  *   royal capture, an absent filter is a full wipe.
  * - `reach`: a PAWN of `side` reaches the level's objective zone (pawn-only by game rule; a pawn
@@ -64,7 +64,7 @@ export type VictoryCondition =
   | { kind: 'all'; of: VictoryCondition[] };
 
 /**
- * A level's authored win/lose logic (ADR-0054). The player WINS the instant any `win` condition
+ * A level's authored win/lose logic (ADR-0055). The player WINS the instant any `win` condition
  * holds and LOSES the instant any `lose` condition holds, checked lose-list-first (defeat-first,
  * MTG rule 104.3f). Absent on a Level ⇒ derived from the `objective` preset — the same opt-in
  * back-compat pattern as placement/roster/surviveTurns/timeControl, so every legacy body is
@@ -145,7 +145,7 @@ export interface Level {
   // The battle clock (see TimeControl). Absent ⇒ untimed — the back-compat default, same
   // optional-field pattern as placement/roster/surviveTurns.
   timeControl?: TimeControl;
-  // Authored victory conditions (ADR-0054). Absent ⇒ the `objective` preset defines win/lose
+  // Authored victory conditions (ADR-0055). Absent ⇒ the `objective` preset defines win/lose
   // (see victoryRulesForObjective); when present it OVERRIDES the preset — the two-list model
   // that lets one level combine several win and several lose conditions. Optional + back-compat
   // like the other rules fields; `objective` stays required (mode label + fallback outcome copy).
@@ -213,7 +213,7 @@ export type ValidateResult = { ok: true; level: Level } | { ok: false; errors: s
 
 const CONDITION_KINDS = ['eliminate', 'reach', 'turnLimit', 'all'] as const;
 
-/** Structural errors for a single victory condition (ADR-0054). Recurses into `all`. Shape/enum
+/** Structural errors for a single victory condition (ADR-0055). Recurses into `all`. Shape/enum
  * checks only — the win/lose-non-empty gameplay gate is validatePlayability's P6. */
 function conditionErrors(c: unknown, path: string): string[] {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return [`${path} must be a condition object`];
@@ -259,7 +259,7 @@ function conditionErrors(c: unknown, path: string): string[] {
   return errs;
 }
 
-/** Structural errors for an authored `Level.victory` (ADR-0054). Empty win/lose lists are legal
+/** Structural errors for an authored `Level.victory` (ADR-0055). Empty win/lose lists are legal
  * SHAPE (validatePlayability P6 rejects them as unplayable); this only checks the two lists exist
  * and every condition is well-formed. */
 function victoryRuleErrors(value: unknown): string[] {

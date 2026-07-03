@@ -3,14 +3,15 @@
 // new state out). The renderer and HUD subscribe to it; neither mutates state.
 
 import { create } from 'zustand';
-import type { GameEvent, GameState, Move, Winner } from '../core/types';
-import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
+import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
+import { applyMove, enemyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { evaluateVictory, kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType, VictoryRules } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
 import { playArrival, playTerrain } from '../sfx';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
+import { persistMatch, type PersistedMatch } from './matchPersistence';
 
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
@@ -89,23 +90,43 @@ function firstPlayerId(game: GameState): string | null {
   return game.pieces.find((p) => p.side === 'player' && p.alive)?.id ?? null;
 }
 
+/** True if any living piece of `side` has at least one legal move. */
+export function sideHasLegalMove(game: GameState, side: Side, env: MoveEnv): boolean {
+  return livingPieces(game.pieces, side).some((p) => legalMoves(p, game.pieces, game.size, env).length > 0);
+}
+
 /** True if any living player piece has at least one legal move. */
 export function playerHasLegalMove(game: GameState, env: MoveEnv): boolean {
-  return livingPieces(game.pieces, 'player').some((p) => legalMoves(p, game.pieces, game.size, env).length > 0);
+  return sideHasLegalMove(game, 'player', env);
 }
 
 /**
- * Resolve a soft-lock: with no manual "end turn" anymore, a player who has zero
- * legal moves would otherwise be stuck forever. There is no voluntary passing in
- * chess, so a player who genuinely cannot move ends the game in a stalemate — a
- * draw. Only acts on the player's undecided turn with no move available;
- * otherwise returns the state unchanged.
+ * The terminal result when the side to move has no legal move: there is no
+ * passing in chess, so the game ends here — a LOSS for that side if its King is
+ * in check (checkmate), otherwise a DRAW (stalemate). A kingless army is never in
+ * check, so it can only stalemate. Returns null when the side can still move, the
+ * game is already decided, or it isn't a live side's turn.
  */
-export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean } {
-  if (game.turn === 'player' && !game.winner && !playerHasLegalMove(game, env)) {
-    return { game: { ...game, winner: 'draw', turn: 'done' }, stuck: true };
-  }
-  return { game, stuck: false };
+export function terminalIfStuck(game: GameState, env: MoveEnv): { winner: Winner; checkmate: boolean; side: Side } | null {
+  const side = game.turn;
+  if ((side !== 'player' && side !== 'enemy') || game.winner) return null;
+  if (sideHasLegalMove(game, side, env)) return null;
+  const checkmate = sideInCheck(game, side, env);
+  const winner: Winner = checkmate ? (side === 'player' ? 'enemy' : 'player') : 'draw';
+  return { winner, checkmate, side };
+}
+
+/**
+ * Resolve a soft-lock on the player's turn (handing control back after the enemy
+ * reply, and as a start-of-game safety net). Delegates to `terminalIfStuck`:
+ * checkmate ⇒ defeat, stalemate ⇒ draw. No-op unless it is the player's
+ * undecided turn with no move available.
+ */
+export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean; checkmate: boolean } {
+  if (game.turn !== 'player') return { game, stuck: false, checkmate: false };
+  const t = terminalIfStuck(game, env);
+  if (!t) return { game, stuck: false, checkmate: false };
+  return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, checkmate: t.checkmate };
 }
 
 /** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
@@ -149,7 +170,7 @@ export interface SkirmishState {
    * reach destination cells, and which side fields THE King (kingSide, computed from
    * the starting pieces for level AND free games alike). */
   objectiveCtx: ObjectiveContext;
-  /** An authored win/lose OVERRIDE for this game (ADR-0054): `level.victory` when the level
+  /** An authored win/lose OVERRIDE for this game (ADR-0055): `level.victory` when the level
    * carried one, else null to fall back to the `objective` preset (victoryRulesForObjective,
    * resolved at eval time). Stored as the override — not the resolved rules — so `objective` +
    * `objectiveCtx` stay the single source of truth for preset games; the eval sites derive the
@@ -165,6 +186,9 @@ export interface SkirmishState {
   /** The battle clock, when the level authored one (null = untimed). */
   clock: ClockState | null;
   newSkirmish: (opts: SkirmishOptions) => void;
+  /** Rehydrate a match saved to disk (see matchPersistence) — used to resume the
+   * live board after a page reload instead of starting a fresh game. */
+  resumeMatch: (match: PersistedMatch) => void;
   select: (id: string | null) => void;
   focus: (id: string | null) => void;
   movesForSelected: () => Move[];
@@ -216,6 +240,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       focusedId: null,
       log: ['Defeat — your clock ran out.', ...cur.log].slice(0, 12),
     });
+    persistMatch(get()); // game decided → drops the saved copy
   };
 
   const tickClock = () => {
@@ -263,9 +288,13 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
       // With no manual End Turn, a player handed the turn with no legal move would
       // soft-lock — resolve that as a loss (you can't pass in chess).
-      const stuckRes = resolveIfPlayerStuck(enemyRes.game, envFor(enemyRes.game));
+      const afterEnv = envFor(enemyRes.game);
+      const stuckRes = resolveIfPlayerStuck(enemyRes.game, afterEnv);
       let game = stuckRes.game;
-      if (stuckRes.stuck) msgs.push('Stalemate — no legal moves remain. The skirmish is a draw.');
+      if (stuckRes.stuck) msgs.push(stuckRes.checkmate
+        ? 'Checkmate — your King is trapped. Defeat.'
+        : 'Stalemate — no legal moves remain. The skirmish is a draw.');
+      else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
       // A full player→enemy round just elapsed: advance the survive clock, then
       // re-check the objective — survive reached, or a player wipe = defeat.
       const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
@@ -295,6 +324,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // The turn is back with the player — their clock resumes (no-op when untimed
       // or the reply decided the game).
       startClock();
+      // The board settled after the enemy answer (or the reply decided it): persist
+      // the new position, or drop the saved copy if the game just ended.
+      persistMatch(get());
     }, ENEMY_REPLY_DELAY);
   };
 
@@ -330,7 +362,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       ...(opts.level ? objectiveContextForLevel(opts.level) : {}),
       kingSide: kingSideOf(created.pieces),
     };
-    // The level's authored win/lose lists override the preset (ADR-0054); null ⇒ the eval sites
+    // The level's authored win/lose lists override the preset (ADR-0055); null ⇒ the eval sites
     // derive the `objective` preset each turn from objectiveCtx (kingSide / survive target).
     const victoryOverride: VictoryRules | null = opts.level?.victory ?? null;
     const intro = opts.level
@@ -360,6 +392,44 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         playLandingSfx(env, pc.x, pc.y, delay, 0.7);
         setTimeout(() => playArrival({ gain: 0.55 }), delay);
       });
+    // Snapshot the fresh board immediately, so a reload before the first move
+    // resumes THIS game rather than re-rolling a different random start.
+    persistMatch(get());
+  },
+
+  resumeMatch: (match) => {
+    // A previous game's ticker must never outlive its game.
+    stopClockTicker();
+    const game = match.game;
+    const env = envFor(game);
+    const selectedId = firstPlayerId(game);
+    set({
+      game,
+      env,
+      seed: match.seed,
+      tick: match.tick,
+      turnsElapsed: match.turnsElapsed,
+      objective: match.objective,
+      objectiveCtx: match.objectiveCtx,
+      // Back-compat: a match saved before ADR-0055 has no override → preset (null).
+      victoryOverride: match.victoryOverride ?? null,
+      log: match.log,
+      levelId: match.levelId,
+      selectedId,
+      focusedId: selectedId,
+      started: true,
+      // Resume with the clock paused; startClock re-arms the deadline from the
+      // banked remainder when it's the player's live turn. A reload isn't thinking
+      // time, so the player keeps the time they had at their last move.
+      clock: match.clock ? { ...match.clock, running: false } : null,
+    });
+    startClock();
+    // If the reload caught the game mid enemy-reply (the player had just moved, the
+    // turn was handed to 'enemy', but the staged setTimeout died with the old page),
+    // re-stage it — otherwise the board soft-locks: player input is locked on the
+    // enemy turn with no reply pending. The enemy is deterministic on (game, seed,
+    // tick), all restored, so the re-staged reply is exactly the one that was lost.
+    if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
   },
 
   select: (id) => {
@@ -414,18 +484,37 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
         msgs.push(objectiveOutcomeCopy(s.objective, winner, s.objectiveCtx?.kingSide));
       }
     }
+    // Checkmate the player just delivered ends the game immediately: if the enemy
+    // (now to move) has no legal reply, that's checkmate (victory) when its King is
+    // in check, otherwise stalemate (a draw). A non-terminal check is announced.
+    const enemyEnv = envFor(game);
+    if (!game.winner && game.turn === 'enemy') {
+      const term = terminalIfStuck(game, enemyEnv);
+      if (term) {
+        game = { ...game, winner: term.winner, turn: 'done' };
+        msgs.push(term.checkmate
+          ? 'Checkmate — the enemy King has no escape. Victory!'
+          : 'Stalemate — the enemy has no legal move. The skirmish is a draw.');
+      } else if (sideInCheck(game, 'enemy', enemyEnv)) {
+        msgs.push('Check!');
+      }
+    }
     // Beat 1: commit the player's move on its own so it animates and the board
     // reads before the enemy answers. applyMove flips the turn to 'enemy', which
     // also locks further player input until the reply resolves.
     set({
       game,
-      env: envFor(game),
+      env: enemyEnv,
       selectedId: null,
       focusedId: null,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
     });
     // Beats 2–3: a read beat, then the enemy "thinks" and answers.
     if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
+    // Persist the post-move position (turn now 'enemy', or 'done' if this move won).
+    // A reload here resumes mid enemy-turn and re-stages the reply (see resumeMatch),
+    // or — if the move ended the game — persistMatch drops the saved copy.
+    persistMatch(get());
   },
   };
 });

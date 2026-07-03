@@ -121,7 +121,7 @@ describe('levelToEditorBoard — legacy (no boardCode) derive path', () => {
   });
 });
 
-describe('editorBoardToLevel — authored victory (ADR-0054)', () => {
+describe('editorBoardToLevel — authored victory (ADR-0055)', () => {
   it('writes meta.victory onto the level, and omits it when absent (preset)', () => {
     const victory = {
       win: [{ kind: 'reach' as const, side: 'player' as const }, { kind: 'eliminate' as const, side: 'enemy' as const }],

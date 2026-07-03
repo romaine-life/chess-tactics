@@ -44,7 +44,7 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
-  it('accepts a well-formed authored victory, and an absent field (preset) — ADR-0054', () => {
+  it('accepts a well-formed authored victory, and an absent field (preset) — ADR-0055', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
     lvl.victory = {
       win: [{ kind: 'reach', side: 'player' }, { kind: 'all', of: [{ kind: 'turnLimit', turns: 5 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }] }],
@@ -55,7 +55,7 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
-  it('rejects malformed victory conditions (bad kind/side/turns/filter, empty all, non-array list) — ADR-0054', () => {
+  it('rejects malformed victory conditions (bad kind/side/turns/filter, empty all, non-array list) — ADR-0055', () => {
     const bad: unknown[] = [
       { win: [{ kind: 'nope' }], lose: [] },
       { win: [{ kind: 'eliminate', side: 'neither' }], lose: [] },

@@ -68,7 +68,7 @@ describe('evaluateObjective', () => {
     // A pawn on a target wins; off the target is undecided.
     expect(evaluateObjective(state([piece('p', 'player', 'pawn', 3, 3), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBe('player');
     expect(evaluateObjective(state([piece('p', 'player', 'pawn', 2, 2), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBeNull();
-    // A NON-pawn sitting on the target does NOT win — the pre-ADR-0054 any-piece looseness is fixed.
+    // A NON-pawn sitting on the target does NOT win — the pre-ADR-0055 any-piece looseness is fixed.
     expect(evaluateObjective(state([piece('k', 'player', 'knight', 3, 3), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBeNull();
   });
 
@@ -90,7 +90,7 @@ describe('evaluateObjective', () => {
   });
 });
 
-describe('evaluateVictory (ADR-0054 two-list model)', () => {
+describe('evaluateVictory (ADR-0055 two-list model)', () => {
   it('defeat-first: a turn that trips both a lose and a win resolves as a loss', () => {
     // Survive-shaped rules: win by outlasting, lose by wipe. When the clock hits N AND the last
     // player piece is gone, the LOSE list (checked first) decides → 'enemy'.

@@ -475,9 +475,9 @@ export function SkirmishBoard() {
   const moveSet = useMemo(() => new Set((showMoves ? overlayMoves : []).map((move) => `${move.x},${move.y}`)), [overlayMoves, showMoves]);
   const threatSet = useMemo(() => {
     if (!showEnemyAttacks) return new Set<string>();
-    const tiles = focusPiece?.side === 'enemy' ? attackedSquares(focusPiece, game.pieces, game.size) : enemyThreats(game.pieces, game.size);
+    const tiles = focusPiece?.side === 'enemy' ? attackedSquares(focusPiece, game.pieces, game.size, env) : enemyThreats(game.pieces, game.size, env);
     return new Set(tiles.map((tile) => `${tile.x},${tile.y}`));
-  }, [focusPiece, game.pieces, game.size, showEnemyAttacks]);
+  }, [env, focusPiece, game.pieces, game.size, showEnemyAttacks]);
   const blockedSet = useMemo(() => {
     if (!showBlocked || !focusPiece) return new Set<string>();
     const legal = new Set(overlayMoves.map((move) => `${move.x},${move.y}`));
@@ -496,8 +496,8 @@ export function SkirmishBoard() {
     [env, game.pieces, game.size, showEnemyMoves],
   );
   const playerAttackSet = useMemo(
-    () => armyLayer(showPlayerAttacks, (p) => attackedSquares(p, game.pieces, game.size), 'player'),
-    [game.pieces, game.size, showPlayerAttacks],
+    () => armyLayer(showPlayerAttacks, (p) => attackedSquares(p, game.pieces, game.size, env), 'player'),
+    [env, game.pieces, game.size, showPlayerAttacks],
   );
   const playerMoveSet = useMemo(
     () => armyLayer(showPlayerMoves, (p) => legalMoves(p, game.pieces, game.size, env), 'player'),

@@ -18,7 +18,7 @@ export interface LevelEditorDraft {
   roster: { player: Roster; enemy: Roster };
   // The battle clock (ADR-0053), or undefined when the level is untimed.
   timeControl?: TimeControl;
-  // Authored victory conditions (ADR-0054), or undefined when the level uses the objective preset.
+  // Authored victory conditions (ADR-0055), or undefined when the level uses the objective preset.
   victory?: VictoryRules;
 }
 

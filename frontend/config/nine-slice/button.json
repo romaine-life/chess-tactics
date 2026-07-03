@@ -1,12 +1,5 @@
 {
   "asset": "button",
-  "keyline": {
-    "dx": 0,
-    "dy": 0
-  },
-  "bracket": {
-    "dx": -5,
-    "dy": -5
-  },
-  "content": 5
+  "content": 5,
+  "fill": 0
 }

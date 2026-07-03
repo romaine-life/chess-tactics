@@ -109,7 +109,7 @@ function conditionHolds(state: GameState, cond: VictoryCondition, ctx: Objective
 
 /**
  * Resolve authored win/lose lists to a winner, or `null` while undecided. Pure. Defeat-first
- * (ADR-0054, MTG rule 104.3f): the LOSE list is checked before the WIN list and the first
+ * (ADR-0055, MTG rule 104.3f): the LOSE list is checked before the WIN list and the first
  * matching condition ends the game — so a settled turn that trips both resolves as a loss (e.g.
  * Survive's clock reaches N on the very turn the last player piece is wiped → 'enemy').
  */
@@ -123,9 +123,9 @@ const eliminate = (side: ConditionSide, type?: Piece['type']): VictoryCondition 
   ({ kind: 'eliminate', side, ...(type ? { filter: { type } } : {}) });
 
 /**
- * Expand a legacy `objective` preset into the two-list model (ADR-0054) — the ONLY place the 5
+ * Expand a legacy `objective` preset into the two-list model (ADR-0055) — the ONLY place the 5
  * stored modes are defined in terms of conditions. `evaluateObjective` and the store both route
- * through it, so preset and authored levels share one evaluator. Reproduces the pre-ADR-0054
+ * through it, so preset and authored levels share one evaluator. Reproduces the pre-ADR-0055
  * semantics exactly; the only theoretical shift is rival-kings' both-Kings-fall tie, which now
  * resolves defeat-first rather than win-first (unreachable — one move removes only one King).
  */
@@ -152,7 +152,7 @@ export function victoryRulesForObjective(objective: ObjectiveType, ctx: Objectiv
 
 /**
  * Resolve a level objective to a winner, or `null` while undecided. Pure. Thin wrapper over the
- * two-list model (ADR-0054): expands the preset, then evaluates it defeat-first. Kept as the
+ * two-list model (ADR-0055): expands the preset, then evaluates it defeat-first. Kept as the
  * entry point for every preset (non-authored) game so existing call sites read unchanged.
  */
 export function evaluateObjective(state: GameState, objective: ObjectiveType, ctx: ObjectiveContext = {}): Winner {
