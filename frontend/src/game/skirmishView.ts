@@ -12,7 +12,13 @@ const MAX_ZOOM = 1.45;
 const DEFAULT_ZOOM = 0.9;
 const DEFAULT_PAN = { x: 0, y: -12 };
 
-type OverlayKey = 'showMoves' | 'showEnemyAttacks' | 'showBlocked';
+type OverlayKey =
+  | 'showMoves'
+  | 'showEnemyAttacks'
+  | 'showBlocked'
+  | 'showEnemyMoves'
+  | 'showPlayerAttacks'
+  | 'showPlayerMoves';
 
 export interface SkirmishViewState {
   /** Highlight the focused piece's legal moves. Default on. */
@@ -21,6 +27,13 @@ export interface SkirmishViewState {
   showEnemyAttacks: boolean;
   /** Highlight squares the focused piece is blocked from. Opt-in (default off). */
   showBlocked: boolean;
+  /** Army-wide display layers driven by the in-match shortcut grid (SkirmishHud
+   *  "Controls" tab). Each is the union over one side of that kind of square, and
+   *  is independent of which piece is focused. All opt-in (default off) so the
+   *  board stays clean until the player calls a layer up. */
+  showEnemyMoves: boolean;
+  showPlayerAttacks: boolean;
+  showPlayerMoves: boolean;
   zoom: number;
   pan: { x: number; y: number };
   toggle: (key: OverlayKey) => void;
@@ -33,6 +46,9 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
   showMoves: true,
   showEnemyAttacks: true,
   showBlocked: false,
+  showEnemyMoves: false,
+  showPlayerAttacks: false,
+  showPlayerMoves: false,
   zoom: DEFAULT_ZOOM,
   pan: DEFAULT_PAN,
   toggle: (key) => set((s) => ({ [key]: !s[key] })),

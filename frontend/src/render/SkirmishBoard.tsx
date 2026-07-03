@@ -3,7 +3,7 @@ import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } fro
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { BoardSize, GameState, Move, Piece, TerrainType, Vec } from '../core/types';
-import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
+import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
 import { canTraverse, elevationAt } from '../core/terrain';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
@@ -415,6 +415,9 @@ export function SkirmishBoard() {
   const showMoves = useSkirmishView((s) => s.showMoves);
   const showEnemyAttacks = useSkirmishView((s) => s.showEnemyAttacks);
   const showBlocked = useSkirmishView((s) => s.showBlocked);
+  const showEnemyMoves = useSkirmishView((s) => s.showEnemyMoves);
+  const showPlayerAttacks = useSkirmishView((s) => s.showPlayerAttacks);
+  const showPlayerMoves = useSkirmishView((s) => s.showPlayerMoves);
   const boardZoom = useSkirmishView((s) => s.zoom);
   const boardPan = useSkirmishView((s) => s.pan);
   const setZoom = useSkirmishView((s) => s.setZoom);
@@ -480,6 +483,26 @@ export function SkirmishBoard() {
     const legal = new Set(overlayMoves.map((move) => `${move.x},${move.y}`));
     return new Set(blockedCandidateSquares(focusPiece, game.pieces, game.size, env).filter((tile) => !legal.has(`${tile.x},${tile.y}`)).map((tile) => `${tile.x},${tile.y}`));
   }, [env, focusPiece, game.pieces, game.size, overlayMoves, showBlocked]);
+  // Army-wide display layers driven by the in-match shortcut grid: each is the union
+  // over one whole side of that kind of square, independent of the focused piece.
+  const armyLayer = (enabled: boolean, tilesFor: (p: Piece) => Vec[], side: 'player' | 'enemy') => {
+    if (!enabled) return new Set<string>();
+    const out = new Set<string>();
+    for (const p of livingPieces(game.pieces, side)) for (const t of tilesFor(p)) out.add(`${t.x},${t.y}`);
+    return out;
+  };
+  const enemyMoveSet = useMemo(
+    () => armyLayer(showEnemyMoves, (p) => legalMoves(p, game.pieces, game.size, env), 'enemy'),
+    [env, game.pieces, game.size, showEnemyMoves],
+  );
+  const playerAttackSet = useMemo(
+    () => armyLayer(showPlayerAttacks, (p) => attackedSquares(p, game.pieces, game.size), 'player'),
+    [game.pieces, game.size, showPlayerAttacks],
+  );
+  const playerMoveSet = useMemo(
+    () => armyLayer(showPlayerMoves, (p) => legalMoves(p, game.pieces, game.size, env), 'player'),
+    [env, game.pieces, game.size, showPlayerMoves],
+  );
 
   const handleTile = (x: number, y: number) => {
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
@@ -517,6 +540,9 @@ export function SkirmishBoard() {
             if (!cell.asset && !cell.missing) return null;
             const key = `${cell.x},${cell.y}`;
             const state = [
+              playerMoveSet.has(key) ? 'is-player-move' : '',
+              enemyMoveSet.has(key) ? 'is-enemy-move' : '',
+              playerAttackSet.has(key) ? 'is-player-attack' : '',
               moveSet.has(key) ? 'is-move' : '',
               threatSet.has(key) ? 'is-threat' : '',
               blockedSet.has(key) ? 'is-blocked-candidate' : '',

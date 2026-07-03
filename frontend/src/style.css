@@ -4066,6 +4066,24 @@ h1 {
   position: absolute;
 }
 
+/* Army-wide display layers from the in-match shortcut grid. Side-coded: player = cool
+   blue/green, enemy = warm magenta/red. Declared before .is-threat / .is-move so the
+   focused-piece cyan and the enemy danger-zone red win where layers overlap a cell. */
+.skirmish-board-cell-hit.is-player-move::before {
+  background: rgba(70, 140, 255, .30);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-enemy-move::before {
+  background: rgba(222, 92, 190, .30);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-player-attack::before {
+  background: rgba(74, 210, 132, .32);
+  opacity: 1;
+}
+
 .skirmish-board-cell-hit.is-threat::before {
   background: rgba(255, 105, 64, .38);
   opacity: 1;
@@ -4523,6 +4541,58 @@ h1 {
   font-size: var(--ds-text-sm);
   min-width: 44px;
   text-align: center;
+}
+
+/* In-match shortcut grid (Controls tab). Cells reuse the kit mode-button frame
+   (.app-header-button / .app-header-button-active), so this block is layout + the
+   key-cap badge only — no raw-CSS chrome. */
+.skirmish-grid {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.skirmish-grid-key.app-header-button {
+  block-size: auto;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
+  min-block-size: 60px;
+  min-width: 0;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.skirmish-grid-cap {
+  color: #bfe9ff;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  line-height: 1;
+}
+
+.skirmish-grid-label {
+  font-size: var(--ds-text-xs);
+  letter-spacing: .01em;
+  line-height: 1.05;
+  max-width: 100%;
+  opacity: .92;
+  white-space: normal;
+}
+
+.skirmish-grid-key.is-empty {
+  cursor: default;
+  opacity: .32;
+  pointer-events: none;
+}
+
+.skirmish-grid-key.is-empty .skirmish-grid-label {
+  display: none;
+}
+
+.skirmish-grid-hint {
+  color: #7fb2c9;
+  font-size: var(--ds-text-xs);
+  margin: 6px 0 0;
 }
 
 .skirmish-score-panel,
