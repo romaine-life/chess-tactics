@@ -245,7 +245,7 @@ function openSse(path, headers = {}) {
 // server applies migrations before it begins listening (and /health gates on
 // that), so waitForServer() has already returned by the time this runs.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns');
+  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns, lab_runs');
 }
 
 async function queryDb(sql, params = []) {
@@ -763,6 +763,89 @@ async function main() {
   const rivalWorkspaceBody = JSON.parse(rivalWorkspace.body);
   if (rivalWorkspace.statusCode !== 200 || rivalWorkspaceBody.campaigns.length !== 0) {
     throw new Error(`Workspace should be scoped to owner: ${rivalWorkspace.statusCode} ${rivalWorkspace.body}`);
+  }
+
+  // --- Game Lab runs (/api/lab-runs): per-user, DB-backed --------------------
+  const anonymousLabRuns = await get('/api/lab-runs');
+  if (anonymousLabRuns.statusCode !== 401) {
+    throw new Error(`Anonymous lab runs should require sign-in: ${anonymousLabRuns.statusCode}`);
+  }
+
+  const emptyLabRuns = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const emptyLabRunsBody = JSON.parse(emptyLabRuns.body);
+  if (emptyLabRuns.statusCode !== 200 || emptyLabRunsBody.runs.length !== 0) {
+    throw new Error(`Empty lab run list should be empty: ${emptyLabRuns.statusCode} ${emptyLabRuns.body}`);
+  }
+
+  const invalidLabRun = await request(
+    'POST', '/api/lab-runs',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ meta: 'nope', body: { games: [] } }),
+  );
+  const invalidLabRunBody = JSON.parse(invalidLabRun.body);
+  if (invalidLabRun.statusCode !== 400 || invalidLabRunBody.error !== 'invalid_lab_run') {
+    throw new Error(`Invalid lab run should fail: ${invalidLabRun.statusCode} ${invalidLabRun.body}`);
+  }
+
+  const savedLabRun = await request(
+    'POST', '/api/lab-runs',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ meta: { name: 't' }, body: { games: [1, 2] } }),
+  );
+  const savedLabRunBody = JSON.parse(savedLabRun.body);
+  if (savedLabRun.statusCode !== 200 || savedLabRunBody.ok !== true || !savedLabRunBody.id || !savedLabRunBody.created_at) {
+    throw new Error(`Unexpected lab run save: ${savedLabRun.statusCode} ${savedLabRun.body}`);
+  }
+  const labRunId = savedLabRunBody.id;
+
+  const listedLabRuns = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const listedLabRunsBody = JSON.parse(listedLabRuns.body);
+  if (
+    listedLabRuns.statusCode !== 200 ||
+    listedLabRunsBody.runs.length !== 1 ||
+    listedLabRunsBody.runs[0].id !== labRunId ||
+    listedLabRunsBody.runs[0].meta.name !== 't' ||
+    'body' in listedLabRunsBody.runs[0]
+  ) {
+    throw new Error(`Lab run list should carry meta but never body: ${listedLabRuns.statusCode} ${listedLabRuns.body}`);
+  }
+
+  const loadedLabRun = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  const loadedLabRunBody = JSON.parse(loadedLabRun.body);
+  if (
+    loadedLabRun.statusCode !== 200 ||
+    loadedLabRunBody.id !== labRunId ||
+    loadedLabRunBody.meta.name !== 't' ||
+    JSON.stringify(loadedLabRunBody.body) !== JSON.stringify({ games: [1, 2] })
+  ) {
+    throw new Error(`Lab run body did not round-trip: ${loadedLabRun.statusCode} ${loadedLabRun.body}`);
+  }
+
+  // Per-user scoping: the rival can neither read the player's run nor delete
+  // it (their DELETE is a 200 no-op).
+  const rivalLabRunRead = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=rival' });
+  if (rivalLabRunRead.statusCode !== 404) {
+    throw new Error(`Rival should not read the player's lab run: ${rivalLabRunRead.statusCode} ${rivalLabRunRead.body}`);
+  }
+  const rivalLabRunDelete = await request('DELETE', `/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=rival' });
+  const rivalLabRunDeleteBody = JSON.parse(rivalLabRunDelete.body);
+  if (rivalLabRunDelete.statusCode !== 200 || rivalLabRunDeleteBody.ok !== true) {
+    throw new Error(`Rival lab run delete should be an idempotent 200: ${rivalLabRunDelete.statusCode} ${rivalLabRunDelete.body}`);
+  }
+  const labRunSurvived = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  if (labRunSurvived.statusCode !== 200) {
+    throw new Error(`Rival's delete must not remove the player's lab run: ${labRunSurvived.statusCode} ${labRunSurvived.body}`);
+  }
+
+  const deletedLabRun = await request('DELETE', `/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  const deletedLabRunBody = JSON.parse(deletedLabRun.body);
+  if (deletedLabRun.statusCode !== 200 || deletedLabRunBody.ok !== true) {
+    throw new Error(`Unexpected lab run delete: ${deletedLabRun.statusCode} ${deletedLabRun.body}`);
+  }
+  const labRunsAfterDelete = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const labRunsAfterDeleteBody = JSON.parse(labRunsAfterDelete.body);
+  if (labRunsAfterDelete.statusCode !== 200 || labRunsAfterDeleteBody.runs.length !== 0) {
+    throw new Error(`Lab run list should be empty after delete: ${labRunsAfterDelete.statusCode} ${labRunsAfterDelete.body}`);
   }
 
   const createdCampaign = await request(

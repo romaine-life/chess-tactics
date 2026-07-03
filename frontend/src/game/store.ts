@@ -5,11 +5,12 @@
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
+import { searchEnemyMove } from '../core/ai';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
 import { playArrival, playTerrain } from '../sfx';
-import { createRng } from '../core/rng';
+import { createRng, type Rng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
 
@@ -176,11 +177,24 @@ export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: Gam
   return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, checkmate: t.checkmate };
 }
 
+/** How an enemy decision is made: same call shape as the core's `enemyMove`. */
+type EnemyPolicy = (game: GameState, rng: Rng, env: MoveEnv) => { pieceId: string; move: Move } | null;
+
+/** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). */
+export type AiMode = 'search' | 'greedy';
+
+// Think budget for the live search enemy. Bounded by NODES, not wall clock: the
+// reply runs synchronously inside the staged "enemy thinks" beat, and a node cap
+// keeps it deterministic (a frozen clock in tests can't make it run to full depth)
+// while still bounding real-play latency — ~40k nodes lands well under the 520ms
+// reply beat on skirmish-sized boards (see aibench). maxDepth caps the ceiling.
+const LIVE_SEARCH = { maxDepth: 6, maxNodes: 40_000 };
+
 /** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
-function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv): { game: GameState; tick: number; events: GameEvent[] } {
+function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv, pick: EnemyPolicy): { game: GameState; tick: number; events: GameEvent[] } {
   const events: GameEvent[] = [];
   while (game.turn === 'enemy' && !game.winner) {
-    const move = enemyMove(game, createRng(seed + tick), env);
+    const move = pick(game, createRng(seed + tick), env);
     tick += 1;
     if (!move) { game = { ...game, turn: 'player' }; break; }
     const res = applyMove(game, move.pieceId, move.move);
@@ -224,6 +238,10 @@ export interface SkirmishState {
   /** Level this game is testing (null = free skirmish). Lets the screen tell
    * "resume the same board" from "launch a different level". */
   levelId: string | null;
+  /** Enemy decision policy for this game. 'search' is the rung-1 objective-aware
+   * search AI (core/ai); 'greedy' keeps the legacy capture-else-random policy
+   * reachable for A/B feel comparison via `?ai=greedy`. */
+  aiMode: AiMode;
   /** The battle clock, when the level authored one (null = untimed). */
   clock: ClockState | null;
   /** Multiplayer context (null = single-player). When set, the AI never fires and
@@ -335,7 +353,17 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       const cur = get();
       // Bail if a new game reset the turn, or it somehow already resolved.
       if (cur.game.turn !== 'enemy' || cur.game.winner) return;
-      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game));
+      // The search enemy needs the objective framing so it plays the MODE (hunt
+      // the King, rush the survive clock, garrison the reach zone) — that's the
+      // whole point of the rung-1 AI. The greedy policy ignores it.
+      const pick: EnemyPolicy = cur.aiMode === 'greedy'
+        ? enemyMove
+        : (g, rng, env) => searchEnemyMove(g, rng, env, {
+            objective: cur.objective,
+            ctx: cur.objectiveCtx ?? {},
+            turnsElapsed: cur.turnsElapsed ?? 0,
+          }, LIVE_SEARCH);
+      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game), pick);
       const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
       // With no manual End Turn, a player handed the turn with no legal move would
       // soft-lock — resolve that as a loss (you can't pass in chess).
@@ -450,6 +478,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   turnsElapsed: 0,
   started: false,
   levelId: null,
+  aiMode: 'search',
   clock: null,
   net: null,
 
@@ -478,7 +507,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const clock: ClockState | null = tc
       ? { remainingMs: tc.initialSeconds * 1000, running: false, incrementMs: tc.incrementSeconds * 1000 }
       : null;
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, clock, net: null });
+    // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
+    // preserves the A/B lever the route set on entry).
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, net: null });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -558,6 +589,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       objectiveCtx: match.objectiveCtx,
       log: match.log,
       levelId: match.levelId,
+      // Restore the enemy policy so the ?ai=greedy A/B lever survives a reload
+      // (older snapshots predate the field ⇒ default to the search AI).
+      aiMode: match.aiMode ?? 'search',
       selectedId,
       focusedId: selectedId,
       started: true,

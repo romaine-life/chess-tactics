@@ -20,4 +20,5 @@ export const PAGE_ENTRIES: PageEntry[] = [
   { name: 'campaign-editor', label: 'Campaign Editor', route: '/campaigns-next', status: 'functional', blurb: 'The campaign authoring screen — tune the action buttons (size, frame, fill) live.', thumb: '/assets/ui/pages/campaign-editor.webp' },
   { name: 'level-editor', label: 'Level Editor', route: '/edit', status: 'stub', blurb: 'The level / terrain editor.', thumb: '/assets/ui/pages/level-editor.webp' },
   { name: 'lobbies', label: 'Lobbies', route: '/lobbies', status: 'stub', blurb: 'Multiplayer lobbies.', thumb: '/assets/ui/pages/lobbies.webp' },
+  { name: 'game-lab', label: 'Game Lab', route: '/game-lab', status: 'stub', blurb: 'AI experiment bench — self-play runs, win rates, piece activity, replays.', thumb: '/assets/ui/pages/game-lab.webp' },
 ];

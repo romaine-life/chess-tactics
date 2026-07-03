@@ -47,13 +47,18 @@ export interface SkirmishOptions {
   party?: PieceType[];
   /** Authored campaign level to test play. */
   level?: Level;
+  /** Enemy decision policy (consumed by the store, not by setup): 'search' is the
+   * objective-aware search AI; 'greedy' keeps the legacy policy as an A/B lever. */
+  ai?: 'search' | 'greedy';
 }
 
 function pawnForwardFields(type: PieceType, facing: Piece['facing']): Pick<Piece, 'pawnForward'> {
   return type === 'pawn' && facing ? { pawnForward: facing } : {};
 }
 
-function createFromLevel(level: Level, seed: number): GameState {
+/** Build the initial GameState for an authored level. Exported for headless
+ * self-play (game/selfplay.ts) — the store path reaches it via createSkirmish. */
+export function createFromLevel(level: Level, seed: number): GameState {
   const pieces: Piece[] = level.layers.units.map((unit, index) => {
     // Honor the authored facing so test-play shows the painted direction; fall back to
     // the side's default when a level (legacy / facing-free) doesn't carry one. Pawns

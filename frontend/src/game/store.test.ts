@@ -6,8 +6,10 @@ import type { GameState, Piece, PieceType, Side } from '../core/types';
 import { createBlankLevel } from '../core/level';
 
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
-// turn-taking rather than a simultaneous swap. Fake timers let us drive that
-// reply deterministically and keep pending timeouts from leaking between tests.
+// turn-taking rather than a simultaneous swap. Fake timers (Date included) let us
+// drive both that reply and the battle clock deterministically. The search enemy
+// carries no wall-clock budget in the live store (LIVE_SEARCH is node-bounded), so
+// a frozen Date can't make it run away — it terminates on maxNodes, deterministically.
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   vi.clearAllTimers();
