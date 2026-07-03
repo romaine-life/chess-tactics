@@ -44,25 +44,27 @@ describe('level schema', () => {
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
-  it('accepts a well-formed authored victory, and an absent field (preset) — ADR-0055', () => {
+  it('accepts a well-formed authored victory (if-then rules), and an absent field (preset) — ADR-0055', () => {
     const lvl = createBlankLevel('l1', 'T', 8, 8);
-    lvl.victory = {
-      win: [{ kind: 'reach', side: 'player' }, { kind: 'all', of: [{ kind: 'turnLimit', turns: 5 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }] }],
-      lose: [{ kind: 'eliminate', side: 'player' }],
-    };
+    lvl.victory = [
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'turnLimit', turns: 5 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], then: 'win' },
+      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
+    ];
     expect(validateLevel(lvl).ok).toBe(true);
     delete (lvl as { victory?: unknown }).victory; // absent ⇒ valid (the objective preset applies)
     expect(validateLevel(lvl).ok).toBe(true);
   });
 
-  it('rejects malformed victory conditions (bad kind/side/turns/filter, empty all, non-array list) — ADR-0055', () => {
+  it('rejects malformed victory rules (bad then/kind/side/turns/filter, non-array) — ADR-0055', () => {
     const bad: unknown[] = [
-      { win: [{ kind: 'nope' }], lose: [] },
-      { win: [{ kind: 'eliminate', side: 'neither' }], lose: [] },
-      { win: [{ kind: 'turnLimit', turns: 0 }], lose: [] },
-      { win: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'rock' } }], lose: [] },
-      { win: [{ kind: 'all', of: [] }], lose: [] },
-      { win: 'nope', lose: [] },
+      { not: 'an array' },
+      [{ if: [{ kind: 'eliminate', side: 'enemy' }], then: 'maybe' }], // bad `then`
+      [{ if: [{ kind: 'nope' }], then: 'win' }],
+      [{ if: [{ kind: 'eliminate', side: 'neither' }], then: 'win' }],
+      [{ if: [{ kind: 'turnLimit', turns: 0 }], then: 'win' }],
+      [{ if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'rock' } }], then: 'win' }],
+      [{ if: 'nope', then: 'win' }], // if not an array
     ];
     for (const victory of bad) {
       expect(validateLevel({ ...createBlankLevel('l1', 'T', 8, 8), victory } as unknown).ok).toBe(false);

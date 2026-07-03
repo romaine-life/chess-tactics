@@ -79,13 +79,12 @@ const cleanTimeControl = (raw: unknown): TimeControl | undefined => {
   return { initialSeconds, incrementSeconds };
 };
 
-// A stored victory survives the round-trip only when it carries the two condition arrays; the
+// A stored victory (ADR-0055 if-then rule list) survives the round-trip when it is an array; the
 // contents came from our own serialize, so a light shape check is enough — the real gate is
-// validateLevel / validatePlayability at save time.
-const cleanVictory = (raw: unknown): VictoryRules | undefined => {
-  if (!isRecord(raw) || !Array.isArray(raw.win) || !Array.isArray(raw.lose)) return undefined;
-  return { win: raw.win as VictoryRules['win'], lose: raw.lose as VictoryRules['lose'] };
-};
+// validateLevel / validatePlayability at save time. (A pre-ADR-0055 `{win,lose}` draft is not an
+// array, so it resolves to undefined and the level falls back to its objective preset.)
+const cleanVictory = (raw: unknown): VictoryRules | undefined =>
+  Array.isArray(raw) ? (raw as VictoryRules) : undefined;
 
 export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
   try {

@@ -50,7 +50,7 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
-import { VictoryConditionsEditor, mergeRules, rulesEqual } from './VictoryConditionsEditor';
+import { VictoryConditionsEditor, mergeRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
@@ -1068,6 +1068,18 @@ export function LevelEditor(): ReactElement {
   // toggle + its config live here (objective is always written); placement/roster/surviveTurns are
   // sent WHEN they diverge from the schema default, so a fixed capture-all board serializes without
   // them (back-compat) — but the roster/survive values are always carried when their mode is active.
+  // The factions offered in each condition's "IF <faction>" dropdown — one per side, labelled by the
+  // board's assigned palette (ADR-0055). Maps to the engine's player/enemy side; true multi-faction
+  // (two distinct enemies) is future work.
+  const victoryFactions = useMemo((): FactionOption[] => {
+    const label = (p: string): string =>
+      (({ 'navy-blue': 'Navy', crimson: 'Crimson', golden: 'Golden', emerald: 'Emerald' }) as Record<string, string>)[p] ?? p;
+    const enemyPalette = Object.values(boardUnits).map((u) => u.faction).find((f) => f && f !== playerFaction);
+    return [
+      { side: 'player', label: playerFaction ? label(playerFaction) : 'You (Player)' },
+      { side: 'enemy', label: enemyPalette ? label(enemyPalette) : 'Enemy' },
+    ];
+  }, [playerFaction, boardUnits]);
   // A level stores `victory` only when the lists DIVERGE from the objective preset — else the
   // preset drives it (keeps preset bodies clean + out of the dirty check, and preserves
   // capture-king's runtime kingSide direction-awareness for an untouched King Assault). ADR-0055.
@@ -1748,7 +1760,7 @@ export function LevelEditor(): ReactElement {
                 off the placed units) and composes with the others; duplicates are ignored. The last
                 preset picked also becomes the level's `objective` — its headline label + the
                 one-King save check. */}
-            <p className="le-board-note">How this level is won and lost. Load a preset to fill in its conditions — they ADD to the lists (combine several, e.g. Reach + King Assault), then edit. Duplicate conditions are ignored.</p>
+            <p className="le-board-note">How this level is won and lost, as <b>IF … THEN</b> rules. Load a preset to fill in its rules — they ADD (combine several, e.g. Reach + King Assault), then edit. Duplicate rules are ignored.</p>
             <div className="le-seg le-seg-wrap le-victory-presets">
               {OBJECTIVE_TYPES.map((mode) => (
                 <button
@@ -1764,8 +1776,8 @@ export function LevelEditor(): ReactElement {
                 >{MODE_NAME[mode]}</button>
               ))}
             </div>
-            <VictoryConditionsEditor value={victory} onChange={setVictory} />
-            <p className="le-board-note">The player wins the instant any <b>Win</b> condition holds and loses the instant any <b>Lose</b> condition holds; a tie resolves as a loss.</p>
+            <VictoryConditionsEditor value={victory} factions={victoryFactions} onChange={setVictory} />
+            <p className="le-board-note">Rules are checked top-to-bottom each turn — the first whose conditions all hold decides. Lose rules sit above win rules, so a tie resolves as a loss.</p>
           </section>
 
           <section className="skirmish-card">

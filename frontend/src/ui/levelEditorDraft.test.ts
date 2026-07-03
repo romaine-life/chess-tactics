@@ -78,24 +78,24 @@ describe('level editor draft codec', () => {
     expect(withTc({ initialSeconds: 180, incrementSeconds: 5 }).timeControl).toEqual({ initialSeconds: 180, incrementSeconds: 5 });
   });
 
-  it('round-trips authored victory conditions, and stays undefined (preset) when absent', () => {
-    const victory = {
-      win: [{ kind: 'reach' as const, side: 'player' as const }, { kind: 'eliminate' as const, side: 'enemy' as const, filter: { type: 'king' as const } }],
-      lose: [{ kind: 'eliminate' as const, side: 'player' as const }, { kind: 'turnLimit' as const, turns: 10 }],
-    };
+  it('round-trips authored victory rules, and stays undefined (preset) when absent', () => {
+    const victory = [
+      { if: [{ kind: 'eliminate' as const, side: 'player' as const }, { kind: 'turnLimit' as const, turns: 10 }], then: 'lose' as const },
+      { if: [{ kind: 'reach' as const, side: 'player' as const }], then: 'win' as const },
+    ];
     const custom = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({ victory })))!;
     expect(custom.victory).toEqual(victory);
     const preset = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft()))!;
     expect(preset.victory).toBeUndefined();
   });
 
-  it('drops a malformed victory (missing win/lose arrays) back to the preset', () => {
+  it('drops a non-array victory (e.g. a pre-ADR-0055 draft) back to the preset', () => {
     const withVictory = (victory: unknown): LevelEditorDraft => {
       const raw = JSON.parse(serializeLevelEditorDraft(baseDraft())) as Record<string, unknown>;
       raw.victory = victory;
       return parseLevelEditorDraft(JSON.stringify(raw))!;
     };
-    expect(withVictory({ win: [] }).victory).toBeUndefined();
+    expect(withVictory({ win: [], lose: [] }).victory).toBeUndefined();
     expect(withVictory('nope').victory).toBeUndefined();
   });
 

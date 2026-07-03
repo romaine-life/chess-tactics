@@ -211,16 +211,16 @@ export function validatePlayability(level: Level): PlayabilityResult {
   }
 
   // P6 — authored victory (ADR-0055): when a level overrides the `objective` preset with its own
-  // win/lose lists, each list needs at least one condition. An empty WIN list is unwinnable; an
-  // empty LOSE list is unlosable-by-wipe — the footgun the preset default never has (every preset
-  // ships an eliminate(player) loss). Structural SHAPE is validateLevel's job; this is the
+  // if-then rules, the set needs at least one rule that can WIN and one that can LOSE. A set with no
+  // win rule is unwinnable; with no lose rule it is unlosable — the footgun the preset default never
+  // has (every preset ships a lose rule). Structural SHAPE is validateLevel's job; this is the
   // gameplay gate, same both-gates pattern as P4/P5. Assumes a structurally valid level.
   if (level.victory !== undefined) {
-    if (level.victory.win.length === 0) {
-      violations.push({ code: 'P6_VICTORY_NO_WIN', message: 'The authored victory has no win condition — the level cannot be won.' });
+    if (!level.victory.some((rule) => rule.then === 'win')) {
+      violations.push({ code: 'P6_VICTORY_NO_WIN', message: 'The victory rules have no way to win — add a rule that ends in a win.' });
     }
-    if (level.victory.lose.length === 0) {
-      violations.push({ code: 'P6_VICTORY_NO_LOSE', message: 'The authored victory has no lose condition — add at least one (e.g. losing all your pieces).' });
+    if (!level.victory.some((rule) => rule.then === 'lose')) {
+      violations.push({ code: 'P6_VICTORY_NO_LOSE', message: 'The victory rules have no way to lose — add a rule that ends in a loss (e.g. losing all your pieces).' });
     }
   }
 

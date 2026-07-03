@@ -1453,10 +1453,10 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // frontend `isPlayablePieceType` gate on `Level.roster` (core/level.ts + core/pieces.ts).
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 // ADR-0055 victory-condition kinds — mirror of core/level.ts VictoryCondition.
-const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit', 'all']);
+const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit']);
 
-/** Structural check for one ADR-0055 victory condition; recurses into `all`. Returns an error
- * string or null. Shape/enum only, mirroring the frontend's conditionErrors (core/level.ts). */
+/** Structural check for one ADR-0055 victory condition. Returns an error string or null. Shape/enum
+ * only, mirroring the frontend's conditionErrors (core/level.ts). */
 function validateWorkspaceCondition(c, label) {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return `${label} must be a condition object`;
   if (!WORKSPACE_CONDITION_KINDS.has(c.kind)) return `${label}.kind is invalid`;
@@ -1470,26 +1470,24 @@ function validateWorkspaceCondition(c, label) {
     if (c.side !== 'player' && c.side !== 'enemy') return `${label}.side is invalid`;
   } else if (c.kind === 'turnLimit') {
     if (!isFiniteInteger(c.turns) || c.turns < 1) return `${label}.turns is invalid`;
-  } else if (c.kind === 'all') {
-    if (!Array.isArray(c.of) || c.of.length === 0) return `${label}.of is invalid`;
-    for (let i = 0; i < c.of.length; i += 1) {
-      const err = validateWorkspaceCondition(c.of[i], `${label}.of[${i}]`);
-      if (err) return err;
-    }
   }
   return null;
 }
 
-/** Structural check for an authored `Level.victory` (ADR-0055). Empty win/lose lists are legal
- * shape here (the editor's validatePlayability P6 gates them); this only checks the two lists
- * exist and every condition is well-formed. Returns an error string or null. */
+/** Structural check for an authored `Level.victory` (ADR-0055) — an ORDERED array of if-then rules.
+ * An empty list is legal shape here (the editor's validatePlayability P6 gates unwinnable/unlosable
+ * sets); this only checks each rule has a conditions array + a valid `then`, and every condition is
+ * well-formed. Returns an error string or null. */
 function validateWorkspaceVictory(victory, key) {
-  if (!victory || typeof victory !== 'object' || Array.isArray(victory)) return `levels.${key}.victory is invalid`;
-  for (const listName of ['win', 'lose']) {
-    const list = victory[listName];
-    if (!Array.isArray(list)) return `levels.${key}.victory.${listName} is invalid`;
-    for (let i = 0; i < list.length; i += 1) {
-      const err = validateWorkspaceCondition(list[i], `levels.${key}.victory.${listName}[${i}]`);
+  if (!Array.isArray(victory)) return `levels.${key}.victory is invalid`;
+  for (let i = 0; i < victory.length; i += 1) {
+    const rule = victory[i];
+    const label = `levels.${key}.victory[${i}]`;
+    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return `${label} must be a rule object`;
+    if (rule.then !== 'win' && rule.then !== 'lose') return `${label}.then is invalid`;
+    if (!Array.isArray(rule.if)) return `${label}.if is invalid`;
+    for (let j = 0; j < rule.if.length; j += 1) {
+      const err = validateWorkspaceCondition(rule.if[j], `${label}.if[${j}]`);
       if (err) return err;
     }
   }

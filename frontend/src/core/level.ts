@@ -32,12 +32,15 @@ export type ObjectiveType = 'capture-all' | 'capture-king' | 'rival-kings' | 'su
 export const OBJECTIVE_TYPES = ['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach'] as const satisfies readonly ObjectiveType[];
 
 // ---- Victory conditions (ADR-0055) -----------------------------------------------------------
-// The two-list model that generalises the single `objective` enum: a level can win by ANY of
-// several conditions and lose by ANY of several others, evaluated once per settled turn with the
-// LOSE list checked first (defeat-first). The 5 modes above become PRESETS that expand into these
-// lists (see `victoryRulesForObjective` in core/objectives.ts); `Level.victory` overrides them.
+// An ORDERED list of if-then RULES (the RTS-editor trigger model): each rule is `IF <conditions>
+// THEN <win|lose>`. Rules are checked top-to-bottom and the FIRST whose conditions all hold decides
+// the game — so precedence is rule ORDER (presets seed lose rules above win rules, which gives
+// defeat-first). The 5 modes above are PRESETS that expand into rule lists (`victoryRulesForObjective`
+// in core/objectives.ts); `Level.victory` overrides them. Phase-ready: a future `then` can move a
+// phase and a future condition can gate on it, with no reshape.
 
-/** The side a victory/defeat condition refers to (neutral pieces never own an outcome). */
+/** The side a victory/defeat condition refers to (neutral pieces never own an outcome). The editor
+ * surfaces this as a dropdown of the board's factions, each mapping to its side. */
 export type ConditionSide = 'player' | 'enemy';
 
 /** Narrows which of a side's pieces a condition counts. Piece TYPE only — there is no per-unit
@@ -47,34 +50,37 @@ export interface PieceFilter {
 }
 
 /**
- * One win/lose predicate over a settled GameState (ADR-0055). Pure + serializable.
- * - `eliminate`: `side` has no living piece matching `filter` — filter `{type:'king'}` is a
- *   royal capture, an absent filter is a full wipe.
- * - `reach`: a PAWN of `side` reaches the level's objective zone (pawn-only by game rule; a pawn
- *   that promotes on arrival still counts — see `evaluateVictory`).
- * - `turnLimit`: player-turns elapsed ≥ `turns`. In the WIN list this reads "outlast N turns"; in
- *   the LOSE list it is a deadline. The condition is perspective-free — the LIST assigns valence.
- * - `all`: every sub-condition holds (AND). Top-level win/lose lists are OR; `all` is the single
- *   nesting level for compound goals ("reach the zone AND survive N turns").
+ * One predicate over a settled GameState — the "IF" vocabulary (ADR-0055). Pure + serializable.
+ * - `eliminate`: `side` has no living piece matching `filter` ({type:'king'} = royal capture; no
+ *   filter = full wipe).
+ * - `reach`: a PAWN of `side` reaches the level's objective zone (pawn-only; a pawn that promotes
+ *   on arrival still counts — see `evaluateVictory`).
+ * - `turnLimit`: player-turns elapsed ≥ `turns`.
  */
 export type VictoryCondition =
   | { kind: 'eliminate'; side: ConditionSide; filter?: PieceFilter }
   | { kind: 'reach'; side: ConditionSide }
-  | { kind: 'turnLimit'; turns: number }
-  | { kind: 'all'; of: VictoryCondition[] };
+  | { kind: 'turnLimit'; turns: number };
+
+/** What a fired rule decides, from the player's perspective. Room to grow (spawn / open-gate
+ * effects, phase transitions) become new `Outcome`s later without reshaping the rule. */
+export type Outcome = 'win' | 'lose';
+
+/** One `IF <conditions> THEN <outcome>` rule. The `if` conditions are ANDed — ALL must hold (an
+ * empty `if` always fires). Order matters ACROSS rules (see VictoryRules). */
+export interface VictoryRule {
+  if: VictoryCondition[];
+  then: Outcome;
+}
 
 /**
- * A level's authored win/lose logic (ADR-0055). The player WINS the instant any `win` condition
- * holds and LOSES the instant any `lose` condition holds, checked lose-list-first (defeat-first,
- * MTG rule 104.3f). Absent on a Level ⇒ derived from the `objective` preset — the same opt-in
- * back-compat pattern as placement/roster/surviveTurns/timeControl, so every legacy body is
- * unchanged. When present it OVERRIDES the preset (the `objective` field still supplies the mode
- * label and outcome copy).
+ * A level's authored win/lose logic (ADR-0055): an ORDERED list of if-then rules, evaluated once
+ * per settled turn top-to-bottom — the FIRST rule whose conditions all hold decides the game.
+ * Absent on a Level ⇒ derived from the `objective` preset (`victoryRulesForObjective`), the same
+ * opt-in back-compat pattern as the other rules fields. When present it OVERRIDES the preset (the
+ * `objective` field still supplies the mode label + outcome copy).
  */
-export interface VictoryRules {
-  win: VictoryCondition[];
-  lose: VictoryCondition[];
-}
+export type VictoryRules = VictoryRule[];
 
 /** Piece counts per side for random placement — playable piece types only (no rocks). */
 export type Roster = Partial<Record<PieceType, number>>;
@@ -211,10 +217,9 @@ export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows 
 
 export type ValidateResult = { ok: true; level: Level } | { ok: false; errors: string[] };
 
-const CONDITION_KINDS = ['eliminate', 'reach', 'turnLimit', 'all'] as const;
+const CONDITION_KINDS = ['eliminate', 'reach', 'turnLimit'] as const;
 
-/** Structural errors for a single victory condition (ADR-0055). Recurses into `all`. Shape/enum
- * checks only — the win/lose-non-empty gameplay gate is validatePlayability's P6. */
+/** Structural errors for a single victory condition (ADR-0055). Shape/enum checks only. */
 function conditionErrors(c: unknown, path: string): string[] {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return [`${path} must be a condition object`];
   const cond = c as { kind?: unknown };
@@ -246,31 +251,25 @@ function conditionErrors(c: unknown, path: string): string[] {
       if (!Number.isInteger(t.turns) || (t.turns as number) < 1) errs.push(`${path}.turns must be a positive integer`);
       break;
     }
-    case 'all': {
-      const a = cond as { of?: unknown };
-      if (!Array.isArray(a.of) || a.of.length === 0) {
-        errs.push(`${path}.of must be a non-empty array of conditions`);
-      } else {
-        a.of.forEach((sub, i) => errs.push(...conditionErrors(sub, `${path}.of[${i}]`)));
-      }
-      break;
-    }
   }
   return errs;
 }
 
-/** Structural errors for an authored `Level.victory` (ADR-0055). Empty win/lose lists are legal
- * SHAPE (validatePlayability P6 rejects them as unplayable); this only checks the two lists exist
- * and every condition is well-formed. */
+/** Structural errors for an authored `Level.victory` (ADR-0055) — an ORDERED array of if-then
+ * rules. An empty list is legal SHAPE (validatePlayability P6 rejects an unwinnable/unlosable set);
+ * this only checks each rule has a conditions array + a valid `then`, and every condition is well-
+ * formed. */
 function victoryRuleErrors(value: unknown): string[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return ['victory must be an object with win and lose arrays'];
-  const v = value as { win?: unknown; lose?: unknown };
+  if (!Array.isArray(value)) return ['victory must be an array of if-then rules'];
   const errs: string[] = [];
-  for (const listName of ['win', 'lose'] as const) {
-    const list = v[listName];
-    if (!Array.isArray(list)) errs.push(`victory.${listName} must be an array`);
-    else list.forEach((c, i) => errs.push(...conditionErrors(c, `victory.${listName}[${i}]`)));
-  }
+  value.forEach((r, i) => {
+    const path = `victory[${i}]`;
+    if (!r || typeof r !== 'object' || Array.isArray(r)) { errs.push(`${path} must be a rule object`); return; }
+    const rule = r as { if?: unknown; then?: unknown };
+    if (rule.then !== 'win' && rule.then !== 'lose') errs.push(`${path}.then must be 'win' or 'lose'`);
+    if (!Array.isArray(rule.if)) errs.push(`${path}.if must be an array of conditions`);
+    else rule.if.forEach((c, j) => errs.push(...conditionErrors(c, `${path}.if[${j}]`)));
+  });
   return errs;
 }
 

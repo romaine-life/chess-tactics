@@ -5027,18 +5027,26 @@ h1 {
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
 
 /* Victory-conditions editor (ADR-0055) — layout only; every control is a kit atom (le-seg-btn /
-   Toggle / Stepper). A hairline top-border separates stacked conditions within a list. */
+   Toggle / Stepper / the styled le-layer-select). Each RULE is a faint grouping block; its
+   conditions stack with an IF/and prefix, then a THEN row. */
 .le-victory-presets { margin: 6px 0 2px; }
-.le-victory-list { margin-top: 12px; }
-.le-victory-head { color: #d6ecf5; font-size: var(--ds-text-sm); letter-spacing: .04em; margin: 14px 2px 2px; opacity: .85; text-transform: uppercase; }
-.le-cond { border-top: 1px solid rgba(150, 180, 200, .14); margin-top: 10px; padding-top: 10px; }
-.le-cond:first-of-type { border-top: 0; margin-top: 6px; padding-top: 0; }
+.le-rules { margin-top: 12px; }
+.le-rule { border: 1px solid rgba(150, 180, 200, .18); border-radius: 6px; margin-top: 10px; padding: 8px 10px 10px; }
+.le-rule-cond { border-top: 1px solid rgba(150, 180, 200, .12); margin-top: 8px; padding-top: 8px; }
+.le-rule-cond:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
 .le-cond-top { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
 .le-cond-summary { color: #eaf5fb; font-size: var(--ds-text-sm); }
-.le-cond-top .le-cond-remove { min-height: 30px; min-width: 0; padding: 0 12px; }
+.le-cond-summary b { color: var(--skirmish-cyan, #7fd7ff); font-weight: 700; margin-right: 3px; }
+.le-cond-remove { min-height: 26px; min-width: 0; padding: 0 10px; }
 .le-cond-params { margin-top: 2px; }
-.le-cond-add { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.le-cond-add .le-seg-btn { min-height: 32px; min-width: 0; padding: 0 12px; }
+.le-faction-select { min-width: 120px; }
+.le-cond-add { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.le-cond-add .le-seg-btn { min-height: 30px; min-width: 0; padding: 0 10px; }
+.le-rule-and { opacity: .7; }
+.le-rule-then { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.le-rule-then .le-ctrllabel { color: var(--skirmish-cyan, #7fd7ff); }
+.le-rule-remove { margin-left: auto; min-height: 30px; min-width: 0; padding: 0 10px; }
+.le-rule-add { margin-top: 12px; }
 .le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
 .le-status-card { gap: 10px; }
 .le-status-current {

@@ -300,20 +300,24 @@ describe('P5 — battle clock', () => {
 });
 
 describe('P6 — authored victory conditions (ADR-0055)', () => {
-  it('accepts an authored victory with at least one win and one lose, and an absent field (preset)', () => {
+  it('accepts a rule set with at least one win rule and one lose rule, and an absent field (preset)', () => {
     const authored = fixedLevel((l) => {
-      l.victory = { win: [{ kind: 'reach', side: 'player' }, { kind: 'eliminate', side: 'enemy' }], lose: [{ kind: 'eliminate', side: 'player' }] };
+      l.victory = [
+        { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+        { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
+        { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+      ];
     });
     expect(validatePlayability(authored)).toEqual({ ok: true, violations: [] });
     expect(validatePlayability(fixedLevel(() => {})).ok).toBe(true); // no victory → preset
   });
 
-  it('rejects an empty win list (unwinnable) and an empty lose list (unlosable-by-wipe)', () => {
-    const noWin = fixedLevel((l) => { l.victory = { win: [], lose: [{ kind: 'eliminate', side: 'player' }] }; });
+  it('rejects a set with no win rule (unwinnable) or no lose rule (unlosable)', () => {
+    const noWin = fixedLevel((l) => { l.victory = [{ if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' }]; });
     expect(codes(noWin)).toEqual(['P6_VICTORY_NO_WIN']);
-    const noLose = fixedLevel((l) => { l.victory = { win: [{ kind: 'eliminate', side: 'enemy' }], lose: [] }; });
+    const noLose = fixedLevel((l) => { l.victory = [{ if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' }]; });
     expect(codes(noLose)).toEqual(['P6_VICTORY_NO_LOSE']);
-    const neither = fixedLevel((l) => { l.victory = { win: [], lose: [] }; });
+    const neither = fixedLevel((l) => { l.victory = []; });
     expect(codes(neither)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
   });
 });

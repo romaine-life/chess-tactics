@@ -90,36 +90,37 @@ describe('evaluateObjective', () => {
   });
 });
 
-describe('evaluateVictory (ADR-0055 two-list model)', () => {
-  it('defeat-first: a turn that trips both a lose and a win resolves as a loss', () => {
-    // Survive-shaped rules: win by outlasting, lose by wipe. When the clock hits N AND the last
-    // player piece is gone, the LOSE list (checked first) decides → 'enemy'.
-    const rules: VictoryRules = { win: [{ kind: 'turnLimit', turns: 5 }], lose: [{ kind: 'eliminate', side: 'player' }] };
+describe('evaluateVictory (ADR-0055 if-then rules)', () => {
+  it('first-match ordering: a lose rule above a win rule resolves a tie as a loss', () => {
+    // Survive-shaped: the lose rule (wipe) sits above the win rule (outlast). When the clock hits N
+    // AND the last player piece is gone, the lose rule (checked first) decides → 'enemy'.
+    const rules: VictoryRules = [
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'turnLimit', turns: 5 }], then: 'win' },
+    ];
     expect(evaluateVictory(state([piece('e', 'enemy', 'pawn', 1, 1)]), rules, { turnsElapsed: 5 })).toBe('enemy');
     const held = state([piece('p', 'player', 'pawn', 0, 0), piece('e', 'enemy', 'pawn', 1, 1)]);
     expect(evaluateVictory(held, rules, { turnsElapsed: 5 })).toBe('player');
     expect(evaluateVictory(held, rules, { turnsElapsed: 4 })).toBeNull();
   });
 
-  it('win by ANY: reach the goal OR wipe out the enemy', () => {
-    const rules: VictoryRules = {
-      win: [{ kind: 'reach', side: 'player' }, { kind: 'eliminate', side: 'enemy' }],
-      lose: [{ kind: 'eliminate', side: 'player' }],
-    };
-    // Enemy wiped → win without reaching.
-    expect(evaluateVictory(state([piece('p', 'player', 'pawn', 0, 0)]), rules, {})).toBe('player');
-    // Both sides live, no pawn on goal → undecided.
+  it('separate rules are OR: reach the goal OR wipe out the enemy', () => {
+    const rules: VictoryRules = [
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+    ];
+    expect(evaluateVictory(state([piece('p', 'player', 'pawn', 0, 0)]), rules, {})).toBe('player'); // enemy wiped
     const contested = state([piece('p', 'player', 'pawn', 0, 0), piece('e', 'enemy', 'pawn', 1, 1)]);
     expect(evaluateVictory(contested, rules, { reachCells: [{ x: 7, y: 7 }] })).toBeNull();
-    // A pawn on the goal → win.
     expect(evaluateVictory(state([piece('p', 'player', 'pawn', 7, 7), piece('e', 'enemy', 'pawn', 1, 1)]), rules, { reachCells: [{ x: 7, y: 7 }] })).toBe('player');
   });
 
-  it('all: an AND-group holds only when every sub-condition does', () => {
-    const rules: VictoryRules = {
-      win: [{ kind: 'all', of: [{ kind: 'turnLimit', turns: 3 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }] }],
-      lose: [{ kind: 'eliminate', side: 'player' }],
-    };
+  it('conditions within a rule are AND: the rule fires only when all hold', () => {
+    const rules: VictoryRules = [
+      { if: [{ kind: 'turnLimit', turns: 3 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+    ];
     const kingUp = state([piece('p', 'player', 'pawn', 0, 0), piece('ek', 'enemy', 'king', 7, 7)]);
     expect(evaluateVictory(kingUp, rules, { turnsElapsed: 3 })).toBeNull(); // turn reached, king alive
     const kingGone = state([piece('p', 'player', 'pawn', 0, 0), piece('ep', 'enemy', 'pawn', 4, 4)]);
@@ -129,27 +130,27 @@ describe('evaluateVictory (ADR-0055 two-list model)', () => {
 });
 
 describe('victoryRulesForObjective (preset expansion)', () => {
-  it('capture-king expands direction-aware; the others are fixed pairs', () => {
-    expect(victoryRulesForObjective('capture-all')).toEqual({
-      win: [{ kind: 'eliminate', side: 'enemy' }],
-      lose: [{ kind: 'eliminate', side: 'player' }],
-    });
-    expect(victoryRulesForObjective('capture-king', { kingSide: 'enemy' })).toEqual({
-      win: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }],
-      lose: [{ kind: 'eliminate', side: 'player' }],
-    });
-    expect(victoryRulesForObjective('capture-king', { kingSide: 'player' })).toEqual({
-      win: [{ kind: 'eliminate', side: 'enemy' }],
-      lose: [{ kind: 'eliminate', side: 'player', filter: { type: 'king' } }],
-    });
-    expect(victoryRulesForObjective('survive', { surviveTurns: 6 })).toEqual({
-      win: [{ kind: 'turnLimit', turns: 6 }],
-      lose: [{ kind: 'eliminate', side: 'player' }],
-    });
-    expect(victoryRulesForObjective('reach')).toEqual({
-      win: [{ kind: 'reach', side: 'player' }],
-      lose: [{ kind: 'eliminate', side: 'player' }],
-    });
+  it('expands to lose-then-win rules; capture-king is direction-aware', () => {
+    expect(victoryRulesForObjective('capture-all')).toEqual([
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+    ]);
+    expect(victoryRulesForObjective('capture-king', { kingSide: 'enemy' })).toEqual([
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], then: 'win' },
+    ]);
+    expect(victoryRulesForObjective('capture-king', { kingSide: 'player' })).toEqual([
+      { if: [{ kind: 'eliminate', side: 'player', filter: { type: 'king' } }], then: 'lose' },
+      { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+    ]);
+    expect(victoryRulesForObjective('survive', { surviveTurns: 6 })).toEqual([
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'turnLimit', turns: 6 }], then: 'win' },
+    ]);
+    expect(victoryRulesForObjective('reach')).toEqual([
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
+    ]);
   });
 
   it('the preset path stays in sync with evaluateObjective across boards and contexts', () => {

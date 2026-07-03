@@ -4,7 +4,7 @@
 // store evaluates this after each resolved turn.
 
 import type { BoardSize, GameState, Piece, Vec, Winner } from './types';
-import type { ConditionSide, Level, ObjectiveType, VictoryCondition, VictoryRules } from './level';
+import type { ConditionSide, Level, ObjectiveType, VictoryCondition, VictoryRule, VictoryRules } from './level';
 import { livingPieces } from './rules';
 
 /** The "royal" piece whose loss ends a capture-king / rival-kings objective. */
@@ -75,7 +75,7 @@ export interface ObjectiveContext {
   kingSide?: 'player' | 'enemy';
 }
 
-/** Does a single victory condition hold on this settled state? Pure. Recurses into `all`. */
+/** Does a single victory condition hold on this settled state? Pure. */
 function conditionHolds(state: GameState, cond: VictoryCondition, ctx: ObjectiveContext): boolean {
   switch (cond.kind) {
     case 'eliminate': {
@@ -100,53 +100,55 @@ function conditionHolds(state: GameState, cond: VictoryCondition, ctx: Objective
     }
     case 'turnLimit':
       return (ctx.turnsElapsed ?? 0) >= cond.turns;
-    case 'all':
-      return cond.of.length > 0 && cond.of.every((c) => conditionHolds(state, c, ctx));
     default:
       return false;
   }
 }
 
 /**
- * Resolve authored win/lose lists to a winner, or `null` while undecided. Pure. Defeat-first
- * (ADR-0055, MTG rule 104.3f): the LOSE list is checked before the WIN list and the first
- * matching condition ends the game — so a settled turn that trips both resolves as a loss (e.g.
- * Survive's clock reaches N on the very turn the last player piece is wiped → 'enemy').
+ * Resolve authored if-then rules to a winner, or `null` while undecided. Pure. Rules are checked in
+ * ORDER, top-to-bottom (ADR-0055): the FIRST rule whose conditions ALL hold decides the game.
+ * Presets seed lose rules above win rules, so a settled turn that trips both resolves as a loss
+ * (defeat-first — e.g. Survive's clock reaches N on the very turn the last player piece is wiped).
  */
 export function evaluateVictory(state: GameState, rules: VictoryRules, ctx: ObjectiveContext = {}): Winner {
-  if (rules.lose.some((c) => conditionHolds(state, c, ctx))) return 'enemy';
-  if (rules.win.some((c) => conditionHolds(state, c, ctx))) return 'player';
+  for (const rule of rules) {
+    if (rule.if.every((c) => conditionHolds(state, c, ctx))) return rule.then === 'win' ? 'player' : 'enemy';
+  }
   return null;
 }
 
 const eliminate = (side: ConditionSide, type?: Piece['type']): VictoryCondition =>
   ({ kind: 'eliminate', side, ...(type ? { filter: { type } } : {}) });
+const loseRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, then: 'lose' });
+const winRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, then: 'win' });
 
 /**
- * Expand a legacy `objective` preset into the two-list model (ADR-0055) — the ONLY place the 5
- * stored modes are defined in terms of conditions. `evaluateObjective` and the store both route
- * through it, so preset and authored levels share one evaluator. Reproduces the pre-ADR-0055
- * semantics exactly; the only theoretical shift is rival-kings' both-Kings-fall tie, which now
- * resolves defeat-first rather than win-first (unreachable — one move removes only one King).
+ * Expand a legacy `objective` preset into the if-then rule model (ADR-0055) — the ONLY place the 5
+ * stored modes are defined in terms of rules. `evaluateObjective` and the store both route through
+ * it, so preset and authored levels share one evaluator. Lose rules are seeded ABOVE win rules so
+ * first-match ordering reproduces the pre-ADR-0055 defeat-first semantics exactly (the only
+ * theoretical shift is rival-kings' both-Kings-fall tie → loss, unreachable since one move removes
+ * only one King).
  */
 export function victoryRulesForObjective(objective: ObjectiveType, ctx: ObjectiveContext = {}): VictoryRules {
   switch (objective) {
     case 'capture-all':
-      return { win: [eliminate('enemy')], lose: [eliminate('player')] };
+      return [loseRule(eliminate('player')), winRule(eliminate('enemy'))];
     case 'capture-king':
       // Direction-aware: the King-holder loses when its King falls; the kingless side loses only
       // by wipe. ctx.kingSide defaults to 'enemy' (free skirmish / legacy = hunt the enemy King).
       return (ctx.kingSide ?? 'enemy') === 'player'
-        ? { win: [eliminate('enemy')], lose: [eliminate('player', ROYAL)] }
-        : { win: [eliminate('enemy', ROYAL)], lose: [eliminate('player')] };
+        ? [loseRule(eliminate('player', ROYAL)), winRule(eliminate('enemy'))]
+        : [loseRule(eliminate('player')), winRule(eliminate('enemy', ROYAL))];
     case 'rival-kings':
-      return { win: [eliminate('enemy', ROYAL)], lose: [eliminate('player', ROYAL)] };
+      return [loseRule(eliminate('player', ROYAL)), winRule(eliminate('enemy', ROYAL))];
     case 'survive':
-      return { win: [{ kind: 'turnLimit', turns: ctx.surviveTurns ?? 0 }], lose: [eliminate('player')] };
+      return [loseRule(eliminate('player')), winRule({ kind: 'turnLimit', turns: ctx.surviveTurns ?? 0 })];
     case 'reach':
-      return { win: [{ kind: 'reach', side: 'player' }], lose: [eliminate('player')] };
+      return [loseRule(eliminate('player')), winRule({ kind: 'reach', side: 'player' })];
     default:
-      return { win: [eliminate('enemy')], lose: [eliminate('player')] };
+      return [loseRule(eliminate('player')), winRule(eliminate('enemy'))];
   }
 }
 

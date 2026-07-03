@@ -2,19 +2,28 @@ import { describe, it, expect } from 'vitest';
 import { mergeRules, rulesEqual, conditionKey } from './VictoryConditionsEditor';
 import type { VictoryRules } from '../core/level';
 
-// The pure helpers behind the additive-preset / idempotent-add behaviour (ADR-0055).
+// The pure helpers behind the additive-preset / idempotent-add behaviour (ADR-0055 if-then rules).
 
-describe('victory condition helpers (ADR-0055)', () => {
-  it('mergeRules adds conditions but never duplicates, and re-merging is a no-op', () => {
-    const base: VictoryRules = { win: [{ kind: 'reach', side: 'player' }], lose: [{ kind: 'eliminate', side: 'player' }] };
-    const add: VictoryRules = { win: [{ kind: 'eliminate', side: 'enemy' }], lose: [{ kind: 'eliminate', side: 'player' }] };
+describe('victory rule helpers (ADR-0055)', () => {
+  it('mergeRules adds rules but never duplicates, and re-merging is a no-op', () => {
+    const base: VictoryRules = [{ if: [{ kind: 'reach', side: 'player' }], then: 'win' }];
+    const add: VictoryRules = [
+      { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+      { if: [{ kind: 'reach', side: 'player' }], then: 'win' }, // identical to base → not duplicated
+    ];
     const merged = mergeRules(base, add);
-    expect(merged.win).toHaveLength(2); // reach + eliminate(enemy)
-    expect(merged.lose).toHaveLength(1); // eliminate(player) already present → not duplicated
+    expect(merged).toHaveLength(2);
     expect(mergeRules(merged, add)).toEqual(merged); // idempotent
   });
 
-  it('conditionKey de-dupes eliminate by side+filter, but turnLimit by kind alone (one per list)', () => {
+  it('a win rule and a lose rule with the same conditions are distinct', () => {
+    const win: VictoryRules = [{ if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' }];
+    const lose: VictoryRules = [{ if: [{ kind: 'eliminate', side: 'enemy' }], then: 'lose' }];
+    expect(rulesEqual(win, lose)).toBe(false);
+    expect(mergeRules(win, lose)).toHaveLength(2); // different `then` → both kept
+  });
+
+  it('conditionKey de-dupes eliminate by side+filter, but turnLimit by kind alone', () => {
     expect(conditionKey({ kind: 'eliminate', side: 'enemy' }))
       .not.toBe(conditionKey({ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }));
     expect(conditionKey({ kind: 'eliminate', side: 'enemy' }))
@@ -22,13 +31,18 @@ describe('victory condition helpers (ADR-0055)', () => {
     expect(conditionKey({ kind: 'turnLimit', turns: 5 })).toBe(conditionKey({ kind: 'turnLimit', turns: 9 }));
   });
 
-  it('rulesEqual is order-insensitive but turn-sensitive', () => {
-    const a: VictoryRules = { win: [{ kind: 'reach', side: 'player' }, { kind: 'eliminate', side: 'enemy' }], lose: [{ kind: 'eliminate', side: 'player' }] };
-    const b: VictoryRules = { win: [{ kind: 'eliminate', side: 'enemy' }, { kind: 'reach', side: 'player' }], lose: [{ kind: 'eliminate', side: 'player' }] };
-    expect(rulesEqual(a, b)).toBe(true); // reordered win → still equal
-    const c: VictoryRules = { win: [{ kind: 'turnLimit', turns: 5 }], lose: [] };
-    const d: VictoryRules = { win: [{ kind: 'turnLimit', turns: 8 }], lose: [] };
+  it('rulesEqual is order-insensitive (rules and conditions) but turn-sensitive', () => {
+    const a: VictoryRules = [
+      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+    ];
+    const b: VictoryRules = [ // rules reordered
+      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
+    ];
+    expect(rulesEqual(a, b)).toBe(true);
+    const c: VictoryRules = [{ if: [{ kind: 'turnLimit', turns: 5 }], then: 'win' }];
+    const d: VictoryRules = [{ if: [{ kind: 'turnLimit', turns: 8 }], then: 'win' }];
     expect(rulesEqual(c, d)).toBe(false); // different turn count → not equal
-    expect(rulesEqual(a, c)).toBe(false); // different conditions entirely
   });
 });
