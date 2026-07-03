@@ -115,8 +115,11 @@ files), so a change is detectable on the filesystem, not just in the browser.
 - Good: **dev-only by construction** — `apply: 'serve'` keeps the write endpoint
   out of production builds; `import.meta.env.DEV` keeps the button out of the
   production UI.
-- Good: scope rules (inert keyline, consumption-side content) are enforced in one
-  place each and warn rather than silently mis-bake.
+- Good: the consumption-side content rule is enforced in one place (baked into
+  CSS, never the PNG). *(The original inert-keyline rule and its bake warning were
+  superseded by [ADR-0050](0050-nine-slice-editor-is-the-devs-calibration-bench.md),
+  which made every element tunable with symmetry guaranteed by construction — there
+  is no keyline warning to emit anymore.)*
 - Cost: a **dev endpoint surface** (`/__nine-slice/save`, `/__nine-slice/config`)
   that must stay serve-only — its safety rests on the `apply: 'serve'` guard.
 - Cost: the editor must **track the registry schema** ([ADR-0016](0016-single-source-nine-slice-registry.md));

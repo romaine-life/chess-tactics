@@ -40,6 +40,15 @@ other three are guaranteed identical.
 
 ## Decision Outcome
 
+> **Entry point superseded by [ADR-0050](0050-nine-slice-editor-is-the-devs-calibration-bench.md).**
+> The *decision* below — atom assembly, never whole-frame generation — stands. But the
+> canonical assembler is now `buildFrameParts` in `frontend/scripts/nine-slice-kit.mjs`
+> (split-layer, per-element offsets, mirror-after-scale, pinned by the bake-parity
+> test), driven by `/nine-slice-editor` + Save or `apply-nine-slice.mjs`. The
+> standalone `scripts/assemble-frame.mjs` / `buildFrameFrom` named throughout this
+> record is **retired**; read the references below as historical. Do not build a new
+> frame through it.
+
 **Any scalable 9-slice chrome frame** — anything rendered via `border-image` and
 tiled/stretched (panel, row, button, tab, header strip, etc.) — has its source
 PNG **assembled from atoms** via `scripts/assemble-frame.mjs`

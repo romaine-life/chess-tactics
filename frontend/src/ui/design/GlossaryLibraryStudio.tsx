@@ -106,7 +106,8 @@ const GLOSSARY_DETAILS: Record<string, ReactNode> = {
         <li>
           <strong>Build time — make the <em>source</em>.</strong> The small source
           PNG is produced once, either <em>assembled from atoms</em> (one corner
-          mirrored into four, the edge tiled — see <code>scripts/assemble-frame.mjs</code>)
+          mirrored into four, the edge tiled — see <code>buildFrameParts</code> in
+          <code>scripts/nine-slice-kit.mjs</code>)
           or <em>extracted as real pixels</em> from the approved concept art. The
           atoms stay the source of truth; the combined PNG is a regenerable artifact.
         </li>

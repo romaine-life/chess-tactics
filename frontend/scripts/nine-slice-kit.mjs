@@ -35,7 +35,7 @@ export const LINE_DIR = `${root}public/assets/ui/explore/frames/`;
 export const CONFIG_DIR = `${root}config/nine-slice/`;
 
 // Single source of truth — the SAME registry the in-app editor and the catalog
-// edit-link read (config/nine-slice/registry.json). Add a frame there and it
+// edit-link read (config/nine-slice-registry.json). Add a frame there and it
 // becomes bakeable, editable, and catalog-linked with no code change here.
 const REG = JSON.parse(readFileSync(`${root}config/nine-slice-registry.json`, 'utf8'));
 const PALETTES = REG.palettes ?? {};
@@ -242,7 +242,10 @@ export function normalizeConfig(c) {
   // Returns the CANONICAL shape (see file header): per-element absolutes. A legacy
   // config (global+residual fields) folds in transparently; a canonical config
   // passes through. Mixing is resolved per element group: canonical field wins.
-  const scale = (v, fb) => (Number.isFinite(v) ? Math.max(1, Math.min(4, Number(v))) : fb);
+  // Scale is clamped to [1,4] and rounded to 2 decimals — the SAME quantization the
+  // editor applies (NineSliceEditor roundedScale), so a hand-edited high-precision
+  // scale bakes exactly what the editor previews, not one Math.round(w*scale) off.
+  const scale = (v, fb) => (Number.isFinite(v) ? Math.max(1, Math.min(4, Math.round(Number(v) * 100) / 100)) : fb);
   return {
     asset: c.asset,
     coolCorners: c.coolCorners ? foldCorners(undefined, c.coolCorners) : foldCorners(c.keyline, c.frameCorners),
