@@ -14,7 +14,8 @@ import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { livingPieces } from '../core/rules';
-import { computeStars, recordLevelWin } from '../campaign/progress';
+import { computeStars, nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
+import { navigateApp } from './navigation';
 
 const STAR_ICON = '/assets/ui/kit/icons/star.png';
 
@@ -47,6 +48,10 @@ export function Skirmish() {
   const [boardSettled, setBoardSettled] = useState(false);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
   const game = useSkirmish((s) => s.game);
+  // Subscribed (not getState) so the victory "Continue" button knows, reactively, whether
+  // a next level exists once the workspace hydrates.
+  const campaigns = useCampaigns((s) => s.campaigns);
+  const levelDocs = useCampaigns((s) => s.levels);
   // The live objective + which side holds the King come from the STORE (not routeLevel):
   // the store computes kingSide from the actual starting pieces, so a random-placement
   // King Assault whose roster deals the player the King reads "Protect your King" too, and
@@ -78,6 +83,32 @@ export function Skirmish() {
 
   const replayLevel = () => {
     if (routeLevel) newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: routeLevel });
+  };
+
+  // The next level in this campaign after the one just cleared (null on the last level or
+  // before the workspace hydrates) — powers the victory "Continue" button.
+  const nextLevel = useMemo(() => {
+    if (!isCampaignPlay || !routeCampaignId || !routeLevel) return null;
+    const camp = campaigns.find((c) => c.id === routeCampaignId);
+    if (!camp) return null;
+    const ref = nextLevelRef(orderedLevels(camp), routeLevel.id);
+    return ref ? levelDocs[ref.levelId] ?? null : null;
+  }, [isCampaignPlay, campaigns, levelDocs, routeCampaignId, routeLevel]);
+
+  // Victory "Continue": drop straight into the next level. The /play route keys on the
+  // pathname only, so a bare search-param nav (levelId=A → levelId=B) would change the URL
+  // without remounting — the board would keep showing the cleared level. So swap the board
+  // in place the same way Replay does, and update the URL (replace, not push, so Back lands
+  // on the campaign rather than a stale board) so a reload/deep-link resolves the new level.
+  const advanceToNextLevel = () => {
+    if (!routeCampaignId || !nextLevel) return;
+    navigateApp(
+      `/play?campaignId=${encodeURIComponent(routeCampaignId)}&levelId=${encodeURIComponent(nextLevel.id)}`,
+      { replace: true },
+    );
+    useCampaigns.getState().selectLevel(nextLevel.id);
+    setRouteLevel(nextLevel);
+    newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: nextLevel });
   };
 
   useEffect(() => {
@@ -190,9 +221,15 @@ export function Skirmish() {
               <button type="button" className="app-header-button" onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}
               </button>
-              <NavButton className="app-header-button app-header-button-active" to={`/campaign/${routeCampaignId}`}>
-                {game.winner === 'player' ? 'Continue' : 'Back to Campaign'}
-              </NavButton>
+              {game.winner === 'player' && nextLevel ? (
+                <button type="button" className="app-header-button app-header-button-active" onClick={advanceToNextLevel}>
+                  Continue
+                </button>
+              ) : (
+                <NavButton className="app-header-button app-header-button-active" to={`/campaign/${routeCampaignId}`}>
+                  Back to Campaign
+                </NavButton>
+              )}
             </div>
           </div>
         </div>
