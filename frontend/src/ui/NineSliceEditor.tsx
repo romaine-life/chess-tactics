@@ -1,15 +1,21 @@
-// 9-slice editor. You align a kit 9-slice by nudging its pieces one pixel at a
-// time; the tool renders the rest of the frame from those nudges, live.
+// 9-slice editor — the dev's calibration bench (ADR-0050). Control shape:
 //
-// Decomposition (the model we settled on):
-//   - FRAME: the cool corner-frame pixels + the straight edge atoms, tuned as one layer.
-//   - BRACKET: the gold corner decoration, tuned with the same control profile.
-//   - CONTENT: an inset guide marking where text/icons start (consumption-side).
-// Toggle the outer/content guide boxes (fixed at the footprint) to align against.
+//   LAYER tabs (gold | cool) — the two disjoint pixel layers of the corner atom
+//     (warm gold decoration vs cool frame), each with its own scale knob.
+//   3×3 SPATIAL SELECTOR — click the part of the frame you mean: a corner cell
+//     (2-axis screen-direction d-pad), a side cell (1-axis d-pad along the side's
+//     normal; cool sides move corner-pair and/or pipe per the member toggles,
+//     both on = the rigid seam-safe side move), or center (whole-layer symmetric
+//     out/in steppers). All multi-member moves are ATOMIC: one shared clamped
+//     delta — everything moves or nothing does, so a side can never shear apart.
+//   HAND-OFF BOXES — content (where text starts) and fill (where a backing
+//     surface stops): human-calibrated values that code consumes, never baked.
 //
-// Edge handedness is copied verbatim from scripts/assemble-frame.mjs (the proven
-// assembler): right = rot90(edge), left = flipH(right), top = edge, bottom =
-// flipV(edge). Same rot90 pixel transform, so left/right can't reverse.
+// State is per-element absolutes matching the kit's canonical config exactly
+// (brackets/coolCorners per corner, pipes one number per side), inward-positive,
+// so mirror symmetry = literally equal values (the asymmetry chip watches this).
+// Edge handedness: right = rot90(scaled edge), left = flipH(right), bottom =
+// flipV(top) — every mirror/rotation AFTER scaling, identical to the Node bake.
 //
 // In dev, Save writes config/nine-slice/<asset>.json and regenerates the asset
 // (via the Vite dev endpoint). Routing follows repo convention (lazy in App.tsx).
@@ -19,13 +25,20 @@ import { SURFACE_ASSETS } from './surfaceCatalog';
 
 type Off = { dx: number; dy: number };
 type Frame = { w: number; h: number };
-type BracketCorner = 'tl' | 'tr' | 'bl' | 'br';
-type BracketScope = 'all' | 'top' | 'bottom' | 'left' | 'right' | BracketCorner;
-type BracketCorners = Record<BracketCorner, Off>;
-type EdgeSide = 'top' | 'bottom' | 'left' | 'right';
-type EdgeSides = Record<EdgeSide, Off>;
-type EditState = { keyline: Off; frameCorners: BracketCorners; edge: Off; edgeSides: EdgeSides; frameScale: number; bracket: Off; bracketCorners: BracketCorners; content: number; fill: number; bracketScale: number };
-type PieceKey = 'frame' | 'bracket' | 'pipes';
+type Corner = 'tl' | 'tr' | 'bl' | 'br';
+type Side = 'top' | 'bottom' | 'left' | 'right';
+// What's selected in the 3×3 spatial selector: a corner cell, a side cell, or the center.
+type Sel = Corner | Side | 'center';
+// The two disjoint pixel layers of a frame (the warm/cool split of the corner atom).
+type Layer = 'gold' | 'cool';
+type Corners = Record<Corner, Off>;
+type Pipes = Record<Side, number>;
+// Per-element ABSOLUTES (ADR-0050) — exactly the render degrees of freedom, matching
+// the kit's canonical config shape. Values are inward-positive in each element's own
+// corner/side space (mirrored axes negate on draw), so a mirror-symmetric frame is
+// one whose stored values are literally equal. Pipes carry ONE number each: their
+// normal-axis offset (a pipe tiles its full span; tangent movement is meaningless).
+type EditState = { coolCorners: Corners; pipes: Pipes; frameScale: number; brackets: Corners; bracketScale: number; content: number; fill: number };
 
 type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean };
 
@@ -55,35 +68,34 @@ const DEFAULT_FILL = 0;
 const DEFAULT_BRACKET_SCALE = 1;
 const DEFAULT_FRAME_SCALE = 1;
 const ZERO_OFF: Off = { dx: 0, dy: 0 };
-const CORNERS: BracketCorner[] = ['tl', 'tr', 'bl', 'br'];
-const SIDES: EdgeSide[] = ['top', 'bottom', 'left', 'right'];
-const ZERO_BRACKET_CORNERS: BracketCorners = {
-  tl: { dx: 0, dy: 0 },
-  tr: { dx: 0, dy: 0 },
-  bl: { dx: 0, dy: 0 },
-  br: { dx: 0, dy: 0 },
+const CORNERS: Corner[] = ['tl', 'tr', 'bl', 'br'];
+const SIDES: Side[] = ['top', 'bottom', 'left', 'right'];
+// Screen→stored sign per corner: stored offsets are inward-positive, so screen
+// arrows negate on each mirrored axis (x for the right column, y for the bottom row).
+const CORNER_MIRROR: Record<Corner, { x: 1 | -1; y: 1 | -1 }> = {
+  tl: { x: 1, y: 1 }, tr: { x: -1, y: 1 }, bl: { x: 1, y: -1 }, br: { x: -1, y: -1 },
 };
-const ZERO_EDGE_SIDES: EdgeSides = {
-  top: { dx: 0, dy: 0 },
-  bottom: { dx: 0, dy: 0 },
-  left: { dx: 0, dy: 0 },
-  right: { dx: 0, dy: 0 },
-};
-const BRACKET_SCOPES: { key: BracketScope; label: string }[] = [
-  { key: 'all', label: 'all' },
-  { key: 'top', label: 'top' },
-  { key: 'bottom', label: 'bottom' },
-  { key: 'left', label: 'left' },
-  { key: 'right', label: 'right' },
-  { key: 'tl', label: 'TL' },
-  { key: 'tr', label: 'TR' },
-  { key: 'bl', label: 'BL' },
-  { key: 'br', label: 'BR' },
-];
-const STORAGE_KEY = 'nine-slice-editor-v4';
+// A side's one degree of freedom (its normal axis) and its screen→stored sign.
+const SIDE_AXIS: Record<Side, 'dx' | 'dy'> = { top: 'dy', bottom: 'dy', left: 'dx', right: 'dx' };
+const SIDE_SIGN: Record<Side, 1 | -1> = { top: 1, bottom: -1, left: 1, right: -1 };
+const SIDE_CORNERS: Record<Side, [Corner, Corner]> = { top: ['tl', 'tr'], bottom: ['bl', 'br'], left: ['tl', 'bl'], right: ['tr', 'br'] };
+// v5: per-element absolutes (older entries hold the retired global+residual shape).
+const STORAGE_KEY = 'nine-slice-editor-v5';
 const Z = 6;
+// The 3×3 spatial selector — you click the part of the frame you mean.
+const SEL_CELLS: { key: Sel; glyph: string; title: string }[] = [
+  { key: 'tl', glyph: '◤', title: 'top-left corner' },
+  { key: 'top', glyph: '━', title: 'top side' },
+  { key: 'tr', glyph: '◥', title: 'top-right corner' },
+  { key: 'left', glyph: '┃', title: 'left side' },
+  { key: 'center', glyph: '▣', title: 'whole layer (symmetric out/in)' },
+  { key: 'right', glyph: '┃', title: 'right side' },
+  { key: 'bl', glyph: '◣', title: 'bottom-left corner' },
+  { key: 'bottom', glyph: '━', title: 'bottom side' },
+  { key: 'br', glyph: '◢', title: 'bottom-right corner' },
+];
 
-function cloneBracketCorners(src?: Partial<BracketCorners>): BracketCorners {
+function cloneCorners(src?: Partial<Corners>): Corners {
   return {
     tl: { ...(src?.tl ?? ZERO_OFF) },
     tr: { ...(src?.tr ?? ZERO_OFF) },
@@ -92,26 +104,18 @@ function cloneBracketCorners(src?: Partial<BracketCorners>): BracketCorners {
   };
 }
 
-function cloneEdgeSides(src?: Partial<EdgeSides>): EdgeSides {
-  return {
-    top: { ...(src?.top ?? ZERO_OFF) },
-    bottom: { ...(src?.bottom ?? ZERO_OFF) },
-    left: { ...(src?.left ?? ZERO_OFF) },
-    right: { ...(src?.right ?? ZERO_OFF) },
-  };
+function clonePipes(src?: Partial<Pipes>): Pipes {
+  return { top: src?.top ?? 0, bottom: src?.bottom ?? 0, left: src?.left ?? 0, right: src?.right ?? 0 };
 }
 
 const DEFAULT_EDIT: EditState = {
-  keyline: { dx: 0, dy: 0 },
-  frameCorners: cloneBracketCorners(),
-  edge: { dx: 0, dy: 0 },
-  edgeSides: cloneEdgeSides(),
+  coolCorners: cloneCorners(),
+  pipes: clonePipes(),
   frameScale: DEFAULT_FRAME_SCALE,
-  bracket: { dx: 0, dy: 0 },
-  bracketCorners: cloneBracketCorners(),
+  brackets: cloneCorners(),
+  bracketScale: DEFAULT_BRACKET_SCALE,
   content: DEFAULT_CONTENT,
   fill: DEFAULT_FILL,
-  bracketScale: DEFAULT_BRACKET_SCALE,
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -131,7 +135,7 @@ function normalizedOff(value: unknown, fallback: Off): Off {
   };
 }
 
-function normalizedCorners(value: unknown, fallback: BracketCorners): BracketCorners {
+function normalizedCorners(value: unknown, fallback: Corners): Corners {
   const raw = asRecord(value);
   return {
     tl: normalizedOff(raw.tl, fallback.tl),
@@ -141,13 +145,16 @@ function normalizedCorners(value: unknown, fallback: BracketCorners): BracketCor
   };
 }
 
-function normalizedEdgeSides(value: unknown, fallback: EdgeSides): EdgeSides {
-  const raw = asRecord(value);
+// Legacy fold (matches the kit's normalizeConfig): global offset + per-corner
+// residuals sum into per-corner absolutes.
+function foldedCorners(global: unknown, per: unknown): Corners {
+  const g = normalizedOff(global, ZERO_OFF);
+  const p = normalizedCorners(per, cloneCorners());
   return {
-    top: normalizedOff(raw.top, fallback.top),
-    bottom: normalizedOff(raw.bottom, fallback.bottom),
-    left: normalizedOff(raw.left, fallback.left),
-    right: normalizedOff(raw.right, fallback.right),
+    tl: { dx: g.dx + p.tl.dx, dy: g.dy + p.tl.dy },
+    tr: { dx: g.dx + p.tr.dx, dy: g.dy + p.tr.dy },
+    bl: { dx: g.dx + p.bl.dx, dy: g.dy + p.bl.dy },
+    br: { dx: g.dx + p.br.dx, dy: g.dy + p.br.dy },
   };
 }
 
@@ -155,43 +162,46 @@ function roundedScale(value: unknown, fallback: number): number {
   return Math.max(1, Math.min(4, Math.round(finiteNumber(value, fallback) * 100) / 100));
 }
 
+// Accepts the canonical per-element shape AND the retired global+residual shape
+// (canonical field wins per element group), so old exports/localStorage still load.
 function normalizedEdit(value: unknown, fallback: EditState = DEFAULT_EDIT): EditState {
   const raw = asRecord(value);
+  const legacyEdge = asRecord(raw.edge);
+  const legacySides = asRecord(raw.edgeSides);
+  const n = (v: unknown) => finiteNumber(v, 0);
+  const pipes: Pipes = raw.pipes
+    ? clonePipes({
+      top: finiteNumber(asRecord(raw.pipes).top, fallback.pipes.top),
+      bottom: finiteNumber(asRecord(raw.pipes).bottom, fallback.pipes.bottom),
+      left: finiteNumber(asRecord(raw.pipes).left, fallback.pipes.left),
+      right: finiteNumber(asRecord(raw.pipes).right, fallback.pipes.right),
+    })
+    : (raw.edge || raw.edgeSides)
+      ? {
+        top: n(legacyEdge.dy) + n(asRecord(legacySides.top).dy),
+        bottom: n(legacyEdge.dy) + n(asRecord(legacySides.bottom).dy),
+        left: n(legacyEdge.dx) + n(asRecord(legacySides.left).dx),
+        right: n(legacyEdge.dx) + n(asRecord(legacySides.right).dx),
+      }
+      : clonePipes(fallback.pipes);
   return {
-    keyline: normalizedOff(raw.keyline, fallback.keyline),
-    frameCorners: normalizedCorners(raw.frameCorners, fallback.frameCorners),
-    edge: normalizedOff(raw.edge, fallback.edge),
-    edgeSides: normalizedEdgeSides(raw.edgeSides, fallback.edgeSides),
+    coolCorners: raw.coolCorners
+      ? normalizedCorners(raw.coolCorners, fallback.coolCorners)
+      : (raw.keyline || raw.frameCorners) ? foldedCorners(raw.keyline, raw.frameCorners) : cloneCorners(fallback.coolCorners),
+    pipes,
     frameScale: roundedScale(raw.frameScale ?? raw.edgeScale, fallback.frameScale),
-    bracket: normalizedOff(raw.bracket, fallback.bracket),
-    bracketCorners: normalizedCorners(raw.bracketCorners, fallback.bracketCorners),
+    brackets: raw.brackets
+      ? normalizedCorners(raw.brackets, fallback.brackets)
+      : (raw.bracket || raw.bracketCorners) ? foldedCorners(raw.bracket, raw.bracketCorners) : cloneCorners(fallback.brackets),
+    bracketScale: roundedScale(raw.bracketScale, fallback.bracketScale),
     content: Math.max(0, Math.round(finiteNumber(raw.content, fallback.content))),
     fill: Math.max(0, Math.round(finiteNumber(raw.fill, fallback.fill))),
-    bracketScale: roundedScale(raw.bracketScale, fallback.bracketScale),
   };
 }
 
 function pastedAssetId(value: unknown): string | null {
   const asset = asRecord(value).asset;
   return typeof asset === 'string' && REGISTRY[asset] ? asset : null;
-}
-
-function cornersForScope(scope: BracketScope): BracketCorner[] {
-  if (scope === 'all') return CORNERS;
-  if (scope === 'top') return ['tl', 'tr'];
-  if (scope === 'bottom') return ['bl', 'br'];
-  if (scope === 'left') return ['tl', 'bl'];
-  if (scope === 'right') return ['tr', 'br'];
-  return [scope];
-}
-
-function sidesForScope(scope: BracketScope): EdgeSide[] {
-  if (scope === 'all') return SIDES;
-  if (scope === 'top') return ['top'];
-  if (scope === 'bottom') return ['bottom'];
-  if (scope === 'left') return ['left'];
-  if (scope === 'right') return ['right'];
-  return [];
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -337,13 +347,9 @@ type Loaded = {
   eh: number;
   baseBox: { minX: number; minY: number; maxX: number; maxY: number };
   accentBox: { minX: number; minY: number; maxX: number; maxY: number };
-  edgeMinDx: number;
-  edgeMinDy: number;
-  edgeMaxDx: number;
-  edgeMaxDy: number;
 };
 
-// Assemble the 9-slice at an arbitrary W×H (no margin) with the edge/keyline/bracket
+// Assemble the 9-slice at an arbitrary W×H (no margin) with the per-element
 // offsets baked in. This is the single source of truth for both the editor canvas
 // and the live previews, so a preview can never diverge from what you're editing.
 // bracketScale enlarges the gold corner bracket; frameScale enlarges the cool frame layer
@@ -368,34 +374,29 @@ function buildFrameCanvas(L: Loaded, edit: EditState, w: number, h: number, carv
   const fr = flip(r, r.width, r.height, true, false);
   const rightS = flipSides ? fr : r;
   const leftS = flipSides ? r : fr;
-  const topY = edit.edge.dy + edit.edgeSides.top.dy;
-  const bottomY = edit.edge.dy + edit.edgeSides.bottom.dy;
-  const leftX = edit.edge.dx + edit.edgeSides.left.dx;
-  const rightX = edit.edge.dx + edit.edgeSides.right.dx;
   // Pipes are an underlay, drawn once at their scaled thickness. At scale 1 they
   // span corner-to-corner (matches every scale-1 bake byte-for-byte). At scale > 1
   // they span the FULL side, so a nudged corner sliding over them can never expose
   // an empty seam behind its arms — the line simply continues underneath.
   const px0 = edit.frameScale > 1 ? 0 : cw;
   const py0 = edit.frameScale > 1 ? 0 : ch;
-  tileH(g, topS, px0, W - px0, topY);
-  tileH(g, botS, px0, W - px0, H - botS.height - bottomY);
-  tileV(g, leftS, py0, H - py0, leftX);
-  tileV(g, rightS, py0, H - py0, W - rightS.width - rightX);
-  const corner = (art: HTMLCanvasElement, ox: number, oy: number, scale = 1, perCorner: BracketCorners = ZERO_BRACKET_CORNERS) => {
+  tileH(g, topS, px0, W - px0, edit.pipes.top);
+  tileH(g, botS, px0, W - px0, H - botS.height - edit.pipes.bottom);
+  tileV(g, leftS, py0, H - py0, edit.pipes.left);
+  tileV(g, rightS, py0, H - py0, W - rightS.width - edit.pipes.right);
+  const corner = (art: HTMLCanvasElement, scale: number, corners: Corners) => {
     const tl = scaleCanvas(art, scale);
     const dw = tl.width, dh = tl.height;
     const tr = flip(tl, dw, dh, true, false);
     const bl = flip(tl, dw, dh, false, true);
     const br = flip(tl, dw, dh, true, true);
-    const p = perCorner;
-    g.drawImage(tl, ox + p.tl.dx, oy + p.tl.dy);
-    g.drawImage(tr, W - dw - (ox + p.tr.dx), oy + p.tr.dy);
-    g.drawImage(bl, ox + p.bl.dx, H - dh - (oy + p.bl.dy));
-    g.drawImage(br, W - dw - (ox + p.br.dx), H - dh - (oy + p.br.dy));
+    g.drawImage(tl, corners.tl.dx, corners.tl.dy);
+    g.drawImage(tr, W - dw - corners.tr.dx, corners.tr.dy);
+    g.drawImage(bl, corners.bl.dx, H - dh - corners.bl.dy);
+    g.drawImage(br, W - dw - corners.br.dx, H - dh - corners.br.dy);
   };
-  corner(L.base, edit.keyline.dx, edit.keyline.dy, edit.frameScale, edit.frameCorners); // cool frame corners
-  if (L.hasAccent) corner(L.accent, edit.bracket.dx, edit.bracket.dy, edit.bracketScale, edit.bracketCorners); // gold bracket
+  corner(L.base, edit.frameScale, edit.coolCorners); // cool frame corners
+  if (L.hasAccent) corner(L.accent, edit.bracketScale, edit.brackets); // gold bracket
   if (carve) carveExterior(c);
   return c;
 }
@@ -415,11 +416,16 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId) ?? ASSETS[0], [assetId]);
   const aid = asset.id;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [layerScope, setLayerScope] = useState<BracketScope>('all');
+  // Selection = layer tab (gold | cool) + a cell of the 3×3 spatial selector.
+  // The cool layer's side/center moves take their members from two toggles
+  // (corners / pipe) — both on = the rigid seam-safe side move.
+  const [layer, setLayer] = useState<Layer>('gold');
+  const [sel, setSel] = useState<Sel>('center');
+  const [memberCorners, setMemberCorners] = useState(true);
+  const [memberPipe, setMemberPipe] = useState(true);
   // Fingerprints of the exact tile bytes this view is built from (corner/edge/fill),
   // shown in the header so the asset on screen is identifiable and matchable to disk.
   const [tileHashes, setTileHashes] = useState<{ corner?: string; edge?: string; fill?: string }>({});
-  const [active, setActive] = useState<PieceKey>('bracket');
   const [showOuter, setShowOuter] = useState(true);
   const [showContent, setShowContent] = useState(false);
   const [showFill, setShowFill] = useState(false);
@@ -434,15 +440,14 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   // gap from each outer-box edge to the art's outermost opaque pixel. + = gap inside; − = beyond (overflow).
   const [status, setStatus] = useState<{ top: number; right: number; bottom: number; left: number } | null>(null);
   const [edits, setEdits] = useState<Record<string, EditState>>(() => {
-    // Only keep well-formed entries — a malformed/old saved shape must never blank the editor.
+    // Only keep well-formed entries — a malformed/old saved shape must never blank
+    // the editor. normalizedEdit also folds the retired global+residual shape.
     try {
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
       const clean: Record<string, EditState> = {};
       for (const k of Object.keys(raw)) {
         const e = raw[k];
-        if (e && e.keyline && typeof e.keyline.dx === 'number' && e.bracket && typeof e.bracket.dx === 'number') {
-          clean[k] = normalizedEdit(e);
-        }
+        if (e && typeof e === 'object' && !Array.isArray(e)) clean[k] = normalizedEdit(e);
       }
       return clean;
     } catch { return {}; }
@@ -451,17 +456,16 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   const pvActualRef = useRef<HTMLCanvasElement>(null);
   const stored = edits[aid];
   const edit: EditState = {
-    keyline: stored?.keyline ?? { dx: 0, dy: 0 },
-    frameCorners: cloneBracketCorners(stored?.frameCorners),
-    edge: stored?.edge ?? { dx: 0, dy: 0 },
-    edgeSides: cloneEdgeSides(stored?.edgeSides),
+    coolCorners: cloneCorners(stored?.coolCorners),
+    pipes: clonePipes(stored?.pipes),
     frameScale: stored?.frameScale ?? DEFAULT_FRAME_SCALE,
-    bracket: stored?.bracket ?? { dx: 0, dy: 0 },
-    bracketCorners: cloneBracketCorners(stored?.bracketCorners),
+    brackets: cloneCorners(stored?.brackets),
+    bracketScale: stored?.bracketScale ?? DEFAULT_BRACKET_SCALE,
     content: stored?.content ?? DEFAULT_CONTENT,
     fill: stored?.fill ?? DEFAULT_FILL,
-    bracketScale: stored?.bracketScale ?? DEFAULT_BRACKET_SCALE,
   };
+  // One dependency key for effects that redraw from the full edit state.
+  const editKey = JSON.stringify(edit);
 
   useEffect(() => {
     let live = true; setLoaded(null);
@@ -469,20 +473,6 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       .then(([corner, edge, fill, target]) => {
         if (!live) return;
         const { base, accent, hasAccent } = splitWarm(corner);
-        const topEdge = toCanvas(edge, edge.width, edge.height);
-        const bottomEdge = flip(topEdge, topEdge.width, topEdge.height, false, true);
-        const side = rot90(edge, edge.width, edge.height);
-        const flippedSide = flip(side, side.width, side.height, true, false);
-        const rightEdge = asset.flipSides ? flippedSide : side;
-        const leftEdge = asset.flipSides ? side : flippedSide;
-        const topBox = opaqueBox(topEdge);
-        const bottomBox = opaqueBox(bottomEdge);
-        const leftBox = opaqueBox(leftEdge);
-        const rightBox = opaqueBox(rightEdge);
-        const edgeMinDx = Math.max(-leftBox.minX, rightBox.maxX - rightEdge.width + 1);
-        const edgeMinDy = Math.max(-topBox.minY, bottomBox.maxY - bottomEdge.height + 1);
-        const edgeMaxDx = Math.max(edgeMinDx, Math.floor((asset.frame.w - leftEdge.width - rightEdge.width) / 2));
-        const edgeMaxDy = Math.max(edgeMinDy, Math.floor((asset.frame.h - topEdge.height - bottomEdge.height) / 2));
         setLoaded({
           base,
           accent,
@@ -496,10 +486,6 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           eh: edge.height,
           baseBox: opaqueBox(base),
           accentBox: hasAccent ? opaqueBox(accent) : { minX: 0, minY: 0, maxX: corner.width - 1, maxY: corner.height - 1 },
-          edgeMinDx,
-          edgeMinDy,
-          edgeMaxDx,
-          edgeMaxDy,
         });
       }).catch(() => { if (live) setLoaded(null); });
     return () => { live = false; };
@@ -508,8 +494,8 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(edits)); }, [edits]);
 
   useEffect(() => {
-    if (loaded && !loaded.hasAccent && active === 'bracket') setActive('frame');
-  }, [loaded, active]);
+    if (loaded && !loaded.hasAccent && layer === 'gold') setLayer('cool');
+  }, [loaded, layer]);
 
   // Fingerprint the actual served bytes of this asset's tiles (no cache), so the
   // header shows exactly which artwork the on-screen frame is assembled from.
@@ -568,8 +554,11 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     const W = asset.frame.w, H = asset.frame.h;
     return { minX: -scaled.minX, maxX: W - 1 - scaled.maxX, minY: -scaled.minY, maxY: H - 1 - scaled.maxY };
   };
-  const bracketRange = () => loaded ? boxRange(loaded.accentBox, edit.bracketScale) : null;
-  const frameCornerRange = (scale = edit.frameScale) => loaded ? boxRange(loaded.baseBox, scale) : null;
+  const withAxis = (o: Off, axis: 'dx' | 'dy', v: number): Off => (axis === 'dx' ? { ...o, dx: v } : { ...o, dy: v });
+  // Corner clamp range for a layer's ABSOLUTE offsets: outward limit = art flush
+  // with the footprint corner, inward limit = art fully inside the footprint.
+  const cornerRangeAt = (l: Layer, scale: number) => (loaded ? boxRange(l === 'gold' ? loaded.accentBox : loaded.baseBox, scale) : null);
+  const cornerRange = (l: Layer = layer) => cornerRangeAt(l, l === 'gold' ? edit.bracketScale : edit.frameScale);
   // The four scaled pipe canvases, built EXACTLY like buildFrameCanvas does (mirror/
   // rotate after scaling), so clamp ranges are computed on the same pixels that draw.
   const scaledPipes = (scale = edit.frameScale) => {
@@ -580,26 +569,9 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     const fr = flip(r, r.width, r.height, true, false);
     return { top, bottom, right: asset.flipSides ? fr : r, left: asset.flipSides ? r : fr };
   };
-  const edgeRange = (scale = edit.frameScale, sides = edit.edgeSides) => {
-    const p = scaledPipes(scale);
-    if (!p) return null;
-    const topBox = opaqueBox(p.top);
-    const bottomBox = opaqueBox(p.bottom);
-    const leftBox = opaqueBox(p.left);
-    const rightBox = opaqueBox(p.right);
-    const minDx = Math.max(-leftBox.minX - sides.left.dx, rightBox.maxX - p.right.width + 1 - sides.right.dx);
-    const minDy = Math.max(-topBox.minY - sides.top.dy, bottomBox.maxY - p.bottom.height + 1 - sides.bottom.dy);
-    return {
-      minDx,
-      minDy,
-      maxDx: Math.max(minDx, Math.floor((asset.frame.w - p.left.width - p.right.width) / 2) - Math.max(sides.left.dx, sides.right.dx)),
-      maxDy: Math.max(minDy, Math.floor((asset.frame.h - p.top.height - p.bottom.height) / 2) - Math.max(sides.top.dy, sides.bottom.dy)),
-    };
-  };
-  // Per-side range for the stored SUM (global edge + that side's residual): outward
-  // limit = art flush with the footprint edge, inward limit = halfway to the
-  // opposite pipe. Unlike edgeRange (the global clamp), each side is independent.
-  const pipeSideRange = (side: EdgeSide, scale = edit.frameScale) => {
+  // A pipe's clamp range (absolute, its normal axis): outward limit = art flush
+  // with the footprint edge, inward limit = halfway to the opposite pipe.
+  const pipeSideRange = (side: Side, scale = edit.frameScale) => {
     const p = scaledPipes(scale);
     if (!p) return null;
     const box = opaqueBox(p[side]);
@@ -608,260 +580,174 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     if (side === 'left') return { min: -box.minX, max: Math.floor((asset.frame.w - p.left.width - p.right.width) / 2) };
     return { min: box.maxX - p.right.width + 1, max: Math.floor((asset.frame.w - p.left.width - p.right.width) / 2) };
   };
-  // Arrow deltas arrive in SCREEN space; offsets are stored inward-positive (mirrored
-  // axes negate). Remap so the selected piece always moves in the arrow's screen
-  // direction. 'all' stays symmetric (↓/→ = inward, ↑/← = outward); a side scope's
-  // tangent axis stays a symmetric squeeze/spread of its corner pair.
-  const screenToStored = (scope: BracketScope, dx: number, dy: number): [number, number] => {
-    if (scope === 'tr') return [-dx, dy];
-    if (scope === 'bl') return [dx, -dy];
-    if (scope === 'br') return [-dx, -dy];
-    if (scope === 'bottom') return [dx, -dy];
-    if (scope === 'right') return [-dx, dy];
-    return [dx, dy];
-  };
-  const withAxis = (o: Off, axis: 'dx' | 'dy', v: number): Off => (axis === 'dx' ? { ...o, dx: v } : { ...o, dy: v });
-  const nudgeBracket = (sdx: number, sdy: number) => {
-    const [dx, dy] = screenToStored(layerScope, sdx, sdy);
-    const range = bracketRange();
-    if (!range) return;
-    const scoped = cornersForScope(layerScope);
+  // Which members a side/center move touches. Corner cells always move their corner;
+  // the gold layer has no pipes, so its toggles don't exist.
+  const wantCorners = layer === 'gold' || memberCorners;
+  const wantPipe = layer === 'cool' && memberPipe;
+  const activeCorners = (cur: EditState) => (layer === 'gold' ? cur.brackets : cur.coolCorners);
+  const putCorners = (cur: EditState, corners: Corners): EditState => (layer === 'gold' ? { ...cur, brackets: corners } : { ...cur, coolCorners: corners });
+  // Single corner: d-pad in SCREEN direction, both axes, clamped. Member toggles
+  // don't apply — a corner cell always moves exactly its corner.
+  const nudgeCorner = (k: Corner, sdx: number, sdy: number) => {
+    const r = cornerRange();
+    if (!r) return;
+    const m = CORNER_MIRROR[k];
     update((cur) => {
-      const corners = cloneBracketCorners(cur.bracketCorners);
-      if (layerScope === 'all') {
-        const minDx = Math.max(...CORNERS.map((k) => range.minX - corners[k].dx));
-        const maxDx = Math.min(...CORNERS.map((k) => range.maxX - corners[k].dx));
-        const minDy = Math.max(...CORNERS.map((k) => range.minY - corners[k].dy));
-        const maxDy = Math.min(...CORNERS.map((k) => range.maxY - corners[k].dy));
-        return { ...cur, bracket: { dx: clamp(cur.bracket.dx + dx, minDx, maxDx), dy: clamp(cur.bracket.dy + dy, minDy, maxDy) } };
-      }
-      for (const k of scoped) {
-        const actualX = clamp(cur.bracket.dx + corners[k].dx + dx, range.minX, range.maxX);
-        const actualY = clamp(cur.bracket.dy + corners[k].dy + dy, range.minY, range.maxY);
-        corners[k] = { dx: actualX - cur.bracket.dx, dy: actualY - cur.bracket.dy };
-      }
-      return { ...cur, bracketCorners: corners };
+      const corners = cloneCorners(activeCorners(cur));
+      corners[k] = {
+        dx: clamp(corners[k].dx + sdx * m.x, r.minX, r.maxX),
+        dy: clamp(corners[k].dy + sdy * m.y, r.minY, r.maxY),
+      };
+      return putCorners(cur, corners);
     });
   };
-  const nudgeFrame = (sdx: number, sdy: number) => {
-    const [dx, dy] = screenToStored(layerScope, sdx, sdy);
-    const cornerRange = frameCornerRange();
-    const edgeBaseRange = edgeRange();
-    if (!cornerRange || !edgeBaseRange) return;
-    const cornerScope = cornersForScope(layerScope);
-    const sideScope = sidesForScope(layerScope);
+  // Side: RIGID move along the side's only axis (its normal). One shared delta is
+  // clamped so every enabled member (corner pair and/or pipe) can take it — the
+  // side moves whole or not at all; it can never shear apart at a clamp bound.
+  const nudgeSideMove = (side: Side, screenDelta: number) => {
+    if (!screenDelta) return;
+    const d = screenDelta * SIDE_SIGN[side];
+    const axis = SIDE_AXIS[side];
+    const r = cornerRange();
+    const pr = wantPipe ? pipeSideRange(side) : null;
+    if (!r || (!wantCorners && !wantPipe)) return;
     update((cur) => {
-      const frameCorners = cloneBracketCorners(cur.frameCorners);
-      const edgeSides = cloneEdgeSides(cur.edgeSides);
-      if (layerScope === 'all') {
-        const minDx = Math.max(...CORNERS.map((k) => cornerRange.minX - frameCorners[k].dx));
-        const maxDx = Math.min(...CORNERS.map((k) => cornerRange.maxX - frameCorners[k].dx));
-        const minDy = Math.max(...CORNERS.map((k) => cornerRange.minY - frameCorners[k].dy));
-        const maxDy = Math.min(...CORNERS.map((k) => cornerRange.maxY - frameCorners[k].dy));
-        return {
-          ...cur,
-          keyline: { dx: clamp(cur.keyline.dx + dx, minDx, maxDx), dy: clamp(cur.keyline.dy + dy, minDy, maxDy) },
-          edge: { dx: clamp(cur.edge.dx + dx, edgeBaseRange.minDx, edgeBaseRange.maxDx), dy: clamp(cur.edge.dy + dy, edgeBaseRange.minDy, edgeBaseRange.maxDy) },
-        };
+      const corners = cloneCorners(activeCorners(cur));
+      const pipes = clonePipes(cur.pipes);
+      let lo = -Infinity, hi = Infinity;
+      if (wantCorners) for (const k of SIDE_CORNERS[side]) {
+        lo = Math.max(lo, (axis === 'dx' ? r.minX : r.minY) - corners[k][axis]);
+        hi = Math.min(hi, (axis === 'dx' ? r.maxX : r.maxY) - corners[k][axis]);
       }
-      if (sideScope.length === 1) {
-        // RIGID side move along the side's normal axis: ONE shared delta, clamped so
-        // both corners AND the pipe can take it — the side moves whole or not at all
-        // (it must never shear apart when one member hits a clamp bound first).
-        const side = sideScope[0];
-        const axis: 'dx' | 'dy' = side === 'top' || side === 'bottom' ? 'dy' : 'dx';
-        const d = axis === 'dy' ? dy : dx;
-        const pr = pipeSideRange(side);
-        if (d !== 0 && pr) {
-          let lo = pr.min - (cur.edge[axis] + edgeSides[side][axis]);
-          let hi = pr.max - (cur.edge[axis] + edgeSides[side][axis]);
-          const cornerLo = axis === 'dx' ? cornerRange.minX : cornerRange.minY;
-          const cornerHi = axis === 'dx' ? cornerRange.maxX : cornerRange.maxY;
-          for (const k of cornerScope) {
-            lo = Math.max(lo, cornerLo - (cur.keyline[axis] + frameCorners[k][axis]));
-            hi = Math.min(hi, cornerHi - (cur.keyline[axis] + frameCorners[k][axis]));
-          }
-          const applied = lo <= hi ? clamp(d, lo, hi) : 0;
-          for (const k of cornerScope) frameCorners[k] = withAxis(frameCorners[k], axis, frameCorners[k][axis] + applied);
-          edgeSides[side] = withAxis(edgeSides[side], axis, edgeSides[side][axis] + applied);
-        }
-        // Tangent axis: symmetric squeeze/spread of the corner pair (pipes are
-        // anchored along their own axis, so there is nothing rigid to move).
-        const tAxis: 'dx' | 'dy' = axis === 'dy' ? 'dx' : 'dy';
-        const t = tAxis === 'dx' ? dx : dy;
-        if (t !== 0) {
-          const tLo = tAxis === 'dx' ? cornerRange.minX : cornerRange.minY;
-          const tHi = tAxis === 'dx' ? cornerRange.maxX : cornerRange.maxY;
-          for (const k of cornerScope) {
-            const actual = clamp(cur.keyline[tAxis] + frameCorners[k][tAxis] + t, tLo, tHi);
-            frameCorners[k] = withAxis(frameCorners[k], tAxis, actual - cur.keyline[tAxis]);
-          }
-        }
-        return { ...cur, frameCorners, edgeSides };
-      }
-      for (const k of cornerScope) {
-        const actualX = clamp(cur.keyline.dx + frameCorners[k].dx + dx, cornerRange.minX, cornerRange.maxX);
-        const actualY = clamp(cur.keyline.dy + frameCorners[k].dy + dy, cornerRange.minY, cornerRange.maxY);
-        frameCorners[k] = { dx: actualX - cur.keyline.dx, dy: actualY - cur.keyline.dy };
-      }
-      return { ...cur, frameCorners, edgeSides };
+      if (wantPipe && pr) { lo = Math.max(lo, pr.min - pipes[side]); hi = Math.min(hi, pr.max - pipes[side]); }
+      const a = lo <= hi ? clamp(d, lo, hi) : 0;
+      if (!a) return cur;
+      if (wantCorners) for (const k of SIDE_CORNERS[side]) corners[k] = withAxis(corners[k], axis, corners[k][axis] + a);
+      if (wantPipe && pr) pipes[side] += a;
+      return { ...putCorners(cur, corners), pipes };
     });
   };
-  // Pipes as their own piece: move ONE pipe (or the global edge under 'all') without
-  // touching any corner — the operation that used to require hand-editing JSON.
-  const nudgePipes = (sdx: number, sdy: number) => {
-    const [dx, dy] = screenToStored(layerScope, sdx, sdy);
-    if (layerScope === 'all') {
-      const range = edgeRange();
-      if (!range) return;
-      update((cur) => ({ ...cur, edge: { dx: clamp(cur.edge.dx + dx, range.minDx, range.maxDx), dy: clamp(cur.edge.dy + dy, range.minDy, range.maxDy) } }));
-      return;
-    }
-    const sideScope = sidesForScope(layerScope);
-    if (!sideScope.length) return;
+  // Center: symmetric whole-layer seating, one axis at a time. dir +1 = inward,
+  // -1 = outward. Atomic across all enabled members, so symmetry is preserved:
+  // either every member moves or none does.
+  const nudgeCenter = (axis: 'dx' | 'dy', dir: 1 | -1) => {
+    const r = cornerRange();
+    if (!r || (!wantCorners && !wantPipe)) return;
+    const sides: Side[] = axis === 'dx' ? ['left', 'right'] : ['top', 'bottom'];
     update((cur) => {
-      const edgeSides = cloneEdgeSides(cur.edgeSides);
-      for (const side of sideScope) {
-        const axis: 'dx' | 'dy' = side === 'top' || side === 'bottom' ? 'dy' : 'dx';
-        const d = axis === 'dy' ? dy : dx;
-        if (!d) continue;
-        const pr = pipeSideRange(side);
-        if (!pr) continue;
-        const sum = clamp(cur.edge[axis] + edgeSides[side][axis] + d, pr.min, pr.max);
-        edgeSides[side] = withAxis(edgeSides[side], axis, sum - cur.edge[axis]);
+      const corners = cloneCorners(activeCorners(cur));
+      const pipes = clonePipes(cur.pipes);
+      let lo = -Infinity, hi = Infinity;
+      if (wantCorners) for (const k of CORNERS) {
+        lo = Math.max(lo, (axis === 'dx' ? r.minX : r.minY) - corners[k][axis]);
+        hi = Math.min(hi, (axis === 'dx' ? r.maxX : r.maxY) - corners[k][axis]);
       }
-      return { ...cur, edgeSides };
+      if (wantPipe) for (const s of sides) { const pr = pipeSideRange(s); if (pr) { lo = Math.max(lo, pr.min - pipes[s]); hi = Math.min(hi, pr.max - pipes[s]); } }
+      const a = lo <= hi ? clamp(dir, lo, hi) : 0;
+      if (!a) return cur;
+      if (wantCorners) for (const k of CORNERS) corners[k] = withAxis(corners[k], axis, corners[k][axis] + a);
+      if (wantPipe) for (const s of sides) pipes[s] += a;
+      return { ...putCorners(cur, corners), pipes };
     });
   };
-  const nudge = (dx: number, dy: number) => {
-    if (active === 'bracket') { nudgeBracket(dx, dy); return; }
-    if (active === 'pipes') { nudgePipes(dx, dy); return; }
-    nudgeFrame(dx, dy);
+  const nudge = (sdx: number, sdy: number) => {
+    if (sel === 'center') return; // center seats via the labeled out/in steppers
+    if ((SIDES as string[]).includes(sel)) {
+      const side = sel as Side;
+      nudgeSideMove(side, SIDE_AXIS[side] === 'dy' ? sdy : sdx);
+      return;
+    }
+    nudgeCorner(sel as Corner, sdx, sdy);
   };
-  // Send the active piece to its max outward position — flush with the footprint corner.
-  const maxOut = () => {
-    if (!loaded) return;
-    if (active === 'pipes') {
-      const range = edgeRange();
-      if (!range) return;
-      update((cur) => {
-        if (layerScope === 'all') return { ...cur, edge: { dx: range.minDx, dy: range.minDy }, edgeSides: cloneEdgeSides() };
-        const edgeSides = cloneEdgeSides(cur.edgeSides);
-        for (const side of sidesForScope(layerScope)) {
-          const axis: 'dx' | 'dy' = side === 'top' || side === 'bottom' ? 'dy' : 'dx';
-          const pr = pipeSideRange(side);
-          if (pr) edgeSides[side] = withAxis(edgeSides[side], axis, pr.min - cur.edge[axis]);
-        }
-        return { ...cur, edgeSides };
-      });
-      return;
-    }
-    if (active === 'bracket') {
-      const range = bracketRange();
-      if (!range) return;
-      const scoped = cornersForScope(layerScope);
-      update((cur) => {
-        const corners = cloneBracketCorners(cur.bracketCorners);
-        if (layerScope === 'all') return { ...cur, bracket: { dx: range.minX, dy: range.minY }, bracketCorners: cloneBracketCorners() };
-        for (const k of scoped) corners[k] = { dx: range.minX - cur.bracket.dx, dy: range.minY - cur.bracket.dy };
-        return { ...cur, bracketCorners: corners };
-      });
-      return;
-    }
-    const cornerRange = frameCornerRange();
-    const edgeBaseRange = edgeRange();
-    if (!cornerRange || !edgeBaseRange) return;
-    const cornerScope = cornersForScope(layerScope);
-    const sideScope = sidesForScope(layerScope);
+  // Send the selection to its max outward position — flush with the footprint.
+  const flushOutward = () => {
+    const r = cornerRange();
+    if (!r) return;
     update((cur) => {
-      const frameCorners = cloneBracketCorners(cur.frameCorners);
-      const edgeSides = cloneEdgeSides(cur.edgeSides);
-      if (layerScope === 'all') {
-        return {
-          ...cur,
-          keyline: { dx: cornerRange.minX, dy: cornerRange.minY },
-          frameCorners: cloneBracketCorners(),
-          edge: { dx: edgeBaseRange.minDx, dy: edgeBaseRange.minDy },
-          edgeSides: cloneEdgeSides(),
-        };
+      const corners = cloneCorners(activeCorners(cur));
+      const pipes = clonePipes(cur.pipes);
+      if (sel === 'center') {
+        if (wantCorners) for (const k of CORNERS) corners[k] = { dx: r.minX, dy: r.minY };
+        if (wantPipe) for (const s of SIDES) { const pr = pipeSideRange(s); if (pr) pipes[s] = pr.min; }
+      } else if ((SIDES as string[]).includes(sel)) {
+        const side = sel as Side;
+        const axis = SIDE_AXIS[side];
+        if (wantCorners) for (const k of SIDE_CORNERS[side]) corners[k] = withAxis(corners[k], axis, axis === 'dx' ? r.minX : r.minY);
+        if (wantPipe) { const pr = pipeSideRange(side); if (pr) pipes[side] = pr.min; }
+      } else {
+        corners[sel as Corner] = { dx: r.minX, dy: r.minY };
       }
-      for (const k of cornerScope) frameCorners[k] = { dx: cornerRange.minX - cur.keyline.dx, dy: cornerRange.minY - cur.keyline.dy };
-      for (const side of sideScope) {
-        if (side === 'top' || side === 'bottom') edgeSides[side] = { ...edgeSides[side], dy: edgeBaseRange.minDy - cur.edge.dy };
-        else edgeSides[side] = { ...edgeSides[side], dx: edgeBaseRange.minDx - cur.edge.dx };
-      }
-      return { ...cur, frameCorners, edgeSides };
+      return { ...putCorners(cur, corners), pipes };
     });
   };
   const setContent = (dc: number) => update((cur) => ({ ...cur, content: Math.max(0, (cur.content ?? DEFAULT_CONTENT) + dc) }));
   // Fill inset can't exceed half the smaller frame dim (box would invert); clamp to >= 0.
   const setFill = (df: number) => update((cur) => ({ ...cur, fill: Math.max(0, Math.min(Math.floor(Math.min(asset.frame.w, asset.frame.h) / 2) - 1, (cur.fill ?? DEFAULT_FILL) + df)) }));
+  // Scale changes shrink clamp ranges, so element values re-clamp with them — the
+  // invariant "every stored value is inside its range" survives every operation.
+  const clampCornersTo = (corners: Corners, r: { minX: number; maxX: number; minY: number; maxY: number }): Corners => ({
+    tl: { dx: clamp(corners.tl.dx, r.minX, r.maxX), dy: clamp(corners.tl.dy, r.minY, r.maxY) },
+    tr: { dx: clamp(corners.tr.dx, r.minX, r.maxX), dy: clamp(corners.tr.dy, r.minY, r.maxY) },
+    bl: { dx: clamp(corners.bl.dx, r.minX, r.maxX), dy: clamp(corners.bl.dy, r.minY, r.maxY) },
+    br: { dx: clamp(corners.br.dx, r.minX, r.maxX), dy: clamp(corners.br.dy, r.minY, r.maxY) },
+  });
   const setBracketScale = (next: number | ((cur: number) => number)) => update((cur) => {
     const raw = typeof next === 'function' ? next(cur.bracketScale ?? DEFAULT_BRACKET_SCALE) : next;
-    return { ...cur, bracketScale: Math.max(1, Math.min(4, Math.round(raw * 100) / 100)) };
+    const bracketScale = Math.max(1, Math.min(4, Math.round(raw * 100) / 100));
+    const r = cornerRangeAt('gold', bracketScale);
+    return { ...cur, bracketScale, brackets: r ? clampCornersTo(cur.brackets, r) : cur.brackets };
   });
   const setFrameScale = (next: number | ((cur: number) => number)) => update((cur) => {
     const raw = typeof next === 'function' ? next(cur.frameScale ?? DEFAULT_FRAME_SCALE) : next;
     const frameScale = clamp(Math.round(raw * 100) / 100, 1, maxFrameScale);
-    const range = edgeRange(frameScale, cur.edgeSides);
-    return {
-      ...cur,
-      frameScale,
-      edge: range ? { dx: clamp(cur.edge.dx, range.minDx, range.maxDx), dy: clamp(cur.edge.dy, range.minDy, range.maxDy) } : cur.edge,
-    };
+    const r = cornerRangeAt('cool', frameScale);
+    const pipes = clonePipes(cur.pipes);
+    for (const s of SIDES) { const pr = pipeSideRange(s, frameScale); if (pr) pipes[s] = clamp(pipes[s], pr.min, pr.max); }
+    return { ...cur, frameScale, coolCorners: r ? clampCornersTo(cur.coolCorners, r) : cur.coolCorners, pipes };
   });
-  // Per-control resets — each reverts ONE control to the asset's saved baseline (its shipped value),
-  // the same "↺ back to default" every other Studio tuner gives its controls. Backing is preview-only,
-  // so it resets to its neutral state (none).
+  // Per-selection reset — reverts exactly what the selection's controls can change
+  // to the asset's saved baseline (its shipped value), the same "↺ back to default"
+  // every other Studio tuner gives its controls.
   const baselineOf = (): EditState => baselineRef.current[aid] ?? DEFAULT_EDIT;
-  const resetBracket = () => update((cur) => {
+  const resetSelection = () => update((cur) => {
     const base = baselineOf();
-    if (layerScope === 'all') return { ...cur, bracket: base.bracket, bracketCorners: cloneBracketCorners(base.bracketCorners) };
-    const corners = cloneBracketCorners(cur.bracketCorners);
-    const baseCorners = cloneBracketCorners(base.bracketCorners);
-    for (const k of cornersForScope(layerScope)) corners[k] = baseCorners[k];
-    return { ...cur, bracketCorners: corners };
-  });
-  const resetFrame = () => update((cur) => {
-    const base = baselineOf();
-    if (layerScope === 'all') {
-      return {
-        ...cur,
-        keyline: base.keyline,
-        frameCorners: cloneBracketCorners(base.frameCorners),
-        edge: base.edge,
-        edgeSides: cloneEdgeSides(base.edgeSides),
-      };
+    const corners = cloneCorners(activeCorners(cur));
+    const baseCorners = cloneCorners(layer === 'gold' ? base.brackets : base.coolCorners);
+    const pipes = clonePipes(cur.pipes);
+    if (sel === 'center') {
+      // center = the whole layer (per member toggles for cool)
+      if (wantCorners) for (const k of CORNERS) corners[k] = { ...baseCorners[k] };
+      if (wantPipe) for (const s of SIDES) pipes[s] = base.pipes[s];
+    } else if ((SIDES as string[]).includes(sel)) {
+      // a side's controls only change the normal-axis component (+ its pipe)
+      const side = sel as Side;
+      const axis = SIDE_AXIS[side];
+      if (wantCorners) for (const k of SIDE_CORNERS[side]) corners[k] = withAxis(corners[k], axis, baseCorners[k][axis]);
+      if (wantPipe) pipes[side] = base.pipes[side];
+    } else {
+      corners[sel as Corner] = { ...baseCorners[sel as Corner] };
     }
-    const frameCorners = cloneBracketCorners(cur.frameCorners);
-    const edgeSides = cloneEdgeSides(cur.edgeSides);
-    const baseFrameCorners = cloneBracketCorners(base.frameCorners);
-    const baseEdgeSides = cloneEdgeSides(base.edgeSides);
-    for (const k of cornersForScope(layerScope)) frameCorners[k] = baseFrameCorners[k];
-    for (const s of sidesForScope(layerScope)) edgeSides[s] = baseEdgeSides[s];
-    return { ...cur, frameCorners, edgeSides };
-  });
-  const resetPipes = () => update((cur) => {
-    const base = baselineOf();
-    if (layerScope === 'all') return { ...cur, edge: base.edge, edgeSides: cloneEdgeSides(base.edgeSides) };
-    const edgeSides = cloneEdgeSides(cur.edgeSides);
-    const baseEdgeSides = cloneEdgeSides(base.edgeSides);
-    for (const s of sidesForScope(layerScope)) edgeSides[s] = baseEdgeSides[s];
-    return { ...cur, edgeSides };
+    return { ...putCorners(cur, corners), pipes };
   });
   const resetContent = () => update((cur) => ({ ...cur, content: baselineOf().content }));
   const resetFill = () => update((cur) => ({ ...cur, fill: baselineOf().fill }));
-  const resetBracketScale = () => update((cur) => ({ ...cur, bracketScale: baselineOf().bracketScale ?? DEFAULT_BRACKET_SCALE }));
-  const resetFrameScale = () => update((cur) => {
-    const frameScale = clamp(baselineOf().frameScale ?? DEFAULT_FRAME_SCALE, 1, maxFrameScale);
-    const range = edgeRange(frameScale, cur.edgeSides);
-    return {
-      ...cur,
-      frameScale,
-      edge: range ? { dx: clamp(cur.edge.dx, range.minDx, range.maxDx), dy: clamp(cur.edge.dy, range.minDy, range.maxDy) } : cur.edge,
-    };
-  });
+  const resetBracketScale = () => setBracketScale(baselineOf().bracketScale ?? DEFAULT_BRACKET_SCALE);
+  const resetFrameScale = () => setFrameScale(baselineOf().frameScale ?? DEFAULT_FRAME_SCALE);
   const resetAll = () => { update(() => baselineOf()); setBacking('none'); };
+  // Passive symmetry guard: with inward-positive storage, a mirror-symmetric frame
+  // has literally equal values — any inequality is deliberate (or a mistake), so
+  // name it instead of letting it hide until the consumed button looks off.
+  const asymmetries = (() => {
+    const out: string[] = [];
+    const eq = (a: Off, b: Off) => a.dx === b.dx && a.dy === b.dy;
+    for (const [label, g] of [['gold', edit.brackets], ['cool', edit.coolCorners]] as const) {
+      if (!eq(g.tl, g.tr) || !eq(g.bl, g.br)) out.push(`${label} corners L≠R`);
+      if (!eq(g.tl, g.bl) || !eq(g.tr, g.br)) out.push(`${label} corners T≠B`);
+    }
+    if (edit.pipes.left !== edit.pipes.right) out.push('pipes L≠R');
+    if (edit.pipes.top !== edit.pipes.bottom) out.push('pipes T≠B');
+    return out;
+  })();
 
   useEffect(() => {
     if (!loaded || edit.frameScale <= maxFrameScale) return;
@@ -878,7 +764,8 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, aid, loaded, edit.bracketScale, edit.frameScale, layerScope]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layer, sel, memberCorners, memberPipe, aid, loaded, edit.bracketScale, edit.frameScale]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -910,7 +797,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     }
 
     // Guides are FIXED references at the asset footprint — you position the
-    // edge/keyline/bracket RELATIVE to them; they do NOT follow the art.
+    // corners/pipes/brackets RELATIVE to them; they do NOT follow the art.
     // OUTER box = the footprint edge. CONTENT box = inset by `content` px.
     if (showOuter) {
       vg.strokeStyle = '#ff5cf0'; vg.lineWidth = 2;
@@ -936,45 +823,8 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       if (od[(y * W + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
     }
     setStatus(maxX < 0 ? null : { top: minY, left: minX, right: (W - 1) - maxX, bottom: (H - 1) - maxY });
-  }, [
-    loaded,
-    edit.keyline.dx,
-    edit.keyline.dy,
-    edit.frameCorners.tl.dx,
-    edit.frameCorners.tl.dy,
-    edit.frameCorners.tr.dx,
-    edit.frameCorners.tr.dy,
-    edit.frameCorners.bl.dx,
-    edit.frameCorners.bl.dy,
-    edit.frameCorners.br.dx,
-    edit.frameCorners.br.dy,
-    edit.edge.dx,
-    edit.edge.dy,
-    edit.edgeSides.top.dy,
-    edit.edgeSides.bottom.dy,
-    edit.edgeSides.left.dx,
-    edit.edgeSides.right.dx,
-    edit.frameScale,
-    edit.bracket.dx,
-    edit.bracket.dy,
-    edit.bracketCorners.tl.dx,
-    edit.bracketCorners.tl.dy,
-    edit.bracketCorners.tr.dx,
-    edit.bracketCorners.tr.dy,
-    edit.bracketCorners.bl.dx,
-    edit.bracketCorners.bl.dy,
-    edit.bracketCorners.br.dx,
-    edit.bracketCorners.br.dy,
-    edit.bracketScale,
-    edit.content,
-    edit.fill,
-    showOuter,
-    showContent,
-    showFill,
-    backing,
-    surfaceImg,
-    asset,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, editKey, showOuter, showContent, showFill, backing, surfaceImg, asset]);
 
   // LIVE preview — the exact assembled asset footprint. Consumer previews below use
   // real app DOM/CSS with this live frame source instead of a hand-drawn imitation.
@@ -991,105 +841,38 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       g.drawImage(f, 0, 0, sw, sh, 0, 0, cvs.width, cvs.height);
     };
     draw(pvActualRef, fw, fh, 1);
-  }, [
-    loaded,
-    edit.keyline.dx,
-    edit.keyline.dy,
-    edit.frameCorners.tl.dx,
-    edit.frameCorners.tl.dy,
-    edit.frameCorners.tr.dx,
-    edit.frameCorners.tr.dy,
-    edit.frameCorners.bl.dx,
-    edit.frameCorners.bl.dy,
-    edit.frameCorners.br.dx,
-    edit.frameCorners.br.dy,
-    edit.edge.dx,
-    edit.edge.dy,
-    edit.edgeSides.top.dy,
-    edit.edgeSides.bottom.dy,
-    edit.edgeSides.left.dx,
-    edit.edgeSides.right.dx,
-    edit.frameScale,
-    edit.bracket.dx,
-    edit.bracket.dy,
-    edit.bracketCorners.tl.dx,
-    edit.bracketCorners.tl.dy,
-    edit.bracketCorners.tr.dx,
-    edit.bracketCorners.tr.dy,
-    edit.bracketCorners.bl.dx,
-    edit.bracketCorners.bl.dy,
-    edit.bracketCorners.br.dx,
-    edit.bracketCorners.br.dy,
-    edit.bracketScale,
-    asset,
-    backing,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, editKey, asset, backing]);
 
   const liveConsumerFrameUrl = useMemo(() => {
     if (!loaded) return null;
     const frame = buildFrameCanvas(loaded, edit, asset.frame.w, asset.frame.h, asset.carve, asset.flipSides);
     return frame.toDataURL('image/png');
-  }, [
-    loaded,
-    edit.keyline.dx,
-    edit.keyline.dy,
-    edit.frameCorners.tl.dx,
-    edit.frameCorners.tl.dy,
-    edit.frameCorners.tr.dx,
-    edit.frameCorners.tr.dy,
-    edit.frameCorners.bl.dx,
-    edit.frameCorners.bl.dy,
-    edit.frameCorners.br.dx,
-    edit.frameCorners.br.dy,
-    edit.edge.dx,
-    edit.edge.dy,
-    edit.edgeSides.top.dy,
-    edit.edgeSides.bottom.dy,
-    edit.edgeSides.left.dx,
-    edit.edgeSides.right.dx,
-    edit.frameScale,
-    edit.bracket.dx,
-    edit.bracket.dy,
-    edit.bracketCorners.tl.dx,
-    edit.bracketCorners.tl.dy,
-    edit.bracketCorners.tr.dx,
-    edit.bracketCorners.tr.dy,
-    edit.bracketCorners.bl.dx,
-    edit.bracketCorners.bl.dy,
-    edit.bracketCorners.br.dx,
-    edit.bracketCorners.br.dy,
-    edit.bracketScale,
-    asset,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, editKey, asset]);
   const liveConsumerFrameStyle: CSSProperties | undefined = liveConsumerFrameUrl
     ? { borderImageSource: `url("${liveConsumerFrameUrl}")` }
     : undefined;
 
+  // Canonical shape, same key order the kit writes — a saved config and an export
+  // diff cleanly against each other.
   const exportJson = JSON.stringify({
     asset: aid,
-    keyline: edit.keyline,
-    frameCorners: edit.frameCorners,
-    edge: edit.edge,
-    edgeSides: edit.edgeSides,
+    coolCorners: edit.coolCorners,
+    pipes: edit.pipes,
     frameScale: edit.frameScale,
-    bracket: edit.bracket,
-    bracketCorners: edit.bracketCorners,
+    brackets: edit.brackets,
     bracketScale: edit.bracketScale,
     content: edit.content,
     fill: edit.fill,
   }, null, 2);
-  const pieces: PieceKey[] = loaded ? (loaded.hasAccent ? ['bracket', 'frame', 'pipes'] : ['frame', 'pipes']) : [];
-  const pieceLabel = (k: PieceKey) => k;
-  // Pipes have one degree of freedom each (their normal axis) — corner scopes don't
-  // apply. The shared grid narrows to all + the four sides for the pipes piece.
-  const scopesForPiece = (k: PieceKey) => (k === 'pipes' ? BRACKET_SCOPES.filter((s) => s.key === 'all' || sidesForScope(s.key).length === 1) : BRACKET_SCOPES);
-  const setActivePiece = (k: PieceKey) => {
-    setActive(k);
-    if (k === 'pipes' && layerScope !== 'all' && sidesForScope(layerScope).length !== 1) setLayerScope('all');
-  };
-  const scopeLabel = BRACKET_SCOPES.find((s) => s.key === layerScope)?.label ?? layerScope;
-  const activeLabel = layerScope !== 'all' ? `${pieceLabel(active)} ${scopeLabel}` : pieceLabel(active);
-  const resetActive = active === 'frame' ? resetFrame : active === 'pipes' ? resetPipes : resetBracket;
+  const layers: Layer[] = loaded ? (loaded.hasAccent ? ['gold', 'cool'] : ['cool']) : [];
+  const layerLabel = (l: Layer) => (l === 'gold' ? 'gold brackets' : 'cool frame');
+  const selLabel = sel === 'center' ? 'whole layer' : (CORNERS as string[]).includes(sel) ? sel.toUpperCase() : `${sel} side`;
+  const activeLabel = `${layer} ${selLabel}`;
+  const selIsSide = (SIDES as string[]).includes(sel);
+  const selIsCorner = (CORNERS as string[]).includes(sel);
+  const membersOff = layer === 'cool' && !memberCorners && !memberPipe && !selIsCorner;
 
   // Save straight to the on-disk config + regenerate the asset, via the dev-only
   // Vite endpoint. import.meta.env.DEV gates the button; the endpoint only exists
@@ -1184,41 +967,11 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               ))}
             </div>
           <div style={ST.pieceRow}>
-            {pieces.map((k) => (
-              <button key={k} type="button" onClick={() => setActivePiece(k)} style={{ ...ST.pieceBtn, ...(active === k ? ST.pieceBtnOn : {}) }}>{pieceLabel(k)}</button>
+            {layers.map((l) => (
+              <button key={l} type="button" onClick={() => setLayer(l)} style={{ ...ST.pieceBtn, ...(layer === l ? (l === 'gold' ? ST.layerGoldOn : ST.pieceBtnOn) : {}) }}>{layerLabel(l)}</button>
             ))}
           </div>
-          <div style={ST.scopeBox}>
-            <span style={ST.scopeLabel}>{pieceLabel(active)} scope</span>
-            <div style={ST.scopeGrid}>
-              {scopesForPiece(active).map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => setLayerScope(s.key)}
-                  style={{ ...ST.scopeBtn, ...(layerScope === s.key ? ST.scopeBtnOn : {}) }}
-                  title={`Nudge ${s.label} ${pieceLabel(active)} piece${cornersForScope(s.key).length > 1 || sidesForScope(s.key).length > 1 ? 's' : ''}`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p style={ST.hint}>
-            Editing <b>{activeLabel}</b> — arrows nudge 1px in screen direction.
-            {layerScope === 'all' && <> On <b>all</b>, ↓/→ push inward and ↑/← outward (symmetric).</>}
-            {active === 'frame' && layerScope !== 'all' && sidesForScope(layerScope).length === 1 && <> A side moves rigid (corners + pipe together); the cross-axis squeezes its corner pair.</>}
-            {active === 'pipes' && <> Moves the straight pipe only — corners stay put.</>}
-          </p>
-          <div style={ST.dpad}>
-            <div /><button type="button" style={ST.nb} onClick={() => nudge(0, -1)}>↑</button><div />
-            <button type="button" style={ST.nb} onClick={() => nudge(-1, 0)}>←</button>
-            <button type="button" style={ST.nbReset} title={`Reset ${activeLabel} nudge to saved`} aria-label={`Reset ${activeLabel} nudge`} onClick={resetActive}>↺</button>
-            <button type="button" style={ST.nb} onClick={() => nudge(1, 0)}>→</button>
-            <div /><button type="button" style={ST.nb} onClick={() => nudge(0, 1)}>↓</button><div />
-          </div>
-          <button type="button" style={ST.maxBtn} onClick={maxOut}>⤢ Send {activeLabel} to max (flush to box corner)</button>
-          {active === 'bracket' && (
+          {layer === 'gold' ? (
             <>
               <div style={ST.tunerRow}>
                 <span style={{ ...ST.sizeLabel, color: '#ffd98a', whiteSpace: 'nowrap' }}>Bracket size</span>
@@ -1228,10 +981,8 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
                 <button type="button" style={ST.sb} title="Reset bracket size to saved" aria-label="Reset bracket size" onClick={resetBracketScale}>↺</button>
               </div>
               <input type="range" min={1} max={4} step={0.05} value={edit.bracketScale} onChange={(e) => setBracketScale(Number(e.target.value))} style={{ display: 'block', width: '100%', minWidth: 0, boxSizing: 'border-box' }} aria-label="Bracket size" />
-              <p style={ST.hint}>Scales the gold bracket layer only. Switch to <b>frame</b> for the cool frame and pipe layer.</p>
             </>
-          )}
-          {active === 'frame' && (
+          ) : (
             <>
               <div style={ST.tunerRow}>
                 <span style={{ ...ST.sizeLabel, color: '#9fd6ff', whiteSpace: 'nowrap' }}>Frame size</span>
@@ -1241,17 +992,82 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
                 <button type="button" style={ST.sb} title="Reset frame size to saved" aria-label="Reset frame size" onClick={resetFrameScale}>↺</button>
               </div>
               <input type="range" min={1} max={maxFrameScale} step={0.05} value={edit.frameScale} onChange={(e) => setFrameScale(Number(e.target.value))} style={{ display: 'block', width: '100%', minWidth: 0, boxSizing: 'border-box' }} aria-label="Frame size" />
-              <p style={ST.hint}>Scales the cool corner-frame pixels and straight pipes together.</p>
+              <p style={ST.hint}>One line weight: frame size scales the cool corners and the pipes' thickness together.</p>
             </>
           )}
+          <div style={ST.selRow}>
+            <div style={ST.selGrid} role="group" aria-label="Frame part selector">
+              {SEL_CELLS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  title={c.title}
+                  onClick={() => setSel(c.key)}
+                  style={{ ...ST.selBtn, ...(sel === c.key ? ST.selBtnOn : {}) }}
+                >
+                  {c.glyph}
+                </button>
+              ))}
+            </div>
+            <div style={ST.selSide}>
+              <span style={ST.scopeLabel}>{activeLabel}</span>
+              {layer === 'cool' && !selIsCorner && (
+                <>
+                  <label style={ST.toggle} title="Side/center moves include the corner pieces">
+                    <input type="checkbox" checked={memberCorners} onChange={(e) => setMemberCorners(e.target.checked)} /> corners
+                  </label>
+                  <label style={ST.toggle} title="Side/center moves include the straight pipe(s)">
+                    <input type="checkbox" checked={memberPipe} onChange={(e) => setMemberPipe(e.target.checked)} /> {sel === 'center' ? 'pipes' : 'pipe'}
+                  </label>
+                </>
+              )}
+            </div>
+          </div>
+          <p style={ST.hint}>
+            {sel === 'center' && <>Symmetric seat of the whole layer — <b>out</b> toward the footprint edge, <b>in</b> toward the middle. Atomic: every member moves or none.</>}
+            {selIsSide && <>Arrows move the {sel} side along its one axis{layer === 'cool' ? ' — both toggles on = the rigid, seam-safe side move' : ''}. Atomic: all enabled members or none.</>}
+            {selIsCorner && <>Arrows move the {selLabel} corner in screen direction, clamped to the footprint.</>}
+            {membersOff && <> <b>Both members are off — nothing to move.</b></>}
+          </p>
+          {sel === 'center' ? (
+            <div style={ST.centerBox}>
+              {([['dx', 'horizontal'], ['dy', 'vertical']] as ['dx' | 'dy', string][]).map(([axis, label]) => (
+                <div key={axis} style={ST.centerRow}>
+                  <span style={{ ...ST.sizeLabel, whiteSpace: 'nowrap' }}>{label}</span>
+                  <button type="button" style={ST.inOutBtn} disabled={membersOff} onClick={() => nudgeCenter(axis, -1)}>⟵ out</button>
+                  <button type="button" style={ST.inOutBtn} disabled={membersOff} onClick={() => nudgeCenter(axis, 1)}>in ⟶</button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={ST.dpad}>
+              <div />
+              <button type="button" style={{ ...ST.nb, ...((membersOff || (selIsSide && SIDE_AXIS[sel as Side] === 'dx')) ? ST.nbOff : {}) }} disabled={membersOff || (selIsSide && SIDE_AXIS[sel as Side] === 'dx')} onClick={() => nudge(0, -1)}>↑</button>
+              <div />
+              <button type="button" style={{ ...ST.nb, ...((membersOff || (selIsSide && SIDE_AXIS[sel as Side] === 'dy')) ? ST.nbOff : {}) }} disabled={membersOff || (selIsSide && SIDE_AXIS[sel as Side] === 'dy')} onClick={() => nudge(-1, 0)}>←</button>
+              <button type="button" style={ST.nbReset} title={`Reset ${selLabel} to saved`} aria-label={`Reset ${selLabel}`} onClick={resetSelection}>↺</button>
+              <button type="button" style={{ ...ST.nb, ...((membersOff || (selIsSide && SIDE_AXIS[sel as Side] === 'dy')) ? ST.nbOff : {}) }} disabled={membersOff || (selIsSide && SIDE_AXIS[sel as Side] === 'dy')} onClick={() => nudge(1, 0)}>→</button>
+              <div />
+              <button type="button" style={{ ...ST.nb, ...((membersOff || (selIsSide && SIDE_AXIS[sel as Side] === 'dx')) ? ST.nbOff : {}) }} disabled={membersOff || (selIsSide && SIDE_AXIS[sel as Side] === 'dx')} onClick={() => nudge(0, 1)}>↓</button>
+              <div />
+            </div>
+          )}
+          <div style={ST.importActions}>
+            <button type="button" style={ST.maxBtn} onClick={flushOutward} disabled={membersOff}>⤢ Flush {selLabel} outward</button>
+            {sel === 'center' && <button type="button" style={ST.maxBtn} onClick={resetSelection}>↺ Reset {selLabel}</button>}
+          </div>
+          {asymmetries.length > 0 && (
+            <div style={ST.asymBox} title="Mirror pairs with unequal values — deliberate asymmetry or a stray nudge">
+              ⚠ asymmetric: {asymmetries.join(' · ')}
+            </div>
+          )}
           <div style={ST.sizeBox}>
-            <label style={ST.toggle}>
-              <input type="checkbox" checked={showOuter} onChange={(e) => setShowOuter(e.target.checked)} />
-              <span style={{ color: '#ff5cf0' }}>■</span> Outer box — outermost pixels of the 9-slice (centering guide)
-            </label>
+            {/* The two HUMAN-CALIBRATED values code consumes (ADR-0050): the dev lines
+                these boxes up against real pixels; consumers pad/clip by the result. */}
+            <span style={ST.sectionHead}>Hand-off boxes — you calibrate, code consumes</span>
             <label style={ST.toggle}>
               <input type="checkbox" checked={showContent} onChange={(e) => setShowContent(e.target.checked)} />
-              <span style={{ color: '#5cff9e' }}>■</span> Content box — where text / icons start
+              <span style={{ color: '#5cff9e' }}>■</span> <b>Content box</b>&nbsp;— where text / icons start
             </label>
             <div style={ST.insetRow}>
               <span style={ST.sizeW}>inset {edit.content}px</span>
@@ -1261,7 +1077,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
             </div>
             <label style={ST.toggle}>
               <input type="checkbox" checked={showFill} onChange={(e) => setShowFill(e.target.checked)} />
-              <span style={{ color: '#ffb454' }}>■</span> Fill box — where a surface fill stops (frame may bleed outside it)
+              <span style={{ color: '#ffb454' }}>■</span> <b>Fill box</b>&nbsp;— where a backing surface stops (frame may bleed outside it)
             </label>
             <div style={ST.insetRow}>
               <span style={ST.sizeW}>inset {edit.fill}px</span>
@@ -1269,6 +1085,13 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               <button type="button" style={ST.sb} onClick={() => setFill(1)}>+</button>
               <button type="button" style={ST.sb} title="Reset fill inset to saved" aria-label="Reset fill inset" onClick={resetFill}>↺</button>
             </div>
+          </div>
+          <div style={ST.sizeBox}>
+            <span style={ST.sectionHead}>Preview</span>
+            <label style={ST.toggle}>
+              <input type="checkbox" checked={showOuter} onChange={(e) => setShowOuter(e.target.checked)} />
+              <span style={{ color: '#ff5cf0' }}>■</span> Outer box — outermost pixels of the 9-slice (centering guide)
+            </label>
             <div style={ST.backingRow}>
               <span style={{ ...ST.sizeLabel, color: '#cfe3ff', minWidth: 52 }}>Backing</span>
               <select value={backing} onChange={(e) => setBacking(e.target.value as 'none' | 'fill' | 'surface')} style={{ ...ST.select, fontSize: 13, flex: 1, minWidth: 0 }}>
@@ -1285,7 +1108,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
                 </select>
               </div>
             )}
-            <span style={ST.sizeLabel}>Preview only — you're editing the ornament; the body is a backing the consumer supplies. Save writes bracket, frame, sizes, content, and fill.</span>
+            <span style={ST.sizeLabel}>Backing is preview-only — the body is supplied by the consumer. Save writes corners, pipes, sizes, content, and fill.</span>
           </div>
           {status && (status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0) && (
             <div style={{ ...ST.statusBox, borderColor: '#e0556a', color: '#ff9aa8' }}>
@@ -1300,12 +1123,9 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           )}
           <div style={ST.offsets}>
             {([
-              ['bracket', `dx ${edit.bracket.dx}, dy ${edit.bracket.dy} · x${edit.bracketScale.toFixed(2)}`],
-              ['bracket corners', `TL ${edit.bracketCorners.tl.dx},${edit.bracketCorners.tl.dy} TR ${edit.bracketCorners.tr.dx},${edit.bracketCorners.tr.dy} BL ${edit.bracketCorners.bl.dx},${edit.bracketCorners.bl.dy} BR ${edit.bracketCorners.br.dx},${edit.bracketCorners.br.dy}`],
-              ['frame', `dx ${edit.keyline.dx}, dy ${edit.keyline.dy} · x${edit.frameScale.toFixed(2)}`],
-              ['frame corners', `TL ${edit.frameCorners.tl.dx},${edit.frameCorners.tl.dy} TR ${edit.frameCorners.tr.dx},${edit.frameCorners.tr.dy} BL ${edit.frameCorners.bl.dx},${edit.frameCorners.bl.dy} BR ${edit.frameCorners.br.dx},${edit.frameCorners.br.dy}`],
-              ['pipes', `dx ${edit.edge.dx}, dy ${edit.edge.dy}`],
-              ['pipe sides', `T ${edit.edgeSides.top.dy} B ${edit.edgeSides.bottom.dy} L ${edit.edgeSides.left.dx} R ${edit.edgeSides.right.dx}`],
+              ['gold brackets', `TL ${edit.brackets.tl.dx},${edit.brackets.tl.dy} TR ${edit.brackets.tr.dx},${edit.brackets.tr.dy} BL ${edit.brackets.bl.dx},${edit.brackets.bl.dy} BR ${edit.brackets.br.dx},${edit.brackets.br.dy} · x${edit.bracketScale.toFixed(2)}`],
+              ['cool corners', `TL ${edit.coolCorners.tl.dx},${edit.coolCorners.tl.dy} TR ${edit.coolCorners.tr.dx},${edit.coolCorners.tr.dy} BL ${edit.coolCorners.bl.dx},${edit.coolCorners.bl.dy} BR ${edit.coolCorners.br.dx},${edit.coolCorners.br.dy} · x${edit.frameScale.toFixed(2)}`],
+              ['pipes', `T ${edit.pipes.top} B ${edit.pipes.bottom} L ${edit.pipes.left} R ${edit.pipes.right}`],
               ['content / fill', `${edit.content}px / ${edit.fill}px`],
             ] as [string, string][]).map(([k, v]) => (
               <div key={k} style={ST.offsetRow}>
@@ -1367,11 +1187,19 @@ const ST: Record<string, CSSProperties> = {
   pieceRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(62px, 1fr))', gap: 6 },
   pieceBtn: { display: 'grid', placeItems: 'center', minWidth: 0, padding: '8px 6px', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', textTransform: 'none', lineHeight: 1.1, overflow: 'hidden' },
   pieceBtnOn: { background: '#1d5f9e', color: '#fff', borderColor: '#4fbdf0' },
-  scopeBox: { display: 'grid', gap: 6, minWidth: 0 },
-  scopeLabel: { fontSize: 11, color: '#ffd98a', lineHeight: 1, textTransform: 'uppercase' },
-  scopeGrid: { display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 4, minWidth: 0 },
-  scopeBtn: { display: 'grid', placeItems: 'center', minWidth: 0, minHeight: 0, height: 28, padding: '0 4px', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', fontSize: 11, lineHeight: 1, textTransform: 'none', overflow: 'hidden' },
-  scopeBtnOn: { background: '#6b4f1d', color: '#fff2c4', borderColor: '#d5a34a' },
+  layerGoldOn: { background: '#6b4f1d', color: '#fff2c4', borderColor: '#d5a34a' },
+  scopeLabel: { fontSize: 11, color: '#ffd98a', lineHeight: 1.3, textTransform: 'uppercase' },
+  selRow: { display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: 12, alignItems: 'start' },
+  selGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 34px)', gridAutoRows: '34px', gap: 3 },
+  selBtn: { display: 'grid', placeItems: 'center', minWidth: 0, minHeight: 0, padding: 0, background: '#111a2c', color: '#7f93ad', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', fontSize: 14, lineHeight: 1, overflow: 'hidden' },
+  selBtnOn: { background: '#6b4f1d', color: '#fff2c4', borderColor: '#d5a34a' },
+  selSide: { display: 'grid', gap: 6, alignContent: 'start', minWidth: 0 },
+  centerBox: { display: 'grid', gap: 6 },
+  centerRow: { display: 'grid', gridTemplateColumns: '72px minmax(0, 1fr) minmax(0, 1fr)', gap: 6, alignItems: 'center' },
+  inOutBtn: { display: 'grid', placeItems: 'center', minWidth: 0, minHeight: 0, height: 30, padding: '0 6px', background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 5, cursor: 'pointer', fontSize: 12, lineHeight: 1, textTransform: 'none', overflow: 'hidden' },
+  nbOff: { opacity: 0.3, cursor: 'default' },
+  asymBox: { fontSize: 12, color: '#ffd98a', background: '#241d0a', border: '1px solid #6b5a1d', borderRadius: 6, padding: '6px 10px' },
+  sectionHead: { fontSize: 11, color: '#ffd98a', letterSpacing: 0.4, textTransform: 'uppercase', fontWeight: 700 },
   hint: { fontSize: 13, color: '#9fc4d5', margin: 0, textTransform: 'none', fontWeight: 400, letterSpacing: 0 },
   dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 36px)', gridAutoRows: '36px', gap: 4, justifyContent: 'center' },
   nb: { display: 'grid', placeItems: 'center', minHeight: 0, padding: 0, fontFamily: 'system-ui, sans-serif', fontSize: 16, lineHeight: 1, background: '#111a2c', color: '#eaf3ff', border: '1px solid #2a3c5e', borderRadius: 6, cursor: 'pointer' },

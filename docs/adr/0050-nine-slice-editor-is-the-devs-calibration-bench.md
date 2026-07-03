@@ -60,12 +60,18 @@ Concretely:
 ### Amendments to earlier records
 
 - **ADR-0019 scope rule 1 ("keyline offset is inert; only the bracket is
-  nudgeable") is superseded.** The split-layer model tunes the cool frame layer
-  too: corner atoms split into a cool base + warm bracket, each with global +
-  per-corner offsets and a scale; straight pipes carry per-side offsets. The
-  editor exposes these as pieces (bracket / frame / pipes) with screen-direction
-  arrows and atomic (non-shearing) side moves. Rule 2 (content is
-  consumption-side) stands.
+  nudgeable") is superseded.** Every element is tunable, and the config stores
+  per-element ABSOLUTES — exactly the render degrees of freedom (4 gold
+  brackets + 4 cool corners at {dx,dy} each, 4 pipes at one normal-axis number
+  each, two layer scales, content/fill); the retired global+residual shape
+  folds in on read. The editor's control shape: two layer tabs (gold | cool,
+  each owning its scale), a 3×3 spatial selector (corner cell = 2-axis
+  screen-direction d-pad; side cell = 1-axis d-pad along the side's normal,
+  with cool-layer member toggles corners/pipe — both on is the rigid seam-safe
+  side move; center = whole-layer symmetric out/in steppers), all multi-member
+  moves atomic (one shared clamped delta — no member can shear away at a clamp
+  bound), plus a passive asymmetry indicator (inward-positive storage makes
+  mirror symmetry = equal values). Rule 2 (content is consumption-side) stands.
 - **ADR-0012's canonical assembler is now `buildFrameParts` in
   `frontend/scripts/nine-slice-kit.mjs`.** `assemble-frame.mjs` no longer has
   importers and does not implement the split-layer model or the mirror-after-scale
