@@ -17,6 +17,7 @@ import {
 } from '../net/lobbies';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { navigateApp } from './navigation';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -142,8 +143,13 @@ export function Lobbies() {
       if (u.signed_in) {
         refresh();
         // Live list: refetch on every server-side lobby mutation (create/join/leave/
-        // start/level). THIS is the fix for "host doesn't see the guest join".
+        // start/level) and on every (re)connect. THIS is the fix for "host doesn't see
+        // the guest join".
         unsubscribe = subscribeLobbies(refresh);
+        // The subscription is created AFTER an async round-trip, so the effect's cleanup
+        // may already have run (fast unmount/remount, StrictMode). If so, close it now —
+        // otherwise the cleanup closed over a still-null ref and the stream would leak.
+        if (!active) { unsubscribe(); unsubscribe = null; }
       }
     });
     return () => { active = false; unsubscribe?.(); };
@@ -184,6 +190,8 @@ export function Lobbies() {
 
   return (
     <section className="settings-art-route" aria-label="Lobbies" data-testid="lobbies">
+      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu. */}
+      <SceneBackdrop />
       <AmbienceBackground />
       <div className="settings-screen utility-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="utility-screen utility-lobbies">

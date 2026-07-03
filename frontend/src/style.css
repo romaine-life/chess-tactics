@@ -3684,20 +3684,10 @@ h1 {
   z-index: -1;
 }
 
-.skirmish-screen.skirmish-picker-screen::before {
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat;
-}
+/* The skirmish picker is a light-art route: LightArtRouteShell renders the animated menu
+   scene (still art + waterfalls + scrim) as a <SceneBackdrop> element, so the picker no
+   longer overrides the base ::before with the menu scene — the base dark floor rides behind
+   the backdrop like every other light-art screen. */
 
 .skirmish-war-room {
   display: grid;
@@ -4979,27 +4969,30 @@ h1 {
   text-transform: none;
 }
 .le-layer-select option:disabled { color: rgba(207, 230, 241, .4); }
+/* The board-link field wears the kit `field-input` 9-slice (its own navy well is the frame's
+   fill slice), never a hand-rolled border (ADR-0032/0034) — the same input chrome the Codex
+   editor uses. Single-line control: horizontal inset on the role token, vertical centring from
+   min-height (ADR-0055). */
 .le-board-link-input {
   appearance: none;
-  background: rgba(3, 12, 19, .74);
-  border: 1px solid rgba(87, 153, 184, .4);
-  border-radius: 5px;
+  background: transparent;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 8px stretch;
   box-sizing: border-box;
   color: #eff9ff;
   font: inherit;
   font-size: var(--ds-text-sm);
+  image-rendering: pixelated;
   margin-top: 8px;
   min-height: 38px;
   outline: none;
-  /* Single-line control: horizontal inset on the role token (ADR-0055); vertical
-     centering comes from min-height. */
   padding: 0 var(--ds-inset);
   width: 100%;
 }
 .le-board-link-input::placeholder { color: rgba(207, 230, 241, .52); }
 .le-board-link-input:focus-visible {
-  border-color: rgba(101, 184, 255, .72);
-  box-shadow: 0 0 0 2px rgba(101, 184, 255, .2);
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 /* active brush picker */
@@ -5087,10 +5080,18 @@ h1 {
 .le-seg-icons .le-seg-btn.active .ic-move { background-image: url("/assets/ui/level-editor/icons/move-active.png"); }
 
 /* ---- Playability violations list (ADR-0050) -----------------------------------------------
-   The to-fix list (Status layer only). A warm accent line marks it as blocking — and because
-   it DRAWS a box around its text, the content is inset by the role token (ADR-0055): text
-   never sits flush against a drawn edge. Frameless cards stay zero-padding. */
-.le-violations { box-shadow: inset 0 0 0 1px rgba(242, 122, 106, .35); padding: var(--ds-inset); }
+   The to-fix list (Status layer only). A warm/blocking kit line frame (the `warm` tone twin of
+   panel-line, ADR-0034) marks it as blocking — no hand-rolled outline (ADR-0032). Its interior is
+   transparent, so the HUD panel's navy reads straight through; the ornament is the only surface.
+   Because it DRAWS a box around its text, the content insets by the role token (ADR-0055): text
+   never sits flush against the drawn edge. */
+.le-violations {
+  --le-frame: 12px;
+  border: var(--le-frame) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line-warm.png") 24 / var(--le-frame) round;
+  image-rendering: pixelated;
+  padding: var(--ds-inset);
+}
 .le-violation-list { display: flex; flex-direction: column; gap: var(--ds-stack); list-style: none; margin: 0; padding: 0; }
 .le-violation { align-items: center; color: #f4d8d2; display: flex; font-size: var(--ds-text-sm); gap: 8px; justify-content: space-between; line-height: 1.3; }
 .le-violation-msg { flex: 1 1 auto; min-width: 0; }
@@ -5172,26 +5173,38 @@ h1 {
 .le-status-level { align-items: baseline; display: flex; gap: var(--ds-inline-tight); min-width: 0; }
 .le-status-level .le-level-name { color: #f0e7d3; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .le-official-tag { color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; }
-/* Drawn text boxes inset their content by the role token (ADR-0055). */
+/* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
+   9-slice over the box's own navy surface (a border-box background layer, reaching the frame
+   edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
+   corners. Content insets by the role token (ADR-0055). */
 .le-status-current {
+  --le-frame: 12px;
   background: rgba(4, 13, 20, .7);
-  border: 1px solid rgba(82, 142, 170, .3);
-  border-radius: 5px;
+  background-clip: border-box;
+  background-origin: border-box;
+  border: var(--le-frame) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
   display: grid;
   gap: var(--ds-inline-tight);
+  image-rendering: pixelated;
   padding: var(--ds-inset);
 }
 .le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
-.le-status-current.is-ready { border-color: rgba(103, 217, 138, .42); }
-.le-status-current.is-blocked { border-color: rgba(240, 189, 85, .42); }
-/* Drawn text box → role-token inset + ladder gaps (ADR-0055/0056). */
+.le-status-current.is-ready { border-image-source: url("/assets/ui/explore/frames/panel-line-success.png"); }
+.le-status-current.is-blocked { border-image-source: url("/assets/ui/explore/frames/panel-line-warning.png"); }
+/* Drawn text box → kit line frame (panel-line over its own navy surface, ADR-0032/0034) +
+   role-token inset + ladder gaps (ADR-0055/0056). */
 .le-material-values {
+  --le-frame: 12px;
   background: rgba(3, 12, 19, .48);
-  border: 1px solid rgba(82, 142, 170, .24);
-  border-radius: 5px;
+  background-clip: border-box;
+  background-origin: border-box;
+  border: var(--le-frame) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
   display: grid;
   gap: var(--ds-stack);
+  image-rendering: pixelated;
   padding: var(--ds-inset);
 }
 .le-material-values-head { align-items: baseline; display: flex; gap: var(--ds-inline); justify-content: space-between; }
@@ -5212,21 +5225,29 @@ h1 {
 .le-material-values dt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-material-values dd { color: #9fe0ff; font-size: var(--ds-text-sm); font-weight: 800; margin: 0; }
 .le-status-log { display: grid; gap: var(--ds-stack); }
+/* Each log entry is a kit line frame (panel-line over its own navy surface, ADR-0032/0034);
+   its tone swaps the SOURCE to the success/warning/error twin — the semantic accent that was a
+   raw border-left stripe now lives in the frame's corners. Content insets by the role token
+   (ADR-0055). */
 .le-status-entry {
+  --le-frame: 10px;
   background: rgba(3, 12, 19, .58);
-  border-left: 3px solid rgba(143, 182, 198, .55);
-  border-radius: 4px;
+  background-clip: border-box;
+  background-origin: border-box;
+  border: var(--le-frame) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: 58px minmax(0, 1fr);
+  image-rendering: pixelated;
   padding: var(--ds-inset);
 }
 .le-status-entry time { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.2; }
 .le-status-entry strong { color: #f3ead8; display: block; font-size: var(--ds-text-sm); line-height: 1.2; }
 .le-status-entry span { color: var(--skirmish-muted); display: block; font-size: var(--ds-text-sm); line-height: 1.35; margin-top: 3px; }
-.le-status-entry.is-success { border-left-color: #67d98a; }
-.le-status-entry.is-warning { border-left-color: #f0bd55; }
-.le-status-entry.is-error { border-left-color: #ff7f70; }
+.le-status-entry.is-success { border-image-source: url("/assets/ui/explore/frames/panel-line-success.png"); }
+.le-status-entry.is-warning { border-image-source: url("/assets/ui/explore/frames/panel-line-warning.png"); }
+.le-status-entry.is-error { border-image-source: url("/assets/ui/explore/frames/panel-line-error.png"); }
 
 /* road connection editor — clickable diamond edges for the selected road tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
@@ -5870,23 +5891,12 @@ body { font-size: 17px; }
   --ce-slate: #b7cad4;
   --ce-gold-bright: #f5bb45;
   --ce-eyebrow: #c9a877;
-  /* Same art-directed backdrop as the main menu (.main-menu-layer / .settings-art-route)
-     so the editor sits over the menu scene + the synced rain (AmbienceBackground, below).
-     Keep this declaration in sync with .settings-art-route. The editor's panels overlap
-     most of it; the scene + rain only show in the gaps, for a consistent feel.
-     First declaration = PNG fallback for engines without image-set()/type(). */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat #02070b;
+  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
+     the <SceneBackdrop> element the editor renders (ui/SceneBackdrop.tsx), the same way the
+     main menu paints it, so the editor sits over the menu scene + synced rain. The editor's
+     panels overlap most of it; the scene + rain only show in the gaps, for a consistent
+     feel. This floor keeps the screen dark (never white) before the scene decodes. */
+  background: #02070b;
   color: var(--ce-ink);
   display: grid;
   font-family: var(--ds-font-pixel);
@@ -5905,6 +5915,10 @@ body { font-size: 17px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Sit above the scene backdrop (<SceneBackdrop>, z1) so this cyan edge tint still colors
+     the menu scene — it used to ride over the .ce-screen background scene, which now lives
+     in a z1 element. Rain field (z2, later in the DOM) still falls in front of the tint. */
+  z-index: 2;
   background:
     linear-gradient(90deg, rgba(48, 214, 255, .08), transparent 16% 84%, rgba(48, 214, 255, .08)),
     linear-gradient(180deg, rgba(255, 255, 255, .03), transparent 14% 86%, rgba(0, 0, 0, .28));
@@ -10938,21 +10952,11 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
-  /* Same art-directed backdrop as the main menu (.main-menu-layer, ~line 712) so the
-     settings frames sit over the menu scene + the synced rain. Keep the two in sync.
-     First declaration = PNG fallback for engines without image-set()/type(). */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat #02070b;
+  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
+     the <SceneBackdrop> element these screens render (ui/SceneBackdrop.tsx), the same way
+     the main menu paints it, so the settings frames sit over the menu scene + synced rain.
+     This floor keeps the screen dark (never white) before the scene decodes. */
+  background: #02070b;
   display: grid;
   height: 100%;
   justify-items: center;

@@ -180,6 +180,66 @@ function get(path, headers) {
   return request('GET', path, headers);
 }
 
+// Open a long-lived SSE stream and expose its parsed `data:` frames. Unlike request()
+// (which reads to end with a 1s socket timeout), this keeps the connection open and lets
+// a test await stream conditions. Heartbeat comments (`:keepalive`) carry no `data:` line
+// and are skipped, so they never count as frames.
+function openSse(path, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { hostname: '127.0.0.1', port, method: 'GET', path, headers: { accept: 'text/event-stream', ...headers } },
+      (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          reject(new Error(`SSE ${path} returned ${res.statusCode}`));
+          return;
+        }
+        res.setEncoding('utf8');
+        let buffer = '';
+        const frames = [];
+        const waiters = [];
+        const check = () => {
+          for (let i = waiters.length - 1; i >= 0; i -= 1) {
+            if (waiters[i].fn(frames)) {
+              clearTimeout(waiters[i].timer);
+              waiters[i].resolve(frames.length);
+              waiters.splice(i, 1);
+            }
+          }
+        };
+        res.on('data', (chunk) => {
+          buffer += chunk;
+          let idx;
+          while ((idx = buffer.indexOf('\n\n')) !== -1) {
+            const evt = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            const data = evt.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).join('\n');
+            if (data) { frames.push(data); check(); }
+          }
+        });
+        resolve({
+          frames,
+          waitUntil(fn, timeoutMs = 2000, label = 'condition') {
+            if (fn(frames)) return Promise.resolve(frames.length);
+            return new Promise((res2, rej2) => {
+              const w = { fn, resolve: res2 };
+              w.timer = setTimeout(() => {
+                const i = waiters.indexOf(w);
+                if (i !== -1) waiters.splice(i, 1);
+                rej2(new Error(`SSE ${path}: ${label} not met within ${timeoutMs}ms; frames=${JSON.stringify(frames)}`));
+              }, timeoutMs);
+              waiters.push(w);
+            });
+          },
+          close() { req.destroy(); },
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 // Reset the Postgres-backed document tables so re-runs (and a freshly migrated
 // CI database) start from a known-empty state. Tables exist by now because the
 // server applies migrations before it begins listening (and /health gates on
@@ -253,6 +313,7 @@ async function main() {
   if (fallback.statusCode !== 200 || !fallback.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
   }
+
   const missingAsset = await get('/assets/missing.png');
   if (missingAsset.statusCode !== 404) {
     throw new Error(`Missing asset-like routes should return 404: ${missingAsset.statusCode}`);
@@ -1000,6 +1061,54 @@ async function main() {
   );
   if (deletedCampaignRows.rowCount !== 0) {
     throw new Error(`Deleted campaign should be removed from Postgres: ${JSON.stringify(deletedCampaignRows.rows)}`);
+  }
+
+  // --- Live lobby sync (SSE) ---------------------------------------------------
+  // Regression guard for the reported bug: "host created a lobby, a friend joined, and the
+  // guest never appeared on the host's screen." The host's waiting screen learns about a
+  // join ONLY through the global lobby-list SSE channel (GET /api/lobbies/events). The rest
+  // of this suite is plain request/response and never opened that stream — which is exactly
+  // why the live-sync break shipped green. This exercises the channel end to end at the
+  // server layer. (The browser-side reconnect resync + guest eviction are covered by the
+  // two-browser E2E, frontend/scripts/lobby-e2e.mjs; the gateway timeout that severs the
+  // stream is guarded by backend/check-sse-route.js.)
+  {
+    const sseHost = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+    if (sseHost.statusCode !== 201) {
+      throw new Error(`SSE test: could not host lobby: ${sseHost.statusCode} ${sseHost.body}`);
+    }
+    const sseLobbyId = JSON.parse(sseHost.body).lobby.id;
+
+    const stream = await openSse('/api/lobbies/events', { cookie: 'better-auth.session=abc' });
+    try {
+      // 1) Connect-time snapshot: the stream must push a frame immediately on open, so a
+      //    freshly (re)connected host resyncs without waiting for a future mutation.
+      await stream.waitUntil((f) => f.some((d) => d.includes('lobbies-changed')), 2000, 'connect-time snapshot frame');
+      const beforeJoin = stream.frames.length;
+
+      // 2) A guest join must reach the connected host as a NEW live frame — the actual
+      //    "friend joined" event that was silently dropped in production.
+      const sseJoin = await request('POST', `/api/lobbies/${sseLobbyId}/join`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+      if (sseJoin.statusCode !== 200) {
+        throw new Error(`SSE test: guest join failed: ${sseJoin.statusCode} ${sseJoin.body}`);
+      }
+      await stream.waitUntil((f) => f.length > beforeJoin, 2000, 'live lobbies-changed frame after guest join');
+
+      // 3) And the host's authoritative view now shows the guest (the visible symptom).
+      const afterJoin = JSON.parse((await get('/api/lobbies', { cookie: 'better-auth.session=abc' })).body);
+      if (!afterJoin.current || afterJoin.current.seats.filled !== 2 || !afterJoin.current.guest) {
+        throw new Error(`SSE test: host list should show the joined guest: ${JSON.stringify(afterJoin.current)}`);
+      }
+    } finally {
+      stream.close();
+    }
+
+    // Clean up so the lobby-lifecycle test below starts from an empty state (host leave
+    // closes + deletes the lobby, freeing both abc and rival).
+    const sseCleanup = await request('POST', `/api/lobbies/${sseLobbyId}/leave`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+    if (sseCleanup.statusCode !== 204) {
+      throw new Error(`SSE test: host leave/cleanup failed: ${sseCleanup.statusCode} ${sseCleanup.body}`);
+    }
   }
 
   const hosted = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');

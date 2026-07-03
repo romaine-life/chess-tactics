@@ -49,6 +49,7 @@ export function PagesLibraryStudio({
   );
 }
 
+
 // The stone surfaces the menu slab can wear (files under public/assets/ui/surfaces/).
 const STONE_SURFACES = [
   { name: 'stone-slate-blue', label: 'Slate blue' },

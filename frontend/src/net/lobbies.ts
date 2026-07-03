@@ -106,6 +106,13 @@ function parseFrame(data: string): unknown {
 // EventSource auto-reconnects on transient errors, so onerror only logs.
 export function subscribeLobbies(onChange: () => void): () => void {
   const source = new EventSource('/api/lobbies/events');
+  // Resync on every (re)connect. EventSource silently auto-reconnects after any drop
+  // (gateway timeout, network blip, sleep/wake); the server's mutation pings are
+  // fire-and-forget, so a ping emitted during the gap is otherwise lost forever. An
+  // onopen refetch makes every connection self-heal: whatever we missed, we re-read.
+  // THIS (with the server-side connect snapshot) is what actually keeps the host's
+  // list truthful — onmessage alone only ever caught live-while-connected pings.
+  source.onopen = () => { onChange(); };
   source.onmessage = (event: MessageEvent<string>) => {
     const frame = parseFrame(event.data);
     if (frame && typeof frame === 'object' && (frame as { type?: string }).type === 'lobbies-changed') {

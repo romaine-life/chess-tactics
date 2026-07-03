@@ -972,7 +972,10 @@ const SSE_HEADERS = {
   'Connection': 'keep-alive',
   'X-Accel-Buffering': 'no',
 };
-const SSE_KEEPALIVE_MS = 15000;
+// Kept comfortably under any proxy/gateway timeout. The lobby SSE routes disable
+// Envoy Gateway's default 15s HTTPRoute request timeout (k8s/templates/httproute.yaml);
+// this heartbeat is the belt-and-suspenders for any other idle timer in the path.
+const SSE_KEEPALIVE_MS = 10000;
 
 // Start an SSE response: write headers, kick off a heartbeat, and wire cleanup on
 // close. Returns the interval so the route can clear it in its own close handler.
@@ -1007,6 +1010,24 @@ function frontendIndexFile() {
 
 app.get('/health', (_req, res) => {
   res.status(200).send('ok');
+});
+
+// Human-facing build/deploy provenance for Settings → About. The frontend bakes
+// the app semver at build time; the deploy-time PR/commit are not knowable then
+// (the frontend builds inside Docker with no .git), so they ride as env stamped
+// into k8s/values.yaml's `build:` block by .github/workflows/build-and-deploy.yaml
+// on each deploy — the SAME commit that bumps the image tag. That means the labels
+// stay correct even when a content-identical rebuild is skipped and the old image
+// is reused (the image bytes never carry this — only the k8s manifest does). Pure
+// chrome: never 500s; unset fields degrade to '' and the client shows just the
+// baked version.
+app.get('/api/build-info', (_req, res) => {
+  res.status(200).json({
+    prTitle: process.env.BUILD_PR_TITLE || '',
+    prNumber: process.env.BUILD_PR_NUMBER || '',
+    prUrl: process.env.BUILD_PR_URL || '',
+    commit: process.env.BUILD_COMMIT || '',
+  });
 });
 
 // Readable fallback title from a slugged blob name, used only when a track has no
@@ -1206,6 +1227,12 @@ app.get('/api/lobbies/events', async (req, res) => {
   if (!user) return;
   const heartbeat = startSse(res);
   lobbyListSubscribers.add(res);
+  // Connect-time snapshot: push an immediate change ping so the client refetches the
+  // current list the instant the stream opens (mirrors the per-lobby channel's on-connect
+  // frame at the /:id/events route). Combined with the client's onopen refetch, this makes
+  // every (re)connection self-healing — a mutation missed while the socket was down is
+  // recovered on reconnect instead of being lost until a manual Refresh.
+  sseWrite(res, 'data: {"type":"lobbies-changed"}\n\n');
   req.on('close', () => {
     clearInterval(heartbeat);
     lobbyListSubscribers.delete(res);
