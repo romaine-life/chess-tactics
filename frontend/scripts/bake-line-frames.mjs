@@ -18,4 +18,9 @@ if (!flagged.length) console.log('no frames flagged with a `line` output in the 
 for (const [asset, rec] of flagged) {
   writeFileSync(`${LINE_DIR}${rec.line}`, PNG.sync.write(bakeLine(asset)));
   console.log(`wrote explore/frames/${rec.line} (from ${asset})`);
+  // Semantic-accent twins (lineTones): same frame, a palette swap on the ornament.
+  for (const t of (rec.lineTones ?? [])) {
+    writeFileSync(`${LINE_DIR}${t.out}`, PNG.sync.write(bakeLine(asset, t.swap)));
+    console.log(`wrote explore/frames/${t.out} (from ${asset}, tone)`);
+  }
 }

@@ -62,6 +62,10 @@ screens migrate as they're touched, per the ADR-0024 staged-migration precedent.
 
 - WHAT may draw a box is governed elsewhere (ADR-0032: visible surfaces are kit chrome;
   ADR-0034: line frames). The rail's raw-CSS boxes (`.le-status-current`,
-  `.le-status-entry`, `.le-violations`' outline) predate those and are standing debt —
-  re-chroming them to kit line frames is tracked as separate work; this ADR governs only
-  the content inset and applies identically before and after that swap.
+  `.le-status-entry`, `.le-material-values`, `.le-violations`, `.le-board-link-input`)
+  predated those and were standing debt; they are **now re-chromed to the kit**: the wells
+  wear the `panel-line` 9-slice (with `success`/`warning`/`error`/`warm` tone twins — see
+  ADR-0034's `lineTones`) over a border-box surface, and the input wears the `field-input`
+  frame. This ADR's content-inset rule was designed to apply identically before and after
+  that swap, and does: every box kept `padding: var(--ds-inset)` — now the inset from the
+  drawn *frame* edge rather than a 1px CSS edge.

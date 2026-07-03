@@ -1,5 +1,5 @@
 {
-  "_doc": "Single source of truth for atom-built 9-slice frames. Read by the Node bake (scripts/nine-slice-kit.mjs), the in-app editor (NineSliceEditor), and the catalog edit-link (AssetLibraryStudio). Add a frame here and it becomes bakeable, editable, and catalog-linked with no other code change. atoms = names in public/assets/ui/kit/atoms; variants[].out = composed PNG in public/assets/ui/kit; swap = palette name; consume = the CSS var its content drives; carve = flood navy bleed outside the rail; line = filename of the transparent-interior 'line' twin baked into public/assets/ui/explore/frames (full ornament over a see-through center — assembled from the corner+edge atoms with a transparent fill; no masking, no carve — the fix for the 9-slice fill problem so a surface shows behind the chrome while the frame stays; the ornament must reach the element edge, so only bracket frames qualify, NOT the inset steel row rail; see ADR-0034).",
+  "_doc": "Single source of truth for atom-built 9-slice frames. Read by the Node bake (scripts/nine-slice-kit.mjs), the in-app editor (NineSliceEditor), and the catalog edit-link (AssetLibraryStudio). Add a frame here and it becomes bakeable, editable, and catalog-linked with no other code change. atoms = names in public/assets/ui/kit/atoms; variants[].out = composed PNG in public/assets/ui/kit; swap = palette name; consume = the CSS var its content drives; carve = flood navy bleed outside the rail; line = filename of the transparent-interior 'line' twin baked into public/assets/ui/explore/frames (full ornament over a see-through center — assembled from the corner+edge atoms with a transparent fill; no masking, no carve — the fix for the 9-slice fill problem so a surface shows behind the chrome while the frame stays; the ornament must reach the element edge, so only bracket frames qualify, NOT the inset steel row rail; see ADR-0034). lineTones = semantic-accent twins of `line`: each { out, swap } re-bakes the line frame with a palette swap applied to the corner/edge atoms, so the warm gold bracket ramp becomes a success/warning/error/warm accent while the cool steel rail is untouched — one frame character, corner accent per tone (baked beside panel-line.png, parity-tested like every other output).",
   "palettes": {
     "active": {
       "101921": "183452",
@@ -18,6 +18,30 @@
       "c79b55": "e07a3c",
       "a7793d": "c0532a",
       "5b4124": "6e2c18"
+    },
+    "warm": {
+      "faefbb": "ffcabf",
+      "c79b55": "f58a76",
+      "a7793d": "e5604a",
+      "5b4124": "8f3324"
+    },
+    "success": {
+      "faefbb": "d6f5df",
+      "c79b55": "7fe3a0",
+      "a7793d": "3fb368",
+      "5b4124": "1f5e37"
+    },
+    "warning": {
+      "faefbb": "fdedc4",
+      "c79b55": "f5c869",
+      "a7793d": "cf8f2f",
+      "5b4124": "6e4a18"
+    },
+    "error": {
+      "faefbb": "ffd4cd",
+      "c79b55": "ff9182",
+      "a7793d": "e05446",
+      "5b4124": "7a271e"
     },
     "row-active": {
       "142234": "183452",
@@ -149,6 +173,12 @@
         "h": 72
       },
       "line": "panel-line.png",
+      "lineTones": [
+        { "out": "panel-line-warm.png", "swap": "warm" },
+        { "out": "panel-line-success.png", "swap": "success" },
+        { "out": "panel-line-warning.png", "swap": "warning" },
+        { "out": "panel-line-error.png", "swap": "error" }
+      ],
       "variants": [
         {
           "out": "panel.png"

@@ -43,6 +43,9 @@ const PALETTES = REG.palettes ?? {};
 export const REGISTRY = Object.fromEntries(Object.entries(REG.assets).map(([id, a]) => [id, {
   ...a,
   variants: a.variants.map((v) => ({ ...v, swap: v.swap ? PALETTES[v.swap] : undefined })),
+  // Semantic-accent twins of the `line` frame: resolve each tone's palette name to its
+  // swap map, exactly like a variant, so bakeLine(id, swap) can re-colour the ornament.
+  lineTones: a.lineTones ? a.lineTones.map((t) => ({ ...t, swap: t.swap ? PALETTES[t.swap] : undefined })) : undefined,
 }]));
 
 const hex = (r, g, b) => `${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
@@ -384,6 +387,12 @@ export function buildAsset(assetId, cfgRaw) {
     writeFileSync(`${LINE_DIR}${rec.line}`, PNG.sync.write(bakeLine(assetId)));
     written.push(`explore/frames/${rec.line}`);
   }
+  // Semantic-accent twins of the line frame — one per tone, same atoms + corner tune, so they
+  // can never drift from the neutral twin (the parity test re-bakes each and pins it).
+  for (const t of (rec?.lineTones ?? [])) {
+    writeFileSync(`${LINE_DIR}${t.out}`, PNG.sync.write(bakeLine(assetId, t.swap)));
+    written.push(`explore/frames/${t.out}`);
+  }
   return { written, warns, note };
 }
 
@@ -403,12 +412,16 @@ export function buildFamily(theme) {
 // of the baked navy fill. This is the GENERAL fix for the "navy ring" 9-slice fill
 // problem (cf. the hand-made panel-line.png): dropping border-image `fill` alone is not
 // enough because the 8 edge slices still carry the fill colour inward.
-export function bakeLine(assetId) {
+export function bakeLine(assetId, swap) {
   const rec = REGISTRY[assetId];
   if (!rec) throw new Error(`nine-slice-kit: unknown asset "${assetId}" (known: ${Object.keys(REGISTRY).join(', ')})`);
   let cfg; try { cfg = loadConfig(assetId); } catch { cfg = normalizeConfigForAsset(assetId, { asset: assetId }); }
-  const { base, bracket } = splitCorner(loadAtom(rec.atoms.corner));
-  const edge = loadAtom(rec.atoms.edge);
+  let { base, bracket } = splitCorner(loadAtom(rec.atoms.corner));
+  let edge = loadAtom(rec.atoms.edge);
+  // A tone twin (lineTones) recolours the ornament to a semantic accent — the same whole-frame
+  // palette swap a filled variant uses. The tone palettes remap only the warm gold bracket ramp,
+  // so the cool steel rail is left alone: every tone shares one frame, differing at the corners.
+  if (swap) { base = swapPalette(base, swap); bracket = swapPalette(bracket, swap); edge = swapPalette(edge, swap); }
   const fillAtom = loadAtom(rec.atoms.fill);
   // Assemble from the corner + edge atoms with a TRANSPARENT fill. The navy interior lives
   // ENTIRELY in the fill atom, so this alone is the full ornament over a see-through center —
