@@ -428,6 +428,10 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   // Selection = layer tab (gold | cool) + a cell of the 3×3 spatial selector.
   // The cool layer's side/center moves take their members from two toggles
   // (corners / pipe) — both on = the rigid seam-safe side move.
+  // Top-level control tab: 'shape' edits the frame pixels (bakes into the PNG);
+  // 'boxes' calibrates the consumption-side hand-off values (content / fill) that
+  // code reads but that never bake — a different job, so its own tab.
+  const [tab, setTab] = useState<'shape' | 'boxes'>('shape');
   const [layer, setLayer] = useState<Layer>('gold');
   const [sel, setSel] = useState<Sel>('center');
   const [memberCorners, setMemberCorners] = useState(true);
@@ -768,6 +772,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (tab !== 'shape') return; // arrows nudge the frame; the Hand-off tab has no frame nudging
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
       const moves: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
@@ -777,7 +782,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layer, sel, memberCorners, memberPipe, aid, loaded, edit.bracketScale, edit.frameScale]);
+  }, [tab, layer, sel, memberCorners, memberPipe, aid, loaded, edit.bracketScale, edit.frameScale]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -978,6 +983,14 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
                 </div>
               ))}
             </div>
+          <div style={ST.tabRow} role="tablist">
+            {(['shape', 'boxes'] as const).map((t) => (
+              <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} style={{ ...ST.tabBtn, ...(tab === t ? ST.tabBtnOn : {}) }}>
+                {t === 'shape' ? 'Shape' : 'Hand-off boxes'}
+              </button>
+            ))}
+          </div>
+          {tab === 'shape' && (<>
           <div style={ST.pieceRow}>
             {layers.map((l) => (
               <button key={l} type="button" onClick={() => setLayer(l)} style={{ ...ST.pieceBtn, ...(layer === l ? (l === 'gold' ? ST.layerGoldOn : ST.pieceBtnOn) : {}) }}>{layerLabel(l)}</button>
@@ -1073,55 +1086,60 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               ⚠ asymmetric: {asymmetries.join(' · ')}
             </div>
           )}
-          <div style={ST.sizeBox}>
-            {/* The two HUMAN-CALIBRATED values code consumes (ADR-0050): the dev lines
-                these boxes up against real pixels; consumers pad/clip by the result. */}
-            <span style={ST.sectionHead}>Hand-off boxes — you calibrate, code consumes</span>
-            <label style={ST.toggle}>
-              <input type="checkbox" checked={showContent} onChange={(e) => setShowContent(e.target.checked)} />
-              <span style={{ color: '#5cff9e' }}>■</span> <b>Content box</b>&nbsp;— where text / icons start
-            </label>
-            <div style={ST.insetRow}>
-              <span style={ST.sizeW}>inset {edit.content}px</span>
-              <button type="button" style={ST.sb} onClick={() => setContent(-1)}>-</button>
-              <button type="button" style={ST.sb} onClick={() => setContent(1)}>+</button>
-              <button type="button" style={ST.sb} title="Reset content inset to saved" aria-label="Reset content inset" onClick={resetContent}>↺</button>
-            </div>
-            <label style={ST.toggle}>
-              <input type="checkbox" checked={showFill} onChange={(e) => setShowFill(e.target.checked)} />
-              <span style={{ color: '#ffb454' }}>■</span> <b>Fill box</b>&nbsp;— where a backing surface stops (frame may bleed outside it)
-            </label>
-            <div style={ST.insetRow}>
-              <span style={ST.sizeW}>inset {edit.fill}px</span>
-              <button type="button" style={ST.sb} onClick={() => setFill(-1)}>-</button>
-              <button type="button" style={ST.sb} onClick={() => setFill(1)}>+</button>
-              <button type="button" style={ST.sb} title="Reset fill inset to saved" aria-label="Reset fill inset" onClick={resetFill}>↺</button>
-            </div>
-          </div>
-          <div style={ST.sizeBox}>
-            <span style={ST.sectionHead}>Preview</span>
-            <label style={ST.toggle}>
-              <input type="checkbox" checked={showOuter} onChange={(e) => setShowOuter(e.target.checked)} />
-              <span style={{ color: '#ff5cf0' }}>■</span> Outer box — outermost pixels of the 9-slice (centering guide)
-            </label>
-            <div style={ST.backingRow}>
-              <span style={{ ...ST.sizeLabel, color: '#cfe3ff', minWidth: 52 }}>Backing</span>
-              <select value={backing} onChange={(e) => setBacking(e.target.value as 'none' | 'fill' | 'surface')} style={{ ...ST.select, fontSize: 13, flex: 1, minWidth: 0 }}>
-                <option value="none">None</option>
-                <option value="fill">Baked fill</option>
-                <option value="surface">Surface…</option>
-              </select>
-              <button type="button" style={ST.sb} title="Reset backing to None" aria-label="Reset backing" onClick={() => setBacking('none')}>↺</button>
-            </div>
-            {backing === 'surface' && (
-              <div style={ST.sizeRow}>
-                <select value={previewSurfaceName} onChange={(e) => setPreviewSurfaceName(e.target.value)} style={{ ...ST.select, fontSize: 13, flex: 1, minWidth: 0 }}>
-                  {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
-                </select>
+          <label style={ST.toggle} title="Draw the footprint edge so you can centre the frame against it">
+            <input type="checkbox" checked={showOuter} onChange={(e) => setShowOuter(e.target.checked)} />
+            <span style={{ color: '#ff5cf0' }}>■</span> Outer box — footprint edge (centering guide)
+          </label>
+          </>)}
+          {tab === 'boxes' && (<>
+            <div style={ST.sizeBox}>
+              {/* The two HUMAN-CALIBRATED values code consumes (ADR-0050): the dev lines
+                  these boxes up against real pixels; consumers pad/clip by the result.
+                  They bake into NO pixels — they ride in the config + generated CSS. */}
+              <span style={ST.sectionHead}>Hand-off boxes — you calibrate, code consumes</span>
+              <p style={ST.hint}>These don't touch the frame art — they mark where consumers start their content and stop their backing. Save writes them to the config + generated CSS.</p>
+              <label style={ST.toggle}>
+                <input type="checkbox" checked={showContent} onChange={(e) => setShowContent(e.target.checked)} />
+                <span style={{ color: '#5cff9e' }}>■</span> <b>Content box</b>&nbsp;— where text / icons start
+              </label>
+              <div style={ST.insetRow}>
+                <span style={ST.sizeW}>inset {edit.content}px</span>
+                <button type="button" style={ST.sb} onClick={() => setContent(-1)}>-</button>
+                <button type="button" style={ST.sb} onClick={() => setContent(1)}>+</button>
+                <button type="button" style={ST.sb} title="Reset content inset to saved" aria-label="Reset content inset" onClick={resetContent}>↺</button>
               </div>
-            )}
-            <span style={ST.sizeLabel}>Backing is preview-only — the body is supplied by the consumer. Save writes corners, pipes, sizes, content, and fill.</span>
-          </div>
+              <label style={ST.toggle}>
+                <input type="checkbox" checked={showFill} onChange={(e) => setShowFill(e.target.checked)} />
+                <span style={{ color: '#ffb454' }}>■</span> <b>Fill box</b>&nbsp;— where a backing surface stops (frame may bleed outside it)
+              </label>
+              <div style={ST.insetRow}>
+                <span style={ST.sizeW}>inset {edit.fill}px</span>
+                <button type="button" style={ST.sb} onClick={() => setFill(-1)}>-</button>
+                <button type="button" style={ST.sb} onClick={() => setFill(1)}>+</button>
+                <button type="button" style={ST.sb} title="Reset fill inset to saved" aria-label="Reset fill inset" onClick={resetFill}>↺</button>
+              </div>
+            </div>
+            <div style={ST.sizeBox}>
+              <span style={ST.sectionHead}>Check against a backing</span>
+              <span style={ST.sizeLabel}>Preview-only — drop a real surface behind the frame to line the fill box up against it. Not saved.</span>
+              <div style={ST.backingRow}>
+                <span style={{ ...ST.sizeLabel, color: '#cfe3ff', minWidth: 52 }}>Backing</span>
+                <select value={backing} onChange={(e) => setBacking(e.target.value as 'none' | 'fill' | 'surface')} style={{ ...ST.select, fontSize: 13, flex: 1, minWidth: 0 }}>
+                  <option value="none">None</option>
+                  <option value="fill">Baked fill</option>
+                  <option value="surface">Surface…</option>
+                </select>
+                <button type="button" style={ST.sb} title="Reset backing to None" aria-label="Reset backing" onClick={() => setBacking('none')}>↺</button>
+              </div>
+              {backing === 'surface' && (
+                <div style={ST.sizeRow}>
+                  <select value={previewSurfaceName} onChange={(e) => setPreviewSurfaceName(e.target.value)} style={{ ...ST.select, fontSize: 13, flex: 1, minWidth: 0 }}>
+                    {SURFACE_ASSETS.map((s) => <option key={s.name} value={s.name}>{s.label}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          </>)}
           {status && (status.top < 0 || status.right < 0 || status.bottom < 0 || status.left < 0) && (
             <div style={{ ...ST.statusBox, borderColor: '#e0556a', color: '#ff9aa8' }}>
               <div style={{ fontWeight: 700 }}>✗ overflow — pixels extend beyond the box</div>
@@ -1196,6 +1214,9 @@ const ST: Record<string, CSSProperties> = {
   previewLabel: { fontSize: 11, color: '#9fc4d5', letterSpacing: 0.3 },
   consumerPreview: { display: 'grid', placeItems: 'center', minWidth: 300, minHeight: 112, padding: '10px 18px', boxSizing: 'border-box' },
   previewNote: { fontSize: 12, color: '#9fc4d5', textAlign: 'center' },
+  tabRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, padding: 4, background: '#0a0f1c', border: '1px solid #1b2740', borderRadius: 8 },
+  tabBtn: { display: 'grid', placeItems: 'center', minWidth: 0, padding: '10px 8px', background: 'transparent', color: '#9fc4d5', border: '1px solid transparent', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 700, textTransform: 'none', lineHeight: 1.1 },
+  tabBtnOn: { background: '#1d5f9e', color: '#fff', borderColor: '#4fbdf0' },
   pieceRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(62px, 1fr))', gap: 6 },
   pieceBtn: { display: 'grid', placeItems: 'center', minWidth: 0, padding: '8px 6px', background: '#111a2c', color: '#c4d6e6', border: '1px solid #2a3c5e', borderRadius: 4, cursor: 'pointer', textTransform: 'none', lineHeight: 1.1, overflow: 'hidden' },
   pieceBtnOn: { background: '#1d5f9e', color: '#fff', borderColor: '#4fbdf0' },
