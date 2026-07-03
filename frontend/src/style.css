@@ -5026,8 +5026,9 @@ h1 {
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
 
-/* Victory-conditions editor (ADR-0054) — layout only; every control is a kit atom (le-seg-btn /
+/* Victory-conditions editor (ADR-0055) — layout only; every control is a kit atom (le-seg-btn /
    Toggle / Stepper). A hairline top-border separates stacked conditions within a list. */
+.le-victory-presets { margin: 6px 0 2px; }
 .le-victory-list { margin-top: 12px; }
 .le-victory-head { color: #d6ecf5; font-size: var(--ds-text-sm); letter-spacing: .04em; margin: 14px 2px 2px; opacity: .85; text-transform: uppercase; }
 .le-cond { border-top: 1px solid rgba(150, 180, 200, .14); margin-top: 10px; padding-top: 10px; }

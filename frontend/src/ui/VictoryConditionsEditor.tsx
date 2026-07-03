@@ -4,10 +4,11 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 
-// The Level Editor's authoring surface for ADR-0055 victory conditions: two editable lists (win /
-// lose) of VictoryConditions. The player wins the instant ANY win condition holds and loses the
-// instant ANY lose condition holds (defeat-first). Rendered inside the RULES panel only when the
-// author turns on "Custom win/lose"; otherwise the `objective` preset defines the outcome.
+// The Level Editor's authoring surface for ADR-0055 victory conditions — THE place a level's
+// win/lose is set (always visible in the RULES panel, not a mode you toggle). Two editable lists:
+// the player wins the instant ANY win condition holds and loses the instant ANY lose condition
+// holds (defeat-first). Presets load their conditions in as ADDITIVE helpers (see `mergeRules`),
+// and every add is idempotent (see `addUnique`) so re-clicking or layering presets never dupes.
 //
 // Chrome is the editor's kit idiom only — `le-seg-btn` segmented buttons, the shared Toggle and
 // Stepper, `le-ctrlrow`/`le-board-note` layout. Leaf conditions (eliminate / reach / turnLimit)
@@ -15,6 +16,43 @@ import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 // re-save never silently drops it.
 
 type ListKey = 'win' | 'lose';
+
+/** De-dupe identity: two conditions collide when they are the same kind + params. `turnLimit`
+ * collides on kind ALONE (one deadline per list — its turn count is edited in place, so re-adding
+ * never makes a second), while `eliminate`/`reach` distinguish by side/filter. */
+export function conditionKey(c: VictoryCondition): string {
+  switch (c.kind) {
+    case 'eliminate': return `eliminate:${c.side}:${c.filter?.type ?? ''}`;
+    case 'reach': return `reach:${c.side}`;
+    case 'turnLimit': return 'turnLimit';
+    case 'all': return `all:${c.of.map(conditionKey).sort().join('|')}`;
+  }
+}
+
+/** Append a condition unless one with the same key is already present — the idempotent add. */
+function addUnique(list: VictoryCondition[], c: VictoryCondition): VictoryCondition[] {
+  return new Set(list.map(conditionKey)).has(conditionKey(c)) ? list : [...list, c];
+}
+
+/** Merge a preset's rules into existing lists — each condition added only if not already there.
+ * Presets are additive helpers, so loading two composes their conditions without duplicates. */
+export function mergeRules(base: VictoryRules, add: VictoryRules): VictoryRules {
+  return { win: add.win.reduce(addUnique, base.win), lose: add.lose.reduce(addUnique, base.lose) };
+}
+
+/** Full-equality key — like conditionKey but the turn count MATTERS — for deciding whether the
+ * authored lists still exactly match a preset expansion (if so, the level stores no `victory` and
+ * the `objective` preset drives it, preserving e.g. capture-king's runtime kingSide direction). */
+function conditionFullKey(c: VictoryCondition): string {
+  return c.kind === 'turnLimit' ? `turnLimit:${c.turns}` : conditionKey(c);
+}
+
+/** True when two rule sets hold the same conditions (order-insensitive). */
+export function rulesEqual(a: VictoryRules, b: VictoryRules): boolean {
+  const same = (x: VictoryCondition[], y: VictoryCondition[]): boolean =>
+    x.length === y.length && x.map(conditionFullKey).sort().join(',') === y.map(conditionFullKey).sort().join(',');
+  return same(a.win, b.win) && same(a.lose, b.lose);
+}
 
 /** Live plain-language summary of a condition — the row's identity, updates as its params change. */
 function conditionSummary(c: VictoryCondition): string {
@@ -39,7 +77,7 @@ export function VictoryConditionsEditor({ value, onChange }: {
   const update = (key: ListKey, next: VictoryCondition[]): void => onChange({ ...value, [key]: next });
   const setAt = (key: ListKey, i: number, c: VictoryCondition): void => update(key, value[key].map((x, j) => (j === i ? c : x)));
   const removeAt = (key: ListKey, i: number): void => update(key, value[key].filter((_, j) => j !== i));
-  const add = (key: ListKey, c: VictoryCondition): void => update(key, [...value[key], c]);
+  const add = (key: ListKey, c: VictoryCondition): void => update(key, addUnique(value[key], c));
 
   return (
     <>

@@ -50,7 +50,7 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
-import { VictoryConditionsEditor } from './VictoryConditionsEditor';
+import { VictoryConditionsEditor, mergeRules, rulesEqual } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
@@ -655,11 +655,10 @@ export function LevelEditor(): ReactElement {
   );
   const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
   const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
-  // Custom victory (ADR-0055): off ⇒ the mode defines win/lose; on ⇒ the two edited lists override
-  // it. `victory` holds the working lists (seeded from the current mode when the toggle flips on).
-  const [victoryCustom, setVictoryCustom] = useState<boolean>(
-    localDraft ? localDraft.victory !== undefined : initialCampaignLevel?.victory !== undefined,
-  );
+  // Victory conditions (ADR-0055): `victory` is the working win/lose lists — always the truth for
+  // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
+  // that never customized them; a level stores `victory` only when the lists diverge from that
+  // preset (see victoryForSave), which keeps preset levels' bodies clean and out of the dirty check.
   const [victory, setVictory] = useState<VictoryRules>(
     localDraft?.victory ?? initialCampaignLevel?.victory ?? victoryRulesForObjective(objective, { surviveTurns }),
   );
@@ -779,7 +778,6 @@ export function LevelEditor(): ReactElement {
       setClockEnabled(level.timeControl !== undefined);
       setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
       setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
-      setVictoryCustom(level.victory !== undefined);
       setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
       setEditingId(level.id);
       setLevelName(level.name);
@@ -1070,14 +1068,21 @@ export function LevelEditor(): ReactElement {
   // toggle + its config live here (objective is always written); placement/roster/surviveTurns are
   // sent WHEN they diverge from the schema default, so a fixed capture-all board serializes without
   // them (back-compat) — but the roster/survive values are always carried when their mode is active.
+  // A level stores `victory` only when the lists DIVERGE from the objective preset — else the
+  // preset drives it (keeps preset bodies clean + out of the dirty check, and preserves
+  // capture-king's runtime kingSide direction-awareness for an untouched King Assault). ADR-0055.
+  const victoryForSave = useMemo(
+    () => (rulesEqual(victory, victoryRulesForObjective(objective, { surviveTurns })) ? undefined : victory),
+    [victory, objective, surviveTurns],
+  );
   const modeMeta = useMemo(() => ({
     objective,
     placement: placement === 'random' ? ('random' as const) : undefined,
     roster: placement === 'random' ? roster : undefined,
     surviveTurns: objective === 'survive' ? surviveTurns : undefined,
     timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
-    victory: victoryCustom ? victory : undefined,
-  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryCustom, victory]);
+    victory: victoryForSave,
+  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave]);
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
@@ -1120,9 +1125,9 @@ export function LevelEditor(): ReactElement {
       surviveTurns,
       roster,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
-      victory: victoryCustom ? victory : undefined,
+      victory: victoryForSave,
     });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryCustom, victory]);
+  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave]);
 
   const targetLevelId = editingId ?? routeParams.levelId;
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
@@ -1736,52 +1741,31 @@ export function LevelEditor(): ReactElement {
           </section>
           </>
         ) : layer === 'rules' ? (<>
-          <section className="skirmish-card">
-            <h2>Mode</h2>
-            {/* The win-rule mode picker (ADR-0050). One control, kit segmented buttons; labels are
-                the owner-facing MODE_NAME, not the stored objective ids. */}
-            <div className="le-seg le-seg-wrap">
+          <section className="skirmish-card le-victory-card">
+            <h2>Victory conditions</h2>
+            {/* ADR-0055: THE place win/lose is set (always visible — not a mode you toggle). Presets
+                are additive "load" helpers: each fills its conditions into the lists (kingSide read
+                off the placed units) and composes with the others; duplicates are ignored. The last
+                preset picked also becomes the level's `objective` — its headline label + the
+                one-King save check. */}
+            <p className="le-board-note">How this level is won and lost. Load a preset to fill in its conditions — they ADD to the lists (combine several, e.g. Reach + King Assault), then edit. Duplicate conditions are ignored.</p>
+            <div className="le-seg le-seg-wrap le-victory-presets">
               {OBJECTIVE_TYPES.map((mode) => (
                 <button
                   type="button"
                   key={mode}
-                  className={`le-seg-btn ${objective === mode ? 'active' : ''}`.trim()}
-                  onClick={() => setObjective(mode)}
+                  className="le-seg-btn"
+                  title={MODE_DESCRIPTION[mode]}
+                  onClick={() => {
+                    const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
+                    setObjective(mode);
+                    setVictory((v) => mergeRules(v, victoryRulesForObjective(mode, { surviveTurns, kingSide: kingSideOf(seedUnits) })));
+                  }}
                 >{MODE_NAME[mode]}</button>
               ))}
             </div>
-            <p className="le-board-note">{MODE_DESCRIPTION[objective]}</p>
-          </section>
-
-          <section className="skirmish-card le-victory-card">
-            <h2>Victory conditions</h2>
-            {/* ADR-0055: off ⇒ the mode above defines win/lose; on ⇒ the two edited lists override it.
-                Turning it on seeds from the current mode (kingSide read off the placed units) so the
-                author starts from the preset, then edits. */}
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Custom win/lose</span>
-              <Toggle
-                checked={victoryCustom}
-                label="Toggle custom victory conditions"
-                onChange={(on) => {
-                  if (on && !victoryCustom) {
-                    const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
-                    setVictory(victoryRulesForObjective(objective, { surviveTurns, kingSide: kingSideOf(seedUnits) }));
-                  }
-                  setVictoryCustom(on);
-                }}
-              />
-            </div>
-            {victoryCustom ? (<>
-              <VictoryConditionsEditor value={victory} onChange={setVictory} />
-              <p className="le-board-note">
-                The player wins the instant any <b>Win</b> condition holds and loses the instant any <b>Lose</b> condition holds; a tie resolves as a loss. The <b>{MODE_NAME[objective]}</b> label above still names the mode.
-              </p>
-            </>) : (
-              <p className="le-board-note">
-                Using the <b>{MODE_NAME[objective]}</b> preset. Turn on to combine your own win and lose conditions — it starts from this mode, then you edit freely.
-              </p>
-            )}
+            <VictoryConditionsEditor value={victory} onChange={setVictory} />
+            <p className="le-board-note">The player wins the instant any <b>Win</b> condition holds and loses the instant any <b>Lose</b> condition holds; a tie resolves as a loss.</p>
           </section>
 
           <section className="skirmish-card">
@@ -1855,24 +1839,6 @@ export function LevelEditor(): ReactElement {
                 : 'Untimed — the player can think as long as they like.'}
             </p>
           </section>
-
-          {objective === 'survive' ? (
-            <section className="skirmish-card">
-              <h2>Survive turns</h2>
-              <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Turns to outlast</span>
-                <Stepper
-                  value={surviveTurns}
-                  suffix=""
-                  decreaseLabel="Fewer turns to survive"
-                  increaseLabel="More turns to survive"
-                  onDecrease={() => setSurviveTurns((n) => Math.max(1, n - 1))}
-                  onIncrease={() => setSurviveTurns((n) => n + 1)}
-                />
-              </div>
-              <p className="le-board-note">The player wins by lasting this many of their own turns.</p>
-            </section>
-          ) : null}
 
           {placement === 'random' ? (
             (['player', 'enemy'] as const).map((side) => (
