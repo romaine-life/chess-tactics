@@ -73,6 +73,32 @@ describe('skirmish store', () => {
     expect(['player', 'done']).toContain(after.turn);
   });
 
+  it('keeps the piece you moved selected through the enemy turn and into your next turn', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    const movedId = useSkirmish.getState().selectedId!;
+    const moves = useSkirmish.getState().movesForSelected();
+    expect(moves.length).toBeGreaterThan(0);
+    useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+
+    // Through the enemy turn: the mover always survives its own move, so the piece the
+    // player just commanded stays selected rather than being cleared. Input is gated by
+    // turn, so it shows no move-dots — it just keeps the player's context on the board.
+    expect(useSkirmish.getState().selectedId).toBe(movedId);
+
+    // Into the next player turn: the selection follows that same piece, only falling
+    // back to a living player piece if the enemy captured it.
+    vi.runAllTimers();
+    const after = useSkirmish.getState();
+    const movedStillAlive = after.game.pieces.some((p) => p.id === movedId && p.alive && p.side === 'player');
+    if (movedStillAlive) {
+      expect(after.selectedId).toBe(movedId);
+    } else {
+      const sel = after.game.pieces.find((p) => p.id === after.selectedId);
+      expect(sel?.side).toBe('player');
+      expect(sel?.alive).toBe(true);
+    }
+  });
+
   it('ignores an illegal destination', () => {
     useSkirmish.getState().newSkirmish({ seed: 5 });
     const before = useSkirmish.getState().game;

@@ -139,6 +139,16 @@ function firstOwnId(game: GameState, side: Side): string | null {
   return game.pieces.find((p) => p.side === side && p.alive)?.id ?? null;
 }
 
+/**
+ * The current selection if that piece is still a living piece of `side`, else null.
+ * Lets the selection FOLLOW the piece the player is working with across a turn instead
+ * of resetting — an enemy capture of that piece drops it, so callers fall back to a
+ * default (the first own piece).
+ */
+function livingSelected(game: GameState, selectedId: string | null, side: Side): string | null {
+  return game.pieces.some((p) => p.id === selectedId && p.alive && p.side === side) ? selectedId : null;
+}
+
 /** Result copy from THIS client's seat: in netplay 'you' is the local side, not 'player'. */
 function netOutcomeCopy(winner: Winner, localSide: Side): string {
   if (winner === 'draw') return 'Draw — the skirmish is even.';
@@ -399,13 +409,17 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           msgs.push(objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
         }
       }
+      // Turn returns to the player: keep the piece they were working with selected so
+      // the board reads continuously, only falling back to their first piece if the
+      // enemy captured it (or nothing was selected — e.g. resumed match).
+      const keep = livingSelected(game, cur.selectedId, 'player') ?? firstPlayerId(game);
       set({
         game,
         env: envFor(game),
         tick: enemyRes.tick,
         turnsElapsed,
-        selectedId: firstPlayerId(game),
-        focusedId: firstPlayerId(game),
+        selectedId: keep,
+        focusedId: keep,
         log: [...msgs.reverse(), ...cur.log].slice(0, 12),
       });
       // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
@@ -729,12 +743,15 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     }
     // Beat 1: commit the player's move on its own so it animates and the board
     // reads before the enemy answers. applyMove flips the turn to 'enemy', which
-    // also locks further player input until the reply resolves.
+    // also locks further player input until the reply resolves. Keep the moved piece
+    // selected (the mover always survives its own move) so its highlight carries
+    // through the enemy turn — input is gated by turn, so it shows no move-dots and
+    // isn't actionable, it just keeps the player's context visible.
     set({
       game,
       env: enemyEnv,
-      selectedId: null,
-      focusedId: null,
+      selectedId: p.id,
+      focusedId: p.id,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
     });
     // Beats 2–3: a read beat, then the enemy "thinks" and answers.
