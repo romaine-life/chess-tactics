@@ -11,6 +11,12 @@ describe('demo campaign workspace', () => {
     expect(workspace.campaigns.some((campaign) => campaign.favorite)).toBe(true);
     expect(workspace.campaigns.find((campaign) => campaign.id === DEMO_SELECTED_CAMPAIGN_ID)).toBeTruthy();
     expect(workspace.levels[DEMO_SELECTED_LEVEL_ID]).toBeTruthy();
+    const pawnCompass = workspace.levels['demo-valoria-pawn-compass'];
+    expect(pawnCompass).toBeTruthy();
+    expect(pawnCompass.layers.units
+      .filter((unit) => unit.side === 'player' && unit.type === 'pawn')
+      .map((unit) => unit.facing)
+      .sort()).toEqual(['east', 'north', 'north-east', 'north-west', 'south', 'south-east', 'south-west', 'west'].sort());
 
     for (const campaign of workspace.campaigns) {
       for (const ref of campaign.levels) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSkirmish } from './setup';
-import { livingPieces } from '../core/rules';
+import { legalMoves, livingPieces } from '../core/rules';
 import { isPassableTerrain } from '../core/terrain';
 import { createBlankLevel, type Level } from '../core/level';
 import { tileAssets, tileFamilies } from '../art/tileset';
@@ -20,6 +20,8 @@ const terrainToFamily: Record<TerrainType, TileFamilyId> = {
   pebble: 'pebble',
   sand: 'sand',
 };
+const hasMove = (moves: ReadonlyArray<{ x: number; y: number }>, x: number, y: number): boolean =>
+  moves.some((move) => move.x === x && move.y === y);
 
 describe('createSkirmish', () => {
   it('is deterministic for a given seed', () => {
@@ -219,5 +221,45 @@ describe('createFromLevel — random placement', () => {
       ['knight', 2, 6],
       ['king', 5, 1],
     ]);
+  });
+
+  it('fixed placement gives pawns their double-step from the authored starting row', () => {
+    const level = createBlankLevel('fx-pawns', 'Fixed Pawns', 8, 8);
+    level.layers.units = [
+      { x: 2, y: 6, type: 'pawn', side: 'player' },
+      { x: 5, y: 1, type: 'pawn', side: 'enemy' },
+      { x: 0, y: 4, type: 'pawn', side: 'player' },
+    ];
+
+    const game = createSkirmish({ seed: 9, level });
+    const playerHome = game.pieces.find((p) => p.side === 'player' && p.x === 2)!;
+    const enemyHome = game.pieces.find((p) => p.side === 'enemy')!;
+    const advanced = game.pieces.find((p) => p.side === 'player' && p.x === 0)!;
+
+    expect(playerHome.startX).toBe(2);
+    expect(playerHome.startY).toBe(6);
+    expect(hasMove(legalMoves(playerHome, game.pieces, game.size), 2, 4)).toBe(true);
+    expect(enemyHome.startX).toBe(5);
+    expect(enemyHome.startY).toBe(1);
+    expect(hasMove(legalMoves(enemyHome, game.pieces, game.size), 5, 3)).toBe(true);
+    expect(advanced.startX).toBe(0);
+    expect(advanced.startY).toBe(4);
+    expect(hasMove(legalMoves(advanced, game.pieces, game.size), 0, 2)).toBe(true);
+  });
+
+  it('fixed placement uses the authored pawn facing as immutable forward', () => {
+    const level = createBlankLevel('fx-facing-pawn', 'Fixed Pawn Facing', 8, 8);
+    level.layers.units = [
+      { x: 2, y: 4, type: 'pawn', side: 'player', facing: 'east' },
+      { x: 6, y: 4, type: 'king', side: 'enemy' },
+    ];
+
+    const game = createSkirmish({ seed: 9, level });
+    const pawn = game.pieces.find((p) => p.type === 'pawn')!;
+    expect(pawn.facing).toBe('east');
+    expect(pawn.pawnForward).toBe('east');
+    expect(hasMove(legalMoves(pawn, game.pieces, game.size), 3, 4)).toBe(true);
+    expect(hasMove(legalMoves(pawn, game.pieces, game.size), 4, 4)).toBe(true);
+    expect(hasMove(legalMoves(pawn, game.pieces, game.size), 2, 3)).toBe(false);
   });
 });
