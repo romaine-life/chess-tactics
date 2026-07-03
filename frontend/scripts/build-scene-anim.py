@@ -55,7 +55,18 @@ def build_mask(static: Image.Image, frames: list[Image.Image], w: int, h: int,
             sr, sg, sb = static_px[x, y][:3]
             # Water in the night scene is pale moonlit blue: noticeably brighter
             # than the basalt/trees around it. Dark pixels never animate.
+            # (Color can NOT separate water from sky gaps here — measured r/b is
+            # identical for both — so the structural-drift guard below does it.)
             if max(sr, sg, sb) < bright_thresh:
+                continue
+            # Structural-drift guard: real water motion sparkles AROUND its
+            # static brightness; when the generator instead REPAINTS a bright
+            # area dark in (almost) every frame — e.g. extending the treeline
+            # over a sky gap — that's drift, not motion, and it would flash
+            # once per loop when frame 0 restores the true art. Exclude pixels
+            # whose median generated brightness collapses vs the static art.
+            gen_lum = sorted(max(f.load()[x, y][:3]) for f in frames)
+            if gen_lum[len(gen_lum) // 2] < 0.55 * max(sr, sg, sb):
                 continue
             for frame in frames:
                 fr, fg, fb = frame.load()[x, y][:3]
@@ -95,6 +106,7 @@ def main() -> None:
     parser.add_argument("--rect", required=True, help="X,Y,W,H crop in scene pixels")
     parser.add_argument("--out", required=True, help="output sheet name (no extension)")
     parser.add_argument("--zones", default="", help="crop-relative x,y,w,h rects (';'-separated) where motion is allowed")
+    parser.add_argument("--skip", default="", help="comma-separated source frame indices to drop (generator fumbles: a frame whose exposure gain is an outlier has usually lost its streak texture — amplifying it doesn't help, dropping it does)")
     parser.add_argument("--frames", type=int, default=8)
     parser.add_argument("--edge", type=int, default=6)
     parser.add_argument("--diff", type=int, default=26)
@@ -104,22 +116,42 @@ def main() -> None:
     x0, y0, w, h = (int(v) for v in args.rect.split(","))
     static = Image.open(SCENE_PATH).convert("RGBA").crop((x0, y0, x0 + w, y0 + h))
 
+    skip = {int(v) for v in args.skip.split(",") if v}
     frames: list[Image.Image] = []
     for i in range(args.frames):
+        if i in skip:
+            continue
         frame = Image.open(args.run_dir / "v0" / f"{i}.png").convert("RGBA")
         if frame.size != (w, h):
             sys.exit(f"frame {i} is {frame.size}, expected {(w, h)} — refusing to rescale pixel art")
         frames.append(frame)
 
+    n = len(frames)  # frames actually baked (source count minus --skip)
     zones = [tuple(int(v) for v in z.split(",")) for z in args.zones.split(";") if z]
     mask = build_mask(static, frames[1:], w, h, args.edge, args.diff, args.bright, zones)
     moving = sum(1 for row in mask for v in row if v)
     print(f"mask: {moving} moving px ({moving * 100 // (w * h)}% of crop)")
 
     static_px = static.load()
-    sheet = Image.new("RGBA", (w * args.frames, h), (0, 0, 0, 0))
+
+    # Exposure lock: the generator's global gain drifts a few frames per run
+    # (the whole fall dims, then recovers — reads as flicker). Water sparkle is
+    # spatial texture, not mean-brightness wobble, so scale each frame's masked
+    # RGB so its mean luminance matches the static art's.
+    static_mean = sum(
+        max(static_px[x, y][:3]) for y in range(h) for x in range(w) if mask[y][x]
+    ) / max(moving, 1)
+    gains = [1.0]
+    for i in range(1, n):
+        frame_px = frames[i].load()
+        mean = sum(
+            max(frame_px[x, y][:3]) for y in range(h) for x in range(w) if mask[y][x]
+        ) / max(moving, 1)
+        gains.append(static_mean / mean if mean else 1.0)
+
+    sheet = Image.new("RGBA", (w * n, h), (0, 0, 0, 0))
     report = []
-    for i in range(args.frames):
+    for i in range(n):
         out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         out_px = out.load()
         frame_px = frames[i].load()
@@ -131,12 +163,13 @@ def main() -> None:
                 if i == 0:
                     out_px[x, y] = static_px[x, y]  # loop wraps onto the shipped art
                 else:
-                    fr, fg, fb = frame_px[x, y][:3]
+                    fr, fg, fb = (min(255, round(c * gains[i])) for c in frame_px[x, y][:3])
                     out_px[x, y] = (fr, fg, fb, 255)
                     if (fr, fg, fb) != static_px[x, y][:3]:
                         changed += 1
         sheet.paste(out, (w * i, 0))
         report.append(f"{changed * 100 // max(moving, 1)}%")
+    print("exposure gains:", " ".join(f"{g:.2f}" for g in gains))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / f"{args.out}.png"
