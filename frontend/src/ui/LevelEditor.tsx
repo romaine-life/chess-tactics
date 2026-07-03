@@ -1382,10 +1382,11 @@ export function LevelEditor(): ReactElement {
         </TitleBarSlot>
         <TitleBarSlot region="actions">
           {/* Only the RETURN nav rides the global title bar now (‹ Catalog / ‹ Back). The
-              workspace ACTIONS (Undo · Test · Save) moved into the editor's OWN pinned dock in
-              the control rail (.le-actions-dock below) — document verbs belong in the editor's
-              toolbar, not global chrome (the Unity/Unreal/Godot/Blender convention). The bar
-              stays brand + return-nav + account cluster, matching Settings. */}
+              workspace ACTIONS live in the editor's OWN chrome — Undo/Redo in the pinned
+              dock (.le-actions-dock), Test + Save/Publish in the Status layer card — because
+              document verbs belong in the editor's toolbar, not global chrome (the
+              Unity/Unreal/Godot/Blender convention). The bar stays brand + return-nav +
+              account cluster, matching Settings. */}
           <nav className="le-topbar-actions" aria-label="Editor navigation">
             {cameFromStudio ? <NavButton className="app-header-button le-back-catalog" to="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</NavButton> : null}
             {routeParams.returnTo ? <NavButton className="app-header-button" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</NavButton> : null}
@@ -1447,15 +1448,14 @@ export function LevelEditor(): ReactElement {
           </div>
         </section>
 
-        {/* Pinned editor ACTIONS dock: workspace verbs — Undo · Test · Save — in the editor's
-            OWN chrome instead of the global title bar (Unity/Unreal/Godot/Blender all keep
-            document verbs in a docked editor toolbar). A fixed flex child of the rail ABOVE the
-            sole scroll region, so it's always visible without overlaying the Pixi board; kit
-            .le-seg-btn atoms only. Save's gating (canSave / canTest / dirty / saved-version)
-            is preserved verbatim — /play reads the STORED level, so Test stays Save-gated. */}
+        {/* Pinned editor ACTIONS dock: only the ALWAYS-relevant verbs — Undo · Redo — stay
+            universal (a fixed flex child of the rail ABOVE the sole scroll region, always
+            visible without overlaying the Pixi board; kit .le-seg-btn atoms only). Test and
+            Save/Publish are session verbs, not per-edit verbs, so they live in the Status
+            layer card below with the rest of the save workflow. */}
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
           <h2>Actions</h2>
-          <div className="le-board-actions">
+          <div className="le-board-actions le-history-actions">
             <button
               type="button"
               className="le-seg-btn"
@@ -1463,30 +1463,13 @@ export function LevelEditor(): ReactElement {
               disabled={!undoStack.length}
               title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
             >Undo</button>
-            {canTest && testHref ? (
-              <NavButton className="le-seg-btn" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
-            ) : (
-              <button
-                type="button"
-                className="le-seg-btn"
-                data-testid="le-test"
-                disabled
-                title={
-                  !playability.ok ? 'Fix the playability issues below to test-play.'
-                  : dirty ? 'Save the level first — Test plays the saved version.'
-                  : !targetLevelId ? 'Save the level first to test-play it.'
-                  : 'Test-play unavailable.'
-                }
-              >Test</button>
-            )}
             <button
               type="button"
-              className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
-              data-testid="le-save"
-              aria-label={canSave ? saveLabel : `${saveLabel}: ${saveBlockedMessage}`}
-              title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
-              onClick={() => { if (canSave) void saveLevel(); else explainBlockedSave(); }}
-            >{saveLabel}</button>
+              className="le-seg-btn"
+              onClick={redoBoard}
+              disabled={!redoStack.length}
+              title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
+            >Redo</button>
           </div>
         </section>
 
@@ -1517,6 +1500,36 @@ export function LevelEditor(): ReactElement {
             <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
               <strong>{canSave ? 'Ready to save' : saveBlockedMessage || saveStateLabel}</strong>
               {canSave ? <span>{isOfficialTarget ? 'Publishing will update the official campaigns.' : 'The current board has unsaved changes.'}</span> : <span>{saveBlockedDetail}</span>}
+            </div>
+            {/* The save-workflow verbs live HERE with the state that explains them (the pinned
+                dock above keeps only Undo/Redo). Gating is preserved verbatim — /play reads the
+                STORED level, so Test stays Save-gated; a blocked Save click still routes to the
+                blocking layer via explainBlockedSave. */}
+            <div className="le-board-actions le-status-actions">
+              {canTest && testHref ? (
+                <NavButton className="le-seg-btn" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
+              ) : (
+                <button
+                  type="button"
+                  className="le-seg-btn"
+                  data-testid="le-test"
+                  disabled
+                  title={
+                    !playability.ok ? 'Fix the playability issues below to test-play.'
+                    : dirty ? 'Save the level first — Test plays the saved version.'
+                    : !targetLevelId ? 'Save the level first to test-play it.'
+                    : 'Test-play unavailable.'
+                  }
+                >Test</button>
+              )}
+              <button
+                type="button"
+                className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
+                data-testid="le-save"
+                aria-label={canSave ? saveLabel : `${saveLabel}: ${saveBlockedMessage}`}
+                title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
+                onClick={() => { if (canSave) void saveLevel(); else explainBlockedSave(); }}
+              >{saveLabel}</button>
             </div>
             <div className="le-status-log" role="log" aria-label="Save status log">
               {statusLog.length ? statusLog.map((entry) => (

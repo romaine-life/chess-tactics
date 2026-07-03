@@ -4575,11 +4575,17 @@ h1 {
 /* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
    disabled control, matching the retired title-bar Save's is-disabled look. */
 .le-seg-btn.is-blocked { opacity: .45; }
-/* Pinned Actions dock in the rail — the workspace verbs (Undo/Test/Save) that moved out of the
-   global title bar. A fixed flex child of .skirmish-hud (above .le-hud-scroll), so it never
-   scrolls; the button row reuses the .le-board-actions 3-col grid. */
+/* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo). A fixed
+   flex child of .skirmish-hud (above .le-hud-scroll), so it never scrolls. Test + Save/Publish
+   are session verbs and live in the Status layer card (.le-status-actions). Both rows reuse
+   the .le-board-actions grid with a 2-col override (the base grid stays 3-col for the Board
+   layer's row). */
 .le-actions-dock .le-board-actions { margin-top: 6px; }
 .le-board-actions { display: grid; gap: 5px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 8px; }
+.le-board-actions.le-history-actions,
+.le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* The status card spaces its children with the card gap; don't stack the row margin on top. */
+.le-board-actions.le-status-actions { margin-top: 0; }
 .le-board-actions .le-seg-btn { min-width: 0; }
 
 /* Level settings live under the Board layer: rule readout + faction-control assignment. */
