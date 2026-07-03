@@ -3684,20 +3684,10 @@ h1 {
   z-index: -1;
 }
 
-.skirmish-screen.skirmish-picker-screen::before {
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat;
-}
+/* The skirmish picker is a light-art route: LightArtRouteShell renders the animated menu
+   scene (still art + waterfalls + scrim) as a <SceneBackdrop> element, so the picker no
+   longer overrides the base ::before with the menu scene — the base dark floor rides behind
+   the backdrop like every other light-art screen. */
 
 .skirmish-war-room {
   display: grid;
@@ -5901,23 +5891,12 @@ body { font-size: 17px; }
   --ce-slate: #b7cad4;
   --ce-gold-bright: #f5bb45;
   --ce-eyebrow: #c9a877;
-  /* Same art-directed backdrop as the main menu (.main-menu-layer / .settings-art-route)
-     so the editor sits over the menu scene + the synced rain (AmbienceBackground, below).
-     Keep this declaration in sync with .settings-art-route. The editor's panels overlap
-     most of it; the scene + rain only show in the gaps, for a consistent feel.
-     First declaration = PNG fallback for engines without image-set()/type(). */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat #02070b;
+  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
+     the <SceneBackdrop> element the editor renders (ui/SceneBackdrop.tsx), the same way the
+     main menu paints it, so the editor sits over the menu scene + synced rain. The editor's
+     panels overlap most of it; the scene + rain only show in the gaps, for a consistent
+     feel. This floor keeps the screen dark (never white) before the scene decodes. */
+  background: #02070b;
   color: var(--ce-ink);
   display: grid;
   font-family: var(--ds-font-pixel);
@@ -5936,6 +5915,10 @@ body { font-size: 17px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Sit above the scene backdrop (<SceneBackdrop>, z1) so this cyan edge tint still colors
+     the menu scene — it used to ride over the .ce-screen background scene, which now lives
+     in a z1 element. Rain field (z2, later in the DOM) still falls in front of the tint. */
+  z-index: 2;
   background:
     linear-gradient(90deg, rgba(48, 214, 255, .08), transparent 16% 84%, rgba(48, 214, 255, .08)),
     linear-gradient(180deg, rgba(255, 255, 255, .03), transparent 14% 86%, rgba(0, 0, 0, .28));
@@ -10969,21 +10952,11 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
-  /* Same art-directed backdrop as the main menu (.main-menu-layer, ~line 712) so the
-     settings frames sit over the menu scene + the synced rain. Keep the two in sync.
-     First declaration = PNG fallback for engines without image-set()/type(). */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat #02070b;
+  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
+     the <SceneBackdrop> element these screens render (ui/SceneBackdrop.tsx), the same way
+     the main menu paints it, so the settings frames sit over the menu scene + synced rain.
+     This floor keeps the screen dark (never white) before the scene decodes. */
+  background: #02070b;
   display: grid;
   height: 100%;
   justify-items: center;

@@ -1012,6 +1012,24 @@ app.get('/health', (_req, res) => {
   res.status(200).send('ok');
 });
 
+// Human-facing build/deploy provenance for Settings → About. The frontend bakes
+// the app semver at build time; the deploy-time PR/commit are not knowable then
+// (the frontend builds inside Docker with no .git), so they ride as env stamped
+// into k8s/values.yaml's `build:` block by .github/workflows/build-and-deploy.yaml
+// on each deploy — the SAME commit that bumps the image tag. That means the labels
+// stay correct even when a content-identical rebuild is skipped and the old image
+// is reused (the image bytes never carry this — only the k8s manifest does). Pure
+// chrome: never 500s; unset fields degrade to '' and the client shows just the
+// baked version.
+app.get('/api/build-info', (_req, res) => {
+  res.status(200).json({
+    prTitle: process.env.BUILD_PR_TITLE || '',
+    prNumber: process.env.BUILD_PR_NUMBER || '',
+    prUrl: process.env.BUILD_PR_URL || '',
+    commit: process.env.BUILD_COMMIT || '',
+  });
+});
+
 // Readable fallback title from a slugged blob name, used only when a track has no
 // `title` metadata yet (e.g. just dropped in the container, not synced). e.g.
 // "03-heavens-devils.mp3" -> "Heavens Devils".

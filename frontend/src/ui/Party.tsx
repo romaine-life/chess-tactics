@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
 import { NavButton } from './shared/NavButton';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 
@@ -25,6 +26,8 @@ export function Party() {
 
   return (
     <section className="settings-art-route" aria-label="Party" data-testid="party">
+      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu. */}
+      <SceneBackdrop />
       <AmbienceBackground />
       <div className="settings-screen utility-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="utility-screen utility-party">

@@ -7,6 +7,21 @@ image:
   tag: "app-905022a3eafea56454e2da41cd0c1d23d02174faa3d78d4bca6731e63efa5da2"
   pullPolicy: IfNotPresent
 
+# Human-facing build provenance surfaced in Settings → About via /api/build-info
+# (backend/server.js reads these as env; deployment.yaml wires them onto the
+# container). Written by .github/workflows/build-and-deploy.yaml on every push to
+# main — the SAME commit that bumps the image tag above — via
+# scripts/write-build-info.mjs (a targeted per-line replace, so these are the only
+# lines it touches). Deliberately carried in the manifest, NOT baked into the
+# image: the tag is a pure content fingerprint and a content-identical rebuild is
+# skipped, so baking these in would let a reused image show a stale PR. Empty by
+# default; non-main lanes (test slots / dev) show just the baked app version.
+build:
+  prTitle: ""
+  prNumber: ""
+  prUrl: ""
+  commit: ""
+
 name: chess-tactics
 namespace: chess-tactics
 

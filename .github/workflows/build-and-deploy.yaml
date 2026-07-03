@@ -21,6 +21,9 @@ on:
 permissions:
   id-token: write
   contents: write
+  # Resolve the merged PR (title/number/url) for the built commit — surfaced in
+  # Settings → About. See the "Resolve build metadata" step.
+  pull-requests: read
 
 concurrency:
   group: build-and-deploy
@@ -76,6 +79,45 @@ jobs:
           fi
           git checkout --detach "$full_sha"
           echo "Resolved ${target_ref} -> ${full_sha}"
+
+      - name: Resolve build metadata
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          short="$(git rev-parse --short HEAD)"
+          # The PR whose squash-merge produced this commit on main. The GitHub API
+          # is the source of truth (handles merge-commit and rebase strategies);
+          # `|| echo '{}'` keeps a missing association non-fatal.
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" \
+            -H "Accept: application/vnd.github+json" --jq '.[0] // {}' 2>/dev/null || echo '{}')"
+          pr_number="$(printf '%s' "$pr_json" | jq -r '.number // empty')"
+          pr_title="$(printf '%s' "$pr_json" | jq -r '.title // empty')"
+          pr_url="$(printf '%s' "$pr_json" | jq -r '.html_url // empty')"
+          # Fallback for direct pushes / dispatch with no API association: parse a
+          # trailing "(#NNN)" from the commit subject (our squash-merge convention).
+          if [ -z "$pr_number" ]; then
+            subj="$(git log -1 --pretty=%s)"
+            pr_number="$(printf '%s' "$subj" | sed -n 's/.*(#\([0-9][0-9]*\))$/\1/p')"
+            if [ -n "$pr_number" ]; then
+              pr_title="$(printf '%s' "$subj" | sed 's/ (#[0-9][0-9]*)$//')"
+              pr_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${pr_number}"
+            fi
+          fi
+          {
+            echo "commit=${short}"
+            echo "pr_number=${pr_number}"
+            echo "pr_url=${pr_url}"
+          } >> "$GITHUB_OUTPUT"
+          # Title is free text — write it with a heredoc so quotes/newlines survive.
+          {
+            echo "pr_title<<__META_EOF__"
+            printf '%s\n' "$pr_title"
+            echo "__META_EOF__"
+          } >> "$GITHUB_OUTPUT"
+          echo "Build metadata: ${short} — ${pr_title:-(no title)} (#${pr_number:-?})" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -158,6 +200,15 @@ jobs:
           sed -i "s|^  tag: .*|  tag: \"${TAG}\"|" k8s/values.yaml
           grep -qx "  tag: \"${TAG}\"" k8s/values.yaml \
             || { echo "::error::k8s/values.yaml image tag was not updated"; exit 1; }
+
+      - name: Write build provenance into k8s/values.yaml
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          PR_TITLE: ${{ steps.meta.outputs.pr_title }}
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          PR_URL: ${{ steps.meta.outputs.pr_url }}
+          COMMIT: ${{ steps.meta.outputs.commit }}
+        run: node scripts/write-build-info.mjs k8s/values.yaml
 
       - name: Commit and push tag bump
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
