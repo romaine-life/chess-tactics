@@ -729,10 +729,15 @@ export function LevelEditor(): ReactElement {
     if (selection !== undefined) setSelectedCell(selection);
     return true;
   };
+  // In both directions the DEPARTING board must be snapshotted BEFORE queueing the stack
+  // update: React runs the updater after this handler has already repointed
+  // currentEditorBoardRef at the restored board, so reading the ref inside the updater
+  // captures the wrong side of the swap (redo would "restore" the board already shown).
   const undoBoard = (): void => {
     const prev = undoStack[undoStack.length - 1];
     if (!prev) return;
-    setRedoStack((next) => [cloneEditorBoard(currentEditorBoardRef.current), ...next].slice(0, HISTORY_LIMIT));
+    const departing = cloneEditorBoard(currentEditorBoardRef.current);
+    setRedoStack((next) => [departing, ...next].slice(0, HISTORY_LIMIT));
     setUndoStack((next) => next.slice(0, -1));
     const restored = cloneEditorBoard(prev);
     currentEditorBoardRef.current = restored;
@@ -742,7 +747,8 @@ export function LevelEditor(): ReactElement {
   const redoBoard = (): void => {
     const next = redoStack[0];
     if (!next) return;
-    setUndoStack((prev) => [...prev, cloneEditorBoard(currentEditorBoardRef.current)].slice(-HISTORY_LIMIT));
+    const departing = cloneEditorBoard(currentEditorBoardRef.current);
+    setUndoStack((prev) => [...prev, departing].slice(-HISTORY_LIMIT));
     setRedoStack((prev) => prev.slice(1));
     const restored = cloneEditorBoard(next);
     currentEditorBoardRef.current = restored;
