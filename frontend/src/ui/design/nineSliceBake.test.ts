@@ -4,7 +4,26 @@
 // (buildAsset) and the dev-Save endpoint, so this also pins editor↔bake parity.
 import { describe, it, expect } from 'vitest';
 // @ts-ignore — nine-slice-kit is an untyped .mjs build script (cf. main.tsx/bgm.js)
-import { bakeAsset, bakeLine, REGISTRY, LINE_DIR, loadConfig, normalizeConfig, diffCommitted } from '../../../scripts/nine-slice-kit.mjs';
+import { bakeAsset, bakeLine, REGISTRY, LINE_DIR, loadConfig, normalizeConfig, assetsInTheme, diffCommitted } from '../../../scripts/nine-slice-kit.mjs';
+
+describe('theme family (ADR-0050: members share ONE shape, cannot drift)', () => {
+  it('gold family members bake a byte-identical base frame', () => {
+    const members = assetsInTheme('gold');
+    expect(members.length, 'expected the gold family to have members').toBeGreaterThan(1);
+    // Same atoms + same shared shape + no palette swap on variant[0] ⇒ the base frame
+    // is identical across members (content/fill bake into no pixels). This is the
+    // strongest anti-drift guard: if a member's shape ever diverged, this fails.
+    const base = (id: string) => bakeAsset(id, loadConfig(id)).variants[0].png;
+    const ref = base(members[0]);
+    for (const id of members.slice(1)) {
+      const png = base(id);
+      expect(png.width === ref.width && png.height === ref.height, `${id} base frame size differs from ${members[0]}`).toBe(true);
+      let diff = 0;
+      for (let i = 0; i < ref.data.length; i++) if (ref.data[i] !== png.data[i]) diff++;
+      expect(diff, `${id} base frame differs from ${members[0]} by ${diff} channel-values — the family drifted`).toBe(0);
+    }
+  });
+});
 
 describe('config shapes (ADR-0050: per-element absolutes; legacy global+residual folds in)', () => {
   it('legacy shape folds to the same canonical config', () => {

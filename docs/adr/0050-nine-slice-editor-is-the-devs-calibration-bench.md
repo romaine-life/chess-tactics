@@ -56,6 +56,19 @@ Concretely:
 - **What-you-tune-is-what-bakes stays absolute** (ADR-0019's one-bake-path rule):
   editor preview, dev Save, and CLI bake share the assembler model; the committed
   PNG must equal a fresh bake from its committed config (also test-pinned).
+- **Frames that share a format share ONE shape (a "family"/theme).** Assets built
+  from the same atoms (gold: `mode-button`, `button`, `panel`) carry a `theme` key
+  in the registry, and their shared *shape* — cool corners, pipes, scales, brackets
+  — lives in a single `config/nine-slice/themes/<theme>.json`. Each member's own
+  config carries only its per-frame boxes (content / fill). The bake resolves
+  *theme shape + member boxes*, so the family **cannot drift** — there is one
+  source for the shape. Editing the Shape tab edits the family; the editor says so
+  ("Editing the gold family — one shared shape") rather than "this asset". Saving
+  writes the theme file + the member's boxes and rebakes **every** member, then
+  pushes a Vite `full-reload` so the change lands live across the whole app — set
+  it once, then navigate. Pinned by vitest: family members bake a byte-identical
+  base frame. (This corrects the earlier per-asset-config split, which duplicated
+  the shape across three files and let them drift.)
 
 ### Amendments to earlier records
 

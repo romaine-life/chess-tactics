@@ -310,8 +310,34 @@ export function normalizeConfigForAsset(assetId, c) {
   cfg.frameScale = Math.min(cfg.frameScale, maxFrameScaleForAsset(assetId));
   return cfg;
 }
+// A "theme" (registry `theme` key) is a FAMILY of frames that share ONE shape. The
+// shared shaping (cool corners, pipes, scales, brackets) lives in a single file,
+// config/nine-slice/themes/<theme>.json; each member's own file carries only its
+// consumption-side boxes (content / fill). So the family cannot drift — there is one
+// source for the shape, consumed identically by every member.
+export const THEME_DIR = `${CONFIG_DIR}themes/`;
+const SHAPE_FIELDS = ['coolCorners', 'pipes', 'frameScale', 'brackets', 'bracketScale'];
+function pickShape(obj) { const o = {}; for (const k of SHAPE_FIELDS) if (obj && obj[k] !== undefined) o[k] = obj[k]; return o; }
+export function themeOf(assetId) { return REGISTRY[assetId]?.theme ?? null; }
+export function assetsInTheme(theme) { return Object.keys(REGISTRY).filter((id) => REGISTRY[id].theme === theme); }
+export function loadTheme(theme) { try { return JSON.parse(readFileSync(`${THEME_DIR}${theme}.json`, 'utf8')); } catch { return {}; } }
+export function saveTheme(theme, shape) {
+  mkdirSync(THEME_DIR, { recursive: true });
+  writeFileSync(`${THEME_DIR}${theme}.json`, `${JSON.stringify({ theme, ...normalizeShape(shape) }, null, 2)}\n`);
+}
+// Normalize just the shape half of a config (what a theme file stores), reusing the
+// full normalizer so a theme file is always the canonical shape.
+function normalizeShape(shape) { return pickShape(normalizeConfig({ ...shape, asset: '_theme' })); }
 export function loadConfig(assetId) {
-  return normalizeConfigForAsset(assetId, JSON.parse(readFileSync(`${CONFIG_DIR}${assetId}.json`, 'utf8')));
+  const raw = JSON.parse(readFileSync(`${CONFIG_DIR}${assetId}.json`, 'utf8'));
+  const theme = themeOf(assetId);
+  // Themed assets: shaping ONLY from the theme file, boxes ONLY from the asset file
+  // (strict — a member cannot override the family shape). Un-themed assets keep their
+  // self-contained config.
+  const composed = theme
+    ? { asset: assetId, ...pickShape(loadTheme(theme)), content: raw.content ?? 0, fill: raw.fill ?? 0 }
+    : raw;
+  return normalizeConfigForAsset(assetId, composed);
 }
 
 // Bake an asset to in-memory PNGs WITHOUT writing — the pure core shared by
@@ -359,6 +385,15 @@ export function buildAsset(assetId, cfgRaw) {
     written.push(`explore/frames/${rec.line}`);
   }
   return { written, warns, note };
+}
+
+// Rebake EVERY member of a theme from its on-disk config (which now resolves the
+// shared shape) — the family stays in lockstep because they all read the one theme
+// file. Used by the dev-save endpoint after writing the theme shape.
+export function buildFamily(theme) {
+  const written = [];
+  for (const id of assetsInTheme(theme)) written.push(...buildAsset(id, loadConfig(id)).written);
+  return written;
 }
 
 // Bake an ornament-only (transparent-interior) variant of an asset's frame: the SAME

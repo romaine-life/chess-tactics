@@ -40,12 +40,12 @@ type Pipes = Record<Side, number>;
 // normal-axis offset (a pipe tiles its full span; tangent movement is meaningless).
 type EditState = { coolCorners: Corners; pipes: Pipes; frameScale: number; brackets: Corners; bracketScale: number; content: number; fill: number };
 
-type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean };
+type Asset = { id: string; label: string; corner: string; edge: string; fill: string; target: string; frame: Frame; carve?: boolean; flipSides?: boolean; theme?: string };
 
 // Derived from the SINGLE registry (shared with the Node bake + the catalog). Every
 // atom-built frame appears here automatically — adding one is a registry edit, not a
 // code change in three files.
-type RegAsset = { label: string; atoms: { corner: string; edge: string; fill: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
+type RegAsset = { label: string; theme?: string; atoms: { corner: string; edge: string; fill: string }; frame: Frame; carve?: boolean; flipSides?: boolean; variants: { out: string }[] };
 const REGISTRY = (nineSliceRegistry as { assets: Record<string, RegAsset> }).assets;
 const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
   id,
@@ -57,7 +57,13 @@ const ASSETS: Asset[] = Object.entries(REGISTRY).map(([id, a]) => ({
   frame: a.frame,
   carve: !!a.carve,
   flipSides: !!a.flipSides,
+  theme: a.theme,
 }));
+// The family (same theme) an asset belongs to — the frames that share one shape.
+function familyOf(assetId: string): Asset[] {
+  const theme = ASSETS.find((a) => a.id === assetId)?.theme;
+  return theme ? ASSETS.filter((a) => a.theme === theme) : [];
+}
 
 // 0 = no content inset, matching the bake's fallback (normalizeConfig in
 // scripts/nine-slice-kit.mjs) so an unsaved asset previews exactly what it bakes.
@@ -424,6 +430,10 @@ export const DEFAULT_NINE_SLICE_ASSET = ASSETS[0].id;
 export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; onAssetId: (id: string) => void; header?: ReactNode }): ReactElement {
   const asset = useMemo(() => ASSETS.find((a) => a.id === assetId) ?? ASSETS[0], [assetId]);
   const aid = asset.id;
+  // The frames that share this asset's shape (same theme). Editing Shape edits the
+  // whole family; only content/fill are per-member.
+  const family = useMemo(() => familyOf(aid), [aid]);
+  const familyNames = family.map((a) => a.label).join(' · ');
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // Selection = layer tab (gold | cool) + a cell of the 3×3 spatial selector.
   // The cool layer's side/center moves take their members from two toggles
@@ -904,8 +914,10 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       const r = await fetch('/__nine-slice/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: exportJson });
       const j = await r.json();
       if (j.ok) baselineRef.current[aid] = edit; // the just-saved config is the new reset baseline
-      const warn = (j.warns && j.warns.length) ? ` · ⚠ ${j.warns.join('; ')}` : '';
-      setSaveMsg(j.ok ? `saved ${j.config} → ${j.written.join(', ')}${warn} · hard-refresh to see it${j.note ? ` (${j.note})` : ''}` : `error: ${j.error}`);
+      const scope = j.theme ? `${j.theme} family (${j.written.length} files)` : j.asset;
+      // The endpoint pushes a live page reload after a save, so the app shows it
+      // everywhere on navigation — this message is a brief confirmation before that.
+      setSaveMsg(j.ok ? `saved ${scope} · applying live across the app…` : `error: ${j.error}`);
     } catch (e) { setSaveMsg(`error: ${String(e)}`); }
   };
   const applyImportJson = (mode: 'current' | 'named') => {
@@ -991,6 +1003,14 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
             ))}
           </div>
           {tab === 'shape' && (<>
+          {asset.theme && (
+            <div style={ST.familyBanner}>
+              <div style={{ fontWeight: 700, color: '#ffd98a' }}>🔗 Editing the {asset.theme} family — one shared shape</div>
+              <div style={{ fontSize: 12, color: '#cfe3ff', marginTop: 3, lineHeight: 1.4 }}>
+                Every change here applies to all {family.length}: {familyNames}. They can't drift — one source. (Content &amp; fill stay per-frame — that's the Hand-off tab.)
+              </div>
+            </div>
+          )}
           <div style={ST.pieceRow}>
             {layers.map((l) => (
               <button key={l} type="button" onClick={() => setLayer(l)} style={{ ...ST.pieceBtn, ...(layer === l ? (l === 'gold' ? ST.layerGoldOn : ST.pieceBtnOn) : {}) }}>{layerLabel(l)}</button>
@@ -1096,8 +1116,8 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               {/* The two HUMAN-CALIBRATED values code consumes (ADR-0050): the dev lines
                   these boxes up against real pixels; consumers pad/clip by the result.
                   They bake into NO pixels — they ride in the config + generated CSS. */}
-              <span style={ST.sectionHead}>Hand-off boxes — you calibrate, code consumes</span>
-              <p style={ST.hint}>These don't touch the frame art — they mark where consumers start their content and stop their backing. Save writes them to the config + generated CSS.</p>
+              <span style={ST.sectionHead}>Hand-off boxes{asset.theme ? ` · ${asset.label} only` : ''} — you calibrate, code consumes</span>
+              <p style={ST.hint}>These are <b>per-frame</b>{asset.theme ? ' (unlike the shared Shape)' : ''} — they don't touch the frame art, just mark where consumers start their content and stop their backing. Save writes them to the config + generated CSS.</p>
               <label style={ST.toggle}>
                 <input type="checkbox" checked={showContent} onChange={(e) => setShowContent(e.target.checked)} />
                 <span style={{ color: '#5cff9e' }}>■</span> <b>Content box</b>&nbsp;— where text / icons start
@@ -1167,7 +1187,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
           <button type="button" style={ST.resetAll} onClick={resetAll}>↺ Reset all adjustments</button>
           {isDev && (
             <>
-              <button type="button" style={ST.save} onClick={saveToDisk}>💾 Save to disk + regenerate (dev)</button>
+              <button type="button" style={ST.save} onClick={saveToDisk}>{asset.theme ? `💾 Save ${asset.theme} family (${family.length}) + apply live` : '💾 Save to disk + regenerate (dev)'}</button>
               {saveMsg && <div style={{ ...ST.hint, color: saveMsg.startsWith('error') ? '#ff9aa8' : '#9affc4' }}>{saveMsg}</div>}
             </>
           )}
@@ -1214,6 +1234,7 @@ const ST: Record<string, CSSProperties> = {
   previewLabel: { fontSize: 11, color: '#9fc4d5', letterSpacing: 0.3 },
   consumerPreview: { display: 'grid', placeItems: 'center', minWidth: 300, minHeight: 112, padding: '10px 18px', boxSizing: 'border-box' },
   previewNote: { fontSize: 12, color: '#9fc4d5', textAlign: 'center' },
+  familyBanner: { padding: '9px 11px', background: '#241d0a', border: '1px solid #6b5a1d', borderRadius: 8 },
   tabRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, padding: 4, background: '#0a0f1c', border: '1px solid #1b2740', borderRadius: 8 },
   tabBtn: { display: 'grid', placeItems: 'center', minWidth: 0, padding: '10px 8px', background: 'transparent', color: '#9fc4d5', border: '1px solid transparent', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 700, textTransform: 'none', lineHeight: 1.1 },
   tabBtnOn: { background: '#1d5f9e', color: '#fff', borderColor: '#4fbdf0' },

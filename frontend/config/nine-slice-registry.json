@@ -86,6 +86,7 @@
   "assets": {
     "mode-button": {
       "label": "Mode button (tabs / header)",
+      "theme": "gold",
       "atoms": {
         "corner": "corner",
         "edge": "edge",
@@ -108,6 +109,7 @@
     },
     "button": {
       "label": "Action button (settings / studio) — neutral / primary / danger",
+      "theme": "gold",
       "atoms": {
         "corner": "corner",
         "edge": "edge",
@@ -133,6 +135,7 @@
     },
     "panel": {
       "label": "Settings panel / frame",
+      "theme": "gold",
       "atoms": {
         "corner": "corner",
         "edge": "edge",
