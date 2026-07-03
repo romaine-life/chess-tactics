@@ -45,3 +45,22 @@ export function formatClockSeconds(seconds: number): string {
   const clamped = Math.max(0, Math.round(seconds));
   return `${Math.floor(clamped / 60)}:${String(clamped % 60).padStart(2, '0')}`;
 }
+
+/** Parse a hand-typed clock value into whole seconds, or null if it isn't a valid
+ * time. Accepts either "m:ss" (minutes plus 0–59 seconds, e.g. "6:23") or a bare
+ * count of seconds (e.g. "383"). Non-negative integers only — the schema stores
+ * whole seconds. Clamping to a field's minimum is the caller's job. This is what
+ * lets the editor's clock be typed to any exact value, off the stepper ladder. */
+export function parseClockSeconds(raw: string): number | null {
+  const text = raw.trim();
+  if (text === '') return null;
+  if (text.includes(':')) {
+    const parts = text.split(':');
+    if (parts.length !== 2 || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1])) return null;
+    const seconds = Number(parts[1]);
+    if (seconds > 59) return null;
+    return Number(parts[0]) * 60 + seconds;
+  }
+  if (!/^\d+$/.test(text)) return null;
+  return Number(text);
+}

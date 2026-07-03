@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, formatClockMs, formatClockSeconds, stepLadder } from './clock';
+import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, formatClockMs, formatClockSeconds, parseClockSeconds, stepLadder } from './clock';
 
 describe('formatClockMs (live readout)', () => {
   it('renders m:ss above ten seconds, rounding a started second up', () => {
@@ -27,6 +27,33 @@ describe('formatClockSeconds (authored values)', () => {
     expect(formatClockSeconds(300)).toBe('5:00');
     expect(formatClockSeconds(30)).toBe('0:30');
     expect(formatClockSeconds(3_600)).toBe('60:00');
+  });
+});
+
+describe('parseClockSeconds (hand-typed exact values)', () => {
+  it('parses m:ss into whole seconds, off the ladder', () => {
+    expect(parseClockSeconds('6:23')).toBe(383);
+    expect(parseClockSeconds('5:00')).toBe(300);
+    expect(parseClockSeconds('0:30')).toBe(30);
+    expect(parseClockSeconds('90:00')).toBe(5_400); // no upper cap
+    expect(parseClockSeconds(' 1:05 ')).toBe(65); // trims surrounding space
+  });
+
+  it('parses a bare count of seconds', () => {
+    expect(parseClockSeconds('383')).toBe(383);
+    expect(parseClockSeconds('0')).toBe(0);
+    expect(parseClockSeconds('7')).toBe(7);
+  });
+
+  it('rejects malformed times with null (caller keeps the last good value)', () => {
+    expect(parseClockSeconds('')).toBeNull();
+    expect(parseClockSeconds('abc')).toBeNull();
+    expect(parseClockSeconds('5:99')).toBeNull(); // seconds must be 0–59
+    expect(parseClockSeconds(':30')).toBeNull();
+    expect(parseClockSeconds('5:')).toBeNull();
+    expect(parseClockSeconds('1:2:3')).toBeNull();
+    expect(parseClockSeconds('6.5')).toBeNull(); // whole seconds only
+    expect(parseClockSeconds('-5')).toBeNull();
   });
 });
 
