@@ -6,12 +6,48 @@ import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
-import type { ObjectiveType } from '../core/level';
+import type { Level, ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
 import { playArrival, playTerrain } from '../sfx';
 import { createRng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
+
+// ---- Multiplayer (netplay) --------------------------------------------------
+// A skirmish is normally single-player: the local human controls 'player' and a
+// deterministic local AI (scheduleEnemyReply) answers as 'enemy'. In a lobby match
+// BOTH sides are human — the host controls 'player', the guest controls 'enemy',
+// and each side's moves are relayed to the other over the lobby channel. The core
+// is pure and seeded (applyMove + createRng), so both clients that build from the
+// same (level, seed) and apply the same ordered moves stay byte-identical WITHOUT
+// running the AI. See docs / ADR-0050 and frontend/src/net/lobbies.ts.
+
+/** Per-match multiplayer context. `null` = single-player (local AI opponent). */
+export interface NetState {
+  lobbyId: string;
+  /** The board side THIS client controls ('player' = host, 'enemy' = guest). */
+  localSide: Side;
+  /** Moves applied to this client's board so far — the next expected relay index. */
+  moveCount: number;
+}
+
+export interface NetMatchOptions {
+  lobbyId: string;
+  localSide: Side;
+  level: Level;
+  seed: number;
+}
+
+/** The minimal identifier for a relayed move: just the destination cell. The receiver
+ *  re-derives the canonical Move (capture id, en-passant flag) from its own identical
+ *  board via legalMoves — so nothing rules-derived rides the wire. */
+export interface RelayMove { x: number; y: number }
+
+/** Relay hook: in a netplay match the store calls this with each LOCAL move so the
+ *  netplay layer (Skirmish) can POST it to the lobby relay. Null in single-player. */
+export type NetMoveSink = (pieceId: string, move: RelayMove) => void;
+let netMoveSink: NetMoveSink | null = null;
+export function setNetMoveSink(sink: NetMoveSink | null): void { netMoveSink = sink; }
 
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
@@ -88,6 +124,17 @@ function describeEvent(ev: GameEvent): string | null {
 
 function firstPlayerId(game: GameState): string | null {
   return game.pieces.find((p) => p.side === 'player' && p.alive)?.id ?? null;
+}
+
+/** First living piece of a given side (netplay pre-selects the side this client owns). */
+function firstOwnId(game: GameState, side: Side): string | null {
+  return game.pieces.find((p) => p.side === side && p.alive)?.id ?? null;
+}
+
+/** Result copy from THIS client's seat: in netplay 'you' is the local side, not 'player'. */
+function netOutcomeCopy(winner: Winner, localSide: Side): string {
+  if (winner === 'draw') return 'Draw — the skirmish is even.';
+  return winner === localSide ? 'Victory — the field is yours.' : 'Defeat — your force has fallen.';
 }
 
 /** True if any living piece of `side` has at least one legal move. */
@@ -179,7 +226,17 @@ export interface SkirmishState {
   levelId: string | null;
   /** The battle clock, when the level authored one (null = untimed). */
   clock: ClockState | null;
+  /** Multiplayer context (null = single-player). When set, the AI never fires and
+   *  input is gated to `net.localSide` instead of 'player'. */
+  net: NetState | null;
   newSkirmish: (opts: SkirmishOptions) => void;
+  /** Start a multiplayer match: build the shared (level, seed) board, record which
+   *  side this client controls, disable the local AI + clock, and route local moves
+   *  to the relay sink. Both clients call this with the SAME level + seed. */
+  newNetMatch: (opts: NetMatchOptions) => void;
+  /** Apply a move that arrived from the OTHER player over the relay (no AI, no
+   *  re-emit). Re-validates legality before applying. */
+  applyRemoteMove: (pieceId: string, move: RelayMove) => void;
   /** Rehydrate a match saved to disk (see matchPersistence) — used to resume the
    * live board after a page reload instead of starting a fresh game. */
   resumeMatch: (match: PersistedMatch) => void;
@@ -323,6 +380,63 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     }, ENEMY_REPLY_DELAY);
   };
 
+  // Apply ONE ordered move to a netplay board. Netplay is SERVER-SEQUENCED: the local
+  // player's own move comes back through the server echo like any other, so this is the
+  // single apply path for both sides (no optimistic local apply → no rollback/desync).
+  // Mirrors the bookkeeping tail of tryMoveTo (SFX, objective + terminal + check, log)
+  // but NEVER runs the AI or the clock, and is side-agnostic. Returns true iff it applied.
+  const commitNet = (pieceId: string, move: RelayMove): boolean => {
+    const s = get();
+    if (!s.net || s.game.winner) return false;
+    const piece = s.game.pieces.find((q) => q.id === pieceId && q.alive);
+    if (!piece) { console.warn('[netplay] relayed move references a missing piece', pieceId); return false; }
+    // Turn integrity: only the side whose turn it is may move. legalMoves ignores whose
+    // turn it is and applyMove derives the next turn from piece.side, so without this a
+    // tampered peer could move on our turn or move our pieces. Dropped identically on both
+    // boards (deterministic), so they stay in lockstep.
+    if (piece.side !== s.game.turn) { console.warn('[netplay] dropping out-of-turn relayed move', pieceId, s.game.turn, piece.side); return false; }
+    const mv = legalMoves(piece, s.game.pieces, s.game.size, s.env).find((m) => m.x === move.x && m.y === move.y);
+    if (!mv) { console.warn('[netplay] dropping illegal relayed move', pieceId, move); return false; }
+
+    const localSide = s.net.localSide;
+    const prevTurn = s.game.turn;
+    const res = applyMove(s.game, piece.id, mv);
+    let game = res.state;
+    if (res.events.some((e) => e.kind === 'moved')) playLandingSfx(s.env, mv.x, mv.y, LANDING_SFX_DELAY);
+    const msgs = res.events.map(describeEvent).filter((m): m is string => m !== null);
+    // A full enemy turn completing (enemy→player) advances the survive-clock round count.
+    const turnsElapsed = (s.turnsElapsed ?? 0) + (prevTurn === 'enemy' && game.turn === 'player' ? 1 : 0);
+
+    if (!game.winner) {
+      const winner = evaluateObjective(game, s.objective, { ...(s.objectiveCtx ?? {}), turnsElapsed });
+      if (winner) { game = { ...game, winner, turn: 'done' }; msgs.push(netOutcomeCopy(winner, localSide)); }
+    }
+    if (!game.winner && (game.turn === 'player' || game.turn === 'enemy')) {
+      const env2 = envFor(game);
+      const term = terminalIfStuck(game, env2);
+      if (term) {
+        game = { ...game, winner: term.winner, turn: 'done' };
+        msgs.push(term.checkmate
+          ? (term.winner === localSide ? 'Checkmate — victory!' : 'Checkmate — defeat.')
+          : 'Stalemate — the skirmish is a draw.');
+      } else if (sideInCheck(game, game.turn, env2)) {
+        msgs.push(game.turn === localSide ? 'Your King is in check!' : 'Check delivered.');
+      }
+    }
+
+    const nextSel = game.turn === localSide ? firstOwnId(game, localSide) : null;
+    set({
+      game,
+      env: envFor(game),
+      turnsElapsed,
+      selectedId: nextSel,
+      focusedId: nextSel,
+      log: [...msgs.reverse(), ...s.log].slice(0, 12),
+      net: { ...s.net, moveCount: s.net.moveCount + 1 },
+    });
+    return true;
+  };
+
   return {
   game: INITIAL_GAME,
   env: envFor(INITIAL_GAME),
@@ -337,6 +451,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   started: false,
   levelId: null,
   clock: null,
+  net: null,
 
   newSkirmish: (opts) => {
     // A previous game's ticker must never outlive its game.
@@ -363,7 +478,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const clock: ClockState | null = tc
       ? { remainingMs: tc.initialSeconds * 1000, running: false, incrementMs: tc.incrementSeconds * 1000 }
       : null;
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, clock });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, clock, net: null });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -385,6 +500,47 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // resumes THIS game rather than re-rolling a different random start.
     persistMatch(get());
   },
+
+  newNetMatch: ({ lobbyId, localSide, level, seed }) => {
+    // A previous game's ticker must never outlive its game.
+    stopClockTicker();
+    // Both clients build the SAME board from (level, seed); with the AI disabled the
+    // only randomness is initial placement, so the two boards are byte-identical.
+    const created = createSkirmish({ seed, level });
+    const env = envFor(created);
+    const objective: ObjectiveType = level.objective ?? 'capture-king';
+    const objectiveCtx: ObjectiveContext = { ...objectiveContextForLevel(level), kingSide: kingSideOf(created.pieces) };
+    const localTurn = created.turn === localSide;
+    const selectedId = localTurn ? firstOwnId(created, localSide) : null;
+    const youCommand = localSide === 'player' ? 'the vanguard' : 'the challenger';
+    set({
+      game: created,
+      env,
+      seed,
+      tick: 0,
+      turnsElapsed: 0,
+      objective,
+      objectiveCtx,
+      selectedId,
+      focusedId: selectedId,
+      log: [`Multiplayer skirmish — ${objectiveSummary(objective, objectiveCtx.kingSide)}. You command ${youCommand}.`],
+      started: true,
+      levelId: level.id,
+      clock: null, // netplay is untimed in v1 (a shared wall-clock is future work)
+      net: { lobbyId, localSide, moveCount: 0 },
+    });
+    // Deploy roll-call for the pieces this client commands (cosmetic; each client
+    // voices only its own side).
+    created.pieces
+      .filter((pc) => pc.alive && pc.side === localSide)
+      .forEach((pc, i) => {
+        const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
+        playLandingSfx(env, pc.x, pc.y, delay, 0.7);
+        setTimeout(() => playArrival({ gain: 0.55 }), delay);
+      });
+  },
+
+  applyRemoteMove: (pieceId, move) => { commitNet(pieceId, move); },
 
   resumeMatch: (match) => {
     // A previous game's ticker must never outlive its game.
@@ -409,6 +565,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // banked remainder when it's the player's live turn. A reload isn't thinking
       // time, so the player keeps the time they had at their last move.
       clock: match.clock ? { ...match.clock, running: false } : null,
+      net: null, // netplay disables persistence, so a disk-resumed match is single-player
     });
     startClock();
     // If the reload caught the game mid enemy-reply (the player had just moved, the
@@ -421,31 +578,43 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
 
   select: (id) => {
     if (id === null) { set({ selectedId: null, focusedId: null }); return; }
-    const p = get().game.pieces.find((q) => q.id === id && q.alive);
-    if (p && p.side === 'player') set({ selectedId: id, focusedId: id });
+    const s = get();
+    const side = s.net ? s.net.localSide : 'player';
+    const p = s.game.pieces.find((q) => q.id === id && q.alive);
+    if (p && p.side === side) set({ selectedId: id, focusedId: id });
   },
 
   focus: (id) => {
     if (id === null) { set({ focusedId: get().selectedId }); return; }
-    const p = get().game.pieces.find((q) => q.id === id && q.alive);
+    const s = get();
+    const side = s.net ? s.net.localSide : 'player';
+    const p = s.game.pieces.find((q) => q.id === id && q.alive);
     if (!p) return;
-    set({ focusedId: id, selectedId: p.side === 'player' ? id : get().selectedId });
+    set({ focusedId: id, selectedId: p.side === side ? id : s.selectedId });
   },
 
   movesForSelected: () => {
-    const { game, selectedId, env } = get();
-    if (game.turn !== 'player' || game.winner) return [];
-    const p = game.pieces.find((q) => q.id === selectedId && q.alive && q.side === 'player');
+    const { game, selectedId, env, net } = get();
+    const side = net ? net.localSide : 'player';
+    if (game.turn !== side || game.winner) return [];
+    const p = game.pieces.find((q) => q.id === selectedId && q.alive && q.side === side);
     return p ? legalMoves(p, game.pieces, game.size, env) : [];
   },
 
   tryMoveTo: (x, y) => {
     const s = get();
-    if (s.game.turn !== 'player' || s.game.winner) return;
-    const p = s.game.pieces.find((q) => q.id === s.selectedId && q.alive && q.side === 'player');
+    const side = s.net ? s.net.localSide : 'player';
+    if (s.game.turn !== side || s.game.winner) return;
+    const p = s.game.pieces.find((q) => q.id === s.selectedId && q.alive && q.side === side);
     if (!p) return;
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
+    // Netplay is server-sequenced: DON'T apply locally — relay the target cell and let
+    // the server's echo apply it in order on both boards (no optimistic apply, so a
+    // dropped POST is a no-op the seat can retry, never a permanent desync). Clear the
+    // selection for immediate "click registered" feedback; the echo sets the next one.
+    if (s.net) { if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y }); set({ selectedId: null, focusedId: null }); return; }
+    // ---- single-player path (unchanged) ----
     // The move is legal and WILL apply — the player's clock stops here, banking the
     // Fischer increment. It stays paused for the whole enemy reply.
     pauseClockWithIncrement();

@@ -10,7 +10,17 @@ const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'fron
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
+// Multiplayer lobbies + netplay relay live entirely in process: this Map is the
+// authoritative store and the SSE subscriber sets below hold live connections.
+// This is only correct because the deployment runs a SINGLE replica
+// (k8s/templates/deployment.yaml:17 `replicas: 1`, a hard invariant) — a second
+// pod would split the lobby state and the relay. No Redis; in-memory is fine for v1.
 const lobbies = new Map();
+// SSE subscribers. Global list channel (lobby list changed) and per-lobby game
+// channels. Each per-lobby entry is { res, email } so the lobby frame can be
+// projected per-viewer (your_side / viewer_role depend on the viewer's email).
+const lobbyListSubscribers = new Set(); // Set<res>
+const lobbyChannelSubscribers = new Map(); // Map<lobbyId, Set<{ res, email }>>
 
 // Background music. The browser streams tracks directly from BGM_BASE_URL (the
 // public-read blob container). The backend assembles the /api/bgm playlist one
@@ -336,6 +346,12 @@ function publicLobby(lobby, viewerEmail) {
       total: 2,
     },
     viewer_role: viewerEmail === lobby.host.email ? 'host' : (lobby.guest && viewerEmail === lobby.guest.email ? 'guest' : 'observer'),
+    level_id: lobby.levelId ?? null,
+    seed: lobby.seed ?? null,
+    move_count: lobby.moves ? lobby.moves.length : 0,
+    your_side: viewerEmail === lobby.host.email
+      ? 'player'
+      : (lobby.guest && viewerEmail === lobby.guest.email ? 'enemy' : null),
   };
 }
 
@@ -875,6 +891,76 @@ function userActiveLobby(email) {
   return activeLobbies().find((lobby) => lobby.host.email === email || (lobby.guest && lobby.guest.email === email)) || null;
 }
 
+// ---------------------------------------------------------------------------
+// SSE relay for lobbies + netplay. Two channels:
+//   - the global lobby-list channel (lobbyListSubscribers): a viewer-neutral
+//     `{type:'lobbies-changed'}` ping; clients refetch GET /api/lobbies.
+//   - per-lobby game channels (lobbyChannelSubscribers): move relay + lobby
+//     state, projected per-subscriber (your_side/viewer_role need the viewer).
+// Every write is guarded — a dead socket throws — and the subscriber is dropped
+// on failure so the sets never leak. Single-replica invariant (see the lobbies
+// Map above) is what makes an in-process relay correct.
+// ---------------------------------------------------------------------------
+function sseWrite(res, payload) {
+  try {
+    res.write(payload);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+// Ping every global subscriber so clients refetch the lobby list. Called after
+// EVERY lobby mutation (create/join/leave/start/level/move).
+function broadcastLobbies() {
+  const payload = 'data: {"type":"lobbies-changed"}\n\n';
+  for (const res of lobbyListSubscribers) {
+    if (!sseWrite(res, payload)) {
+      lobbyListSubscribers.delete(res);
+    }
+  }
+}
+
+// Send a frame to every subscriber of one lobby's game channel. `frame` may be a
+// static object, or a function (sub) => frame to project per-subscriber (used for
+// lobby frames whose your_side/viewer_role depend on the viewer's email).
+function broadcastToLobby(lobbyId, frame) {
+  const subs = lobbyChannelSubscribers.get(lobbyId);
+  if (!subs) return;
+  for (const sub of subs) {
+    const value = typeof frame === 'function' ? frame(sub) : frame;
+    if (!sseWrite(sub.res, `data: ${JSON.stringify(value)}\n\n`)) {
+      subs.delete(sub);
+    }
+  }
+  if (subs.size === 0) lobbyChannelSubscribers.delete(lobbyId);
+}
+
+// Push the current lobby state to every game-channel subscriber, each correctly
+// projected for its own viewer. Use after any lobby-state change (start/leave/etc).
+function broadcastLobbyState(lobby) {
+  broadcastToLobby(lobby.id, (sub) => ({ type: 'lobby', lobby: publicLobby(lobby, sub.email) }));
+}
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache, no-transform',
+  'Connection': 'keep-alive',
+  'X-Accel-Buffering': 'no',
+};
+const SSE_KEEPALIVE_MS = 15000;
+
+// Start an SSE response: write headers, kick off a heartbeat, and wire cleanup on
+// close. Returns the interval so the route can clear it in its own close handler.
+function startSse(res) {
+  res.writeHead(200, SSE_HEADERS);
+  res.flushHeaders?.();
+  const heartbeat = setInterval(() => {
+    if (!sseWrite(res, ':keepalive\n\n')) clearInterval(heartbeat);
+  }, SSE_KEEPALIVE_MS);
+  return heartbeat;
+}
+
 function lobbyNameFor(user) {
   const base = (user.name || user.email || 'Player').split('@')[0].trim();
   return `${base}'s lobby`;
@@ -1079,9 +1165,27 @@ app.post('/api/lobbies', async (req, res) => {
     updatedAt: now,
     host: user,
     guest: null,
+    levelId: null,
+    seed: null,
+    moves: [],
   };
   lobbies.set(id, lobby);
+  broadcastLobbies();
   res.status(201).json({ lobby: publicLobby(lobby, user.email) });
+});
+
+// GLOBAL lobby-list SSE channel. Registered BEFORE `/api/lobbies/:id` so the
+// literal `/events` path is not swallowed by the :id param route. Auth before
+// headers; a viewer-neutral ping on every lobby mutation → clients refetch.
+app.get('/api/lobbies/events', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const heartbeat = startSse(res);
+  lobbyListSubscribers.add(res);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    lobbyListSubscribers.delete(res);
+  });
 });
 
 app.get('/api/lobbies/:id', async (req, res) => {
@@ -1119,6 +1223,37 @@ app.post('/api/lobbies/:id/join', async (req, res) => {
   lobby.guest = user;
   lobby.phase = 'ready';
   lobby.updatedAt = new Date().toISOString();
+  broadcastLobbies();
+  broadcastLobbyState(lobby);
+  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+});
+
+// Host picks the level (before start). phase must be waiting|ready.
+app.post('/api/lobbies/:id/level', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  if (lobby.host.email !== user.email) {
+    res.status(403).json({ error: 'host_only' });
+    return;
+  }
+  if (lobby.phase !== 'waiting' && lobby.phase !== 'ready') {
+    res.status(409).json({ error: 'lobby_already_started' });
+    return;
+  }
+  const levelId = req.body && typeof req.body.levelId === 'string' ? req.body.levelId.trim() : '';
+  if (!levelId) {
+    res.status(400).json({ error: 'missing_level_id' });
+    return;
+  }
+  lobby.levelId = levelId;
+  lobby.updatedAt = new Date().toISOString();
+  broadcastLobbies();
+  broadcastLobbyState(lobby);
   res.status(200).json({ lobby: publicLobby(lobby, user.email) });
 });
 
@@ -1138,9 +1273,116 @@ app.post('/api/lobbies/:id/start', async (req, res) => {
     res.status(409).json({ error: 'missing_opponent' });
     return;
   }
+  if (!lobby.levelId) {
+    res.status(409).json({ error: 'no_level' });
+    return;
+  }
+  // Lock a positive-integer seed for deterministic shared placement (crypto so it
+  // is not predictable). Both clients build the identical board from (level, seed).
+  lobby.seed = 1 + (crypto.randomInt ? crypto.randomInt(900000) : Math.floor(Math.random() * 900000));
   lobby.phase = 'started';
   lobby.updatedAt = new Date().toISOString();
+  broadcastLobbies();
+  broadcastLobbyState(lobby);
   res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+});
+
+// Relay one applyMove. Caller must be host/guest; lobby must be started. The
+// server does NOT validate chess legality — clients do (deterministic replay).
+app.post('/api/lobbies/:id/moves', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const isHost = lobby.host.email === user.email;
+  const isGuest = lobby.guest && lobby.guest.email === user.email;
+  if (!isHost && !isGuest) {
+    res.status(409).json({ error: 'not_in_lobby' });
+    return;
+  }
+  if (lobby.phase !== 'started') {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const pieceId = typeof body.pieceId === 'string' ? body.pieceId : '';
+  const move = body.move;
+  if (
+    !pieceId ||
+    !move || typeof move !== 'object' || Array.isArray(move) ||
+    typeof move.x !== 'number' || !Number.isFinite(move.x) ||
+    typeof move.y !== 'number' || !Number.isFinite(move.y)
+  ) {
+    res.status(400).json({ error: 'bad_move' });
+    return;
+  }
+  // Turn integrity: the client store applies moves without AP mode, so every move flips
+  // the turn — strict one-move-per-turn alternation. Host ('player') therefore posts at
+  // EVEN relay indices, guest ('enemy') at odd. Reject a post from the side whose turn it
+  // isn't, so a tampered/misbehaving client can't move out of turn (which desyncs boards).
+  const expectHost = lobby.moves.length % 2 === 0;
+  if (isHost !== expectHost) {
+    res.status(409).json({ error: 'not_your_turn' });
+    return;
+  }
+  const event = {
+    i: lobby.moves.length,
+    side: isHost ? 'player' : 'enemy',
+    pieceId,
+    move,
+  };
+  lobby.moves.push(event);
+  lobby.updatedAt = new Date().toISOString();
+  broadcastToLobby(lobby.id, { type: 'move', move: event });
+  res.status(200).json({ move: event });
+});
+
+// Backfill relayed moves since index N (reconnect / late join). Same visibility
+// as GET /api/lobbies/:id (host/guest/observer — lobby exists & not closed).
+app.get('/api/lobbies/:id/moves', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const parsed = Number.parseInt(req.query.since, 10);
+  const since = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  res.status(200).json({ moves: lobby.moves.slice(since) });
+});
+
+// PER-LOBBY game SSE channel. Auth; lobby must exist & be open. Sends the current
+// lobby frame immediately (projected for this viewer), then move + lobby frames.
+app.get('/api/lobbies/:id/events', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const heartbeat = startSse(res);
+  const sub = { res, email: user.email };
+  let subs = lobbyChannelSubscribers.get(lobby.id);
+  if (!subs) {
+    subs = new Set();
+    lobbyChannelSubscribers.set(lobby.id, subs);
+  }
+  subs.add(sub);
+  // Immediate current-state frame so the client has state without a refetch.
+  sseWrite(res, `data: ${JSON.stringify({ type: 'lobby', lobby: publicLobby(lobby, user.email) })}\n\n`);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    const set = lobbyChannelSubscribers.get(lobby.id);
+    if (set) {
+      set.delete(sub);
+      if (set.size === 0) lobbyChannelSubscribers.delete(lobby.id);
+    }
+  });
 });
 
 app.post('/api/lobbies/:id/leave', async (req, res) => {
@@ -1154,7 +1396,19 @@ app.post('/api/lobbies/:id/leave', async (req, res) => {
   if (lobby.host.email === user.email) {
     lobby.phase = 'closed';
     lobby.updatedAt = new Date().toISOString();
+    // Notify game-channel subscribers (guest sees the lobby close) before dropping it.
+    broadcastLobbyState(lobby);
+    // Proactively end the per-lobby SSE streams so their heartbeats/timers don't linger
+    // against a now-deleted lobby (ending each res fires its own 'close' handler, which
+    // clears the heartbeat and removes the sub). Otherwise it only self-heals whenever the
+    // guest's socket eventually drops.
+    const subs = lobbyChannelSubscribers.get(lobby.id);
+    if (subs) {
+      for (const sub of subs) { try { sub.res.end(); } catch { /* already closed */ } }
+      lobbyChannelSubscribers.delete(lobby.id);
+    }
     lobbies.delete(lobby.id);
+    broadcastLobbies();
     res.status(204).end();
     return;
   }
@@ -1162,6 +1416,8 @@ app.post('/api/lobbies/:id/leave', async (req, res) => {
     lobby.guest = null;
     lobby.phase = 'waiting';
     lobby.updatedAt = new Date().toISOString();
+    broadcastLobbies();
+    broadcastLobbyState(lobby);
     res.status(200).json({ lobby: publicLobby(lobby, user.email) });
     return;
   }

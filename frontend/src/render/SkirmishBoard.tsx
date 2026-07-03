@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
-import type { BoardSize, GameState, Move, Piece, TerrainType, Vec } from '../core/types';
+import type { BoardSize, GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
 import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
 import { canTraverse, elevationAt } from '../core/terrain';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
@@ -456,6 +456,11 @@ export function SkirmishBoard() {
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const tryMoveTo = useSkirmish((s) => s.tryMoveTo);
+  const net = useSkirmish((s) => s.net);
+  // The side THIS client controls: 'player' in single-player, or its lobby seat in
+  // netplay (host='player', guest='enemy'). Interaction (selecting, move highlights,
+  // committing) is gated to this side, not the literal 'player'.
+  const localSide: Side = net ? net.localSide : 'player';
   // Drag-to-move (coexists with click-select → click-move). The live gesture is tracked in a
   // ref (mutated freely without re-rendering the board every pointer frame); `drag` state only
   // flips on/off at pick-up/drop so the ghost mounts and the origin piece fades. Only ONE drag
@@ -496,10 +501,10 @@ export function SkirmishBoard() {
     }
   }, [drag, dropHoverKey]);
   const selectedMoves = useMemo(() => {
-    if (game.turn !== 'player' || game.winner) return [];
-    const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === 'player');
+    if (game.turn !== localSide || game.winner) return [];
+    const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
-  }, [env, game.pieces, game.size, game.turn, game.winner, selectedId]);
+  }, [env, game.pieces, game.size, game.turn, game.winner, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
   const livePieces = useMemo(
     // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
@@ -580,9 +585,12 @@ export function SkirmishBoard() {
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
     if (selectedMoves.some((move) => move.x === x && move.y === y)) {
       tryMoveTo(x, y);
-    } else if (here && here.side === 'player') {
+    } else if (here && here.side === localSide) {
+      // A piece THIS client commands — select it (own side; 'player' in single-player).
       select(here.id);
-    } else if (here && here.side === 'enemy') {
+    } else if (here && here.side !== 'neutral') {
+      // The opponent's living piece — inspect (focus) it, never select. Neutral obstacles
+      // (rocks) fall through to the inert tryMoveTo no-op, as before.
       focus(here.id);
     } else {
       tryMoveTo(x, y);
@@ -611,9 +619,9 @@ export function SkirmishBoard() {
     if (dragRef.current) return;
     // Don't let a press start a drag before the board is even visible (cold load = opacity:0
     // but still hit-testable) — you'd be dragging a piece you can't see.
-    if (game.turn !== 'player' || game.winner || !boardReady) return;
-    const piece = livePieces.find((p) => p.x === cx && p.y === cy && p.side === 'player');
-    if (!piece) return; // only our own pieces initiate a drag; empty/enemy cells fall through to onClick
+    if (game.turn !== localSide || game.winner || !boardReady) return;
+    const piece = livePieces.find((p) => p.x === cx && p.y === cy && p.side === localSide);
+    if (!piece) return; // only THIS client's pieces initiate a drag; empty/opponent cells fall through to onClick
     // Pick it up: select immediately (same as a tap would) so the ring shows, and arm a
     // potential drag. It only becomes a real drag once the pointer crosses the threshold,
     // so a plain tap still falls through to the click handler and behaves exactly as before.

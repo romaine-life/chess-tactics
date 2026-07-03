@@ -2784,6 +2784,83 @@ h1 {
   padding: 6px;
 }
 
+/* Netplay level picker — the host chooses one of the 7 official levels for the
+   lobby. Cards reuse the panel frame (ADR-0032: no bare boxes) and the lobby type
+   ramp; the grid auto-fills so 7 cards flow to as many columns as fit. */
+.utility-level-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.utility-level-picker-head {
+  color: var(--power);
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.utility-level-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+}
+
+.utility-level-card {
+  background: transparent;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  image-rendering: pixelated;
+  padding: 4px 6px 8px;
+  position: relative;
+  text-align: left;
+}
+
+.utility-level-card:hover {
+  filter: brightness(1.08);
+}
+
+.utility-level-card:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.utility-level-card.is-selected {
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+}
+
+.utility-level-thumb {
+  background: rgba(3, 10, 16, .48);
+  border: 1px solid rgba(205, 165, 74, .55);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.utility-level-card strong {
+  color: #f6ecd8;
+  display: block;
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .58rem;
+  line-height: 1.45;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.utility-level-card small {
+  color: var(--muted);
+  font-size: .96rem;
+  line-height: 1.2;
+}
+
 .utility-button {
   align-items: center;
   background: transparent;
@@ -2793,12 +2870,12 @@ h1 {
   cursor: pointer;
   display: inline-flex;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: .55rem;
+  font-size: var(--ds-text-sm);
   gap: 7px;
   justify-content: center;
   letter-spacing: 0;
   line-height: 1.35;
-  min-height: 48px;
+  min-height: 40px;
   min-width: 104px;
   padding: 0 4px;
   text-align: center;
