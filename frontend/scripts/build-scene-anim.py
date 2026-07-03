@@ -134,20 +134,24 @@ def main() -> None:
 
     static_px = static.load()
 
-    # Exposure lock: the generator's global gain drifts a few frames per run
-    # (the whole fall dims, then recovers — reads as flicker). Water sparkle is
-    # spatial texture, not mean-brightness wobble, so scale each frame's masked
-    # RGB so its mean luminance matches the static art's.
-    static_mean = sum(
-        max(static_px[x, y][:3]) for y in range(h) for x in range(w) if mask[y][x]
-    ) / max(moving, 1)
-    gains = [1.0]
-    for i in range(1, n):
-        frame_px = frames[i].load()
-        mean = sum(
-            max(frame_px[x, y][:3]) for y in range(h) for x in range(w) if mask[y][x]
-        ) / max(moving, 1)
-        gains.append(static_mean / mean if mean else 1.0)
+    # Color-stats lock (per-channel Reinhard transfer): the sheet pins frame 0
+    # to the SHIPPED art, but the generator restyles the water (richer, bluer,
+    # and with a slow gain swell across the run) — so the one authentic frame
+    # reads as a pale flash once per loop, which the eye reports as a wrap
+    # jolt. Matching every generated frame's masked mean AND spread per channel
+    # to the static art keeps the motion but makes the static frame the family
+    # look instead of the outlier. (Replaces the earlier mean-luminance-only
+    # exposure lock, which left the color-character snap in place.)
+    def masked_stats(px) -> list[tuple[float, float]]:
+        stats = []
+        for c in range(3):
+            vals = [px[x, y][c] for y in range(h) for x in range(w) if mask[y][x]]
+            mean = sum(vals) / max(len(vals), 1)
+            var = sum((v - mean) ** 2 for v in vals) / max(len(vals), 1)
+            stats.append((mean, var ** 0.5))
+        return stats
+
+    target = masked_stats(static_px)
 
     sheet = Image.new("RGBA", (w * n, h), (0, 0, 0, 0))
     report = []
@@ -155,6 +159,13 @@ def main() -> None:
         out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         out_px = out.load()
         frame_px = frames[i].load()
+        if i > 0:
+            src = masked_stats(frame_px)
+            # clamp the spread gain so a flat/noisy frame can't be blown up
+            xfer = [
+                (sm, tm, max(0.6, min(1.6, (ts / ss) if ss else 1.0)))
+                for (sm, ss), (tm, ts) in zip(src, target)
+            ]
         changed = 0
         for y in range(h):
             for x in range(w):
@@ -163,13 +174,15 @@ def main() -> None:
                 if i == 0:
                     out_px[x, y] = static_px[x, y]  # loop wraps onto the shipped art
                 else:
-                    fr, fg, fb = (min(255, round(c * gains[i])) for c in frame_px[x, y][:3])
+                    fr, fg, fb = (
+                        max(0, min(255, round((frame_px[x, y][c] - xfer[c][0]) * xfer[c][2] + xfer[c][1])))
+                        for c in range(3)
+                    )
                     out_px[x, y] = (fr, fg, fb, 255)
                     if (fr, fg, fb) != static_px[x, y][:3]:
                         changed += 1
         sheet.paste(out, (w * i, 0))
         report.append(f"{changed * 100 // max(moving, 1)}%")
-    print("exposure gains:", " ".join(f"{g:.2f}" for g in gains))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUT_DIR / f"{args.out}.png"
