@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-905022a3eafea56454e2da41cd0c1d23d02174faa3d78d4bca6731e63efa5da2"
+  tag: "app-6d1993561facf61d03e8eedf43ee94276554726b97fd88ea54de6062a81372e6"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: ""
-  prNumber: ""
-  prUrl: ""
-  commit: ""
+  prTitle: "Unblock deploys: give store.test.ts AI-search tests real timeout headroom"
+  prNumber: "334"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/334"
+  commit: "64b1adb"
 
 name: chess-tactics
 namespace: chess-tactics
