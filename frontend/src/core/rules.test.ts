@@ -136,6 +136,78 @@ describe('sliding pieces', () => {
   });
 });
 
+describe('king may not move into check', () => {
+  // A far-off enemy king keeps a board legal (both sides fielded) without
+  // touching the squares under test.
+  const farKing = () => P('enemy', 'king', 7, 0);
+  const farPlayerKing = () => P('player', 'king', 7, 11);
+
+  it('skips squares an enemy rook attacks', () => {
+    const king = P('player', 'king', 4, 6);
+    const rook = P('enemy', 'rook', 0, 5); // rakes row 5
+    const moves = legalMoves(king, [king, rook, farKing()], SIZE);
+    expect(has(moves, 3, 5)).toBe(false);
+    expect(has(moves, 4, 5)).toBe(false);
+    expect(has(moves, 5, 5)).toBe(false);
+    expect(has(moves, 3, 6)).toBe(true);
+    expect(has(moves, 4, 7)).toBe(true);
+  });
+
+  it('cannot retreat straight back along the checking line (slider x-rays the vacated square)', () => {
+    const king = P('player', 'king', 4, 3);
+    const rook = P('enemy', 'rook', 4, 0); // checks down column 4, blocked at the king
+    const moves = legalMoves(king, [king, rook, farPlayerKing()], SIZE);
+    expect(has(moves, 4, 4)).toBe(false); // stepping away in-line is still check
+    expect(has(moves, 4, 2)).toBe(false); // toward the rook, still on the file
+    expect(has(moves, 3, 3)).toBe(true); // sidestep off the file escapes
+    expect(has(moves, 5, 4)).toBe(true);
+  });
+
+  it('may capture an undefended attacker', () => {
+    const king = P('player', 'king', 4, 6);
+    const rook = P('enemy', 'rook', 4, 5); // adjacent, giving check, undefended
+    const m = find(legalMoves(king, [king, rook, farKing()], SIZE), 4, 5);
+    expect(m?.capture).toBe(rook.id);
+  });
+
+  it('may not capture a defended attacker', () => {
+    const king = P('player', 'king', 4, 6);
+    const rook = P('enemy', 'rook', 4, 5); // adjacent checker...
+    const guard = P('enemy', 'rook', 0, 5); // ...defended along row 5
+    expect(has(legalMoves(king, [king, rook, guard, farKing()], SIZE), 4, 5)).toBe(false);
+    expect(has(legalMoves(king, [king, rook, guard, farKing()], SIZE), 3, 6)).toBe(true); // still has an out
+  });
+
+  it('may not attack-in-place a multi-hp checker it cannot kill (still in check)', () => {
+    const king = P('player', 'king', 4, 6);
+    const tank = P('enemy', 'rook', 4, 5, { hp: 2, maxHp: 2 }); // survives the hit, keeps checking
+    expect(has(legalMoves(king, [king, tank, farKing()], SIZE), 4, 5)).toBe(false);
+  });
+
+  it('keeps the two kings apart (cannot step next to the enemy king)', () => {
+    const king = P('player', 'king', 4, 6);
+    const foeKing = P('enemy', 'king', 4, 4); // guards row 5 around (4,5)
+    const moves = legalMoves(king, [king, foeKing], SIZE);
+    expect(has(moves, 4, 5)).toBe(false);
+    expect(has(moves, 3, 5)).toBe(false);
+    expect(has(moves, 5, 5)).toBe(false);
+    expect(has(moves, 4, 7)).toBe(true);
+  });
+
+  it('still offers every genuinely safe square on an open board', () => {
+    const king = P('player', 'king', 4, 6);
+    expect(legalMoves(king, [king, farKing()], SIZE)).toHaveLength(8);
+  });
+
+  it('applies symmetrically to the enemy king', () => {
+    const foeKing = P('enemy', 'king', 4, 6);
+    const rook = P('player', 'rook', 0, 5); // player rook rakes row 5
+    const moves = legalMoves(foeKing, [foeKing, rook, farPlayerKing()], SIZE);
+    expect(has(moves, 4, 5)).toBe(false);
+    expect(has(moves, 3, 6)).toBe(true);
+  });
+});
+
 describe('threats', () => {
   it('pawn attacks the two forward diagonals', () => {
     const pawn = P('player', 'pawn', 4, 6);

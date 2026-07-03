@@ -212,9 +212,44 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
 }
 
 /**
+ * A king may not step onto a square any hostile piece attacks — it can't place
+ * itself in check. The threat is judged on the board AS IT WOULD BE after the
+ * move: the king is lifted off its origin (so an enemy slider "sees through" the
+ * vacated square, keeping a straight retreat along a rook/bishop/queen line
+ * illegal) and a captured piece is removed only when the hit actually kills it
+ * (so the king may take an undefended attacker but not one still guarded). An
+ * enemy king still guards its eight neighbours, so two kings can never sit
+ * adjacent. Threats use the same terrain-agnostic `attackedSquares` as the rest
+ * of the engine's threat model.
+ */
+function kingMoveStaysSafe(king: Piece, move: Move, pieces: readonly Piece[], size: BoardSize): boolean {
+  const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
+  const captured = capturedId ? pieces.find((p) => p.id === capturedId) : undefined;
+  const hostile = !!captured && captured.side !== king.side && !isObstacle(captured);
+  const kills = hostile && pieceHp(captured!) - 1 <= 0;
+  // A surviving hostile target is an attack-in-place: the king stays on its
+  // origin. Otherwise it relocates onto the destination square.
+  const displaced = !hostile || kills;
+  const dest: Vec = displaced ? { x: move.x, y: move.y } : { x: king.x, y: king.y };
+  const after: Piece[] = [];
+  for (const p of pieces) {
+    if (kills && p.id === capturedId) continue; // removed by the capture
+    after.push(p.id === king.id ? { ...p, x: dest.x, y: dest.y } : p);
+  }
+  for (const p of after) {
+    if (!p.alive || isObstacle(p) || p.side === king.side || p.side === 'neutral') continue;
+    for (const a of attackedSquares(p, after, size)) {
+      if (a.x === dest.x && a.y === dest.y) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * All legal destinations for a piece (excludes obstacles, which never move).
  * Pass `env.terrain` to apply terrain movement effects (cliff/rock barriers and
  * elevation limits); omit it for pure chess movement. Water is passable.
+ * A king additionally may not move into check (see `kingMoveStaysSafe`).
  */
 export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Move[] {
   if (!piece || !piece.alive || isObstacle(piece)) return [];
@@ -225,7 +260,8 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
     case 'bishop': return rayMoves(piece, pieces, size, DIAG, env, originElev);
     case 'rook': return rayMoves(piece, pieces, size, ORTHO, env, originElev);
     case 'queen': return rayMoves(piece, pieces, size, ALL8, env, originElev);
-    case 'king': return stepMoves(piece, pieces, size, ALL8, env, originElev);
+    case 'king': return stepMoves(piece, pieces, size, ALL8, env, originElev)
+      .filter((m) => kingMoveStaysSafe(piece, m, pieces, size));
     default: return [];
   }
 }
