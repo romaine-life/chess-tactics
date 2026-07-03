@@ -55,7 +55,7 @@ import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS } from '../core/objectives';
-import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, stepLadder } from '../core/clock';
+import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
 
@@ -534,21 +534,29 @@ const STATUS_LOG_LIMIT = 24;
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link) and optionally
-  // ?kind=tile|unit|doodad&brush=<id> to pre-arm the brush you clicked in the catalog. Read
-  // once at mount; reached from the main menu these are all absent and we open on the first layer.
+  // ?kind=tile|unit|doodad&brush=<id> to pre-arm the brush you clicked in the catalog. A general
+  // ?layer=<id> deep-link opens straight on any panel (rules, status, zone, …) — validated
+  // against the real layer list, ignoring unknown/disabled ids. Read once at mount; reached from
+  // the main menu these are all absent and we open on the first layer.
   const studioArm = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const kindParam = params.get('kind');
     const kind: 'tile' | 'unit' | 'doodad' | undefined =
       kindParam === 'unit' || kindParam === 'doodad' || kindParam === 'tile' ? kindParam : undefined;
+    const layerParam = params.get('layer');
+    const layer: LayerKey | undefined = LEVEL_EDITOR_LAYER_OPTIONS.some(
+      (option) => option.id === layerParam && !isLayerOptionDisabled(option.id),
+    ) ? (layerParam as LayerKey) : undefined;
     return {
       fromStudio: params.get('from') === 'studio',
       kind,
+      layer,
       brush: params.get('brush') ?? undefined,
     };
   }, []);
   const cameFromStudio = studioArm.fromStudio;
-  const initialLayer: LayerKey = studioArm.kind ?? defaultLevelEditorLayer();
+  // An explicit ?layer= wins over ?kind= (which is really brush-arming), then the default.
+  const initialLayer: LayerKey = studioArm.layer ?? studioArm.kind ?? defaultLevelEditorLayer();
   // The campaign path deep-links here with ?campaignId&levelId (&returnTo): which level to
   // edit, and where "Back" returns after a save. Read once at mount; absent ⇒ a standalone
   // (board-link / blank) board with no campaign target.
@@ -1763,29 +1771,43 @@ export function LevelEditor(): ReactElement {
               <div className="le-ctrlrow">
                 <span className="le-ctrllabel">Starting time</span>
                 <Stepper
-                  value={formatClockSeconds(clockInitialSeconds)}
                   suffix=""
                   decreaseLabel="Less starting time"
                   increaseLabel="More starting time"
                   onDecrease={() => setClockInitialSeconds((v) => stepLadder(CLOCK_INITIAL_SECONDS, v, -1))}
                   onIncrease={() => setClockInitialSeconds((v) => stepLadder(CLOCK_INITIAL_SECONDS, v, 1))}
+                  edit={{
+                    value: clockInitialSeconds,
+                    min: 1,
+                    format: formatClockSeconds,
+                    parse: parseClockSeconds,
+                    onCommit: (s) => setClockInitialSeconds(s),
+                    ariaLabel: 'Starting time (m:ss or seconds)',
+                  }}
                 />
               </div>
               <div className="le-ctrlrow">
                 <span className="le-ctrllabel">Increment</span>
                 <Stepper
-                  value={clockIncrementSeconds}
                   suffix="s"
                   decreaseLabel="Smaller increment per move"
                   increaseLabel="Larger increment per move"
                   onDecrease={() => setClockIncrementSeconds((v) => stepLadder(CLOCK_INCREMENT_SECONDS, v, -1))}
                   onIncrease={() => setClockIncrementSeconds((v) => stepLadder(CLOCK_INCREMENT_SECONDS, v, 1))}
+                  edit={{
+                    value: clockIncrementSeconds,
+                    min: 0,
+                    format: (s) => String(s),
+                    parse: parseClockSeconds,
+                    onCommit: (s) => setClockIncrementSeconds(s),
+                    ariaLabel: 'Increment in seconds',
+                  }}
                 />
               </div>
             </>) : null}
             <p className="le-board-note">
               {clockEnabled
-                ? 'The player’s clock counts down only on their own turn and each completed move banks the increment. Reaching zero loses the battle. The enemy is not timed.'
+                ? 'The player’s clock counts down only on their own turn and each completed move banks the increment. Reaching zero loses the battle. The enemy is not timed. Use +/– for standard controls, or click a value to type it exactly.'
                 : 'Untimed — the player can think as long as they like.'}
             </p>
           </section>

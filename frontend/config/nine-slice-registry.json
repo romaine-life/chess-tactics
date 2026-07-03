@@ -86,6 +86,8 @@
   "assets": {
     "mode-button": {
       "label": "Mode button (tabs / header)",
+      "theme": "gold",
+      "consume": { "cssVar": "--ns-content-mode-button", "selector": "opt-in: footprint-px where top-left content starts" },
       "atoms": {
         "corner": "corner",
         "edge": "edge",
@@ -108,6 +110,8 @@
     },
     "button": {
       "label": "Action button (settings / studio) — neutral / primary / danger",
+      "theme": "gold",
+      "consume": { "cssVar": "--ns-content-button", "selector": "opt-in: footprint-px where top-left content starts" },
       "atoms": {
         "corner": "corner",
         "edge": "edge",
@@ -133,6 +137,8 @@
     },
     "panel": {
       "label": "Settings panel / frame",
+      "theme": "gold",
+      "consume": { "cssVar": "--ns-content-panel", "selector": "opt-in: footprint-px where top-left content starts" },
       "atoms": {
         "corner": "corner",
         "edge": "edge",
