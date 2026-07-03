@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
-import { solveSocketBoard, type SocketBoardResult } from '../core/tileBoardGenerator';
+import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
-import type { BoardSize, Move, Piece, TerrainType, Vec } from '../core/types';
+import type { BoardSize, GameState, Move, Piece, TerrainType, Vec } from '../core/types';
 import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
 import { canTraverse, elevationAt } from '../core/terrain';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
-import type { TileFamilyId } from '../core/tileSockets';
+import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
@@ -16,6 +16,8 @@ import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
 import { featureFrameSrc } from '../art/tileset';
+import { FENCE_ART_PENDING, featureMaskAt, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 
 const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
   grass: 'grass',
@@ -29,6 +31,8 @@ const TERRAIN_TO_FAMILY: Record<TerrainType, TileFamilyId> = {
   pebble: 'pebble',
   sand: 'sand',
 };
+
+const tileAssetById = new Map(tileAssets.map((asset) => [asset.id, asset]));
 
 function isPlayablePieceType(type: Piece['type']): type is PlayablePieceType {
   return (PLAYABLE_PIECE_TYPES as readonly Piece['type'][]).includes(type);
@@ -73,7 +77,7 @@ function pieceImageSrc(piece: Piece): string | null {
   return pieceSpritePath(piece.type, SIDE_PALETTE[piece.side], piece.facing ?? defaultFacingForSide(piece.side));
 }
 
-function terrainMapForGame(game: ReturnType<typeof useSkirmish.getState>['game']): TileFamilyId[] {
+function terrainMapForGame(game: GameState): TileFamilyId[] {
   const byKey = new Map((game.terrain ?? []).map((cell) => [`${cell.x},${cell.y}`, TERRAIN_TO_FAMILY[cell.terrain]]));
   const map: TileFamilyId[] = [];
   for (let y = 0; y < game.size.rows; y += 1) {
@@ -84,30 +88,114 @@ function terrainMapForGame(game: ReturnType<typeof useSkirmish.getState>['game']
   return map;
 }
 
-function solveSkirmishBoard(
-  game: ReturnType<typeof useSkirmish.getState>['game'],
+function legacyFeatureMapForGame(game: GameState): Map<string, { kind: FeatureKind; material: FeatureMaterial }> | undefined {
+  const map = new Map<string, { kind: FeatureKind; material: FeatureMaterial }>();
+  for (const cell of game.terrain ?? []) {
+    if (cell.terrain === 'road') map.set(`${cell.x},${cell.y}`, { kind: 'road', material: 'cobble' });
+  }
+  return map.size ? map : undefined;
+}
+
+function featureOverlaysForBoard(board: EditorBoard): Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> {
+  const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
+  const isExit = (edge: string): boolean => board.featureExits[edge] === true;
+  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
+  for (const [key, feature] of Object.entries(board.features)) presentByKind[feature.kind].add(key);
+
+  const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
+  for (const [key, feature] of Object.entries(board.features)) {
+    const [x, y] = key.split(',').map(Number);
+    const mask = featureMaskAt(presentByKind[feature.kind], x, y, isSevered, isExit);
+    out[key] = { kind: feature.kind, material: feature.material, mask };
+  }
+  return out;
+}
+
+function resolveBoardCode(game: GameState): EditorBoard | null {
+  if (!game.boardCode) return null;
+  const board = decodeBoard(game.boardCode);
+  if (!board || board.cols !== game.size.cols || board.rows !== game.size.rows) return null;
+  return board;
+}
+
+function coverMapForGame(game: GameState, exactBoard: EditorBoard | null): Map<string, 'sparse' | 'filled'> {
+  if (exactBoard) return new Map(Object.entries(exactBoard.cover));
+  return new Map((game.terrain ?? []).filter((cell) => cell.cover).map((cell) => [`${cell.x},${cell.y}`, cell.cover!.density]));
+}
+
+function resolveSkirmishGroundCover(
+  result: SocketBoardResult<TileAsset>,
+  game: GameState,
   seed: number,
+  exactBoard: EditorBoard | null,
 ): SocketBoardResult<TileAsset> {
-  const result = solveSocketBoard({
+  // Resolve ambient ground cover ONCE here (placement/build time), not per render.
+  // Painted cover (level data) is authoritative; a level with NO cover painted at all
+  // falls back to a low-frequency density field so generated/legacy boards still grow grass.
+  const painted = coverMapForGame(game, exactBoard);
+  const hasPainted = exactBoard ? true : painted.size > 0;
+  resolveGroundCover(result.cells, seed, (cell) =>
+    painted.get(`${cell.x},${cell.y}`) ?? (hasPainted ? null : densityFieldAt(cell.x, cell.y, seed)),
+  );
+  return result;
+}
+
+function generatedSkirmishBoard(game: GameState, seed: number): SocketBoardResult<TileAsset> {
+  return solveSocketBoard({
     assets: tileAssets,
     terrainMap: terrainMapForGame(game),
     seed,
     columns: game.size.cols,
     rows: game.size.rows,
     familyAssets: tileFamilies,
+    featureMap: legacyFeatureMapForGame(game),
     edgeAssets: edgeTiles,
   });
-  // Resolve ambient ground cover ONCE here (placement/build time), not per render.
-  // Painted cover (level data) is authoritative; a level with NO cover painted at all
-  // falls back to a low-frequency density field so generated/legacy boards still grow grass.
-  const painted = new Map(
-    (game.terrain ?? []).filter((c) => c.cover).map((c) => [`${c.x},${c.y}`, c.cover!.density]),
-  );
-  const hasPainted = painted.size > 0;
-  resolveGroundCover(result.cells, seed, (cell) =>
-    painted.get(`${cell.x},${cell.y}`) ?? (hasPainted ? null : densityFieldAt(cell.x, cell.y, seed)),
-  );
-  return result;
+}
+
+function exactSkirmishBoard(
+  game: GameState,
+  seed: number,
+  exactBoard: EditorBoard,
+  base: SocketBoardResult<TileAsset>,
+): SocketBoardResult<TileAsset> {
+  const featureOverlays = featureOverlaysForBoard(exactBoard);
+  const cells: SocketBoardCell<TileAsset>[] = base.cells.map((cell) => {
+    const key = `${cell.x},${cell.y}`;
+    const exactAsset = tileAssetById.get(exactBoard.cells[key]);
+    const exactFeature = featureOverlays[key];
+    const feature = exactFeature && !(FENCE_ART_PENDING && exactFeature.kind === 'fence') ? exactFeature : undefined;
+    if (!exactAsset) return { ...cell, feature };
+
+    const terrain = familyIdForAsset(exactAsset, tileFamilies);
+    return {
+      ...cell,
+      asset: exactAsset,
+      sideAsset: undefined,
+      terrain,
+      sockets: tileSocketsForAsset(exactAsset, tileFamilies),
+      feature,
+      missing: undefined,
+    };
+  });
+
+  return resolveSkirmishGroundCover({
+    cells,
+    fallbacks: base.fallbacks,
+    stats: {
+      placed: cells.length,
+      missingPlacements: cells.filter((cell) => !cell.asset).length,
+      illegalEdges: countIllegalEdges(cells, tileFamilies),
+      candidateAssets: base.stats.candidateAssets,
+    },
+  }, game, seed, exactBoard);
+}
+
+export function buildSkirmishBoard(game: GameState, seed: number): SocketBoardResult<TileAsset> {
+  const base = generatedSkirmishBoard(game, seed);
+  const exactBoard = resolveBoardCode(game);
+  if (!exactBoard) return resolveSkirmishGroundCover(base, game, seed, null);
+  return exactSkirmishBoard(game, seed, exactBoard, base);
 }
 
 function terrainBlocks(env: ReturnType<typeof useSkirmish.getState>['env'], piece: Piece, x: number, y: number): boolean {
@@ -324,7 +412,7 @@ export function SkirmishBoard() {
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === 'player');
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
   }, [env, game.pieces, game.size, game.turn, game.winner, selectedId]);
-  const board = useMemo(() => solveSkirmishBoard(game, seed), [game, seed]);
+  const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
   const livePieces = useMemo(
     // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
     // seat — exclude them so they don't paint an empty/phantom seat over their footprint cells.
