@@ -1,6 +1,8 @@
 import type { ReactElement, ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
 import { DoodadSprite } from './BoardDoodad';
+import { PropSprite } from './BoardStructure';
+import { propDef, type PropDef } from '../core/props';
 import { GroundCoverLayer } from './GroundCoverLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
@@ -21,8 +23,8 @@ import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
-// draws (tiles + feature overlays in the cell band; units + doodads + ground cover bracketed
-// in the +20000 band, exactly like the game's SkirmishBoard). Both surfaces consume it:
+// draws (tiles + feature overlays in the cell band; units + doodads + props + ground cover
+// bracketed in the +20000 band, exactly like the game's SkirmishBoard). Both surfaces consume it:
 //   - the Level Editor's StudioEditableBoard layers its paint/erase/select interaction on top
 //     of these same cells + sprites (so the editable board and this viewer can never drift), and
 //   - the Campaign Editor's selected-level viewer renders it read-only inside a ViewPane.
@@ -112,27 +114,41 @@ export function studioCellArt({
 }
 
 /**
- * The unit + doodad sprites for the whole board, seated via the shared `.board-unit-seat`
- * and `<DoodadSprite>` (identical to the game board). Pure (no interaction); the editor adds
- * its own doodad hit targets alongside these. `renderUnitDoodadExtra` lets a caller inject a
- * per-cell overlay (the editor's transparent doodad hit) without forking the seating logic.
+ * The unit + doodad + prop sprites for the whole board, seated via the shared `.board-unit-seat`,
+ * `<DoodadSprite>` and `<PropSprite>` (identical to the game board). Pure (no interaction); the
+ * editor adds its own doodad/prop hit targets alongside these — it draws its OWN props (so it can
+ * bracket them with hit spans) and simply omits `props` here. `renderDoodadExtra` lets a caller
+ * inject a per-cell overlay (the editor's transparent doodad hit) without forking the seating logic.
  */
 export function studioBoardSprites({
   units,
   doodads,
+  props = {},
   resolveUnit = resolveUnitAsset,
   resolveDoodad = doodadAsset,
+  resolveProp = propDef,
   hidden,
   renderDoodadExtra,
 }: {
   units: Record<string, { unitId: string; direction: string; faction: string }>;
   doodads: Record<string, { doodadId: string }>;
+  /** Multi-cell props keyed by ANCHOR cell "x,y" (optional — the editor renders its own). */
+  props?: Record<string, { propId: string }>;
   resolveUnit?: (id: string) => UnitAsset | undefined;
   resolveDoodad?: (id: string) => DoodadAsset | undefined;
+  resolveProp?: (id: string) => PropDef | undefined;
   hidden?: BoardLayerVisibility;
   renderDoodadExtra?: (cell: { x: number; y: number; left: number; top: number; zIndex: number }) => ReactNode;
 }): ReactNode[] {
   const sprites: ReactNode[] = [];
+  // Multi-cell props (trees/houses): the shared tall <PropSprite> (back/front halves), exactly
+  // as the game board seats it. Unknown ids skip silently (forward-compat, same as the bridge).
+  for (const [key, placement] of Object.entries(props)) {
+    const def = resolveProp(placement.propId);
+    if (!def || hidden?.doodad) continue;
+    const [ax, ay] = key.split(',').map(Number);
+    sprites.push(<PropSprite key={`prop-${key}`} prop={{ x: ax, y: ay, propId: placement.propId }} def={def} />);
+  }
   for (const key of new Set([...Object.keys(units), ...Object.keys(doodads)])) {
     const [cx, cy] = key.split(',').map(Number);
     const { left, top, zIndex } = boardLabCellPosition({ x: cx, y: cy });
@@ -178,7 +194,8 @@ export function studioCoverCells(
 
 /**
  * A static, read-only board rendered straight from an EditorBoard — tiles, feature ribbons,
- * units, doodads and ground cover, all through the SAME render core the editor uses. No
+ * units, doodads, multi-cell props and ground cover, all through the SAME render core the
+ * editor uses. No
  * painting, no selection, no animation clock (the frame is fixed). Wrap it in a ViewPane for
  * pan/zoom (the Campaign Editor's selected-level viewer does exactly that).
  */
@@ -216,7 +233,7 @@ export function StudioReadOnlyBoard({
     }
   }
 
-  const sprites = studioBoardSprites({ units: board.units, doodads: board.doodads });
+  const sprites = studioBoardSprites({ units: board.units, doodads: board.doodads, props: board.props });
   const coverCells = studioCoverCells(board.cells, board.cover, coverSeed);
 
   return (
