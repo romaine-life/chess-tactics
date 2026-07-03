@@ -43,10 +43,20 @@ describe('nine-slice bake parity (committed PNG === fresh bake from config)', ()
   // hand-compensated per corner in mode-button.json).
   const opaqueAt = (png: { data: Uint8Array; width: number }, x: number, y: number) => png.data[(y * png.width + x) * 4 + 3] > 40;
   const B6 = { dx: -6, dy: -6 };
-  for (const frameScale of [1.25, 1.5]) {
+  // Bright steel RAIL pixel: opaque, not warm gold, and brighter than the navy fill
+  // (max channel ≥ RAIL_MIN 45, the kit's own rail/fill threshold). Isolates the cool
+  // border line from the fill — which is otherwise opaque everywhere and hides thickness.
+  const railAt = (png: { data: Uint8Array; width: number }, x: number, y: number) => {
+    const i = (y * png.width + x) * 4;
+    return png.data[i + 3] > 40 && !(png.data[i] > png.data[i + 2] + 15)
+      && Math.max(png.data[i], png.data[i + 1], png.data[i + 2]) >= 45;
+  };
+  const bakeMB = (frameScale: number) => bakeAsset('mode-button', { asset: 'mode-button', frameScale, bracketScale: 1.25, brackets: { tl: B6, tr: B6, bl: B6, br: B6 } }).variants[0].png;
+  // Includes scales PAST the old 1.5 cap (quadrant clipping keeps the frame symmetric
+  // and clean up to frame/corner = 3.0, so the rail keeps thickening with no wall).
+  for (const frameScale of [1.25, 1.5, 2.25, 3.0]) {
     it(`mode-button at frameScale ${frameScale}: bake is mirror-symmetric`, () => {
-      const { variants } = bakeAsset('mode-button', { asset: 'mode-button', frameScale, bracketScale: 1.25, brackets: { tl: B6, tr: B6, bl: B6, br: B6 } });
-      const png = variants[0].png;
+      const png = bakeMB(frameScale);
       let h = 0, v = 0;
       for (let y = 0; y < png.height; y++) for (let x = 0; x < png.width; x++) {
         if (opaqueAt(png, x, y) !== opaqueAt(png, png.width - 1 - x, y)) h++;
@@ -56,6 +66,20 @@ describe('nine-slice bake parity (committed PNG === fresh bake from config)', ()
       expect(v, 'vertical mirror mismatch (px)').toBe(0);
     });
   }
+
+  // Past the old cap the rail must genuinely thicken (more cool pixels), not plateau —
+  // the whole point of quadrant clipping. Counts cool (non-warm) opaque pixels.
+  it('mode-button cool rail thickens monotonically with frameScale past 1.5', () => {
+    const railCount = (fs: number) => {
+      const png = bakeMB(fs);
+      let n = 0;
+      for (let y = 0; y < png.height; y++) for (let x = 0; x < png.width; x++) if (railAt(png, x, y)) n++;
+      return n;
+    };
+    const c15 = railCount(1.5), c225 = railCount(2.25), c30 = railCount(3.0);
+    expect(c225, `2.25 (${c225}) should exceed 1.5 (${c15})`).toBeGreaterThan(c15);
+    expect(c30, `3.0 (${c30}) should exceed 2.25 (${c225})`).toBeGreaterThan(c225);
+  });
 
   for (const id of ids) {
     it(`${id}: committed PNG(s) match a fresh bake`, () => {

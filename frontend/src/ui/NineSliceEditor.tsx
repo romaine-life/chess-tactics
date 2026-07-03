@@ -384,16 +384,25 @@ function buildFrameCanvas(L: Loaded, edit: EditState, w: number, h: number, carv
   tileH(g, botS, px0, W - px0, H - botS.height - edit.pipes.bottom);
   tileV(g, leftS, py0, H - py0, edit.pipes.left);
   tileV(g, rightS, py0, H - py0, W - rightS.width - edit.pipes.right);
+  // Each corner clipped to its quadrant (mirrors the Node bake's compRect): a corner
+  // scaled past the half-way point fills its side to the midline and meets its
+  // neighbour there instead of overlapping. Below that the corner is inside its
+  // quadrant so the clip does nothing (scale ≤ 1.5 renders identically).
+  const midX = Math.ceil(W / 2), midY = Math.ceil(H / 2);
+  const drawClipped = (img: HTMLCanvasElement, dx: number, dy: number, x0: number, y0: number, x1: number, y1: number) => {
+    g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip();
+    g.drawImage(img, dx, dy); g.restore();
+  };
   const corner = (art: HTMLCanvasElement, scale: number, corners: Corners) => {
     const tl = scaleCanvas(art, scale);
     const dw = tl.width, dh = tl.height;
     const tr = flip(tl, dw, dh, true, false);
     const bl = flip(tl, dw, dh, false, true);
     const br = flip(tl, dw, dh, true, true);
-    g.drawImage(tl, corners.tl.dx, corners.tl.dy);
-    g.drawImage(tr, W - dw - corners.tr.dx, corners.tr.dy);
-    g.drawImage(bl, corners.bl.dx, H - dh - corners.bl.dy);
-    g.drawImage(br, W - dw - corners.br.dx, H - dh - corners.br.dy);
+    drawClipped(tl, corners.tl.dx, corners.tl.dy, 0, 0, midX, midY);
+    drawClipped(tr, W - dw - corners.tr.dx, corners.tr.dy, midX, 0, W, midY);
+    drawClipped(bl, corners.bl.dx, H - dh - corners.bl.dy, 0, midY, midX, H);
+    drawClipped(br, W - dw - corners.br.dx, H - dh - corners.br.dy, midX, midY, W, H);
   };
   corner(L.base, edit.frameScale, edit.coolCorners); // cool frame corners
   if (L.hasAccent) corner(L.accent, edit.bracketScale, edit.brackets); // gold bracket
@@ -548,7 +557,10 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     return { ...prev, [aid]: mut(cur) };
   });
   const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-  const maxFrameScale = loaded ? Math.max(1, Math.min(4, asset.frame.w / (2 * loaded.cw), asset.frame.h / (2 * loaded.ch))) : 4;
+  // A corner may grow until it fills its whole side (frame / corner) — quadrant
+  // clipping lets it meet the opposite corner at the midline instead of overlapping.
+  // Mirrors maxFrameScaleForAsset in the Node bake.
+  const maxFrameScale = loaded ? Math.max(1, Math.min(4, asset.frame.w / loaded.cw, asset.frame.h / loaded.ch)) : 4;
   const boxRange = (box: { minX: number; minY: number; maxX: number; maxY: number }, scale: number) => {
     const scaled = scaleBox(box, scale);
     const W = asset.frame.w, H = asset.frame.h;

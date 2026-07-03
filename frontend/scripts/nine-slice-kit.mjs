@@ -129,6 +129,22 @@ function compClipped(o, img, sx, sy, clipX1, clipY1) {
 function tile(o, t, x0, y0, x1, y1) {
   for (let y = y0; y < y1; y += t.height) for (let x = x0; x < x1; x += t.width) compClipped(o, t, x, y, x1, y1);
 }
+// Composite clipped to an arbitrary rect [x0,x1)×[y0,y1). Corners use this to stay
+// inside their own quadrant, so a corner scaled past the half-way point meets its
+// neighbour exactly at the midline instead of overlapping into it (no center pip).
+function compRect(o, img, sx, sy, x0, y0, x1, y1) {
+  for (let y = 0; y < img.height; y += 1) for (let x = 0; x < img.width; x += 1) {
+    const dx = sx + x, dy = sy + y;
+    if (dx < x0 || dy < y0 || dx >= x1 || dy >= y1 || dx >= o.width || dy >= o.height) continue;
+    const c = px(img, x, y);
+    const a = c[3] / 255;
+    const i = (dy * o.width + dx) * 4;
+    o.data[i] = Math.round(c[0] * a + o.data[i] * (1 - a));
+    o.data[i + 1] = Math.round(c[1] * a + o.data[i + 1] * (1 - a));
+    o.data[i + 2] = Math.round(c[2] * a + o.data[i + 2] * (1 - a));
+    o.data[i + 3] = Math.max(o.data[i + 3], c[3]);
+  }
+}
 
 // New image holding only the kept pixels, shifted by (dx,dy).
 function layer(src, dx, dy, keep) {
@@ -184,13 +200,20 @@ function buildFrameParts(baseCorner, bracketCorner, edge, fill, cfg, W, H, flipS
   tile(o, eL, cfg.pipes.left, py0, cfg.pipes.left + eL.width, H - py0);
   tile(o, eR, W - eR.width - cfg.pipes.right, py0, W - cfg.pipes.right, H - py0);
 
+  // Each corner is clipped to its own quadrant, so scaling a corner past the half-way
+  // point (frameScale > frame/(2·corner)) lets it fill its side up to the midline and
+  // meet the opposite corner seamlessly, instead of overlapping into it. Below that
+  // point the corner is smaller than its quadrant, so the clip is a no-op (scale ≤ 1.5
+  // bakes are byte-identical). This is what lets the frame keep getting thicker with
+  // no wall — the footprint stays fixed, only the rail grows.
+  const midX = Math.ceil(W / 2), midY = Math.ceil(H / 2);
   const corner = (img, scale, corners) => {
     const s = scalePng(img, scale);
     const dw = s.width, dh = s.height;
-    comp(o, s, corners.tl.dx, corners.tl.dy);
-    comp(o, flipH(s), W - dw - corners.tr.dx, corners.tr.dy);
-    comp(o, flipV(s), corners.bl.dx, H - dh - corners.bl.dy);
-    comp(o, flipH(flipV(s)), W - dw - corners.br.dx, H - dh - corners.br.dy);
+    compRect(o, s, corners.tl.dx, corners.tl.dy, 0, 0, midX, midY);
+    compRect(o, flipH(s), W - dw - corners.tr.dx, corners.tr.dy, midX, 0, W, midY);
+    compRect(o, flipV(s), corners.bl.dx, H - dh - corners.bl.dy, 0, midY, midX, H);
+    compRect(o, flipH(flipV(s)), W - dw - corners.br.dx, H - dh - corners.br.dy, midX, midY, W, H);
   };
   corner(baseCorner, cfg.frameScale, cfg.coolCorners);
   corner(bracketCorner, cfg.bracketScale, cfg.brackets);
@@ -270,11 +293,17 @@ export function normalizeConfig(c) {
     fill: c.fill ?? 0,
   };
 }
+// Ceiling on frameScale: a corner may grow until it fills its whole SIDE (frame /
+// corner), where — clipped to its quadrant — it meets the opposite corner exactly at
+// the midline. (The old ceiling was frame/(2·corner), the point where corners first
+// touch; quadrant clipping lets them keep going cleanly past that, so the rail keeps
+// thickening.) Beyond frame/corner the corner's solid bend would cross the midline and
+// clip visibly, so that's the wall.
 function maxFrameScaleForAsset(assetId) {
   const rec = REGISTRY[assetId];
   if (!rec) return 4;
   const corner = loadAtom(rec.atoms.corner);
-  return Math.max(1, Math.min(4, rec.frame.w / (2 * corner.width), rec.frame.h / (2 * corner.height)));
+  return Math.max(1, Math.min(4, rec.frame.w / corner.width, rec.frame.h / corner.height));
 }
 export function normalizeConfigForAsset(assetId, c) {
   const cfg = normalizeConfig({ ...c, asset: assetId });
