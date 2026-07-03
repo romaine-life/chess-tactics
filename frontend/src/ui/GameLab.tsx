@@ -31,6 +31,7 @@ import {
 } from '../net/labRuns';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
+import { LevelThumbnail } from '../render/LevelThumbnail';
 import { ViewPane } from './shared/ViewPane';
 import { fetchMe } from '../net/auth';
 import type { PieceType } from '../core/types';
@@ -157,18 +158,18 @@ export function GameLabCatalog({
   const q = search.trim().toLowerCase();
   const levels = useMemo(() => {
     const seen = new Set<string>();
-    const out: Array<{ id: string; label: string; sub: string }> = [];
+    const out: Array<{ id: string; label: string; sub: string; level: Level }> = [];
     for (const campaign of campaigns) {
       for (const ref of campaign.levels) {
         const lvl = workspaceLevels[ref.levelId];
         if (!lvl || seen.has(lvl.id)) continue;
         seen.add(lvl.id);
-        out.push({ id: lvl.id, label: lvl.name, sub: `${campaign.name} · ${MODE_NAME[lvl.objective]}` });
+        out.push({ id: lvl.id, label: lvl.name, sub: `${campaign.name} · ${MODE_NAME[lvl.objective]}`, level: lvl });
       }
     }
     for (const lvl of Object.values(workspaceLevels)) {
       if (seen.has(lvl.id)) continue;
-      out.push({ id: lvl.id, label: lvl.name, sub: MODE_NAME[lvl.objective] });
+      out.push({ id: lvl.id, label: lvl.name, sub: MODE_NAME[lvl.objective], level: lvl });
     }
     return out.filter((o) => !q || `${o.label} ${o.sub}`.toLowerCase().includes(q));
   }, [campaigns, workspaceLevels, q]);
@@ -184,6 +185,11 @@ export function GameLabCatalog({
           aria-pressed={o.id === selected}
           title={`${o.label} — ${o.sub}`}
         >
+          <span className="tileset-studio-card-image pages-card-image">
+            {/* Baked board thumbnail — the same preview the Campaign Editor's level
+                list uses, so a level looks identical everywhere it's shown. */}
+            <LevelThumbnail level={o.level} width={132} height={88} alt="" />
+          </span>
           <span className="tileset-studio-card-meta">
             <span className="tileset-studio-card-text">
               <strong>{o.label}</strong>
