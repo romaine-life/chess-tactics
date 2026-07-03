@@ -28,10 +28,13 @@ const ROWS = 7;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-// Anchor number field with explicit −/+ steppers (Shift = ×10). The native number-input
-// spinner is hidden: under the app's `color-scheme: dark` Chrome draws it so low-contrast
-// that only the hovered half reads — it looked like a down-only control.
-function SeatNumber({ label, value, onCommit }: { label: string; value: number; onCommit: (n: number) => void }) {
+// Anchor number field with explicit −/+ steppers (Shift = ×10) and a per-control ↺ that
+// resets JUST this field to its saved value (ADR-0057: every control resets on its own).
+// The native number-input spinner is hidden: under the app's `color-scheme: dark` Chrome
+// draws it so low-contrast that only the hovered half reads — it looked down-only.
+function SeatNumber({ label, value, onCommit, onReset, atSaved }: {
+  label: string; value: number; onCommit: (n: number) => void; onReset: () => void; atSaved: boolean;
+}) {
   return (
     <label className="pl-num">{label}
       <span className="pl-num-row">
@@ -48,6 +51,8 @@ function SeatNumber({ label, value, onCommit }: { label: string; value: number; 
         />
         <button type="button" className="pl-step" title="+1 (Shift: +10)" aria-label={`increase ${label}`}
           onClick={(ev) => onCommit(value + (ev.shiftKey ? 10 : 1))}>+</button>
+        <button type="button" className="pl-mini-reset" title={`Reset ${label} to saved`} aria-label={`reset ${label}`}
+          disabled={atSaved} onClick={onReset}>↺</button>
       </span>
     </label>
   );
@@ -288,15 +293,21 @@ export function PropLab(): ReactElement {
           <p className="pl-hint">Drag the prop, or nudge with arrow keys (Shift = ×10). The blue diamonds are the tiles the prop occupies; the cross is the ground point its anchor seats on.</p>
 
           <div className="pl-fields">
-            <SeatNumber label="anchor X" value={liveSeat.anchorX} onCommit={(n) => setSeat({ anchorX: n })} />
-            <SeatNumber label="anchor Y" value={liveSeat.anchorY} onCommit={(n) => setSeat({ anchorY: n })} />
+            <SeatNumber label="anchor X" value={liveSeat.anchorX} onCommit={(n) => setSeat({ anchorX: n })}
+              onReset={() => setSeat({ anchorX: committed.anchorX })} atSaved={liveSeat.anchorX === committed.anchorX} />
+            <SeatNumber label="anchor Y" value={liveSeat.anchorY} onCommit={(n) => setSeat({ anchorY: n })}
+              onReset={() => setSeat({ anchorY: committed.anchorY })} atSaved={liveSeat.anchorY === committed.anchorY} />
           </div>
 
           <label className="pl-scale">Scale {liveSeat.scale.toFixed(2)}×
-            <input
-              type="range" min={0.25} max={2} step={0.01} value={liveSeat.scale}
-              onChange={(ev) => setSeat({ scale: round2(Number(ev.target.value)) })}
-            />
+            <span className="pl-scale-row">
+              <input
+                type="range" min={0.25} max={2} step={0.01} value={liveSeat.scale}
+                onChange={(ev) => setSeat({ scale: round2(Number(ev.target.value)) })}
+              />
+              <button type="button" className="pl-mini-reset" title="Reset scale to saved" aria-label="reset scale"
+                disabled={liveSeat.scale === committed.scale} onClick={() => setSeat({ scale: committed.scale })}>↺</button>
+            </span>
           </label>
           <div className="pl-fields">
             <label>exact
@@ -313,7 +324,7 @@ export function PropLab(): ReactElement {
           <div className="pl-actions">
             <button type="button" className="pl-btn pl-btn--primary" onClick={save} disabled={!dirty}>Save to disk</button>
             <button type="button" className="pl-btn" onClick={copy}>Copy JSON</button>
-            <button type="button" className="pl-btn" onClick={() => setSeat({ ...committed })} title="Back to the saved seat for this prop">Reset</button>
+            <button type="button" className="pl-btn" onClick={() => setSeat({ ...committed })} disabled={!dirty} title="Reset all three controls to the saved seat">Reset all</button>
           </div>
           {status ? <p className={`pl-status ${status.startsWith('error') ? 'is-error' : ''}`}>{status}</p> : null}
           {dirty && !status ? <p className="pl-status">unsaved changes</p> : null}
@@ -362,8 +373,15 @@ const PL_CSS = `
 .pl-step { flex: none; width: 28px; padding: 0; font-size: 15px; line-height: 1; cursor: pointer;
   background: #111a2c; color: #cfe3ff; border: 1px solid #2a3c5e; border-radius: 4px; }
 .pl-step:hover { background: #17223a; }
+/* Per-control ↺ (ADR-0057): resets just this control to its saved value; disabled when
+   already saved so it doubles as a per-control dirty indicator. */
+.pl-mini-reset { flex: none; width: 26px; padding: 0; font-size: 13px; line-height: 1; cursor: pointer;
+  background: #0f1930; color: #9fd0ff; border: 1px solid #2a3c5e; border-radius: 4px; }
+.pl-mini-reset:hover:not(:disabled) { background: #17223a; }
+.pl-mini-reset:disabled { opacity: 0.35; cursor: default; }
 .pl-scale { display: grid; gap: 4px; font-size: 12px; color: #9fb6cc; }
-.pl-scale input[type=range] { width: 100%; }
+.pl-scale-row { display: flex; gap: 6px; align-items: center; }
+.pl-scale-row input[type=range] { flex: 1; min-width: 0; }
 .pl-committed { font-size: 11px; color: #5f769b; padding-bottom: 8px; }
 .pl-actions { display: flex; gap: 6px; }
 .pl-btn { flex: 1; padding: 7px 8px; font-size: 12px; font-family: inherit; cursor: pointer;

@@ -268,6 +268,9 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
     return () => { live = false; };
   }, [previewSurfaceName]);
 
+  // The committed on-disk config per asset, retained so each control's ↺ can reset to the
+  // SAVED value (ADR-0057). An asset with no config file has DEFAULT_EDIT as its baseline.
+  const [savedConfig, setSavedConfig] = useState<Record<string, EditState>>({});
   // Hydrate from the on-disk config (dev) the first time each asset is opened, so the
   // editor reflects what's actually baked — not stale localStorage or defaults. This
   // is what stops a fresh editor from saving default values over your real config.
@@ -280,11 +283,14 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       .then((j) => {
         if (!live || !j.ok || !j.config) return;
         hydrated.current.add(aid);
-        setEdits((prev) => ({ ...prev, [aid]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL } }));
+        const cfg: EditState = { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL };
+        setSavedConfig((p) => ({ ...p, [aid]: cfg }));
+        setEdits((prev) => ({ ...prev, [aid]: cfg }));
       })
       .catch(() => {});
     return () => { live = false; };
   }, [aid]);
+  const savedBaseline = savedConfig[aid] ?? DEFAULT_EDIT;
 
   const update = (mut: (cur: EditState) => EditState) => setEdits((prev) => {
     const cur = prev[aid] ?? DEFAULT_EDIT;
@@ -313,6 +319,18 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
   // Fill inset can't exceed half the smaller frame dim (box would invert); clamp to >= 0.
   const setFill = (df: number) => update((cur) => ({ ...cur, fill: Math.max(0, Math.min(Math.floor(Math.min(asset.frame.w, asset.frame.h) / 2) - 1, (cur.fill ?? DEFAULT_FILL) + df)) }));
   const reset = () => update(() => DEFAULT_EDIT);
+  // Per-control ↺ (ADR-0057): reset JUST this control to its saved value (the on-disk
+  // config, or zeros if the asset has none). Distinct from the d-pad '0' (zero-out).
+  const resetBracket = () => update((cur) => ({ ...cur, bracket: { ...savedBaseline.bracket } }));
+  const resetContent = () => update((cur) => ({ ...cur, content: savedBaseline.content }));
+  const resetFill = () => update((cur) => ({ ...cur, fill: savedBaseline.fill }));
+  const bracketAtSaved = edit.bracket.dx === savedBaseline.bracket.dx && edit.bracket.dy === savedBaseline.bracket.dy;
+  const contentAtSaved = edit.content === savedBaseline.content;
+  const fillAtSaved = edit.fill === savedBaseline.fill;
+  const miniReset = (onReset: () => void, atSaved: boolean, what: string): ReactElement => (
+    <button type="button" style={{ ...ST.sb, ...(atSaved ? { opacity: 0.35, cursor: 'default' } : {}) }}
+      title={`Reset ${what} to saved`} aria-label={`reset ${what}`} disabled={atSaved} onClick={onReset}>↺</button>
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -435,7 +453,9 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
       const r = await fetch(`/__nine-slice/config?asset=${aid}`);
       const j = await r.json();
       if (j.ok && j.config) {
-        setEdits((prev) => ({ ...prev, [aid]: { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL } }));
+        const cfg: EditState = { keyline: j.config.keyline, bracket: j.config.bracket, content: j.config.content, fill: j.config.fill ?? DEFAULT_FILL };
+        setSavedConfig((p) => ({ ...p, [aid]: cfg })); // keep per-control ↺ baselines aligned
+        setEdits((prev) => ({ ...prev, [aid]: cfg }));
         setSaveMsg('reverted to the saved config');
       } else {
         setEdits((prev) => ({ ...prev, [aid]: DEFAULT_EDIT }));
@@ -488,7 +508,10 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
             <button type="button" style={ST.nb} onClick={() => nudge(1, 0)}>→</button>
             <div /><button type="button" style={ST.nb} onClick={() => nudge(0, 1)}>↓</button><div />
           </div>
-          <button type="button" style={ST.maxBtn} onClick={maxOut}>⤢ Send {active} to max (flush to box corner)</button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button type="button" style={{ ...ST.maxBtn, flex: 1 }} onClick={maxOut}>⤢ Send {active} to max (flush to box corner)</button>
+            {miniReset(resetBracket, bracketAtSaved, 'bracket')}
+          </div>
           <div style={ST.sizeBox}>
             <label style={ST.toggle}>
               <input type="checkbox" checked={showOuter} onChange={(e) => setShowOuter(e.target.checked)} />
@@ -502,6 +525,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               <span style={ST.sizeW}>inset {edit.content} px</span>
               <button type="button" style={ST.sb} onClick={() => setContent(-1)}>−</button>
               <button type="button" style={ST.sb} onClick={() => setContent(1)}>＋</button>
+              {miniReset(resetContent, contentAtSaved, 'content inset')}
               <span style={ST.sizeLabel}>uniform on all sides</span>
             </div>
             <label style={ST.toggle}>
@@ -512,6 +536,7 @@ export function NineSliceLab({ assetId, onAssetId, header }: { assetId: string; 
               <span style={ST.sizeW}>inset {edit.fill} px</span>
               <button type="button" style={ST.sb} onClick={() => setFill(-1)}>−</button>
               <button type="button" style={ST.sb} onClick={() => setFill(1)}>＋</button>
+              {miniReset(resetFill, fillAtSaved, 'fill inset')}
               <span style={ST.sizeLabel}>uniform on all sides</span>
             </div>
             <div style={ST.sizeRow}>

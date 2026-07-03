@@ -38,11 +38,16 @@ Chosen: **codify the Reset contract**. Every Studio surface with TUNING state mu
 1. **Reset restores the committed baseline** — the checked-in file / shipped code the
    surface's Save/Copy flow feeds — never a zero state or an arbitrary default.
    "Zero out" may exist as a separate labeled control, but it is not Reset.
-2. **Grain: the selected item** (the prop, the frame, the piece, the element), placed in
-   the same action row as Save/Copy. A whole-surface "Reset all" is optional on top
-   (SurfaceDressingRoom and the page tuners are the model for multi-grain resets:
-   per-knob ↺ via `SliderRow`'s `dflt` / `ctlReset` primitives in
-   `frontend/src/ui/dressing/SliderRow.tsx`, then per-element, then reset-all).
+2. **Grain: per-control, REQUIRED.** Every individual tuning control (each slider, each
+   number field, each toggle) ships its own ↺ that resets JUST that control to its saved
+   value — not only one whole-surface button. The reference is SurfaceDressingRoom and the
+   page tuners: per-knob ↺ via `SliderRow`'s `dflt` / `ctlReset` primitives in
+   `frontend/src/ui/dressing/SliderRow.tsx`; a bespoke dark lab (PropLab) matches the
+   pattern in its own idiom (`pl-mini-reset`). Disable the ↺ when the control is already at
+   its saved value, so it doubles as a per-control dirty light. A whole-surface "Reset all"
+   is layered ON TOP for convenience (and, where the surface has element groups, a
+   per-element reset in between) — but it never replaces the per-control resets. Place the
+   surface-level Reset in the same action row as Save/Copy.
 3. **The baseline must be derived, not transcribed**: import the committed module
    (PropLab ← `propSeats.json`, PortraitEditor ← `portraitCrops.json`; SfxLibraryStudio ←
    `ARRIVAL_BAKED` in `sfx.ts`, the same constant the game consumes), measure the live
@@ -66,11 +71,19 @@ Rejected the status quo: it is the loop this ADR exists to end.
 ### Consequences
 
 - Good: one muscle-memory contract across every editor; exploration is always safe.
-- Good: audit (2026-07-03) brought the three gaps up to the contract — NineSliceEditor
-  gained "↺ Reset to saved config" (the `0` d-pad button remains, labeled as zero-out),
+- Good: audit (2026-07-03) brought the gaps up to the contract — NineSliceEditor gained
+  "↺ Reset to saved config" (the `0` d-pad button remains, labeled as zero-out),
   ArtworkCompare gained per-pane "↺ Reset" to the curated/baked CSS baseline, and
   DoodadEditor's Load (its reset-to-saved) now fetches `cache: 'no-store'` so it can no
   longer serve a stale composition right after Save.
+- Good: the per-control (req 2) sweep — PropLab (anchor X / anchor Y / scale),
+  SfxLibraryStudio (each terrain row + arrival sound/volume/firing), and NineSliceEditor
+  (bracket / content inset / fill inset) each got a per-control ↺ that resets only that
+  control to its saved value and disables when already there (a per-control dirty light),
+  with a whole-surface "Reset all" layered on top. The dressing rooms + page tuners
+  already complied via `SliderRow`/`ctlReset`. This was the gap the first draft's
+  "optional on top" wording let through — the reference lab itself (PropLab) shipped
+  without per-control resets.
 - Good: the two hand-mirrored baselines the audit flagged as rot risks are now closed.
   The SFX panel's arrival baseline derives from a new `ARRIVAL_BAKED` constant in
   `sfx.ts` that `playArrival` + the deploy roll-call (`game/store.ts`) actually consume,
