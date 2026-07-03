@@ -208,6 +208,51 @@ describe('king may not move into check', () => {
   });
 });
 
+describe('no move may leave your own king in check (pins & check evasion)', () => {
+  const farKing = () => P('enemy', 'king', 7, 0);
+
+  it('a pinned piece may only move along the pinning line', () => {
+    const king = P('player', 'king', 4, 6);
+    const rook = P('player', 'rook', 4, 4); // pinned to the king down column 4
+    const pinner = P('enemy', 'rook', 4, 0);
+    const moves = legalMoves(rook, [king, rook, pinner, farKing()], SIZE);
+    expect(moves.every((m) => m.x === 4)).toBe(true); // never leaves the file
+    expect(has(moves, 4, 5)).toBe(true); // slide toward the king
+    expect(has(moves, 3, 4)).toBe(false); // stepping off the file exposes the king
+    expect(has(moves, 5, 4)).toBe(false);
+    expect(find(moves, 4, 0)?.capture).toBe(pinner.id); // capturing the pinner is fine
+  });
+
+  it('while in check, only moves that answer the check are legal (interpose)', () => {
+    const king = P('player', 'king', 4, 6);
+    const checker = P('enemy', 'rook', 4, 0); // checks down column 4
+    const knight = P('player', 'knight', 2, 3); // can jump onto the checking file
+    const moves = legalMoves(knight, [king, checker, knight, farKing()], SIZE);
+    expect(moves).toHaveLength(2); // only the two interposing squares
+    expect(has(moves, 4, 2)).toBe(true);
+    expect(has(moves, 4, 4)).toBe(true);
+    expect(has(moves, 0, 2)).toBe(false); // any non-blocking jump leaves the king in check
+    expect(has(moves, 3, 5)).toBe(false);
+  });
+
+  it('while in check, capturing the checker is legal (and is the only out for that piece)', () => {
+    const king = P('player', 'king', 0, 0);
+    const checker = P('enemy', 'rook', 0, 4); // checks down column 0
+    const rook = P('player', 'rook', 4, 4); // can take the checker along row 4
+    const moves = legalMoves(rook, [king, checker, rook, farKing()], SIZE);
+    expect(moves).toHaveLength(1);
+    expect(find(moves, 0, 4)?.capture).toBe(checker.id);
+  });
+
+  it('does not constrain a side that fields no king (pure movement is unaffected)', () => {
+    const rook = P('player', 'rook', 4, 4); // no friendly king on the board
+    const enemyRook = P('enemy', 'rook', 4, 0);
+    const moves = legalMoves(rook, [rook, enemyRook, farKing()], SIZE);
+    expect(has(moves, 3, 4)).toBe(true); // free to move anywhere legal — nothing to protect
+    expect(has(moves, 5, 4)).toBe(true);
+  });
+});
+
 describe('threats', () => {
   it('pawn attacks the two forward diagonals', () => {
     const pawn = P('player', 'pawn', 4, 6);

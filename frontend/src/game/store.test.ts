@@ -361,6 +361,42 @@ describe('soft-lock guard (no manual End Turn)', () => {
     expect(res.game).toBe(free); // unchanged reference
   });
 
+  it('a checkmated player (king in check with no escape) loses, not draws', () => {
+    // King cornered at (0,0): one rook checks down column 0, another seals column 1,
+    // so every escape square is attacked and there is no piece to interpose.
+    const mated = stateOf([
+      piece('pk', 'player', 'king', 0, 0),
+      piece('r1', 'enemy', 'rook', 0, 5),
+      piece('r2', 'enemy', 'rook', 1, 5),
+      piece('ek', 'enemy', 'king', 2, 5),
+    ], 3, 6);
+    expect(playerHasLegalMove(mated, OPEN_ENV)).toBe(false);
+
+    const res = resolveIfPlayerStuck(mated, OPEN_ENV);
+    expect(res.stuck).toBe(true);
+    expect(res.checkmate).toBe(true);
+    expect(res.game.winner).toBe('enemy');
+    expect(res.game.turn).toBe('done');
+  });
+
+  it('a stalemated player (king has no move but is NOT in check) still draws', () => {
+    // King at (0,0) is not attacked, but a rook seals column 1 and a rook seals row 1,
+    // covering every neighbour — no legal move, yet no check: stalemate, not mate.
+    const stuck = stateOf([
+      piece('pk', 'player', 'king', 0, 0),
+      piece('r1', 'enemy', 'rook', 1, 5),
+      piece('r2', 'enemy', 'rook', 5, 1),
+      piece('ek', 'enemy', 'king', 5, 5),
+    ], 6, 6);
+    expect(playerHasLegalMove(stuck, OPEN_ENV)).toBe(false);
+
+    const res = resolveIfPlayerStuck(stuck, OPEN_ENV);
+    expect(res.stuck).toBe(true);
+    expect(res.checkmate).toBe(false);
+    expect(res.game.winner).toBe('draw');
+    expect(res.game.turn).toBe('done');
+  });
+
   it('never fires off the player turn or after the game is decided', () => {
     const trapped = stateOf([piece('p', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 0, 0)], 1, 2);
     expect(resolveIfPlayerStuck({ ...trapped, turn: 'enemy' }, OPEN_ENV).stuck).toBe(false);

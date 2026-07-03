@@ -4,7 +4,7 @@
 
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Winner } from '../core/types';
-import { applyMove, enemyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
+import { applyMove, enemyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
@@ -97,15 +97,18 @@ export function playerHasLegalMove(game: GameState, env: MoveEnv): boolean {
 /**
  * Resolve a soft-lock: with no manual "end turn" anymore, a player who has zero
  * legal moves would otherwise be stuck forever. There is no voluntary passing in
- * chess, so a player who genuinely cannot move ends the game in a stalemate — a
- * draw. Only acts on the player's undecided turn with no move available;
- * otherwise returns the state unchanged.
+ * chess, so a player who genuinely cannot move ends the game here — as a loss if
+ * their King is in check (checkmate) or a draw if it is not (stalemate); a
+ * kingless army is never in check, so it draws. Only acts on the player's
+ * undecided turn with no move available; otherwise returns the state unchanged.
  */
-export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean } {
+export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: GameState; stuck: boolean; checkmate: boolean } {
   if (game.turn === 'player' && !game.winner && !playerHasLegalMove(game, env)) {
-    return { game: { ...game, winner: 'draw', turn: 'done' }, stuck: true };
+    const checkmate = sideInCheck(game, 'player', env);
+    const winner: Winner = checkmate ? 'enemy' : 'draw';
+    return { game: { ...game, winner, turn: 'done' }, stuck: true, checkmate };
   }
-  return { game, stuck: false };
+  return { game, stuck: false, checkmate: false };
 }
 
 /** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
@@ -259,7 +262,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // soft-lock — resolve that as a loss (you can't pass in chess).
       const stuckRes = resolveIfPlayerStuck(enemyRes.game, envFor(enemyRes.game));
       let game = stuckRes.game;
-      if (stuckRes.stuck) msgs.push('Stalemate — no legal moves remain. The skirmish is a draw.');
+      if (stuckRes.stuck) msgs.push(stuckRes.checkmate
+        ? 'Checkmate — your King is trapped. Defeat.'
+        : 'Stalemate — no legal moves remain. The skirmish is a draw.');
       // A full player→enemy round just elapsed: advance the survive clock, then
       // re-check the objective — survive reached, or a player wipe = defeat.
       const turnsElapsed = (cur.turnsElapsed ?? 0) + 1;
