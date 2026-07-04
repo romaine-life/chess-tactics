@@ -118,20 +118,27 @@ export function ruleOutcome(rule: VictoryRule): Winner {
 }
 
 /**
- * Resolve authored event rules to a winner, or `null` while undecided. Pure. Rules are checked in
- * ORDER, top-to-bottom (ADR-0064): the FIRST rule whose conditions ALL hold declares the game via
- * its actions (`ruleOutcome`). Presets seed lose rules above win rules, so a settled turn that trips
- * both resolves as a loss (defeat-first — e.g. Survive's clock reaches N on the turn the last player
- * piece is wiped).
+ * Resolve authored event rules to the FIRST rule that decides the game, plus the winner it declares —
+ * or `{ winner: null, rule: null }` while undecided. Pure. Rules are checked in ORDER, top-to-bottom
+ * (ADR-0064): the first rule whose conditions ALL hold wins. Presets seed lose rules above win rules,
+ * so a settled turn that trips both resolves as a loss (defeat-first — e.g. Survive's clock reaches N
+ * on the turn the last player piece is wiped). The fired rule is returned so the result screen / log
+ * can name the exact condition that ended the battle (its authored `name`) instead of the mode label.
  */
-export function evaluateVictory(state: GameState, rules: VictoryRules, ctx: ObjectiveContext = {}): Winner {
+export function resolveVictory(state: GameState, rules: VictoryRules, ctx: ObjectiveContext = {}): { winner: Winner; rule: VictoryRule | null } {
   for (const rule of rules) {
     if (rule.if.every((c) => conditionHolds(state, c, ctx))) {
       const winner = ruleOutcome(rule);
-      if (winner) return winner;
+      if (winner) return { winner, rule };
     }
   }
-  return null;
+  return { winner: null, rule: null };
+}
+
+/** The winner authored event rules declare, or `null` while undecided. Pure. Thin wrapper over
+ * `resolveVictory` for the many call sites that only need the outcome, not the rule that caused it. */
+export function evaluateVictory(state: GameState, rules: VictoryRules, ctx: ObjectiveContext = {}): Winner {
+  return resolveVictory(state, rules, ctx).winner;
 }
 
 const eliminate = (side: ConditionSide, type?: Piece['type']): VictoryCondition =>

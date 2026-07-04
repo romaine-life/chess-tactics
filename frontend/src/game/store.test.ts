@@ -24,6 +24,9 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
+  // The store is a module singleton shared across tests; a test that sets an authored victory
+  // override (ADR-0064) must not leak it into the next test's preset eval. Reset the victory state.
+  useSkirmish.setState({ victoryOverride: null, resultDetail: null });
 });
 
 function playFirstMove(seed: number) {
@@ -297,6 +300,36 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('enemy');
     expect(s.log[0]).toBe('Defeat — your King has fallen.');
+  });
+});
+
+describe('skirmish store: authored victory names the fired rule (ADR-0064)', () => {
+  it('an authored win reads by its rule name, not the mode label — in the log and resultDetail', () => {
+    // AUTHORED to win by capturing the enemy KING while the enemy still fields a pawn — so the core
+    // last-side-standing rule (a full wipe) does NOT fire, and the authored rule is what decides.
+    // The result must read by the authored rule name ("Storm the keep"), not an objective preset.
+    const game: GameState = {
+      size: { cols: 8, rows: 8 },
+      pieces: [piece('pr', 'player', 'rook', 0, 0), piece('ek', 'enemy', 'king', 0, 5), piece('ep', 'enemy', 'pawn', 7, 7)],
+      turn: 'player',
+      winner: null,
+    };
+    useSkirmish.setState({
+      game,
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-all',
+      objectiveCtx: {},
+      victoryOverride: [{ name: 'Storm the keep', if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] }],
+      resultDetail: null,
+      selectedId: 'pr',
+      focusedId: 'pr',
+      log: [],
+    });
+    useSkirmish.getState().tryMoveTo(0, 5); // rook takes the enemy King (the pawn survives)
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player');
+    expect(s.log[0]).toBe('Victory — Storm the keep.');
+    expect(s.resultDetail).toBe('Storm the keep');
   });
 });
 
