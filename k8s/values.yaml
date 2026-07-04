@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-c9e2d81a6991532c1aafb313d058129dba05747144a12b5981f282d132542a16"
+  tag: "app-31539e4a2519d535cba46cb150f7f08586f5ce02ae52bca4e98c0eb8f2375c53"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Server-side on-demand OG board thumbnails + backend for shareable maps & progress"
-  prNumber: "338"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/338"
-  commit: "c4d4fdf"
+  prTitle: "Fix main-menu buttons clipping off the left edge on narrow viewports"
+  prNumber: "339"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/339"
+  commit: "25cad13"
 
 name: chess-tactics
 namespace: chess-tactics
