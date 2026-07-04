@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-0bb8e83382b3de679792f5ea82d1e3622224935f41804813d3f0f99abcd1817b"
+  tag: "app-8771ea2deea603672add39a1253f3115cfc47e8729d5e3c2df5d3717d1658326"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Retry/restart controls for single-player skirmish & campaign"
-  prNumber: "374"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/374"
-  commit: "3e0b0c3"
+  prTitle: "feat(trainer): ship-to-everyone — global admin AI-weight tier + three-tier resolver"
+  prNumber: "376"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/376"
+  commit: "75630fe"
 
 name: chess-tactics
 namespace: chess-tactics
