@@ -50,6 +50,9 @@ let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode 
 // request as already read and skips it, so every other route keeps the 256kb
 // limit.
 app.use('/api/lab-runs', express.json({ limit: '10mb' }));
+// Training run specs embed a whole level object (+ optionally a generated book), so
+// they exceed the 256kb global ceiling; mount a larger parser first, like lab-runs.
+app.use('/api/train-runs', express.json({ limit: '10mb' }));
 // Opening-book blobs carry every book's capped training trajectory (up to a few
 // hundred points each across several books), which can exceed the global 256kb
 // ceiling. Mount a larger parser first, same as lab-runs; the global parser below
@@ -251,6 +254,28 @@ const MIGRATIONS = [
         updated_at            timestamptz NOT NULL DEFAULT now(),
         updated_by            text
       );
+    `,
+  },
+  {
+    version: 10,
+    name: 'training runs',
+    // Account-scoped headless AI training runs. `spec` is the immutable run config
+    // (level + SPSA/book/search settings) the trainer Job reads; `body` is the
+    // progressively-updated result (champion, trajectory, restart scores); `status`
+    // is pending|running|done|error|cancelled; `job_name` is the k8s Job the backend
+    // launched (so a cancel can delete it). Owner-scoped newest-first listing.
+    sql: `
+      CREATE TABLE IF NOT EXISTS train_runs (
+        id          text        PRIMARY KEY,
+        owner_email text        NOT NULL,
+        spec        jsonb       NOT NULL,
+        body        jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        status      text        NOT NULL DEFAULT 'pending',
+        job_name    text,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS train_runs_owner_idx ON train_runs (owner_email, created_at DESC);
     `,
   },
 ];
@@ -2226,6 +2251,45 @@ async function dbDeleteLabRun(ownerEmail, id) {
   return rowCount > 0;
 }
 
+// ── Training runs (headless cluster AI tuning) ────────────────────────────────
+async function dbListTrainRuns(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, spec, status, created_at, updated_at FROM train_runs WHERE owner_email = $1 ORDER BY created_at DESC LIMIT 100',
+    [ownerEmail],
+  );
+  return rows;
+}
+
+async function dbGetTrainRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, spec, body, status, job_name, created_at, updated_at FROM train_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rows[0] || null;
+}
+
+async function dbInsertTrainRun(ownerEmail, id, spec) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'INSERT INTO train_runs (id, owner_email, spec) VALUES ($1, $2, $3::jsonb) RETURNING created_at',
+    [id, ownerEmail, JSON.stringify(spec)],
+  );
+  return rows[0].created_at;
+}
+
+async function dbSetTrainRunJob(id, jobName, status) {
+  await ensureDbReady();
+  await pool.query('UPDATE train_runs SET job_name = $2, status = $3, updated_at = now() WHERE id = $1', [id, jobName, status]);
+}
+
+async function dbDeleteTrainRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rowCount } = await pool.query('DELETE FROM train_runs WHERE owner_email = $1 AND id = $2', [ownerEmail, id]);
+  return rowCount > 0;
+}
+
 app.get('/api/lab-runs', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
@@ -2277,6 +2341,81 @@ app.delete('/api/lab-runs/:id', async (req, res) => {
     res.status(200).json({ ok: true });
   } catch (error) {
     dbUnavailable(res, 'lab run delete failed', error, 'lab_runs_unavailable');
+  }
+});
+
+// ── Training runs: launch a headless cluster tuning Job, read status, cancel ───
+// POST persists the run spec then creates a k8s Job on the D8als_v7 trainer pool
+// (the worker reads its own train_runs row via TRAIN_RUN_ID and writes progress
+// back). In local dev (not in-cluster) the row persists as 'pending' and simply
+// isn't launched, so dev stays functional without a cluster.
+app.post('/api/train-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const spec = req.body && typeof req.body === 'object' ? req.body : null;
+  if (!spec || !spec.level || typeof spec.level !== 'object') {
+    res.status(400).json({ error: 'invalid_train_spec', details: 'spec.level (a level object) is required' });
+    return;
+  }
+  const id = crypto.randomUUID();
+  try {
+    await dbInsertTrainRun(user.email, id, spec);
+  } catch (error) {
+    dbUnavailable(res, 'train run write failed', error, 'train_runs_unavailable');
+    return;
+  }
+  try {
+    const k8s = await import('./train/k8s.mjs');
+    if (k8s.inCluster()) {
+      const jobName = await k8s.createTrainerJob(id);
+      await dbSetTrainRunJob(id, jobName, 'running');
+      res.status(200).json({ ok: true, id, status: 'running', job: jobName });
+    } else {
+      res.status(200).json({ ok: true, id, status: 'pending', note: 'not in-cluster: run persisted but not launched' });
+    }
+  } catch (error) {
+    try { await dbSetTrainRunJob(id, null, 'error'); } catch { /* best effort */ }
+    console.error('train job launch failed', error);
+    res.status(502).json({ error: 'train_launch_failed', id, details: String((error && error.message) || error) });
+  }
+});
+
+app.get('/api/train-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ runs: await dbListTrainRuns(user.email) });
+  } catch (error) {
+    dbUnavailable(res, 'train run list failed', error, 'train_runs_unavailable');
+  }
+});
+
+app.get('/api/train-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetTrainRun(user.email, req.params.id);
+    if (!run) { res.status(404).json({ error: 'run_not_found' }); return; }
+    res.status(200).json(run);
+  } catch (error) {
+    dbUnavailable(res, 'train run read failed', error, 'train_runs_unavailable');
+  }
+});
+
+// Cancel: delete the k8s Job (stops the run, releases the node) then the row.
+app.delete('/api/train-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetTrainRun(user.email, req.params.id);
+    if (run && run.job_name) {
+      try { const k8s = await import('./train/k8s.mjs'); await k8s.deleteTrainerJob(run.job_name); }
+      catch (e) { console.warn('trainer job delete failed', e && e.message); }
+    }
+    await dbDeleteTrainRun(user.email, req.params.id);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    dbUnavailable(res, 'train run delete failed', error, 'train_runs_unavailable');
   }
 });
 
