@@ -73,7 +73,7 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
               <section className="settings-row">
                 <div className="settings-row-copy">
                   <h4>No levels yet</h4>
-                  <p>This campaign has no levels. Add some in the Campaign Editor.</p>
+                  <p>This campaign has no levels. Add some in the Editor.</p>
                 </div>
               </section>
             )}
