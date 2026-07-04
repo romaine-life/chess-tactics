@@ -25,6 +25,8 @@ import { CroppedView, loadCrops, type Piece as PortraitPiece } from './PortraitE
 import { PORTRAIT_METHODS, PORTRAIT_PIECES, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
+import { BridgeBakeoffStudio } from './BridgeBakeoffStudio';
+import { BRIDGE_METHODS } from './bridgeBakeoff';
 import { TileSidesViewer } from './TileSidesViewer';
 import { TILE_SIDE_ITEMS, tileSideFamilyCount, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
@@ -71,7 +73,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'bridges' | 'scrollbars' | 'sliders' | 'pages';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
@@ -156,7 +158,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'bridges' || value === 'scrollbars' || value === 'sliders' || value === 'pages';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -325,6 +327,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedPortraitMethods, setSelectedPortraitMethods] = useState<PortraitMethod[]>(PORTRAIT_METHODS.map((m) => m.key));
   const [selectedPortraitId, setSelectedPortraitId] = useState<string | undefined>(undefined);
   const [surfaceSearch, setSurfaceSearch] = useState('');
+  const [bridgeSearch, setBridgeSearch] = useState('');
+  const [bridgeMethod, setBridgeMethod] = useState<string>('all');
+  const [selectedBridgeId, setSelectedBridgeId] = useState<string | undefined>(undefined);
   const [scrollbarSearch, setScrollbarSearch] = useState('');
   const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
   const [selectedSurfaceName, setSelectedSurfaceName] = useState<string | undefined>(undefined);
@@ -997,6 +1002,31 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('surface')}>View Selected</button>
+        </>
+      ),
+    },
+    {
+      id: 'bridges', label: 'Bridges', hint: 'Bridge-deck bake-off — every generation method × material, shown as a straight span (H + V) on water. Pick the winner to promote to the production bridge art.',
+      main: <BridgeBakeoffStudio search={bridgeSearch} zoom={zoom} method={bridgeMethod} selected={selectedBridgeId} onSelect={setSelectedBridgeId} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={bridgeSearch} onChange={(event) => setBridgeSearch(event.target.value)} placeholder="material, method…" />
+          </label>
+          <label className="tileset-catalog-zoom">
+            <span>Zoom</span>
+            <input type="range" min="0.75" max="2.5" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+          <div className="tileset-filter-field">
+            <span>Method</span>
+            <div className="tileset-tier-seg" aria-label="Filter by generation method">
+              <button type="button" className={bridgeMethod === 'all' ? 'is-active' : ''} onClick={() => setBridgeMethod('all')}>All</button>
+              {BRIDGE_METHODS.map((m) => (
+                <button key={m.key} type="button" className={bridgeMethod === m.key ? 'is-active' : ''} onClick={() => setBridgeMethod(m.key)}>{m.label}</button>
+              ))}
+            </div>
+          </div>
         </>
       ),
     },

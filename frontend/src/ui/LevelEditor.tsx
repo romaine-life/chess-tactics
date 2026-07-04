@@ -34,7 +34,7 @@ import {
   type StudioFamily,
 } from './studioBoard';
 import { featureFrameSrc, featureThumbSrc } from '../art/tileset';
-import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, featureMaterials, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, bridgeOrientationMask, bridgeEndMask, bridgeSpriteKey, DEFAULT_BRIDGE_ORIENTATION, type FeatureKind, type FeatureMaterial, type BridgeOrientation, type BridgeSpriteKey } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
@@ -76,8 +76,11 @@ function StudioEditableBoard({
   cells: Record<string, string>;
   units: Record<string, BoardUnitPlacement>;
   doodads: Record<string, { doodadId: string }>;
-  /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
-  features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
+  /**
+   * Linear-feature overlays keyed by "x,y". Road/river carry a 4-bit connection `mask`; a bridge
+   * additionally carries a neighbour-aware straight-span `bridgeKey` (e.g. 'v-thru') for the sprite.
+   */
+  features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number; bridgeKey?: BridgeSpriteKey }>;
   resolveAsset: (id: string) => StudioAsset | undefined;
   resolveUnit: (id: string) => UnitAsset | undefined;
   resolveDoodad: (id: string) => DoodadAsset | undefined;
@@ -123,7 +126,7 @@ function StudioEditableBoard({
             {placedFeatures[key] ? (
               <img
                 className="tileset-feature-overlay"
-                src={featureFrameSrc(placedFeatures[key].kind, placedFeatures[key].material, placedFeatures[key].mask)}
+                src={featureFrameSrc(placedFeatures[key].kind, placedFeatures[key].material, placedFeatures[key].mask, placedFeatures[key].bridgeKey)}
                 alt=""
                 draggable={false}
               />
@@ -318,8 +321,8 @@ export function LevelEditor(): ReactElement {
   const [showFootprint, setShowFootprint] = useState(true);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
-  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'cover' | 'road' | 'river'>(studioArm.kind ?? 'tile');
-  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'cover' | 'road' | 'river'>(studioArm.kind ?? 'tile');
+  const [brushKind, setBrushKind] = useState<'tile' | 'unit' | 'doodad' | 'cover' | 'road' | 'river' | 'bridge'>(studioArm.kind ?? 'tile');
+  const [layer, setLayer] = useState<'board' | 'tile' | 'unit' | 'doodad' | 'cover' | 'road' | 'river' | 'bridge'>(studioArm.kind ?? 'tile');
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((loadedBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(loadedBoard?.doodads ?? {});
   // Ground cover is a per-tile FEATURE (density), not a doodad: which tiles grow vegetation
@@ -336,12 +339,15 @@ export function LevelEditor(): ReactElement {
   const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
     road: defaultFeatureMaterial('road'),
     river: defaultFeatureMaterial('river'),
+    bridge: defaultFeatureMaterial('bridge'),
   });
+  // The bridge brush axis (bridges are straight-only — the author picks H or V; it isn't derived).
+  const [bridgeOrientation, setBridgeOrientation] = useState<BridgeOrientation>(DEFAULT_BRIDGE_ORIENTATION);
   // Manually SEVERED feature connections, keyed by the shared edge between two cells
   // (roadEdgeKey, order-independent). A cut overrides auto-connect for BOTH tiles.
   const [featureCuts, setFeatureCuts] = useState<Record<string, true>>(loadedBoard?.featureCuts ?? {});
   // The active feature kind = the current layer when it's a feature layer, else null.
-  const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' ? brushKind : null;
+  const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' || brushKind === 'bridge' ? brushKind : null;
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : unitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -392,12 +398,25 @@ export function LevelEditor(): ReactElement {
   // painted set is the source of truth, so the ribbon re-knits whenever a cell changes.
   const featureOverlays = useMemo(() => {
     const isSevered = (edge: string): boolean => featureCuts[edge] === true;
-    const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set() };
-    for (const [key, f] of Object.entries(boardFeatures)) presentByKind[f.kind].add(key);
-    const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
+    // Road/river autotile against a same-KIND neighbour set. Bridges are neighbour-aware too, but
+    // SPLIT BY ORIENTATION: a bridge's ends open/cap only against same-axis bridges, so each axis
+    // gets its own presence set (a 'v' end never joins an 'h' bridge).
+    const presentByKind: Record<'road' | 'river', Set<string>> = { road: new Set(), river: new Set() };
+    const bridgePresence: Record<BridgeOrientation, Set<string>> = { h: new Set(), v: new Set() };
+    for (const [key, f] of Object.entries(boardFeatures)) {
+      if (f.kind === 'bridge') bridgePresence[f.orientation ?? 'h'].add(key);
+      else if (f.kind === 'road' || f.kind === 'river') presentByKind[f.kind].add(key);
+    }
+    const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number; bridgeKey?: BridgeSpriteKey }> = {};
     for (const [key, f] of Object.entries(boardFeatures)) {
       const [x, y] = key.split(',').map(Number);
-      out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered) };
+      if (f.kind === 'bridge') {
+        const orientation = f.orientation ?? 'h';
+        const ends = bridgeEndMask(bridgePresence[orientation], x, y, orientation);
+        out[key] = { kind: f.kind, material: f.material, mask: bridgeOrientationMask(orientation), bridgeKey: bridgeSpriteKey(orientation, ends) };
+      } else {
+        out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered) };
+      }
     }
     return out;
   }, [boardFeatures, featureCuts]);
@@ -408,7 +427,12 @@ export function LevelEditor(): ReactElement {
     const key = `${x},${y}`;
     if (featureKind) {
       const material = featureBrushMaterial[featureKind];
-      setBoardFeatures((prev) => (prev[key]?.kind === featureKind && prev[key]?.material === material ? prev : { ...prev, [key]: { kind: featureKind, material } }));
+      const orientation = featureKind === 'bridge' ? bridgeOrientation : undefined;
+      setBoardFeatures((prev) => {
+        const cur = prev[key];
+        if (cur?.kind === featureKind && cur.material === material && cur.orientation === orientation) return prev;
+        return { ...prev, [key]: { kind: featureKind, material, orientation } };
+      });
       return;
     }
     if (brushKind === 'unit') {
@@ -586,6 +610,7 @@ export function LevelEditor(): ReactElement {
             <button type="button" className={`le-seg-btn ${layer === 'tile' ? 'active' : ''}`.trim()} onClick={() => { setLayer('tile'); setBrushKind('tile'); setTool('brush'); }}>Tile</button>
             <button type="button" className={`le-seg-btn ${layer === 'road' ? 'active' : ''}`.trim()} onClick={() => { setLayer('road'); setBrushKind('road'); setTool('brush'); }}>Road</button>
             <button type="button" className={`le-seg-btn ${layer === 'river' ? 'active' : ''}`.trim()} onClick={() => { setLayer('river'); setBrushKind('river'); setTool('brush'); }}>River</button>
+            <button type="button" className={`le-seg-btn ${layer === 'bridge' ? 'active' : ''}`.trim()} onClick={() => { setLayer('bridge'); setBrushKind('bridge'); setTool('brush'); }}>Bridge</button>
             <button type="button" className={`le-seg-btn ${layer === 'unit' ? 'active' : ''}`.trim()} onClick={() => { setLayer('unit'); setBrushKind('unit'); setTool('brush'); }}>Unit</button>
             <button type="button" className={`le-seg-btn ${layer === 'doodad' ? 'active' : ''}`.trim()} onClick={() => { setLayer('doodad'); setBrushKind('doodad'); setTool('brush'); }}>Doodad</button>
             <button type="button" className={`le-seg-btn ${layer === 'cover' ? 'active' : ''}`.trim()} onClick={() => { setLayer('cover'); setBrushKind('cover'); setTool('brush'); }}>Cover</button>
@@ -688,6 +713,15 @@ export function LevelEditor(): ReactElement {
               </div>
             <p className="le-board-note">Doodads only land on a tile of their home terrain.</p>
           </section>
+        ) : featureKind === 'bridge' ? (
+          <section className="skirmish-card le-brush-panel">
+            <h2>Bridge direction</h2>
+            <div className="le-seg">
+              <button type="button" className={`le-seg-btn ${bridgeOrientation === 'h' && tool !== 'erase' ? 'active' : ''}`.trim()} onClick={() => { setBridgeOrientation('h'); setBrushKind('bridge'); setLayer('bridge'); setTool('brush'); }}>Horizontal</button>
+              <button type="button" className={`le-seg-btn ${bridgeOrientation === 'v' && tool !== 'erase' ? 'active' : ''}`.trim()} onClick={() => { setBridgeOrientation('v'); setBrushKind('bridge'); setLayer('bridge'); setTool('brush'); }}>Vertical</button>
+            </div>
+            <p className="le-board-note">Drag to lay a straight wooden bridge — pick Horizontal or Vertical. Bridges don’t turn or branch; paint water first, then run the bridge across it. Erase to remove a span.</p>
+          </section>
         ) : featureKind ? (
           <section className="skirmish-card le-brush-panel">
             <h2>{featureKind === 'river' ? 'River material' : 'Road material'}</h2>
@@ -736,7 +770,7 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : null}
 
-        {featureKind && selectedCell && selectedFeature && selectedFeature.kind === featureKind ? (
+        {featureKind && featureKind !== 'bridge' && selectedCell && selectedFeature && selectedFeature.kind === featureKind ? (
           <section className="skirmish-card">
             <h2>{featureKind === 'river' ? 'River connections' : 'Road connections'}</h2>
             <FeatureConnections cell={selectedCell} kind={featureKind} features={boardFeatures} cuts={featureCuts} onToggle={toggleFeatureCut} />

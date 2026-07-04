@@ -18,39 +18,124 @@
 //   8    W    (x-1, y)         upper-left  (NW)
 
 // Linear-feature kinds. Each kind is its OWN connectivity class — a road connects to
-// roads, a river to rivers (never to each other). All baked by build-feature-tiles.py.
-export type FeatureKind = 'road' | 'river';
+// roads, a river to rivers (never to each other). Roads/rivers AUTOTILE (their piece is
+// derived from same-kind neighbours); a BRIDGE does NOT — it's a straight-only span whose
+// orientation the author sets explicitly (see BridgeOrientation). All baked by
+// build-feature-tiles.py.
+export type FeatureKind = 'road' | 'river' | 'bridge';
 
 // A feature's surface look. Within a kind, all cells connect regardless of material
 // (the shape flows, the surface can change per cell); the author picks which to paint.
-// Each is a baked 16-mask set (<kind>-<material>-<mask>.png).
+// Each is a baked 16-mask set (<kind>-<material>-<mask>.png) — except bridges, which bake
+// only the two straight spans (masks 5 & 10).
 export type RoadMaterial = 'dirt' | 'cobble' | 'stone' | 'pebble';
 export type RiverMaterial = 'water';
-export type FeatureMaterial = RoadMaterial | RiverMaterial;
+export type BridgeMaterial = 'wood';
+export type FeatureMaterial = RoadMaterial | RiverMaterial | BridgeMaterial;
 
 // Authored codex-heal materials that ship (build-feature-tiles.py). stone/pebble stay
 // valid types but aren't in the palette until they get the same treatment.
 export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'cobble'];
 export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
+export const BRIDGE_MATERIALS: readonly BridgeMaterial[] = ['wood'];
 export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
   dirt: 'Dirt',
   cobble: 'Cobblestone',
   stone: 'Stone',
   pebble: 'Gravel',
   water: 'Water',
+  wood: 'Wood',
 };
 // Back-compat alias (roads referenced this name before rivers existed).
 export const ROAD_MATERIAL_LABELS = FEATURE_MATERIAL_LABELS;
 export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'dirt';
 export const DEFAULT_RIVER_MATERIAL: RiverMaterial = 'water';
+export const DEFAULT_BRIDGE_MATERIAL: BridgeMaterial = 'wood';
 
 /** Selectable materials for a feature kind (editor palette). */
 export const featureMaterials = (kind: FeatureKind): readonly FeatureMaterial[] =>
-  kind === 'river' ? RIVER_MATERIALS : ROAD_MATERIALS;
+  kind === 'river' ? RIVER_MATERIALS : kind === 'bridge' ? BRIDGE_MATERIALS : ROAD_MATERIALS;
 
 /** The default brush material for a feature kind. */
 export const defaultFeatureMaterial = (kind: FeatureKind): FeatureMaterial =>
-  kind === 'river' ? DEFAULT_RIVER_MATERIAL : DEFAULT_ROAD_MATERIAL;
+  kind === 'river' ? DEFAULT_RIVER_MATERIAL : kind === 'bridge' ? DEFAULT_BRIDGE_MATERIAL : DEFAULT_ROAD_MATERIAL;
+
+// A bridge is straight-only: it spans either vertically (N–S) or horizontally (E–W). The
+// orientation is explicit (the brush sets it) — NOT auto-derived from neighbours like a road —
+// so a bridge never bends, T's, or crosses. It maps to the baked straight masks: V = N+S = 5,
+// H = E+W = 10. The default brush axis is horizontal.
+export type BridgeOrientation = 'h' | 'v';
+export const DEFAULT_BRIDGE_ORIENTATION: BridgeOrientation = 'h';
+export const bridgeOrientationMask = (o: BridgeOrientation): number => (o === 'v' ? 5 : 10);
+
+// NEIGHBOUR-AWARE straight bridge. Unlike a road it never bends, but its two ENDS still react to
+// same-orientation bridge neighbours: an end is OPEN (deck + rails continue) when another bridge
+// of the SAME axis abuts it, else CAPPED with an end post. Only the two same-axis ends matter —
+// a 'v' bridge looks N/S, an 'h' bridge looks E/W — so a bridge only ever connects to a bridge
+// pointing the same way (never corners/T/cross). This is a 2-bit end mask, not the 4-bit road mask.
+
+/** One end of a bridge, by which of the two same-axis ends is open. */
+export interface BridgeEndMask {
+  /** For 'v': the N end is a same-axis bridge. For 'h': the E end is a same-axis bridge. */
+  aheadOpen: boolean;
+  /** For 'v': the S end is a same-axis bridge. For 'h': the W end is a same-axis bridge. */
+  behindOpen: boolean;
+}
+
+/**
+ * Which of a bridge cell's two SAME-AXIS ends abut another bridge (of the same orientation).
+ * For 'v' the ends are N (0,-1) and S (0,+1); for 'h' they are E (+1,0) and W (-1,0). `present`
+ * is the set of same-orientation bridge cell keys ("x,y"). Cross-axis neighbours are ignored — a
+ * bridge only ever joins a bridge pointing the same way, so it stays a straight span.
+ */
+export function bridgeEndMask(
+  present: ReadonlySet<string>,
+  x: number,
+  y: number,
+  orientation: BridgeOrientation,
+): BridgeEndMask {
+  if (orientation === 'v') {
+    return {
+      aheadOpen: present.has(featureKey(x, y - 1)), // N
+      behindOpen: present.has(featureKey(x, y + 1)), // S
+    };
+  }
+  return {
+    aheadOpen: present.has(featureKey(x + 1, y)), // E
+    behindOpen: present.has(featureKey(x - 1, y)), // W
+  };
+}
+
+/**
+ * The 8 baked straight-bridge sprite keys. Each end is OPEN (deck + rails run off the tile) or
+ * CAPPED with an end post; a cap is named for the CAPPED end:
+ *   v-thru   both ends open (N & S)          h-thru   both ends open (E & W)
+ *   v-capN   open S, capped N                h-capE   open W, capped E
+ *   v-capS   open N, capped S                h-capW   open E, capped W
+ *   v-single both ends capped               h-single both ends capped
+ * Files: bridge-<material>-<key>.png (feature dir).
+ */
+export type BridgeSpriteKey =
+  | 'v-thru' | 'v-capN' | 'v-capS' | 'v-single'
+  | 'h-thru' | 'h-capE' | 'h-capW' | 'h-single';
+
+/**
+ * Resolve a bridge cell's baked sprite key from its axis + which ends are open. `aheadOpen` is the
+ * N end for 'v' / the E end for 'h'; `behindOpen` is the S end for 'v' / the W end for 'h'. Both
+ * open ⇒ `-thru`; both capped ⇒ `-single`; one capped ⇒ a `-cap<END>` naming the CAPPED end
+ * (v: N/S, h: E/W).
+ */
+export function bridgeSpriteKey(orientation: BridgeOrientation, endMask: BridgeEndMask): BridgeSpriteKey {
+  const { aheadOpen, behindOpen } = endMask;
+  if (orientation === 'v') {
+    if (aheadOpen && behindOpen) return 'v-thru';
+    if (!aheadOpen && !behindOpen) return 'v-single';
+    return aheadOpen ? 'v-capS' /* open N, cap S */ : 'v-capN' /* open S, cap N */;
+  }
+  if (aheadOpen && behindOpen) return 'h-thru';
+  if (!aheadOpen && !behindOpen) return 'h-single';
+  return aheadOpen ? 'h-capW' /* open E, cap W */ : 'h-capE' /* open W, cap E */;
+}
 
 export type FeatureEdge = 'N' | 'E' | 'S' | 'W';
 

@@ -5,19 +5,28 @@
 //
 // Wire shape (keys kept short): { c:cols, r:rows, f?:fillTileId, t?:{cell:tileId},
 //   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, v?:{cell:density},
-//   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, rc?:[edgeKey] }. `f` fills every cell,
-// then `t` overrides — so a "mostly one tile" board stays tiny. Features split per kind on the
-// wire (rd=roads, rv=rivers) and merge into one `features` map on decode; `rc` (severed edges)
-// is shared (a cut edge only ever joins same-kind cells). base64url of the JSON (no padding,
-// +/ -> -_).
+//   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, br?:{cell:orientation}, bm?:{cell:bridgeMat},
+//   rc?:[edgeKey] }. `bm` (bridge material) is present only for non-default deck variants.
+//   `f` fills every cell, then `t` overrides — so a "mostly one tile" board stays tiny. Features
+//   split per kind on the wire (rd=roads, rv=rivers, br=bridges) and merge into one `features`
+//   map on decode; bridges carry an explicit orientation ('h'/'v') instead of a connection (they
+//   don't autotile), so `br` stores that and the material is implied. `rc` (severed edges) is
+//   shared (a cut edge only ever joins same-kind autotile cells). base64url of the JSON (no
+//   padding, +/ -> -_).
 
 import type { GroundCoverDensity } from '../core/groundCover';
-import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial } from '../core/featureAutotile';
+import { DEFAULT_BRIDGE_MATERIAL } from '../core/featureAutotile';
+import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, BridgeOrientation } from '../core/featureAutotile';
 
-/** One painted feature cell: which linear feature it carries and its surface material. */
+/**
+ * One painted feature cell: which linear feature it carries and its surface material. Bridges
+ * additionally carry an explicit `orientation` (they're straight-only, axis set by the author —
+ * not derived from neighbours like roads/rivers); roads/rivers leave it undefined.
+ */
 export interface FeatureCell {
   kind: FeatureKind;
   material: FeatureMaterial;
+  orientation?: BridgeOrientation;
 }
 
 export interface EditorBoard {
@@ -54,15 +63,23 @@ export function encodeBoard(b: EditorBoard): string {
   if (nonEmpty(b.units)) wire.u = Object.fromEntries(Object.entries(b.units).map(([k, v]) => [k, [v.unitId, v.direction, v.faction]]));
   if (nonEmpty(b.doodads)) wire.d = Object.fromEntries(Object.entries(b.doodads).map(([k, v]) => [k, v.doodadId]));
   if (nonEmpty(b.cover)) wire.v = b.cover;
-  // Split features by kind so each map's values are bare materials (rd=roads, rv=rivers).
+  // Split features by kind: roads/rivers store their material; bridges store their orientation
+  // ('h'/'v') in `br`. A bridge's material is implied 'wood' UNLESS it's a bake-off review
+  // variant, in which case its id is carried per-cell in `bm` (so any deck variant is a pure
+  // board SETTING — no generation needed to build a review board).
   const rd: Record<string, RoadMaterial> = {};
   const rv: Record<string, RiverMaterial> = {};
+  const br: Record<string, BridgeOrientation> = {};
+  const bm: Record<string, string> = {};
   for (const [k, f] of Object.entries(b.features)) {
     if (f.kind === 'river') rv[k] = f.material as RiverMaterial;
+    else if (f.kind === 'bridge') { br[k] = f.orientation ?? 'h'; if (f.material && f.material !== DEFAULT_BRIDGE_MATERIAL) bm[k] = f.material; }
     else rd[k] = f.material as RoadMaterial;
   }
   if (nonEmpty(rd)) wire.rd = rd;
   if (nonEmpty(rv)) wire.rv = rv;
+  if (nonEmpty(br)) wire.br = br;
+  if (nonEmpty(bm)) wire.bm = bm;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   return enc(JSON.stringify(wire));
 }
@@ -82,10 +99,11 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (w.d) for (const [k, id] of Object.entries(w.d as Record<string, string>)) doodads[k] = { doodadId: id };
     const featureCuts: Record<string, true> = {};
     if (Array.isArray(w.rc)) for (const e of w.rc) featureCuts[e] = true;
-    // Merge the per-kind wire maps back into one features map (rd=roads, rv=rivers).
+    // Merge the per-kind wire maps back into one features map (rd=roads, rv=rivers, br=bridges).
     const features: Record<string, FeatureCell> = {};
     if (w.rd) for (const [k, m] of Object.entries(w.rd as Record<string, RoadMaterial>)) features[k] = { kind: 'road', material: m };
     if (w.rv) for (const [k, m] of Object.entries(w.rv as Record<string, RiverMaterial>)) features[k] = { kind: 'river', material: m };
+    if (w.br) for (const [k, o] of Object.entries(w.br as Record<string, BridgeOrientation>)) features[k] = { kind: 'bridge', material: ((w.bm?.[k] as FeatureMaterial) ?? DEFAULT_BRIDGE_MATERIAL), orientation: o };
     return {
       cols, rows, cells, units, doodads,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,

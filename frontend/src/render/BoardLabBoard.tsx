@@ -71,7 +71,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
           {cell.feature ? (
             <img
               className="tileset-feature-overlay"
-              src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask)}
+              src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask, cell.feature.bridgeKey)}
               alt=""
               draggable={false}
             />

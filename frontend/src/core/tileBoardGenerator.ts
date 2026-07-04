@@ -2,8 +2,8 @@ import { createRng } from './rng';
 import type { GroundCover } from './groundCover';
 import type { EdgeName, EdgeSockets, TerrainPairId, TileFamilyId, TileSocketAsset } from './tileSockets';
 import { baseSocketsForFamily, familyIdForAsset, tileSocketsForAsset, transitionPairs } from './tileSockets';
-import type { FeatureKind, FeatureMaterial } from './featureAutotile';
-import { featureKey, featureMaskAt } from './featureAutotile';
+import type { FeatureKind, FeatureMaterial, BridgeOrientation, BridgeSpriteKey } from './featureAutotile';
+import { featureKey, featureMaskAt, bridgeOrientationMask, bridgeEndMask, bridgeSpriteKey } from './featureAutotile';
 
 export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsset> {
   x: number;
@@ -23,11 +23,14 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
   /** Ambient vegetation resolved at board build (see core/groundCover). Not per-render. */
   groundCover?: GroundCover;
   /**
-   * A linear-feature overlay (road; rivers later) riding ON TOP of the base tile.
+   * A linear-feature overlay (road, river, bridge) riding ON TOP of the base tile.
    * Orthogonal to socket selection — it never affects which base `asset` is chosen.
-   * `mask` is the 4-bit connection mask; the renderer maps {kind, material, mask} to a sprite.
+   * For road/river, `mask` is the 4-bit connection mask and the renderer maps {kind, material,
+   * mask} to a sprite. For a bridge, the renderer instead uses `bridgeKey` (a neighbour-aware
+   * straight-span sprite key, e.g. 'v-thru'); `mask` is still the straight axis mask for any
+   * consumer that reads it.
    */
-  feature?: { kind: FeatureKind; material: FeatureMaterial; mask: number };
+  feature?: { kind: FeatureKind; material: FeatureMaterial; mask: number; bridgeKey?: BridgeSpriteKey };
   missing?: {
     kind: 'missing-art' | 'unsupported-junction';
     label: string;
@@ -266,10 +269,12 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   familyAssets: Record<TileFamilyId, readonly TAsset[]>;
   /**
    * Sparse linear-feature layer: cell key ("x,y") -> {kind, material}. Optional and
-   * orthogonal to `terrainMap`; cells in here get a `feature` with the connection
-   * mask resolved from same-kind neighbours. Omit it for the original behaviour.
+   * orthogonal to `terrainMap`; road/river cells get a `feature` with the connection mask
+   * resolved from same-kind neighbours. A BRIDGE cell instead carries an explicit
+   * `orientation` ('h'/'v') and its mask comes straight from that (it's straight-only — no
+   * autotiling). Omit the whole map for the original behaviour.
    */
-  featureMap?: ReadonlyMap<string, { kind: FeatureKind; material: FeatureMaterial }>;
+  featureMap?: ReadonlyMap<string, { kind: FeatureKind; material: FeatureMaterial; orientation?: BridgeOrientation }>;
   /**
    * Optional per-family edge tiles. When supplied, any cell on a FRONT screen edge
    * (`x === columns - 1` or `y === rows - 1` — the void-facing rows in `x+y` paint order)
@@ -321,10 +326,17 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
 
   // Group featured cells by kind once, so each cell's connection mask is resolved
   // against only its OWN kind's neighbours (a road connects to roads, not rivers).
-  // Material is per-cell and does NOT split connectivity — all roads connect.
+  // Material is per-cell and does NOT split connectivity — all roads connect. Bridges are
+  // grouped too, but SPLIT BY ORIENTATION ('h'/'v'): a bridge only joins a bridge pointing the
+  // same way, so each axis gets its own presence set and its ends open only against that axis.
   const featurePresence = new Map<FeatureKind, Set<string>>();
+  const bridgePresence: Record<BridgeOrientation, Set<string>> = { h: new Set(), v: new Set() };
   if (featureMap) {
-    for (const [key, { kind }] of featureMap) {
+    for (const [key, { kind, orientation }] of featureMap) {
+      if (kind === 'bridge') {
+        bridgePresence[orientation ?? 'h'].add(key);
+        continue;
+      }
       const set = featurePresence.get(kind) ?? new Set<string>();
       set.add(key);
       featurePresence.set(kind, set);
@@ -333,7 +345,20 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   const featureAt = (x: number, y: number): SocketBoardCell<TAsset>['feature'] => {
     const entry = featureMap?.get(featureKey(x, y));
     if (!entry) return undefined;
-    return { kind: entry.kind, material: entry.material, mask: featureMaskAt(featurePresence.get(entry.kind)!, x, y) };
+    // A bridge is a NEIGHBOUR-AWARE straight span: its axis is explicit, but each end opens or
+    // caps against same-axis bridge neighbours. Road/river derive the full 4-bit mask instead.
+    if (entry.kind === 'bridge') {
+      const orientation = entry.orientation ?? 'h';
+      const ends = bridgeEndMask(bridgePresence[orientation], x, y, orientation);
+      return {
+        kind: entry.kind,
+        material: entry.material,
+        mask: bridgeOrientationMask(orientation),
+        bridgeKey: bridgeSpriteKey(orientation, ends),
+      };
+    }
+    const mask = featureMaskAt(featurePresence.get(entry.kind)!, x, y);
+    return { kind: entry.kind, material: entry.material, mask };
   };
 
   for (let index = 0; index < columns * rows; index += 1) {

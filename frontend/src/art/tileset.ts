@@ -1,6 +1,6 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
 import { terrainLabels } from '../core/tileSockets';
-import type { FeatureKind, FeatureMaterial } from '../core/featureAutotile';
+import type { FeatureKind, FeatureMaterial, BridgeSpriteKey } from '../core/featureAutotile';
 import type { EdgeFeatureSpec } from '../core/tileBoardGenerator';
 
 export interface TileAsset extends TileSocketAsset {
@@ -159,12 +159,18 @@ export const tileAssets: readonly TileAsset[] = FAMILIES.flatMap((family) => til
 
 export const tileFrameSrc = (asset: TileAsset): string => asset.src;
 
-// Linear-feature overlays (roads, rivers) live in their OWN registry,
+// Linear-feature overlays (roads, rivers, bridges) live in their OWN registry,
 // deliberately apart from the socket base tiles above: a feature is a transparent
-// ribbon composited OVER any base tile, keyed by its material and 4-bit connection
-// mask (0–15), not selected by the socket solver. Baked by scripts/build-feature-tiles.py.
-export const featureFrameSrc = (kind: FeatureKind, material: FeatureMaterial, mask: number): string =>
-  `/assets/tiles/feature/${kind}-${material}-${mask}.png`;
+// ribbon composited OVER any base tile, not selected by the socket solver. Baked by
+// scripts/build-feature-tiles.py.
+//   • road/river AUTOTILE — keyed by material + 4-bit connection mask (0–15).
+//   • bridge is a NEIGHBOUR-AWARE straight span — keyed by material + a BridgeSpriteKey
+//     ('v-thru' | 'v-capN' | … | 'h-single'), derived from its axis and which same-axis ends
+//     abut another bridge (see core/featureAutotile.bridgeSpriteKey). Its `bridgeKey` is required.
+export const featureFrameSrc = (kind: FeatureKind, material: FeatureMaterial, mask: number, bridgeKey?: BridgeSpriteKey): string =>
+  kind === 'bridge'
+    ? `/assets/tiles/feature/bridge-${material}-${bridgeKey ?? 'h-single'}.png`
+    : `/assets/tiles/feature/${kind}-${material}-${mask}.png`;
 
 // A square, pre-centered preview icon for editor palettes/brush (the board sprites
 // are tall 96x180 frames with the art only in the top diamond, so they don't center

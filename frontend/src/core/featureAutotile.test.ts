@@ -7,6 +7,9 @@ import {
   featureMaskMap,
   featurePiece,
   roadEdgeKey,
+  bridgeOrientationMask,
+  featureMaterials,
+  defaultFeatureMaterial,
 } from './featureAutotile';
 
 const setOf = (...keys: string[]): Set<string> => new Set(keys);
@@ -133,5 +136,22 @@ describe('featureDirtySet', () => {
 describe('featureKey', () => {
   it('formats as "x,y"', () => {
     expect(featureKey(3, 7)).toBe('3,7');
+  });
+});
+
+describe('bridge (straight-only span)', () => {
+  it('maps each axis to the matching straight mask: V = N+S = 5, H = E+W = 10', () => {
+    expect(bridgeOrientationMask('v')).toBe(0b0101);
+    expect(bridgeOrientationMask('h')).toBe(0b1010);
+  });
+
+  it('only ever resolves to a STRAIGHT piece (never a corner/T/cross)', () => {
+    expect(featurePiece(bridgeOrientationMask('v'))).toBe('straight');
+    expect(featurePiece(bridgeOrientationMask('h'))).toBe('straight');
+  });
+
+  it('exposes a single wood material with wood as the default brush', () => {
+    expect(featureMaterials('bridge')).toEqual(['wood']);
+    expect(defaultFeatureMaterial('bridge')).toBe('wood');
   });
 });
