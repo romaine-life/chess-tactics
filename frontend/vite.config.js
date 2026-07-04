@@ -4,7 +4,8 @@ import { writeFile, readFile, mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
 
 // Stamp build/server provenance into the bundle so Settings → About can always
@@ -313,6 +314,104 @@ function devAuthMock() {
   };
 }
 
+// Dev-only, opt-in: read the OFFICIAL campaign tier from the LIVE prod DB during local
+// testing instead of the committed fallback file. The official GET is PUBLIC (no auth),
+// so this needs no DB credentials — it proxies GET /api/official-campaigns/<id> to the
+// deployed origin (default chess.romaine.life, override with PROD_ORIGIN — the same var
+// the bake workflow uses) so the gym / campaign screens hydrate from whatever is live
+// right now, not the committed snapshot. READ-ONLY: any non-GET is refused so a local
+// edit can never write to prod, and a prod hiccup returns non-2xx so the frontend's own
+// loader falls back to the committed file (loadOfficialCampaigns). Opt in with
+// DEV_PROD_DATA=1. `apply:'serve'` — never in a production build. NOTE: the signed-in
+// user's OWN campaigns (/api/campaign-workspace) are NOT proxied — they need the user's
+// prod session cookie, which localhost can't carry; that's the local-backend path
+// (DATABASE_URL=<prod> DEV_AUTH=1 node server.js), a separate, write-capable choice.
+function officialCampaignsDevProxy() {
+  const enabled = process.env.DEV_PROD_DATA === '1';
+  const origin = (process.env.PROD_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
+  return {
+    name: 'official-campaigns-dev-proxy',
+    apply: 'serve',
+    configureServer(server) {
+      if (!enabled) return;
+      server.config.logger.info(`[dev-prod-data] official campaigns read live from ${origin}`);
+      server.middlewares.use('/api/official-campaigns', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        if (req.method !== 'GET') { res.statusCode = 405; res.end(JSON.stringify({ error: 'read-only dev proxy' })); return; }
+        const target = `${origin}/api/official-campaigns${req.url || ''}`;
+        try {
+          const upstream = await fetch(target, { signal: AbortSignal.timeout(8000) });
+          res.statusCode = upstream.status;
+          res.end(await upstream.text());
+        } catch (err) {
+          server.config.logger.warn(`[dev-prod-data] ${target} failed: ${err.message}`);
+          res.statusCode = 502;
+          res.end(JSON.stringify({ error: 'prod fetch failed' }));
+        }
+      });
+    },
+  };
+}
+
+// Dev default: run the WHOLE app against the LIVE prod backend + DB. On `vite` dev-
+// server start, spawn backend/server.js as a CHILD pointed at the prod Flexible Server
+// (passwordless via your `az login`, resolved through DefaultAzureCredential) and
+// signed in as your real account (DEV_AUTH), then proxy every /api call to it. The
+// child is tied to vite's lifecycle — starts with the dev server, relaunches if it
+// crashes, and is killed when vite exits — so `vite` ALONE is "full prod from dev", and
+// a reboot is just re-running it. `apply:'serve'`, so this NEVER touches a production
+// build. Escape hatch: DEV_OFFLINE=1 skips the backend and restores the mock stack.
+// host/db/user are not secrets (see k8s deployment); override any via the env.
+const BACKEND_PORT = 3000;
+function prodBackend() {
+  const backendDir = fileURLToPath(new URL('../backend', import.meta.url));
+  let child = null;
+  let stopping = false;
+  return {
+    name: 'prod-backend',
+    apply: 'serve',
+    configureServer(server) {
+      const log = server.config.logger;
+      const start = () => {
+        child = spawn(process.execPath, ['server.js'], {
+          cwd: backendDir,
+          env: {
+            ...process.env,
+            POSTGRES_HOST: process.env.POSTGRES_HOST || 'chess-tactics-pg.postgres.database.azure.com',
+            POSTGRES_DATABASE: process.env.POSTGRES_DATABASE || 'chess_tactics',
+            POSTGRES_USER: process.env.POSTGRES_USER || 'nelson-devops-project@outlook.com',
+            DEV_AUTH: '1',
+            DEV_AUTH_EMAIL: process.env.DEV_AUTH_EMAIL || 'nelson@romaine.life',
+            DEV_AUTH_NAME: process.env.DEV_AUTH_NAME || 'Nelson',
+            ADMIN_EMAILS: process.env.ADMIN_EMAILS || 'nelson@romaine.life',
+            PORT: String(BACKEND_PORT),
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        child.stdout.on('data', (d) => log.info(`[backend] ${String(d).replace(/\s+$/, '')}`));
+        child.stderr.on('data', (d) => log.warn(`[backend] ${String(d).replace(/\s+$/, '')}`));
+        child.on('exit', (code) => {
+          child = null;
+          if (stopping) return;
+          log.warn(`[backend] exited (code ${code}) — relaunching in 1s`);
+          setTimeout(start, 1000);
+        });
+      };
+      const stop = () => { stopping = true; if (child) { child.kill(); child = null; } };
+      start();
+      server.httpServer?.once('close', stop);
+      process.once('exit', stop);
+      for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { stop(); process.exit(0); });
+    },
+  };
+}
+
+const offline = process.env.DEV_OFFLINE === '1';
+const devApiPlugins = offline
+  ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()]
+  : [prodBackend()];
+
 export default defineConfig({
-  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), propSeatDelete(), nineSliceDevSave(), bgmDevMock(), devAuthMock()],
+  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), propSeatDelete(), nineSliceDevSave(), ...devApiPlugins],
+  ...(offline ? {} : { server: { proxy: { '/api': { target: `http://localhost:${BACKEND_PORT}`, changeOrigin: true, secure: false } } } }),
 });
