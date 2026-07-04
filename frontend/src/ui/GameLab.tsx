@@ -112,7 +112,8 @@ function pieceRollup(records: readonly GameRecord[]): Array<{
 // `.tileset-view-controls` chrome, so only the run-form bits and the tables need
 // scoping here.
 const GL_CSS = `
-.game-lab-main { overflow-y: auto; padding: 14px 16px 40px; color: #e8e4da; font: 13px/1.45 system-ui, sans-serif; }
+.game-lab-main { display: flex; flex-direction: column; overflow: hidden; color: #e8e4da; font: 13px/1.45 system-ui, sans-serif; }
+.game-lab-scroll { flex: 1 1 0; min-height: 96px; overflow-y: auto; padding: 14px 16px 24px; }
 .game-lab-main h2 { font-size: 15px; margin: 0 0 8px; }
 .game-lab-main h3 { font-size: 13px; margin: 14px 0 6px; color: #b9b2a4; }
 .game-lab-main table { border-collapse: collapse; width: 100%; margin-top: 4px; }
@@ -126,7 +127,8 @@ const GL_CSS = `
 .game-lab-replay-controls input[type=range] { flex: 1; min-width: 160px; }
 .game-lab-ply-label, .game-lab-hint { font-size: 12px; color: #8f8878; }
 .game-lab-move-line { font-family: ui-monospace, monospace; font-size: 12px; color: #cfc8b8; margin: 4px 0 10px; }
-.game-lab-board { display: grid; grid-template-rows: minmax(0, 1fr); height: 440px; border: 1px solid #333a47; border-radius: 6px; overflow: hidden; background: #0d1015; }
+.game-lab-stage { flex: 1.5 1 0; min-height: 320px; margin: 0 16px 14px; display: flex; flex-direction: column; }
+.game-lab-board { flex: 1 1 auto; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); border: 1px solid #333a47; border-radius: 6px; overflow: hidden; background: #0d1015; }
 .game-lab-controls .gl-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #b9b2a4; margin-bottom: 8px; }
 .game-lab-controls input, .game-lab-controls select { background: #12151b; color: #e8e4da; border: 1px solid #3a4150; border-radius: 4px; padding: 5px 8px; font-size: 13px; }
 .game-lab-controls .gl-run-row { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
@@ -395,6 +397,7 @@ export function GameLabViewer({ levelId, header }: { levelId?: string; header?: 
     <>
       <style>{GL_CSS}</style>
       <section className="al-lab-main game-lab-main" aria-label="Game Lab output">
+        <div className="game-lab-scroll">
         {!level ? (
           <p className="game-lab-hint">Pick a level from the Game Lab catalog to run experiments on it.</p>
         ) : !records ? (
@@ -471,31 +474,33 @@ export function GameLabViewer({ levelId, header }: { levelId?: string; header?: 
             </div>
 
             <h3>Replay</h3>
-            {selectedRecord && states && stepBoard ? (
-              <>
-                <div className="game-lab-replay-controls">
-                  <button type="button" onClick={() => setPly(Math.max(0, clampedPly - 1))} disabled={clampedPly === 0}>‹ Prev</button>
-                  <input type="range" min={0} max={states.length - 1} value={clampedPly} onChange={(e) => setPly(Number(e.target.value))} />
-                  <button type="button" onClick={() => setPly(Math.min(states.length - 1, clampedPly + 1))} disabled={clampedPly >= states.length - 1}>Next ›</button>
-                  <span className="game-lab-ply-label">
-                    Ply {clampedPly}/{states.length - 1} — seed {selectedRecord.seed}, {selectedRecord.winner} wins in {selectedRecord.plies}
-                  </span>
-                </div>
-                <p className="game-lab-move-line">
-                  {clampedPly === 0 ? 'Starting position' : describeMove(selectedRecord, clampedPly - 1)}
-                </p>
-                <div className="game-lab-board">
-                  <ViewPane kind="board" ariaLabel="Replay board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
-                    <div className="tileset-view-board-content is-board">
-                      <StudioReadOnlyBoard board={stepBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Replay board" />
-                    </div>
-                  </ViewPane>
-                </div>
-              </>
-            ) : (
+            {selectedRecord && states && stepBoard ? null : (
               <p className="game-lab-hint">Pick a game from the table to step through it.</p>
             )}
           </>
+        ) : null}
+        </div>
+        {selectedRecord && states && stepBoard ? (
+          <div className="game-lab-stage">
+            <div className="game-lab-replay-controls">
+              <button type="button" onClick={() => setPly(Math.max(0, clampedPly - 1))} disabled={clampedPly === 0}>‹ Prev</button>
+              <input type="range" min={0} max={states.length - 1} value={clampedPly} onChange={(e) => setPly(Number(e.target.value))} />
+              <button type="button" onClick={() => setPly(Math.min(states.length - 1, clampedPly + 1))} disabled={clampedPly >= states.length - 1}>Next ›</button>
+              <span className="game-lab-ply-label">
+                Ply {clampedPly}/{states.length - 1} — seed {selectedRecord.seed}, {selectedRecord.winner} wins in {selectedRecord.plies}
+              </span>
+            </div>
+            <p className="game-lab-move-line">
+              {clampedPly === 0 ? 'Starting position' : describeMove(selectedRecord, clampedPly - 1)}
+            </p>
+            <div className="game-lab-board">
+              <ViewPane kind="board" ariaLabel="Replay board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
+                <div className="tileset-view-board-content is-board">
+                  <StudioReadOnlyBoard board={stepBoard} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Replay board" />
+                </div>
+              </ViewPane>
+            </div>
+          </div>
         ) : null}
       </section>
 
