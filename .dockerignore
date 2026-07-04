@@ -4,3 +4,10 @@ npm-debug.log
 .github
 README.md
 frontend/dist
+
+# The committed official campaigns file is a DEV-ONLY seed fixture (the weekly bake). It is
+# deliberately kept OUT of the prod image so stale/test data is physically impossible to serve — the
+# live DB is the single source of truth in production (backend/server.js officialWorkspace, and the
+# client's loadOfficialCampaigns gates its fixture fallback on import.meta.env.DEV). Excluded from the
+# build context ⇒ vite never copies it into dist ⇒ it isn't in the running container.
+frontend/public/assets/campaigns/official.json
