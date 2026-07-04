@@ -44,7 +44,7 @@ describe('props core', () => {
     }
   });
 
-  it('seeds an oak (tree) and a cottage (house), both blocking 2×2', () => {
+  it('seeds an oak (tree) and a cottage (house), all blocking with a valid footprint', () => {
     const ids = PROP_DEFS.map((d) => d.id);
     expect(ids).toContain('oak');
     expect(ids).toContain('cottage');
@@ -52,9 +52,19 @@ describe('props core', () => {
     expect(propDef('cottage')!.kind).toBe('house');
     for (const d of PROP_DEFS) {
       expect(d.blocking).toBe(true);
-      expect(d.w).toBe(2);
-      expect(d.h).toBe(2);
+      // Footprint is editable (propSeats w/h); the seed set is 2×2, but only assert it's valid.
+      expect(Number.isInteger(d.w) && d.w >= 1, `${d.id} w`).toBe(true);
+      expect(Number.isInteger(d.h) && d.h >= 1, `${d.id} h`).toBe(true);
     }
+  });
+
+  it('footprint comes from propSeats (default 2×2); a variant inherits the base cells', () => {
+    // No footprint override in the seed → the default 2×2.
+    expect(propDef('cottage')!.w).toBe(2);
+    expect(propDef('cottage')!.h).toBe(2);
+    // The variant has no w/h in its entry, so it inherits the base's footprint.
+    expect(propDef('cottage-small')!.w).toBe(propDef('cottage')!.w);
+    expect(propDef('cottage-small')!.h).toBe(propDef('cottage')!.h);
   });
 
   it('a size variant shares the base sprite + footprint, differing only by seat', () => {

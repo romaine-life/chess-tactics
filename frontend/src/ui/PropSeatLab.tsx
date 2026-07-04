@@ -18,7 +18,7 @@ import COMMITTED_SEATS from '../core/propSeats.json';
 // (tree/house) SITS on its tiles through the real PropSprite path, then Saves the seat map to
 // src/core/propSeats.json (dev endpoint) — the checked-in source PROP_DEFS composes from.
 
-type Seat = { anchorX: number; anchorY: number; scale: number };
+type Seat = { anchorX: number; anchorY: number; scale: number; w?: number; h?: number; base?: string; label?: string };
 type Seats = Record<string, Seat>;
 
 const FAMILIES = ['grass', 'dirt', 'stone'] as const;
@@ -72,8 +72,11 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const def = PROP_DEFS.find((d) => d.id === activeId) as PropDef;
   const liveSeat = seats[activeId];
   const committed = committedSeats[activeId];
+  // Live gameplay footprint — an override's w/h if set, else the committed def's cells.
+  const liveW = liveSeat.w ?? def.w;
+  const liveH = liveSeat.h ?? def.h;
   const sameSeat = (a: Seat | undefined, b: Seat | undefined) =>
-    !!a && !!b && a.anchorX === b.anchorX && a.anchorY === b.anchorY && a.scale === b.scale;
+    !!a && !!b && a.anchorX === b.anchorX && a.anchorY === b.anchorY && a.scale === b.scale && a.w === b.w && a.h === b.h;
   const dirty = Object.keys(overrides).some((id) => !sameSeat(overrides[id], committedSeats[id]));
 
   // Drop an override once it matches committed again (after a Save's HMR, or an external edit),
@@ -107,11 +110,11 @@ export function PropSeatLab({ propId, onPropId, header }: {
     setOverrides((o) => ({ ...o, [activeId]: { ...(o[activeId] ?? committedSeats[activeId]), ...patch } }));
   };
 
-  const ax = Math.floor((COLS - def.w) / 2);
-  const ay = Math.floor((ROWS - def.h) / 2);
+  const ax = Math.floor((COLS - liveW) / 2);
+  const ay = Math.floor((ROWS - liveH) / 2);
   const base0 = boardLabCellPosition({ x: ax, y: ay });
-  const groundLeft = base0.left + (((def.w - 1) - (def.h - 1)) / 2) * TILE_TEMPLATE.stepX;
-  const groundTop = base0.top + (((def.w - 1) + (def.h - 1)) / 2) * TILE_TEMPLATE.stepY;
+  const groundLeft = base0.left + (((liveW - 1) - (liveH - 1)) / 2) * TILE_TEMPLATE.stepX;
+  const groundTop = base0.top + (((liveW - 1) + (liveH - 1)) / 2) * TILE_TEMPLATE.stepY;
 
   // Visual-direction nudge (vx>0 right, vy>0 down). The anchor is where the frame TOUCHES the
   // ground point, so moving the sprite right/down pulls the anchor left/up — hence anchor -= v.
@@ -174,15 +177,17 @@ export function PropSeatLab({ propId, onPropId, header }: {
     setStatus('copied propSeats.json to clipboard');
   };
 
-  const liveDef: PropDef = { ...def, sprite: { w: def.sprite.w, h: def.sprite.h, ...liveSeat } };
-  const savedDef: PropDef = { ...def, sprite: { w: def.sprite.w, h: def.sprite.h, ...committed } };
+  // Build the sprite seat explicitly (NOT ...liveSeat — that also carries w/h/base/label, which
+  // would clobber the sprite FRAME dims). Footprint rides on the def's w/h (liveW/liveH).
+  const liveDef: PropDef = { ...def, w: liveW, h: liveH, sprite: { w: def.sprite.w, h: def.sprite.h, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY, scale: liveSeat.scale } };
+  const savedDef: PropDef = { ...def, sprite: { w: def.sprite.w, h: def.sprite.h, anchorX: committed.anchorX, anchorY: committed.anchorY, scale: committed.scale } };
   const frame = {
     left: groundLeft - liveSeat.anchorX * liveSeat.scale,
     top: groundTop - liveSeat.anchorY * liveSeat.scale,
     width: def.sprite.w * liveSeat.scale,
     height: def.sprite.h * liveSeat.scale,
   };
-  const unitCell = { x: ax + def.w, y: ay + def.h - 1 };
+  const unitCell = { x: ax + liveW, y: ay + liveH - 1 };
   const unitPos = boardLabCellPosition(unitCell);
 
   // "Share base" size variants (ADR-0059): duplicate the CURRENT prop at its current seat as a new
@@ -195,12 +200,15 @@ export function PropSeatLab({ propId, onPropId, header }: {
     const baseId = def.spriteId;
     const baseDef = PROP_DEFS.find((d) => d.id === baseId) ?? def;
     const variantId = `${baseId}-${slug}`;
+    // Capture the current footprint only if it differs from the base, so a variant inherits the
+    // base's cells by default but keeps a changed footprint if you set one.
+    const footprint = (liveW !== baseDef.w || liveH !== baseDef.h) ? { w: liveW, h: liveH } : {};
     setStatus('saving variant…');
     try {
       const res = await fetch('/__prop-seat/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [variantId]: { base: baseId, label: `${baseDef.label} — ${suffix}`, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY, scale: liveSeat.scale } }),
+        body: JSON.stringify({ [variantId]: { base: baseId, label: `${baseDef.label} — ${suffix}`, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY, scale: liveSeat.scale, ...footprint } }),
       });
       const json = await res.json();
       if (json.ok) { setStatus(`saved variant "${variantId}" — pick it from Prop after reload`); setVariantName(''); }
@@ -234,7 +242,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
             ) : null}
             {showGuides ? (
               <>
-                {propCells(ax, ay, def).map((cell) => {
+                {propCells(ax, ay, liveDef).map((cell) => {
                   const p = boardLabCellPosition(cell);
                   return (
                     <svg key={`g-${cell.x}-${cell.y}`} className="ps-guide"
@@ -304,7 +312,15 @@ export function PropSeatLab({ propId, onPropId, header }: {
             <SliderRow label={`Scale · ${liveSeat.scale.toFixed(2)}×`} value={liveSeat.scale} set={(v) => setSeat({ scale: round2(v) })}
               min={0.25} max={2} step={0.01} nudge={0.05} dflt={committed.scale} />
 
-            <p className="ps-saved">saved: ({committed.anchorX}, {committed.anchorY}) @ {committed.scale.toFixed(2)}×</p>
+            {/* Footprint — how many gameplay cells the prop occupies (placement + blocking rocks).
+                Separate from Scale (visual only); the guides + seat reflow as you change it. */}
+            <span className="ps-ctl-label" style={{ marginTop: 6 }}>Footprint <em>{liveW} × {liveH} cells</em></span>
+            <SliderRow label={`Width · ${liveW}`} value={liveW} set={(v) => setSeat({ w: Math.round(v) })}
+              min={1} max={6} step={1} nudge={1} dflt={def.w} />
+            <SliderRow label={`Height · ${liveH}`} value={liveH} set={(v) => setSeat({ h: Math.round(v) })}
+              min={1} max={6} step={1} nudge={1} dflt={def.h} />
+
+            <p className="ps-saved">saved: ({committed.anchorX}, {committed.anchorY}) @ {committed.scale.toFixed(2)}× · {def.w}×{def.h} cells</p>
             <div className="ps-actions">
               <button type="button" className="tileset-view-action ps-primary" onClick={save} disabled={!dirty}>Save to disk</button>
               <button type="button" className="tileset-view-action" onClick={copy}>Copy JSON</button>

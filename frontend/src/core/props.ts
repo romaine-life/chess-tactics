@@ -37,14 +37,19 @@ export interface PropSprite {
 // base prop's PNG + gameplay footprint and differs ONLY by its own seat (scale + anchor). A
 // variant is a distinct prop id, so placement/serialisation need no change; it just gets its own
 // PROP_DEFS entry synthesized from the base. Authored by eye in /prop-lab.
-type PropSeatEntry = { anchorX: number; anchorY: number; scale: number; base?: string; label?: string };
+// A prop-config entry: the seat (anchor + render scale), an optional gameplay FOOTPRINT override
+// (w × h cells — absent means the default/base footprint), and, for a size variant, its `base`.
+type PropSeatEntry = { anchorX: number; anchorY: number; scale: number; w?: number; h?: number; base?: string; label?: string };
 const SEATS = propSeats as Record<string, PropSeatEntry>;
+const DEFAULT_FOOTPRINT = 2;
 
 function seat(id: string): { anchorX: number; anchorY: number; scale: number } {
   const s = SEATS[id];
   if (!s) throw new Error(`propSeats.json has no seat for prop "${id}"`);
   return { anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale };
 }
+const footW = (id: string): number => SEATS[id]?.w ?? DEFAULT_FOOTPRINT;
+const footH = (id: string): number => SEATS[id]?.h ?? DEFAULT_FOOTPRINT;
 
 export interface PropDef {
   id: string;
@@ -82,8 +87,8 @@ const BASE_PROP_DEFS: readonly PropDef[] = [
     id: 'oak',
     label: 'Oak tree',
     kind: 'tree',
-    w: 2,
-    h: 2,
+    w: footW('oak'),
+    h: footH('oak'),
     blocking: true,
     terrains: ['grass', 'dirt'],
     spriteId: 'oak',
@@ -94,8 +99,8 @@ const BASE_PROP_DEFS: readonly PropDef[] = [
     id: 'cottage',
     label: 'Cottage',
     kind: 'house',
-    w: 2,
-    h: 2,
+    w: footW('cottage'),
+    h: footH('cottage'),
     blocking: true,
     terrains: ['grass', 'dirt', 'stone'],
     spriteId: 'cottage',
@@ -106,8 +111,8 @@ const BASE_PROP_DEFS: readonly PropDef[] = [
   // gated Codex img2img RESTYLES of real Blender captures (photoreal meshes read "too realistic"
   // raw, so the cabin/green-roof shapes are kept but re-skinned to pixel-art). Method-verified via
   // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
-  { id: 'cabin', label: 'Log cabin', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', family: 'cabin', sprite: { w: 220, h: 176, ...seat('cabin') } },
-  { id: 'lodge', label: 'Green-roof house', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', family: 'lodge', sprite: { w: 210, h: 177, ...seat('lodge') } },
+  { id: 'cabin', label: 'Log cabin', kind: 'house', w: footW('cabin'), h: footH('cabin'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', family: 'cabin', sprite: { w: 220, h: 176, ...seat('cabin') } },
+  { id: 'lodge', label: 'Green-roof house', kind: 'house', w: footW('lodge'), h: footH('lodge'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', family: 'lodge', sprite: { w: 210, h: 177, ...seat('lodge') } },
 ];
 
 // Size variants: any propSeats.json entry with a `base` synthesizes a prop that SHARES the base's
@@ -121,9 +126,12 @@ function variantDefs(bases: readonly PropDef[]): PropDef[] {
     const base = byId.get(s.base);
     if (!base) throw new Error(`prop variant "${id}" in propSeats.json references unknown base "${s.base}"`);
     out.push({
-      ...base, // inherit kind/w/h/blocking/terrains/spriteId/family from the base
+      ...base, // inherit kind/blocking/terrains/spriteId/family from the base
       id,
       label: s.label ?? `${base.label} (${id})`,
+      // Footprint: a variant inherits the base's cells unless its entry overrides w/h.
+      w: s.w ?? base.w,
+      h: s.h ?? base.h,
       sprite: { w: base.sprite.w, h: base.sprite.h, anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale },
     });
   }

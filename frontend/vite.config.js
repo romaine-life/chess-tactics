@@ -85,13 +85,15 @@ function propSeatSave() {
           try {
             const posted = JSON.parse(body);
             const entries = posted && typeof posted === 'object' && !Array.isArray(posted) ? Object.entries(posted) : [];
+            const okFoot = (v) => v === undefined || (Number.isInteger(v) && v >= 1 && v <= 12);
             const ok = entries.length > 0 && entries.every(([id, s]) => /^[a-z0-9_-]+$/i.test(id)
               && s && typeof s === 'object'
               && Number.isFinite(s.anchorX) && Number.isFinite(s.anchorY)
               && Number.isFinite(s.scale) && s.scale > 0
+              && okFoot(s.w) && okFoot(s.h)
               && (s.base === undefined || typeof s.base === 'string')
               && (s.label === undefined || typeof s.label === 'string'));
-            if (!ok) throw new Error('body must be a non-empty { [propId]: { anchorX, anchorY, scale, base?, label? } } map with finite numbers');
+            if (!ok) throw new Error('body must be a non-empty { [propId]: { anchorX, anchorY, scale, w?, h?, base?, label? } } map with finite numbers');
             const rel = 'src/core/propSeats.json';
             const out = join(process.cwd(), rel);
             const existing = JSON.parse(await readFile(out, 'utf8'));
@@ -102,10 +104,14 @@ function propSeatSave() {
               const prev = existing[id] || {};
               const base = s.base ?? prev.base;
               const label = s.label ?? prev.label;
+              const w = s.w ?? prev.w;
+              const h = s.h ?? prev.h;
               merged[id] = {
                 ...(base ? { base } : {}),
                 ...(label ? { label } : {}),
                 anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale,
+                ...(w !== undefined ? { w } : {}),
+                ...(h !== undefined ? { h } : {}),
               };
             }
             await writeFile(out, `${JSON.stringify(merged, null, 2)}\n`);

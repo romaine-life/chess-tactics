@@ -2,22 +2,30 @@
   "oak": {
     "anchorX": 96,
     "anchorY": 255,
-    "scale": 1
+    "scale": 1,
+    "w": 2,
+    "h": 2
   },
   "cottage": {
     "anchorX": 91,
     "anchorY": 110,
-    "scale": 0.62
+    "scale": 0.62,
+    "w": 2,
+    "h": 2
   },
   "cabin": {
     "anchorX": 117,
     "anchorY": 100,
-    "scale": 1
+    "scale": 1,
+    "w": 2,
+    "h": 2
   },
   "lodge": {
     "anchorX": 103,
     "anchorY": 126,
-    "scale": 1
+    "scale": 1,
+    "w": 2,
+    "h": 2
   },
   "cottage-small": {
     "base": "cottage",
