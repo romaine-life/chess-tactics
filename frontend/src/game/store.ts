@@ -14,6 +14,12 @@ import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
 import { createRng, type Rng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
+import { loadShippedAiWeights } from '../net/aiWeights';
+
+// Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
+// admin shipped for a level (ship-to-everyone). Best-effort; a failure leaves the
+// cache empty and the AI falls back to the player's personal adoption or DEFAULT.
+void loadShippedAiWeights();
 
 // ---- Multiplayer (netplay) --------------------------------------------------
 // A skirmish is normally single-player: the local human controls 'player' and a
