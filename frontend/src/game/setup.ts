@@ -3,7 +3,7 @@
 // Replaces the legacy startGame() placement with a seeded, testable version.
 
 import type { BoardSize, GameState, Piece, PieceType, Side, TerrainCell, TerrainType } from '../core/types';
-import type { Level } from '../core/level';
+import type { Level, TimeControl } from '../core/level';
 import { createRng, type Rng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
 import { tileAssets, tileFamilies } from '../art/tileset';
@@ -50,6 +50,11 @@ export interface SkirmishOptions {
   /** Enemy decision policy (consumed by the store, not by setup): 'search' is the
    * objective-aware search AI; 'greedy' keeps the legacy policy as an A/B lever. */
   ai?: 'search' | 'greedy';
+  /** Battle clock for a FREE skirmish (consumed by the store, not by setup). A
+   * TimeControl arms the player's clock; `null` forces an untimed game; omitting it
+   * lets the store fall back to the level's authored control, or — for a free
+   * skirmish with no level — the 5:00 default (DEFAULT_TIME_CONTROL). */
+  timeControl?: TimeControl | null;
 }
 
 function pawnForwardFields(type: PieceType, facing: Piece['facing']): Pick<Piece, 'pawnForward'> {

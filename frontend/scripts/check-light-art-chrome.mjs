@@ -37,7 +37,7 @@ function checkFile(path) {
     errors.push(`${file}: import ArtRouteChrome/LightArtRouteShell instead of useScreenEntrance directly.`);
   }
 
-  // Single-owner rule (ADR-0063): the homepage backdrop is ONE continuous instance shared by
+  // Single-owner rule (ADR-0064): the homepage backdrop is ONE continuous instance shared by
   // every homepage-family surface, so it can never re-mount/re-adjust on navigation. Screens
   // render <HomepageBackdrop/> — never a bespoke <AmbienceBackground/> rain (folded into it)
   // nor the standalone <SceneBackdrop/> component (a per-screen scene re-crops on every hop).
@@ -45,7 +45,7 @@ function checkFile(path) {
   const importsAmbience =
     /from\s+['"][^'"]*AmbienceBackground['"]/.test(source) || /<AmbienceBackground[\s/>]/.test(source);
   if (importsAmbience && file !== BACKDROP_OWNER) {
-    errors.push(`${file}: render <HomepageBackdrop/> — AmbienceBackground was folded into it (single-owner backdrop, ADR-0063).`);
+    errors.push(`${file}: render <HomepageBackdrop/> — AmbienceBackground was folded into it (single-owner backdrop, ADR-0064).`);
   }
 
   // The standalone <SceneBackdrop> React component is a STUDIO INSPECTOR render only (SceneAnimLab
@@ -55,7 +55,7 @@ function checkFile(path) {
   const importsSceneComponent =
     /import\s+\{[^}]*\bSceneBackdrop\b[^}]*\}\s+from\s+['"][^'"]*SceneBackdrop['"]/.test(source);
   if (importsSceneComponent && !SCENE_COMPONENT_ALLOWED.has(file)) {
-    errors.push(`${file}: render <HomepageBackdrop/> — the SceneBackdrop component is for the studio inspector only (single-owner backdrop, ADR-0063).`);
+    errors.push(`${file}: render <HomepageBackdrop/> — the SceneBackdrop component is for the studio inspector only (single-owner backdrop, ADR-0064).`);
   }
 
   // A homepage-backdrop route enrolls its chrome through ArtRouteChrome/LightArtRouteShell, so the

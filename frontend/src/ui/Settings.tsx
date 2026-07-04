@@ -758,11 +758,14 @@ export function Settings(): ReactElement {
       <div className="settings-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
-            {tabs.map((tab) => (
+            {tabs.map((tab, index) => (
               <NavButton
                 key={tab.id}
                 to={withReturnTo(TAB_PATHS[tab.id])}
                 className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
+                // Position down the rail — drives the shared stone-continuity slice
+                // (--tab-index, see .settings-tab in style.css) so the tabs read as one sheet.
+                style={{ ['--tab-index' as string]: index }}
                 aria-current={tab.id === activeTab ? 'page' : undefined}
                 onClick={() => setConfirmingReset(false)}
               >

@@ -21,7 +21,7 @@ import { useLayoutEffect, useRef, type ReactElement } from 'react';
 // (buildSceneBackdropNode). Homepage SCREENS never render the scene from here: the
 // live backdrop must be ONE continuous instance re-parented across route swaps
 // (never re-mounted), so it lives as a singleton node owned by HomepageBackdrop —
-// a per-screen React subtree would re-crop/re-fade on navigation (ADR-0063). The
+// a per-screen React subtree would re-crop/re-fade on navigation (ADR-0064). The
 // <SceneBackdrop> component below is a STANDALONE render for the studio inspector
 // only (SceneAnimLab's Animated Scenes picker); it builds the same DOM via the
 // builder so there is one structure. See ui/HomepageBackdrop.tsx.

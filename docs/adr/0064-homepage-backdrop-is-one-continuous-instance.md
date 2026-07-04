@@ -4,7 +4,7 @@ date: 2026-07-04
 deciders: Nelson, Claude
 ---
 
-# ADR-0063: The homepage backdrop is one continuous instance
+# ADR-0064: The homepage backdrop is one continuous instance
 
 Closes the gap left open by [ADR-0046 §G](0046-screen-and-control-transitions-are-orchestrated.md)
 and [ADR-0049](0049-route-surfaces-own-navigation-transitions.md). Those ADRs declared the

@@ -61,9 +61,16 @@ const SETTINGS_ICON = `${ICONS}/settings.png`;
 // Settings sidebar uses, so the menu and the rest of the app read as one family
 // (retires the bespoke stone slabs). A NavButton, not an anchor (ADR-0052): game
 // controls are buttons; the route is the address, not the affordance.
-function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
+// `index` is the tab's position down the rail — it drives the shared stone-continuity
+// slice (--tab-index) so this rail's stone reads as one sheet however many tabs it has
+// (the menu carries five; the Settings screen four). See .settings-tab in style.css.
+function ModeTab({ tab, index }: { tab: MenuTab; index: number }): ReactElement {
   return (
-    <NavButton className="settings-tab main-menu-mode-tab" to={tab.href}>
+    <NavButton
+      className="settings-tab main-menu-mode-tab"
+      to={tab.href}
+      style={{ ['--tab-index' as string]: index }}
+    >
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
@@ -136,7 +143,7 @@ export function MainMenu(): ReactElement {
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
+            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} />)}
           </aside>
         </ArtRouteChrome>
       </div>
