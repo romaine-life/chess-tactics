@@ -9,6 +9,7 @@ import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pi
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
 import { useSkirmishView } from '../game/skirmishView';
+import { provisionalBoard, premoveArrows, premoveTargets, type PremoveArrow } from '../game/premoves';
 import { BoardLabBoard, boardLabCellPosition } from './BoardLabBoard';
 import { GroundCoverLayer } from './GroundCoverLayer';
 import { PropSprite } from './BoardStructure';
@@ -409,6 +410,42 @@ function UnitPiece({
   );
 }
 
+// The queued premove chain, drawn chess.com-style: one arrow per step, from the piece's
+// provisional square to its destination. Rendered inside the board's transformed space
+// (the same coordinate system as the unit seats) so it tracks zoom/pan for free.
+// Placeholder art — a flat stroked line + arrowhead — pending a richer treatment.
+function PremoveArrowLayer({ arrows }: { arrows: PremoveArrow[] }) {
+  if (!arrows.length) return null;
+  return (
+    <svg
+      className="premove-arrow-layer"
+      style={{ position: 'absolute', left: 0, top: 0, width: 1, height: 1, overflow: 'visible', pointerEvents: 'none', zIndex: 32000 }}
+      aria-hidden="true"
+    >
+      <defs>
+        <marker id="premove-arrowhead" markerWidth="4" markerHeight="4" refX="2.4" refY="2" orient="auto">
+          <path d="M0,0 L4,2 L0,4 Z" className="premove-arrowhead-fill" />
+        </marker>
+      </defs>
+      {arrows.map((arrow, i) => {
+        const from = boardLabCellPosition(arrow.from);
+        const to = boardLabCellPosition(arrow.to);
+        return (
+          <line
+            key={`${arrow.from.x},${arrow.from.y}->${arrow.to.x},${arrow.to.y}-${i}`}
+            x1={from.left}
+            y1={from.top}
+            x2={to.left}
+            y2={to.top}
+            className="premove-arrow"
+            markerEnd="url(#premove-arrowhead)"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 export function SkirmishBoard() {
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
   // the controls and the playfield stays clean of floating buttons.
@@ -430,6 +467,13 @@ export function SkirmishBoard() {
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const tryMoveTo = useSkirmish((s) => s.tryMoveTo);
+  const premoves = useSkirmish((s) => s.premoves);
+  const queueMove = useSkirmish((s) => s.queueMove);
+  const clearPremoves = useSkirmish((s) => s.clearPremoves);
+  // Premove building: which piece the player is queueing from. Component-local (not the
+  // game store's selection) so it never fights the live-turn selection overlays — during
+  // the enemy turn the store's selectedId is null, leaving this the only selection in play.
+  const [premoveSelectedId, setPremoveSelectedId] = useState<string | null>(null);
   const selectedMoves = useMemo(() => {
     if (game.turn !== 'player' || game.winner) return [];
     const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === 'player');
@@ -504,7 +548,47 @@ export function SkirmishBoard() {
     [env, game.pieces, game.size, showPlayerMoves],
   );
 
+  // Premoves: while the opponent is thinking (game.turn === 'enemy'), the board stays
+  // live — the player can queue a chain that fires one-per-turn as control returns. The
+  // chain is built on the PROVISIONAL board (current board + the moves already queued),
+  // so a later step sees the piece where its earlier steps left it. See game/premoves.
+  const premoveMode = game.turn === 'enemy' && !game.winner;
+  const provGame = useMemo(() => provisionalBoard(game, premoves), [game, premoves]);
+  const premoveChain = useMemo(() => premoveArrows(game, premoves), [game, premoves]);
+  const premoveTargetSet = useMemo(
+    () => (premoveMode ? new Set(premoveTargets(game, premoves, premoveSelectedId).map((m) => `${m.x},${m.y}`)) : new Set<string>()),
+    [premoveMode, game, premoves, premoveSelectedId],
+  );
+  const premoveDestSet = useMemo(() => new Set(premoveChain.map((a) => `${a.to.x},${a.to.y}`)), [premoveChain]);
+  const premoveSelKey = useMemo(() => {
+    if (!premoveMode || !premoveSelectedId) return null;
+    const p = provGame.pieces.find((q) => q.id === premoveSelectedId && q.alive && q.side === 'player');
+    return p ? `${p.x},${p.y}` : null;
+  }, [premoveMode, premoveSelectedId, provGame.pieces]);
+
+  // The chain-building selection is only meaningful during the opponent's turn; when it
+  // ends (a premove fires, or the player regains a live turn) drop it so the next enemy
+  // turn starts clean.
+  useEffect(() => { if (!premoveMode) setPremoveSelectedId(null); }, [premoveMode]);
+  // Escape clears the whole queued chain (spec: chess-style cancel).
+  useEffect(() => {
+    if (!premoves.length && !premoveSelectedId) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { clearPremoves(); setPremoveSelectedId(null); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [premoves.length, premoveSelectedId, clearPremoves]);
+
   const handleTile = (x: number, y: number) => {
+    // Opponent's turn: clicks build the premove chain instead of being ignored. Select a
+    // player piece (by its provisional position), then click a legal target to queue a step.
+    if (premoveMode) {
+      if (premoveSelectedId && premoveTargetSet.has(`${x},${y}`)) { queueMove(premoveSelectedId, x, y); return; }
+      const here = provGame.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
+      if (here && here.side === 'player') setPremoveSelectedId(here.id);
+      return;
+    }
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
     if (selectedMoves.some((move) => move.x === x && move.y === y)) {
       tryMoveTo(x, y);
@@ -546,7 +630,10 @@ export function SkirmishBoard() {
               moveSet.has(key) ? 'is-move' : '',
               threatSet.has(key) ? 'is-threat' : '',
               blockedSet.has(key) ? 'is-blocked-candidate' : '',
+              premoveTargetSet.has(key) ? 'is-premove-target' : '',
+              premoveDestSet.has(key) ? 'is-premove' : '',
               game.pieces.some((piece) => piece.id === selectedId && piece.alive && piece.x === cell.x && piece.y === cell.y) ? 'is-selected' : '',
+              premoveSelKey === key ? 'is-selected' : '',
               focusPiece && focusPiece.x === cell.x && focusPiece.y === cell.y ? 'is-focused-piece' : '',
             ].filter(Boolean).join(' ');
             return (
@@ -580,6 +667,7 @@ export function SkirmishBoard() {
               arrivalDelay={arrivalDelays.get(piece.id) ?? 0}
             />
           ))}
+          <PremoveArrowLayer arrows={premoveChain} />
         </BoardLabBoard>
       </ViewPane>
     </div>

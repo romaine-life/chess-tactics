@@ -4100,6 +4100,33 @@ h1 {
   opacity: 1;
 }
 
+/* Premoves (queued while the opponent thinks). Cool indigo, distinct from the live-turn
+   cyan move highlight: -target = a square the selected piece could be premoved to, -premove
+   = a square already queued as a step in the chain. */
+.skirmish-board-cell-hit.is-premove-target::before {
+  background: rgba(120, 158, 255, .22);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-premove::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(158, 190, 255, .34), transparent 60%),
+    rgba(96, 132, 240, .26);
+  opacity: 1;
+}
+
+/* The queued-chain arrows (placeholder art). Coordinates are board-space, so the stroke
+   scales with the board zoom transform. */
+.premove-arrow {
+  stroke: rgba(139, 174, 255, .85);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.premove-arrowhead-fill {
+  fill: rgba(139, 174, 255, .92);
+}
+
 .skirmish-board-cell-hit.is-selected::after,
 .skirmish-board-cell-hit.is-focused-piece::after,
 .skirmish-board-cell-hit:focus-visible::after,
