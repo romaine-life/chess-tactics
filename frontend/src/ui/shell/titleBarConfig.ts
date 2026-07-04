@@ -25,9 +25,12 @@ export interface TitleBarConfig {
 }
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
-  // The design/asset Studio + its deep-link aliases: brand left, account cluster right.
+  // The design/asset Studio + its deep-link aliases: brand left, then the workspace
+  // switcher (Catalog/Lab/Viewer icons) in the actions slot, account cluster right. The
+  // Studio portals its icon nav there via <TitleBarSlot region="actions">; studio-topbar
+  // adds the 3rd grid column (brand · actions · cluster) that slot needs.
   if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') {
-    return { screenName: 'Studio' };
+    return { screenName: 'Studio', barClass: 'studio-topbar', actionsSlot: true };
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };

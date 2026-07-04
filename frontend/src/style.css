@@ -3874,6 +3874,13 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
+/* Studio bar: 3 columns — brand · workspace switcher (Catalog/Lab/Viewer icons, actions
+   slot) · account cluster. The extra track lets the icon nav sit before the always-present
+   cluster (ADR-0042). */
+.app-shell-titlebar.studio-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 .skirmish-topbar-status {
   align-items: center;
   display: flex;
@@ -7344,7 +7351,6 @@ body { font-size: 17px; }
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
 }
 
-.tileset-mode-tabs button,
 .tileset-view-action {
   min-height: 36px;
   padding: 9px 12px;
@@ -7357,52 +7363,54 @@ body { font-size: 17px; }
   font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
-.tileset-mode-tabs {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  gap: 3px;
-  padding: 3px;
-  background: rgba(2, 8, 13, 0.5);
-  border: 1px solid rgba(67, 127, 179, 0.24);
-  border-radius: 6px;
+/* The Studio workspace switcher (Catalog / Lab / Viewer). It rides the title bar's
+   actions slot as three kit-framed icon buttons, so it reads as a sibling of the trailing
+   gear/account cluster instead of eating a row on every Viewer's control rail. */
+.studio-mode-nav {
+  align-items: center;
+  display: flex;
+  gap: 6px;
 }
 
-.tileset-mode-tabs button {
-  min-width: 0;
-  min-height: 28px;
-  padding: 5px 8px;
-  font-size: 11px;
-  border-color: transparent;
+.studio-mode-icon {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  block-size: 52px;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  image-rendering: pixelated;
+  inline-size: 52px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
 }
 
-.tileset-mode-tabs button.is-active {
-  color: #f3fbff;
-  background: rgba(25, 94, 132, 0.95);
-  border-color: rgba(111, 210, 255, 0.76);
+/* Active mode gets the lit frame — same swap the settings gear / mode buttons use. */
+.studio-mode-icon.is-active {
+  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 10px stretch;
 }
 
-.tileset-mode-tabs button:disabled {
-  color: rgba(216, 234, 255, 0.42);
-  background: rgba(12, 31, 48, 0.42);
-  border-color: transparent;
-  cursor: not-allowed;
+.studio-mode-icon:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, 0.72);
+  outline-offset: 2px;
 }
 
-/* The relocated workspace switcher, as a labelled field at the top of the control
-   panel (catalog rail + each Viewer lab's controls). */
-.tileset-mode-field {
-  display: grid;
-  gap: 5px;
+/* Forged pixel-art glyph, sized like the neighbouring gear's icon (26px in its frame). */
+.studio-mode-icon > img {
+  block-size: 28px;
+  image-rendering: pixelated;
+  inline-size: 28px;
+  object-fit: contain;
 }
 
-.tileset-mode-field .tileset-control-label {
-  color: #72bde8;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+/* Idle glyphs sit a touch dimmed so the lit (active) mode reads as selected; hover/active full. */
+.studio-mode-icon > img { opacity: 0.82; }
+.studio-mode-icon.is-active > img,
+.studio-mode-icon:hover > img { opacity: 1; }
 
 .tileset-context-tabs {
   flex: none;
@@ -9128,13 +9136,6 @@ button.tileset-relationship-cell {
   overflow-wrap: anywhere;
 }
 
-.tileset-control-stack .tileset-mode-tabs button {
-  min-width: 0;
-  min-height: 28px;
-  padding: 5px 8px;
-  font-size: 11px;
-  line-height: 1;
-}
 
 /* Per-focus layer-visibility toggle (the "vision" eye). Amber when the layer is hidden,
    so it's obvious the board is concealing something rather than empty. */
