@@ -11571,6 +11571,28 @@ button.tileset-relationship-cell {
   transform: translate(-230px, -21px);
 }
 
+/* HOME MENU rail: keep the tuned centred placement, but FLOOR it so it can't clip.
+   Scoped to .main-menu-home (the home menu only — Campaign shares .main-menu-twin-screen /
+   .main-menu-layer but has a rows box tuned to the same centred shell, so it keeps the base
+   rules above).
+
+   The bug: the shell centres its body with margin = (layout-vw - shellW)/2, and the rail is
+   then pulled left a fixed -230px (the .settings-rail-frame transform above). At wide widths
+   that lands the buttons where they were TUNED to sit — do NOT disturb that. But as the window
+   narrows the centring margin shrinks while -230px stays put, so below ~1748px CSS width the
+   rail's left edge crosses x=0 and the buttons clip off the screen (labels sheared). A 1920
+   display at 125%/150% Windows scaling reports a CSS viewport of ~1536/1280 — squarely in the
+   clip zone.
+
+   The fix keeps the EXACT centred value wherever it already clears the floor (rail-left =
+   margin-230 stays put), and only floors the margin at 230px + a 40px gutter so the rail-left
+   can never fall below ~40px. So it is byte-identical to the tuned/production placement at every
+   width >= ~1748px, and merely stops the clip on narrower viewports. The rail keeps its shared
+   translate(-230px,-21px) — placement is corrected here, at the shell, not by moving the rail. */
+.main-menu-home .settings-shell {
+  margin-inline-start: max(270px, calc((var(--layout-vw, 100vw) - var(--settings-shell-w)) / 2));
+}
+
 /* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label
    (text is exempt from the kit-surface rule, ADR-0032). */
 .campaign-rail-group {
