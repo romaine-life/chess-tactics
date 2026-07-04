@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateObjective, objectiveContextForLevel, objectiveSummary, kingSideOf, DEFAULT_SURVIVE_TURNS, MODE_NAME } from './objectives';
-import { createBlankLevel } from './level';
+import { evaluateObjective, evaluateVictory, victoryRulesForObjective, objectiveContextForLevel, objectiveSummary, kingSideOf, DEFAULT_SURVIVE_TURNS, MODE_NAME, type ObjectiveContext } from './objectives';
+import { createBlankLevel, type VictoryRules } from './level';
 import type { GameState, Piece, PieceType, Side } from './types';
 
 function piece(id: string, side: Side, type: PieceType, x: number, y: number): Piece {
@@ -63,10 +63,109 @@ describe('evaluateObjective', () => {
     expect(evaluateObjective(s, 'survive', { surviveTurns: 5, turnsElapsed: 5 })).toBe('player');
   });
 
-  it('reach: won when a living player stands on a target cell', () => {
-    const s = state([piece('p', 'player', 'knight', 3, 3), piece('e', 'enemy', 'pawn', 1, 1)]);
-    expect(evaluateObjective(s, 'reach', { reachCells: [{ x: 7, y: 0 }] })).toBeNull();
-    expect(evaluateObjective(s, 'reach', { reachCells: [{ x: 3, y: 3 }, { x: 7, y: 0 }] })).toBe('player');
+  it('reach: won when a PAWN reaches a target cell; other pieces do not count (pawn-only)', () => {
+    const cells = [{ x: 3, y: 3 }, { x: 7, y: 0 }];
+    // A pawn on a target wins; off the target is undecided.
+    expect(evaluateObjective(state([piece('p', 'player', 'pawn', 3, 3), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBe('player');
+    expect(evaluateObjective(state([piece('p', 'player', 'pawn', 2, 2), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBeNull();
+    // A NON-pawn sitting on the target does NOT win — the pre-ADR-0064 any-piece looseness is fixed.
+    expect(evaluateObjective(state([piece('k', 'player', 'knight', 3, 3), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBeNull();
+  });
+
+  it('reach: a pawn that promotes on arrival still scores (lastMove carries the pre-promotion type)', () => {
+    // A pawn reaching the enemy back rank (y=0) promotes to a queen inside applyMove, so the
+    // settled board shows a queen on the goal — but lastMove records pieceType 'pawn' + the
+    // destination, so reach still fires.
+    const promoted: GameState = {
+      size: { cols: 8, rows: 8 },
+      pieces: [piece('q', 'player', 'queen', 7, 0), piece('e', 'enemy', 'pawn', 1, 1)],
+      turn: 'enemy',
+      winner: null,
+      lastMove: { pieceId: 'q', pieceType: 'pawn', side: 'player', from: { x: 7, y: 1 }, to: { x: 7, y: 0 } },
+    };
+    expect(evaluateObjective(promoted, 'reach', { reachCells: [{ x: 7, y: 0 }] })).toBe('player');
+    // A REAL queen that merely moved onto the goal (lastMove.pieceType 'queen') does NOT score.
+    const wandered: GameState = { ...promoted, lastMove: { ...promoted.lastMove!, pieceType: 'queen' } };
+    expect(evaluateObjective(wandered, 'reach', { reachCells: [{ x: 7, y: 0 }] })).toBeNull();
+  });
+});
+
+describe('evaluateVictory (ADR-0064 if-then rules)', () => {
+  it('first-match ordering: a lose rule above a win rule resolves a tie as a loss', () => {
+    // Survive-shaped: the lose rule (wipe) sits above the win rule (outlast). When the clock hits N
+    // AND the last player piece is gone, the lose rule (checked first) decides → 'enemy'.
+    const rules: VictoryRules = [
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'turnLimit', turns: 5 }], do: [{ kind: 'win', side: 'player' }] },
+    ];
+    expect(evaluateVictory(state([piece('e', 'enemy', 'pawn', 1, 1)]), rules, { turnsElapsed: 5 })).toBe('enemy');
+    const held = state([piece('p', 'player', 'pawn', 0, 0), piece('e', 'enemy', 'pawn', 1, 1)]);
+    expect(evaluateVictory(held, rules, { turnsElapsed: 5 })).toBe('player');
+    expect(evaluateVictory(held, rules, { turnsElapsed: 4 })).toBeNull();
+  });
+
+  it('separate rules are OR: reach the goal OR wipe out the enemy', () => {
+    const rules: VictoryRules = [
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
+      { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+    ];
+    expect(evaluateVictory(state([piece('p', 'player', 'pawn', 0, 0)]), rules, {})).toBe('player'); // enemy wiped
+    const contested = state([piece('p', 'player', 'pawn', 0, 0), piece('e', 'enemy', 'pawn', 1, 1)]);
+    expect(evaluateVictory(contested, rules, { reachCells: [{ x: 7, y: 7 }] })).toBeNull();
+    expect(evaluateVictory(state([piece('p', 'player', 'pawn', 7, 7), piece('e', 'enemy', 'pawn', 1, 1)]), rules, { reachCells: [{ x: 7, y: 7 }] })).toBe('player');
+  });
+
+  it('conditions within a rule are AND: the rule fires only when all hold', () => {
+    const rules: VictoryRules = [
+      { if: [{ kind: 'turnLimit', turns: 3 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+    ];
+    const kingUp = state([piece('p', 'player', 'pawn', 0, 0), piece('ek', 'enemy', 'king', 7, 7)]);
+    expect(evaluateVictory(kingUp, rules, { turnsElapsed: 3 })).toBeNull(); // turn reached, king alive
+    const kingGone = state([piece('p', 'player', 'pawn', 0, 0), piece('ep', 'enemy', 'pawn', 4, 4)]);
+    expect(evaluateVictory(kingGone, rules, { turnsElapsed: 2 })).toBeNull(); // king gone, turn not reached
+    expect(evaluateVictory(kingGone, rules, { turnsElapsed: 3 })).toBe('player'); // both
+  });
+});
+
+describe('victoryRulesForObjective (preset expansion)', () => {
+  it('expands to lose-then-win rules; capture-king is direction-aware', () => {
+    expect(victoryRulesForObjective('capture-all')).toEqual([
+      { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'Enemy is wiped out', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+    ]);
+    expect(victoryRulesForObjective('capture-king', { kingSide: 'enemy' })).toEqual([
+      { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'Enemy King is captured', if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] },
+    ]);
+    expect(victoryRulesForObjective('capture-king', { kingSide: 'player' })).toEqual([
+      { name: 'Your King is captured', if: [{ kind: 'eliminate', side: 'player', filter: { type: 'king' } }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'Enemy is wiped out', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+    ]);
+    expect(victoryRulesForObjective('survive', { surviveTurns: 6 })).toEqual([
+      { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'You outlast the assault', if: [{ kind: 'turnLimit', turns: 6 }], do: [{ kind: 'win', side: 'player' }] },
+    ]);
+    expect(victoryRulesForObjective('reach')).toEqual([
+      { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'A pawn reaches the goal', if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
+    ]);
+  });
+
+  it('the preset path stays in sync with evaluateObjective across boards and contexts', () => {
+    const boards: GameState[] = [
+      state([piece('p', 'player', 'pawn', 0, 0), piece('e', 'enemy', 'pawn', 1, 1)]),
+      state([piece('p', 'player', 'pawn', 0, 0)]),
+      state([piece('pk', 'player', 'king', 0, 0), piece('ep', 'enemy', 'pawn', 4, 4)]),
+      state([piece('pr', 'player', 'rook', 0, 0), piece('ek', 'enemy', 'king', 7, 7)]),
+    ];
+    const ctxs: ObjectiveContext[] = [{}, { kingSide: 'player' }, { surviveTurns: 5, turnsElapsed: 5 }, { reachCells: [{ x: 0, y: 0 }] }];
+    for (const obj of ['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach'] as const) {
+      for (const g of boards) for (const ctx of ctxs) {
+        expect(evaluateVictory(g, victoryRulesForObjective(obj, ctx), ctx)).toBe(evaluateObjective(g, obj, ctx));
+      }
+    }
   });
 });
 
