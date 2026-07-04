@@ -13,6 +13,8 @@
 import { DEFAULT_HYPERPARAMS, type MatchOptions, type SpsaHyperParams } from '../game/tuning';
 import { generateOpeningBook, type BookPosition, type OpeningBookSettings } from '../game/openingBook';
 import { advanceSession } from './gymStep';
+import { validateStep, type ValState } from './validate';
+import { DEFAULT_SPRT } from '../game/sprt';
 import { DEFAULT_EVAL_WEIGHTS, type EvalWeights } from '../core/ai';
 import type { Level } from '../core/level';
 import type { GymSession, GymPoint } from './openingBooks';
@@ -41,12 +43,19 @@ export interface GymStep {
   book: BookPosition[];
   session: GymSession;
 }
-export type GymRequest = GymInit | GymGenerate | GymStep;
+export interface GymValidate {
+  type: 'validate';
+  /** The champion weight vector to test against the shipped reference. */
+  candidate: EvalWeights;
+  book: BookPosition[];
+}
+export type GymRequest = GymInit | GymGenerate | GymStep | GymValidate;
 
 export type GymResponse =
   | { type: 'ready' }
   | { type: 'book'; positions: BookPosition[] }
   | { type: 'point'; point: GymPoint; session: GymSession }
+  | { type: 'valpoint'; state: ValState }
   | { type: 'error'; message: string };
 
 const post = (m: GymResponse): void => (self as unknown as { postMessage(m: GymResponse): void }).postMessage(m);
@@ -99,6 +108,24 @@ self.onmessage = (event: MessageEvent<GymRequest>): void => {
         book,
       );
       post({ type: 'point', point, session: next });
+      return;
+    }
+
+    if (msg.type === 'validate') {
+      if (!config) { post({ type: 'error', message: 'gym not initialised' }); return; }
+      const c = config;
+      // Stream a full SPRT validation of the champion (`candidate`) vs the shipped
+      // reference: play one game per iteration, post the folded W/D/L + verdict after
+      // EACH game, and stop when validateStep says done (a verdict crossed a bound or
+      // the game budget ran out). Deterministic in (level, candidate, reference, book,
+      // match, masterSeed): the same run replays the identical stream, and the UI
+      // renders each game as it lands. Runs synchronously in this worker thread, so it
+      // never blocks the main thread — the point of the worker.
+      let state: ValState | null = null;
+      do {
+        state = validateStep(c.level, msg.candidate, c.reference, msg.book, c.match, c.masterSeed, state, DEFAULT_SPRT);
+        post({ type: 'valpoint', state });
+      } while (!state.done);
       return;
     }
   } catch (error) {
