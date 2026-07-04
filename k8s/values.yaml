@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-2c90a2a517d97b024ec726a304b780d36f87c2188144036a81a2619d0dd4849e"
+  tag: "app-034fc5eedfd5541a763c285189f50535e8f3ff2edd0012ee0d379baa815d38bb"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Prop Studio: base/copy props, editable footprint & size variants + lab migrations"
-  prNumber: "346"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/346"
-  commit: "8eeb99f"
+  prTitle: "OG thumbnails read live official campaigns, not the stale baked file"
+  prNumber: "347"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/347"
+  commit: "1e02f8c"
 
 name: chess-tactics
 namespace: chess-tactics
