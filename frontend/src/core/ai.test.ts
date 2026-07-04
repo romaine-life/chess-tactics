@@ -112,6 +112,40 @@ describe('searchBestAction', () => {
     const after = Math.min(octile(chosen!.move.x, chosen!.move.y, 1, 6), octile(chosen!.move.x, chosen!.move.y, 0, 7));
     expect(after).toBeLessThan(before);
   });
+
+  it('declines a poisoned capture whose recapture is past the horizon (quiescence)', () => {
+    // maxDepth 1: without quiescence the leaf is scored the instant the rook grabs
+    // the pawn — +1 material minus only the tiny static hanging penalty (0.05·5) —
+    // and the recapture (the guard pawn takes the rook) sits one ply PAST the
+    // horizon, unseen, so plain negamax would keep the "+0.75" and hang the rook.
+    // Quiescence extends that capture, so the rook-for-pawn trade reads as the ≈ -4
+    // it truly is and the engine keeps its rook. (Pre-q behavior is in git history;
+    // the durable guard is the positive assertion that the poison is declined.)
+    const s = state([
+      piece('e-rook', 'enemy', 'rook', 4, 0), // slides up file 4 to (4,4)
+      piece('poison', 'player', 'pawn', 4, 4), // the capturable-but-defended pawn
+      piece('guard', 'player', 'pawn', 3, 5), // player pawn captures toward -y → defends (4,4)
+    ]);
+    const chosen = searchBestAction(s, {}, sctx(), null, { maxDepth: 1, maxNodes: 50_000 });
+    expect(chosen).not.toBeNull();
+    expect(chosen!.move.capture).not.toBe('poison');
+  });
+
+  it('is deterministic on a capture-rich position (quiescence recurses)', () => {
+    // Mutually-attacking pieces so quiescence actually recurses several plies; the
+    // whole ChosenAction (score, depth, node count) must be byte-identical twice.
+    // The only randomness is the root epsilon pick, which quiescence never touches.
+    const s = state([
+      piece('e-queen', 'enemy', 'queen', 4, 4),
+      piece('e-rook', 'enemy', 'rook', 4, 6),
+      piece('p-rook', 'player', 'rook', 4, 2),
+      piece('p-bishop', 'player', 'bishop', 2, 6),
+      piece('p-pawn', 'player', 'pawn', 5, 5),
+    ]);
+    const a = searchBestAction(s, {}, sctx(), createRng(7), { maxDepth: 4, maxNodes: 80_000 });
+    const b = searchBestAction(s, {}, sctx(), createRng(7), { maxDepth: 4, maxNodes: 80_000 });
+    expect(a).toEqual(b);
+  });
 });
 
 describe('evaluateGameState', () => {
