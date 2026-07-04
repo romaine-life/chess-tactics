@@ -2555,12 +2555,12 @@ function makeStaticCacheHeaders(rootDir) {
 // A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
 // JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
 // ON-DEMAND board render served here — no CI bake, no browser (the board composites in Node via
-// generated/board-render.cjs + boardThumbnail.js). Officials resolve from the baked official.json;
-// user maps from public_maps. A render/resolve failure degrades to the branded default image.
+// generated/board-render.cjs + boardThumbnail.js). Officials resolve from the LIVE DB (never the
+// committed seed fixture); user maps from public_maps. A render/resolve failure degrades to the
+// branded default image.
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 const DEFAULT_OG_IMAGE = '/assets/og/default.png';
-const OFFICIAL_WORKSPACE_REL = path.join('assets', 'campaigns', 'official.json');
 // Owner-facing objective labels — mirrors frontend core/objectives.ts MODE_NAME (5 stable entries).
 const OG_MODE_NAME = {
   'capture-all': 'Last Man Standing', 'capture-king': 'King Assault',
@@ -2580,32 +2580,34 @@ function readFileCached(absPath) {
   _fileCache.set(absPath, { mtimeMs: stat.mtimeMs, content });
   return content;
 }
-function frontendAssetPath(relPath) {
-  if (staticFrontendDir) {
-    const override = path.join(staticFrontendDir, relPath);
-    if (fs.existsSync(override)) return override;
-  }
-  return path.join(frontendDir, relPath);
-}
 function htmlEscape(value) {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-let _wsRaw = null;
-let _wsParsed = { campaigns: [], levels: {} };
-function officialWorkspace() {
-  const raw = readFileCached(frontendAssetPath(OFFICIAL_WORKSPACE_REL));
-  if (!raw) return { campaigns: [], levels: {} };
-  if (raw === _wsRaw) return _wsParsed;
+// Official campaigns for the OG/thumbnail path come ONLY from the LIVE DB — the same source the game
+// loads (GET /api/official-campaigns/default) — so a thumbnail can never drift from a re-published
+// level. A short TTL keeps the crawler hot path off the DB (≤1 query/minute); the last SUCCESSFUL
+// read is kept in memory so a transient DB blip still serves REAL (last-known) data. The committed
+// official.json is a DEV-ONLY seed fixture and is deliberately NOT read here (and not shipped to
+// prod): stale/test data must be impossible to show on a remote unfurl. On a cold start during a DB
+// outage (no cached read yet) this resolves to empty → the generic card, never the fixture.
+const OFFICIAL_WS_TTL_MS = 60 * 1000;
+let _officialCache = { at: 0, ws: null }; // last SUCCESSFUL DB read
+async function officialWorkspace() {
+  const now = Date.now();
+  if (_officialCache.ws && now - _officialCache.at < OFFICIAL_WS_TTL_MS) return _officialCache.ws;
   try {
-    const doc = JSON.parse(raw);
-    _wsParsed = {
-      campaigns: Array.isArray(doc.campaigns) ? doc.campaigns : [],
-      levels: doc.levels && typeof doc.levels === 'object' ? doc.levels : {},
-    };
-  } catch { _wsParsed = { campaigns: [], levels: {} }; }
-  _wsRaw = raw;
-  return _wsParsed;
+    const doc = await dbGetOfficialCampaigns('default');
+    const data = doc && doc.data;
+    if (data && Array.isArray(data.campaigns) && data.campaigns.length) {
+      _officialCache = {
+        at: now,
+        ws: { campaigns: data.campaigns, levels: data.levels && typeof data.levels === 'object' ? data.levels : {} },
+      };
+      return _officialCache.ws;
+    }
+  } catch { /* DB unreachable — fall through to the last-good real read below, else empty */ }
+  return _officialCache.ws || { campaigns: [], levels: {} };
 }
 // Resolve a share reference to { level, title, subtitle, description }. Officials read the on-disk
 // baked file (sync, no DB); user maps read public_maps (async). Returns null when unresolvable.
@@ -2623,7 +2625,7 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
     };
   }
   if (levelId && /^off-[a-z-]+$/.test(levelId)) {
-    const ws = officialWorkspace();
+    const ws = await officialWorkspace();
     const level = Object.hasOwn(ws.levels, levelId) && ws.levels[levelId] && typeof ws.levels[levelId] === 'object'
       ? ws.levels[levelId] : null;
     if (!level) return null;
