@@ -69,7 +69,7 @@ function conditionSummary(c: VictoryCondition, factionLabel: (s: ConditionSide) 
       return `turn ${c.turns} is reached`;
   }
 }
-const displayName = (r: VictoryRule, i: number): string => (r.name && r.name.trim()) || `Rule ${i + 1}`;
+const displayName = (r: VictoryRule, i: number): string => (r.name && r.name.trim()) || `Event ${i + 1}`;
 const outcomeLabel = (r: VictoryRule, factionLabel: (s: ConditionSide) => string): string => {
   const a = r.do[0] ?? DEFAULT_ACTION;
   return `${factionLabel(a.side)} ${a.kind === 'win' ? 'wins' : 'loses'}`;
@@ -95,13 +95,13 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
   const factionLabel = (s: ConditionSide): string => factions.find((f) => f.side === s)?.label ?? (s === 'player' ? 'Player' : 'Enemy');
 
   const setRule = (i: number, r: VictoryRule): void => onChange(value.map((x, j) => (j === i ? r : x)));
-  const addRule = (kind: VictoryAction['kind']): void => {
+  const addEvent = (): void => {
+    // One "add event": a blank event with a starting condition + action, both edited in the detail.
+    // Win vs lose is a property of the action (the THEN control), not a separate kind of rule.
     const taken = new Set(value.map((r, i) => displayName(r, i)));
-    const name = uniqueName(kind === 'win' ? 'New win rule' : 'New lose rule', taken);
-    const fresh: VictoryRule = kind === 'win'
-      ? { name, if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] }
-      : { name, if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] };
-    setSel(value.length); // focus the new rule
+    const name = uniqueName('New event', taken);
+    const fresh: VictoryRule = { name, if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] };
+    setSel(value.length); // focus the new event
     onChange([...value, fresh]);
   };
   const removeRule = (i: number): void => { setSel(Math.max(0, i - 1)); onChange(value.filter((_, j) => j !== i)); };
@@ -119,8 +119,8 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
     <div className="le-md">
       <div className="le-md-list">
         {templates}
-        <h3 className="le-victory-head">Rules</h3>
-        {value.length === 0 ? <p className="le-board-warning">No rules yet — set a template above, or add one below.</p> : null}
+        <h3 className="le-victory-head">Events</h3>
+        {value.length === 0 ? <p className="le-board-warning">No events yet — set a template above, or add one below.</p> : null}
         <div className="le-md-rules">
           {value.map((r, i) => (
             <button type="button" key={i} className={`le-md-item ${i === selected ? 'active' : ''}`.trim()} onClick={() => setSel(i)}>
@@ -130,8 +130,7 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
           ))}
         </div>
         <div className="le-cond-add le-rule-add">
-          <button type="button" className="le-seg-btn" onClick={() => addRule('win')}>+ Add win rule</button>
-          <button type="button" className="le-seg-btn" onClick={() => addRule('lose')}>+ Add lose rule</button>
+          <button type="button" className="le-seg-btn le-add-event" onClick={addEvent}>+ Add event</button>
         </div>
       </div>
 
@@ -139,12 +138,12 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
         {rule ? (
           <div className="le-rule">
             <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Rule name</span>
-              <input className="le-text-input" value={rule.name ?? ''} placeholder={`Rule ${selected + 1}`} aria-label="Rule name"
+              <span className="le-ctrllabel">Event name</span>
+              <input className="le-text-input" value={rule.name ?? ''} placeholder={`Event ${selected + 1}`} aria-label="Event name"
                 onChange={(e) => setRule(selected, { ...rule, name: e.target.value })} />
             </div>
 
-            {rule.if.length === 0 ? <p className="le-board-warning">This rule has no conditions — it fires every turn.</p> : null}
+            {rule.if.length === 0 ? <p className="le-board-warning">This event has no conditions — it fires every turn.</p> : null}
             {rule.if.map((c, j) => (
               <div className="le-rule-cond" key={j}>
                 <div className="le-cond-top">
@@ -197,10 +196,10 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
                     onClick={() => patchAction({ kind })}>{kind === 'win' ? 'wins' : 'loses'}</button>
                 ))}
               </div>
-              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeRule(selected)}>Remove rule</button>
+              <button type="button" className="le-seg-btn danger le-rule-remove" onClick={() => removeRule(selected)}>Remove event</button>
             </div>
           </div>
-        ) : <p className="le-board-note">No rule selected — set a template or add a rule on the left.</p>}
+        ) : <p className="le-board-note">No event selected — set a template or add an event on the left.</p>}
       </div>
     </div>
   );

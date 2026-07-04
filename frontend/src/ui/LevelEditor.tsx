@@ -1604,7 +1604,7 @@ export function LevelEditor(): ReactElement {
                         setVictory((v) => mergeRules(v, victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) })));
                       }}>Set template</button>
                     </div>
-                    <p className="le-board-note">Rules run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
+                    <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
                   </div>
                 )}
               />
@@ -1795,7 +1795,7 @@ export function LevelEditor(): ReactElement {
             <h2>Victory events</h2>
             {/* ADR-0055: the rule authoring lives in a full-size overlay over the board (this panel is
                 too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
-            <p className="le-board-note">How this level is won and lost, as <b>IF … THEN</b> rules. {victory.length} rule{victory.length === 1 ? '' : 's'} set — templates and editing open over the board.</p>
+            <p className="le-board-note">How this level is won and lost, as <b>IF … THEN</b> events. {victory.length} event{victory.length === 1 ? '' : 's'} set — templates and editing open over the board.</p>
             <button type="button" className="le-seg-btn le-events-open" onClick={() => setEventsOpen(true)}>Open events editor</button>
           </section>
 
