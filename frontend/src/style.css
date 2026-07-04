@@ -4074,7 +4074,9 @@ h1 {
    cyan move highlight: -target = a square the selected piece could be premoved to, -premove
    = a square already queued as a step in the chain. */
 .skirmish-board-cell-hit.is-premove-target::before {
-  background: rgba(120, 158, 255, .22);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(150, 182, 255, .34), transparent 62%),
+    rgba(108, 148, 255, .34);
   opacity: 1;
 }
 

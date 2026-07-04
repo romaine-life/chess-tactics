@@ -514,6 +514,8 @@ export function SkirmishBoard() {
     targets: Set<string>;
     src: string | null;
     side: Piece['side'];
+    /** True when this drag is queuing a PREMOVE (opponent's turn) rather than moving now. */
+    premove: boolean;
   } | null>(null);
   const ghostRef = useRef<HTMLImageElement | null>(null);
   const lastCursorRef = useRef({ x: 0, y: 0 });
@@ -705,22 +707,32 @@ export function SkirmishBoard() {
     if (dragRef.current) return;
     // Don't let a press start a drag before the board is even visible (cold load = opacity:0
     // but still hit-testable) — you'd be dragging a piece you can't see.
-    if (game.turn !== localSide || game.winner || !boardReady) return;
+    if (game.winner || !boardReady) return;
+    // On your turn a drag MOVES; on the opponent's turn (premoveMode: single-player only) it
+    // queues a PREMOVE instead. Either way only your own pieces initiate — empty/opponent
+    // cells fall through to onClick. localSide is 'player' whenever premoveMode is on (!net).
+    const canMove = game.turn === localSide;
+    if (!canMove && !premoveMode) return;
     const piece = livePieces.find((p) => p.x === cx && p.y === cy && p.side === localSide);
-    if (!piece) return; // only THIS client's pieces initiate a drag; empty/opponent cells fall through to onClick
-    // Pick it up: select immediately (same as a tap would) so the ring shows, and arm a
-    // potential drag. It only becomes a real drag once the pointer crosses the threshold,
-    // so a plain tap still falls through to the click handler and behaves exactly as before.
-    select(piece.id);
+    if (!piece) return;
+    // Pick it up: select (so the ring shows) and arm a potential drag. It only becomes a real
+    // drag once the pointer crosses the threshold, so a plain tap still falls through to the
+    // click handler unchanged. Targets are this move's legal squares, or — for a premove —
+    // the provisional-board squares the piece could be queued to.
+    if (canMove) select(piece.id); else setPremoveSelectedId(piece.id);
     dragRef.current = {
       pointerId: event.pointerId,
       pieceId: piece.id,
       startX: event.clientX,
       startY: event.clientY,
       active: false,
-      targets: new Set(legalMoves(piece, game.pieces, game.size, env).map((m) => `${m.x},${m.y}`)),
+      targets: new Set(
+        (canMove ? legalMoves(piece, game.pieces, game.size, env) : premoveTargets(game, premoves, piece.id))
+          .map((m) => `${m.x},${m.y}`),
+      ),
       src: pieceImageSrc(piece),
       side: piece.side,
+      premove: !canMove,
     };
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -779,12 +791,17 @@ export function SkirmishBoard() {
     }, 0);
     const hit = cellFromPoint(event.clientX, event.clientY);
     if (hit && d.targets.has(`${hit.x},${hit.y}`)) {
-      // Legal drop: land with no hop (the drag already showed the travel). noHopId is set in
-      // the same handler as tryMoveTo so the destination render carries the suppress flag.
-      setNoHopId(d.pieceId);
-      window.setTimeout(() => setNoHopId(null), 0);
-      select(d.pieceId);
-      tryMoveTo(hit.x, hit.y);
+      if (d.premove) {
+        // Opponent's turn: the drop queues a premove step (no board move now).
+        queueMove(d.pieceId, hit.x, hit.y);
+      } else {
+        // Legal drop: land with no hop (the drag already showed the travel). noHopId is set in
+        // the same handler as tryMoveTo so the destination render carries the suppress flag.
+        setNoHopId(d.pieceId);
+        window.setTimeout(() => setNoHopId(null), 0);
+        select(d.pieceId);
+        tryMoveTo(hit.x, hit.y);
+      }
     }
     // Illegal drop (or released off the board): keep the piece selected so its move dots
     // stay up and the player can click a destination instead — just release the ghost.

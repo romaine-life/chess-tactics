@@ -71,6 +71,13 @@ export function setNetResignSink(sink: NetResignSink | null): void { netResignSi
 // delay stages that read-beat + thinking pause before the enemy reply resolves.
 const ENEMY_REPLY_DELAY = 520;
 
+// A queued premove does NOT fire the instant the enemy reply resolves — it waits this
+// beat first, so the player sees the enemy's move land AND their own queued arrow sitting
+// on the board before it executes. Without it, a fast reply makes the premove invisible:
+// the arrow and the move happen in the same frame. Roughly the enemy's move-glide, so the
+// premove reads as "the enemy moved, then I answered", not two moves at once.
+const PREMOVE_FIRE_DELAY = 460;
+
 // Landing-SFX timing. The move tween runs ~170ms (see SkirmishBoard); fire the
 // terrain footstep a beat into it so the sound lands as the piece *seats*, not as
 // it lifts off. Several enemy moves resolved in one reply are spread out so their
@@ -453,11 +460,16 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // The turn is back with the player — their clock resumes (no-op when untimed
       // or the reply decided the game).
       startClock();
-      // A queued premove fires HERE, the instant control returns: drain the head against
-      // the board the reply just produced. If it applies, commitPlayerMove already
-      // persisted (and re-staged the next reply, continuing the chain); otherwise persist
-      // the settled position, or drop the saved copy if the reply ended the game.
-      if (!drainPremove()) persistMatch(get());
+      // Persist the settled post-reply position now (a reload here resumes it; the queued
+      // premove is ephemeral and intentionally not saved).
+      persistMatch(get());
+      // A queued premove fires after a visible beat rather than in this same frame, so the
+      // player sees the enemy's move land with their queued arrow still on the board before
+      // it executes. drainPremove re-checks validity when it fires — a manual move made
+      // during the beat (which flips the turn) makes it drop the chain instead.
+      if (get().premoves.length > 0 && !get().game.winner) {
+        setTimeout(() => drainPremove(), PREMOVE_FIRE_DELAY);
+      }
     }, ENEMY_REPLY_DELAY);
   };
 
@@ -813,6 +825,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     // dropped POST is a no-op the seat can retry, never a permanent desync). Clear the
     // selection for immediate "click registered" feedback; the echo sets the next one.
     if (s.net) { if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y }); set({ selectedId: null, focusedId: null }); return; }
+    // A deliberate manual move overrides any premove queued during the fire-beat — the
+    // player took the wheel, so drop the chain rather than firing it a beat later.
+    if (s.premoves.length) set({ premoves: [] });
     // Single-player: the move's rhythm — it lands on its own so it animates and reads, then
     // a beat, then the enemy answers — lives in commitPlayerMove, shared with the premove
     // drain so an auto-fired premove is byte-for-byte the same move a click would make.
