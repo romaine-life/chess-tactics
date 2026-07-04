@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  generateOpeningBook, stateAtPosition, positionBalance,
+  generateOpeningBook, generateCuratedBook, stateAtPosition, positionBalance,
   type BookPosition, type OpeningBookSettings,
 } from './openingBook';
 import { matchScore, spsaStep, encodeWeights, DEFAULT_HYPERPARAMS } from './tuning';
@@ -135,6 +135,30 @@ describe('positions are well-formed', () => {
       const flip = startTurn === 'player' ? 'enemy' : 'player';
       expect(turn).toBe(even ? startTurn : flip);
     }
+  });
+});
+
+describe('generateCuratedBook (UHO — keep the imbalanced positions)', () => {
+  const meanAbsBalance = (book: BookPosition[]): number =>
+    book.reduce((s, p) => s + Math.abs(positionBalance(battle(), p)), 0) / (book.length || 1);
+
+  it('returns exactly `size` positions and is deterministic (no self-play)', () => {
+    const a = generateCuratedBook(battle(), settings({ size: 4 }), MATCH);
+    const b = generateCuratedBook(battle(), settings({ size: 4 }), MATCH);
+    expect(a.positions).toHaveLength(4);
+    expect(a).toEqual(b);
+  });
+
+  it('keeps at least as imbalanced a set as an uncurated same-size book', () => {
+    const curated = generateCuratedBook(battle(), settings({ size: 4 }), MATCH, { candidateMultiplier: 5, minImbalance: 1 });
+    const uncurated = generateOpeningBook(battle(), settings({ size: 4 }), MATCH);
+    expect(meanAbsBalance(curated.positions)).toBeGreaterThanOrEqual(meanAbsBalance(uncurated));
+  });
+
+  it('never returns fewer than size (fills with least-balanced) and reports passed=0 when nothing clears the bar', () => {
+    const r = generateCuratedBook(battle(), settings({ size: 4 }), MATCH, { candidateMultiplier: 3, minImbalance: 999 });
+    expect(r.positions).toHaveLength(4);
+    expect(r.passed).toBe(0);
   });
 });
 
