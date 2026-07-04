@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { BoardSize, Move, Piece, PieceType, Side } from './types';
+import type { BoardSize, GameState, Move, Piece, PieceType, Side } from './types';
 import {
   applyMove,
   attackedSquares,
   enemyMove,
   enemyThreats,
+  gameEnv,
   isEnemy,
   legalMoves,
   type MoveEnv,
@@ -463,5 +464,14 @@ describe('edge fences (movement blocking)', () => {
     const threats = attackedSquares(rook, [rook], SIZE, env);
     expect(has(threats, 4, 2)).toBe(true); // reaches up to the fence
     expect(has(threats, 4, 3)).toBe(false); // but not across it
+  });
+
+  it('gameEnv threads a state\'s fences into the movement env (the one env builder all consumers share)', () => {
+    const env = gameEnv({ size: SIZE, pieces: [], turn: 'player', winner: null, fences: [roadEdgeKey(2, 2, 3, 2)] } as GameState);
+    expect(env.fences?.has(roadEdgeKey(2, 2, 3, 2))).toBe(true);
+    const rook = P('player', 'rook', 2, 2);
+    expect(has(legalMoves(rook, [rook], SIZE, env), 3, 2)).toBe(false); // the fenced edge blocks the step
+    // A fence-free state yields no fence set (so movement is byte-identical to a fence-free game).
+    expect(gameEnv({ size: SIZE, pieces: [], turn: 'player', winner: null } as GameState).fences).toBeUndefined();
   });
 });

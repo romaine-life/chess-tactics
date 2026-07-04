@@ -108,6 +108,21 @@ function fenceBlocks(env: MoveEnv | undefined, ax: number, ay: number, bx: numbe
   return fenceBlocksCrossing(env?.fences, ax, ay, bx, by);
 }
 
+/**
+ * The STATIC movement environment for a game state — its indexed terrain layer + edge-fence set.
+ * Neither changes across a game's plies (only `lastMove` does), so callers build this ONCE and
+ * spread it per ply as `{ ...gameEnv(state), lastMove }`. Centralised so EVERY consumer (the store,
+ * self-play, the opening book, applyMove's stat pass, the AI search) honours terrain AND fences
+ * identically — a gameplay layer omitted from one hand-rolled env is exactly the bug class this
+ * prevents. The returned env has no `lastMove`; add it at the call site when the caller needs it.
+ */
+export function gameEnv(state: GameState): MoveEnv {
+  return {
+    terrain: state.terrain ? buildTerrainIndex(state.terrain) : undefined,
+    fences: state.fences && state.fences.length ? new Set(state.fences) : undefined,
+  };
+}
+
 /** Whether terrain in `env` halts a multi-square move that enters (x, y). */
 function haltsTravelAt(env: MoveEnv | undefined, x: number, y: number): boolean {
   return !!env?.terrain && haltsTravel(env.terrain, x, y);
@@ -420,9 +435,9 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
 
   // Service-record bookkeeping: only player/enemy units accrue stats, and only
   // from this (committed) move. Snapshot the threat picture BEFORE the move while
-  // the piece still sits on `from`. Threats respect terrain so escapes/threats are
-  // counted against the same board movement uses.
-  const statEnv: MoveEnv | undefined = state.terrain ? { terrain: buildTerrainIndex(state.terrain) } : undefined;
+  // the piece still sits on `from`. Threats respect terrain AND fences so escapes/
+  // threats are counted against the same board movement uses.
+  const statEnv: MoveEnv = gameEnv(state);
   const tracksStats = piece.side === 'player' || piece.side === 'enemy';
   const opponentSide: Side | null = piece.side === 'player' ? 'enemy' : piece.side === 'enemy' ? 'player' : null;
   const escapedThreat = tracksStats && opponentSide

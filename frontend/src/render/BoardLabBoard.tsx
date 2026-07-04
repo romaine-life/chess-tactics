@@ -72,17 +72,26 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
         'data-board-x': cell.x,
         'data-board-y': cell.y,
       },
-      children: topSrc ? (
+      // A fence draws even when its owner cell has no base tile, so a rail on the boundary of a
+      // hole never silently vanishes in the game board while the editor/thumbnail still show it
+      // (cross-renderer parity — the other renderers draw the fence unconditionally).
+      children: topSrc || fence || cell.missing ? (
         <>
-          <img className="tile-layer-side" src={(sideSrc ?? topSrc).replace(/\.png$/, '-side.png')} alt="" draggable={false} />
-          <TileTopLayer baseSrc={topSrc} animFrames={cell.asset?.topAnimFrames} x={cell.x} y={cell.y} />
-          {cell.feature ? (
-            <img
-              className="tileset-feature-overlay"
-              src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask)}
-              alt=""
-              draggable={false}
-            />
+          {topSrc ? (
+            <>
+              <img className="tile-layer-side" src={(sideSrc ?? topSrc).replace(/\.png$/, '-side.png')} alt="" draggable={false} />
+              <TileTopLayer baseSrc={topSrc} animFrames={cell.asset?.topAnimFrames} x={cell.x} y={cell.y} />
+              {cell.feature ? (
+                <img
+                  className="tileset-feature-overlay"
+                  src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask)}
+                  alt=""
+                  draggable={false}
+                />
+              ) : null}
+            </>
+          ) : cell.missing ? (
+            <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
           ) : null}
           {fence ? (
             <img
@@ -93,8 +102,6 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
             />
           ) : null}
         </>
-      ) : cell.missing ? (
-        <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
       ) : null,
     };
   });
