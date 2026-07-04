@@ -265,7 +265,7 @@ function openSse(path, headers = {}) {
 // server applies migrations before it begins listening (and /health gates on
 // that), so waitForServer() has already returned by the time this runs.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns, lab_runs');
+  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns, lab_runs, prop_seats');
 }
 
 async function queryDb(sql, params = []) {
@@ -619,6 +619,77 @@ async function main() {
   );
   if (digitOffIdWrite.statusCode !== 400 || JSON.parse(digitOffIdWrite.body).error !== 'invalid_official_ids') {
     throw new Error(`Official ids with digits should be rejected: ${digitOffIdWrite.statusCode} ${digitOffIdWrite.body}`);
+  }
+
+  // --- Prop-seat tuning (/api/prop-seats): global, public GET / admin PUT (ADR-0061) ---
+  const propSeatsDoc = {
+    oak: { anchorX: 96, anchorY: 255, scale: 1, w: 2, h: 2 },
+    'oak-1x1-tree': { base: 'oak', anchorX: 96, anchorY: 238, scale: 0.25, w: 1, h: 1 },
+  };
+
+  const emptyPropSeats = await get('/api/prop-seats/default');
+  const emptyPropSeatsBody = JSON.parse(emptyPropSeats.body);
+  if (emptyPropSeats.statusCode !== 200 || emptyPropSeatsBody.portfolio.revision !== 0 || Object.keys(emptyPropSeatsBody.portfolio.data).length !== 0) {
+    throw new Error(`Unexpected empty prop seats response: ${emptyPropSeats.statusCode} ${emptyPropSeats.body}`);
+  }
+
+  const anonymousPropSeatsWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc }),
+  );
+  if (anonymousPropSeatsWrite.statusCode !== 401) {
+    throw new Error(`Anonymous prop-seats write should require sign-in: ${anonymousPropSeatsWrite.statusCode} ${anonymousPropSeatsWrite.body}`);
+  }
+
+  const nonAdminPropSeatsWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { cookie: 'better-auth.session=rival', 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc }),
+  );
+  if (nonAdminPropSeatsWrite.statusCode !== 403) {
+    throw new Error(`Non-admin prop-seats write should be forbidden: ${nonAdminPropSeatsWrite.statusCode} ${nonAdminPropSeatsWrite.body}`);
+  }
+
+  const invalidPropSeatsId = await get('/api/prop-seats/Bad%20ID');
+  if (invalidPropSeatsId.statusCode !== 400) {
+    throw new Error(`Invalid prop-seats id should fail: ${invalidPropSeatsId.statusCode} ${invalidPropSeatsId.body}`);
+  }
+
+  const adminPropSeatsWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: propSeatsDoc }),
+  );
+  const adminPropSeatsWriteBody = JSON.parse(adminPropSeatsWrite.body);
+  if (
+    adminPropSeatsWrite.statusCode !== 200 ||
+    adminPropSeatsWriteBody.portfolio.revision !== 1 ||
+    adminPropSeatsWriteBody.portfolio.updated_by !== 'player@example.com' ||
+    adminPropSeatsWriteBody.portfolio.data.oak.scale !== 1
+  ) {
+    throw new Error(`Unexpected admin prop-seats write: ${adminPropSeatsWrite.statusCode} ${adminPropSeatsWrite.body}`);
+  }
+
+  // Public GET returns the published seats — visible WITHOUT a session.
+  const publishedPropSeats = await get('/api/prop-seats/default');
+  const publishedPropSeatsBody = JSON.parse(publishedPropSeats.body);
+  if (
+    publishedPropSeats.statusCode !== 200 ||
+    publishedPropSeatsBody.portfolio.revision !== 1 ||
+    publishedPropSeatsBody.portfolio.data['oak-1x1-tree'].base !== 'oak'
+  ) {
+    throw new Error(`Prop seats did not persist for public read: ${publishedPropSeats.statusCode} ${publishedPropSeats.body}`);
+  }
+
+  // A size-variant whose `base` doesn't resolve in-document is rejected (no orphan variant).
+  const orphanVariantWrite = await request(
+    'PUT', '/api/prop-seats/default',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ data: { 'ghost-house': { base: 'missing', anchorX: 1, anchorY: 1, scale: 1 } } }),
+  );
+  if (orphanVariantWrite.statusCode !== 400 || JSON.parse(orphanVariantWrite.body).error !== 'invalid_prop_seats') {
+    throw new Error(`Orphan prop-seat variant should be rejected: ${orphanVariantWrite.statusCode} ${orphanVariantWrite.body}`);
   }
 
   // --- New-format level persistence (/api/levels): per-user, DB-backed -------

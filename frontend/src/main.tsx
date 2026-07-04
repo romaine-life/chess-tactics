@@ -13,6 +13,7 @@ import { armForColdHome, isMainMenuPath } from './ui/shell/coldReveal';
 import { initBgm } from './bgm.js';
 import { primeSfx } from './sfx';
 import { initProgressSync } from './campaign/progressSync';
+import { loadLiveSeats } from './net/propSeats';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -58,7 +59,17 @@ try { initBgm(); } catch { /* background music is decorative */ }
 try { primeSfx(); } catch { /* sound effects are decorative */ }
 
 const root = document.getElementById('root');
-if (root) createRoot(root).render(<App />);
+if (root) {
+  const reactRoot = createRoot(root);
+  reactRoot.render(<App />);
+  // Overlay the live prop-seat overrides on the committed baseline (ADR-0061). Props render
+  // immediately from the baseline (sync import in core/props); when the DB overlay lands we
+  // re-render so board views pick up the tuned seats. Fail-soft: outage/empty is a no-op and the
+  // baseline stands — this never blocks or breaks the render above.
+  void loadLiveSeats()
+    .then((changed) => { if (changed) reactRoot.render(<App />); })
+    .catch(() => { /* prop seats are decorative tuning — baseline always renders */ });
+}
 
 // Fold this browser's campaign progress together with the signed-in account's, so clears/stars
 // follow you across devices (and a guest's local progress merges up on first sign-in). Fail-soft:
