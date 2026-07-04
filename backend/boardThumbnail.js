@@ -56,19 +56,48 @@ function truncate(ctx, text, maxWidth) {
 /**
  * Render a level's OG card to a PNG Buffer.
  * @param {{ plan: {ops:Array,bounds:{minX:number,minY:number,width:number,height:number}},
- *           frontendDir: string, title: string, subtitle?: string }} args
+ *           frontendDir: string, title: string, subtitle?: string, backgroundSrc?: string }} args
  */
-async function renderLevelCard({ plan, frontendDir, title, subtitle }) {
+async function renderLevelCard({ plan, frontendDir, title, subtitle, backgroundSrc }) {
   ensureFont(frontendDir);
   const canvas = createCanvas(CARD_W, CARD_H);
   const ctx = canvas.getContext('2d');
 
-  // Background: a dark vertical gradient matching the app shell.
-  const bg = ctx.createLinearGradient(0, 0, 0, CARD_H);
-  bg.addColorStop(0, '#0c1620');
-  bg.addColorStop(0.62, '#06101a');
-  bg.addColorStop(1, '#05090d');
-  ctx.fillStyle = bg;
+  // Background: the game's world backdrop (cover-fit, centered) so the card reads like the played
+  // board sitting in its scene — the same image .skirmish-screen::before uses. Falls back to a flat
+  // dark gradient if the scene can't be loaded.
+  let drewWorld = false;
+  if (backgroundSrc) {
+    const world = await loadSprite(frontendDir, backgroundSrc);
+    if (world && world.width && world.height) {
+      const cover = Math.max(CARD_W / world.width, CARD_H / world.height);
+      const w = world.width * cover;
+      const h = world.height * cover;
+      ctx.imageSmoothingEnabled = true; // photographic scene, not pixel art
+      ctx.drawImage(world, (CARD_W - w) / 2, (CARD_H - h) / 2, w, h);
+      drewWorld = true;
+    }
+  }
+  if (!drewWorld) {
+    const bg = ctx.createLinearGradient(0, 0, 0, CARD_H);
+    bg.addColorStop(0, '#0c1620');
+    bg.addColorStop(0.62, '#06101a');
+    bg.addColorStop(1, '#05090d');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, CARD_W, CARD_H);
+  }
+  // Dark-edge scrim (mirrors the game's ::before 90° gradient) + a stronger bottom fade, so the
+  // wordmark and title stay legible over a busy scene.
+  const scrim = ctx.createLinearGradient(0, 0, CARD_W, 0);
+  scrim.addColorStop(0, 'rgba(2,8,13,0.72)');
+  scrim.addColorStop(0.46, 'rgba(3,15,26,0.24)');
+  scrim.addColorStop(1, 'rgba(2,7,12,0.78)');
+  ctx.fillStyle = scrim;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  const fade = ctx.createLinearGradient(0, CARD_H * 0.5, 0, CARD_H);
+  fade.addColorStop(0, 'rgba(3,9,15,0)');
+  fade.addColorStop(1, 'rgba(3,9,15,0.72)');
+  ctx.fillStyle = fade;
   ctx.fillRect(0, 0, CARD_W, CARD_H);
 
   // Board: letterbox the native-size plan into the hero rect, nearest-neighbour (pixel art).

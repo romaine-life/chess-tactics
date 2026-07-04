@@ -1762,7 +1762,8 @@ var require_jsx_runtime = __commonJS({
 var serverBoardRender_exports = {};
 __export(serverBoardRender_exports, {
   boardHashForLevel: () => boardHashForLevel,
-  levelRenderPlan: () => levelRenderPlan
+  levelRenderPlan: () => levelRenderPlan,
+  worldBackgroundSrc: () => worldBackgroundSrc
 });
 module.exports = __toCommonJS(serverBoardRender_exports);
 
@@ -2645,11 +2646,14 @@ function boardDrawOps(board) {
     if (!def) continue;
     const [ax, ay] = key.split(",").map(Number);
     const { left, top } = structureSeatPoint({ x: ax, y: ay }, def.w, def.h);
-    const dx = left - def.sprite.anchorX;
-    const dy = top - def.sprite.anchorY;
+    const s = def.sprite.scale ?? 1;
+    const dx = left - def.sprite.anchorX * s;
+    const dy = top - def.sprite.anchorY * s;
+    const dw = def.sprite.w * s;
+    const dh = def.sprite.h * s;
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
-    ops.push({ src: propHalfSrc(def.spriteId, "back"), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: back });
-    ops.push({ src: propHalfSrc(def.spriteId, "front"), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: front });
+    ops.push({ src: propHalfSrc(def.spriteId, "back"), dx, dy, dw, dh, z: back });
+    ops.push({ src: propHalfSrc(def.spriteId, "front"), dx, dy, dw, dh, z: front });
   }
   const COVER_SEED = 1234;
   const coverCells = [];
@@ -2730,6 +2734,32 @@ function boardBounds(board) {
   return { minX, minY, width: Math.ceil(maxX - minX), height: Math.ceil(maxY - minY) };
 }
 
+// src/art/backgroundSets.ts
+var setPath = (setId, file) => `/assets/backgrounds/${setId}/${file}`;
+var portraitPaths = (setId) => ({
+  pawn: setPath(setId, "portraits/pawn.png"),
+  knight: setPath(setId, "portraits/knight.png"),
+  bishop: setPath(setId, "portraits/bishop.png"),
+  rook: setPath(setId, "portraits/rook.png"),
+  queen: setPath(setId, "portraits/queen.png"),
+  king: setPath(setId, "portraits/king.png")
+});
+var backgroundSets = [
+  {
+    id: "summer-that-failed-set-01",
+    label: "The Summer That Failed",
+    world: setPath("summer-that-failed-set-01", "world.png"),
+    portraits: portraitPaths("summer-that-failed-set-01")
+  },
+  {
+    id: "farm-behind-line-set-01",
+    label: "The Farm Behind The Line",
+    world: setPath("farm-behind-line-set-01", "world.png"),
+    portraits: portraitPaths("farm-behind-line-set-01")
+  }
+];
+var DEFAULT_BACKGROUND_SET = backgroundSets[0];
+
 // src/render/serverBoardRender.ts
 function levelRenderPlan(level) {
   const board = levelToEditorBoard(level);
@@ -2742,8 +2772,12 @@ function levelRenderPlan(level) {
 function boardHashForLevel(level) {
   return boardContentHash(levelToEditorBoard(level));
 }
+function worldBackgroundSrc() {
+  return DEFAULT_BACKGROUND_SET.world;
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   boardHashForLevel,
-  levelRenderPlan
+  levelRenderPlan,
+  worldBackgroundSrc
 });
