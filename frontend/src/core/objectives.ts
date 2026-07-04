@@ -4,7 +4,7 @@
 // store evaluates this after each resolved turn.
 
 import type { BoardSize, GameState, Piece, Vec, Winner } from './types';
-import type { ConditionSide, Level, ObjectiveType, VictoryCondition, VictoryRule, VictoryRules } from './level';
+import type { ConditionSide, Level, ObjectiveType, VictoryAction, VictoryCondition, VictoryRule, VictoryRules } from './level';
 import { livingPieces } from './rules';
 
 /** The "royal" piece whose loss ends a capture-king / rival-kings objective. */
@@ -105,23 +105,42 @@ function conditionHolds(state: GameState, cond: VictoryCondition, ctx: Objective
   }
 }
 
+/** Player↔enemy — the other side. Used to resolve a `lose` action (side loses ⇒ the other wins). */
+const OTHER: Record<ConditionSide, Winner> = { player: 'enemy', enemy: 'player' };
+
+/** The Winner a fired rule declares — from its first win/lose action (`win(side)` ⇒ that side wins,
+ * `lose(side)` ⇒ the other side wins). Null when the rule has no win/lose action. Exported for the
+ * per-faction save gate (validatePlayability P6). Pure. */
+export function ruleOutcome(rule: VictoryRule): Winner {
+  const act = rule.do.find((a) => a.kind === 'win' || a.kind === 'lose');
+  if (!act) return null;
+  return act.kind === 'win' ? act.side : OTHER[act.side];
+}
+
 /**
- * Resolve authored if-then rules to a winner, or `null` while undecided. Pure. Rules are checked in
- * ORDER, top-to-bottom (ADR-0055): the FIRST rule whose conditions ALL hold decides the game.
- * Presets seed lose rules above win rules, so a settled turn that trips both resolves as a loss
- * (defeat-first — e.g. Survive's clock reaches N on the very turn the last player piece is wiped).
+ * Resolve authored event rules to a winner, or `null` while undecided. Pure. Rules are checked in
+ * ORDER, top-to-bottom (ADR-0055): the FIRST rule whose conditions ALL hold declares the game via
+ * its actions (`ruleOutcome`). Presets seed lose rules above win rules, so a settled turn that trips
+ * both resolves as a loss (defeat-first — e.g. Survive's clock reaches N on the turn the last player
+ * piece is wiped).
  */
 export function evaluateVictory(state: GameState, rules: VictoryRules, ctx: ObjectiveContext = {}): Winner {
   for (const rule of rules) {
-    if (rule.if.every((c) => conditionHolds(state, c, ctx))) return rule.then === 'win' ? 'player' : 'enemy';
+    if (rule.if.every((c) => conditionHolds(state, c, ctx))) {
+      const winner = ruleOutcome(rule);
+      if (winner) return winner;
+    }
   }
   return null;
 }
 
 const eliminate = (side: ConditionSide, type?: Piece['type']): VictoryCondition =>
   ({ kind: 'eliminate', side, ...(type ? { filter: { type } } : {}) });
-const loseRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, then: 'lose' });
-const winRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, then: 'win' });
+const act = (kind: VictoryAction['kind'], side: ConditionSide): VictoryAction => ({ kind, side });
+// Preset rules are authored from the PLAYER's perspective (win/lose for 'player'); in the 2-player
+// game that implies the mirror for the enemy, which is what satisfies the per-faction save gate.
+const loseRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, do: [act('lose', 'player')] });
+const winRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, do: [act('win', 'player')] });
 
 /**
  * Expand a legacy `objective` preset into the if-then rule model (ADR-0055) — the ONLY place the 5

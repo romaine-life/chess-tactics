@@ -95,8 +95,8 @@ describe('evaluateVictory (ADR-0055 if-then rules)', () => {
     // Survive-shaped: the lose rule (wipe) sits above the win rule (outlast). When the clock hits N
     // AND the last player piece is gone, the lose rule (checked first) decides → 'enemy'.
     const rules: VictoryRules = [
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
-      { if: [{ kind: 'turnLimit', turns: 5 }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'turnLimit', turns: 5 }], do: [{ kind: 'win', side: 'player' }] },
     ];
     expect(evaluateVictory(state([piece('e', 'enemy', 'pawn', 1, 1)]), rules, { turnsElapsed: 5 })).toBe('enemy');
     const held = state([piece('p', 'player', 'pawn', 0, 0), piece('e', 'enemy', 'pawn', 1, 1)]);
@@ -106,9 +106,9 @@ describe('evaluateVictory (ADR-0055 if-then rules)', () => {
 
   it('separate rules are OR: reach the goal OR wipe out the enemy', () => {
     const rules: VictoryRules = [
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
-      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
-      { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
+      { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
     ];
     expect(evaluateVictory(state([piece('p', 'player', 'pawn', 0, 0)]), rules, {})).toBe('player'); // enemy wiped
     const contested = state([piece('p', 'player', 'pawn', 0, 0), piece('e', 'enemy', 'pawn', 1, 1)]);
@@ -118,8 +118,8 @@ describe('evaluateVictory (ADR-0055 if-then rules)', () => {
 
   it('conditions within a rule are AND: the rule fires only when all hold', () => {
     const rules: VictoryRules = [
-      { if: [{ kind: 'turnLimit', turns: 3 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], then: 'win' },
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'turnLimit', turns: 3 }, { kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
     ];
     const kingUp = state([piece('p', 'player', 'pawn', 0, 0), piece('ek', 'enemy', 'king', 7, 7)]);
     expect(evaluateVictory(kingUp, rules, { turnsElapsed: 3 })).toBeNull(); // turn reached, king alive
@@ -132,24 +132,24 @@ describe('evaluateVictory (ADR-0055 if-then rules)', () => {
 describe('victoryRulesForObjective (preset expansion)', () => {
   it('expands to lose-then-win rules; capture-king is direction-aware', () => {
     expect(victoryRulesForObjective('capture-all')).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
-      { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
     ]);
     expect(victoryRulesForObjective('capture-king', { kingSide: 'enemy' })).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
-      { if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] },
     ]);
     expect(victoryRulesForObjective('capture-king', { kingSide: 'player' })).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player', filter: { type: 'king' } }], then: 'lose' },
-      { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player', filter: { type: 'king' } }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
     ]);
     expect(victoryRulesForObjective('survive', { surviveTurns: 6 })).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
-      { if: [{ kind: 'turnLimit', turns: 6 }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'turnLimit', turns: 6 }], do: [{ kind: 'win', side: 'player' }] },
     ]);
     expect(victoryRulesForObjective('reach')).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
-      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
     ]);
   });
 

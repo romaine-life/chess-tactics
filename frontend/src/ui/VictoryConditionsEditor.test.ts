@@ -6,10 +6,10 @@ import type { VictoryRules } from '../core/level';
 
 describe('victory rule helpers (ADR-0055)', () => {
   it('mergeRules adds rules but never duplicates, and re-merging is a no-op', () => {
-    const base: VictoryRules = [{ if: [{ kind: 'reach', side: 'player' }], then: 'win' }];
+    const base: VictoryRules = [{ if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] }];
     const add: VictoryRules = [
-      { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
-      { if: [{ kind: 'reach', side: 'player' }], then: 'win' }, // identical to base → not duplicated
+      { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] }, // identical to base → not duplicated
     ];
     const merged = mergeRules(base, add);
     expect(merged).toHaveLength(2);
@@ -17,8 +17,8 @@ describe('victory rule helpers (ADR-0055)', () => {
   });
 
   it('a win rule and a lose rule with the same conditions are distinct', () => {
-    const win: VictoryRules = [{ if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' }];
-    const lose: VictoryRules = [{ if: [{ kind: 'eliminate', side: 'enemy' }], then: 'lose' }];
+    const win: VictoryRules = [{ if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] }];
+    const lose: VictoryRules = [{ if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'lose', side: 'player' }] }];
     expect(rulesEqual(win, lose)).toBe(false);
     expect(mergeRules(win, lose)).toHaveLength(2); // different `then` → both kept
   });
@@ -33,16 +33,16 @@ describe('victory rule helpers (ADR-0055)', () => {
 
   it('rulesEqual is order-insensitive (rules and conditions) but turn-sensitive', () => {
     const a: VictoryRules = [
-      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
+      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
     ];
     const b: VictoryRules = [ // rules reordered
-      { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
-      { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
+      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
     ];
     expect(rulesEqual(a, b)).toBe(true);
-    const c: VictoryRules = [{ if: [{ kind: 'turnLimit', turns: 5 }], then: 'win' }];
-    const d: VictoryRules = [{ if: [{ kind: 'turnLimit', turns: 8 }], then: 'win' }];
+    const c: VictoryRules = [{ if: [{ kind: 'turnLimit', turns: 5 }], do: [{ kind: 'win', side: 'player' }] }];
+    const d: VictoryRules = [{ if: [{ kind: 'turnLimit', turns: 8 }], do: [{ kind: 'win', side: 'player' }] }];
     expect(rulesEqual(c, d)).toBe(false); // different turn count → not equal
   });
 });

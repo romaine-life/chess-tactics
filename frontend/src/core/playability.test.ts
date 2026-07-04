@@ -303,21 +303,25 @@ describe('P6 — authored victory conditions (ADR-0055)', () => {
   it('accepts a rule set with at least one win rule and one lose rule, and an absent field (preset)', () => {
     const authored = fixedLevel((l) => {
       l.victory = [
-        { if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' },
-        { if: [{ kind: 'reach', side: 'player' }], then: 'win' },
-        { if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' },
+        { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+        { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
+        { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
       ];
     });
     expect(validatePlayability(authored)).toEqual({ ok: true, violations: [] });
     expect(validatePlayability(fixedLevel(() => {})).ok).toBe(true); // no victory → preset
   });
 
-  it('rejects a set with no win rule (unwinnable) or no lose rule (unlosable)', () => {
-    const noWin = fixedLevel((l) => { l.victory = [{ if: [{ kind: 'eliminate', side: 'player' }], then: 'lose' }]; });
-    expect(codes(noWin)).toEqual(['P6_VICTORY_NO_WIN']);
-    const noLose = fixedLevel((l) => { l.victory = [{ if: [{ kind: 'eliminate', side: 'enemy' }], then: 'win' }]; });
-    expect(codes(noLose)).toEqual(['P6_VICTORY_NO_LOSE']);
+  it('rejects per faction: a set that leaves an on-board faction unable to win or lose', () => {
+    // Only "player loses": the player has no way to win, and — the same gap — the enemy has no way
+    // to lose (a win for one side is a loss for the other in the 2-player game). Reported per side.
+    const onlyLose = fixedLevel((l) => { l.victory = [{ if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] }]; });
+    expect(codes(onlyLose)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
+    // Only "player wins": the player has no way to lose, and the enemy no way to win.
+    const onlyWin = fixedLevel((l) => { l.victory = [{ if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] }]; });
+    expect(codes(onlyWin)).toEqual(['P6_VICTORY_NO_LOSE', 'P6_VICTORY_NO_WIN']);
+    // Empty set: every on-board faction flags both.
     const neither = fixedLevel((l) => { l.victory = []; });
-    expect(codes(neither)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
+    expect(codes(neither)).toEqual(['P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE', 'P6_VICTORY_NO_WIN', 'P6_VICTORY_NO_LOSE']);
   });
 });

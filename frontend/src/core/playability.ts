@@ -9,7 +9,7 @@
 import type { Level, Roster, ZoneType } from './level';
 import type { PieceType } from './types';
 import { PLAYABLE_PIECE_TYPES, isPlayablePieceType } from './pieces';
-import { MODE_NAME } from './objectives';
+import { MODE_NAME, ruleOutcome } from './objectives';
 import { isPassableTerrain } from './terrain';
 import { propCells, propDef } from './props';
 
@@ -210,17 +210,23 @@ export function validatePlayability(level: Level): PlayabilityResult {
     }
   }
 
-  // P6 — authored victory (ADR-0055): when a level overrides the `objective` preset with its own
-  // if-then rules, the set needs at least one rule that can WIN and one that can LOSE. A set with no
-  // win rule is unwinnable; with no lose rule it is unlosable — the footgun the preset default never
-  // has (every preset ships a lose rule). Structural SHAPE is validateLevel's job; this is the
-  // gameplay gate, same both-gates pattern as P4/P5. Assumes a structurally valid level.
+  // P6 — authored victory (ADR-0055): when a level overrides the preset with its own event rules,
+  // EVERY faction with units on the board must be able to win AND to lose — no player left in an
+  // unwinnable or unloseable state. A faction can win if some rule's outcome makes it the winner,
+  // and can lose if some rule makes the OTHER side win (in the 2-player game a win for one is a loss
+  // for the other, so player-perspective rules cover both). Structural SHAPE is validateLevel's job;
+  // this is the gameplay gate. Assumes a structurally valid level.
   if (level.victory !== undefined) {
-    if (!level.victory.some((rule) => rule.then === 'win')) {
-      violations.push({ code: 'P6_VICTORY_NO_WIN', message: 'The victory rules have no way to win — add a rule that ends in a win.' });
-    }
-    if (!level.victory.some((rule) => rule.then === 'lose')) {
-      violations.push({ code: 'P6_VICTORY_NO_LOSE', message: 'The victory rules have no way to lose — add a rule that ends in a loss (e.g. losing all your pieces).' });
+    const winners = new Set(level.victory.map(ruleOutcome).filter((w): w is CombatSide => w === 'player' || w === 'enemy'));
+    const otherSide: Record<CombatSide, CombatSide> = { player: 'enemy', enemy: 'player' };
+    for (const side of SIDES) {
+      if (pieceCount(level, side) < 1) continue; // not an on-board player
+      if (!winners.has(side)) {
+        violations.push({ code: 'P6_VICTORY_NO_WIN', message: `${SIDE_NAME[side]} has no way to win — add a rule whose outcome is ${SIDE_NAME[side]} winning.` });
+      }
+      if (!winners.has(otherSide[side])) {
+        violations.push({ code: 'P6_VICTORY_NO_LOSE', message: `${SIDE_NAME[side]} has no way to lose — add a rule whose outcome is ${SIDE_NAME[side]} losing.` });
+      }
     }
   }
 

@@ -1753,14 +1753,13 @@ export function LevelEditor(): ReactElement {
           </section>
           </>
         ) : layer === 'rules' ? (<>
-          <section className="skirmish-card le-victory-card">
-            <h2>Victory conditions</h2>
-            {/* ADR-0055: THE place win/lose is set (always visible — not a mode you toggle). Presets
-                are additive "load" helpers: each fills its conditions into the lists (kingSide read
-                off the placed units) and composes with the others; duplicates are ignored. The last
-                preset picked also becomes the level's `objective` — its headline label + the
-                one-King save check. */}
-            <p className="le-board-note">How this level is won and lost, as <b>IF … THEN</b> rules. Load a preset to fill in its rules — they ADD (combine several, e.g. Reach + King Assault), then edit. Duplicate rules are ignored.</p>
+          <section className="skirmish-card">
+            <h2>Victory templates</h2>
+            {/* ADR-0055: the SIMPLE path — a template fills a full event set (each faction gets a way
+                to win and lose) into the Events card below. Additive: load several to compose;
+                duplicate rules ignored. The last one picked also becomes the level's `objective`
+                (headline label + the one-King save check). */}
+            <p className="le-board-note">Start from a template — it fills in the events below. Load more than one to combine (e.g. Reach + King Assault); duplicate rules are ignored.</p>
             <div className="le-seg le-seg-wrap le-victory-presets">
               {OBJECTIVE_TYPES.map((mode) => (
                 <button
@@ -1776,8 +1775,12 @@ export function LevelEditor(): ReactElement {
                 >{MODE_NAME[mode]}</button>
               ))}
             </div>
+          </section>
+
+          <section className="skirmish-card le-victory-card">
+            <h2>Victory events</h2>
+            <p className="le-board-note">The win/lose logic, as <b>IF … THEN</b> rules — checked top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
             <VictoryConditionsEditor value={victory} factions={victoryFactions} onChange={setVictory} />
-            <p className="le-board-note">Rules are checked top-to-bottom each turn — the first whose conditions all hold decides. Lose rules sit above win rules, so a tie resolves as a loss.</p>
           </section>
 
           <section className="skirmish-card">

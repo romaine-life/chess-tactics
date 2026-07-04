@@ -80,8 +80,8 @@ describe('level editor draft codec', () => {
 
   it('round-trips authored victory rules, and stays undefined (preset) when absent', () => {
     const victory = [
-      { if: [{ kind: 'eliminate' as const, side: 'player' as const }, { kind: 'turnLimit' as const, turns: 10 }], then: 'lose' as const },
-      { if: [{ kind: 'reach' as const, side: 'player' as const }], then: 'win' as const },
+      { if: [{ kind: 'eliminate' as const, side: 'player' as const }, { kind: 'turnLimit' as const, turns: 10 }], do: [{ kind: 'lose' as const, side: 'player' as const }] },
+      { if: [{ kind: 'reach' as const, side: 'player' as const }], do: [{ kind: 'win' as const, side: 'player' as const }] },
     ];
     const custom = parseLevelEditorDraft(serializeLevelEditorDraft(baseDraft({ victory })))!;
     expect(custom.victory).toEqual(victory);

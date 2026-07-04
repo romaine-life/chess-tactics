@@ -62,15 +62,22 @@ export type VictoryCondition =
   | { kind: 'reach'; side: ConditionSide }
   | { kind: 'turnLimit'; turns: number };
 
-/** What a fired rule decides, from the player's perspective. Room to grow (spawn / open-gate
- * effects, phase transitions) become new `Outcome`s later without reshaping the rule. */
-export type Outcome = 'win' | 'lose';
+/** What a fired rule DOES — its "THEN". Today: declare a faction the winner or loser (from that
+ * faction's view; in the 2-player game a win for one is a loss for the other). A rule holds an
+ * ARRAY of actions, so effects (spawn a force / open a gate / go to a phase) become new action
+ * kinds later without reshaping the rule — the extension point that plain win/lose lacked. */
+export type VictoryActionKind = 'win' | 'lose';
+export interface VictoryAction {
+  kind: VictoryActionKind;
+  side: ConditionSide;
+}
 
-/** One `IF <conditions> THEN <outcome>` rule. The `if` conditions are ANDed — ALL must hold (an
- * empty `if` always fires). Order matters ACROSS rules (see VictoryRules). */
+/** One event: `IF <conditions> THEN <do actions>`. The `if` conditions are ANDed — ALL must hold
+ * (an empty `if` always fires); order matters ACROSS rules (see VictoryRules). A future `when`
+ * trigger ("each turn" today) is the reserved Event half for on-capture / on-turn-N. */
 export interface VictoryRule {
   if: VictoryCondition[];
-  then: Outcome;
+  do: VictoryAction[];
 }
 
 /**
@@ -255,20 +262,31 @@ function conditionErrors(c: unknown, path: string): string[] {
   return errs;
 }
 
-/** Structural errors for an authored `Level.victory` (ADR-0055) — an ORDERED array of if-then
- * rules. An empty list is legal SHAPE (validatePlayability P6 rejects an unwinnable/unlosable set);
- * this only checks each rule has a conditions array + a valid `then`, and every condition is well-
- * formed. */
+/** Structural errors for one `do` action (ADR-0055): a win/lose declaration for a side. */
+function actionErrors(a: unknown, path: string): string[] {
+  if (!a || typeof a !== 'object' || Array.isArray(a)) return [`${path} must be an action object`];
+  const act = a as { kind?: unknown; side?: unknown };
+  const errs: string[] = [];
+  if (act.kind !== 'win' && act.kind !== 'lose') errs.push(`${path}.kind must be 'win' or 'lose'`);
+  if (act.side !== 'player' && act.side !== 'enemy') errs.push(`${path}.side must be 'player' or 'enemy'`);
+  return errs;
+}
+
+/** Structural errors for an authored `Level.victory` (ADR-0055) — an ORDERED array of `{ if, do }`
+ * event rules. An empty list is legal SHAPE (validatePlayability P6 rejects a set that leaves a
+ * faction unable to win/lose); this only checks each rule has conditions + actions arrays and every
+ * condition / action is well-formed. */
 function victoryRuleErrors(value: unknown): string[] {
   if (!Array.isArray(value)) return ['victory must be an array of if-then rules'];
   const errs: string[] = [];
   value.forEach((r, i) => {
     const path = `victory[${i}]`;
     if (!r || typeof r !== 'object' || Array.isArray(r)) { errs.push(`${path} must be a rule object`); return; }
-    const rule = r as { if?: unknown; then?: unknown };
-    if (rule.then !== 'win' && rule.then !== 'lose') errs.push(`${path}.then must be 'win' or 'lose'`);
+    const rule = r as { if?: unknown; do?: unknown };
     if (!Array.isArray(rule.if)) errs.push(`${path}.if must be an array of conditions`);
     else rule.if.forEach((c, j) => errs.push(...conditionErrors(c, `${path}.if[${j}]`)));
+    if (!Array.isArray(rule.do)) errs.push(`${path}.do must be an array of actions`);
+    else rule.do.forEach((a, j) => errs.push(...actionErrors(a, `${path}.do[${j}]`)));
   });
   return errs;
 }

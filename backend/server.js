@@ -1484,11 +1484,17 @@ function validateWorkspaceVictory(victory, key) {
     const rule = victory[i];
     const label = `levels.${key}.victory[${i}]`;
     if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return `${label} must be a rule object`;
-    if (rule.then !== 'win' && rule.then !== 'lose') return `${label}.then is invalid`;
     if (!Array.isArray(rule.if)) return `${label}.if is invalid`;
     for (let j = 0; j < rule.if.length; j += 1) {
       const err = validateWorkspaceCondition(rule.if[j], `${label}.if[${j}]`);
       if (err) return err;
+    }
+    if (!Array.isArray(rule.do)) return `${label}.do is invalid`;
+    for (let j = 0; j < rule.do.length; j += 1) {
+      const a = rule.do[j];
+      if (!a || typeof a !== 'object' || Array.isArray(a)) return `${label}.do[${j}] must be an action object`;
+      if (a.kind !== 'win' && a.kind !== 'lose') return `${label}.do[${j}].kind is invalid`;
+      if (a.side !== 'player' && a.side !== 'enemy') return `${label}.do[${j}].side is invalid`;
     }
   }
   return null;
