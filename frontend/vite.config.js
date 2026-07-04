@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
 import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
@@ -115,6 +116,97 @@ function bgmDevMock() {
   };
 }
 
+// Dev-only mock of the auth backend. frontend/src/net/auth.ts talks to relative
+// /api/auth/* paths that the deployed backend proxies to auth.romaine.life (Microsoft
+// sign-in). Local `vite` has no backend process, so the real "Sign In" button was a
+// dead redirect and nothing signed-in was testable. This middleware makes the WHOLE
+// round-trip work with just the dev server: click Sign In -> mock session cookie set
+// -> redirect back -> /api/auth/me reports a signed-in user -> the account menu
+// (rename, sign out) works. It mirrors the backend's own dev bypass EXACTLY — same
+// cookie (`better-auth.session=mock-dev-session`) and the same mock identity as
+// `node server.js` run with DEV_AUTH=1 (backend/server.js isDevAuthHost) — so the
+// two local modes show the same player and are interchangeable. `apply: 'serve'`
+// means this exists only under `vite dev`; it is never part of a production build.
+function devAuthMock() {
+  const COOKIE_NAME = 'better-auth.session';
+  const COOKIE_VALUE = 'mock-dev-session';
+  const EMAIL = 'player@example.com';
+  const DEFAULT_NAME = 'Tactics Player';
+  // Match backend gravatarUrl(): md5 of the lowercased email, retro (pixel-art) fallback.
+  const avatar = (() => {
+    const hash = createHash('md5').update(EMAIL).digest('hex');
+    return `https://www.gravatar.com/avatar/${hash}?d=retro&s=96`;
+  })();
+  // In-memory rename override for the running dev session (the DB-backed store the
+  // real PATCH /api/auth/me writes to isn't available locally). Reset on sign-out.
+  let displayName = null;
+  const user = () => ({
+    signed_in: true,
+    email: EMAIL,
+    name: displayName || DEFAULT_NAME,
+    image: null,
+    gravatar_url: avatar,
+    avatar_url: avatar,
+    role: 'pending',
+    is_admin: false,
+  });
+  return {
+    name: 'dev-auth-mock',
+    apply: 'serve',
+    configureServer(server) {
+      // Mounted at /api/auth, so req.url here is the remainder (/sign-in, /me, /sign-out).
+      server.middlewares.use('/api/auth', (req, res) => {
+        const url = req.url || '/';
+        const signedIn = (req.headers.cookie || '').includes(`${COOKIE_NAME}=${COOKIE_VALUE}`);
+        const json = (code, body) => {
+          res.statusCode = code;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(body));
+        };
+        // GET /api/auth/sign-in?returnTo=/path — set the session cookie and bounce back.
+        if (req.method === 'GET' && url.startsWith('/sign-in')) {
+          const raw = new URLSearchParams(url.split('?')[1] || '').get('returnTo') || '/';
+          const returnTo = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+          res.statusCode = 302;
+          res.setHeader('Set-Cookie', `${COOKIE_NAME}=${COOKIE_VALUE}; Path=/; HttpOnly; SameSite=Lax`);
+          res.setHeader('Location', returnTo);
+          res.end();
+          server.config.logger.info(`[dev-auth-mock] signed in as ${EMAIL} -> ${returnTo}`);
+          return;
+        }
+        // POST /api/auth/sign-out — clear the cookie and any rename override.
+        if (req.method === 'POST' && url.startsWith('/sign-out')) {
+          res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`);
+          displayName = null;
+          json(200, { ok: true });
+          return;
+        }
+        // GET /api/auth/me — the session probe fetchMe() calls on mount.
+        if (req.method === 'GET' && url.startsWith('/me')) {
+          json(200, signedIn ? user() : { signed_in: false });
+          return;
+        }
+        // PATCH /api/auth/me — rename the account (in-memory only for local dev).
+        if (req.method === 'PATCH' && url.startsWith('/me')) {
+          if (!signedIn) { json(401, { error: 'sign_in_required' }); return; }
+          let body = '';
+          req.on('data', (chunk) => { body += chunk; });
+          req.on('end', () => {
+            try {
+              const parsed = JSON.parse(body || '{}');
+              const next = typeof parsed.name === 'string' ? parsed.name.trim().slice(0, 48) : '';
+              displayName = next || null;
+            } catch { /* keep prior name on a bad body */ }
+            json(200, user());
+          });
+          return;
+        }
+        json(404, { error: 'not_found' });
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave(), bgmDevMock()],
+  plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave(), bgmDevMock(), devAuthMock()],
 });
