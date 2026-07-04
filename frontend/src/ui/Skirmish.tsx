@@ -125,7 +125,17 @@ export function Skirmish() {
   useEffect(() => { if (!game.winner) setNetResultDismissed(false); }, [game.winner]);
 
   const replayLevel = () => {
-    if (routeLevel) newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: routeLevel });
+    if (!routeLevel) return;
+    // Retry the SAME position: a fixed-placement level reuses the current seed so it rebuilds
+    // byte-identical. The board art signature is then unchanged, so the deploy "arrival" drop
+    // never re-arms (SkirmishBoard) — the pieces simply hop back to their starting seats, which
+    // is the whole reset the player wants. Rolling a fresh seed would leave every piece on its
+    // authored square yet still re-hide the board and re-play the drop, reading as "move back,
+    // disappear, fall again." A random-placement level instead re-rolls: reshuffling the deal is
+    // that mode's point (ADR-0050), and a fresh deal reads better as a new deploy than as pieces
+    // sliding to random new homes.
+    const seed = routeLevel.placement === 'random' ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
+    newSkirmish({ seed, level: routeLevel });
   };
 
   // The next level in this campaign after the one just cleared (null on the last level or
