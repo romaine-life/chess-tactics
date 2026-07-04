@@ -10,10 +10,10 @@
 //    `boardCode` so the next open is exact, and projecting terrain/units into `layers` so
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
-import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, Zone, ZoneType } from './level';
+import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, Zone, ZoneType } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
-import type { Side, TerrainCell, TerrainType, UnitFacing } from './types';
+import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, type EditorBoard } from '../ui/boardCode';
 import { studioFamilies } from '../ui/studioBoard';
@@ -34,10 +34,11 @@ const FAMILY_TO_TERRAIN: Record<TileFamilyId, TerrainType> = {
 // Terrain the editor can REPRESENT (and thus round-trip), so the save-time guard need not
 // preserve it from the pre-save level: the six tile families above, PLUS `road` — which the
 // editor expresses through its feature-overlay layer (not a tile brush), mapped both ways in
-// the converters below. Terrain with neither a tile family nor a feature — bridge, cliff, rock —
-// stays outside this set: it renders as a grass placeholder and is preserved on save rather than
-// flattened (an INV7 data-loss on legacy officials that predate boardCode).
-const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road']);
+// the converters below, and `void` — which the editor expresses as an intentionally missing
+// tile. Terrain with neither a tile family nor a feature — bridge, cliff, rock — stays outside
+// this set: it renders as a grass placeholder and is preserved on save rather than flattened
+// (an INV7 data-loss on legacy officials that predate boardCode).
+const EDITOR_EXPRESSIBLE_TERRAIN = new Set<TerrainType>([...Object.values(FAMILY_TO_TERRAIN), 'road', 'void']);
 
 // Side ↔ faction (team palette). The editor paints a faction; the level stores a side.
 const SIDE_TO_FACTION: Record<'player' | 'enemy', Faction> = { player: 'navy-blue', enemy: 'crimson' };
@@ -92,8 +93,9 @@ function zonesFromLayers(zones: Zone[] | undefined, cols: number, rows: number):
   return channel;
 }
 
-// Resolve a Studio tile id to its family (so its terrain material is known).
-const familyOfTile = (tileId: string): TileFamilyId | undefined =>
+// Resolve a Studio tile id to its family (so its terrain material is known). Exported so the
+// thumbnail renderer (bakeBoardThumbnail) can derive a cell's terrain for ground-cover scatter.
+export const familyOfTile = (tileId: string): TileFamilyId | undefined =>
   studioFamilies.find((family) => family.assets.some((asset) => asset.id === tileId))?.id;
 
 // The default (first) tile id of a family — used when deriving a board from `layers`,
@@ -111,6 +113,7 @@ const TERRAIN_TO_FAMILY = (Object.entries(FAMILY_TO_TERRAIN) as Array<[TileFamil
   {} as Partial<Record<TerrainType, TileFamilyId>>,
 );
 const tileIdForTerrain = (terrain: TerrainType): string | undefined => {
+  if (terrain === 'void') return undefined;
   const family = TERRAIN_TO_FAMILY[terrain] ?? 'grass';
   return defaultTileOfFamily(family);
 };
@@ -138,6 +141,8 @@ export interface LevelMeta {
   placement?: 'fixed' | 'random';
   roster?: { player: Roster; enemy: Roster };
   surviveTurns?: number;
+  // The battle clock, authored in the RULES panel. Omitted ⇒ untimed (back-compat).
+  timeControl?: TimeControl;
   difficulty?: string;
   economy?: LevelEconomy;
   theme?: string;
@@ -146,6 +151,24 @@ export interface LevelMeta {
   // placeholder — without it, republishing a legacy official level (no boardCode) flattens those
   // surfaces to grass for every player (INV7 data-loss). Absent for a brand-new/blank board.
   previousTerrain?: TerrainCell[];
+}
+
+/**
+ * Project live game pieces onto the editor-board units channel — the Game Lab
+ * replay viewer swaps this per step over a `levelToEditorBoard` base so every
+ * ply renders through the same read-only board the editors use. Only living
+ * player/enemy combatants paint (rocks/prop colliders ride the level's own
+ * cells/props channels); a promoted pawn paints as the queen it became.
+ */
+export function unitsForGamePieces(pieces: readonly Piece[]): EditorBoard['units'] {
+  const units: EditorBoard['units'] = {};
+  for (const p of pieces) {
+    if (!p.alive || (p.side !== 'player' && p.side !== 'enemy')) continue;
+    const unitId = unitIdForType(p.type);
+    if (!unitId) continue;
+    units[`${p.x},${p.y}`] = { unitId, direction: p.facing ?? 'south', faction: SIDE_TO_FACTION[p.side] };
+  }
+  return units;
 }
 
 // Re-seed the editor from a saved level. The lossless `boardCode` is preferred (it carries
@@ -163,10 +186,15 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   const cells: EditorBoard['cells'] = {};
   const cover: EditorBoard['cover'] = {};
   const features: EditorBoard['features'] = {};
+  const voidCells = new Set<string>();
   const fallbackTile = defaultTileOfFamily('grass');
   for (const cell of level.layers.terrain) {
     if (cell.x < 0 || cell.x >= cols || cell.y < 0 || cell.y >= rows) continue;
     const key = `${cell.x},${cell.y}`;
+    if (cell.terrain === 'void') {
+      voidCells.add(key);
+      continue;
+    }
     cells[key] = tileIdForTerrain(cell.terrain) ?? fallbackTile ?? '';
     if (cell.cover) cover[key] = cell.cover.density;
     // `road` is a game TerrainType but, in the editor, a feature overlay sitting on a (grass)
@@ -176,7 +204,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   // Fill any unauthored cell with grass so the whole board is paintable.
   if (fallbackTile) for (let y = 0; y < rows; y += 1) for (let x = 0; x < cols; x += 1) {
     const key = `${x},${y}`;
-    if (!(key in cells)) cells[key] = fallbackTile;
+    if (!(key in cells) && !voidCells.has(key)) cells[key] = fallbackTile;
   }
 
   const units: EditorBoard['units'] = {};
@@ -244,14 +272,14 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
       const tileId = board.cells[key];
       const family = tileId ? familyOfTile(tileId) : undefined;
       // Decorative / unknown families fall back to grass (a playable material).
-      let cellTerrain: TerrainType = family ? FAMILY_TO_TERRAIN[family] ?? 'grass' : 'grass';
+      let cellTerrain: TerrainType = tileId ? (family ? FAMILY_TO_TERRAIN[family] ?? 'grass' : 'grass') : 'void';
       // A road feature overlay IS the cell's terrain in the game's schema — project it back to
       // `road` so roads painted (or loaded) in the editor reach layers.terrain, which the game
       // reads. Erasing the overlay leaves no road feature, so the cell reverts to its tile
       // (grass) — i.e. an admin can actually remove a road.
-      if (board.features[key]?.kind === 'road') {
+      if (tileId && board.features[key]?.kind === 'road') {
         cellTerrain = 'road';
-      } else if (cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) {
+      } else if (tileId && cellTerrain === 'grass' && prev && !EDITOR_EXPRESSIBLE_TERRAIN.has(prev.terrain)) {
         // Preserve terrain the editor can neither paint nor feature-map (bridge/cliff/rock) so a
         // republished legacy official keeps those surfaces instead of flattening them to grass.
         cellTerrain = prev.terrain;
@@ -314,5 +342,6 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   if (meta.placement !== undefined) level.placement = meta.placement;
   if (meta.roster !== undefined) level.roster = meta.roster;
   if (meta.surviveTurns !== undefined) level.surviveTurns = meta.surviveTurns;
+  if (meta.timeControl !== undefined) level.timeControl = meta.timeControl;
   return level;
 }

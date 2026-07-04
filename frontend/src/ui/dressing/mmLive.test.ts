@@ -41,7 +41,10 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
   });
 
   it('gap: a representative value inside the rail clamp()', () => {
-    const m = firstBlock('.settings-rail-frame').match(/gap: clamp\((\d+(?:\.\d+)?)px[^,]*,[^,]+,\s*(\d+(?:\.\d+)?)px\)/);
+    // Match the clamp's first (min) and last (max) px terms. The middle is a calc() that itself
+    // contains commas — `var(--layout-vw, 100vw)` (the zoom-safe menu-indent form, PR #339) — so
+    // span it non-greedily rather than assuming exactly three comma-separated clamp args.
+    const m = firstBlock('.settings-rail-frame').match(/gap: clamp\((\d+(?:\.\d+)?)px[\s\S]*?(\d+(?:\.\d+)?)px\)/);
     expect(m, '.settings-rail-frame gap should be clamp(<min>px, …, <max>px)').toBeTruthy();
     expect(MM_LIVE.gap).toBeGreaterThanOrEqual(Number(m![1]));
     expect(MM_LIVE.gap).toBeLessThanOrEqual(Number(m![2]));

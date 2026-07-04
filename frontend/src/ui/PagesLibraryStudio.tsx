@@ -50,6 +50,7 @@ export function PagesLibraryStudio({
   );
 }
 
+
 // The stone surfaces the menu slab can wear (files under public/assets/ui/surfaces/).
 const STONE_SURFACES = [
   { name: 'stone-slate-blue', label: 'Slate blue' },
@@ -144,14 +145,15 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   add(btnH !== MM_LIVE.btnH,
     `.pages-menu-tweak .main-menu-mode-tab { min-height: ${btnH}px !important; }`,
     `.main-menu-mode-tab {\n  min-height: ${btnH}px;\n}`);
-  // Button width = the rail column. The shell ships a centred max-inline-size cap (clamp(900, 88vw,
-  // 1240)), so widen the cap to fit the chosen width — max() keeps the default cap for narrow widths
-  // (no surprise re-centre) and grows the body, centred, up to the full window for wide ones.
-  // Bakes onto the SHARED .settings-shell (not the menu-only scope) so the Settings rail width
-  // stays faithful to the menu's buttons.
+  // Button width = the rail column. The shell ships a centred width cap (--settings-shell-w,
+  // computed from --layout-vw — the zoom-corrected viewport width — so browser zoom magnifies
+  // instead of re-centring), so widen the cap to fit the chosen width — max() keeps the default
+  // cap for narrow widths (no surprise re-centre) and grows the body, centred, up to the full
+  // window for wide ones. Bakes onto the SHARED .settings-shell (not the menu-only scope) so the
+  // Settings rail width stays faithful to the menu's buttons.
   add(railW !== MM_LIVE.railW,
-    `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px) !important; }`,
-    `.settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n  max-inline-size: max(clamp(900px, 88vw, 1240px), ${railW}px);\n}`);
+    `.pages-menu-tweak .settings-shell { grid-template-columns: ${railW}px minmax(0, 1fr) !important; --settings-shell-w: max(clamp(900px, calc(var(--layout-vw, 100vw) * .88), 1240px), ${railW}px) !important; }`,
+    `.settings-shell {\n  grid-template-columns: ${railW}px minmax(0, 1fr);\n  --settings-shell-w: max(clamp(900px, calc(var(--layout-vw, 100vw) * .88), 1240px), ${railW}px);\n}`);
   add(tabGap !== MM_LIVE.gap,
     `.pages-menu-tweak .settings-rail-frame { gap: ${tabGap}px !important; }`,
     `.main-menu-twin-screen .settings-rail-frame {\n  gap: ${tabGap}px;\n}`);

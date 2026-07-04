@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
@@ -6,6 +6,7 @@ import { NavButton } from './shared/NavButton';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
@@ -35,6 +36,15 @@ interface BgmTrack {
   url: string;
   artist?: string;
   album?: string;
+}
+
+interface NowPlayingState {
+  playing: boolean;
+  paused: boolean;
+  currentUrl: string | null;
+  otherTab: boolean;
+  otherPaused: boolean;
+  otherTitle: string | null;
 }
 
 interface TabDefinition {
@@ -109,34 +119,23 @@ function asset(file: string): string {
 
 // Build / server provenance, stamped by vite.config buildInfo, surfaced in About so
 // "which server/build am I actually on?" is summonable from one place — dev or prod.
-// In dev it names the WORKTREE + commit + live port (a server from the wrong worktree
-// reports its own name, so being on the wrong one is a glance, not a 2-hour hunt).
+// Every build carries the app's semver. In dev it also names the WORKTREE + commit +
+// live port (a server from the wrong worktree reports its own name, so being on the
+// wrong one is a glance, not a 2-hour hunt). In prod the deploy-time PR/commit is not
+// knowable at build time (Docker has no .git) — it's fetched at runtime from
+// /api/build-info (see BuildInfoRemote below).
 declare const __BUILD_INFO__:
-  | { mode: 'dev'; worktree: string; commit: string; dirty: boolean; startedAt: number }
-  | { mode: 'prod'; commit: string; dirty: boolean }
+  | { mode: 'dev'; version: string; worktree: string; commit: string; dirty: boolean; startedAt: number }
+  | { mode: 'prod'; version: string; commit: string; dirty: boolean }
   | undefined;
 
-// The deployed entry-chunk hash (empty in dev) — the live asset-bundle id for prod.
-function bootedEntryHash(): string {
-  const el = document.querySelector('script[type="module"][src*="/assets/index-"]') as HTMLScriptElement | null;
-  return (el?.src || '').match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/)?.[1] || '';
-}
+// Deploy-time provenance served by the backend from k8s env (backend/server.js
+// GET /api/build-info; populated by build-and-deploy.yaml into k8s/values.yaml's
+// `build:` block on each deploy). All fields optional — the endpoint never 500s and
+// non-prod lanes leave it empty, so About degrades to just the baked app version.
+type BuildInfoRemote = { prTitle?: string; prNumber?: string | number; prUrl?: string; commit?: string };
 
-function buildSummary(): { headline: string; detail: string } {
-  const info = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
-  if (info && info.mode === 'dev') {
-    const port = window.location.port || 'default';
-    return {
-      headline: `${info.worktree} · ${info.commit}${info.dirty ? '*' : ''}`,
-      detail: `Local dev server · :${port} · started ${new Date(info.startedAt).toLocaleTimeString()}`,
-    };
-  }
-  const hash = bootedEntryHash();
-  return {
-    headline: `${info?.commit ?? '(unknown)'}${info?.dirty ? '*' : ''}${hash ? ` · ${hash}` : ''}`,
-    detail: 'Production build',
-  };
-}
+const BUILD_MONO: CSSProperties = { fontFamily: 'ui-monospace, monospace' };
 
 function readMuted(): boolean {
   // Default OFF — music is muted until explicitly enabled (kept in sync with bgm.js
@@ -323,9 +322,18 @@ export function Settings(): ReactElement {
   // render snapshot (otherwise rapid toggles clobber each other before re-render).
   const disabledRef = useRef<string[]>(disabledUrls);
   // The single BGM player owns playback; we just reflect its broadcast transport
-  // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
-  const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
+  // state so the sounding row shows ■ Stop, paused music stays selected, and the
+  // rest show ▶ Play.
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingState>({
+    playing: false,
+    paused: false,
+    currentUrl: null,
+    otherTab: false,
+    otherPaused: false,
+    otherTitle: null,
+  });
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [buildRemote, setBuildRemote] = useState<BuildInfoRemote | null>(null);
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
@@ -405,19 +413,37 @@ export function Settings(): ReactElement {
     return () => { active = false; };
   }, [showTracks]);
 
-  // Reflect the BGM player's transport state so the playing row shows ■ Stop.
+  // Reflect the BGM player's transport state so the current row distinguishes
+  // sounding playback from paused/muted playback.
   useEffect(() => {
     const onState = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { playing?: boolean; currentUrl?: string | null; otherTab?: boolean; otherTitle?: string | null };
+      const detail = (event as CustomEvent).detail as Partial<NowPlayingState>;
       setNowPlaying({
         playing: Boolean(detail.playing),
+        paused: Boolean(detail.paused),
         currentUrl: detail.currentUrl ?? null,
         otherTab: Boolean(detail.otherTab),
+        otherPaused: Boolean(detail.otherPaused),
         otherTitle: detail.otherTitle ?? null,
       });
     };
     window.addEventListener(BGM_STATE_EVENT, onState);
     return () => window.removeEventListener(BGM_STATE_EVENT, onState);
+  }, []);
+
+  // Deploy-time build provenance for About (prod only). Dev already knows its
+  // worktree + commit from the baked __BUILD_INFO__, so it skips the call. Best-
+  // effort and defensively parsed: any failure (no backend, non-JSON SPA fallback,
+  // empty env) just leaves About showing the baked app version.
+  useEffect(() => {
+    const info = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
+    if (info?.mode === 'dev') return undefined;
+    const controller = new AbortController();
+    fetch('/api/build-info', { signal: controller.signal, headers: { Accept: 'application/json' } })
+      .then((res) => (res.ok && (res.headers.get('content-type') || '').includes('application/json') ? res.json() : null))
+      .then((data) => { if (data && typeof data === 'object') setBuildRemote(data as BuildInfoRemote); })
+      .catch(() => { /* provenance is chrome; never block or surface */ });
+    return () => controller.abort();
   }, []);
 
   // Start a crossfade when the target menu changes: keep the current panel as `previous`,
@@ -503,7 +529,45 @@ export function Settings(): ReactElement {
     updateSetting('uiScale', clamp(settings.uiScale + delta, 90, 120, DEFAULT_SETTINGS.uiScale));
   };
 
-  const build = buildSummary();
+  // The About → Build row. Dev keeps its worktree · commit line; prod shows the
+  // baked semver plus the most recent PR (title links to the GitHub pull request),
+  // with the deploy's short commit in the muted subtitle. Replaces the old
+  // "(no-git) · <asset-hash>" line, which said nothing to a human.
+  const buildInfo = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
+  let buildDetail: string;
+  let buildValue: ReactNode;
+  if (buildInfo?.mode === 'dev') {
+    const port = window.location.port || 'default';
+    buildDetail = `Local dev server · :${port} · started ${new Date(buildInfo.startedAt).toLocaleTimeString()}`;
+    buildValue = (
+      <span style={{ ...BUILD_MONO, fontSize: 12 }}>
+        {`${buildInfo.worktree} · ${buildInfo.commit}${buildInfo.dirty ? '*' : ''}`}
+      </span>
+    );
+  } else {
+    const version = buildInfo?.version ? `v${buildInfo.version}` : '(unknown)';
+    const commit = (buildRemote?.commit || '').trim();
+    buildDetail = `Production build${commit ? ` · ${commit}` : ''}`;
+    const prTitle = (buildRemote?.prTitle || '').trim();
+    const prUrl = (buildRemote?.prUrl || '').trim();
+    const prNumber = buildRemote?.prNumber != null ? String(buildRemote.prNumber).trim() : '';
+    // Lead with #NNN so the durable PR handle survives the ellipsis on long titles;
+    // the full title is on the tooltip and one click away.
+    const prLabel = [prNumber ? `#${prNumber}` : '', prTitle].filter(Boolean).join(' ');
+    const prClamp: CSSProperties = { maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+    const prLink: CSSProperties = { ...prClamp, color: 'var(--ds-accent)' };
+    buildValue = (
+      <span style={{ fontSize: 12, display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <span style={BUILD_MONO}>{version}</span>
+        {prLabel ? <span aria-hidden style={{ opacity: 0.4 }}>·</span> : null}
+        {prLabel
+          ? (prUrl
+              ? <a href={prUrl} target="_blank" rel="noreferrer noopener" title={prTitle || prLabel} style={prLink}>{prLabel}</a>
+              : <span title={prTitle || prLabel} style={prClamp}>{prLabel}</span>)
+          : null}
+      </span>
+    );
+  }
 
   // Decorate an intra-settings href so the ?returnTo thread survives every hop —
   // rail tabs, View Tracks, and the tracks bar's ← Back. Drop it on any one of these
@@ -511,11 +575,15 @@ export function Settings(): ReactElement {
   const withReturnTo = (path: string): string =>
     returnTo ? `${path}?returnTo=${encodeURIComponent(returnTo)}` : path;
 
-  // The track currently coming out of the speakers, looked up in the loaded list by
-  // the player's broadcast url — drives the permanent "Now Playing" row.
-  const nowPlayingTrack = nowPlaying.playing && tracks
+  // The track currently selected in the player, looked up in the loaded list by
+  // the player's broadcast url — drives the permanent "Now Playing" row. Muting
+  // pauses the current track; it does not clear the now-playing identity.
+  const nowPlayingTrack = nowPlaying.currentUrl && tracks
     ? tracks.find((track) => track.url === nowPlaying.currentUrl) ?? null
     : null;
+  const nowPlayingEyebrow = nowPlayingTrack
+    ? [nowPlaying.paused ? 'Paused' : null, nowPlayingTrack.artist].filter(Boolean).join(' · ')
+    : '';
 
   const renderGeneral = () => (
     <>
@@ -655,8 +723,8 @@ export function Settings(): ReactElement {
       <SettingsSection title="About">
         <SettingsRow
           title="Build"
-          description={build.detail}
-          value={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{build.headline}</span>}
+          description={buildDetail}
+          value={buildValue}
         />
       </SettingsSection>
     </>
@@ -685,7 +753,9 @@ export function Settings(): ReactElement {
           <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
         ) : null}
       </TitleBarSlot>
-      {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
+      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu,
+          behind the frames. */}
+      <SceneBackdrop />
       <AmbienceBackground />
       <div className="settings-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell">
@@ -725,12 +795,12 @@ export function Settings(): ReactElement {
                       <span className="settings-nowplaying-label">Now Playing</span>
                       {nowPlaying.otherTab ? (
                         <>
-                          <span className="settings-row-eyebrow">Playing in another tab</span>
+                          <span className="settings-row-eyebrow">{nowPlaying.otherPaused ? 'Paused in another tab' : 'Playing in another tab'}</span>
                           <h4 className="settings-nowplaying-empty">{nowPlaying.otherTitle ?? '—'}</h4>
                         </>
                       ) : nowPlayingTrack ? (
                         <>
-                          {nowPlayingTrack.artist ? <span className="settings-row-eyebrow">{nowPlayingTrack.artist}</span> : null}
+                          {nowPlayingEyebrow ? <span className="settings-row-eyebrow">{nowPlayingEyebrow}</span> : null}
                           <h4>{nowPlayingTrack.title}</h4>
                         </>
                       ) : (

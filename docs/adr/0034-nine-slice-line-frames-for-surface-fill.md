@@ -76,6 +76,17 @@ regenerable kit output, not a one-off. Today only `panel` carries the flag, and 
 panels, the tab buttons, *and* the rows** (per §D the row borrows it). The steel `row`
 frame gets no line twin — its rail is inset (§D), so it can't be surfaced cleanly.
 
+**Semantic-accent twins (`lineTones`).** A frame may also declare **`lineTones: [{ out,
+swap }]`** — each entry re-bakes the line frame through a registry palette (like a filled
+variant's `swap`), so `bakeLine(asset, swap)` recolours the ornament to a status accent
+while the cool steel rail is untouched: one frame character, tone at the corners. `panel`
+carries `warm` / `success` / `warning` / `error` twins (`panel-line-<tone>.png`), the
+kit source for the level-editor status rail — the violations box (`warm`, blocking),
+the ready/blocked save state, and the success/warning/error log entries. They bake and
+parity-test on the exact path as `line`, so a tone twin can never drift from its neutral
+sibling. A consumer swaps only `border-image-source` between tones (same slice/width),
+the pattern the filled `active`/`danger` variants already use.
+
 ### C. The surface is a separate background layer
 
 The element keeps the line frame as `border-image` and paints the surface as its own

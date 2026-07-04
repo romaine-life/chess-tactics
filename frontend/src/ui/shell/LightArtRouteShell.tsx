@@ -1,5 +1,6 @@
 import { useEffect, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { AmbienceBackground } from '../AmbienceBackground';
+import { SceneBackdrop } from '../SceneBackdrop';
 import { ArtRouteChrome } from './ArtRouteChrome';
 import { TitleBarSlot } from './TitleBarSlot';
 
@@ -36,6 +37,9 @@ export function LightArtRouteShell({
 
   return (
     <div data-testid={testId} className={rootClassName} style={style}>
+      {/* A light-art route is, by definition, the main-menu scene + rain (routeSurfaces.ts):
+          the animated scene behind the synced rain, both under the faded chrome. */}
+      <SceneBackdrop />
       <AmbienceBackground />
       {centerSlot ? (
         <TitleBarSlot region="center">
