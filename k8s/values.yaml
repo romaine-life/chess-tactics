@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-b90fb614fff2cdd6759796266468486e5385237a3f829a2a7850f34d17ef66aa"
+  tag: "app-c9e2d81a6991532c1aafb313d058129dba05747144a12b5981f282d132542a16"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Keep the moved unit selected across the turn instead of deselecting it"
-  prNumber: "337"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/337"
-  commit: "8abe01e"
+  prTitle: "Server-side on-demand OG board thumbnails + backend for shareable maps & progress"
+  prNumber: "338"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/338"
+  commit: "c4d4fdf"
 
 name: chess-tactics
 namespace: chess-tactics
