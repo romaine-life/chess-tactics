@@ -15,6 +15,7 @@ import {
 } from '../campaign/progress';
 import { MODE_NAME } from '../core/objectives';
 import { levelObjectiveLine } from './LevelInfoCompact';
+import { LevelThumbnail } from '../render/LevelThumbnail';
 import type { Campaign as CampaignDoc } from '../core/level';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -92,6 +93,14 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
               return (
                 <section className={`settings-row ${unlocked ? '' : 'is-disabled'}`.trim()} key={ref.levelId}>
+                  {/* Leading board preview — the same baked thumbnail the Campaign Editor's
+                      level list uses, so a level looks identical wherever it's shown. Locked
+                      levels still show their board (dimmed) as a peek at what's ahead. */}
+                  <span className="settings-row-thumb" aria-hidden="true">
+                    {level
+                      ? <LevelThumbnail level={level} width={72} height={48} alt="" />
+                      : <span className="settings-row-thumb-empty" />}
+                  </span>
                   <div className="settings-row-copy">
                     <h4>{index + 1}. {level?.name ?? `Level ${index + 1}`}</h4>
                     <p>{goalLine}{status}</p>
