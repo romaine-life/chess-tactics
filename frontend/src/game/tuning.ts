@@ -68,11 +68,21 @@ export interface MatchOptions {
  * playing both colors. Returns A's points (win 1, draw ½) over total games, in
  * [0, 1]: 0.5 means evenly matched, >0.5 means A is stronger on this board.
  */
-export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): number {
+/** Full outcome of A-vs-B over the book (each position played both ways), from A's
+ * perspective. `score` is the usual (wins + ½·draws)/games; the win/draw/loss split
+ * is kept so a run can SHOW why the score sits where it does (e.g. mostly draws). */
+export interface MatchStats {
+  score: number;
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+export function matchStats(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): MatchStats {
   const searchA: SearchOptions = { ...opts.search, weights: a };
   const searchB: SearchOptions = { ...opts.search, weights: b };
-  let points = 0;
-  let games = 0;
+  let wins = 0, draws = 0, losses = 0;
   for (const pos of book) {
     // Each game STARTS from this book position (the seeded opening plies), then A
     // and B play it out. Playing it both ways (A-as-player then A-as-enemy) cancels
@@ -81,13 +91,18 @@ export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: r
     const seed = pos.seed;
     // A as player, B as enemy.
     const r1 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchA, enemy: searchB }, maxPlies: opts.maxPlies });
-    points += r1.winner === 'player' ? 1 : r1.winner === 'draw' ? 0.5 : 0;
+    if (r1.winner === 'player') wins += 1; else if (r1.winner === 'draw') draws += 1; else losses += 1;
     // Same position, sides swapped: A as enemy, B as player.
     const r2 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchB, enemy: searchA }, maxPlies: opts.maxPlies });
-    points += r2.winner === 'enemy' ? 1 : r2.winner === 'draw' ? 0.5 : 0;
-    games += 2;
+    if (r2.winner === 'enemy') wins += 1; else if (r2.winner === 'draw') draws += 1; else losses += 1;
   }
-  return games ? points / games : 0.5;
+  const games = wins + draws + losses;
+  return { score: games ? (wins + 0.5 * draws) / games : 0.5, games, wins, draws, losses };
+}
+
+/** (wins + ½·draws)/games from A's perspective. matchScore(w, w, book) === 0.5. */
+export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): number {
+  return matchStats(level, a, b, book, opts).score;
 }
 
 export interface SpsaHyperParams {
@@ -114,6 +129,12 @@ export interface StepResult {
   /** This step's perturbation and learning sizes (both shrink over time). */
   c: number;
   a: number;
+  /** Game outcomes across BOTH probes this step (θ⁺ and θ⁻ vs the reference), from
+   * the candidate's perspective — surfaced so a run can show its decisiveness. */
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
 }
 
 /**
@@ -138,18 +159,26 @@ export function spsaStep(
   const delta = theta.map(() => (rng.next() < 0.5 ? -1 : 1));
   const thetaPlus = clampVec(theta.map((v, i) => v + c * delta[i]));
   const thetaMinus = clampVec(theta.map((v, i) => v - c * delta[i]));
-  const yPlus = matchScore(level, decodeWeights(thetaPlus), reference, book, match);
-  const yMinus = matchScore(level, decodeWeights(thetaMinus), reference, book, match);
+  const sPlus = matchStats(level, decodeWeights(thetaPlus), reference, book, match);
+  const sMinus = matchStats(level, decodeWeights(thetaMinus), reference, book, match);
+  const yPlus = sPlus.score;
+  const yMinus = sMinus.score;
   // Gradient estimate for the whole vector from just those two measurements, then
   // a step toward the better-scoring direction.
   const thetaNew = clampVec(theta.map((v, i) => v + a * ((yPlus - yMinus) / (2 * c * delta[i]))));
-  return { theta: thetaNew, yPlus, yMinus, c, a };
+  return {
+    theta: thetaNew, yPlus, yMinus, c, a,
+    games: sPlus.games + sMinus.games,
+    wins: sPlus.wins + sMinus.wins,
+    draws: sPlus.draws + sMinus.draws,
+    losses: sPlus.losses + sMinus.losses,
+  };
 }
 
 export interface TrajectoryPoint {
   step: number;
-  /** Estimated strength vs the reference at this point — the climbing curve.
-   * Uses the midpoint of the two SPSA measurements, so it costs no extra games. */
+  /** Honest strength of the stepped weights vs the reference — an actual match over
+   * the book (matchScore), the climbing curve. NOT the yPlus/yMinus probe midpoint. */
   score: number;
   yPlus: number;
   yMinus: number;
@@ -200,7 +229,9 @@ export function runTuning(level: Level, cfg: TuningRunConfig): TuningResult {
   for (let step = 0; step < cfg.steps; step += 1) {
     const r = spsaStep(level, theta, reference, book, step, masterSeed, hp, cfg.match);
     theta = r.theta;
-    const score = (r.yPlus + r.yMinus) / 2; // midpoint proxy for score(θ vs reference)
+    // Honest strength of the stepped weights vs the reference (an actual match over the
+    // book), NOT the yPlus/yMinus probe midpoint — same fix as advanceSession.
+    const score = matchScore(level, decodeWeights(theta), reference, book, cfg.match);
     trajectory.push({ step, score, yPlus: r.yPlus, yMinus: r.yMinus, c: r.c, a: r.a, theta: theta.slice() });
     if (score > champion.score) {
       champion = { step, score, theta: theta.slice() };

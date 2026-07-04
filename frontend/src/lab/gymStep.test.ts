@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { advanceSession, type StepConfig } from './gymStep';
 import { freshSession } from './openingBooks';
 import { generateOpeningBook } from '../game/openingBook';
-import { DEFAULT_HYPERPARAMS } from '../game/tuning';
+import { DEFAULT_HYPERPARAMS, matchScore, decodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 import { createBlankLevel, type Level } from '../core/level';
 
@@ -59,6 +59,19 @@ describe('advanceSession', () => {
     expect(session.champion.step).toBe(0);
     expect(session.champion.score).toBe(point.score);
     expect(session.established).toBe(0);
+  });
+
+  it('plots the HONEST score (stepped weights vs reference over the book), not the probe midpoint', { timeout: 60_000 }, () => {
+    const c = cfg();
+    const b = book();
+    const { point } = advanceSession(c, freshSession(), b);
+    // The point score is the ACTUAL strength of the stepped weights vs the shipped
+    // reference — an independent matchScore, not (yPlus + yMinus)/2.
+    const honest = matchScore(c.level, decodeWeights(point.theta), c.reference, b, c.match);
+    expect(point.score).toBe(honest);
+    // It is genuinely a match score in [0, 1] (a proper strength number).
+    expect(point.score).toBeGreaterThanOrEqual(0);
+    expect(point.score).toBeLessThanOrEqual(1);
   });
 
   it('is deterministic in (config, session, book)', { timeout: 60_000 }, () => {
