@@ -5088,6 +5088,8 @@ h1 {
 .le-template-apply .le-layer-select { flex: 1; }
 .le-text-input { background: rgba(8, 18, 26, .8); border: 1px solid rgba(120, 160, 180, .35); border-radius: 4px; color: #eafaff; font-family: inherit; font-size: var(--ds-text-sm); min-width: 0; padding: 5px 8px; }
 .le-text-input:focus-visible { border-color: var(--skirmish-cyan, #7fd7ff); outline: none; }
+.le-events-tabs { flex: none; margin: 8px 0 0; }
+.le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
 .le-status-card { gap: 10px; }
 .le-status-current {
   background: rgba(4, 13, 20, .7);

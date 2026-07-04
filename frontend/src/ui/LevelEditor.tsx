@@ -50,7 +50,7 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
-import { VictoryConditionsEditor, mergeRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
+import { VictoryConditionsEditor, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
@@ -668,6 +668,9 @@ export function LevelEditor(): ReactElement {
   // The template the overlay's "Set template" button applies (a dropdown choice, not the old
   // row of buttons). Seeded from the current objective.
   const [templateChoice, setTemplateChoice] = useState<ObjectiveType>(objective);
+  // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/gate/phase —
+  // future, empty for now). The Template control only appears on the victory-rules tab.
+  const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
@@ -1580,34 +1583,44 @@ export function LevelEditor(): ReactElement {
             </ViewPane>
           </div>
           {eventsOpen ? (
-            <div className="le-events-overlay" role="dialog" aria-label="Victory events editor">
+            <div className="le-events-overlay" role="dialog" aria-label="Level events editor">
               <div className="le-events-head">
-                <h2>Victory events</h2>
+                <h2>Events</h2>
                 <button type="button" className="le-seg-btn" onClick={() => setEventsOpen(false)}>Done</button>
               </div>
-              <VictoryConditionsEditor
-                value={victory}
-                factions={victoryFactions}
-                onChange={setVictory}
-                templates={(
-                  <div className="le-events-templates">
-                    <h3 className="le-victory-head">Template</h3>
-                    <p className="le-board-note">Set a template to fill in a full rule set (each faction gets a way to win and lose). It ADDS to the rules — duplicates are ignored.</p>
-                    <div className="le-template-apply">
-                      <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
-                        value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
-                        {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
-                      </select>
-                      <button type="button" className="le-seg-btn" onClick={() => {
-                        const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
-                        setObjective(templateChoice);
-                        setVictory((v) => mergeRules(v, victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) })));
-                      }}>Set template</button>
+              <div className="le-seg le-seg-wrap le-events-tabs">
+                <button type="button" className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
+                <button type="button" className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
+              </div>
+              {eventsTab === 'victory' ? (
+                <VictoryConditionsEditor
+                  value={victory}
+                  factions={victoryFactions}
+                  onChange={setVictory}
+                  templates={(
+                    <div className="le-events-templates">
+                      <h3 className="le-victory-head">Template</h3>
+                      <p className="le-board-note">Set a template to REPLACE the victory rules with a full set (each faction gets a way to win and lose). Then edit.</p>
+                      <div className="le-template-apply">
+                        <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
+                          value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
+                          {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
+                        </select>
+                        <button type="button" className="le-seg-btn" onClick={() => {
+                          const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
+                          setObjective(templateChoice);
+                          setVictory(victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) }));
+                        }}>Set template</button>
+                      </div>
+                      <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
                     </div>
-                    <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
-                  </div>
-                )}
-              />
+                  )}
+                />
+              ) : (
+                <div className="le-events-placeholder">
+                  <p className="le-board-note">Other event types — spawn reinforcements, open a gate, advance a phase — will live here. There are none yet; today every event is a victory rule.</p>
+                </div>
+              )}
             </div>
           ) : null}
         </div>
@@ -1796,7 +1809,7 @@ export function LevelEditor(): ReactElement {
             {/* ADR-0055: the rule authoring lives in a full-size overlay over the board (this panel is
                 too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
             <p className="le-board-note">How this level is won and lost, as <b>IF … THEN</b> events. {victory.length} event{victory.length === 1 ? '' : 's'} set — templates and editing open over the board.</p>
-            <button type="button" className="le-seg-btn le-events-open" onClick={() => setEventsOpen(true)}>Open events editor</button>
+            <button type="button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
           </section>
 
           <section className="skirmish-card">
