@@ -44,11 +44,16 @@ function Stars({ count }: { count: number }): ReactElement {
 
 // A campaign rendered as a settings-style rail tab — the same baked-skin chrome the
 // main menu's mode tabs use, so the Campaign screen reads as a twin of the menu.
-function CampaignTab({ campaign, active }: { campaign: CampaignDoc; active: boolean }): ReactElement {
+// `index` is the tab's position down the rail — counted CONTINUOUSLY across both tiers
+// (Official then Your Campaigns), skipping the group-divider rows, so the shared stone
+// slice (--tab-index, see .settings-tab in style.css) flows as one sheet through the whole
+// rail. A :nth-child ladder can't do this — the dividers are siblings and would shift it.
+function CampaignTab({ campaign, active, index }: { campaign: CampaignDoc; active: boolean; index: number }): ReactElement {
   return (
     <NavButton
       className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
       to={`/campaign/${campaign.id}`}
+      style={{ ['--tab-index' as string]: index }}
       aria-current={active ? 'page' : undefined}
     >
       <span className="settings-tab-icon" aria-hidden="true">
@@ -227,16 +232,17 @@ export function Campaign(): ReactElement {
                 {/* Only label the tiers when the user actually has their own (myCampaigns
                     is non-empty only when signed in — it comes from the authed merge). */}
                 {myCampaigns.length > 0 ? <p className="campaign-rail-group">Official</p> : null}
-                {officialCampaigns.map((campaign) => (
-                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} />
+                {officialCampaigns.map((campaign, i) => (
+                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} index={i} />
                 ))}
               </>
             )}
             {myCampaigns.length > 0 && (
               <>
                 <p className="campaign-rail-group">Your Campaigns</p>
-                {myCampaigns.map((campaign) => (
-                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} />
+                {myCampaigns.map((campaign, i) => (
+                  // Continue the index past the official tier so the stone stays one sheet.
+                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} index={officialCampaigns.length + i} />
                 ))}
               </>
             )}

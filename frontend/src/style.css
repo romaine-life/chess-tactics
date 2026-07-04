@@ -11778,13 +11778,16 @@ button.tileset-relationship-cell {
   transition: color .14s ease, filter .14s ease;
 }
 
-/* Recover the continuous-stone flow the retired `fixed` attachment gave: each stacked
-   tab samples the vertical slice it would have if one texture sheet ran down the rail.
-   Step = the ~98px tab pitch (measured; drifts a few px with the clamp()ed gap/padding,
-   imperceptible for a stone texture). The rail is exactly these four tabs in order. */
-.settings-tab:nth-child(2) { background-position-y: -98px; }
-.settings-tab:nth-child(3) { background-position-y: -196px; }
-.settings-tab:nth-child(4) { background-position-y: -294px; }
+/* Recover the continuous-stone flow the retired `fixed` attachment gave: each tab samples
+   the vertical slice it would have if ONE texture sheet ran down the rail. The slice is
+   keyed to the tab's OWN rail position via --tab-index (set by every renderer — MainMenu,
+   Campaign, Settings), NOT its :nth-child index. nth-child re-counts the DOM, so a fixed
+   ladder silently breaks the continuity whenever the rail length changes (the main menu's
+   trailing Settings tab was an uncovered 5th child, restarting the stone at 0) or a non-tab
+   sibling sits between tabs (Campaign interleaves .campaign-rail-group dividers). An index
+   the data owns is immune to both. Step = the ~98px tab pitch (measured; drifts a few px
+   with the clamp()ed gap/padding, imperceptible for a stone texture). ADR-0063. */
+.settings-tab { background-position-y: calc(var(--tab-index, 0) * -98px); }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
