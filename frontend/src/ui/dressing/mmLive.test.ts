@@ -50,3 +50,55 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
     expect(MM_LIVE.gap).toBeLessThanOrEqual(Number(m![2]));
   });
 });
+
+// Comments stripped once — otherwise `.settings-shell` mentioned in a comment (e.g. the ADR-0062
+// tombstone for the removed #339 fork) reads as a selector, and a `[^{}]` span can run a comment
+// into the following real rule. Selectors/bodies must be real CSS, not prose.
+const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+// Every flat rule whose selector references a `.<name>` target — returns { selector, body }
+// for each. Skips @media wrappers naturally: a `[^{}]` selector/body can't span the wrapper's
+// own braces, so it captures the inner flat rules (props only, no nesting in this stylesheet).
+function rulesTargeting(name: string): Array<{ selector: string; body: string }> {
+  const out: Array<{ selector: string; body: string }> = [];
+  const re = new RegExp(`([^{}]*\\.${name}[^{}]*)\\{([^{}]*)\\}`, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cssRules))) out.push({ selector: m[1].trim(), body: m[2] });
+  return out;
+}
+
+// Any way to horizontally shift an element off its normal flow position — the whole family, not
+// just the one property #339 happened to use. A per-surface rail fork written with `left`,
+// `inset-inline-start`, the CSS `translate` property, or a `padding-inline-start` would move the
+// rail's on-screen left edge exactly as `margin-inline-start` did, so the guard must catch them all.
+const H_SHIFT = /(?:margin|inset|padding)-inline-start\s*:|margin-left\s*:|(?:^|[;{\s])left\s*:|\btransform\s*:|\btranslate\s*:/;
+
+// The rules that place a rail-family element are the BARE shared selectors (possibly inside a
+// media query, e.g. the mobile `margin-inline-start: 0` / `transform: none` resets). A rule is a
+// per-surface FORK if it shifts the element AND some comma-part references the target in a scoped
+// (non-bare) form. A group like `.settings-shell, .utility-twin-screen { … }` is fine — its
+// `.settings-shell` part is bare; the other part is a different element.
+function scopedShiftForks(name: string): string[] {
+  const bare = `.${name}`;
+  return rulesTargeting(name)
+    .filter((r) => H_SHIFT.test(r.body))
+    .flatMap((r) => r.selector.split(',').map((s) => s.trim()))
+    .filter((part) => part.includes(bare) && part !== bare);
+}
+
+// ADR-0062: the settings-twin rail (home menu · Settings · Campaign) is placed by ONE shared
+// rule. The #339 regression was a per-surface fork — `.main-menu-home .settings-shell` floored
+// the rail at a different value than its siblings, so the home buttons drifted off the Settings
+// rows. These tests fail if a surface-scoped selector reintroduces a rail-position override (via
+// ANY horizontal-shift property), so that class of drift can never ship again. A bare
+// `.settings-shell` / `.settings-rail-frame` (including inside a media query, or as one part of a
+// group selector) is the shared rule and is fine; a *scoped* one is the defect.
+describe('ADR-0062: no per-surface override forks the shared rail placement', () => {
+  it('no surface-scoped .settings-shell shifts the rail (margin/inset/left/transform/translate)', () => {
+    expect(scopedShiftForks('settings-shell'), 'a surface-scoped .settings-shell must not shift the rail — place it in the shared .settings-shell rule (ADR-0062)').toEqual([]);
+  });
+
+  it('no surface-scoped .settings-rail-frame shifts the rail', () => {
+    expect(scopedShiftForks('settings-rail-frame'), 'a surface-scoped .settings-rail-frame must not shift the rail — the offset is the shared MM_LIVE.btnX/btnY (ADR-0062)').toEqual([]);
+  });
+});
