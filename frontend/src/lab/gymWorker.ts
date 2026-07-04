@@ -1,83 +1,104 @@
-// Training-gym worker: holds one board's tuning state and does ONE SPSA step per
-// request, streaming the resulting trajectory point back. Stepping is driven from
-// the UI (one step per click, or repeated for auto-run), so the owner controls the
-// pace. Pure compute over the tuning engine — no DOM.
+// Training-gym worker: a PURE stepper over the tuning engine. It holds NO hidden
+// training state — the store owns every book's retained session. Each message is
+// self-contained:
+//   init     {level, match}            -> ready
+//   generate {settings}                -> book   (the opening-book positions)
+//   step     {book, session}           -> point  (the appended GymPoint + the
+//                                                  UPDATED session to persist)
+// Because the step is a pure function of (book, session), the UI can switch the
+// active book at will and each book's session (champion + curve) resumes exactly.
+// Pure compute over the deterministic engine (game/tuning.ts, game/openingBook.ts)
+// — no DOM, no timers, no module-level accumulation beyond the immutable init.
 
-import {
-  spsaStep, encodeWeights, makeBook, DEFAULT_HYPERPARAMS,
-  type MatchOptions, type SpsaHyperParams,
-} from '../game/tuning';
+import { DEFAULT_HYPERPARAMS, type MatchOptions, type SpsaHyperParams } from '../game/tuning';
+import { generateOpeningBook, type BookPosition, type OpeningBookSettings } from '../game/openingBook';
+import { advanceSession } from './gymStep';
 import { DEFAULT_EVAL_WEIGHTS, type EvalWeights } from '../core/ai';
 import type { Level } from '../core/level';
+import type { GymSession, GymPoint } from './openingBooks';
+
+// Re-export the session/point shapes the UI + store speak, so a consumer can pull
+// them from the worker module without also importing the store.
+export type { GymSession, GymPoint } from './openingBooks';
 
 export interface GymInit {
   type: 'init';
   level: Level;
-  bookSize: number;
-  bookBaseSeed?: number;
-  masterSeed?: number;
+  /** Search + ply budget shared by generation (ranking) and the training games. */
+  match: MatchOptions;
+  /** Fixed reference the trajectory is measured against (default: shipped weights). */
   reference?: EvalWeights;
   hyper?: SpsaHyperParams;
-  match: MatchOptions;
+  /** SPSA master seed (the whole trajectory replays identically from it). */
+  masterSeed?: number;
 }
-export type GymRequest = GymInit | { type: 'step' };
+export interface GymGenerate {
+  type: 'generate';
+  settings: OpeningBookSettings;
+}
+export interface GymStep {
+  type: 'step';
+  book: BookPosition[];
+  session: GymSession;
+}
+export type GymRequest = GymInit | GymGenerate | GymStep;
 
-export interface GymPoint {
-  step: number;
-  score: number;
-  yPlus: number;
-  yMinus: number;
-  c: number;
-  a: number;
-  theta: number[];
-}
 export type GymResponse =
-  | { type: 'ready'; book: number[]; referenceTheta: number[] }
-  | { type: 'point'; point: GymPoint; champion: { step: number; score: number; theta: number[] }; sinceImprovement: number }
+  | { type: 'ready' }
+  | { type: 'book'; positions: BookPosition[] }
+  | { type: 'point'; point: GymPoint; session: GymSession }
   | { type: 'error'; message: string };
 
 const post = (m: GymResponse): void => (self as unknown as { postMessage(m: GymResponse): void }).postMessage(m);
 
-interface State {
+interface WorkerConfig {
   level: Level;
-  reference: EvalWeights;
-  theta: number[];
-  step: number;
-  book: number[];
-  hp: SpsaHyperParams;
   match: MatchOptions;
+  reference: EvalWeights;
+  hp: SpsaHyperParams;
   masterSeed: number;
-  champion: { step: number; score: number; theta: number[] };
-  sinceImprovement: number;
 }
-let state: State | null = null;
+// The ONLY retained state: the immutable init config. No trajectory, no champion,
+// no theta — every step's mutable state travels in the message.
+let config: WorkerConfig | null = null;
 
-self.onmessage = (event: MessageEvent<GymRequest>) => {
+self.onmessage = (event: MessageEvent<GymRequest>): void => {
   try {
     const msg = event.data;
+
     if (msg.type === 'init') {
-      const reference = msg.reference ?? DEFAULT_EVAL_WEIGHTS;
-      const theta = encodeWeights(reference);
-      const book = makeBook(msg.bookSize, msg.bookBaseSeed ?? 1);
-      state = {
-        level: msg.level, reference, theta, step: 0, book,
-        hp: msg.hyper ?? DEFAULT_HYPERPARAMS, match: msg.match, masterSeed: msg.masterSeed ?? 1,
-        champion: { step: -1, score: 0.5, theta: theta.slice() }, sinceImprovement: 0,
+      config = {
+        level: msg.level,
+        match: msg.match,
+        reference: msg.reference ?? DEFAULT_EVAL_WEIGHTS,
+        hp: msg.hyper ?? DEFAULT_HYPERPARAMS,
+        masterSeed: msg.masterSeed ?? 1,
       };
-      post({ type: 'ready', book, referenceTheta: theta.slice() });
+      post({ type: 'ready' });
       return;
     }
+
+    if (msg.type === 'generate') {
+      if (!config) { post({ type: 'error', message: 'gym not initialised' }); return; }
+      const positions = generateOpeningBook(config.level, msg.settings, { search: config.match.search });
+      post({ type: 'book', positions });
+      return;
+    }
+
     if (msg.type === 'step') {
-      if (!state) { post({ type: 'error', message: 'gym not initialised' }); return; }
-      const s = state;
-      const r = spsaStep(s.level, s.theta, s.reference, s.book, s.step, s.masterSeed, s.hp, s.match);
-      s.theta = r.theta;
-      const score = (r.yPlus + r.yMinus) / 2;
-      const point: GymPoint = { step: s.step, score, yPlus: r.yPlus, yMinus: r.yMinus, c: r.c, a: r.a, theta: r.theta.slice() };
-      if (score > s.champion.score) { s.champion = { step: s.step, score, theta: r.theta.slice() }; s.sinceImprovement = 0; }
-      else { s.sinceImprovement += 1; }
-      s.step += 1;
-      post({ type: 'point', point, champion: s.champion, sinceImprovement: s.sinceImprovement });
+      if (!config) { post({ type: 'error', message: 'gym not initialised' }); return; }
+      const c = config;
+      const { session, book } = msg;
+      // One SPSA step from the session's current point over THIS book. The pure
+      // reducer (gymStep.ts) is seeded by (masterSeed, session.k), so replaying a
+      // session's k re-derives the same trajectory — the session is the complete,
+      // portable training state.
+      const { point, session: next } = advanceSession(
+        { level: c.level, reference: c.reference, hp: c.hp, match: c.match, masterSeed: c.masterSeed },
+        session,
+        book,
+      );
+      post({ type: 'point', point, session: next });
       return;
     }
   } catch (error) {

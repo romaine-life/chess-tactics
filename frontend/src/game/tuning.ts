@@ -16,9 +16,9 @@
 import type { Level } from '../core/level';
 import { playLevelGame } from './selfplay';
 import { DEFAULT_EVAL_WEIGHTS, type EvalWeights, type SearchOptions } from '../core/ai';
-import { createFromLevel } from './setup';
 import { createRng } from '../core/rng';
 import type { PieceType } from '../core/types';
+import type { BookPosition } from './openingBook';
 
 // The tunable parameters, in a FIXED order so encode/decode and the UI always
 // agree. The two rock "pieces" are structural (value 0, never captured) and stay
@@ -57,13 +57,6 @@ export function decodeWeights(vec: readonly number[]): EvalWeights {
 /** Non-negativity floor: piece values and term weights below 0 are nonsensical. */
 const clampVec = (vec: number[]): number[] => vec.map((v) => (v > 0 ? v : 0));
 
-/** The opening book for a board: the first `size` seeded starts, from `baseSeed`.
- * Each seed produces one starting position (random-placement levels re-deal per
- * seed; fixed levels vary only in the AI's play, which is still a valid sample). */
-export function makeBook(size: number, baseSeed = 1): number[] {
-  return Array.from({ length: Math.max(1, size) }, (_, i) => baseSeed + i);
-}
-
 export interface MatchOptions {
   search: SearchOptions;
   maxPlies?: number;
@@ -75,17 +68,22 @@ export interface MatchOptions {
  * playing both colors. Returns A's points (win 1, draw ½) over total games, in
  * [0, 1]: 0.5 means evenly matched, >0.5 means A is stronger on this board.
  */
-export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: readonly number[], opts: MatchOptions): number {
+export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): number {
   const searchA: SearchOptions = { ...opts.search, weights: a };
   const searchB: SearchOptions = { ...opts.search, weights: b };
   let points = 0;
   let games = 0;
-  for (const seed of book) {
+  for (const pos of book) {
+    // Each game STARTS from this book position (the seeded opening plies), then A
+    // and B play it out. Playing it both ways (A-as-player then A-as-enemy) cancels
+    // side bias — so matchScore(w, w, book) === 0.5 for any book (swap symmetry).
+    const opening = pos.moves;
+    const seed = pos.seed;
     // A as player, B as enemy.
-    const r1 = playLevelGame(level, { seed, searchForSide: { player: searchA, enemy: searchB }, maxPlies: opts.maxPlies });
+    const r1 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchA, enemy: searchB }, maxPlies: opts.maxPlies });
     points += r1.winner === 'player' ? 1 : r1.winner === 'draw' ? 0.5 : 0;
     // Same position, sides swapped: A as enemy, B as player.
-    const r2 = playLevelGame(level, { seed, searchForSide: { player: searchB, enemy: searchA }, maxPlies: opts.maxPlies });
+    const r2 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchB, enemy: searchA }, maxPlies: opts.maxPlies });
     points += r2.winner === 'enemy' ? 1 : r2.winner === 'draw' ? 0.5 : 0;
     games += 2;
   }
@@ -127,7 +125,7 @@ export function spsaStep(
   level: Level,
   theta: readonly number[],
   reference: EvalWeights,
-  book: readonly number[],
+  book: readonly BookPosition[],
   step: number,
   masterSeed: number,
   hp: SpsaHyperParams,
@@ -162,8 +160,9 @@ export interface TrajectoryPoint {
 
 export interface TuningRunConfig {
   steps: number;
-  bookSize: number;
-  bookBaseSeed?: number;
+  /** The opening-book positions the trajectory trains over (one game per position,
+   * played both ways per SPSA measurement). */
+  book: readonly BookPosition[];
   masterSeed?: number;
   /** Fixed opponent the trajectory is measured against (default: the hand-authored
    * origin weights — so "score" reads as "how much better than the shipped AI"). */
@@ -174,7 +173,7 @@ export interface TuningRunConfig {
 
 export interface TuningResult {
   reference: EvalWeights;
-  book: number[];
+  book: readonly BookPosition[];
   trajectory: TrajectoryPoint[];
   /** Best point seen — the current champion. */
   champion: { step: number; score: number; theta: number[] };
@@ -191,7 +190,7 @@ export function runTuning(level: Level, cfg: TuningRunConfig): TuningResult {
   const reference = cfg.reference ?? DEFAULT_EVAL_WEIGHTS;
   const hp = cfg.hyper ?? DEFAULT_HYPERPARAMS;
   const masterSeed = cfg.masterSeed ?? 1;
-  const book = makeBook(cfg.bookSize, cfg.bookBaseSeed ?? 1);
+  const book = cfg.book;
 
   let theta = encodeWeights(reference);
   const trajectory: TrajectoryPoint[] = [];
@@ -211,14 +210,4 @@ export function runTuning(level: Level, cfg: TuningRunConfig): TuningResult {
     }
   }
   return { reference, book, trajectory, champion, stepsSinceImprovement: sinceImprovement };
-}
-
-/** Convenience for the UI/worker: a level exists at this seed (validate a book entry). */
-export function bookPositionExists(level: Level, seed: number): boolean {
-  try {
-    const g = createFromLevel(level, seed);
-    return g.pieces.length > 0;
-  } catch {
-    return false;
-  }
 }
