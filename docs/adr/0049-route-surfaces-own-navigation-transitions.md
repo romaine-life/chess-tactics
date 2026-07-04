@@ -106,5 +106,8 @@ background without the wrapper or if a screen imports `useScreenEntrance()` dire
   `frontend/scripts/check-light-art-chrome.mjs`.
 - First consumer fixed by this ADR: `SkirmishMapPicker` in
   `frontend/src/ui/SkirmishMapPicker.tsx`.
+- Extended by [ADR-0063](0063-homepage-backdrop-is-one-continuous-instance.md): the shared menu
+  scene + rain become one owned, re-parented instance (`HomepageBackdrop`) instead of a per-screen
+  pair, so the "continuous backdrop" this ADR relies on is true for the scene, not just the rain.
 - Builds on: [ADR-0043](0043-ui-motion-system.md),
   [ADR-0046](0046-screen-and-control-transitions-are-orchestrated.md).

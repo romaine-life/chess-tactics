@@ -126,6 +126,9 @@ consolidation (incl. folding in the veil, F) must preserve it.
 
 ## More Information
 
+- Completed by [ADR-0063](0063-homepage-backdrop-is-one-continuous-instance.md): §G promised the
+  homepage **scene** and rain were both continuous, but only the rain was — the scene re-mounted
+  per screen. ADR-0063 makes the scene one re-parented instance too, closing the gap.
 - Sits on: [ADR-0043](0043-ui-motion-system.md) (motion tokens). Siblings: [ADR-0024](0024-ui-typography-system.md),
   [ADR-0031](0031-ui-spacing-system.md).
 - Primitive: `useScreenEntrance()` in `frontend/src/ui/shell/`; tokens in `style.css` `:root`.

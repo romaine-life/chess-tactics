@@ -16,8 +16,7 @@ import {
   type LobbyUser,
 } from '../net/lobbies';
 import { LevelThumbnail } from '../render/LevelThumbnail';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { navigateApp } from './navigation';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -190,9 +189,8 @@ export function Lobbies() {
 
   return (
     <section className="settings-art-route" aria-label="Lobbies" data-testid="lobbies">
-      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu. */}
-      <SceneBackdrop />
-      <AmbienceBackground />
+      {/* Same art-directed backdrop (animated menu scene + synced rain) as the main menu. */}
+      <HomepageBackdrop />
       <div className="settings-screen utility-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="utility-screen utility-lobbies">
           {me && !me.signed_in ? (

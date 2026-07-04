@@ -558,7 +558,7 @@ h1 {
 
 /* Ambience effect credit — a quiet bottom-right stamp naming the scene the
    shared rain world is running right now (read live off the vendored client;
-   rendered by AmbienceBackground, so every screen with the shared backdrop
+   rendered by HomepageBackdrop, so every screen with the shared backdrop
    carries it). Links to ambience's read-only monitor for the same broadcast.
    z4: above the screens' z3 UI tier so the corner stays clickable under
    footers/panels that reach it, still below the near-drop overlay (z5) so the
@@ -605,7 +605,7 @@ h1 {
     color var(--ds-duration-fast) var(--ds-ease-standard);
 }
 
-/* One start frame at opacity 0; AmbienceBackground drops this class on the
+/* One start frame at opacity 0; HomepageBackdrop drops this class on the
    next frame and the transition above plays. */
 .ambience-credit-start {
   opacity: 0;
@@ -3684,8 +3684,35 @@ h1 {
   z-index: -1;
 }
 
+/* The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
+   (menu scene + synced rain), NOT the battlefield world (/play keeps that). LevelEditor wraps
+   the faded editor chrome in .level-editor-root and renders <HomepageBackdrop> as a SIBLING of
+   it — outside the fade, so the backdrop stays continuous and never re-fades on entrance
+   (ADR-0046 §G), mirroring CampaignEditor's shape. This root is the positioned/overflow anchor
+   the backdrop's absolute layers fill; the editor's own ::before battlefield is dropped so the
+   shared scene shows through the (otherwise transparent) .skirmish-screen.
+   `isolation: isolate` makes the whole backdrop+editor stack self-contained, so its top layer
+   (the near rain overlay, z5) stays BELOW the global title bar (z50) that lives outside it. */
+.level-editor-root {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* Same layer order as the menu: scene (z1) < rain field (z2) < editor chrome (z3) < near rain
+   overlay (z5, drops crossing IN FRONT of the UI). The editor chrome inherits .skirmish-screen's
+   z5 — drop it to z3 so the overlay clears it; two classes out-rank the base rule. /play keeps
+   z5 (it has no rain). */
+.skirmish-screen.level-editor-screen {
+  z-index: 3;
+}
+.level-editor-screen::before {
+  background: none;
+}
+
 /* The skirmish picker is a light-art route: LightArtRouteShell renders the animated menu
-   scene (still art + waterfalls + scrim) as a <SceneBackdrop> element, so the picker no
+   scene (still art + waterfalls + scrim) via the shared <HomepageBackdrop>, so the picker no
    longer overrides the base ::before with the menu scene — the base dark floor rides behind
    the backdrop like every other light-art screen. */
 
@@ -5924,8 +5951,8 @@ body { font-size: 17px; }
   --ce-gold-bright: #f5bb45;
   --ce-eyebrow: #c9a877;
   /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
-     the <SceneBackdrop> element the editor renders (ui/SceneBackdrop.tsx), the same way the
-     main menu paints it, so the editor sits over the menu scene + synced rain. The editor's
+     the shared <HomepageBackdrop> the editor renders, the same continuous instance the
+     main menu shows, so the editor sits over the menu scene + synced rain. The editor's
      panels overlap most of it; the scene + rain only show in the gaps, for a consistent
      feel. This floor keeps the screen dark (never white) before the scene decodes. */
   background: #02070b;
@@ -5947,9 +5974,9 @@ body { font-size: 17px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Sit above the scene backdrop (<SceneBackdrop>, z1) so this cyan edge tint still colors
-     the menu scene — it used to ride over the .ce-screen background scene, which now lives
-     in a z1 element. Rain field (z2, later in the DOM) still falls in front of the tint. */
+  /* Sit above the scene backdrop (HomepageBackdrop's .scene-backdrop, z1) so this cyan edge
+     tint still colors the menu scene — it used to ride over the .ce-screen background scene,
+     which now lives in a z1 element. Rain field (z2, later in the DOM) still falls in front. */
   z-index: 2;
   background:
     linear-gradient(90deg, rgba(48, 214, 255, .08), transparent 16% 84%, rgba(48, 214, 255, .08)),
@@ -11011,8 +11038,8 @@ button.tileset-relationship-cell {
 .settings-art-route {
   align-items: center;
   /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
-     the <SceneBackdrop> element these screens render (ui/SceneBackdrop.tsx), the same way
-     the main menu paints it, so the settings frames sit over the menu scene + synced rain.
+     the shared <HomepageBackdrop> these screens render, the same continuous instance the
+     main menu shows, so the settings frames sit over the menu scene + synced rain.
      This floor keeps the screen dark (never white) before the scene decodes. */
   background: #02070b;
   display: grid;

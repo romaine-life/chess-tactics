@@ -3,7 +3,7 @@
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
@@ -23,7 +23,7 @@ import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
-import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import {
   hasDirectionSprite,
   productionUnitAssets,
@@ -1544,8 +1544,6 @@ export function LevelEditor(): ReactElement {
     else next.featureExits[edge] = true;
     commitEditorBoard(next);
   };
-  const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
-
   // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
   // PUBLISHES to all players; a private/unassigned level just SAVES. A level only resolves a
   // tier once a target id is known (campaign path); a fresh standalone board saves as private.
@@ -1598,7 +1596,15 @@ export function LevelEditor(): ReactElement {
     : undefined;
 
   return (
-    <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle} ready={editorReady}>
+    // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
+    // (menu scene + synced rain), not the battlefield world. The backdrop is a SIBLING of the
+    // faded editor chrome (not a child) so it stays continuous across navigation and never
+    // re-fades on entrance (ADR-0046 §G) — the same shape CampaignEditor uses. The editor's own
+    // ::before battlefield is dropped (.level-editor-screen::before) so the shared scene shows
+    // through the transparent chrome; /play keeps that battlefield (its game world).
+    <div className="level-editor-root">
+      <HomepageBackdrop />
+      <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
         {confirmDialog}
         {/* The title bar carries NO editor status (no level name, no save-state chip) — the
             owner removed the center cluster: that's ambient chrome noise while editing, and
@@ -2336,6 +2342,7 @@ export function LevelEditor(): ReactElement {
         ) : null}
         </KitScroll>
       </aside>
-    </ArtRouteChrome>
+      </ArtRouteChrome>
+    </div>
   );
 }

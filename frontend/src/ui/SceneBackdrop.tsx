@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactElement } from 'react';
+import { useLayoutEffect, useRef, type ReactElement } from 'react';
 
 // The main-menu background scene as REAL elements instead of a `::after`
 // background — so animated regions can anchor to scene coordinates.
@@ -16,6 +16,15 @@ import type { CSSProperties, ReactElement } from 'react';
 // twin of ADR-0048's water ripple): only water pixels are opaque, frame 0 is
 // bit-identical to the shipped scene, and CSS steps() just advances the frame.
 // Region + frame data here must match the sheet the script baked.
+//
+// This module exposes the scene as DATA (SCENE_ANIMS) + a plain-DOM builder
+// (buildSceneBackdropNode). Homepage SCREENS never render the scene from here: the
+// live backdrop must be ONE continuous instance re-parented across route swaps
+// (never re-mounted), so it lives as a singleton node owned by HomepageBackdrop —
+// a per-screen React subtree would re-crop/re-fade on navigation (ADR-0063). The
+// <SceneBackdrop> component below is a STANDALONE render for the studio inspector
+// only (SceneAnimLab's Animated Scenes picker); it builds the same DOM via the
+// builder so there is one structure. See ui/HomepageBackdrop.tsx.
 
 const SCENE_W = 1586;
 const SCENE_H = 991;
@@ -108,33 +117,58 @@ export const SCENE_ANIMS: SceneAnim[] = [
   },
 ];
 
+// Build the scene backdrop as a detached DOM subtree — the plain-DOM twin of the
+// old JSX (identical class names, so the existing style.css rules apply
+// unchanged). Created ONCE by HomepageBackdrop and re-parented across screens; a
+// moved node keeps its computed cover-crop and animation state, so the scene
+// never re-adjusts on navigation. aria-hidden: it is pure decoration.
+export function buildSceneBackdropNode(): HTMLDivElement {
+  const root = document.createElement('div');
+  root.className = 'scene-backdrop';
+  root.setAttribute('aria-hidden', 'true');
+
+  const canvas = document.createElement('div');
+  canvas.className = 'scene-backdrop-canvas';
+
+  for (const a of SCENE_ANIMS) {
+    const span = document.createElement('span');
+    span.className = 'scene-backdrop-anim';
+    span.dataset.sceneAnim = a.id;
+    const s = span.style;
+    s.left = `${(a.x / SCENE_W) * 100}%`;
+    s.top = `${(a.y / SCENE_H) * 100}%`;
+    s.width = `${(a.w / SCENE_W) * 100}%`;
+    s.height = `${(a.h / SCENE_H) * 100}%`;
+    s.backgroundImage = `url("${a.sheet}")`;
+    s.setProperty('--scene-anim-frames', `${a.frames}`);
+    // steps(N) over [0, N/(N-1) * 100%] lands step k on frame k of an N-frame
+    // sheet sized in percent (bg-pos % maps k/(N-1) -> -k*boxW).
+    s.setProperty('--scene-anim-travel', `${(a.frames / (a.frames - 1)) * 100}%`);
+    s.setProperty('--scene-anim-dur', `${a.frames * a.frameMs}ms`);
+    canvas.appendChild(span);
+  }
+  root.appendChild(canvas);
+
+  const scrim = document.createElement('div');
+  scrim.className = 'scene-backdrop-scrim';
+  root.appendChild(scrim);
+
+  return root;
+}
+
+// Standalone scene render for the studio inspector (SceneAnimLab overlays clickable
+// region boxes on it). NOT for homepage screens — those use <HomepageBackdrop/>, the
+// one continuous instance. Builds the same DOM as the singleton (buildSceneBackdropNode)
+// under a display:contents host, so `.scene-backdrop` anchors to the picker box exactly
+// as a direct child would and the shared style.css rules apply unchanged.
 export function SceneBackdrop(): ReactElement {
-  return (
-    <div className="scene-backdrop" aria-hidden="true">
-      <div className="scene-backdrop-canvas">
-        {SCENE_ANIMS.map((a) => (
-          <span
-            key={a.id}
-            className="scene-backdrop-anim"
-            data-scene-anim={a.id}
-            style={
-              {
-                left: `${(a.x / SCENE_W) * 100}%`,
-                top: `${(a.y / SCENE_H) * 100}%`,
-                width: `${(a.w / SCENE_W) * 100}%`,
-                height: `${(a.h / SCENE_H) * 100}%`,
-                backgroundImage: `url("${a.sheet}")`,
-                '--scene-anim-frames': `${a.frames}`,
-                // steps(N) over [0, N/(N-1) * 100%] lands step k on frame k of an
-                // N-frame sheet sized in percent (bg-pos % maps k/(N-1) -> -k*boxW).
-                '--scene-anim-travel': `${(a.frames / (a.frames - 1)) * 100}%`,
-                '--scene-anim-dur': `${a.frames * a.frameMs}ms`,
-              } as CSSProperties
-            }
-          />
-        ))}
-      </div>
-      <div className="scene-backdrop-scrim" />
-    </div>
-  );
+  const hostRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return undefined;
+    const node = buildSceneBackdropNode();
+    host.appendChild(node);
+    return () => node.remove();
+  }, []);
+  return <div ref={hostRef} style={{ display: 'contents' }} aria-hidden="true" />;
 }
