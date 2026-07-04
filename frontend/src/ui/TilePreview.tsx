@@ -47,6 +47,7 @@ import { DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
 import { navigateApp } from './navigation';
+import { TitleBarSlot } from './shell/TitleBarSlot';
 import {
   activeUnitFamilies,
   familyLabels,
@@ -1345,32 +1346,33 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     </label>
   );
 
-  // The studio workspace switcher (Catalog / Lab / Viewer). Per the title-bar
-  // standardization (ADR-0023) it lives in the CONTROL PANEL, not the title bar:
-  // it rides the top of the catalog controls rail and the Viewer labs' `header`
-  // slot, so it shows in both modes while the bar carries only brand + account.
-  const studioModeTabs = (
-    <div className="tileset-mode-field">
-      <span className="tileset-control-label">Workspace</span>
-      <span className="tileset-mode-tabs" aria-label="Workspace">
-        <button type="button" className={studioMode === 'catalog' ? 'is-active' : ''} onClick={openCatalogMode} title="Browse the catalogs.">
-          Catalog
-        </button>
-        <button type="button" onClick={() => navigateApp('/level-editor?from=studio')} title="Open the Level Editor — paint tiles and units and set the board size.">
-          Lab
-        </button>
-        <button type="button" className={studioMode === 'viewer' ? 'is-active' : ''} onClick={() => setStudioMode('viewer')} title="View one finished asset or artwork.">
-          Viewer
-        </button>
-      </span>
-    </div>
+  // The studio workspace switcher (Catalog / Lab / Viewer) — three icon buttons that ride
+  // the persistent title bar's actions slot (just before the account cluster), portaled in
+  // via <TitleBarSlot> below. It moved OFF the control rail so switching workspaces no longer
+  // costs every Viewer's controls a row of word-tabs. The glyphs are forged kit icons —
+  // indie pixel-art of period objects (~0–1750 AD): an open illuminated codex (Catalog), an
+  // alchemist's flask (Lab), a hand lens (Viewer) — made by scripts/forge-studio-switcher-icons.mjs
+  // (codex img-gen → 64×64 kit canvas). Catalog & Viewer toggle in place; Lab hops to the Level Editor.
+  const studioModeNav = (
+    <nav className="studio-mode-nav" aria-label="Studio workspace">
+      <button type="button" className={`studio-mode-icon${studioMode === 'catalog' ? ' is-active' : ''}`} aria-pressed={studioMode === 'catalog'} onClick={openCatalogMode} aria-label="Catalog" title="Catalog — browse the catalogs.">
+        <img src="/assets/ui/kit/icons/studio-catalog.png" alt="" />
+      </button>
+      <button type="button" className="studio-mode-icon" onClick={() => navigateApp('/level-editor?from=studio')} aria-label="Lab" title="Lab — open the Level Editor to paint tiles and units and set the board size.">
+        <img src="/assets/ui/kit/icons/studio-lab.png" alt="" />
+      </button>
+      <button type="button" className={`studio-mode-icon${studioMode === 'viewer' ? ' is-active' : ''}`} aria-pressed={studioMode === 'viewer'} onClick={() => setStudioMode('viewer')} aria-label="Viewer" title="Viewer — view one finished asset or artwork.">
+        <img src="/assets/ui/kit/icons/studio-viewer.png" alt="" />
+      </button>
+    </nav>
   );
-  // Viewer labs render their controls through a `header` slot; lead it with the
-  // workspace switcher so the relocated tabs sit atop the Viewer control panel too.
-  const studioViewerHeader = <>{studioModeTabs}{viewerKindSelect}</>;
+  // Viewer labs render their controls through a `header` slot — now just the preview-kind
+  // select; the workspace switcher moved out of the rail and onto the title bar (above).
+  const studioViewerHeader = viewerKindSelect;
 
   return (
     <main className="tileset-studio-page app-shell-bar-pad">
+      <TitleBarSlot region="actions">{studioModeNav}</TitleBarSlot>
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'artwork' ? 'is-artwork' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
@@ -1379,7 +1381,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
           <section className="tileset-inspector-section">
             <h2>Controls</h2>
             <div className="tileset-control-stack">
-              {studioModeTabs}
               <label className="tileset-category-select" title={activeCatalog.hint}>
                 <span>Category</span>
                 <select value={category} onChange={(event) => setCategory(event.target.value as StudioCategory)} aria-label="Catalog category">
