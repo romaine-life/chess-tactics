@@ -12778,3 +12778,22 @@ button.tileset-relationship-cell {
     overflow-y: auto; -webkit-overflow-scrolling: touch;
   }
 }
+
+/* InfoTip (ui/shared/InfoTip.tsx): a compact "i" whose short explanation pops on
+   hover / keyboard focus. The pop is position:fixed (placed from JS) so it escapes
+   scrolling Studio rails. */
+.infotip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
+.infotip-dot {
+  appearance: none; cursor: help; inline-size: 14px; block-size: 14px; padding: 0;
+  border-radius: 50%; border: 1px solid #3a4657; background: #0c1116; color: #93a0b0;
+  font: 700 9px/1 system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center;
+}
+.infotip-dot:hover, .infotip-dot:focus-visible { color: #e7ebf0; border-color: #46d6b8; }
+.infotip-dot:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
+.infotip-pop {
+  position: fixed; z-index: 1000; inline-size: max-content; max-inline-size: 256px;
+  padding: 8px 10px; background: #161d26; color: #cfd6df; border: 1px solid #29323f;
+  border-radius: 6px; font: 400 12px/1.45 system-ui, sans-serif; text-align: left;
+  text-transform: none; letter-spacing: normal;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45); pointer-events: none;
+}

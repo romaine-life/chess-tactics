@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  encodeWeights, decodeWeights, matchScore, runTuning, spsaStep,
-  PARAM_LABELS, DEFAULT_HYPERPARAMS,
+  encodeWeights, decodeWeights, matchScore, matchStats, runTuning, spsaStep,
+  PARAM_LABELS, DEFAULT_HYPERPARAMS, deriveScales, tailAverageTheta,
 } from './tuning';
 import { generateOpeningBook, type BookPosition, type OpeningBookSettings } from './openingBook';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
@@ -27,6 +27,27 @@ function book(size = 3): BookPosition[] {
   const settings: OpeningBookSettings = { size, seedBase: 1, plies: 3, variety: 0.5 };
   return generateOpeningBook(duel(), settings, MATCH);
 }
+
+describe('matchStats (game outcomes surfaced for the run view)', () => {
+  const b = book(3);
+  it('splits into W/D/L that sum to games, with score = (wins + ½·draws)/games', () => {
+    const s = matchStats(duel(), DEFAULT_EVAL_WEIGHTS, DEFAULT_EVAL_WEIGHTS, b, MATCH);
+    expect(s.wins + s.draws + s.losses).toBe(s.games);
+    expect(s.games).toBe(b.length * 2); // each position played both ways
+    expect(s.score).toBeCloseTo((s.wins + 0.5 * s.draws) / s.games, 10);
+  });
+  it('A-vs-A is symmetric: wins === losses and score === 0.5', () => {
+    const s = matchStats(duel(), DEFAULT_EVAL_WEIGHTS, DEFAULT_EVAL_WEIGHTS, b, MATCH);
+    expect(s.wins).toBe(s.losses);
+    expect(s.score).toBe(0.5);
+  });
+  it('spsaStep reports this step\'s outcomes across BOTH probes, summing to its games', () => {
+    const theta = encodeWeights(DEFAULT_EVAL_WEIGHTS);
+    const r = spsaStep(duel(), theta, DEFAULT_EVAL_WEIGHTS, b, 0, 7, DEFAULT_HYPERPARAMS, MATCH);
+    expect(r.wins + r.draws + r.losses).toBe(r.games);
+    expect(r.games).toBe(b.length * 4); // θ⁺ and θ⁻, each both ways over the book
+  });
+});
 
 describe('weight vector encode/decode', () => {
   it('round-trips the default weights and pins the rocks to 0', () => {
@@ -87,5 +108,28 @@ describe('runTuning', () => {
     // The champion is the best point actually seen in the trajectory.
     const best = Math.max(0.5, ...a.trajectory.map((p) => p.score));
     expect(a.champion.score).toBeCloseTo(best, 6);
+  });
+});
+
+describe('per-parameter SPSA scaling', () => {
+  it('scales each axis by its own magnitude — piece values ≫ term weights, floored so a zero weight still moves', () => {
+    const s = deriveScales(DEFAULT_EVAL_WEIGHTS);
+    expect(s).toHaveLength(PARAM_LABELS.length);
+    // A pawn's value (1) must get a far bigger perturbation scale than `advance` (0.05).
+    expect(s[PARAM_LABELS.indexOf('pawn')]).toBeGreaterThan(s[PARAM_LABELS.indexOf('advance')] * 5);
+    // hangingDefended defaults to 0 post-quiescence; the 0.05 floor keeps it tunable.
+    expect(s.every((v) => v >= 0.05)).toBe(true);
+    expect(s[PARAM_LABELS.indexOf('hanging (def)')]).toBe(0.05);
+  });
+});
+
+describe('tailAverageTheta (Polyak–Ruppert)', () => {
+  it('averages the last fraction of the trajectory', () => {
+    const traj = [{ theta: [0, 10] }, { theta: [2, 20] }, { theta: [4, 30] }, { theta: [6, 40] }];
+    // last 50% = last 2 points: mean of [4,30] and [6,40] = [5,35]
+    expect(tailAverageTheta(traj, 0.5)).toEqual([5, 35]);
+    // whole trajectory when fraction covers it
+    expect(tailAverageTheta(traj, 1)).toEqual([3, 25]);
+    expect(tailAverageTheta([], 0.5)).toBeNull();
   });
 });

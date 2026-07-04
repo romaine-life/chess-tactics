@@ -57,6 +57,36 @@ export function decodeWeights(vec: readonly number[]): EvalWeights {
 /** Non-negativity floor: piece values and term weights below 0 are nonsensical. */
 const clampVec = (vec: number[]): number[] => vec.map((v) => (v > 0 ? v : 0));
 
+/**
+ * Per-parameter perturbation SCALE — the fix for SPSA finding nothing. The default
+ * spsaStep used one scalar c across a vector where piece values are 1–9 but term
+ * weights are 0.04–0.5, so at c=0.25 a term weight was kicked by ~5× its own value
+ * (pure noise) while a pawn barely moved. Scaling the perturbation by each weight's
+ * own magnitude (with a small floor so a zero-valued weight can still move) nudges
+ * every axis by a comparable FRACTION of itself — this game's analogue of Fishtest's
+ * per-variable c_end. Effectively SPSA runs in the normalized space φ = θ/scale.
+ */
+export function deriveScales(reference: EvalWeights): number[] {
+  return encodeWeights(reference).map((v) => Math.max(0.05, Math.abs(v)));
+}
+
+/**
+ * Polyak–Ruppert tail average: the mean of the LAST `fraction` of the trajectory's
+ * iterates. SPSA's single best-scoring point is a noisy estimate (it can be a lucky
+ * measurement); the tail average is the standard variance-reduced estimator and is
+ * what the adopt path should validate on held-out openings. Returns null for an
+ * empty trajectory.
+ */
+export function tailAverageTheta(trajectory: readonly { theta: number[] }[], fraction = 0.25): number[] | null {
+  if (!trajectory.length) return null;
+  const n = Math.max(1, Math.round(trajectory.length * fraction));
+  const tail = trajectory.slice(trajectory.length - n);
+  const dim = tail[0].theta.length;
+  const sum = new Array(dim).fill(0);
+  for (const p of tail) for (let i = 0; i < dim; i += 1) sum[i] += p.theta[i];
+  return sum.map((v) => v / tail.length);
+}
+
 export interface MatchOptions {
   search: SearchOptions;
   maxPlies?: number;
@@ -68,11 +98,21 @@ export interface MatchOptions {
  * playing both colors. Returns A's points (win 1, draw ½) over total games, in
  * [0, 1]: 0.5 means evenly matched, >0.5 means A is stronger on this board.
  */
-export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): number {
+/** Full outcome of A-vs-B over the book (each position played both ways), from A's
+ * perspective. `score` is the usual (wins + ½·draws)/games; the win/draw/loss split
+ * is kept so a run can SHOW why the score sits where it does (e.g. mostly draws). */
+export interface MatchStats {
+  score: number;
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+export function matchStats(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): MatchStats {
   const searchA: SearchOptions = { ...opts.search, weights: a };
   const searchB: SearchOptions = { ...opts.search, weights: b };
-  let points = 0;
-  let games = 0;
+  let wins = 0, draws = 0, losses = 0;
   for (const pos of book) {
     // Each game STARTS from this book position (the seeded opening plies), then A
     // and B play it out. Playing it both ways (A-as-player then A-as-enemy) cancels
@@ -81,13 +121,18 @@ export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: r
     const seed = pos.seed;
     // A as player, B as enemy.
     const r1 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchA, enemy: searchB }, maxPlies: opts.maxPlies });
-    points += r1.winner === 'player' ? 1 : r1.winner === 'draw' ? 0.5 : 0;
+    if (r1.winner === 'player') wins += 1; else if (r1.winner === 'draw') draws += 1; else losses += 1;
     // Same position, sides swapped: A as enemy, B as player.
     const r2 = playLevelGame(level, { seed, openingMoves: opening, searchForSide: { player: searchB, enemy: searchA }, maxPlies: opts.maxPlies });
-    points += r2.winner === 'enemy' ? 1 : r2.winner === 'draw' ? 0.5 : 0;
-    games += 2;
+    if (r2.winner === 'enemy') wins += 1; else if (r2.winner === 'draw') draws += 1; else losses += 1;
   }
-  return games ? points / games : 0.5;
+  const games = wins + draws + losses;
+  return { score: games ? (wins + 0.5 * draws) / games : 0.5, games, wins, draws, losses };
+}
+
+/** (wins + ½·draws)/games from A's perspective. matchScore(w, w, book) === 0.5. */
+export function matchScore(level: Level, a: EvalWeights, b: EvalWeights, book: readonly BookPosition[], opts: MatchOptions): number {
+  return matchStats(level, a, b, book, opts).score;
 }
 
 export interface SpsaHyperParams {
@@ -101,6 +146,10 @@ export interface SpsaHyperParams {
   gamma: number;
   /** Learning-rate stability constant A. */
   bigA: number;
+  /** Optional per-parameter perturbation scale (see deriveScales). When omitted,
+   * spsaStep derives it from the reference's magnitudes so each weight moves
+   * proportionally to itself instead of being swamped/starved by one scalar c. */
+  cScale?: number[];
 }
 
 export const DEFAULT_HYPERPARAMS: SpsaHyperParams = { a0: 0.6, c0: 0.25, alpha: 0.602, gamma: 0.101, bigA: 5 };
@@ -114,6 +163,12 @@ export interface StepResult {
   /** This step's perturbation and learning sizes (both shrink over time). */
   c: number;
   a: number;
+  /** Game outcomes across BOTH probes this step (θ⁺ and θ⁻ vs the reference), from
+   * the candidate's perspective — surfaced so a run can show its decisiveness. */
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
 }
 
 /**
@@ -132,24 +187,36 @@ export function spsaStep(
   match: MatchOptions,
 ): StepResult {
   const rng = createRng(masterSeed + step * 7919 + 101);
+  // Per-parameter scale so each weight is perturbed by a comparable FRACTION of its
+  // own magnitude (see deriveScales) — the fix for one scalar c being noise on the
+  // term weights and negligible on the piece values.
+  const scale = hp.cScale ?? deriveScales(reference);
   const c = hp.c0 / Math.pow(step + 1, hp.gamma);
   const a = hp.a0 / Math.pow(step + 1 + hp.bigA, hp.alpha);
   // Δ: a random ±1 for every weight (Bernoulli), the "simultaneous perturbation".
   const delta = theta.map(() => (rng.next() < 0.5 ? -1 : 1));
-  const thetaPlus = clampVec(theta.map((v, i) => v + c * delta[i]));
-  const thetaMinus = clampVec(theta.map((v, i) => v - c * delta[i]));
-  const yPlus = matchScore(level, decodeWeights(thetaPlus), reference, book, match);
-  const yMinus = matchScore(level, decodeWeights(thetaMinus), reference, book, match);
-  // Gradient estimate for the whole vector from just those two measurements, then
-  // a step toward the better-scoring direction.
-  const thetaNew = clampVec(theta.map((v, i) => v + a * ((yPlus - yMinus) / (2 * c * delta[i]))));
-  return { theta: thetaNew, yPlus, yMinus, c, a };
+  const thetaPlus = clampVec(theta.map((v, i) => v + c * scale[i] * delta[i]));
+  const thetaMinus = clampVec(theta.map((v, i) => v - c * scale[i] * delta[i]));
+  const sPlus = matchStats(level, decodeWeights(thetaPlus), reference, book, match);
+  const sMinus = matchStats(level, decodeWeights(thetaMinus), reference, book, match);
+  const yPlus = sPlus.score;
+  const yMinus = sMinus.score;
+  // Gradient in the normalized space, mapped back per-axis by `scale`: a step toward
+  // the better-scoring direction where each weight moves proportionally to itself.
+  const thetaNew = clampVec(theta.map((v, i) => v + scale[i] * a * ((yPlus - yMinus) / (2 * c * delta[i]))));
+  return {
+    theta: thetaNew, yPlus, yMinus, c, a,
+    games: sPlus.games + sMinus.games,
+    wins: sPlus.wins + sMinus.wins,
+    draws: sPlus.draws + sMinus.draws,
+    losses: sPlus.losses + sMinus.losses,
+  };
 }
 
 export interface TrajectoryPoint {
   step: number;
-  /** Estimated strength vs the reference at this point — the climbing curve.
-   * Uses the midpoint of the two SPSA measurements, so it costs no extra games. */
+  /** Honest strength of the stepped weights vs the reference — an actual match over
+   * the book (matchScore), the climbing curve. NOT the yPlus/yMinus probe midpoint. */
   score: number;
   yPlus: number;
   yMinus: number;
@@ -200,7 +267,9 @@ export function runTuning(level: Level, cfg: TuningRunConfig): TuningResult {
   for (let step = 0; step < cfg.steps; step += 1) {
     const r = spsaStep(level, theta, reference, book, step, masterSeed, hp, cfg.match);
     theta = r.theta;
-    const score = (r.yPlus + r.yMinus) / 2; // midpoint proxy for score(θ vs reference)
+    // Honest strength of the stepped weights vs the reference (an actual match over the
+    // book), NOT the yPlus/yMinus probe midpoint — same fix as advanceSession.
+    const score = matchScore(level, decodeWeights(theta), reference, book, cfg.match);
     trajectory.push({ step, score, yPlus: r.yPlus, yMinus: r.yMinus, c: r.c, a: r.a, theta: theta.slice() });
     if (score > champion.score) {
       champion = { step, score, theta: theta.slice() };
