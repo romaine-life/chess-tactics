@@ -7387,6 +7387,18 @@ body { font-size: 17px; }
   gap: 6px;
 }
 
+/* The Studio's title-bar actions cluster: the "‹ Scene" back (shown in the waterfall
+   inspector) sits inline, left of the Catalog/Lab/Viewer nav — one flex row so the text
+   button doesn't drop onto its own line above the icons. */
+.studio-topbar-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+.studio-scene-back {
+  white-space: nowrap;
+}
+
 .studio-mode-icon {
   align-items: center;
   appearance: none;
