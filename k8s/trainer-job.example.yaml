@@ -1,0 +1,56 @@
+# Reference Job for a headless AI tuning run on the D8als_v7 trainer pool.
+#
+# The backend creates Jobs shaped like this programmatically (POST /api/train-runs);
+# this file documents the shape and lets you launch one by hand for a smoke test:
+#
+#   IMAGE=$(kubectl -n chess-tactics get deploy chess-tactics -o jsonpath='{.spec.template.spec.containers[0].image}')
+#   SPEC='{"level":{...},"steps":60,"restarts":7,"match":{"search":{"maxDepth":4,"maxNodes":40000},"maxPlies":100}}'
+#   sed "s|IMAGE_TAG|$IMAGE|" k8s/trainer-job.example.yaml \
+#     | kubectl -n chess-tactics apply -f - --dry-run=client -o yaml   # then set TRAIN_SPEC and apply
+#
+# nodeSelector+toleration pin it to the tainted trainer pool, which the cluster
+# autoscaler scales 0->1 when this Job is pending and back to 0 when it finishes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: chess-trainer-smoke
+  namespace: chess-tactics
+  labels:
+    app: chess-trainer
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  activeDeadlineSeconds: 7200
+  template:
+    metadata:
+      labels:
+        app: chess-trainer
+        # Uncomment for the DB-persistence path (TRAIN_RUN_ID): projects the app's
+        # federated Postgres token so the worker can UPDATE its train_runs row.
+        # azure.workload.identity/use: "true"
+    spec:
+      restartPolicy: Never
+      # serviceAccountName: <the chess-tactics app SA>   # DB path only
+      nodeSelector:
+        workload: trainer
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: trainer
+          effect: NoSchedule
+      containers:
+        - name: trainer
+          image: IMAGE_TAG
+          command: ["node", "backend/train-worker.mjs"]
+          env:
+            # A JSON run spec: { level, steps, restarts, match, bookSettings, masterSeed }.
+            # stdout-only (kubectl logs) unless TRAIN_RUN_ID + the DB env/SA are set.
+            - name: TRAIN_SPEC
+              value: "{}"
+          resources:
+            requests:
+              cpu: "6"
+              memory: "3Gi"
+            limits:
+              cpu: "8"
+              memory: "6Gi"

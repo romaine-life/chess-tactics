@@ -11,3 +11,7 @@ tmp/
 # Local append-only audit trail of nine-slice bakes (scripts/nine-slice-kit.mjs)
 config/nine-slice/save-log.jsonl
 scripts/__pycache__/
+
+# Headless trainer engine bundle (built by `npm run build:trainer` in the Docker
+# frontend stage, copied into the runtime image; never committed).
+trainer-bundle/
