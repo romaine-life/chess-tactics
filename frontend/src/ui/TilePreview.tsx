@@ -1422,13 +1422,26 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       </button>
     </nav>
   );
+  // "‹ Scene" back: from the per-waterfall inspector (the 'sceneanim' Viewer) return to the
+  // Animated Scenes picker for THAT region's scene. Lives in the title-bar actions slot beside the
+  // studio's own workspace nav, styled like the shared "‹ Back" (app-header-button) so it reads as
+  // the same affordance. It's an in-app state flip (the studio owns its own URL), not a ?returnTo.
+  const backToSceneMap = (): void => {
+    const scene = SCENE_ANIM_SCENES.find((s) => s.regionIds.includes(selectedRegionId)) ?? SCENE_ANIM_SCENES[0];
+    setSelectedSceneId(scene.id);
+    openViewer('animscene');
+  };
+  const sceneBackNav = studioMode === 'viewer' && viewerKind === 'sceneanim' ? (
+    <button type="button" className="app-header-button studio-scene-back" onClick={backToSceneMap}
+      aria-label="Back to the animated scene" title="Back to the animated scene map">‹ Scene</button>
+  ) : null;
   // Viewer labs render their controls through a `header` slot — now just the preview-kind
   // select; the workspace switcher moved out of the rail and onto the title bar (above).
   const studioViewerHeader = viewerKindSelect;
 
   return (
     <main className="tileset-studio-page app-shell-bar-pad">
-      <TitleBarSlot region="actions">{studioModeNav}</TitleBarSlot>
+      <TitleBarSlot region="actions"><div className="studio-topbar-actions">{sceneBackNav}{studioModeNav}</div></TitleBarSlot>
       <section className={`tileset-studio-shell is-${studioMode} ${category === 'units' ? 'is-units' : ''} ${category === 'artwork' ? 'is-artwork' : ''}`} aria-label="Tileset browser">
         {studioMode === 'catalog' ? (
         <>
