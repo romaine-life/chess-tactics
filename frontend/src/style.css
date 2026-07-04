@@ -4882,7 +4882,11 @@ h1 {
 .le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
 .le-board-actions.le-history-actions { display: flex; }
 .le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.le-icon-btn { padding: 0; width: 38px; }
+/* Undo/Redo glyph PNGs already carry their OWN kit frame, so we drop the outer .le-seg-btn
+   button frame (same treatment as the .le-seg-icons tool row) — otherwise the two frames nest
+   into a double border. The icon fills the square so its single frame IS the button edge. */
+.le-icon-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 38px; height: 38px; }
+.le-icon-btn .le-ico { width: 100%; height: 100%; }
 .le-icon-btn:not(:disabled):active .ic-undo { background-image: url("/assets/ui/level-editor/icons/undo-active.png"); }
 .le-icon-btn:not(:disabled):active .ic-redo { background-image: url("/assets/ui/level-editor/icons/redo-active.png"); }
 /* The status card is a live flex column (ADR-0056) — its gap spaces the row; no extra margin. */
@@ -5049,29 +5053,6 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(var(--le-zone-accent), .85);
   pointer-events: none;
   z-index: 2;
-}
-
-/* Prop-brush footprint hover: one translucent diamond per cell the prop would occupy, green when
-   the placement is legal and red when blocked. Seats EXACTLY like .le-zone-cell (tile equator +
-   diamond clip-path) so a multi-cell footprint reads as highlighted tiles, not offset boxes.
-   z-index above the zone tint (2) but below the selection ring (3). */
-.le-prop-ghost-cell {
-  position: absolute;
-  left: 0;
-  top: var(--iso-tile-surface-top);
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  pointer-events: none;
-  z-index: 2;
-}
-.le-prop-ghost-cell.is-ok {
-  background: rgba(80, 220, 140, .28);
-  box-shadow: inset 0 0 0 2px rgba(80, 220, 140, .9);
-}
-.le-prop-ghost-cell.is-blocked {
-  background: rgba(240, 90, 90, .28);
-  box-shadow: inset 0 0 0 2px rgba(240, 90, 90, .9);
 }
 
 /* Zone brush preview (fills the 48px thumb) + the small swatch dot in the zone picker. */

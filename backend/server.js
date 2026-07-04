@@ -2660,7 +2660,8 @@ app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
     let png = _thumbCache.get(cacheKey);
     if (!png) {
       const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
-      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle });
+      const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
+      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle, backgroundSrc });
       if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
       _thumbCache.set(cacheKey, png);
     }

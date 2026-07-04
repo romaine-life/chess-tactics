@@ -5,6 +5,7 @@
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
+import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
@@ -156,17 +157,6 @@ function StudioEditableBoard({
   // art + sprite seating the Campaign Editor's read-only viewer uses): it supplies the SHARED
   // tile/feature art via `studioCellArt`, then layers its own interaction chrome — the selection
   // ring and the paint/erase/select hit target — on top per cell.
-  // Prop-brush footprint hover: the cells the armed prop would occupy under the cursor + whether
-  // that placement is legal. Highlighted per-tile as DIAMONDS (below), reusing the zone/selection
-  // seating — never an axis-aligned box, which doesn't line up with the iso grid.
-  const propGhost = propBrush && tool === 'brush' && hoverCell
-    ? {
-        anchor: hoverCell,
-        def: propBrush.def,
-        cells: new Set(propCells(hoverCell.x, hoverCell.y, propBrush.def).map((c) => `${c.x},${c.y}`)),
-        placeable: propBrush.canPlaceAt(hoverCell.x, hoverCell.y),
-      }
-    : null;
   const cells: TileGridCell[] = [];
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
@@ -194,9 +184,6 @@ function StudioEditableBoard({
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
             {placedZones[key] ? <span className={`le-zone-cell le-zone-${LE_ZONE_TINT[placedZones[key]] ?? 'goal'}`} aria-hidden="true" /> : null}
-            {/* Prop-brush footprint hover: a diamond per occupied cell (green = placeable, red =
-                blocked), seated exactly like the zone diamond so it traces the tile, not a box. */}
-            {propGhost?.cells.has(key) ? <span className={`le-prop-ghost-cell ${propGhost.placeable ? 'is-ok' : 'is-blocked'}`} aria-hidden="true" /> : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             {isMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
             {isMoveTo ? <span className={`tileset-cell-ring ${moveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
@@ -294,12 +281,44 @@ function StudioEditableBoard({
     );
   }
 
-  // Ghost the PropSprite at the anchor so the author sees what the prop looks like (and, via the
-  // per-cell diamonds above, exactly which tiles it lands on) before committing.
-  if (propGhost) {
+  // Footprint hover preview for the prop brush: outline every cell the prop would occupy under the
+  // cursor (placeable vs blocked), and ghost the PropSprite at the anchor so the author sees both
+  // where it lands and what it looks like before committing.
+  if (propBrush && tool === 'brush' && hoverCell) {
+    const { def } = propBrush;
+    const placeable = propBrush.canPlaceAt(hoverCell.x, hoverCell.y);
+    for (const c of propCells(hoverCell.x, hoverCell.y, def)) {
+      if (c.x < 0 || c.x >= cols || c.y < 0 || c.y >= rows) continue;
+      const { left, top, zIndex } = boardLabCellPosition(c);
+      overlaySprites.push(
+        <span
+          key={`prop-ghostcell-${c.x},${c.y}`}
+          className={`le-prop-ghost-cell ${placeable ? 'is-ok' : 'is-blocked'}`}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left,
+            top,
+            zIndex: zIndex + 19000,
+            // Match the tile's top-face diamond (stepX/stepY*2), centred on the projected
+            // equator point — same shape/seating as the prop-lab guide and the zone/selection
+            // overlays. A rectangle here (the old 96×55 box + outline) reads as "off the grid".
+            width: TILE_TEMPLATE.stepX * 2,
+            height: TILE_TEMPLATE.stepY * 2,
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)',
+            // Border via inset box-shadow, not `outline`: clip-path doesn't clip an outline,
+            // so an outline would still paint the old axis-aligned square around the diamond.
+            boxShadow: `inset 0 0 0 2px ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
+            background: placeable ? 'rgba(80,220,140,.18)' : 'rgba(240,90,90,.18)',
+          }}
+        />,
+      );
+    }
     overlaySprites.push(
-      <span key="prop-ghost-sprite" aria-hidden="true" style={{ opacity: propGhost.placeable ? 0.65 : 0.3, position: 'absolute', left: 0, top: 0 }}>
-        <PropSprite prop={{ x: propGhost.anchor.x, y: propGhost.anchor.y, propId: propGhost.def.id }} def={propGhost.def} />
+      <span key="prop-ghost-sprite" aria-hidden="true" style={{ opacity: placeable ? 0.65 : 0.3, position: 'absolute', left: 0, top: 0 }}>
+        <PropSprite prop={{ x: hoverCell.x, y: hoverCell.y, propId: def.id }} def={def} />
       </span>,
     );
   }

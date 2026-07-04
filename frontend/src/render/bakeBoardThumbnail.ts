@@ -168,12 +168,19 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
     if (!def) continue; // unknown prop id — skip, like the live renderer and collision bridge
     const [ax, ay] = key.split(',').map(Number);
     const { left, top } = structureSeatPoint({ x: ax, y: ay }, def.w, def.h);
-    const dx = left - def.sprite.anchorX;
-    const dy = top - def.sprite.anchorY;
+    // Apply the prop's render scale. A "copy"/size-variant prop shares the base's PNG + footprint and
+    // differs ONLY by scale (+ anchor) — the live <StructureSprite> sizes the frame at w/h*scale and
+    // seats the contact pixel with a PERCENTAGE translate, so the anchor offset scales too. Without
+    // this the variant renders at BASE size in the thumbnail.
+    const s = def.sprite.scale ?? 1;
+    const dx = left - def.sprite.anchorX * s;
+    const dy = top - def.sprite.anchorY * s;
+    const dw = def.sprite.w * s;
+    const dh = def.sprite.h * s;
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
     // Size variants share the base's PNG — bake by spriteId (the base), not the placed variant id.
-    ops.push({ src: propHalfSrc(def.spriteId, 'back'), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: back });
-    ops.push({ src: propHalfSrc(def.spriteId, 'front'), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: front });
+    ops.push({ src: propHalfSrc(def.spriteId, 'back'), dx, dy, dw, dh, z: back });
+    ops.push({ src: propHalfSrc(def.spriteId, 'front'), dx, dy, dw, dh, z: front });
   }
 
   // Ground cover (grass/water/sand tufts) — the SAME vegetation the GAME scatters (SkirmishBoard),

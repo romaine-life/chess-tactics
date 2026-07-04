@@ -19,25 +19,34 @@ const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
 const MODE_HREFS: Record<string, string> = {
   'solo-skirmish': '/skirmish',
   'campaign-editor': '/campaigns-next',
-  'level-editor': '/edit',
   lobbies: '/lobbies',
   settings: '/settings',
 };
 
 interface MenuTab { slug: string; label: string; href: string; iconSlug: string }
 
+// Product-menu relabels applied over MENU_MODES (which stays the untouched design-catalog
+// source of truth — its widget assets keep their 'campaign-editor'/'level-editor' names).
+// The campaign editor IS the app's single "Editor": level authoring is reached from inside
+// it (Edit Board / + New Board), so the rail presents it simply as "Editor" and no longer
+// carries a separate top-level "Level Editor" tab. That route (/edit) still exists — it's
+// just no longer a front door, only reached by drilling into a level from the Editor.
+const MENU_TAB_LABELS: Record<string, string> = { 'campaign-editor': 'Editor' };
+const MENU_HIDDEN_SLUGS = new Set(['level-editor']);
+
 // The main-menu rail. The Campaign (play) mode is menu-only — not a design-catalog
 // widget — so it lives here rather than in MENU_MODES (the catalog's source of
-// truth). It leads the rail as the headline mode and sits apart from the Campaign
-// Editor so the shared placeholder icon doesn't read as a duplicate of an adjacent
+// truth). It leads the rail as the headline mode and sits apart from the Editor
+// so the shared placeholder icon doesn't read as a duplicate of an adjacent
 // tab. Temp icon: reuses the campaign-editor carving until a dedicated 'campaign'
 // carving is forged.
 const MENU_TABS: MenuTab[] = [
   { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
   ...MENU_MODES
+    .filter((mode) => !MENU_HIDDEN_SLUGS.has(mode.slug))
     .map((mode) => ({
       slug: mode.slug,
-      label: mode.label,
+      label: MENU_TAB_LABELS[mode.slug] ?? mode.label,
       href: MODE_HREFS[mode.slug] || '/',
       iconSlug: mode.slug,
     })),
