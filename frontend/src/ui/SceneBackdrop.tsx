@@ -32,10 +32,11 @@ export interface SceneAnim {
   sheet: string;
 }
 
-// Every animated region of the menu scene — all four waterfalls, scroll-baked
-// (build-scene-anim.py --scroll). Per the color-cycling canon (Mark Ferrari):
-// each region runs its OWN loop tempo (1.44s / 1.68s / 1.92s / 2.16s) so the
-// scene never pulses in unison.
+// Every animated region of the menu scene — six waterfalls, scroll-baked
+// (build-scene-anim.py --scroll, from the static art alone; no run dir). Per the
+// color-cycling canon (Mark Ferrari), each region runs its OWN loop tempo
+// (1.44s / 1.56s / 1.68s / 1.80s / 1.92s / 2.16s) so the scene never pulses in
+// unison. Exact bake commands live in git (see the commit that added each sheet).
 export const SCENE_ANIMS: SceneAnim[] = [
   {
     id: 'waterfall-right',
@@ -78,6 +79,24 @@ export const SCENE_ANIMS: SceneAnim[] = [
     sheet: '/assets/ui/main-menu/scene-anim/waterfall-left.png',
   },
   {
+    // The thin cliff fall right of waterfall-left — its water column is dimmer
+    // than the bright main fall, so it's zoned + baked at a lower brightness gate
+    // (--bright 46 --scroll 2 --zones 12,5,32,98) to catch it without the lake
+    // behind it. Was un-animated until now (only five regions existed).
+    id: 'waterfall-upperright',
+    x: 325,
+    y: 495,
+    w: 75,
+    h: 115,
+    frames: 12,
+    frameMs: 130,
+    sheet: '/assets/ui/main-menu/scene-anim/waterfall-upperright.png',
+  },
+  {
+    // Two lower falls + the cascade into the lake. The dim moonlit water sat
+    // below the default brightness gate, so the first bake caught almost no
+    // pixels and looked frozen; re-baked at --bright 44 --scroll 4 (these falls
+    // are bluish, near-zero vegetation, so no zones are needed).
     id: 'waterfall-lowerleft',
     x: 110,
     y: 770,
