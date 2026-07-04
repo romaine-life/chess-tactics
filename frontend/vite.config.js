@@ -130,8 +130,8 @@ function bgmDevMock() {
 function devAuthMock() {
   const COOKIE_NAME = 'better-auth.session';
   const COOKIE_VALUE = 'mock-dev-session';
-  const EMAIL = 'player@example.com';
-  const DEFAULT_NAME = 'Tactics Player';
+  const EMAIL = process.env.DEV_AUTH_EMAIL || 'player@example.com';
+  const DEFAULT_NAME = process.env.DEV_AUTH_NAME || 'Tactics Player';
   // Match backend gravatarUrl(): md5 of the lowercased email, retro (pixel-art) fallback.
   const avatar = (() => {
     const hash = createHash('md5').update(EMAIL).digest('hex');

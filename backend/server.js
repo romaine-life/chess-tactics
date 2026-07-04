@@ -903,10 +903,13 @@ async function readSession(req) {
   if (isDevAuthHost(req)) {
     const cookie = req.get('cookie') || '';
     if (cookie.includes('better-auth.session=mock-dev-session')) {
+      // Who the dev session signs in as. Defaults to a throwaway player; set
+      // DEV_AUTH_EMAIL (+ DEV_AUTH_NAME) to sign in as a real account so its
+      // owner-scoped data shows. Admin affordances still come from ADMIN_EMAILS.
       return {
         user: {
-          email: 'player@example.com',
-          name: 'Tactics Player',
+          email: process.env.DEV_AUTH_EMAIL || 'player@example.com',
+          name: process.env.DEV_AUTH_NAME || 'Tactics Player',
           role: 'pending',
         }
       };
