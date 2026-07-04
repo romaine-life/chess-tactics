@@ -25,13 +25,20 @@ export function readProgress(): CampaignProgress {
   }
 }
 
-/** Record a cleared level, keeping the best star rating, and notify open screens. */
+/** Overwrite the whole progress map and notify open screens. Used by the account sync to persist a
+ *  merged (local + account) view; recordLevelWin is the per-level path. */
+export function writeProgress(progress: CampaignProgress): void {
+  try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch { /* ignore */ }
+  try { window.dispatchEvent(new CustomEvent(CAMPAIGN_PROGRESS_EVENT)); } catch { /* ignore */ }
+}
+
+/** Record a cleared level, keeping the best star rating, and notify open screens (which the account
+ *  sync also listens to, writing the win through to the signed-in account). */
 export function recordLevelWin(levelId: string, stars: number): void {
   const progress = readProgress();
   const prev = progress[levelId];
   progress[levelId] = { completed: true, stars: Math.max(stars, prev?.stars ?? 0) };
-  try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch { /* ignore */ }
-  try { window.dispatchEvent(new CustomEvent(CAMPAIGN_PROGRESS_EVENT)); } catch { /* ignore */ }
+  writeProgress(progress);
 }
 
 /** A campaign's levels in play order. */

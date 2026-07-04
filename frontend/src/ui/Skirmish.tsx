@@ -14,6 +14,7 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
 import { editorBoardToLevel } from '../core/levelBoard';
+import { fetchPublicMap } from '../net/maps';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
@@ -49,7 +50,11 @@ export function Skirmish() {
   const routeObjective = routeParams.get('obj');
   // Multiplayer: `?lobby=<id>` enters a lobby's shared board as one of the two seats.
   const routeLobby = routeParams.get('lobby');
+  // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
+  // campaign). The dead-link message shows if the id is unknown/removed.
+  const routeMap = routeParams.get('map');
   const [netError, setNetError] = useState<string | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
   // Netplay has no campaign result flow, so a decided match shows its own result card.
   // "View board" dismisses it to review the final position (re-armed for the next match).
   const [netResultDismissed, setNetResultDismissed] = useState(false);
@@ -178,7 +183,7 @@ export function Skirmish() {
     // the in-memory store from scratch; without a saved copy that would silently
     // restart a live battle. Turn disk persistence on for real play, off for the
     // editor's ephemeral Test Play and for one-off `?board=` link positions.
-    setMatchPersistenceEnabled(!isTestPlay && !routeBoard);
+    setMatchPersistenceEnabled(!isTestPlay && !routeBoard && !routeMap);
 
     // Returning here from the menu (or any other screen) should resume, not
     // restart: the store is a singleton that already holds the live board. Only
@@ -223,6 +228,32 @@ export function Skirmish() {
       }
     }
 
+    // A `?map=<publicId>` link plays a SHARED user map: fetch its public snapshot (no sign-in) and
+    // start fresh (ephemeral, like ?board=). Once fetched, routeLevel is set and this branch just
+    // re-affirms the game on the effect's re-run (guarded so it never re-fetches in a loop).
+    if (routeMap) {
+      if (routeLevel) {
+        if (shouldStartFresh(routeLevel.id)) newSkirmish({ seed: freshSeed(), level: routeLevel, ai });
+        setBoardSettled(true);
+        return undefined;
+      }
+      let active = true;
+      fetchPublicMap(routeMap)
+        .then((level) => {
+          if (!active) return;
+          setMapError(null);
+          if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level, ai });
+          setRouteLevel(level);
+          setBoardSettled(true);
+        })
+        .catch(() => {
+          if (!active) return;
+          setMapError('This shared map isn’t available — the link may be wrong or the map was removed.');
+          setBoardSettled(true);
+        });
+      return () => { active = false; };
+    }
+
     if (!routeLevelId || routeLevel) {
       startOrResume(routeLevel?.id ?? null, routeLevel);
       setBoardSettled(true);
@@ -244,7 +275,7 @@ export function Skirmish() {
       })
       .catch(() => { startOrResume(routeLevelId, null); setBoardSettled(true); });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeObjective, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeMap, routeObjective, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -404,10 +435,21 @@ export function Skirmish() {
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
-            {boardSettled ? <SkirmishBoard /> : routeLobby ? (
+            {mapError ? (
+              <div className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
+                <strong>{mapError}</strong>
+                <NavButton className="app-header-button app-header-button-active" to="/">Home</NavButton>
+              </div>
+            ) : boardSettled ? <SkirmishBoard /> : routeLobby ? (
               <div className="skirmish-status-chip skirmish-turn-plate" role="status">
                 <strong>{netError ?? 'Connecting…'}</strong>
                 <small>Multiplayer</small>
+              </div>
+            ) : routeMap ? (
+              // A cold shared-map link fetches its snapshot before the board can mount.
+              <div className="skirmish-status-chip skirmish-turn-plate" role="status">
+                <strong>Loading map…</strong>
+                <small>Shared map</small>
               </div>
             ) : null}
           </div>
