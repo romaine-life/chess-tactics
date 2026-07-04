@@ -44,15 +44,17 @@ describe('props core', () => {
     }
   });
 
-  it('seeds an oak (tree) and a cottage (house), all blocking with a valid footprint', () => {
+  it('seeds oak (tree), cottage (house), and rock (rock 1×1), all blocking with a valid footprint', () => {
     const ids = PROP_DEFS.map((d) => d.id);
     expect(ids).toContain('oak');
     expect(ids).toContain('cottage');
+    expect(ids).toContain('rock');
     expect(propDef('oak')!.kind).toBe('tree');
     expect(propDef('cottage')!.kind).toBe('house');
+    expect(propDef('rock')!).toMatchObject({ kind: 'rock', w: 1, h: 1 });
     for (const d of PROP_DEFS) {
       expect(d.blocking).toBe(true);
-      // Footprint is editable (propSeats w/h); the seed set is 2×2, but only assert it's valid.
+      // Footprint is editable (propSeats w/h); the seed set is 2×2 (rocks 1×1), only assert valid.
       expect(Number.isInteger(d.w) && d.w >= 1, `${d.id} w`).toBe(true);
       expect(Number.isInteger(d.h) && d.h >= 1, `${d.id} h`).toBe(true);
     }

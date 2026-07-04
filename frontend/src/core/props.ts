@@ -10,7 +10,7 @@
 
 import propSeats from './propSeats.json';
 
-export type PropKind = 'tree' | 'house';
+export type PropKind = 'tree' | 'house' | 'rock';
 
 /** The sprite frame geometry for a prop (pixel dims + the ground-contact anchor pixel). */
 export interface PropSprite {
@@ -113,6 +113,16 @@ const BASE_PROP_DEFS: readonly PropDef[] = [
   // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
   { id: 'cabin', label: 'Log cabin', kind: 'house', w: footW('cabin'), h: footH('cabin'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', family: 'cabin', sprite: { w: 220, h: 176, ...seat('cabin') } },
   { id: 'lodge', label: 'Green-roof house', kind: 'house', w: footW('lodge'), h: footH('lodge'), blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', family: 'lodge', sprite: { w: 210, h: 177, ...seat('lodge') } },
+  // Rocks — 1×1 blocking boulders: the placeable impassable-cell obstacle (the old editor's rock
+  // terrain swatch, reborn as a prop so the rules engine stays untouched). Same gated Codex restyle
+  // pipeline as cabin/lodge, from the two staged /rocks meshes (see SOURCES.md). Native-res PNGs;
+  // tile-fit is the `scale` in propSeats.json (eye-tunable in /prop-lab), not a baked-small sprite.
+  { id: 'rock', label: 'Rock', kind: 'rock', w: footW('rock'), h: footH('rock'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'rock', family: 'rock', sprite: { w: 40, h: 45, ...seat('rock') } },
+  // Named 'fieldstone' (not 'granite') to avoid colliding with the obstacle-piece sprite variant
+  // ROCK_VARIANTS=['boulder','granite'] under /assets/units/rock/ (render/SkirmishBoard.tsx) — a
+  // separate system from these placeable props. Both derive from the same round-boulder mesh.
+  { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: footW('fieldstone'), h: footH('fieldstone'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'fieldstone', family: 'fieldstone', sprite: { w: 51, h: 47, ...seat('fieldstone') } },
+
 ];
 
 // Size variants: any propSeats.json entry with a `base` synthesizes a prop that SHARES the base's

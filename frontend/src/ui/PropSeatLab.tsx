@@ -356,7 +356,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
             <SliderRow label={`Anchor Y · ${liveSeat.anchorY}`} value={liveSeat.anchorY} set={(v) => setSeat({ anchorY: Math.round(v) })}
               min={ayMin} max={ayMax} step={1} nudge={1} dflt={committed.anchorY} />
             <SliderRow label={`Scale · ${liveSeat.scale.toFixed(2)}×`} value={liveSeat.scale} set={(v) => setSeat({ scale: round2(v) })}
-              min={0.25} max={2} step={0.01} nudge={0.05} dflt={committed.scale} />
+              min={0.05} max={2} step={0.01} nudge={0.05} dflt={committed.scale} />
 
             {/* Footprint — how many gameplay cells the prop occupies (placement + blocking rocks).
                 Separate from Scale (visual only); the guides + seat reflow as you change it. */}

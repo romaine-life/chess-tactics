@@ -2046,12 +2046,12 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : brushKind === 'prop' ? (
           <section className="skirmish-card le-brush-panel">
-            {(['tree', 'house'] as PropKind[]).map((kind) => {
+            {(['tree', 'house', 'rock'] as PropKind[]).map((kind) => {
               const group = PROP_DEFS.filter((def) => def.kind === kind);
               if (!group.length) return null;
               return (
                 <div className="le-pal-group" key={kind}>
-                  <span className="le-pal-grouplabel">{kind === 'tree' ? 'Trees' : 'Houses'}</span>
+                  <span className="le-pal-grouplabel">{kind === 'tree' ? 'Trees' : kind === 'house' ? 'Houses' : 'Rocks'}</span>
                   <div className="le-swatches">
                     {group.map((def) => (
                       <button
@@ -2069,7 +2069,7 @@ export function LevelEditor(): ReactElement {
                 </div>
               );
             })}
-            <p className="le-board-note">Props span {propBrushDef.w}×{propBrushDef.h} tiles, anchored at the clicked cell. They only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses) become impassable in play.</p>
+            <p className="le-board-note">This prop spans {propBrushDef.w}×{propBrushDef.h} tile{propBrushDef.w * propBrushDef.h > 1 ? 's' : ''}, anchored at the clicked cell. Props only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses, rocks) become impassable in play.</p>
           </section>
         ) : featureKind === 'fence' ? (
           <section className="skirmish-card le-brush-panel">

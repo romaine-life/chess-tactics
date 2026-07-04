@@ -27,6 +27,20 @@
     "w": 2,
     "h": 2
   },
+  "rock": {
+    "anchorX": 20,
+    "anchorY": 44,
+    "scale": 1,
+    "w": 1,
+    "h": 1
+  },
+  "fieldstone": {
+    "anchorX": 25,
+    "anchorY": 46,
+    "scale": 1,
+    "w": 1,
+    "h": 1
+  },
   "cottage-small": {
     "base": "cottage",
     "label": "1x1 cottage",
