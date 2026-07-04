@@ -55,6 +55,10 @@ export interface SelfPlayOptions {
   seed: number;
   /** Search settings applied to BOTH sides (equal-strength self-play). */
   search?: SearchOptions;
+  /** Per-side search settings (champion-vs-challenger). When provided for a side,
+   * it overrides `search` for that side; the gym passes different eval weights per
+   * side here so one config plays another. Absent side falls back to `search`. */
+  searchForSide?: Partial<Record<'player' | 'enemy', SearchOptions>>;
   /** Hard game-length cap; hitting it scores a draw. */
   maxPlies?: number;
 }
@@ -99,7 +103,9 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
   while (!game.winner && plies < maxPlies && (game.turn === 'player' || game.turn === 'enemy')) {
     const side: Side = game.turn;
     const env: MoveEnv = { terrain, lastMove: game.lastMove };
-    const chosen = searchBestAction(game, env, { objective, ctx, turnsElapsed }, createRng(seed + tick), opts.search);
+    // Champion-vs-challenger: each side may search with its own eval weights.
+    const sideSearch = opts.searchForSide?.[side] ?? opts.search;
+    const chosen = searchBestAction(game, env, { objective, ctx, turnsElapsed }, createRng(seed + tick), sideSearch);
     tick += 1;
     if (!chosen) {
       // No legal action: checkmate if the stuck side's King is attacked (a loss
