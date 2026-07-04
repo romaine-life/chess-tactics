@@ -51,10 +51,12 @@ modes, it is wrong**, no matter how correct the contents are.
 
 ## Layout — the same in every mode
 
-- **Topbar:** brand · **breadcrumb** (where you are) · the **mode** toggle.
-- The mode toggle is **three fixed tabs**: **Catalog · Lab · Viewer**. They are
-  **persistent destinations**, always present and always live — never disabled,
-  never relabeled, never reordered. They are **decoupled from the category**: the
+- **Topbar:** brand · **breadcrumb** (where you are) · the **mode** toggle. The mode
+  toggle rides the persistent app title bar's actions slot, just before the account
+  cluster — so it costs the Controls panel no vertical space in any mode.
+- The mode toggle is **three fixed icon tabs** — **open book** (Catalog) ·
+  **beaker** (Lab) · **magnifier** (Viewer). They are **persistent destinations**,
+  always present and always live — never disabled, never reordered. They are **decoupled from the category**: the
   category only governs what the Catalog shows; Lab and Viewer are standing
   workspaces you can jump to at any time. Each tab **remembers its own last
   state** (the Lab keeps its board; the Viewer keeps the last item it opened), so

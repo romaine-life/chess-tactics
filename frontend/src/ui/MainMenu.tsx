@@ -19,25 +19,34 @@ const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
 const MODE_HREFS: Record<string, string> = {
   'solo-skirmish': '/skirmish',
   'campaign-editor': '/campaigns-next',
-  'level-editor': '/edit',
   lobbies: '/lobbies',
   settings: '/settings',
 };
 
 interface MenuTab { slug: string; label: string; href: string; iconSlug: string }
 
+// Product-menu relabels applied over MENU_MODES (which stays the untouched design-catalog
+// source of truth — its widget assets keep their 'campaign-editor'/'level-editor' names).
+// The campaign editor IS the app's single "Editor": level authoring is reached from inside
+// it (Edit Board / + New Board), so the rail presents it simply as "Editor" and no longer
+// carries a separate top-level "Level Editor" tab. That route (/edit) still exists — it's
+// just no longer a front door, only reached by drilling into a level from the Editor.
+const MENU_TAB_LABELS: Record<string, string> = { 'campaign-editor': 'Editor' };
+const MENU_HIDDEN_SLUGS = new Set(['level-editor']);
+
 // The main-menu rail. The Campaign (play) mode is menu-only — not a design-catalog
 // widget — so it lives here rather than in MENU_MODES (the catalog's source of
-// truth). It leads the rail as the headline mode and sits apart from the Campaign
-// Editor so the shared placeholder icon doesn't read as a duplicate of an adjacent
+// truth). It leads the rail as the headline mode and sits apart from the Editor
+// so the shared placeholder icon doesn't read as a duplicate of an adjacent
 // tab. Temp icon: reuses the campaign-editor carving until a dedicated 'campaign'
 // carving is forged.
 const MENU_TABS: MenuTab[] = [
   { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
   ...MENU_MODES
+    .filter((mode) => !MENU_HIDDEN_SLUGS.has(mode.slug))
     .map((mode) => ({
       slug: mode.slug,
-      label: mode.label,
+      label: MENU_TAB_LABELS[mode.slug] ?? mode.label,
       href: MODE_HREFS[mode.slug] || '/',
       iconSlug: mode.slug,
     })),
@@ -53,9 +62,16 @@ const SETTINGS_ICON = `${ICONS}/settings.png`;
 // Settings sidebar uses, so the menu and the rest of the app read as one family
 // (retires the bespoke stone slabs). A NavButton, not an anchor (ADR-0052): game
 // controls are buttons; the route is the address, not the affordance.
-function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
+// `index` is the tab's position down the rail — it drives the shared stone-continuity
+// slice (--tab-index) so this rail's stone reads as one sheet however many tabs it has
+// (the menu carries five; the Settings screen four). See .settings-tab in style.css.
+function ModeTab({ tab, index }: { tab: MenuTab; index: number }): ReactElement {
   return (
-    <NavButton className="settings-tab main-menu-mode-tab" to={tab.href}>
+    <NavButton
+      className="settings-tab main-menu-mode-tab"
+      to={tab.href}
+      style={{ ['--tab-index' as string]: index }}
+    >
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
@@ -122,11 +138,14 @@ export function MainMenu(): ReactElement {
       <SceneBackdrop />
       <AmbienceBackground />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
-          mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
+          mode tabs + a framed feature panel — the same baked-skin chrome as /settings.
+          The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no
+          home-only position class — so its buttons line up pixel-for-pixel with the
+          Settings/Campaign rails at every width. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
+            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} />)}
           </aside>
         </ArtRouteChrome>
       </div>

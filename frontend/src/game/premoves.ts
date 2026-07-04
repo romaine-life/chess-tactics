@@ -8,8 +8,7 @@
 // paths share so neither re-derives the fold.
 
 import type { GameState, Move, Vec } from '../core/types';
-import { applyMove, legalMoves, type MoveEnv } from '../core/rules';
-import { buildTerrainIndex } from '../core/terrain';
+import { applyMove, gameEnv, legalMoves, type MoveEnv } from '../core/rules';
 
 /** One queued move: a player piece and where it will go. The "from" is implied by
  *  the piece's position on the provisional board at that point in the chain. */
@@ -25,10 +24,11 @@ export interface PremoveArrow {
   to: Vec;
 }
 
-// Movement environment for a state (terrain index + en-passant lastMove). Mirrors
-// store.envFor; kept local to avoid a store↔premoves import cycle.
+// Movement environment for a state: the canonical static env (terrain + edge fences,
+// via gameEnv so premove legality honours the SAME gameplay layers as real moves) plus
+// this ply's lastMove for en passant. Mirrors store.envFor.
 function envFor(game: GameState): MoveEnv {
-  return { terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined, lastMove: game.lastMove };
+  return { ...gameEnv(game), lastMove: game.lastMove };
 }
 
 // Fold the queued steps onto `game`, applying each as a real move on the board built

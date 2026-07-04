@@ -5,8 +5,9 @@
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
+import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
-import { PropSprite } from '../render/BoardStructure';
+import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
@@ -39,8 +40,8 @@ import {
   type StudioAsset,
   type StudioFamily,
 } from './studioBoard';
-import { featureThumbSrc, tileTopSrc } from '../art/tileset';
-import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_ART_PENDING, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { featureThumbSrc, fenceThumbSrc, tileTopSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFenceOverlays, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, FENCE_MATERIALS, DEFAULT_FENCE_MATERIAL, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_MATERIAL_LABELS, type FeatureKind, type FeatureMaterial, type FeatureEdge, type FenceMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
@@ -51,6 +52,8 @@ import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
+import { publishMap } from '../net/maps';
+import { HttpError } from '../net/http';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
@@ -77,6 +80,10 @@ function StudioEditableBoard({
   doodads: placedDoodads,
   props: placedProps = {},
   features: placedFeatures = {},
+  fences: placedFences = {},
+  fenceTool = false,
+  onPaintEdge,
+  onEraseEdge,
   zones: placedZones = {},
   resolveAsset,
   resolveUnit,
@@ -105,6 +112,14 @@ function StudioEditableBoard({
   props?: Record<string, { propId: string }>;
   /** Linear-feature overlays (roads + rivers) keyed by "x,y" -> {kind, material, mask}. */
   features?: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
+  /** Edge fences keyed by shared-edge key (roadEdgeKey) -> fence material — drawn as edge rails. */
+  fences?: Record<string, FenceMaterial>;
+  /** When true, the brush paints EDGES (fences) not cells: hover picks the nearest diamond edge. */
+  fenceTool?: boolean;
+  /** Add a fence on the shared edge (roadEdgeKey between two on-board cells). */
+  onPaintEdge?: (edgeKey: string) => void;
+  /** Remove a fence from the shared edge. */
+  onEraseEdge?: (edgeKey: string) => void;
   /** Gameplay zones (ADR-0050) keyed by cell "x,y" -> zone type — drawn as a tinted diamond. */
   zones?: Record<string, ZoneType>;
   resolveAsset: (id: string) => StudioAsset | undefined;
@@ -134,11 +149,45 @@ function StudioEditableBoard({
   // The unit picked up under the Move tool (its source cell), held while the pointer drags to a
   // destination. It's state (not a ref) so the source/target highlights re-render as you drag.
   const [movingFrom, setMovingFrom] = useState<{ x: number; y: number } | null>(null);
+  // Edge-fence painting: which diamond side is under the cursor (the rail will drop there).
+  const [hoverEdge, setHoverEdge] = useState<{ x: number; y: number; edge: FeatureEdge } | null>(null);
+  const fenceOverlayMap = resolveFenceOverlays(placedFences);
   const applyTool = (x: number, y: number) => {
     if (tool === 'brush') onPaint(x, y);
     else if (tool === 'erase') onErase(x, y);
     else if (tool === 'move') { /* handled via drag in the pointer handlers below */ }
     else onSelect(x, y);
+  };
+  // The neighbour + canonical edge key for one of a cell's 4 diamond sides. onBoard is false when
+  // the neighbour is off the board (no fence there — a fence always joins two real tiles).
+  const edgeTarget = (x: number, y: number, edge: FeatureEdge) => {
+    const dir = FEATURE_DIRS.find((d) => d.edge === edge)!;
+    const nx = x + dir.dx;
+    const ny = y + dir.dy;
+    return { nx, ny, key: roadEdgeKey(x, y, nx, ny), onBoard: nx >= 0 && nx < cols && ny >= 0 && ny < rows };
+  };
+  // Nearest diamond edge to the pointer: `.tileset-cell-hit` IS the diamond (centred), so the sign
+  // of the offset from its centre picks the quadrant → the adjoining edge (N=NE, E=SE, S=SW, W=NW).
+  const edgeAtPointer = (e: { currentTarget: Element; clientX: number; clientY: number }): FeatureEdge => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dx = e.clientX - (rect.left + rect.width / 2);
+    const dy = e.clientY - (rect.top + rect.height / 2);
+    return dy < 0 ? (dx >= 0 ? 'N' : 'W') : (dx >= 0 ? 'E' : 'S');
+  };
+  // Toggle a fence on the diamond edge under the cursor (brush adds, erase/right-click removes).
+  // A no-op when the neighbour is off-board (nothing to wall between).
+  const applyFenceAt = (x: number, y: number, edge: FeatureEdge, erasing: boolean): void => {
+    const { key, onBoard } = edgeTarget(x, y, edge);
+    if (!onBoard) return;
+    if (erasing) onEraseEdge?.(key);
+    else onPaintEdge?.(key);
+  };
+  // The two diamond-side endpoints (in a 0..100 viewBox over the hit diamond) for the edge hint.
+  const EDGE_LINE: Record<FeatureEdge, [number, number, number, number]> = {
+    N: [50, 0, 100, 50],
+    E: [100, 50, 50, 100],
+    S: [50, 100, 0, 50],
+    W: [0, 50, 50, 0],
   };
   // End a pointer interaction: drop a held unit at the cell under the cursor (a no-op if it's the
   // same cell or off-board), then clear the paint/move latches. Fired on pointer-up over the board.
@@ -166,6 +215,7 @@ function StudioEditableBoard({
       const isMoveFrom = tool === 'move' && movingFrom?.x === x && movingFrom?.y === y;
       const isMoveTo = tool === 'move' && !!movingFrom && !isMoveFrom && hoverCell?.x === x && hoverCell?.y === y;
       const moveDroppable = isMoveTo && (canMoveTo ? canMoveTo(x, y) : true);
+      const fenceHere = fenceTool && hoverEdge?.x === x && hoverEdge?.y === y ? hoverEdge.edge : null;
       cells.push({
         key,
         x,
@@ -173,14 +223,18 @@ function StudioEditableBoard({
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
-            {/* Fences are PLUMBING-ONLY (no baked mask art yet): don't pass a fence feature to
-                studioCellArt, or featureFrameSrc would 404. They render no image until art ships —
-                see FENCE_ART_PENDING. */}
-            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key]?.kind === 'fence' ? undefined : placedFeatures[key], animationFrame, hidden, x, y })}
+            {studioCellArt({ tileAsset: asset, feature: placedFeatures[key], fence: fenceOverlayMap.get(key), animationFrame, hidden, x, y })}
             {/* Zone tint: a translucent diamond seated on the tile EQUATOR — it reuses the exact
                 seating of the selection ring (top: --iso-tile-surface-top + the diamond clip-path),
                 which is the fix for the recurring "overlay sits at iso-tile-height/2, not y69" bug. */}
             {placedZones[key] ? <span className={`le-zone-cell le-zone-${LE_ZONE_TINT[placedZones[key]] ?? 'goal'}`} aria-hidden="true" /> : null}
+            {/* Fence edge hint: highlight the diamond side under the cursor so you see where the rail
+                lands before clicking. The SVG is seated exactly like the hit diamond (surface-top). */}
+            {fenceHere ? (
+              <svg className="le-fence-edge-hint" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <line x1={EDGE_LINE[fenceHere][0]} y1={EDGE_LINE[fenceHere][1]} x2={EDGE_LINE[fenceHere][2]} y2={EDGE_LINE[fenceHere][3]} />
+              </svg>
+            ) : null}
             {isSelected ? <span className="tileset-cell-ring" aria-hidden="true" /> : null}
             {isMoveFrom ? <span className="tileset-cell-ring is-move-from" aria-hidden="true" /> : null}
             {isMoveTo ? <span className={`tileset-cell-ring ${moveDroppable ? 'is-move-ok' : 'is-move-blocked'}`} aria-hidden="true" /> : null}
@@ -189,6 +243,11 @@ function StudioEditableBoard({
               onPointerDown={(event) => {
                 if (event.button === 2) return; // right-click erases via onContextMenu
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
+                if (fenceTool) {
+                  // Fence tool paints EDGES: toggle the diamond side under the cursor.
+                  if (tool === 'brush' || tool === 'erase') applyFenceAt(x, y, edgeAtPointer(event), tool === 'erase');
+                  return;
+                }
                 if (tool === 'move') {
                   // Pick up a unit to drag — only if one sits here; empty cells aren't grabbable.
                   if (placedUnits[`${x},${y}`]) { setMovingFrom({ x, y }); setHoverCell({ x, y }); }
@@ -197,8 +256,9 @@ function StudioEditableBoard({
                 if (tool !== 'select') paintingRef.current = true;
                 applyTool(x, y);
               }}
-              onPointerEnter={() => { setHoverCell({ x, y }); if (paintingRef.current) applyTool(x, y); }}
-              onContextMenu={(event) => { event.preventDefault(); onErase(x, y); }}
+              onPointerEnter={() => { setHoverCell({ x, y }); if (!fenceTool && paintingRef.current) applyTool(x, y); }}
+              onPointerMove={fenceTool ? (event) => setHoverEdge({ x, y, edge: edgeAtPointer(event) }) : undefined}
+              onContextMenu={(event) => { event.preventDefault(); if (fenceTool) applyFenceAt(x, y, edgeAtPointer(event), true); else onErase(x, y); }}
             />
           </>
         ),
@@ -297,11 +357,17 @@ function StudioEditableBoard({
             left,
             top,
             zIndex: zIndex + 19000,
-            width: 96,
-            height: 55,
+            // Match the tile's top-face diamond (stepX/stepY*2), centred on the projected
+            // equator point — same shape/seating as the prop-lab guide and the zone/selection
+            // overlays. A rectangle here (the old 96×55 box + outline) reads as "off the grid".
+            width: TILE_TEMPLATE.stepX * 2,
+            height: TILE_TEMPLATE.stepY * 2,
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none',
-            outline: `2px solid ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
+            clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)',
+            // Border via inset box-shadow, not `outline`: clip-path doesn't clip an outline,
+            // so an outline would still paint the old axis-aligned square around the diamond.
+            boxShadow: `inset 0 0 0 2px ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
             background: placeable ? 'rgba(80,220,140,.18)' : 'rgba(240,90,90,.18)',
           }}
         />,
@@ -322,7 +388,7 @@ function StudioEditableBoard({
       boardZoom={boardZoom}
       boardPan={boardPan}
       onPointerUp={endInteraction}
-      onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); }}
+      onPointerLeave={() => { setMovingFrom(null); paintingRef.current = false; setHoverCell(null); setHoverEdge(null); }}
     >
       {overlay}
       {overlaySprites}
@@ -492,15 +558,15 @@ function FeatureConnections({
 }
 
 // The editor's palette layers. Roads and rivers share one "Paths" layer (both are linear
-// connection features); the brush kind under it decides road vs river. Fence is its own
-// (still art-pending) layer. The layer picker is a dropdown, so the count no longer crowds a row.
+// connection features); the brush kind under it decides road vs river. Fence is its own EDGE
+// layer (you paint the boundary between two tiles). The layer picker is a dropdown.
 type LayerKey = 'board' | 'tile' | 'paths' | 'fence' | 'unit' | 'doodad' | 'prop' | 'cover' | 'zone' | 'rules' | 'status';
 type BrushKind = 'tile' | 'unit' | 'doodad' | 'prop' | 'cover' | 'road' | 'river' | 'fence' | 'zone';
 const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }> = [
   { id: 'board', label: 'Board' },
   { id: 'tile', label: 'Tile' },
   { id: 'paths', label: 'Paths' },
-  { id: 'fence', label: FENCE_ART_PENDING ? 'Fence (soon)' : 'Fence' },
+  { id: 'fence', label: 'Fence' },
   { id: 'unit', label: 'Unit' },
   { id: 'doodad', label: 'Doodad' },
   { id: 'prop', label: 'Prop' },
@@ -509,7 +575,7 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
   { id: 'rules', label: 'Rules' },
   { id: 'status', label: 'Status' },
 ];
-const isLayerOptionDisabled = (layer: LayerKey): boolean => layer === 'fence' && FENCE_ART_PENDING;
+const isLayerOptionDisabled = (_layer: LayerKey): boolean => false;
 const defaultLevelEditorLayer = (): LayerKey => LEVEL_EDITOR_LAYER_OPTIONS.find((option) => !isLayerOptionDisabled(option.id))?.id ?? LEVEL_EDITOR_LAYER_OPTIONS[0].id;
 // `rules` (a mode/placement panel) and `board`/`status` are non-painting layers → select tool.
 const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (layer === 'board' || layer === 'status' || layer === 'rules') ? 'select' : 'brush';
@@ -610,11 +676,14 @@ export function LevelEditor(): ReactElement {
   // SAME-KIND neighbours so the renderer picks straight/corner/T/cross. One unified layer —
   // roads connect to roads, rivers to rivers, never to each other. See core/featureAutotile.ts.
   const [boardFeatures, setBoardFeatures] = useState<Record<string, FeatureCell>>(initialBoard?.features ?? {});
+  // Edge fences (ADR): a wall on the boundary between two tiles, keyed by the shared-edge key
+  // (roadEdgeKey) -> material. Painted per-edge, not per-cell; blocks crossing that edge in play.
+  const [boardFences, setBoardFences] = useState<Record<string, FenceMaterial>>(initialBoard?.fences ?? {});
+  const [fenceBrushMaterial, setFenceBrushMaterial] = useState<FenceMaterial>(DEFAULT_FENCE_MATERIAL);
   // The remembered brush material PER kind, so switching Road↔River keeps each picker's choice.
   const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
     road: defaultFeatureMaterial('road'),
     river: defaultFeatureMaterial('river'),
-    fence: defaultFeatureMaterial('fence'),
   });
   // Manually SEVERED feature connections, keyed by the shared edge between two cells
   // (roadEdgeKey, order-independent). A cut overrides auto-connect for BOTH tiles.
@@ -623,8 +692,10 @@ export function LevelEditor(): ReactElement {
   // pushed to connect anyway, so the ribbon runs off the board edge (or into a non-feature tile)
   // instead of capping. Same edge keying as cuts (roadEdgeKey); the neighbour may be off-board.
   const [featureExits, setFeatureExits] = useState<Record<string, true>>(initialBoard?.featureExits ?? {});
-  // The active feature kind = the current layer when it's a feature layer, else null.
-  const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' || brushKind === 'fence' ? brushKind : null;
+  // The active feature kind = the current layer when it's a (road/river) feature layer, else null.
+  const featureKind: FeatureKind | null = brushKind === 'road' || brushKind === 'river' ? brushKind : null;
+  // The fence tool paints EDGES (a separate, edge-based feature), not per-cell ribbons.
+  const fenceTool = brushKind === 'fence';
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : leUnitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
@@ -666,7 +737,6 @@ export function LevelEditor(): ReactElement {
   // clean even for a legacy level whose derived boardCode differs from its saved one).
   const needsBaselineRef = useRef(false);
   const [quietDraftRestore] = useState(() => consumeNewBuildReloadIntent());
-  const [saveStatus, setSaveStatus] = useState('');
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
   const [saving, setSaving] = useState(false);
@@ -688,7 +758,6 @@ export function LevelEditor(): ReactElement {
   }, [ask]);
 
   const reportStatus = (message: string, tone: StatusTone = 'info', detail?: string): void => {
-    setSaveStatus(message);
     statusLogSeq.current += 1;
     const at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const entry: StatusLogEntry = { id: statusLogSeq.current, tone, message, detail, at };
@@ -785,8 +854,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, features: boardFeatures, featureCuts, featureExits, zones: boardZones }),
-    [boardCols, boardRows, playerFaction, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardFeatures, featureCuts, featureExits, boardZones],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zones: boardZones }),
+    [boardCols, boardRows, playerFaction, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardFeatures, boardFences, featureCuts, featureExits, boardZones],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -799,6 +868,7 @@ export function LevelEditor(): ReactElement {
     setBoardProps(board.props);
     setBoardCover(board.cover);
     setBoardFeatures(board.features);
+    setBoardFences(board.fences ?? {});
     setFeatureCuts(board.featureCuts);
     setFeatureExits(board.featureExits);
     setBoardZones(board.zones ?? {});
@@ -811,14 +881,18 @@ export function LevelEditor(): ReactElement {
     setRedoStack([]);
     currentEditorBoardRef.current = next;
     applyEditorBoard(next);
-    setSaveStatus('');
     if (selection !== undefined) setSelectedCell(selection);
     return true;
   };
+  // In both directions the DEPARTING board must be snapshotted BEFORE queueing the stack
+  // update: React runs the updater after this handler has already repointed
+  // currentEditorBoardRef at the restored board, so reading the ref inside the updater
+  // captures the wrong side of the swap (redo would "restore" the board already shown).
   const undoBoard = (): void => {
     const prev = undoStack[undoStack.length - 1];
     if (!prev) return;
-    setRedoStack((next) => [cloneEditorBoard(currentEditorBoardRef.current), ...next].slice(0, HISTORY_LIMIT));
+    const departing = cloneEditorBoard(currentEditorBoardRef.current);
+    setRedoStack((next) => [departing, ...next].slice(0, HISTORY_LIMIT));
     setUndoStack((next) => next.slice(0, -1));
     const restored = cloneEditorBoard(prev);
     currentEditorBoardRef.current = restored;
@@ -828,7 +902,8 @@ export function LevelEditor(): ReactElement {
   const redoBoard = (): void => {
     const next = redoStack[0];
     if (!next) return;
-    setUndoStack((prev) => [...prev, cloneEditorBoard(currentEditorBoardRef.current)].slice(-HISTORY_LIMIT));
+    const departing = cloneEditorBoard(currentEditorBoardRef.current);
+    setUndoStack((prev) => [...prev, departing].slice(-HISTORY_LIMIT));
     setRedoStack((prev) => prev.slice(1));
     const restored = cloneEditorBoard(next);
     currentEditorBoardRef.current = restored;
@@ -911,14 +986,7 @@ export function LevelEditor(): ReactElement {
   const featureOverlays = useMemo(() => {
     const isSevered = (edge: string): boolean => featureCuts[edge] === true;
     const isExit = (edge: string): boolean => featureExits[edge] === true;
-    const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-    for (const [key, f] of Object.entries(boardFeatures)) presentByKind[f.kind].add(key);
-    const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
-    for (const [key, f] of Object.entries(boardFeatures)) {
-      const [x, y] = key.split(',').map(Number);
-      out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered, isExit) };
-    }
-    return out;
+    return resolveFeatureOverlays(boardFeatures, isSevered, isExit);
   }, [boardFeatures, featureCuts, featureExits]);
 
   const paintCell = (x: number, y: number): void => {
@@ -1010,8 +1078,24 @@ export function LevelEditor(): ReactElement {
     delete next.cells[key];
     commitEditorBoard(next);
   };
+  // Edge-fence paint/erase — the fence tool targets the shared edge under the cursor (roadEdgeKey),
+  // not a cell. Add stamps the current brush material; erase drops the edge. Both ride undo/redo.
+  const paintFenceEdge = (edgeKey: string): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.fences = { ...(next.fences ?? {}), [edgeKey]: fenceBrushMaterial };
+    commitEditorBoard(next);
+  };
+  const eraseFenceEdge = (edgeKey: string): void => {
+    const current = currentEditorBoardRef.current.fences ?? {};
+    if (!(edgeKey in current)) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const fences = { ...(next.fences ?? {}) };
+    delete fences[edgeKey];
+    next.fences = fences;
+    commitEditorBoard(next);
+  };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, fences: {}, featureCuts: {}, featureExits: {}, zones: {} }, null);
   };
   const clearActiveLayer = (): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -1021,6 +1105,7 @@ export function LevelEditor(): ReactElement {
     else if (brushKind === 'prop') next.props = {};
     else if (brushKind === 'cover') next.cover = {};
     else if (brushKind === 'zone') next.zones = {};
+    else if (brushKind === 'fence') next.fences = {};
     else if (featureKind) {
       const cleared = new Set<string>();
       for (const [key, feature] of Object.entries(next.features)) {
@@ -1170,7 +1255,6 @@ export function LevelEditor(): ReactElement {
       const newId = useCampaigns.getState().createUnassignedLevel(newLevel);
       setEditingId(newId);
       setSaving(true);
-      setSaveStatus('');
       try {
         await saveUserWorkspace();
         reportStatus('Saved to server.', 'success');
@@ -1210,7 +1294,6 @@ export function LevelEditor(): ReactElement {
       cancelLabel: 'Cancel',
     }))) return;
     setSaving(true);
-    setSaveStatus('');
     try {
       if (official) {
         const { revision } = await publishOfficialWorkspace();
@@ -1234,6 +1317,34 @@ export function LevelEditor(): ReactElement {
     const code = encodeBoard(currentEditorBoard);
     void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
     reportStatus('Copied board link.', 'success');
+  };
+  // Publish this map to the server and copy a public /play?map=<id> link. Unlike the board-code
+  // link, this one UNFURLS on Discord (the server can resolve it) and is a short, stable URL anyone
+  // can play. Requires the map to be saved & clean (publish reads the stored copy) and signed in (a
+  // public link needs an owner).
+  const [sharing, setSharing] = useState(false);
+  const copyShareLink = async (): Promise<void> => {
+    if (sharing) return;
+    if (!editingId || dirty) {
+      reportStatus('Save this map first.', 'warning', dirty ? 'You have unsaved changes — Save, then Share Link.' : 'Give it a name and Save, then Share Link.');
+      return;
+    }
+    setSharing(true);
+    try {
+      const { url } = await publishMap(editingId);
+      await navigator.clipboard?.writeText(url);
+      reportStatus('Copied share link.', 'success', 'Anyone with the link can preview and play this map.');
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 401) {
+        reportStatus('Sign in to share.', 'warning', 'A public share link needs a signed-in owner.');
+      } else if (err instanceof HttpError && err.status === 404) {
+        reportStatus('Save this map first.', 'warning', 'The saved copy wasn’t found — Save, then Share Link.');
+      } else {
+        reportStatus('Couldn’t create a share link.', 'error');
+      }
+    } finally {
+      setSharing(false);
+    }
   };
   const loadBoardLink = (): void => {
     setLayer('status');
@@ -1460,7 +1571,7 @@ export function LevelEditor(): ReactElement {
   const saveBlockedDetail = saving
     ? 'Wait for the current save to finish.'
     : !playability.ok
-    ? 'Resolve the playability issues listed in the Rules panel, then Save.'
+    ? 'Resolve the issues in the Fix-before-saving list above, then Save.'
     : needsPlayerFaction
     ? 'Open Board > Level Settings, then assign Player to one board faction.'
     : !dirty && targetLevelId
@@ -1470,13 +1581,14 @@ export function LevelEditor(): ReactElement {
     : '';
   const explainBlockedSave = (): void => {
     if (!saveBlockedMessage) return;
-    setLayer(!playability.ok ? 'rules' : needsPlayerFaction ? 'board' : 'status');
+    // Playability blocks stay on 'status': the Fix-before-saving list renders there, beside Save.
+    setLayer(needsPlayerFaction && playability.ok ? 'board' : 'status');
     setTool('select');
     reportStatus(saveBlockedMessage, saving ? 'info' : 'warning', saveBlockedDetail);
   };
-  // Save-state chip priority: saving → blocked-by-violations → needs-player → dirty → clean.
+  // Save-state label priority (Status card fallback): saving → blocked-by-violations →
+  // needs-player → dirty → clean.
   const saveStateLabel = saving ? 'Saving…' : !playability.ok ? 'Fix issues to save' : needsPlayerFaction ? 'Needs Player' : dirty ? 'Unsaved' : 'No changes';
-  const saveStateClass = saving ? 'is-saving' : !playability.ok ? 'is-blocked' : needsPlayerFaction ? 'is-dirty' : dirty ? 'is-dirty' : 'is-clean';
   // Test-Play is enabled only for a SAVED (clean, in-store), violation-free level with a resolvable
   // id: /play resolves the level from the store, so an unsaved board would test-play the stale
   // saved version. mode=test skips progress recording. See below (button title explains the state).
@@ -1488,21 +1600,17 @@ export function LevelEditor(): ReactElement {
   return (
     <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle} ready={editorReady}>
         {confirmDialog}
-        {/* The title bar lives in the app shell now; the editor paints its live
-            save-state + actions into it via portals (state stays in this component). */}
-        {editorReady ? <TitleBarSlot region="center">
-          <div className="le-topbar-stats" aria-label="Level status">
-            <span className="le-level-name">{levelName}</span>
-            {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
-            <span className={`le-save-state ${saveStateClass}`}>{saveStatus || saveStateLabel}</span>
-          </div>
-        </TitleBarSlot> : null}
+        {/* The title bar carries NO editor status (no level name, no save-state chip) — the
+            owner removed the center cluster: that's ambient chrome noise while editing, and
+            everything it said lives in the Status layer for whoever goes looking. Only the
+            return nav rides the bar (below). */}
         {editorReady ? <TitleBarSlot region="actions">
           {/* Only the RETURN nav rides the global title bar now (‹ Catalog / ‹ Back). The
-              workspace ACTIONS (Undo · Test · Save) moved into the editor's OWN pinned dock in
-              the control rail (.le-actions-dock below) — document verbs belong in the editor's
-              toolbar, not global chrome (the Unity/Unreal/Godot/Blender convention). The bar
-              stays brand + return-nav + account cluster, matching Settings. */}
+              workspace ACTIONS live in the editor's OWN chrome — Undo/Redo in the pinned
+              dock (.le-actions-dock), Test + Save/Publish in the Status layer card — because
+              document verbs belong in the editor's toolbar, not global chrome (the
+              Unity/Unreal/Godot/Blender convention). The bar stays brand + return-nav +
+              account cluster, matching Settings. */}
           <nav className="le-topbar-actions" aria-label="Editor navigation">
             {cameFromStudio ? <NavButton className="app-header-button le-back-catalog" to="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</NavButton> : null}
             {routeParams.returnTo ? <NavButton className="app-header-button" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</NavButton> : null}
@@ -1536,6 +1644,10 @@ export function LevelEditor(): ReactElement {
                   onSelect={selectCell}
                   onMove={moveUnit}
                   canMoveTo={canMoveUnitTo}
+                  fences={boardFences}
+                  fenceTool={fenceTool}
+                  onPaintEdge={paintFenceEdge}
+                  onEraseEdge={eraseFenceEdge}
                   propBrush={brushKind === 'prop' ? { def: propBrushDef, canPlaceAt: (ax, ay) => canPlaceProp(propBrushDef, ax, ay) } : null}
                   overlay={<GroundCoverLayer cells={coverCells} />}
                 />
@@ -1563,76 +1675,101 @@ export function LevelEditor(): ReactElement {
           </div>
         </section>
 
-        {/* Pinned editor ACTIONS dock: workspace verbs — Undo · Test · Save — in the editor's
-            OWN chrome instead of the global title bar (Unity/Unreal/Godot/Blender all keep
-            document verbs in a docked editor toolbar). A fixed flex child of the rail ABOVE the
-            sole scroll region, so it's always visible without overlaying the Pixi board; kit
-            .le-seg-btn atoms only. Save's gating (canSave / canTest / dirty / saved-version)
-            is preserved verbatim — /play reads the STORED level, so Test stays Save-gated. */}
+        {/* Pinned editor ACTIONS dock: only the ALWAYS-relevant verbs — Undo · Redo — stay
+            universal (a fixed flex child of the rail ABOVE the sole scroll region, always
+            visible without overlaying the Pixi board; kit .le-seg-btn atoms only). Test and
+            Save/Publish are session verbs, not per-edit verbs, so they live in the Status
+            layer card below with the rest of the save workflow. */}
         <section className="skirmish-card le-actions-dock" aria-label="Editor actions">
           <h2>Actions</h2>
-          <div className="le-board-actions">
+          <div className="le-board-actions le-history-actions">
             <button
               type="button"
-              className="le-seg-btn"
+              className="le-seg-btn le-icon-btn"
               onClick={undoBoard}
               disabled={!undoStack.length}
+              aria-label="Undo"
               title={undoStack.length ? 'Undo the last board edit.' : 'Nothing to undo.'}
-            >Undo</button>
-            {canTest && testHref ? (
-              <NavButton className="le-seg-btn" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
-            ) : (
-              <button
-                type="button"
-                className="le-seg-btn"
-                data-testid="le-test"
-                disabled
-                title={
-                  !playability.ok ? 'Fix the playability issues below to test-play.'
-                  : dirty ? 'Save the level first — Test plays the saved version.'
-                  : !targetLevelId ? 'Save the level first to test-play it.'
-                  : 'Test-play unavailable.'
-                }
-              >Test</button>
-            )}
+            ><span className="le-ico ic-undo" aria-hidden="true" /></button>
             <button
               type="button"
-              className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
-              data-testid="le-save"
-              aria-label={canSave ? saveLabel : `${saveLabel}: ${saveBlockedMessage}`}
-              title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
-              onClick={() => { if (canSave) void saveLevel(); else explainBlockedSave(); }}
-            >{saveLabel}</button>
+              className="le-seg-btn le-icon-btn"
+              onClick={redoBoard}
+              disabled={!redoStack.length}
+              aria-label="Redo"
+              title={redoStack.length ? 'Redo the last undone edit.' : 'Nothing to redo.'}
+            ><span className="le-ico ic-redo" aria-hidden="true" /></button>
           </div>
         </section>
 
         <KitScroll className="le-hud-scroll">
-        {/* ALWAYS-VISIBLE playability list (ADR-0050): the owner's core ask. While any violation
-            exists Save is disabled and the level cannot persist. Every line is plain language from
-            core/validatePlayability — described by what the author sees (sides, painted units, spawn
-            zones), never by schema jargon. A "Clear pieces" shortcut rides the "remove the placed
-            units" violation so switching to random placement is one click. */}
-        {!playability.ok ? (
-          <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
-            <h2>Fix before saving</h2>
-            <ul className="le-violation-list">
-              {playability.violations.map((v) => (
-                <li key={v.code} className="le-violation">
-                  <span className="le-violation-msg">{v.message}</span>
-                  {v.code === 'P3_UNITS_NOT_EMPTY' ? (
-                    <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
         {layer === 'status' ? (
+          <>
+          {/* Playability list (ADR-0050): while any violation exists Save is disabled and the
+              level cannot persist. The list lives HERE, in the Status layer with the Save it
+              gates — it began as an always-visible rail fixture, but the owner demoted it (it
+              crowded every layer while editing; a blank board starts violating, so it was
+              permanent). There is deliberately NO ambient signal elsewhere — the state is
+              discovered when the author comes to save. Every line is plain language from
+              core/validatePlayability — described by what the author sees (sides, painted
+              units, spawn zones), never by schema jargon. A "Clear pieces" shortcut rides the
+              "remove the placed units" violation so switching to random placement is one
+              click. */}
+          {!playability.ok ? (
+            <section className="skirmish-card le-violations" aria-label="Playability issues" data-testid="le-violations">
+              <h2>Fix before saving</h2>
+              <ul className="le-violation-list">
+                {playability.violations.map((v) => (
+                  <li key={v.code} className="le-violation">
+                    <span className="le-violation-msg">{v.message}</span>
+                    {v.code === 'P3_UNITS_NOT_EMPTY' ? (
+                      <button type="button" className="le-seg-btn le-violation-action" onClick={clearUnits}>Clear pieces</button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <section className="skirmish-card le-status-card" aria-live="polite">
             <h2>Status</h2>
+            {/* The level's identity lives here now, not in the title bar. */}
+            <div className="le-status-level" aria-label="Level">
+              <span className="le-level-name">{levelName}</span>
+              {isOfficialTarget && isAdmin ? <span className="le-official-tag">OFFICIAL</span> : null}
+            </div>
             <div className={`le-status-current ${canSave ? 'is-ready' : 'is-blocked'}`}>
               <strong>{canSave ? 'Ready to save' : saveBlockedMessage || saveStateLabel}</strong>
               {canSave ? <span>{isOfficialTarget ? 'Publishing will update the official campaigns.' : 'The current board has unsaved changes.'}</span> : <span>{saveBlockedDetail}</span>}
+            </div>
+            {/* The save-workflow verbs live HERE with the state that explains them (the pinned
+                dock above keeps only Undo/Redo). Gating is preserved verbatim — /play reads the
+                STORED level, so Test stays Save-gated; a blocked Save click still routes to the
+                blocking layer via explainBlockedSave. */}
+            <div className="le-board-actions le-status-actions">
+              {canTest && testHref ? (
+                <NavButton className="le-seg-btn" data-testid="le-test" to={testHref} title="Play-test this level (progress is not recorded).">Test</NavButton>
+              ) : (
+                <button
+                  type="button"
+                  className="le-seg-btn"
+                  data-testid="le-test"
+                  disabled
+                  title={
+                    !playability.ok ? 'Fix the playability issues listed above to test-play.'
+                    : dirty ? 'Save the level first — Test plays the saved version.'
+                    : !targetLevelId ? 'Save the level first to test-play it.'
+                    : 'Test-play unavailable.'
+                  }
+                >Test</button>
+              )}
+              <button
+                type="button"
+                className={`le-seg-btn ${canSave ? 'active' : 'is-blocked'}`.trim()}
+                data-testid="le-save"
+                aria-label={canSave ? saveLabel : `${saveLabel}: ${saveBlockedMessage}`}
+                title={canSave ? (isOfficialTarget ? 'Publish this level to every player (admin-gated).' : 'Save this level to your workspace.') : `${saveBlockedMessage} ${saveBlockedDetail}`.trim()}
+                onClick={() => { if (canSave) void saveLevel(); else explainBlockedSave(); }}
+              >{saveLabel}</button>
             </div>
             <div className="le-material-values" aria-label="Team material point values">
               <div className="le-material-values-head">
@@ -1665,6 +1802,7 @@ export function LevelEditor(): ReactElement {
               )}
             </div>
           </section>
+          </>
         ) : layer === 'board' ? (
           <>
           <section className="skirmish-card">
@@ -1675,6 +1813,7 @@ export function LevelEditor(): ReactElement {
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
               <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy Link</button>
+              <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>
             <input
               className="le-board-link-input"
@@ -1868,18 +2007,18 @@ export function LevelEditor(): ReactElement {
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'prop'
-                ? <img src={`/assets/props/${propBrushDef.id}/front.png`} alt="" draggable={false} />
+                ? <img src={propHalfSrc(propBrushDef.spriteId, 'front')} alt="" draggable={false} />
                 : brushKind === 'zone'
                 ? <span className={`le-brush-thumb-zone le-zone-${LE_ZONE_TINT[zoneBrushType] ?? 'goal'}`} aria-hidden="true" />
-                : featureKind === 'fence'
-                ? <span className="le-brush-thumb-pending" aria-hidden="true" /> /* fence art pending — no thumb to request */
+                : fenceTool
+                ? <img src={fenceThumbSrc(fenceBrushMaterial)} alt="" draggable={false} />
                 : featureKind
                 ? <img src={featureThumbSrc(featureKind, featureBrushMaterial[featureKind])} alt="" draggable={false} />
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : brushKind === 'zone' ? (LE_ZONE_LABEL[zoneBrushType] ?? 'Zone') : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : brushKind === 'zone' ? (LE_ZONE_LABEL[zoneBrushType] ?? 'Zone') : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -1984,12 +2123,12 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : brushKind === 'prop' ? (
           <section className="skirmish-card le-brush-panel">
-            {(['tree', 'house'] as PropKind[]).map((kind) => {
+            {(['tree', 'house', 'rock'] as PropKind[]).map((kind) => {
               const group = PROP_DEFS.filter((def) => def.kind === kind);
               if (!group.length) return null;
               return (
                 <div className="le-pal-group" key={kind}>
-                  <span className="le-pal-grouplabel">{kind === 'tree' ? 'Trees' : 'Houses'}</span>
+                  <span className="le-pal-grouplabel">{kind === 'tree' ? 'Trees' : kind === 'house' ? 'Houses' : 'Rocks'}</span>
                   <div className="le-swatches">
                     {group.map((def) => (
                       <button
@@ -1999,7 +2138,7 @@ export function LevelEditor(): ReactElement {
                         title={`${def.label} · ${def.w}×${def.h} · ${def.terrains.join(', ')}${def.blocking ? ' · blocks' : ''}`}
                         onClick={() => { setPropBrushId(def.id); setBrushKind('prop'); setLayer('prop'); setTool('brush'); }}
                       >
-                        <img src={`/assets/props/${def.id}/front.png`} alt="" draggable={false} />
+                        <img src={propHalfSrc(def.spriteId, 'front')} alt="" draggable={false} />
                         <small>{def.label}</small>
                       </button>
                     ))}
@@ -2007,14 +2146,32 @@ export function LevelEditor(): ReactElement {
                 </div>
               );
             })}
-            <p className="le-board-note">Props span {propBrushDef.w}×{propBrushDef.h} tiles, anchored at the clicked cell. They only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses) become impassable in play.</p>
+            <p className="le-board-note">This prop spans {propBrushDef.w}×{propBrushDef.h} tile{propBrushDef.w * propBrushDef.h > 1 ? 's' : ''}, anchored at the clicked cell. Props only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses, rocks) become impassable in play.</p>
           </section>
-        ) : featureKind === 'fence' ? (
+        ) : fenceTool ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Fence</h2>
+            <div className="le-pal-group">
+              <span className="le-pal-grouplabel">Rail</span>
+              <div className="le-swatches">
+                {FENCE_MATERIALS.map((mat) => (
+                  <button
+                    type="button"
+                    key={`fence-${mat}`}
+                    className={`le-swatch ${fenceBrushMaterial === mat && tool !== 'erase' ? 'active' : ''}`.trim()}
+                    title={FENCE_MATERIAL_LABELS[mat]}
+                    onClick={() => { setFenceBrushMaterial(mat); setBrushKind('fence'); setLayer('fence'); setTool('brush'); }}
+                  >
+                    <img src={fenceThumbSrc(mat)} alt="" draggable={false} />
+                    <small>{FENCE_MATERIAL_LABELS[mat]}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
             <p className="le-board-note">
-              Fences are <strong>visual only</strong> and the art is still pending, so the brush is
-              disabled for now. They never affect movement — edge-blocking is a later milestone.
+              Hover a tile and the nearest <strong>edge</strong> highlights; click to drop a rail on that edge
+              (right-click or the Erase tool removes it). A fenced edge can&rsquo;t be crossed — both tiles stay
+              walkable, and knights hop it (like water).
             </p>
           </section>
         ) : featureKind ? (
@@ -2085,7 +2242,7 @@ export function LevelEditor(): ReactElement {
 
         {featureKind && selectedCell && selectedFeature ? (
           <section className="skirmish-card">
-            <h2>{selectedFeature.kind === 'river' ? 'River connections' : selectedFeature.kind === 'fence' ? 'Fence connections' : 'Road connections'}</h2>
+            <h2>{selectedFeature.kind === 'river' ? 'River connections' : 'Road connections'}</h2>
             <FeatureConnections cell={selectedCell} kind={selectedFeature.kind} features={boardFeatures} cuts={featureCuts} exits={featureExits} onToggle={toggleFeatureCut} onToggleExit={toggleFeatureExit} />
             <p className="le-board-note">Click an edge that has a neighbour to sever or rejoin it. Click an edge with no neighbour — a board boundary or a non-{selectedFeature.kind} tile — to run the {selectedFeature.kind} <em>off</em> that edge instead of capping it.</p>
           </section>

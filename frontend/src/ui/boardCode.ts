@@ -5,22 +5,26 @@
 //
 // Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, f?:fillTileId, t?:{cell:tileId}, h?:[cell],
 //   u?:{cell:[unitId,dir,faction]}, d?:{cell:doodadId}, p?:{anchorCell:propId}, v?:{cell:density},
-//   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fn?:{cell:fenceMaterial}, rc?:[edgeKey],
-//   rx?:[edgeKey], z?:{cell:zoneType} }. `f` fills every cell, then `t` overrides — so a "mostly
-// one tile" board stays tiny; `h` punches intentional holes back out of that fill. Features split
-// per kind on the wire (rd=roads, rv=rivers, fn=fences) and merge into one `features` map on decode;
-// `rc` (severed edges) and `rx` (forced outward exits) are shared edge lists. `z` is the gameplay-zone
-// channel (ADR-0050): each painted cell -> its zone type. base64url of the JSON (no padding, +/ -> -_).
+//   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
+//   rc?:[edgeKey], rx?:[edgeKey], z?:{cell:zoneType} }. `f` fills every
+// cell, then `t` overrides — so a "mostly one tile" board stays tiny; `h` punches intentional holes
+// back out of that fill. The autotiling ribbon features split per kind on the wire (rd=roads,
+// rv=rivers) and merge into one `features` map on decode. FENCES are edge-based, not per-cell:
+// `fe` maps a shared-edge key (roadEdgeKey "x,y|x,y") to a fence material — same edge keying as
+// `rc` (severed edges) and `rx` (forced outward exits). `z` is the gameplay-zone channel
+// (ADR-0050): each painted cell -> its zone type. base64url of the JSON (no padding, +/ -> -_).
 //
-// FORWARD/BACK-COMPAT: `z` (like `p` before it) is emitted only when non-empty, so a zone-free board
-// encodes byte-identically to a pre-zones code, and an OLD code with no `z` decodes to an empty
-// `zones` map (added the same way facing/props were). No shipped content has zones, so no shim needed.
+// FORWARD/BACK-COMPAT: `z`/`p`/`fe` are emitted only when non-empty, so a board without them
+// encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
 
 import type { GroundCoverDensity } from '../core/groundCover';
 import type { FeatureKind, FeatureMaterial, RoadMaterial, RiverMaterial, FenceMaterial } from '../core/featureAutotile';
 import type { ZoneType } from '../core/level';
 
-/** One painted feature cell: which linear feature it carries and its surface material. */
+/**
+ * One painted autotiling feature cell (road or river): which linear feature it carries and its
+ * surface material. (Fences are NOT here — they are edge-based, stored in `EditorBoard.fences`.)
+ */
 export interface FeatureCell {
   kind: FeatureKind;
   material: FeatureMaterial;
@@ -38,6 +42,11 @@ export interface EditorBoard {
   props: Record<string, { propId: string }>;
   cover: Record<string, GroundCoverDensity>;
   features: Record<string, FeatureCell>;
+  /** Edge fences, keyed by the shared-edge key (roadEdgeKey "x,y|x,y") -> fence material.
+   * Edge-based (a wall between two tiles), not per-cell — mirrors featureCuts/featureExits.
+   * Optional + back-compat (like `zones`): a bare board literal omits it; `decodeBoard` always
+   * returns it populated (empty for an old code). */
+  fences?: Record<string, FenceMaterial>;
   featureCuts: Record<string, true>;
   featureExits: Record<string, true>;
   /** Gameplay zones (ADR-0050), keyed by cell "x,y" -> zone type. The editor paints
@@ -86,18 +95,18 @@ export function encodeBoard(b: EditorBoard): string {
   // prop-free board encodes byte-identically to a pre-props board.
   if (b.props && nonEmpty(b.props)) wire.p = Object.fromEntries(Object.entries(b.props).map(([k, v]) => [k, v.propId]));
   if (nonEmpty(b.cover)) wire.v = b.cover;
-  // Split features by kind so each map's values are bare materials (rd=roads, rv=rivers, fn=fences).
+  // Split the autotiling ribbon features by kind so each map's values are bare materials
+  // (rd=roads, rv=rivers). Fences ride separately in `fe` (edge-keyed), below.
   const rd: Record<string, RoadMaterial> = {};
   const rv: Record<string, RiverMaterial> = {};
-  const fn: Record<string, FenceMaterial> = {};
   for (const [k, f] of Object.entries(b.features)) {
     if (f.kind === 'river') rv[k] = f.material as RiverMaterial;
-    else if (f.kind === 'fence') fn[k] = f.material as FenceMaterial;
     else rd[k] = f.material as RoadMaterial;
   }
   if (nonEmpty(rd)) wire.rd = rd;
   if (nonEmpty(rv)) wire.rv = rv;
-  if (nonEmpty(fn)) wire.fn = fn;
+  // Fences: an edge-key -> material map (emitted only when non-empty, back-compat like `z`/`p`).
+  if (b.fences && nonEmpty(b.fences)) wire.fe = b.fences;
   if (nonEmpty(b.featureCuts)) wire.rc = Object.keys(b.featureCuts);
   if (nonEmpty(b.featureExits)) wire.rx = Object.keys(b.featureExits);
   // Zones ride as a bare {cell:zoneType} map — emitted only when non-empty so a zone-free board
@@ -126,11 +135,13 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (Array.isArray(w.rc)) for (const e of w.rc) featureCuts[e] = true;
     const featureExits: Record<string, true> = {};
     if (Array.isArray(w.rx)) for (const e of w.rx) featureExits[e] = true;
-    // Merge the per-kind wire maps back into one features map (rd=roads, rv=rivers, fn=fences).
+    // Merge the per-kind wire maps back into one features map (rd=roads, rv=rivers).
     const features: Record<string, FeatureCell> = {};
     if (w.rd) for (const [k, m] of Object.entries(w.rd as Record<string, RoadMaterial>)) features[k] = { kind: 'road', material: m };
     if (w.rv) for (const [k, m] of Object.entries(w.rv as Record<string, RiverMaterial>)) features[k] = { kind: 'river', material: m };
-    if (w.fn) for (const [k, m] of Object.entries(w.fn as Record<string, FenceMaterial>)) features[k] = { kind: 'fence', material: m };
+    // Fences: edge-key -> material (an OLD code without `fe` yields an empty map — back-compat).
+    const fences: Record<string, FenceMaterial> = {};
+    if (w.fe) for (const [k, m] of Object.entries(w.fe as Record<string, FenceMaterial>)) fences[k] = m;
     // Zones: an OLD code has no `z`, so this defaults to an empty map — the back-compat contract.
     const zones: EditorBoard['zones'] = {};
     if (w.z) for (const [k, type] of Object.entries(w.z as Record<string, ZoneType>)) zones[k] = type;
@@ -138,6 +149,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       cols, rows, playerFaction: typeof w.pf === 'string' ? w.pf : undefined, cells, units, doodads, props,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       features,
+      fences,
       featureCuts,
       featureExits,
       zones,

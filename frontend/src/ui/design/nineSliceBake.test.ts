@@ -117,6 +117,12 @@ describe('nine-slice bake parity (committed PNG === fresh bake from config)', ()
         expect(d.sameSize, `${rec.line}: size ${JSON.stringify(d.fresh)} vs committed ${JSON.stringify(d.committed)}`).toBe(true);
         expect(d.samePixels, `${rec.line}: line frame drifted — re-bake (scripts/bake-line-frames.mjs)`).toBe(true);
       }
+      // Semantic-accent twins (lineTones): each re-bakes from the same atoms + a palette swap.
+      for (const t of (rec.lineTones ?? [])) {
+        const d = diffCommitted(t.out, bakeLine(id, t.swap), LINE_DIR);
+        expect(d.sameSize, `${t.out}: size ${JSON.stringify(d.fresh)} vs committed ${JSON.stringify(d.committed)}`).toBe(true);
+        expect(d.samePixels, `${t.out}: tone line frame drifted — re-bake (scripts/bake-line-frames.mjs)`).toBe(true);
+      }
     });
   }
 });

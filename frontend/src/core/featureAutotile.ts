@@ -1,10 +1,15 @@
-// Linear-feature autotiling (roads and rivers). A "feature" is a ribbon a
-// level author DRAWS across cells — the engine derives each cell's art from which
+// Linear-feature autotiling (roads and rivers) + edge fences. A "linear feature" is a
+// ribbon a level author DRAWS across cells — the engine derives each cell's art from which
 // of its 4 cardinal neighbours also carry the same feature. This is the canonical
 // 4-bit connection / "edge Wang" autotile (Godot "Match Sides", Tiled edge set,
 // RPG Maker wall autotile): 16 masks → straight / corner / T / cross / dead-end /
 // isolated. Pure + deterministic; the editor, the solver, and the renderer all
 // resolve a cell's piece through this one table.
+//
+// A FENCE is a different animal (see the fence section at the bottom): it lives on the
+// EDGE between two orthogonally-adjacent cells and BLOCKS crossing it. It is stored
+// edge-keyed (roadEdgeKey), exactly like the manual cut/exit overrides, not as a
+// per-cell FeatureKind.
 //
 // Bit + direction convention is pinned to the board projection (boardProjection.ts:
 // left=(x-y)·stepX, top=(x+y)·stepY) AND to the baked sprite geometry
@@ -18,54 +23,41 @@
 //   8    W    (x-1, y)         upper-left  (NW)
 
 // Linear-feature kinds. Each kind is its OWN connectivity class — a road connects to
-// roads, a river to rivers, a fence to fences (never to each other). Roads/rivers are baked by
-// build-feature-tiles.py; FENCES are PLUMBING ONLY in v1 (no baked mask art yet, brush gated in
-// the editor, visual-only when art lands — they add nothing to collision).
-export type FeatureKind = 'road' | 'river' | 'fence';
+// roads, a river to rivers (never to each other). Both AUTOTILE (their piece is derived
+// from same-kind neighbours) and are baked by build-feature-tiles.py. (Fences are NOT a
+// FeatureKind — they are edge-based; see the fence section below.)
+export type FeatureKind = 'road' | 'river';
 
 // A feature's surface look. Within a kind, all cells connect regardless of material
 // (the shape flows, the surface can change per cell); the author picks which to paint.
 // Each is a baked 16-mask set (<kind>-<material>-<mask>.png).
 export type RoadMaterial = 'dirt' | 'cobble' | 'stone' | 'pebble';
 export type RiverMaterial = 'water';
-// Fence materials — plumbing only; the mask art does not exist yet (see ROAD/RIVER comment).
-export type FenceMaterial = 'wood' | 'stone';
-export type FeatureMaterial = RoadMaterial | RiverMaterial | FenceMaterial;
+export type FeatureMaterial = RoadMaterial | RiverMaterial;
 
 // Authored codex-heal materials that ship (build-feature-tiles.py). stone/pebble stay
 // valid types but aren't in the palette until they get the same treatment.
 export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'cobble'];
 export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
-// Fence materials exist as types/plumbing, but the brush is gated until mask art ships, so the
-// palette is intentionally empty for now (nothing selectable yet).
-export const FENCE_MATERIALS: readonly FenceMaterial[] = [];
 export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
   dirt: 'Dirt',
   cobble: 'Cobblestone',
   stone: 'Stone',
   pebble: 'Gravel',
   water: 'Water',
-  wood: 'Wood',
 };
 // Back-compat alias (roads referenced this name before rivers existed).
 export const ROAD_MATERIAL_LABELS = FEATURE_MATERIAL_LABELS;
 export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'dirt';
 export const DEFAULT_RIVER_MATERIAL: RiverMaterial = 'water';
-export const DEFAULT_FENCE_MATERIAL: FenceMaterial = 'wood';
-
-// Fences are PLUMBING-ONLY in v1: the kind, materials, wire key (`fn`) and editor brush all
-// exist, but there is no baked mask art yet, so the brush is GATED (disabled) in the editor and
-// any fence cell renders no image (never a broken/404 sprite). Edge-blocking is deferred —
-// fences add NOTHING to collision.
-export const FENCE_ART_PENDING = true;
 
 /** Selectable materials for a feature kind (editor palette). */
 export const featureMaterials = (kind: FeatureKind): readonly FeatureMaterial[] =>
-  kind === 'river' ? RIVER_MATERIALS : kind === 'fence' ? FENCE_MATERIALS : ROAD_MATERIALS;
+  kind === 'river' ? RIVER_MATERIALS : ROAD_MATERIALS;
 
 /** The default brush material for a feature kind. */
 export const defaultFeatureMaterial = (kind: FeatureKind): FeatureMaterial =>
-  kind === 'river' ? DEFAULT_RIVER_MATERIAL : kind === 'fence' ? DEFAULT_FENCE_MATERIAL : DEFAULT_ROAD_MATERIAL;
+  kind === 'river' ? DEFAULT_RIVER_MATERIAL : DEFAULT_ROAD_MATERIAL;
 
 export type FeatureEdge = 'N' | 'E' | 'S' | 'W';
 
@@ -88,10 +80,10 @@ export const featureKey = (x: number, y: number): string => `${x},${y}`;
 
 /**
  * Canonical key for the EDGE between two adjacent cells (order-independent), used to
- * record a manually SEVERED connection (a cut) or a forced outward stub (an exit). Both
- * are properties of the shared edge, so toggling from either tile applies to both —
- * `roadEdgeKey(a,b) === roadEdgeKey(b,a)`. An exit's "neighbour" may be off-board (a
- * negative or out-of-range coord); the string key handles that fine.
+ * record a manually SEVERED connection (a cut), a forced outward stub (an exit), OR a
+ * fence. All three are properties of the shared edge, so toggling from either tile
+ * applies to both — `roadEdgeKey(a,b) === roadEdgeKey(b,a)`. An exit's "neighbour" may be
+ * off-board (a negative or out-of-range coord); the string key handles that fine.
  */
 export const roadEdgeKey = (ax: number, ay: number, bx: number, by: number): string => {
   const a = featureKey(ax, ay);
@@ -131,6 +123,42 @@ export function featureMaskAt(
     }
   }
   return mask;
+}
+
+/**
+ * A feature cell resolved to its sprite selector. road/river carry a 4-bit connection
+ * `mask`. This is what every board renderer draws from.
+ */
+export interface ResolvedFeatureOverlay {
+  kind: FeatureKind;
+  material: FeatureMaterial;
+  mask: number;
+}
+
+/** A source feature cell (pre-resolution): its kind + material. */
+export interface FeatureSource {
+  kind: FeatureKind;
+  material: FeatureMaterial;
+}
+
+/**
+ * Resolve EVERY painted feature cell to its sprite selector in one pass — the single autotile
+ * table the editor, the socket solver, and all board renderers share (so ribbons knit
+ * identically everywhere). road/river autotile against a same-KIND neighbour set.
+ */
+export function resolveFeatureOverlays(
+  features: Record<string, FeatureSource>,
+  isSevered?: (edgeKey: string) => boolean,
+  isExit?: (edgeKey: string) => boolean,
+): Record<string, ResolvedFeatureOverlay> {
+  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set() };
+  for (const [key, f] of Object.entries(features)) presentByKind[f.kind].add(key);
+  const out: Record<string, ResolvedFeatureOverlay> = {};
+  for (const [key, f] of Object.entries(features)) {
+    const [x, y] = key.split(',').map(Number);
+    out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered, isExit) };
+  }
+  return out;
 }
 
 /** Compute the mask for every featured cell. Keys are "x,y"; values are 0–15. */
@@ -181,4 +209,108 @@ export function featurePiece(mask: number): FeaturePiece {
     default:
       return 'cross';
   }
+}
+
+// ────────────────────────────────────────────────────────────────────────────────────
+// EDGE FENCES
+//
+// A fence sits on the EDGE between two orthogonally-adjacent cells and blocks a piece from
+// stepping across that edge (both cells stay walkable — a fence is a wall, not an obstacle).
+// It is NOT a FeatureKind: it is stored edge-keyed (roadEdgeKey), like a cut/exit, as
+// `Record<edgeKey, FenceMaterial>` in the editor and a parallel channel through the level.
+//
+//   • COLLISION reads the raw edge set: a crossing (ax,ay)→(bx,by) is blocked iff its
+//     roadEdgeKey is fenced. Only orthogonal steps ever cross an edge, so knights (whose
+//     jumps are never orthogonally-adjacent) and diagonal slides pass a lone fence freely.
+//   • RENDERING draws each shared edge exactly once: a cell paints rails on its OWN E (SE)
+//     and S (SW) diamond sides, so the upper-left cell of every fenced pair owns the draw
+//     (see resolveFenceOverlays). Bits: E = 2, S = 4 (same as FEATURE_DIRS), so a per-cell
+//     fence frame is `fence-<material>-<mask>.png` with mask ∈ {2, 4, 6}.
+// ────────────────────────────────────────────────────────────────────────────────────
+
+/** Fence surface look — one baked rail set per material (fence-<material>-<mask>.png). */
+export type FenceMaterial = 'wood' | 'stone';
+export const FENCE_MATERIALS: readonly FenceMaterial[] = ['wood', 'stone'];
+export const DEFAULT_FENCE_MATERIAL: FenceMaterial = 'wood';
+export const FENCE_MATERIAL_LABELS: Record<FenceMaterial, string> = { wood: 'Wood', stone: 'Stone' };
+
+/** The E(2) and S(4) render bits — a per-cell fence frame only ever shows its two FRONT sides. */
+export const FENCE_RENDER_MASKS = [2, 4, 6] as const;
+
+/** Parse an edge key "ax,ay|bx,by" into its two cells, or null if malformed. */
+export function parseEdgeKey(edge: string): { ax: number; ay: number; bx: number; by: number } | null {
+  const parts = edge.split('|');
+  if (parts.length !== 2) return null;
+  const [a, b] = parts;
+  const [ax, ay] = a.split(',').map(Number);
+  const [bx, by] = b.split(',').map(Number);
+  if (![ax, ay, bx, by].every((n) => Number.isFinite(n))) return null;
+  return { ax, ay, bx, by };
+}
+
+/** The canonical fence edge key between two cells (alias of roadEdgeKey for intent clarity). */
+export const fenceEdgeKey = roadEdgeKey;
+
+/** True iff the two cells are orthogonally adjacent (share a diamond edge). */
+export function isOrthogonalPair(ax: number, ay: number, bx: number, by: number): boolean {
+  return Math.abs(ax - bx) + Math.abs(ay - by) === 1;
+}
+
+/**
+ * True iff a fence blocks the crossing (ax,ay)→(bx,by). Only orthogonal crossings can be
+ * fenced, so a diagonal/knight step (whose cells aren't orthogonally adjacent) is never
+ * blocked by a lone fence — it hops. Safe on any input: a non-adjacent pair returns false.
+ */
+export function fenceBlocksCrossing(
+  fences: ReadonlySet<string> | undefined,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): boolean {
+  if (!fences || fences.size === 0) return false;
+  if (!isOrthogonalPair(ax, ay, bx, by)) return false;
+  return fences.has(roadEdgeKey(ax, ay, bx, by));
+}
+
+/** A fenced cell resolved to its render selector: an E(2)/S(4) mask + which rail material. */
+export interface ResolvedFenceOverlay {
+  mask: number;
+  material: FenceMaterial;
+}
+
+/**
+ * Resolve an edge-keyed fence map to the per-cell render overlay (E=2 / S=4 mask + material) —
+ * each shared edge is assigned to its UPPER-LEFT cell (smaller x for a horizontal-screen pair,
+ * smaller y for a vertical-screen pair) so every rail is drawn exactly once. Returns a
+ * `cellKey → { mask, material }` map; cells with no owned fenced edge are absent. If one cell
+ * owns two edges of different materials, the first-seen material wins (a cosmetic v1 limit —
+ * the collision path reads the raw edge set, unaffected).
+ */
+export function resolveFenceOverlays(fences: Record<string, FenceMaterial>): Map<string, ResolvedFenceOverlay> {
+  const out = new Map<string, ResolvedFenceOverlay>();
+  for (const [edge, material] of Object.entries(fences)) {
+    const cells = parseEdgeKey(edge);
+    if (!cells) continue;
+    const { ax, ay, bx, by } = cells;
+    if (!isOrthogonalPair(ax, ay, bx, by)) continue;
+    let ownerX: number;
+    let ownerY: number;
+    let bit: number;
+    if (ay === by) {
+      // horizontal-screen pair (E/W neighbours): owner is the smaller-x cell, its E edge.
+      ownerX = Math.min(ax, bx);
+      ownerY = ay;
+      bit = 2;
+    } else {
+      // vertical-screen pair (N/S neighbours): owner is the smaller-y cell, its S edge.
+      ownerX = ax;
+      ownerY = Math.min(ay, by);
+      bit = 4;
+    }
+    const key = featureKey(ownerX, ownerY);
+    const prev = out.get(key);
+    out.set(key, { mask: (prev?.mask ?? 0) | bit, material: prev?.material ?? material });
+  }
+  return out;
 }

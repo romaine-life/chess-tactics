@@ -13,9 +13,10 @@
 import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, Zone, ZoneType } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
-import type { Side, TerrainCell, TerrainType, UnitFacing } from './types';
+import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { TileFamilyId } from './tileSockets';
 import { decodeBoard, encodeBoard, type EditorBoard } from '../ui/boardCode';
+import { parseEdgeKey, DEFAULT_FENCE_MATERIAL } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
 import { UNIT_PALETTES } from './pieces';
 import { unitAssets, type Faction } from '../ui/unitCatalog';
@@ -93,8 +94,9 @@ function zonesFromLayers(zones: Zone[] | undefined, cols: number, rows: number):
   return channel;
 }
 
-// Resolve a Studio tile id to its family (so its terrain material is known).
-const familyOfTile = (tileId: string): TileFamilyId | undefined =>
+// Resolve a Studio tile id to its family (so its terrain material is known). Exported so the
+// thumbnail renderer (bakeBoardThumbnail) can derive a cell's terrain for ground-cover scatter.
+export const familyOfTile = (tileId: string): TileFamilyId | undefined =>
   studioFamilies.find((family) => family.assets.some((asset) => asset.id === tileId))?.id;
 
 // The default (first) tile id of a family — used when deriving a board from `layers`,
@@ -150,6 +152,24 @@ export interface LevelMeta {
   // placeholder — without it, republishing a legacy official level (no boardCode) flattens those
   // surfaces to grass for every player (INV7 data-loss). Absent for a brand-new/blank board.
   previousTerrain?: TerrainCell[];
+}
+
+/**
+ * Project live game pieces onto the editor-board units channel — the Game Lab
+ * replay viewer swaps this per step over a `levelToEditorBoard` base so every
+ * ply renders through the same read-only board the editors use. Only living
+ * player/enemy combatants paint (rocks/prop colliders ride the level's own
+ * cells/props channels); a promoted pawn paints as the queen it became.
+ */
+export function unitsForGamePieces(pieces: readonly Piece[]): EditorBoard['units'] {
+  const units: EditorBoard['units'] = {};
+  for (const p of pieces) {
+    if (!p.alive || (p.side !== 'player' && p.side !== 'enemy')) continue;
+    const unitId = unitIdForType(p.type);
+    if (!unitId) continue;
+    units[`${p.x},${p.y}`] = { unitId, direction: p.facing ?? 'south', faction: SIDE_TO_FACTION[p.side] };
+  }
+  return units;
 }
 
 // Re-seed the editor from a saved level. The lossless `boardCode` is preferred (it carries
@@ -211,6 +231,14 @@ export function levelToEditorBoard(level: Level): EditorBoard {
   // Legacy fallback: rebuild the zones channel from layers.zones (the boardCode path above already
   // carried it losslessly). Out-of-bounds tiles are dropped like units/props.
   const zones = zonesFromLayers(level.layers.zones, cols, rows);
+  // Legacy fallback (no boardCode): layers.fences carries edge keys only — re-seed the editor's
+  // edge→material map at the default material (the boardCode path above already round-tripped both).
+  const fences: EditorBoard['fences'] = {};
+  for (const edge of level.layers.fences ?? []) {
+    const p = parseEdgeKey(edge);
+    if (!p || [[p.ax, p.ay], [p.bx, p.by]].some(([x, y]) => x < 0 || x >= cols || y < 0 || y >= rows)) continue;
+    fences[edge] = DEFAULT_FENCE_MATERIAL;
+  }
   const hasAuthoredPlayer = level.layers.units.some((unit) => unit.side === 'player');
   return {
     cols,
@@ -222,6 +250,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     props,
     cover,
     features,
+    fences,
     featureCuts: {},
     featureExits: {},
     zones,
@@ -301,6 +330,16 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   // and reach targets read these directly. Clamped to the (possibly resized) bounds like units.
   const zones = zonesToLayers(board.zones, cols, rows);
 
+  // Fences ride BOTH channels: layers.fences (edge keys — the durable wall list the GAME reads for
+  // collision) AND boardCode `fe` (edge→material, for the editor + rail rendering, via encodeBoard).
+  // Out-of-bounds edges are dropped on resize, like units/props/zones.
+  const fences: string[] = [];
+  for (const edge of Object.keys(board.fences ?? {})) {
+    const p = parseEdgeKey(edge);
+    if (!p || [[p.ax, p.ay], [p.bx, p.by]].some(([x, y]) => x < 0 || x >= cols || y < 0 || y >= rows)) continue;
+    fences.push(edge);
+  }
+
   const level: Level = {
     formatVersion: LEVEL_FORMAT_VERSION,
     id: meta.id,
@@ -314,7 +353,7 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
     economy: meta.economy ?? { startingFunds: 1200, incomePerTurn: 150 },
     theme: meta.theme ?? 'grassland',
     boardCode: encodeBoard({ ...board, cols, rows }),
-    layers: { terrain, decals: [], zones, units, props },
+    layers: { terrain, decals: [], zones, units, props, fences },
   };
   // ADR-0050 mode fields ride as OPTIONAL keys: written only when meta supplies a non-default
   // value, so a level that never touched the RULES panel serializes without them (back-compat —

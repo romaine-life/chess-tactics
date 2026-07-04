@@ -22,22 +22,29 @@ export interface TitleBarConfig {
    *  <TitleBarSlot region="actions">. Laid out BEFORE the cluster — additive, never
    *  a replacement for it (ADR-0042). */
   actionsSlot?: boolean;
+  /** Render the bottom-centre "stud" portal slot — the decorative nailhead diamond
+   *  becomes an interactive control the screen fills via <TitleBarSlot region="stud">.
+   *  Absolutely positioned over the ornament, out of the grid, so it never shifts the
+   *  brand/center/cluster layout. Only single-player Skirmish uses it (a Retry button). */
+  studSlot?: boolean;
 }
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
-  // The design/asset Studio + its deep-link aliases: brand left, account cluster right.
-  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor') {
-    return { screenName: 'Studio' };
+  // The design/asset Studio + its deep-link aliases: brand left, then the workspace
+  // switcher (Catalog/Lab/Viewer icons) in the actions slot, account cluster right. The
+  // Studio portals its icon nav there via <TitleBarSlot region="actions">; studio-topbar
+  // adds the 3rd grid column (brand · actions · cluster) that slot needs.
+  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') {
+    return { screenName: 'Studio', barClass: 'studio-topbar', actionsSlot: true };
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
-  if (path === '/doodad-editor') return { screenName: 'Doodad Editor' };
-  if (path === '/tile-compare') return { screenName: 'Tile Compare' };
-  if (path === '/artwork-compare') return { screenName: 'Artwork Compare' };
-  if (path === '/surface-lab') return { screenName: 'Surface Lab' };
 
   if (path === '/play' || path === '/skirmish') {
-    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true };
+    // studSlot lets a single-player battle turn the ornament diamond into a Retry button
+    // (the Skirmish screen portals it in, netplay omitted). The map-picker (/skirmish)
+    // simply never fills it, so its diamond stays the plain decoration.
+    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true, studSlot: true };
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return { screenName: 'Lobbies', signInReturnTo: '/lobbies' };
@@ -49,7 +56,7 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, actionsSlot: true };
   }
   if (path === '/campaigns-next' || path === '/campaigns') {
-    return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true };
+    return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
     // screen, so only Settings scales.

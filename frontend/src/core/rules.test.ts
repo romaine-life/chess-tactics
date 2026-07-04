@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import type { BoardSize, Move, Piece, PieceType, Side } from './types';
+import type { BoardSize, GameState, Move, Piece, PieceType, Side } from './types';
 import {
   applyMove,
   attackedSquares,
   enemyMove,
   enemyThreats,
+  gameEnv,
   isEnemy,
   legalMoves,
+  type MoveEnv,
 } from './rules';
+import { roadEdgeKey } from './featureAutotile';
 import { createRng } from './rng';
 
 const SIZE: BoardSize = { cols: 8, rows: 12 };
@@ -421,5 +424,54 @@ describe('enemy AI', () => {
     const state = { size: SIZE, pieces: [pawn, queen, idle], turn: 'enemy' as const, winner: null };
     const chosen = enemyMove(state, createRng(7));
     expect(chosen?.move.capture).toBe(pawn.id);
+  });
+});
+
+describe('edge fences (movement blocking)', () => {
+  it('stops a rook from crossing a fenced edge, but leaves other directions open', () => {
+    const rook = P('player', 'rook', 4, 4);
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(4, 4, 5, 4)]) }; // wall on the E edge
+    const moves = legalMoves(rook, [rook], SIZE, env);
+    expect(has(moves, 5, 4)).toBe(false); // can't step east across the fence
+    expect(has(moves, 6, 4)).toBe(false); // ...nor continue past it
+    expect(has(moves, 3, 4)).toBe(true); // west is open
+    expect(has(moves, 4, 5)).toBe(true); // south is open
+  });
+
+  it('lets a knight hop a fenced edge (its jumps are never orthogonally adjacent)', () => {
+    const knight = P('player', 'knight', 4, 4);
+    const env: MoveEnv = { fences: new Set([
+      roadEdgeKey(4, 4, 5, 4), roadEdgeKey(4, 4, 3, 4), roadEdgeKey(4, 4, 4, 5), roadEdgeKey(4, 4, 4, 3),
+    ]) };
+    expect(legalMoves(knight, [knight], SIZE, env)).toHaveLength(8);
+  });
+
+  it('lets a bishop slide diagonally past a lone edge fence (a corner, not the edge)', () => {
+    const bishop = P('player', 'bishop', 4, 4);
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(4, 4, 5, 4)]) };
+    expect(has(legalMoves(bishop, [bishop], SIZE, env), 5, 5)).toBe(true);
+  });
+
+  it('stops a pawn from stepping across a fenced forward edge', () => {
+    const pawn = P('player', 'pawn', 3, 6, { startY: 6 });
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(3, 6, 3, 5)]) }; // wall on the N (forward) edge
+    expect(legalMoves(pawn, [pawn], SIZE, env)).toHaveLength(0);
+  });
+
+  it('walls a threat ray so a rook does not reach across a fence', () => {
+    const rook = P('enemy', 'rook', 4, 0);
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(4, 2, 4, 3)]) };
+    const threats = attackedSquares(rook, [rook], SIZE, env);
+    expect(has(threats, 4, 2)).toBe(true); // reaches up to the fence
+    expect(has(threats, 4, 3)).toBe(false); // but not across it
+  });
+
+  it('gameEnv threads a state\'s fences into the movement env (the one env builder all consumers share)', () => {
+    const env = gameEnv({ size: SIZE, pieces: [], turn: 'player', winner: null, fences: [roadEdgeKey(2, 2, 3, 2)] } as GameState);
+    expect(env.fences?.has(roadEdgeKey(2, 2, 3, 2))).toBe(true);
+    const rook = P('player', 'rook', 2, 2);
+    expect(has(legalMoves(rook, [rook], SIZE, env), 3, 2)).toBe(false); // the fenced edge blocks the step
+    // A fence-free state yields no fence set (so movement is byte-identical to a fence-free game).
+    expect(gameEnv({ size: SIZE, pieces: [], turn: 'player', winner: null } as GameState).fences).toBeUndefined();
   });
 });

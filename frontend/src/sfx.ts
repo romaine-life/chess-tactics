@@ -453,6 +453,20 @@ export function playTerrain(terrain: TerrainType, opts?: { gain?: number }): voi
 }
 
 /**
+ * The shipped arrival-thump recipe in ONE place: the sample set playArrival voices, the
+ * per-call gain the deploy roll-call (game/store.ts) fires it at, and the firing shape
+ * (the roll-call fires one thump per deploying unit = 'per-unit'). The Studio SFX
+ * panel's "Reset to current" derives its baseline from THIS constant (ADR-0057:
+ * derived, never transcribed) — when the shipped thump changes, change it here and the
+ * game and the panel both follow.
+ */
+export const ARRIVAL_BAKED: { sample: SampleKey; gain: number; firing: 'per-unit' | 'once' } = {
+  sample: 'arrival',
+  gain: 0.55,
+  firing: 'per-unit',
+};
+
+/**
  * Play the "unit lands on the board" arrival thump (authored landing.mp3), layered
  * on top of the per-terrain spawn sound at the deploy roll-call. No-op (silently
  * kicking off a load) until the sample is decoded. @param opts.gain per-call trim.
@@ -464,7 +478,7 @@ export function playArrival(opts?: { gain?: number }): void {
     void context.resume().catch(() => { /* may need a real gesture first */ });
   }
   if (masterGainFor(effectsSettings()) <= 0) return;
-  if (!playSampleSet('arrival', normGain(opts?.gain))) void loadSampleSet('arrival');
+  if (!playSampleSet(ARRIVAL_BAKED.sample, normGain(opts?.gain))) void loadSampleSet(ARRIVAL_BAKED.sample);
 }
 
 /**

@@ -43,6 +43,25 @@ export function seatTransformPercent(sprite: { w: number; h: number; anchorX: nu
   return { x: -(sprite.anchorX / sprite.w) * 100, y: -(sprite.anchorY / sprite.h) * 100 };
 }
 
+/**
+ * The projected point a W×H footprint's contact pixel seats on: the anchor cell's point shifted
+ * to the footprint's visual GROUND CENTRE — +((w-1)+(h-1))/2 cells down (iso top) and
+ * ((w-1)-(h-1))/2 cells across (iso left), both 0 for a 1×1 (the doodad seat). Pure + exported
+ * so the thumbnail bake (bakeBoardThumbnail) composites at the exact point the DOM seats.
+ */
+export function structureSeatPoint(anchor: { x: number; y: number }, w: number, h: number): { left: number; top: number } {
+  const base0 = boardLabCellPosition(anchor);
+  return {
+    left: base0.left + (((w - 1) - (h - 1)) / 2) * TILE_TEMPLATE.stepX,
+    top: base0.top + (((w - 1) + (h - 1)) / 2) * TILE_TEMPLATE.stepY,
+  };
+}
+
+/** The canonical src of a prop half — shared by the live <PropSprite> and the thumbnail bake. */
+export function propHalfSrc(propId: string, half: 'back' | 'front'): string {
+  return `/assets/props/${propId}/${half}.png`;
+}
+
 /** Seat a sprite (frame `sw×sh`, contact pixel at `ax,ay`) over a footprint anchored at `anchor`. */
 function StructureSprite({
   anchor,
@@ -57,18 +76,14 @@ function StructureSprite({
   w: number;
   /** Gameplay footprint height in cells. */
   h: number;
-  sprite: { w: number; h: number; anchorX: number; anchorY: number };
+  sprite: { w: number; h: number; anchorX: number; anchorY: number; scale?: number };
   srcFor: (half: 'back' | 'front') => string;
   /** Per-half data-* attributes (e.g. `(half) => ({ 'data-doodad': half })`) for hooks/styling. */
   attrsFor: (half: 'back' | 'front') => Record<string, string>;
 }) {
-  const base0 = boardLabCellPosition(anchor);
-  // A W×H footprint's ground centre is offset from the anchor cell's projected point by
-  // +((w-1)+(h-1))/2 cells down (iso top) and ((w-1)-(h-1))/2 cells across (iso left). Bake that
-  // so the sprite sits centred on its cells rather than on the anchor (min) corner. For a 1×1
-  // both terms are 0 — identical to the doodad seat.
-  const left = base0.left + (((w - 1) - (h - 1)) / 2) * TILE_TEMPLATE.stepX;
-  const top = base0.top + (((w - 1) + (h - 1)) / 2) * TILE_TEMPLATE.stepY;
+  // The footprint's ground-centre seat point (shared with the thumbnail bake) — the sprite sits
+  // centred on its cells rather than on the anchor (min) corner.
+  const { left, top } = structureSeatPoint(anchor, w, h);
   // Depth-sort off the FRONT-MOST cell (max x, max y) so the prop brackets a unit on that cell.
   const { back: zBack, front: zFront } = propZBracket(anchor.x, anchor.y, w, h);
   // Seat the contact pixel (anchorX, anchorY) — both measured from the frame's TOP-LEFT — onto the
@@ -76,12 +91,15 @@ function StructureSprite({
   // contact pixel back by its fraction of the frame: -(anchorX/w) and -(anchorY/h). (For the 1×1
   // doodad, 96×180 @ (48,69), this reproduces the shipped translate(-50%, -38.333%).)
   const { x: translateX, y: translateY } = seatTransformPercent(sprite);
+  // Render scale multiplies the frame box only. The seat translate is a PERCENTAGE of the
+  // element, so the contact pixel stays planted on the ground point at any scale.
+  const scale = sprite.scale ?? 1;
   const common = {
     position: 'absolute' as const,
     left,
     top,
-    width: sprite.w,
-    height: sprite.h,
+    width: sprite.w * scale,
+    height: sprite.h * scale,
     transform: `translate(${translateX}%, ${translateY}%)`,
     pointerEvents: 'none' as const,
   };
@@ -103,7 +121,8 @@ export function PropSprite({ prop, def }: { prop: PlacedProp; def?: PropDef }) {
       w={resolved.w}
       h={resolved.h}
       sprite={resolved.sprite}
-      srcFor={(half) => `/assets/props/${prop.propId}/${half}.png`}
+      // Size variants SHARE the base's PNG — load by spriteId (the base), not the placed prop id.
+      srcFor={(half) => propHalfSrc(resolved.spriteId, half)}
       attrsFor={(half) => ({ 'data-prop': prop.propId, 'data-half': half })}
     />
   );

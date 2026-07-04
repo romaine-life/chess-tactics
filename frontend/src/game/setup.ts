@@ -3,7 +3,7 @@
 // Replaces the legacy startGame() placement with a seeded, testable version.
 
 import type { BoardSize, GameState, Piece, PieceType, Side, TerrainCell, TerrainType } from '../core/types';
-import type { Level } from '../core/level';
+import type { Level, TimeControl } from '../core/level';
 import { createRng, type Rng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
 import { tileAssets, tileFamilies } from '../art/tileset';
@@ -47,13 +47,23 @@ export interface SkirmishOptions {
   party?: PieceType[];
   /** Authored campaign level to test play. */
   level?: Level;
+  /** Enemy decision policy (consumed by the store, not by setup): 'search' is the
+   * objective-aware search AI; 'greedy' keeps the legacy policy as an A/B lever. */
+  ai?: 'search' | 'greedy';
+  /** Battle clock for a FREE skirmish (consumed by the store, not by setup). A
+   * TimeControl arms the player's clock; `null` forces an untimed game; omitting it
+   * lets the store fall back to the level's authored control, or — for a free
+   * skirmish with no level — the 5:00 default (DEFAULT_TIME_CONTROL). */
+  timeControl?: TimeControl | null;
 }
 
 function pawnForwardFields(type: PieceType, facing: Piece['facing']): Pick<Piece, 'pawnForward'> {
   return type === 'pawn' && facing ? { pawnForward: facing } : {};
 }
 
-function createFromLevel(level: Level, seed: number): GameState {
+/** Build the initial GameState for an authored level. Exported for headless
+ * self-play (game/selfplay.ts) — the store path reaches it via createSkirmish. */
+export function createFromLevel(level: Level, seed: number): GameState {
   const pieces: Piece[] = level.layers.units.map((unit, index) => {
     // Honor the authored facing so test-play shows the painted direction; fall back to
     // the side's default when a level (legacy / facing-free) doesn't carry one. Pawns
@@ -162,6 +172,9 @@ function createFromLevel(level: Level, seed: number): GameState {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
     terrain: level.layers.terrain,
+    // Edge fences the game blocks crossing (knights hop). Undefined when the level has none, so a
+    // fence-free level's movement is byte-identical to before (see MoveEnv.fences in the store).
+    fences: level.layers.fences && level.layers.fences.length ? level.layers.fences : undefined,
     boardCode: level.boardCode,
     // The render channel: the board draws the tall prop sprite from this list, while the
     // colliders above do the blocking. Defaults to [] so a prop-free level stays prop-free.

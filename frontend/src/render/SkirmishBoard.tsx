@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } from '../art/tileset';
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
-import type { BoardSize, GameState, Move, Piece, TerrainType, Vec } from '../core/types';
+import type { BoardSize, GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
 import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
-import { canTraverse, elevationAt } from '../core/terrain';
+import { canTraverse, elevationAt, haltsTravel } from '../core/terrain';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/store';
@@ -16,8 +17,8 @@ import { PropSprite } from './BoardStructure';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
-import { featureFrameSrc } from '../art/tileset';
-import { FENCE_ART_PENDING, featureMaskAt, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFenceOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay } from '../core/featureAutotile';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
@@ -106,19 +107,10 @@ function legacyFeatureMapForGame(game: GameState): Map<string, { kind: FeatureKi
   return map.size ? map : undefined;
 }
 
-function featureOverlaysForBoard(board: EditorBoard): Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> {
+function featureOverlaysForBoard(board: EditorBoard): Record<string, ResolvedFeatureOverlay> {
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, feature] of Object.entries(board.features)) presentByKind[feature.kind].add(key);
-
-  const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
-  for (const [key, feature] of Object.entries(board.features)) {
-    const [x, y] = key.split(',').map(Number);
-    const mask = featureMaskAt(presentByKind[feature.kind], x, y, isSevered, isExit);
-    out[key] = { kind: feature.kind, material: feature.material, mask };
-  }
-  return out;
+  return resolveFeatureOverlays(board.features, isSevered, isExit);
 }
 
 function resolveBoardCode(game: GameState): EditorBoard | null {
@@ -184,8 +176,7 @@ function exactSkirmishBoard(
   const cells: SocketBoardCell<TileAsset>[] = base.cells.map((cell) => {
     const key = `${cell.x},${cell.y}`;
     const exactAsset = tileAssetById.get(exactBoard.cells[key]);
-    const exactFeature = featureOverlays[key];
-    const feature = exactFeature && !(FENCE_ART_PENDING && exactFeature.kind === 'fence') ? exactFeature : undefined;
+    const feature = featureOverlays[key] ?? undefined;
     if (!exactAsset) return { ...cell, feature };
 
     const terrain = familyIdForAsset(exactAsset, tileFamilies);
@@ -238,7 +229,9 @@ function addBlockedStep(
     out.set(`${x},${y}`, { x, y });
     return false;
   }
-  return !occ;
+  // Mirror rules.ts rayMoves: water may be entered but ends the walk, so squares
+  // beyond it are neither reachable nor a "blocked by X" misattribution.
+  return !occ && !(env.terrain && haltsTravel(env.terrain, x, y));
 }
 
 function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env: ReturnType<typeof useSkirmish.getState>['env']): Vec[] {
@@ -278,8 +271,10 @@ function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], size: B
 function collectBoardArt(
   board: SocketBoardResult<TileAsset>,
   livePieces: readonly Piece[],
+  fenceOverlays: ReadonlyMap<string, ResolvedFenceOverlay>,
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
+  for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
   for (const cell of board.cells) {
     if (cell.asset) {
       const top = tileFrameSrc(cell.asset);
@@ -320,6 +315,13 @@ const ARRIVAL_STEP_MS = 50; // per-unit stagger within a wave
 // that fraction is where the per-unit sound cue + landing effect will hook in (see style.css).
 export const ARRIVAL_TOTAL_MS = 1700; // upper bound: hold `is-arriving` at least this long
 
+// Drag-to-move tuning. The threshold keeps a small wobble on a tap from becoming a drag, so
+// click-select → click-move is untouched; the ghost defaults are only a fallback size for when
+// the on-screen sprite can't be measured at pick-up.
+const DRAG_THRESHOLD_PX = 6;
+const DEFAULT_GHOST_W = 72;
+const DEFAULT_GHOST_H = 86;
+
 const isRoyal = (type: Piece['type']): boolean => type === 'king' || type === 'queen';
 
 function computeArrivalDelays(pieces: readonly Piece[]): Map<string, number> {
@@ -345,6 +347,8 @@ function UnitPiece({
   focused = false,
   arriving = false,
   arrivalDelay = 0,
+  dragging = false,
+  suppressHop = false,
 }: {
   piece: Piece;
   selected?: boolean;
@@ -352,6 +356,10 @@ function UnitPiece({
   /** Play the one-shot deploy drop (board start), staggered by `arrivalDelay`. */
   arriving?: boolean;
   arrivalDelay?: number;
+  /** This piece is currently being picked up and dragged — fade it in place under the ghost. */
+  dragging?: boolean;
+  /** This piece just landed via a drop-move — snap into the seat with no pick-up/hop arc. */
+  suppressHop?: boolean;
 }) {
   const { left, top, zIndex } = boardLabCellPosition(piece);
   const [displayPosition, setDisplayPosition] = useState({ left, top });
@@ -368,6 +376,12 @@ function UnitPiece({
       setDisplayPosition({ left, top });
       return undefined;
     }
+    // A drop-move already showed the travel (the piece rode the cursor as a ghost),
+    // so it lands with no hop arc — jump straight into the destination seat.
+    if (suppressHop) {
+      setDisplayPosition({ left, top });
+      return undefined;
+    }
 
     setIsMoving(true);
     const frame = window.requestAnimationFrame(() => setDisplayPosition({ left, top }));
@@ -378,7 +392,11 @@ function UnitPiece({
       window.cancelAnimationFrame(frame);
       window.clearTimeout(done);
     };
-  }, [left, piece.x, piece.y, top]);
+  }, [left, piece.x, piece.y, top, suppressHop]);
+
+  // On a drop-move render straight at the destination seat (no origin flash before the
+  // effect catches up); otherwise ride the animated displayPosition.
+  const seat = suppressHop ? { left, top } : displayPosition;
 
   return (
     <div
@@ -391,11 +409,13 @@ function UnitPiece({
         arriving ? 'is-arriving' : '',
         selected ? 'is-selected' : '',
         focused ? 'is-focused' : '',
+        dragging ? 'is-dragging' : '',
       ].filter(Boolean).join(' ')}
       style={{
-        left: displayPosition.left,
-        top: displayPosition.top,
+        left: seat.left,
+        top: seat.top,
         zIndex: zIndex + 20000,
+        ...(suppressHop ? { transition: 'none' } : {}),
         ...(arriving ? { ['--arrival-delay' as string]: `${arrivalDelay}ms` } : {}),
       } as CSSProperties}
       aria-label={`${piece.side} ${piece.type}`}
@@ -474,12 +494,62 @@ export function SkirmishBoard() {
   // game store's selection) so it never fights the live-turn selection overlays — during
   // the enemy turn the store's selectedId is null, leaving this the only selection in play.
   const [premoveSelectedId, setPremoveSelectedId] = useState<string | null>(null);
+  const net = useSkirmish((s) => s.net);
+  // The side THIS client controls: 'player' in single-player, or its lobby seat in
+  // netplay (host='player', guest='enemy'). Interaction (selecting, move highlights,
+  // committing) is gated to this side, not the literal 'player'.
+  const localSide: Side = net ? net.localSide : 'player';
+  // Drag-to-move (coexists with click-select → click-move). The live gesture is tracked in a
+  // ref (mutated freely without re-rendering the board every pointer frame); `drag` state only
+  // flips on/off at pick-up/drop so the ghost mounts and the origin piece fades. Only ONE drag
+  // runs at a time — a second concurrent pointer (multi-touch) is ignored while dragRef is set,
+  // so it can't hijack the single slot. The ghost follows the cursor imperatively (per frame);
+  // the drop-target cell is React state (dropHoverKey) so a re-render can't clobber it.
+  const dragRef = useRef<{
+    pointerId: number;
+    pieceId: string;
+    startX: number;
+    startY: number;
+    active: boolean;
+    targets: Set<string>;
+    src: string | null;
+    side: Piece['side'];
+  } | null>(null);
+  const ghostRef = useRef<HTMLImageElement | null>(null);
+  const lastCursorRef = useRef({ x: 0, y: 0 });
+  const suppressClickRef = useRef(false);
+  const [drag, setDrag] = useState<{
+    pieceId: string;
+    src: string | null;
+    side: Piece['side'];
+    w: number;
+    h: number;
+  } | null>(null);
+  const [dropHoverKey, setDropHoverKey] = useState<string | null>(null);
+  const [noHopId, setNoHopId] = useState<string | null>(null);
+  // The ghost rides the cursor imperatively (per frame, no board re-render). When a drag-related
+  // re-render DOES happen (pick-up, or the drop-target cell changing), React would otherwise
+  // reset the ghost's inline position — so re-apply the last cursor after each such commit,
+  // synchronously before paint, so the ghost never flicks back to its mount point.
+  useLayoutEffect(() => {
+    const ghost = ghostRef.current;
+    if (drag && ghost) {
+      ghost.style.left = `${lastCursorRef.current.x}px`;
+      ghost.style.top = `${lastCursorRef.current.y}px`;
+    }
+  }, [drag, dropHoverKey]);
   const selectedMoves = useMemo(() => {
-    if (game.turn !== 'player' || game.winner) return [];
-    const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === 'player');
+    if (game.turn !== localSide || game.winner) return [];
+    const piece = game.pieces.find((candidate) => candidate.id === selectedId && candidate.alive && candidate.side === localSide);
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
-  }, [env, game.pieces, game.size, game.turn, game.winner, selectedId]);
+  }, [env, game.pieces, game.size, game.turn, game.winner, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
+  // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
+  // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
+  const fenceOverlays = useMemo<ReadonlyMap<string, ResolvedFenceOverlay>>(() => {
+    const eb = game.boardCode ? decodeBoard(game.boardCode) : null;
+    return eb ? resolveFenceOverlays(eb.fences ?? {}) : new Map();
+  }, [game.boardCode]);
   const livePieces = useMemo(
     // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
     // seat — exclude them so they don't paint an empty/phantom seat over their footprint cells.
@@ -489,7 +559,7 @@ export function SkirmishBoard() {
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
-  const boardArt = useMemo(() => collectBoardArt(board, livePieces), [board, livePieces]);
+  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays), [board, livePieces, fenceOverlays]);
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
   // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
@@ -552,7 +622,9 @@ export function SkirmishBoard() {
   // live — the player can queue a chain that fires one-per-turn as control returns. The
   // chain is built on the PROVISIONAL board (current board + the moves already queued),
   // so a later step sees the piece where its earlier steps left it. See game/premoves.
-  const premoveMode = game.turn === 'enemy' && !game.winner;
+  // Single-player only: a netplay opponent has no local AI reply to drain the queue on,
+  // and the local seat may even BE 'enemy', so `!net` keeps this off the netplay path.
+  const premoveMode = !net && game.turn === 'enemy' && !game.winner;
   const provGame = useMemo(() => provisionalBoard(game, premoves), [game, premoves]);
   const premoveChain = useMemo(() => premoveArrows(game, premoves), [game, premoves]);
   const premoveTargetSet = useMemo(
@@ -580,6 +652,13 @@ export function SkirmishBoard() {
     return () => window.removeEventListener('keydown', onKey);
   }, [premoves.length, premoveSelectedId, clearPremoves]);
 
+  // While a drag is live, the selected piece's legal squares always glow (even if the
+  // View→moves overlay is off) so the player can see where the drop will land.
+  const dragTargetSet = useMemo(
+    () => new Set(drag ? selectedMoves.map((move) => `${move.x},${move.y}`) : []),
+    [drag, selectedMoves],
+  );
+
   const handleTile = (x: number, y: number) => {
     // Opponent's turn: clicks build the premove chain instead of being ignored. Select a
     // player piece (by its provisional position), then click a legal target to queue a step.
@@ -592,17 +671,136 @@ export function SkirmishBoard() {
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
     if (selectedMoves.some((move) => move.x === x && move.y === y)) {
       tryMoveTo(x, y);
-    } else if (here && here.side === 'player') {
+    } else if (here && here.side === localSide) {
+      // A piece THIS client commands — select it (own side; 'player' in single-player).
       select(here.id);
-    } else if (here && here.side === 'enemy') {
+    } else if (here && here.side !== 'neutral') {
+      // The opponent's living piece — inspect (focus) it, never select. Neutral obstacles
+      // (rocks) fall through to the inert tryMoveTo no-op, as before.
       focus(here.id);
     } else {
       tryMoveTo(x, y);
     }
   };
 
+  // Map a viewport point to the board cell under it. elementFromPoint is transform-agnostic,
+  // so this stays correct under any board zoom/pan; the ghost is pointer-events:none and the
+  // unit seats are too, so the topmost hit is always the cell-hit button (which carries cx/cy).
+  const cellFromPoint = (clientX: number, clientY: number): { x: number; y: number; btn: HTMLElement } | null => {
+    const el = document.elementFromPoint(clientX, clientY);
+    const btn = el?.closest<HTMLElement>('.skirmish-board-cell-hit');
+    if (!btn || btn.dataset.cx === undefined || btn.dataset.cy === undefined) return null;
+    const x = Number(btn.dataset.cx);
+    const y = Number(btn.dataset.cy);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y, btn } : null;
+  };
+
+  const onCellPointerDown = (cx: number, cy: number, event: ReactPointerEvent<HTMLButtonElement>) => {
+    // Right-click-and-hold always pans the board (ViewPane) — never swallow it, even on a unit.
+    if (event.button === 2) return;
+    // Left press stays on the cell: stop it bubbling so ViewPane doesn't start a pan.
+    event.stopPropagation();
+    // One drag at a time: while a gesture is armed, ignore any second concurrent pointer (a
+    // second finger) so it can't overwrite the single drag slot and strand the first drag.
+    if (dragRef.current) return;
+    // Don't let a press start a drag before the board is even visible (cold load = opacity:0
+    // but still hit-testable) — you'd be dragging a piece you can't see.
+    if (game.turn !== localSide || game.winner || !boardReady) return;
+    const piece = livePieces.find((p) => p.x === cx && p.y === cy && p.side === localSide);
+    if (!piece) return; // only THIS client's pieces initiate a drag; empty/opponent cells fall through to onClick
+    // Pick it up: select immediately (same as a tap would) so the ring shows, and arm a
+    // potential drag. It only becomes a real drag once the pointer crosses the threshold,
+    // so a plain tap still falls through to the click handler and behaves exactly as before.
+    select(piece.id);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      pieceId: piece.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: false,
+      targets: new Set(legalMoves(piece, game.pieces, game.size, env).map((m) => `${m.x},${m.y}`)),
+      src: pieceImageSrc(piece),
+      side: piece.side,
+    };
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* capture can fail if the pointer already ended; the gesture just no-ops */
+    }
+  };
+
+  const onCellPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== event.pointerId) return;
+    lastCursorRef.current = { x: event.clientX, y: event.clientY };
+    if (!d.active) {
+      if (Math.hypot(event.clientX - d.startX, event.clientY - d.startY) < DRAG_THRESHOLD_PX) return;
+      d.active = true;
+      // Size the ghost to the piece's actual on-screen sprite (already scaled by board zoom).
+      const img =
+        document.querySelector<HTMLImageElement>('[data-testid="skirmish-board"] .skirmish-board-unit.is-selected img');
+      const rect = img?.getBoundingClientRect();
+      setDrag({
+        pieceId: d.pieceId,
+        src: d.src,
+        side: d.side,
+        w: rect?.width ?? DEFAULT_GHOST_W,
+        h: rect?.height ?? DEFAULT_GHOST_H,
+      });
+    }
+    // Follow the cursor imperatively (no board re-render per frame).
+    const ghost = ghostRef.current;
+    if (ghost) {
+      ghost.style.left = `${event.clientX}px`;
+      ghost.style.top = `${event.clientY}px`;
+    }
+    // Ring the hovered cell only when it's a legal drop. This is React state (not an imperative
+    // class) so it survives the drag's own re-renders; only set it when the cell actually changes.
+    const hit = cellFromPoint(event.clientX, event.clientY);
+    const key = hit && d.targets.has(`${hit.x},${hit.y}`) ? `${hit.x},${hit.y}` : null;
+    setDropHoverKey((prev) => (prev === key ? prev : key));
+  };
+
+  const onCellPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* already released */
+    }
+    setDropHoverKey(null);
+    if (!d.active) return; // a tap, not a drag — let the native click handle select/move
+    // A completed drag emits a trailing click; swallow it so it doesn't re-select the piece.
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+    const hit = cellFromPoint(event.clientX, event.clientY);
+    if (hit && d.targets.has(`${hit.x},${hit.y}`)) {
+      // Legal drop: land with no hop (the drag already showed the travel). noHopId is set in
+      // the same handler as tryMoveTo so the destination render carries the suppress flag.
+      setNoHopId(d.pieceId);
+      window.setTimeout(() => setNoHopId(null), 0);
+      select(d.pieceId);
+      tryMoveTo(hit.x, hit.y);
+    }
+    // Illegal drop (or released off the board): keep the piece selected so its move dots
+    // stay up and the player can click a destination instead — just release the ghost.
+    setDrag(null);
+  };
+
+  const onCellPointerCancel = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setDropHoverKey(null);
+    if (d.active) setDrag(null);
+  };
+
   return (
-    <div data-testid="skirmish-board" className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'}`.trim()}>
+    <div data-testid="skirmish-board" className={`skirmish-board-lab ${boardReady ? '' : 'is-board-loading'} ${drag ? 'is-dragging' : ''}`.trim()}>
       <ViewPane
         kind="board"
         ariaLabel="Skirmish board viewport"
@@ -616,6 +814,7 @@ export function SkirmishBoard() {
         <BoardLabBoard
           board={board}
           assetFrameSrc={tileFrameSrc}
+          fenceOverlays={fenceOverlays}
           boardZoom={boardZoom}
           boardPan={boardPan}
           className="skirmish-board-surface"
@@ -627,11 +826,12 @@ export function SkirmishBoard() {
               playerMoveSet.has(key) ? 'is-player-move' : '',
               enemyMoveSet.has(key) ? 'is-enemy-move' : '',
               playerAttackSet.has(key) ? 'is-player-attack' : '',
-              moveSet.has(key) ? 'is-move' : '',
+              moveSet.has(key) || dragTargetSet.has(key) ? 'is-move' : '',
               threatSet.has(key) ? 'is-threat' : '',
               blockedSet.has(key) ? 'is-blocked-candidate' : '',
               premoveTargetSet.has(key) ? 'is-premove-target' : '',
               premoveDestSet.has(key) ? 'is-premove' : '',
+              dropHoverKey === key ? 'is-drop-hover' : '',
               game.pieces.some((piece) => piece.id === selectedId && piece.alive && piece.x === cell.x && piece.y === cell.y) ? 'is-selected' : '',
               premoveSelKey === key ? 'is-selected' : '',
               focusPiece && focusPiece.x === cell.x && focusPiece.y === cell.y ? 'is-focused-piece' : '',
@@ -641,14 +841,19 @@ export function SkirmishBoard() {
                 type="button"
                 className={`skirmish-board-cell-hit ${state}`}
                 aria-label={`Tile ${cell.x},${cell.y}`}
-                onPointerDown={(event) => {
-                  // Right-click-and-hold always pans the board — navigation matters more than
-                  // any per-cell action, so never swallow it even when the press lands on a unit.
-                  // Left-click stays on the cell: stop it bubbling so ViewPane doesn't start a pan.
-                  if (event.button === 2) return;
-                  event.stopPropagation();
+                data-cx={cell.x}
+                data-cy={cell.y}
+                onPointerDown={(event) => onCellPointerDown(cell.x, cell.y, event)}
+                onPointerMove={onCellPointerMove}
+                onPointerUp={onCellPointerUp}
+                onPointerCancel={onCellPointerCancel}
+                onClick={() => {
+                  // A drag emits a trailing click on release; the handler swallows it so the
+                  // drop doesn't immediately re-select the piece it just moved. dragRef guards
+                  // against a stray second-finger tap firing a move while a drag is in flight.
+                  if (suppressClickRef.current || dragRef.current) return;
+                  handleTile(cell.x, cell.y);
                 }}
-                onClick={() => handleTile(cell.x, cell.y)}
               />
             );
           }}
@@ -665,11 +870,31 @@ export function SkirmishBoard() {
               focused={piece.id === focusPiece?.id}
               arriving={arriving && arrivalDelays.has(piece.id)}
               arrivalDelay={arrivalDelays.get(piece.id) ?? 0}
+              dragging={drag?.pieceId === piece.id}
+              suppressHop={noHopId === piece.id}
             />
           ))}
           <PremoveArrowLayer arrows={premoveChain} />
         </BoardLabBoard>
       </ViewPane>
+      {/* The picked-up piece rides the cursor in screen space. Portaled to <body> so the board's
+          own CSS transform can't become its containing block and misplace the fixed positioning;
+          pointer-events:none so drop hit-testing sees the cells underneath (see cellFromPoint).
+          left/top are owned imperatively (per-frame move + the useLayoutEffect reconcile), never
+          in JSX — so a mid-drag re-render can't reset the ghost to a stale mount position. */}
+      {drag
+        ? createPortal(
+            <img
+              ref={ghostRef}
+              className={`skirmish-drag-ghost is-${drag.side}`}
+              src={drag.src ?? undefined}
+              alt=""
+              draggable={false}
+              style={{ width: drag.w, height: drag.h }}
+            />,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

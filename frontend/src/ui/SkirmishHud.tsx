@@ -10,6 +10,10 @@ import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 // never re-derived per surface. See docs/portrait-contract.md.
 import { UnitPortrait, loadCrops, STORAGE_KEY, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
+import { useConfirm } from './shared/ConfirmDialog';
+import { RestartGlyph, NewGlyph } from './shared/actionGlyphs';
+import { SkirmishClockControl } from './SkirmishClockControl';
+import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -116,23 +120,33 @@ function CountPip({ side, count }: { side: Side; count: number }) {
 }
 
 type SkirmishHudProps = {
+  /** Show the "New skirmish" (+) button — single-player free skirmish only. */
   canStartNewSkirmish?: boolean;
-  onRestartLevel?: (() => void) | null;
-  showRestartLevel?: boolean;
+  /** In-place restart of the CURRENT battle (campaign level or free skirmish). Non-null only
+   *  in single-player; shown as the ↻ Restart button. Same action as the title-bar diamond. */
+  onRestart?: (() => void) | null;
+  /** Accessible name for the Restart button (e.g. "Restart level" / "Restart skirmish"). */
+  restartLabel?: string;
 };
 
 export function SkirmishHud({
   canStartNewSkirmish = true,
-  onRestartLevel = null,
-  showRestartLevel = false,
+  onRestart = null,
+  restartLabel = 'Restart',
 }: SkirmishHudProps = {}) {
   const game = useSkirmish((s) => s.game);
   const selectedId = useSkirmish((s) => s.selectedId);
   const focusedId = useSkirmish((s) => s.focusedId);
   const log = useSkirmish((s) => s.log);
+  const net = useSkirmish((s) => s.net);
   const newSkirmish = useSkirmish((s) => s.newSkirmish);
+  const resign = useSkirmish((s) => s.resign);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
+
+  // Resign is irreversible and hands the opponent the win — gate it behind a confirm
+  // (the kit-framed one, not window.confirm, so it stays in-world). See ConfirmDialog.
+  const { ask, dialog } = useConfirm();
 
   const [tab, setTab] = useState<HudTab>('unit');
 
@@ -191,12 +205,19 @@ export function SkirmishHud({
   const enemyPieces = livingPieces(game.pieces, 'enemy');
   const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins — capture the enemy King.'];
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? DEFAULT_BACKGROUND_SET.portraits[focused.type] : null;
+  // Status reads from THIS client's seat. Single-player: 'you' = 'player'. Netplay:
+  // 'you' = the lobby seat this client controls (host='player', guest='enemy'), so the
+  // guest sees "Victory" when the 'enemy' side wins and "Your turn" on the enemy turn.
+  const localSide: Side = net ? net.localSide : 'player';
+  const opponentTurnLabel = net ? 'Opponent turn' : 'Enemy turn';
   const turnLabel = game.winner
-    ? game.winner === 'draw' ? 'Stalemate' : game.winner === 'player' ? 'Victory' : 'Defeat'
-    : game.turn === 'player' ? 'Your turn' : 'Enemy turn';
+    ? game.winner === 'draw' ? 'Stalemate' : game.winner === localSide ? 'Victory' : 'Defeat'
+    : game.turn === localSide ? 'Your turn' : opponentTurnLabel;
 
   return (
     <aside data-testid="skirmish-hud" className="skirmish-hud" aria-label="Skirmish command HUD">
+      {/* Portals to <body>; render anywhere. Only visible while a resign confirm is open. */}
+      {dialog}
       <section className="skirmish-score-panel" aria-label="Turn summary">
         <div>
           <span className="skirmish-eyebrow">Status</span>
@@ -390,28 +411,65 @@ export function SkirmishHud({
               </div>
               <p className="skirmish-grid-hint">Keys work any time during the match.</p>
             </div>
+            {/* Battle clock for a random skirmish. Free-play only — a campaign level and a
+                netplay match carry their own time control, so the picker is hidden there
+                (same gate as the "New skirmish" button it feeds). */}
+            {canStartNewSkirmish && !net ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Battle clock</span>
+                <SkirmishClockControl timedHint="Applies on your next New skirmish." />
+              </div>
+            ) : null}
             <div className="skirmish-view-group">
-              <span className="skirmish-eyebrow">Match</span>
+              {/* Battle lifecycle: restart THIS scenario (↻) or start a fresh one (＋). Both are
+                  icon-only — the group heading names them and the marks are self-evident, so no
+                  per-button tooltip. Netplay shows Resign here instead (a shared board can't be
+                  locally reset/reseeded without desyncing). */}
+              <span className="skirmish-eyebrow">Scenario</span>
               <div className="skirmish-view-row">
-                {showRestartLevel ? (
+                {onRestart && !net ? (
                   <button
                     type="button"
-                    className="app-header-button"
+                    className="app-header-button skirmish-lifecycle-button"
                     data-testid="restart-level"
-                    disabled={!onRestartLevel}
-                    onClick={onRestartLevel ?? undefined}
+                    aria-label={restartLabel}
+                    onClick={onRestart}
                   >
-                    Restart level
+                    <RestartGlyph className="skirmish-lifecycle-icon" />
                   </button>
                 ) : null}
-                {canStartNewSkirmish ? (
+                {/* "New skirmish" reseeds the local board, which would desync a shared
+                    netplay match — offer it only in single-player. */}
+                {canStartNewSkirmish && !net ? (
                   <button
                     type="button"
-                    className="app-header-button"
+                    className="app-header-button skirmish-lifecycle-button"
                     data-testid="new-skirmish"
-                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff })}
+                    aria-label="New skirmish"
+                    onClick={() => newSkirmish({ seed: Date.now() & 0x7fffffff, timeControl: loadSkirmishClockPref() })}
                   >
-                    New skirmish
+                    <NewGlyph className="skirmish-lifecycle-icon" />
+                  </button>
+                ) : null}
+                {/* Concede a live multiplayer match (hands the opponent the win). Hidden
+                    once the game is decided and in single-player (there's no opponent to
+                    concede to — you'd just start a new skirmish). */}
+                {net && !game.winner ? (
+                  <button
+                    type="button"
+                    className="app-header-button skirmish-resign-button"
+                    data-testid="resign"
+                    onClick={async () => {
+                      const ok = await ask({
+                        title: 'Resign the match?',
+                        message: 'Your opponent is awarded the win. This can’t be undone.',
+                        confirmLabel: 'Resign',
+                        tone: 'danger',
+                      });
+                      if (ok) resign();
+                    }}
+                  >
+                    Resign
                   </button>
                 ) : null}
               </div>

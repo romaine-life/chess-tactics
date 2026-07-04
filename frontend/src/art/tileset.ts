@@ -1,6 +1,6 @@
 import type { TileAssetKind, TileFamilyId, TileSocketAsset } from '../core/tileSockets';
 import { terrainLabels } from '../core/tileSockets';
-import type { FeatureKind, FeatureMaterial } from '../core/featureAutotile';
+import type { FeatureKind, FeatureMaterial, FenceMaterial } from '../core/featureAutotile';
 import type { EdgeFeatureSpec } from '../core/tileBoardGenerator';
 
 export interface TileAsset extends TileSocketAsset {
@@ -171,15 +171,26 @@ export const tileFrameSrc = (asset: TileAsset): string => asset.src;
 // brush/palette preview FOCUS on the surface itself. Mirrors featureThumbSrc's intent.
 export const tileTopSrc = (asset: TileAsset): string => asset.src.replace(/\.png$/, '-top.png');
 
-// Linear-feature overlays (roads, rivers) live in their OWN registry,
+// Linear-feature overlays (roads, rivers, bridges) live in their OWN registry,
 // deliberately apart from the socket base tiles above: a feature is a transparent
-// ribbon composited OVER any base tile, keyed by its material and 4-bit connection
-// mask (0–15), not selected by the socket solver. Baked by scripts/build-feature-tiles.py.
+// ribbon composited OVER any base tile, not selected by the socket solver. Baked by
+// scripts/build-feature-tiles.py.
+//   • road/river AUTOTILE — keyed by material + 4-bit connection mask (0–15).
 export const featureFrameSrc = (kind: FeatureKind, material: FeatureMaterial, mask: number): string =>
   `/assets/tiles/feature/${kind}-${material}-${mask}.png`;
+
+// A per-cell EDGE-FENCE frame: rails on this cell's OWN E(2)/S(4) diamond sides (mask ∈ {2,4,6}),
+// so every shared edge is drawn once by its upper-left cell (see featureAutotile.fenceCellMasks).
+// Baked by scripts/build-fence-tiles.py, same 96x180 frame geometry as the feature ribbons.
+export const fenceFrameSrc = (material: FenceMaterial, mask: number): string =>
+  `/assets/tiles/feature/fence-${material}-${mask}.png`;
 
 // A square, pre-centered preview icon for editor palettes/brush (the board sprites
 // are tall 96x180 frames with the art only in the top diamond, so they don't center
 // in a small box — this is cropped + squared at bake time). See build-feature-tiles.py.
 export const featureThumbSrc = (kind: FeatureKind, material: FeatureMaterial): string =>
   `/assets/tiles/feature/${kind}-${material}-thumb.png`;
+
+/** Square preview icon for the fence palette/brush (baked alongside the fence frames). */
+export const fenceThumbSrc = (material: FenceMaterial): string =>
+  `/assets/tiles/feature/fence-${material}-thumb.png`;

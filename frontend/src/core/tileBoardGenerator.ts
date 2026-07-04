@@ -23,9 +23,9 @@ export interface SocketBoardCell<TAsset extends TileSocketAsset = TileSocketAsse
   /** Ambient vegetation resolved at board build (see core/groundCover). Not per-render. */
   groundCover?: GroundCover;
   /**
-   * A linear-feature overlay (road; rivers later) riding ON TOP of the base tile.
-   * Orthogonal to socket selection — it never affects which base `asset` is chosen.
-   * `mask` is the 4-bit connection mask; the renderer maps {kind, material, mask} to a sprite.
+   * A linear-feature overlay (road, river) riding ON TOP of the base tile. Orthogonal to socket
+   * selection — it never affects which base `asset` is chosen. `mask` is the 4-bit connection
+   * mask and the renderer maps {kind, material, mask} to a sprite.
    */
   feature?: { kind: FeatureKind; material: FeatureMaterial; mask: number };
   missing?: {
@@ -266,8 +266,8 @@ export interface SolveSocketBoardOptions<TAsset extends TileSocketAsset> {
   familyAssets: Record<TileFamilyId, readonly TAsset[]>;
   /**
    * Sparse linear-feature layer: cell key ("x,y") -> {kind, material}. Optional and
-   * orthogonal to `terrainMap`; cells in here get a `feature` with the connection
-   * mask resolved from same-kind neighbours. Omit it for the original behaviour.
+   * orthogonal to `terrainMap`; road/river cells get a `feature` with the connection mask
+   * resolved from same-kind neighbours. Omit the whole map for the original behaviour.
    */
   featureMap?: ReadonlyMap<string, { kind: FeatureKind; material: FeatureMaterial }>;
   /**
@@ -333,7 +333,8 @@ export function solveSocketBoard<TAsset extends TileSocketAsset>({
   const featureAt = (x: number, y: number): SocketBoardCell<TAsset>['feature'] => {
     const entry = featureMap?.get(featureKey(x, y));
     if (!entry) return undefined;
-    return { kind: entry.kind, material: entry.material, mask: featureMaskAt(featurePresence.get(entry.kind)!, x, y) };
+    const mask = featureMaskAt(featurePresence.get(entry.kind)!, x, y);
+    return { kind: entry.kind, material: entry.material, mask };
   };
 
   for (let index = 0; index < columns * rows; index += 1) {
