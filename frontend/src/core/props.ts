@@ -121,7 +121,7 @@ const BASE_PROP_DEFS: readonly PropDef[] = [
   // Named 'fieldstone' (not 'granite') to avoid colliding with the obstacle-piece sprite variant
   // ROCK_VARIANTS=['boulder','granite'] under /assets/units/rock/ (render/SkirmishBoard.tsx) — a
   // separate system from these placeable props. Both derive from the same round-boulder mesh.
-  { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: footW('fieldstone'), h: footH('fieldstone'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'fieldstone', family: 'fieldstone', sprite: { w: 300, h: 275, ...seat('fieldstone') } },
+  { id: 'fieldstone', label: 'Fieldstone', kind: 'rock', w: footW('fieldstone'), h: footH('fieldstone'), blocking: true, terrains: ['grass', 'dirt', 'stone', 'pebble', 'sand'], spriteId: 'fieldstone', family: 'fieldstone', sprite: { w: 51, h: 47, ...seat('fieldstone') } },
 
 ];
 
