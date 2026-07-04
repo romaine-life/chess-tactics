@@ -89,6 +89,11 @@ type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 't
 // in full (definition + any long-form process doc). This records the active kind.
 type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'doodadcomp' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
 
+// Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
+// kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
+// dropped rocks from the Props catalog even though they were valid props.
+const ALL_PROP_KINDS: PropKind[] = [...new Set(PROP_DEFS.map((p) => p.kind))];
+
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
 const FIRST_ARTWORK_ID: string = artworkManifest.groups[0]?.items[0]?.id ?? '';
@@ -425,7 +430,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     setCatalogFacing(rookDirections[(i + 1) % rookDirections.length] ?? 'south');
   };
   const [selectedDoodadTerrains, setSelectedDoodadTerrains] = useState<StudioFamilyId[]>(studioFamilies.map((fam) => fam.id));
-  const [selectedPropKinds, setSelectedPropKinds] = useState<PropKind[]>(['tree', 'house']);
+  const [selectedPropKinds, setSelectedPropKinds] = useState<PropKind[]>([...ALL_PROP_KINDS]);
   const [selectedCompareFamilies, setSelectedCompareFamilies] = useState<string[]>([...COMPARE_TILE_FAMILIES]);
   const [selectedPairId, setSelectedPairId] = useState<TerrainPairId>(initialRoute.selectedPairId);
   const [zoom, setZoom] = useState(1);
@@ -857,14 +862,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       {
         id: 'kind',
         label: 'Kind',
-        options: (['tree', 'house'] as PropKind[]).map((k) => {
+        options: ALL_PROP_KINDS.map((k) => {
           const n = PROP_DEFS.filter((p) => p.kind === k).length;
           return { id: k, label: PROP_KIND_LABEL[k], sub: `${n}` };
         }),
         memberOf: (p) => [p.kind],
         selected: selectedPropKinds,
         toggle: (id) => setSelectedPropKinds((cur) => (cur.includes(id as PropKind) ? cur.filter((x) => x !== id) : [...cur, id as PropKind])),
-        selectAll: () => setSelectedPropKinds(['tree', 'house']),
+        selectAll: () => setSelectedPropKinds([...ALL_PROP_KINDS]),
         clear: () => setSelectedPropKinds([]),
       },
     ],
