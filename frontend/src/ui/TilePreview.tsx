@@ -37,6 +37,7 @@ import { SfxLibraryStudio, SfxViewer } from './SfxLibraryStudio';
 import { PortraitLab } from './PortraitEditor';
 import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { PropSeatLab } from './PropSeatLab';
+import { BridgeTunerLab } from './BridgeTunerLab';
 import { PROP_DEFS, type PropDef, type PropKind } from '../core/props';
 import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, type CompareTile } from './TileCompareLab';
 import { SurfaceTilesLab, SURFACE_TILE_FAMILIES, surfaceTileCap } from './SurfaceTilesLab';
@@ -82,13 +83,13 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'bridgetuner' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'doodadcomp' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'bridgetuner' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'doodadcomp' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -179,7 +180,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'bridgetuner' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -270,7 +271,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedRegionId: regionParam || undefined,
     selectedCompositionName: comp || undefined,
     viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodadcomp' : isArtworkCompareAlias ? 'artworkcompare'
-      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'sceneanim' || vk === 'doodadcomp' || vk === 'artworkcompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' ? vk : undefined,
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'bridgetuner' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'sceneanim' || vk === 'doodadcomp' || vk === 'artworkcompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -1227,6 +1228,27 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
+      id: 'bridgetuner', label: 'Bridges', hint: 'The straight modular stone bridge span. Open the tuner to eye-adjust how it seats + scales on the board.',
+      main: (
+        <div className="al-lab-main" style={{ display: 'grid', placeItems: 'center', padding: 24, overflow: 'auto' }}>
+          <div style={{ display: 'flex', gap: 18, alignItems: 'center', maxWidth: 560, background: '#0f1728', border: '1px solid #223350', borderRadius: 10, padding: 20 }}>
+            <img src="/assets/tiles/feature/bridge-stone-thumb.png" alt="Stone bridge" width={120} height={120} style={{ imageRendering: 'pixelated', flex: 'none' }} draggable={false} />
+            <div>
+              <h3 style={{ margin: '0 0 6px', color: '#eaf3ff' }}>Stone bridge</h3>
+              <p style={{ margin: '0 0 12px', color: '#9fb6d6', fontSize: 13, lineHeight: 1.5 }}>A straight modular stone span that tiles seamlessly across water (thru / cap / single, both axes). Open the tuner to eye-adjust its scale and seating on the tile.</p>
+              <button type="button" className="tileset-view-action" onClick={() => openViewer('bridgetuner')}>Open bridge tuner</button>
+            </div>
+          </div>
+        </div>
+      ),
+      controls: (
+        <>
+          <p className="tileset-catalog-note" style={{ color: '#9fb6d6', fontSize: 12, lineHeight: 1.5 }}>Eye-tune how the baked bridge sprite seats + scales on the board, then Save to bridgeTune.json.</p>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('bridgetuner')}>Open bridge tuner</button>
+        </>
+      ),
+    },
+    {
       id: 'scrollbars', label: 'Scrollbars', hint: 'Scrollbar-grip candidates — carved wooden elements. PixelLab is the current preferred default.',
       main: <ScrollbarLibraryStudio search={scrollbarSearch} zoom={zoom} selected={selectedScrollbarName} onSelect={setSelectedScrollbarName} />,
       controls: (
@@ -1333,6 +1355,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="portrait">Portrait</option>
         <option value="nineslice">9-Slice</option>
         <option value="propseat">Prop Seat</option>
+        <option value="bridgetuner">Bridge Tuner</option>
         <option value="tilecompare">Tile Pipeline</option>
         <option value="surfacetiles">Tileset Surfaces</option>
         <option value="sceneanim">Scene Animation</option>
@@ -1436,6 +1459,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                           ? <TileSidesViewer name={selectedTileSideId} header={studioViewerHeader} />
                           : viewerKind === 'sfx'
                             ? <SfxViewer header={studioViewerHeader} />
+                            : viewerKind === 'bridgetuner'
+                              ? <BridgeTunerLab header={studioViewerHeader} />
                             : <AssetLab name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} />
         ) : null}
       </section>

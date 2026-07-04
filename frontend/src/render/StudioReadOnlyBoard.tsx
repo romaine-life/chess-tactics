@@ -18,6 +18,7 @@ import {
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
 import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
+import { committedBridgeTune, bridgeTuneStyle } from '../core/bridgeTune';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -101,6 +102,7 @@ export function studioCellArt({
           src={featureFrameSrc(feature.kind, feature.material, feature.mask, feature.bridgeKey)}
           alt=""
           draggable={false}
+          style={feature.kind === 'bridge' ? bridgeTuneStyle(committedBridgeTune(feature.material)) : undefined}
         />
       ) : null}
     </>

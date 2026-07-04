@@ -5,6 +5,7 @@ import { TileTopLayer } from './TileTopLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
+import { committedBridgeTune, bridgeTuneStyle, type BridgeTune } from '../core/bridgeTune';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -24,6 +25,12 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   className?: string;
   ariaLabel?: string;
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
+  /**
+   * Live seating override for bridge overlays (the /bridge-tuner lab passes its unsaved tune so the
+   * preview updates as you drag). Omitted everywhere else, so the game + all boards use the COMMITTED
+   * seating (committedBridgeTune) — see core/bridgeTune.
+   */
+  bridgeTuneOverride?: BridgeTune;
   children?: ReactNode;
 }
 
@@ -36,6 +43,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   className = '',
   ariaLabel = 'Generated board',
   renderCellOverlay,
+  bridgeTuneOverride,
   children,
 }: BoardLabBoardProps<TAsset>) {
   const sourceCells = board.cells;
@@ -74,6 +82,11 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
               src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask, cell.feature.bridgeKey)}
               alt=""
               draggable={false}
+              style={
+                cell.feature.kind === 'bridge'
+                  ? bridgeTuneStyle(bridgeTuneOverride ?? committedBridgeTune(cell.feature.material))
+                  : undefined
+              }
             />
           ) : null}
         </>

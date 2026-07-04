@@ -140,6 +140,48 @@ function propSeatSave() {
   };
 }
 
+// Dev-only endpoint: the /bridge-tuner Studio lab POSTs { [material]: { scale, offsetX, offsetY } }
+// here to persist how a bridge sprite SEATS on the board into src/core/bridgeTune.json. MERGES (never
+// replaces) so a stale tab can't drop a material it didn't touch; validates finite numbers + a
+// positive scale. Vite's JSON-module HMR then re-seats every open board.
+function bridgeTunerSave() {
+  return {
+    name: 'bridge-tuner-save',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__bridge-tuner/save', (req, res) => {
+        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            const posted = JSON.parse(body);
+            const entries = posted && typeof posted === 'object' && !Array.isArray(posted) ? Object.entries(posted) : [];
+            const ok = entries.length > 0 && entries.every(([id, s]) => /^[a-z0-9_-]+$/i.test(id)
+              && s && typeof s === 'object'
+              && Number.isFinite(s.scale) && s.scale > 0
+              && Number.isFinite(s.offsetX) && Number.isFinite(s.offsetY));
+            if (!ok) throw new Error('body must be a non-empty { [material]: { scale, offsetX, offsetY } } map with finite numbers and scale > 0');
+            const rel = 'src/core/bridgeTune.json';
+            const out = join(process.cwd(), rel);
+            const existing = JSON.parse(await readFile(out, 'utf8'));
+            const merged = { ...existing };
+            for (const [id, s] of entries) merged[id] = { scale: s.scale, offsetX: s.offsetX, offsetY: s.offsetY };
+            await writeFile(out, `${JSON.stringify(merged, null, 2)}\n`);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true, path: rel, updated: entries.map(([id]) => id) }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, error: String(err) }));
+          }
+        });
+      });
+    },
+  };
+}
+
 // Dev-only endpoint: /prop-lab's "Delete this copy" POSTs { id } here to remove ONE size-variant
 // entry from src/core/propSeats.json. Base protection lives HERE, not only in the UI: a base prop's
 // seat has no `base` field and backs a real PNG + PROP_DEF (props.ts throws at load for a missing
@@ -412,6 +454,6 @@ const devApiPlugins = offline
   : [prodBackend()];
 
 export default defineConfig({
-  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), propSeatDelete(), nineSliceDevSave(), ...devApiPlugins],
+  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), propSeatDelete(), bridgeTunerSave(), nineSliceDevSave(), ...devApiPlugins],
   ...(offline ? {} : { server: { proxy: { '/api': { target: `http://localhost:${BACKEND_PORT}`, changeOrigin: true, secure: false } } } }),
 });
