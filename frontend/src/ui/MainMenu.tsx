@@ -1,5 +1,8 @@
-import { useEffect, useSyncExternalStore, type ReactElement } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { NavButton } from './shared/NavButton';
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -14,30 +17,36 @@ const STONE_SURFACE = '/assets/ui/surfaces/baseline-stone-blue.avif';
 const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
 
 const MODE_HREFS: Record<string, string> = {
-  'solo-skirmish': '/play',
+  'solo-skirmish': '/skirmish',
   'campaign-editor': '/campaigns-next',
-  'level-editor': '/edit',
   lobbies: '/lobbies',
   settings: '/settings',
 };
 
 interface MenuTab { slug: string; label: string; href: string; iconSlug: string }
 
+// Product-menu relabels applied over MENU_MODES (which stays the untouched design-catalog
+// source of truth — its widget assets keep their 'campaign-editor'/'level-editor' names).
+// The campaign editor IS the app's single "Editor": level authoring is reached from inside
+// it (Edit Board / + New Board), so the rail presents it simply as "Editor" and no longer
+// carries a separate top-level "Level Editor" tab. That route (/edit) still exists — it's
+// just no longer a front door, only reached by drilling into a level from the Editor.
+const MENU_TAB_LABELS: Record<string, string> = { 'campaign-editor': 'Editor' };
+const MENU_HIDDEN_SLUGS = new Set(['level-editor']);
+
 // The main-menu rail. The Campaign (play) mode is menu-only — not a design-catalog
 // widget — so it lives here rather than in MENU_MODES (the catalog's source of
-// truth). It leads the rail as the headline mode and sits apart from the Campaign
-// Editor so the shared placeholder icon doesn't read as a duplicate of an adjacent
+// truth). It leads the rail as the headline mode and sits apart from the Editor
+// so the shared placeholder icon doesn't read as a duplicate of an adjacent
 // tab. Temp icon: reuses the campaign-editor carving until a dedicated 'campaign'
 // carving is forged.
 const MENU_TABS: MenuTab[] = [
   { slug: 'campaign', label: 'Campaign', href: '/campaign', iconSlug: 'campaign-editor' },
-  // Settings is excluded from the rail — it now lives in the trailing "settings +
-  // user" chrome cluster (the gear beside the account control), not as a mode tab.
   ...MENU_MODES
-    .filter((mode) => mode.slug !== 'settings')
+    .filter((mode) => !MENU_HIDDEN_SLUGS.has(mode.slug))
     .map((mode) => ({
       slug: mode.slug,
-      label: mode.label,
+      label: MENU_TAB_LABELS[mode.slug] ?? mode.label,
       href: MODE_HREFS[mode.slug] || '/',
       iconSlug: mode.slug,
     })),
@@ -51,15 +60,16 @@ const SETTINGS_ICON = `${ICONS}/settings.png`;
 // A mode entry rendered as a settings-style rail tab (shared baked-skin frame —
 // line frame over the stone surface — carved icon + label). The same chrome the
 // Settings sidebar uses, so the menu and the rest of the app read as one family
-// (retires the bespoke stone slabs).
+// (retires the bespoke stone slabs). A NavButton, not an anchor (ADR-0052): game
+// controls are buttons; the route is the address, not the affordance.
 function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
   return (
-    <a className="settings-tab main-menu-mode-tab" href={tab.href}>
+    <NavButton className="settings-tab main-menu-mode-tab" to={tab.href}>
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
       <span><strong>{tab.label}</strong></span>
-    </a>
+    </NavButton>
   );
 }
 
@@ -71,11 +81,25 @@ export function MainMenu(): ReactElement {
   // layers off the director's stage; the director owns the ordering and the background
   // probe. On any non-cold load the store is already fully revealed, so this is inert.
   const reveal = useSyncExternalStore(subscribe, getSnapshot);
-
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
+  }, []);
+
+  // Soft-nav arrival fade: on a later navigation INTO the menu (e.g. campaign editor ->
+  // menu) the reveal store is already fully revealed, so the buttons would otherwise snap
+  // in. Withhold data-reveal-buttons for one frame after mount (then flip `entered`) so the
+  // existing .main-menu-twin-screen opacity transition runs as an arrival fade — matching
+  // the editor's entrance so the hop dissolves the chrome both ways over the steady
+  // backdrop. On a COLD load this is harmless: the director hasn't opened `buttons` yet, so
+  // the gate already holds them hidden and `entered` flips long before that stage opens. The
+  // timeout backstops a throttled rAF (backgrounded tab) so the menu can never strand blank.
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    const t = window.setTimeout(() => setEntered(true), 120);
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
   }, []);
 
   useEffect(() => {
@@ -102,17 +126,18 @@ export function MainMenu(): ReactElement {
       className="menu-layer main-menu-layer"
       data-testid="main-menu-next"
       data-reveal-bg={reveal.has('bg') ? '' : undefined}
-      data-reveal-buttons={reveal.has('buttons') ? '' : undefined}
+      data-reveal-buttons={reveal.has('buttons') && entered ? '' : undefined}
     >
+      <SceneBackdrop />
       <AmbienceBackground />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
-      <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
-        <div className="settings-shell">
+      <div className="settings-screen main-menu-twin-screen main-menu-home app-shell-bar-pad">
+        <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
           </aside>
-        </div>
+        </ArtRouteChrome>
       </div>
     </div>
   );

@@ -1,5 +1,8 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { NavButton } from './shared/NavButton';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
@@ -10,7 +13,9 @@ import {
   readProgress,
   type CampaignProgress,
 } from '../campaign/progress';
-import { OBJECTIVE_LABEL } from '../core/objectives';
+import { MODE_NAME } from '../core/objectives';
+import { levelObjectiveLine } from './LevelInfoCompact';
+import { LevelThumbnail } from '../render/LevelThumbnail';
 import type { Campaign as CampaignDoc } from '../core/level';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -41,16 +46,16 @@ function Stars({ count }: { count: number }): ReactElement {
 // main menu's mode tabs use, so the Campaign screen reads as a twin of the menu.
 function CampaignTab({ campaign, active }: { campaign: CampaignDoc; active: boolean }): ReactElement {
   return (
-    <a
+    <NavButton
       className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
-      href={`/campaign/${campaign.id}`}
+      to={`/campaign/${campaign.id}`}
       aria-current={active ? 'page' : undefined}
     >
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={CAMPAIGN_ICON} alt="" />
       </span>
       <span><strong>{campaign.name}</strong></span>
-    </a>
+    </NavButton>
   );
 }
 
@@ -69,7 +74,7 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
               <section className="settings-row">
                 <div className="settings-row-copy">
                   <h4>No levels yet</h4>
-                  <p>This campaign has no levels. Add some in the Campaign Editor.</p>
+                  <p>This campaign has no levels. Add some in the Editor.</p>
                 </div>
               </section>
             )}
@@ -78,14 +83,27 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
               const prog = progress[ref.levelId];
               const completed = Boolean(prog?.completed);
               const unlocked = isLevelUnlocked(refs, index, progress);
-              const objective = level?.objective ?? ref.objective;
+              // Prefer the loaded level doc so the goal line is direction-aware (King Assault
+              // reads "Protect your King" when the player holds the King). Fall back to the
+              // campaign ref's objective — mode name only — when the doc hasn't hydrated.
+              const goalLine = level
+                ? levelObjectiveLine(level)
+                : ref.objective ? MODE_NAME[ref.objective] : 'Battle';
               const status = completed ? ' · Cleared' : unlocked ? '' : ' · Locked';
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
               return (
                 <section className={`settings-row ${unlocked ? '' : 'is-disabled'}`.trim()} key={ref.levelId}>
+                  {/* Leading board preview — the same baked thumbnail the Campaign Editor's
+                      level list uses, so a level looks identical wherever it's shown. Locked
+                      levels still show their board (dimmed) as a peek at what's ahead. */}
+                  <span className="settings-row-thumb" aria-hidden="true">
+                    {level
+                      ? <LevelThumbnail level={level} width={72} height={48} alt="" />
+                      : <span className="settings-row-thumb-empty" />}
+                  </span>
                   <div className="settings-row-copy">
                     <h4>{index + 1}. {level?.name ?? `Level ${index + 1}`}</h4>
-                    <p>{objective ? OBJECTIVE_LABEL[objective] : 'Battle'}{status}</p>
+                    <p>{goalLine}{status}</p>
                   </div>
                   <div className="settings-row-value">
                     <Stars count={prog?.stars ?? 0} />
@@ -93,11 +111,11 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
                   <div className="settings-row-control">
                     {unlocked
                       ? (
-                        <a className="app-header-button app-header-button-active" href={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
+                        <NavButton className="app-header-button app-header-button-active" to={playHref} aria-label={`Play ${level?.name ?? `level ${index + 1}`}`}>
                           {completed ? 'Replay' : 'Play'}
-                        </a>
+                        </NavButton>
                       )
-                      : <span className="app-header-button" aria-disabled="true" style={{ opacity: 0.5, pointerEvents: 'none' }}>Locked</span>}
+                      : <button type="button" className="app-header-button" disabled>Locked</button>}
                   </div>
                 </section>
               );
@@ -123,8 +141,21 @@ export function Campaign(): ReactElement {
     return () => shell?.classList.remove('main-menu-active');
   }, []);
 
-  // Load the shared workspace the same way the editor does, so the lists match.
-  useEffect(() => { void ensureCampaignsHydrated(); }, []);
+  // Load the shared workspace the same way the editor does, so the lists match. The
+  // entrance fade HOLDS until this settles (ADR-0046 C.1 / ADR-0051): on a first visit
+  // the store starts empty and the rail/panel would otherwise fade in as a bare frame
+  // with the content popping in whenever the fetch lands. Already-hydrated visits are
+  // ready at mount, so nothing holds. The promise always resolves (officials fall back
+  // to the static file; user-workspace failures are swallowed), and the entrance
+  // primitive's own failsafe backstops anything pathological.
+  const [contentReady, setContentReady] = useState(() => useCampaigns.getState().campaigns.length > 0);
+  useEffect(() => {
+    let active = true;
+    // .catch first: even a failed hydration must flip readiness (show whatever state
+    // exists) rather than hold the chrome invisible until the entrance failsafe.
+    void ensureCampaignsHydrated().catch(() => {}).then(() => { if (active) setContentReady(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const sync = () => setSelectedId(campaignIdFromPath(window.location.pathname));
@@ -149,9 +180,15 @@ export function Campaign(): ReactElement {
   }, []);
 
   // Once campaigns load, a bare /campaign (or an unknown id) normalizes to the first
-  // campaign so the URL always names a real one.
+  // campaign so the URL always names a real one. Guarded to run only while the app is
+  // still ON a campaign path: the URL-sync listener above also fires when the user
+  // navigates AWAY (selectedId resets to ''), and this screen stays mounted for a beat
+  // (route transition / veil cover) — without the guard, the replace here yanked every
+  // exit (home via the brand, the settings gear, Play) straight back to /campaign/<id>.
   useEffect(() => {
     if (!campaigns.length) return;
+    const path = normalizeRoutePath(window.location.pathname);
+    if (path !== '/campaign' && !path.startsWith('/campaign/')) return;
     if (!campaigns.some((c) => c.id === selectedId)) {
       navigateApp(`/campaign/${campaigns[0].id}`, { replace: true, scroll: false });
     }
@@ -165,12 +202,25 @@ export function Campaign(): ReactElement {
   const myCampaigns = campaigns.filter((c) => c.origin !== 'official');
 
   return (
-    <div className="menu-layer main-menu-layer is-ready" data-testid="campaign-menu">
+    // The cold-load reveal director (shell/coldReveal) arms ONLY on the home menu path,
+    // so it never sequences this screen. But its opt-OUT gates hide any .main-menu-layer's
+    // background (the SceneBackdrop) and buttons (.main-menu-twin-screen) UNTIL data-reveal-*
+    // is present (#238). The Campaign reuses those twin classes without running the director,
+    // so declare both up front to render fully revealed — otherwise the scene + level buttons
+    // stay stuck at opacity 0.
+    <div
+      className="menu-layer main-menu-layer is-ready"
+      data-testid="campaign-menu"
+      data-reveal-bg=""
+      data-reveal-buttons=""
+    >
+      {/* Same animated menu scene (still art + waterfalls) as the main menu, behind the rain. */}
+      <SceneBackdrop />
       <AmbienceBackground />
       {/* Settings-twin layout, mirroring the main menu: shared app title bar + a rail
           of campaign tabs and a level-select panel over the ambience. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
-        <div className="settings-shell">
+        <ArtRouteChrome className="settings-shell" ready={contentReady}>
           <aside className="settings-frame settings-rail-frame" aria-label="Campaigns">
             {officialCampaigns.length > 0 && (
               <>
@@ -193,7 +243,7 @@ export function Campaign(): ReactElement {
           </aside>
 
           {activeCampaign && <LevelSelect campaign={activeCampaign} progress={progress} />}
-        </div>
+        </ArtRouteChrome>
       </div>
     </div>
   );

@@ -21,21 +21,32 @@ import { readDisabledUrls, BGM_DISABLED_KEY, BGM_DISABLED_CHANGE_EVENT, BGM_COMM
 const BGM_API_URL = '/api/bgm';
 const MUTE_STORAGE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
+// The Settings screen persists a JSON settings blob under this key and fires this event
+// after every change (see Settings.tsx / sfx.ts SFX_SETTINGS_CHANGE_EVENT). We read the
+// one field we care about — musicVolume — so the Music Volume slider drives BGM loudness
+// live, mirroring how sfx.ts reacts to the same event for the Effects slider.
+const SETTINGS_KEY = 'chess-tactics-settings-v1';
+const SETTINGS_CHANGE_EVENT = 'chess-tactics:settings-change';
 // Cross-tab single-owner coordination: exactly one tab holds the Web Lock and is the
 // only one that plays; the BroadcastChannel announces ownership + what's playing so
 // other tabs can show "Playing in another tab".
 const BGM_OWNER_LOCK = 'chess-tactics-bgm-owner';
 const BGM_CHANNEL_NAME = 'chess-tactics-bgm';
-const DEFAULT_VOLUME = 0.5;
+const DEFAULT_MUSIC_VOLUME = 70; // 0..100, matches Settings DEFAULT_SETTINGS.musicVolume
 // If a track 404s or fails to decode, wait briefly then skip to the next one so
 // a single bad asset can never wedge the playlist.
 const ERROR_SKIP_DELAY_MS = 1500;
 
 function readMuted() {
   try {
-    return window.localStorage.getItem(MUTE_STORAGE_KEY) === 'true';
+    // Default OFF: background music starts muted and the title-bar control is the
+    // explicit on switch — music only plays once the user turns it on (stored as
+    // 'false'). Autoplay is blocked until a gesture anyway, so "default on" only ever
+    // LOOKED on while silent; this makes the control honest. Keep in sync with
+    // Settings' readMuted (same MUTE_KEY).
+    return window.localStorage.getItem(MUTE_STORAGE_KEY) !== 'false';
   } catch {
-    return false;
+    return true; // storage blocked → stay quiet
   }
 }
 
@@ -47,6 +58,24 @@ function writeMuted(muted) {
   }
 }
 
+// The Music Volume slider (Settings → Audio) writes musicVolume (0..100) into the shared
+// settings blob. Scale it to the HTMLMediaElement 0..1 range. Default matches Settings'
+// DEFAULT_SETTINGS so the slider readout and actual loudness agree out of the box. This is
+// independent of mute (which pauses); volume just sets how loud playback is when it runs.
+function readMusicVolume() {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return DEFAULT_MUSIC_VOLUME / 100;
+    const parsed = JSON.parse(raw);
+    const v = typeof parsed.musicVolume === 'number' && Number.isFinite(parsed.musicVolume)
+      ? Math.min(100, Math.max(0, parsed.musicVolume))
+      : DEFAULT_MUSIC_VOLUME;
+    return v / 100;
+  } catch {
+    return DEFAULT_MUSIC_VOLUME / 100;
+  }
+}
+
 // Fisher-Yates shuffle on a copy of the input array.
 export function shuffled(items) {
   const out = items.slice();
@@ -55,6 +84,23 @@ export function shuffled(items) {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
+}
+
+// Re-home the persistent mute control into the title bar's trailing cluster slot
+// (ADR-0044). initBgm() runs (main.tsx) BEFORE React mounts the title bar, so the slot
+// may not exist yet — keep the button DETACHED and observe for the slot, placing it the
+// instant it appears (so it never flashes at a temporary body-docked position). The
+// persistent title bar renders the cluster on every route, so the slot always arrives.
+function mountControl(el) {
+  const SLOT = '.cluster-bgm-slot';
+  const place = () => {
+    const slot = document.querySelector(SLOT);
+    if (slot) { slot.appendChild(el); return true; }
+    return false;
+  };
+  if (place()) return;
+  const observer = new MutationObserver(() => { if (place()) observer.disconnect(); });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 }
 
 // Build one shuffle cycle of indices [0..length-1], ensuring the first index is
@@ -75,7 +121,7 @@ export function initBgm() {
   const audio = new Audio();
   audio.preload = 'none';
   audio.loop = false;
-  audio.volume = DEFAULT_VOLUME;
+  audio.volume = readMusicVolume();
   // BGM is decorative; never let it hijack media-session hardware keys.
   audio.setAttribute('aria-hidden', 'true');
 
@@ -98,10 +144,11 @@ export function initBgm() {
     owner: false,      // this tab holds the audio-owner lock (only the owner plays)
     otherTitle: '',    // what the owner tab is playing (for "Playing in another tab")
     otherPlaying: false, // another tab owns and is actively playing
+    otherPaused: false, // another tab owns a selected-but-paused track
   };
 
   const control = buildControl();
-  document.body.appendChild(control.el);
+  mountControl(control.el);
 
   // ---- single-owner cross-tab coordination --------------------------------
   // Web Locks elect one owner (auto-released when its tab closes → a follower takes
@@ -115,8 +162,25 @@ export function initBgm() {
   let pendingAction = null;   // a transport action to run once ownership is grabbed
   if (!locksSupported) state.owner = true;
 
+  function currentUrlForBroadcast() {
+    return (!state.stopped && !state.unavailable && state.currentUrl) ? state.currentUrl : null;
+  }
+
+  function currentTitleForBroadcast() {
+    return currentUrlForBroadcast() ? state.currentTitle : null;
+  }
+
   function announce(type) {
-    if (channel) channel.postMessage({ type, id: tabId, url: state.currentUrl, title: state.currentTitle, playing: !audio.paused });
+    if (!channel) return;
+    const url = currentUrlForBroadcast();
+    channel.postMessage({
+      type,
+      id: tabId,
+      url,
+      title: currentTitleForBroadcast(),
+      playing: Boolean(url) && !audio.paused,
+      paused: Boolean(url) && audio.paused,
+    });
   }
 
   function onBecomeOwner() {
@@ -174,6 +238,7 @@ export function initBgm() {
     if (msg.type === 'owner' || msg.type === 'np') {
       state.otherTitle = msg.title || '';
       state.otherPlaying = !state.owner && Boolean(msg.playing);
+      state.otherPaused = !state.owner && Boolean(msg.paused);
       updateControl();
     }
   };
@@ -295,6 +360,13 @@ export function initBgm() {
     setMuted(!state.muted);
   }
 
+  // Push the current Music Volume setting into the live <audio> element (cheap; safe to
+  // call often — a slider drag fires this per step). No ramp needed: setting .volume is
+  // sample-accurate and click-free on an HTMLMediaElement.
+  function applyMusicVolume() {
+    audio.volume = readMusicVolume();
+  }
+
   // ---- audio element events ------------------------------------------------
   audio.addEventListener('ended', () => {
     state.errorStreak = 0;
@@ -351,7 +423,12 @@ export function initBgm() {
   // Browsers block audible autoplay until a user gesture. Keep listening on
   // every gesture until playback actually begins, then disarm.
   const armEvents = ['pointerdown', 'keydown', 'touchstart'];
-  function onGesture() {
+  function onGesture(event) {
+    // The mute control owns its own click — ignore gestures that land ON it, or this
+    // pre-arms playback on the same pointerdown and fights the toggle (the "first click
+    // does nothing, second works" bug). Gestures ELSEWHERE still arm already-unmuted
+    // music so it starts on the first interaction (the autoplay workaround).
+    if (event && event.target && control.el.contains(event.target)) return;
     beginPlayback();
   }
   function disarmGesture() {
@@ -362,6 +439,10 @@ export function initBgm() {
   window.addEventListener(MUTE_CHANGE_EVENT, (event) => {
     setMuted(Boolean(event && event.detail && event.detail.muted), { persist: false, notify: false });
   });
+
+  // Live Music Volume: the Settings screen fires this after writing the settings blob, so a
+  // slider drag re-scales BGM loudness immediately (the music analogue of the Effects slider).
+  window.addEventListener(SETTINGS_CHANGE_EVENT, applyMusicVolume);
 
   // Live updates to the user's track on/off set (from the Settings soundtrack
   // manager). Re-filter the rotation; if the playing track was just turned off,
@@ -401,6 +482,7 @@ export function initBgm() {
   window.addEventListener('storage', (event) => {
     if (event.key === MUTE_STORAGE_KEY) setMuted(readMuted(), { persist: false });
     if (event.key === BGM_DISABLED_KEY) onDisabledChange();
+    if (event.key === SETTINGS_KEY) applyMusicVolume();
   });
 
   // ---- mute control UI -----------------------------------------------------
@@ -416,9 +498,25 @@ export function initBgm() {
     el.appendChild(icon);
     el.addEventListener('click', (event) => {
       event.preventDefault();
+      if (state.loaded && !state.tracks.length) return; // no soundtrack — persistent but inert
       if (!state.owner) {
-        // A follower tab — clicking takes playback over to this tab.
+        // A follower tab — clicking takes playback over to this tab. Start audio
+        // SYNCHRONOUSLY inside this user gesture: real Chrome's autoplay policy
+        // blocks any play() that runs after the async lock acquisition, so we must
+        // play here first, THEN steal the lock (the previous owner steps down when
+        // it hears our 'owner' broadcast). takeOwnership() early-returns if we're
+        // already owner, so we leave state.owner=false until it runs.
         pendingAction = null;
+        state.muted = false;
+        writeMuted(false);
+        state.stopped = false;
+        if (audio.src && audio.paused) {
+          const attempt = audio.play();
+          if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+        } else if (!audio.src) {
+          playNext();
+        }
+        updateControl();
         takeOwnership();
       } else if (state.unavailable && !state.muted) {
         // In the unavailable state the button is a retry affordance.
@@ -427,21 +525,30 @@ export function initBgm() {
         beginPlayback();
         updateControl();
       } else {
-        toggleMute();
+        // Toggle whether music is actually SOUNDING, not just the muted flag: if it's
+        // audibly playing, mute it; otherwise unmute AND (re)start playback. setMuted(false)
+        // calls beginPlayback within this click gesture, so autoplay permits it. One click
+        // then always does the intuitive thing — even from the "unmuted but autoplay-blocked
+        // / not started yet" state, where flipping the flag alone would have muted.
+        const audible = !audio.paused && state.started && !state.muted;
+        setMuted(audible);
       }
     });
     return { el };
   }
 
   // Tell the UI (the Settings soundtrack list) what's playing so it can show ■ Stop
-  // on the current row and ▶ Play on the rest.
+  // on the sounding row, keep muted tracks as paused, and show ▶ Play on the rest.
   function broadcast() {
+    const currentUrl = currentUrlForBroadcast();
     window.dispatchEvent(new CustomEvent(BGM_STATE_EVENT, {
       detail: {
-        playing: !audio.paused && state.owner,
-        currentUrl: state.currentUrl || null,
+        playing: Boolean(currentUrl) && !audio.paused && state.owner,
+        paused: Boolean(currentUrl) && audio.paused && state.owner,
+        currentUrl,
         single: Boolean(state.single),
-        otherTab: !state.owner && state.otherPlaying,
+        otherTab: !state.owner && (state.otherPlaying || state.otherPaused),
+        otherPaused: !state.owner && state.otherPaused,
         otherTitle: state.otherTitle || null,
       },
     }));
@@ -455,15 +562,26 @@ export function initBgm() {
 
   function renderControl() {
     const el = control.el;
+    // ADR-0044: the mute control is a PERSISTENT member of the trailing cluster — it must
+    // not vanish, even when no soundtrack is configured for this environment (dev without
+    // BGM_DEV_TRACKS, or an empty library). Present it dimmed/inert in that case instead of
+    // hiding it, so the cluster keeps the same members on every route.
+    el.style.display = '';
+    el.classList.remove('is-othertab'); // only the follower state below re-adds it
     if (state.loaded && !state.tracks.length) {
-      // No BGM configured for this environment — don't show a dead control.
-      el.style.display = 'none';
+      el.classList.remove('is-playing');
+      el.classList.add('is-muted');
+      el.setAttribute('aria-label', 'Background music — no soundtrack configured');
+      el.title = 'Background music — no soundtrack configured';
       return;
     }
-    el.style.display = '';
     if (!state.owner && state.otherPlaying) {
-      // Another tab owns playback; this one is a silent follower.
+      // Another tab owns playback; this one is a silent follower. Wear the LIT (active)
+      // frame so it's visibly distinct from a muted control — which uses the base frame
+      // and is otherwise pixel-identical — because music IS playing, just not here. The
+      // icon stays dimmed (is-muted) to mark that this tab is silent.
       el.classList.remove('is-playing');
+      el.classList.add('is-othertab');
       el.classList.add('is-muted');
       const other = state.otherTitle ? `Playing in another tab — ${state.otherTitle}` : 'Playing in another tab';
       el.setAttribute('aria-label', `${other} — click to play here`);

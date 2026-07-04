@@ -44,22 +44,20 @@ value, so nothing is consistent and there's no one knob to tune feel.
 on a `transition`/`animation` for interactive UI is not allowed** (mirrors 0024 for type,
 0031 for space). Continuous/decorative loops are out of scope (see migration).
 
-### A. The duration scale — a small named ladder, not one shared value
-
-Three tiers (the canon's "small named scale", NOT a single duration — one duration forces
-either laggy fades or abrupt entrances), clearly spaced so there's never a "120 or 150?"
-dither (the adjacent-value trap 0031 warns about):
+### A. Two durations — instant-feedback vs fade (ONE fade speed)
 
 - `--ds-duration-fast: 100ms` — **instant feedback**: hover, focus, toggle, filter/color swap.
-- `--ds-duration-base: 150ms` — **content fades & crossfade legs** (the settings menu swap).
-- `--ds-duration-slow: 300ms` — **screen / large-surface entrances**.
+- `--ds-duration-fade: 350ms` — **every fade/crossfade**: screen entrances AND in-panel
+  control swaps share this ONE fade speed.
 
-Rule (from Material): **duration grows with the surface area / distance the motion covers.**
-A hover tweak < a content fade < a whole screen arriving. `base` sits at the desktop end of
-the canon's 150–200ms content-fade band (this is a mouse game — desktop motion runs faster);
-the settings crossfade is a *sequential* out→in, so each 150ms leg reads as one ~300ms swap,
-inside the canon's content-crossfade total. `slow` is the canon's screen-entrance default.
-Need a value the ladder lacks? **Extend it (add a step) — never subdivide** (0031's lesson).
+**A fade does not vary by surface here.** The canon (Material's "duration grows with surface
+area") argues for a tiered fade scale, and an earlier draft of this ADR split fades into a
+150ms `base` and a 300ms `slow`. That was **overruled** (2026-06-29): a fade reading at two
+different speeds in different spots was the exact inconsistency we set out to kill, so all
+fades resolve to the single `--ds-duration-fade`. (`--ds-duration-fade` is one knob — tune the
+one value to retime every fade at once.) `fast` stays a separate, snappier tier because
+hover/toggle feedback is an *instant state change*, not a fade — matching it to the fade speed
+would make the UI feel laggy. ADR-0046's choreography assumes this single fade speed.
 
 ### B. Easing tokens — name the intent, don't paste a bezier
 
@@ -83,9 +81,9 @@ deliberately-surviving path.)
 
 1. Interactive UI transitions resolve to a duration token + an easing token. No raw ms /
    bespoke bezier on `transition` (allow `0s`).
-2. **First consumers (this PR):** the settings menu crossfade → `base` + `standard`; the new
-   settings-entry fade → `slow` + `out`; `.bgm-control`'s show/hide fade → `base` (was the
-   off-scale 200ms — this is the "same fade speed?" fix).
+2. **First consumers:** the settings menu crossfade, the screen-entrance fade (ADR-0046), and
+   `.bgm-control`'s show/hide fade all resolve to `--ds-duration-fade` — one fade speed across
+   all of them (the "same fade speed?" fix, taken to its conclusion).
 3. **Staged migration** (the 0024/0031 model): the remaining ~hand-tuned transitions migrate
    to tokens over time; a lint rule can land once the bulk is converted. Out of scope:
    continuous decorative loops (rain/threat-pulse/reticle-glow) and the `.route-veil` cross-

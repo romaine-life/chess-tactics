@@ -3,9 +3,9 @@
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
 // last-side-standing) — but deterministic and immutable.
 
-import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, Vec, Winner } from './types';
+import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, UnitFacing, Vec, Winner } from './types';
 import type { Rng } from './rng';
-import { canTraverse, elevationAt, type TerrainIndex } from './terrain';
+import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
 
 const KNIGHT: ReadonlyArray<readonly [number, number]> = [
@@ -14,6 +14,17 @@ const KNIGHT: ReadonlyArray<readonly [number, number]> = [
 const DIAG: ReadonlyArray<readonly [number, number]> = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 const ORTHO: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const ALL8: ReadonlyArray<readonly [number, number]> = [...ORTHO, ...DIAG];
+const COMPASS: readonly UnitFacing[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+const FACING_VECTOR: Record<UnitFacing, readonly [number, number]> = {
+  north: [0, -1],
+  'north-east': [1, -1],
+  east: [1, 0],
+  'south-east': [1, 1],
+  south: [0, 1],
+  'south-west': [-1, 1],
+  west: [-1, 0],
+  'north-west': [-1, -1],
+};
 
 const isObstacle = (p: Piece): boolean => p.type === 'rock' || p.type === 'random-rock';
 
@@ -84,6 +95,48 @@ function blockedByTerrain(env: MoveEnv | undefined, originElev: number, x: numbe
   return !!env?.terrain && !canTraverse(env.terrain, originElev, x, y);
 }
 
+/** Whether terrain in `env` halts a multi-square move that enters (x, y). */
+function haltsTravelAt(env: MoveEnv | undefined, x: number, y: number): boolean {
+  return !!env?.terrain && haltsTravel(env.terrain, x, y);
+}
+
+function defaultPawnForward(piece: Piece): UnitFacing {
+  return piece.side === 'enemy' ? 'south' : 'north';
+}
+
+function pawnForward(piece: Piece): UnitFacing {
+  return piece.pawnForward ?? defaultPawnForward(piece);
+}
+
+function pawnForwardVector(piece: Piece): readonly [number, number] {
+  return FACING_VECTOR[pawnForward(piece)];
+}
+
+function pawnCaptureVectors(piece: Piece): ReadonlyArray<readonly [number, number]> {
+  const forwardIndex = COMPASS.indexOf(pawnForward(piece));
+  const left = COMPASS[(forwardIndex + COMPASS.length - 1) % COMPASS.length];
+  const right = COMPASS[(forwardIndex + 1) % COMPASS.length];
+  return [FACING_VECTOR[left], FACING_VECTOR[right]];
+}
+
+function onPawnStart(piece: Piece): boolean {
+  return piece.startX === undefined ? piece.y === piece.startY : piece.x === piece.startX && piece.y === piece.startY;
+}
+
+function isPawnDoubleStep(last: LastMove): boolean {
+  const dx = Math.abs(last.from.x - last.to.x);
+  const dy = Math.abs(last.from.y - last.to.y);
+  return (dx === 0 && dy === 2) || (dx === 2 && dy === 0) || (dx === 2 && dy === 2);
+}
+
+function reachedPawnFarEdge(piece: Piece, size: BoardSize): boolean {
+  const [dx, dy] = pawnForwardVector(piece);
+  return (dx < 0 && piece.x === 0) ||
+    (dx > 0 && piece.x === size.cols - 1) ||
+    (dy < 0 && piece.y === 0) ||
+    (dy > 0 && piece.y === size.rows - 1);
+}
+
 function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs: ReadonlyArray<readonly [number, number]>, env: MoveEnv | undefined, originElev: number): Move[] {
   const moves: Move[] = [];
   for (const [dx, dy] of dirs) {
@@ -98,6 +151,7 @@ function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs:
         break;
       }
       moves.push({ x, y });
+      if (haltsTravelAt(env, x, y)) break; // water: the ray may end here, not pass
     }
   }
   return moves;
@@ -121,19 +175,22 @@ function stepMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, delt
 }
 
 function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env: MoveEnv | undefined, originElev: number): Move[] {
-  const dir = piece.side === 'player' ? -1 : 1;
+  const [forwardX, forwardY] = pawnForwardVector(piece);
   const moves: Move[] = [];
-  const oneY = piece.y + dir;
-  if (inBounds(piece.x, oneY, size) && !pieceAt(pieces, piece.x, oneY) && !blockedByTerrain(env, originElev, piece.x, oneY)) {
-    moves.push({ x: piece.x, y: oneY });
-    const twoY = piece.y + dir * 2;
-    if (piece.y === piece.startY && inBounds(piece.x, twoY, size) && !pieceAt(pieces, piece.x, twoY) && !blockedByTerrain(env, originElev, piece.x, twoY)) {
-      moves.push({ x: piece.x, y: twoY });
+  const oneX = piece.x + forwardX;
+  const oneY = piece.y + forwardY;
+  if (inBounds(oneX, oneY, size) && !pieceAt(pieces, oneX, oneY) && !blockedByTerrain(env, originElev, oneX, oneY)) {
+    moves.push({ x: oneX, y: oneY });
+    const twoX = piece.x + forwardX * 2;
+    const twoY = piece.y + forwardY * 2;
+    // The double step passes through the one-step square, so water there halts it.
+    if (onPawnStart(piece) && !haltsTravelAt(env, oneX, oneY) && inBounds(twoX, twoY, size) && !pieceAt(pieces, twoX, twoY) && !blockedByTerrain(env, originElev, twoX, twoY)) {
+      moves.push({ x: twoX, y: twoY });
     }
   }
-  for (const dx of [-1, 1]) {
+  for (const [dx, dy] of pawnCaptureVectors(piece)) {
     const x = piece.x + dx;
-    const y = piece.y + dir;
+    const y = piece.y + dy;
     if (!inBounds(x, y, size)) continue;
     if (blockedByTerrain(env, originElev, x, y)) continue;
     const occ = pieceAt(pieces, x, y);
@@ -144,56 +201,129 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
   if (
     last?.pieceType === 'pawn' &&
     last.side !== piece.side &&
-    Math.abs(last.from.y - last.to.y) === 2 &&
-    last.to.y === piece.y &&
-    Math.abs(last.to.x - piece.x) === 1
+    isPawnDoubleStep(last)
   ) {
-    const x = last.to.x;
-    const y = piece.y + dir;
-    if (inBounds(x, y, size) && !pieceAt(pieces, x, y) && !blockedByTerrain(env, originElev, x, y)) {
-      moves.push({ x, y, capture: last.pieceId, enPassant: true });
+    const target = pieceAt(pieces, last.to.x, last.to.y);
+    for (const [dx, dy] of pawnCaptureVectors(piece)) {
+      const x = piece.x + dx;
+      const y = piece.y + dy;
+      const capturedX = x - forwardX;
+      const capturedY = y - forwardY;
+      if (last.to.x !== capturedX || last.to.y !== capturedY || target?.id !== last.pieceId) continue;
+      if (inBounds(x, y, size) && !pieceAt(pieces, x, y) && !blockedByTerrain(env, originElev, x, y)) {
+        moves.push({ x, y, capture: last.pieceId, enPassant: true });
+      }
     }
   }
   return moves;
 }
 
 /**
+ * The board (positions only) after `mover` plays `move`. Mirrors `applyMove`'s
+ * displacement so a hypothetical check test sees the same occupancy a committed
+ * move would: the target is removed only when the hit kills it (hp reaches 0),
+ * and a surviving hostile target is an attack-in-place that leaves the mover on
+ * its origin. En passant is handled implicitly — `move.capture` names the victim
+ * by id, so it is the piece removed even though it doesn't sit on the
+ * destination square.
+ */
+function boardAfterMove(mover: Piece, move: Move, pieces: readonly Piece[]): Piece[] {
+  const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
+  const captured = capturedId ? pieces.find((p) => p.id === capturedId) : undefined;
+  const hostile = !!captured && captured.side !== mover.side && !isObstacle(captured);
+  const kills = hostile && pieceHp(captured!) - 1 <= 0;
+  const displaced = !hostile || kills; // stays put only for a surviving hostile target
+  const after: Piece[] = [];
+  for (const p of pieces) {
+    if (kills && p.id === capturedId) continue; // removed by a fatal capture
+    after.push(p.id === mover.id && displaced ? { ...p, x: move.x, y: move.y } : p);
+  }
+  return after;
+}
+
+/**
+ * True if any living king of `side` is attacked by a hostile piece on `board`.
+ * Obstacles and neutral pieces never give check; an enemy king still guards its
+ * eight neighbours (so two kings can never be adjacent). Terrain-aware via `env`.
+ */
+function sideKingAttacked(board: readonly Piece[], side: Side, size: BoardSize, env?: MoveEnv): boolean {
+  for (const king of board) {
+    if (!king.alive || king.type !== 'king' || king.side !== side) continue;
+    for (const p of board) {
+      if (!p.alive || isObstacle(p) || p.side === side || p.side === 'neutral') continue;
+      for (const a of attackedSquares(p, board, size, env)) {
+        if (a.x === king.x && a.y === king.y) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** True while `side` fields a king that a hostile piece currently attacks (in check). */
+export function sideInCheck(state: GameState, side: Side, env?: MoveEnv): boolean {
+  return sideKingAttacked(state.pieces, side, state.size, env);
+}
+
+/**
  * All legal destinations for a piece (excludes obstacles, which never move).
- * Pass `env.terrain` to apply terrain movement effects (cliff/rock barriers and
- * elevation limits); omit it for pure chess movement. Water is passable.
+ * Pass `env.terrain` to apply terrain movement effects (cliff/rock barriers,
+ * elevation limits, and water halting travel — a slide may end on water but
+ * never pass it, knights hop over, and leaving water is unrestricted); omit it
+ * for pure chess movement.
+ *
+ * A side that fields a king may not make any move that leaves one of its kings
+ * in check: the king can't step into check, a pinned piece can't abandon the
+ * king, and a side already in check must answer it. This is judged on the board
+ * as it would be after the move (see `boardAfterMove` / `sideKingAttacked`).
+ * Sides with no king are unconstrained, so kingless skirmishes and pure movement
+ * behave exactly as before.
  */
 export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Move[] {
   if (!piece || !piece.alive || isObstacle(piece)) return [];
   const originElev = env?.terrain ? elevationAt(env.terrain, piece.x, piece.y) : 0;
+  let moves: Move[];
   switch (piece.type) {
-    case 'pawn': return pawnMoves(piece, pieces, size, env, originElev);
-    case 'knight': return stepMoves(piece, pieces, size, KNIGHT, env, originElev);
-    case 'bishop': return rayMoves(piece, pieces, size, DIAG, env, originElev);
-    case 'rook': return rayMoves(piece, pieces, size, ORTHO, env, originElev);
-    case 'queen': return rayMoves(piece, pieces, size, ALL8, env, originElev);
-    case 'king': return stepMoves(piece, pieces, size, ALL8, env, originElev);
+    case 'pawn': moves = pawnMoves(piece, pieces, size, env, originElev); break;
+    case 'knight': moves = stepMoves(piece, pieces, size, KNIGHT, env, originElev); break;
+    case 'bishop': moves = rayMoves(piece, pieces, size, DIAG, env, originElev); break;
+    case 'rook': moves = rayMoves(piece, pieces, size, ORTHO, env, originElev); break;
+    case 'queen': moves = rayMoves(piece, pieces, size, ALL8, env, originElev); break;
+    case 'king': moves = stepMoves(piece, pieces, size, ALL8, env, originElev); break;
     default: return [];
   }
+  const guardsKing = pieces.some((p) => p.alive && p.type === 'king' && p.side === piece.side);
+  if (!guardsKing) return moves;
+  return moves.filter((m) => !sideKingAttacked(boardAfterMove(piece, m, pieces), piece.side, size, env));
 }
 
-/** Squares a piece threatens (basis for the enemy threat telegraph overlay). */
-export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize): Vec[] {
+/**
+ * Squares a piece threatens (basis for the enemy threat telegraph overlay and
+ * for check detection). Pass `env.terrain` to make threats respect the board the
+ * same way movement does: a slider's ray stops at a terrain wall (and may end on
+ * but never pass water) and a stepper can't threaten across an impassable/
+ * un-climbable tile. Omit it for pure-chess threats. A piece still "controls"
+ * the first occupied square on a ray (that piece is threatened), so a king
+ * still guards its neighbours for opposition.
+ */
+export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Vec[] {
   if (!piece || !piece.alive || isObstacle(piece)) return [];
+  const originElev = env?.terrain ? elevationAt(env.terrain, piece.x, piece.y) : 0;
   if (piece.type === 'pawn') {
-    const dir = piece.side === 'player' ? -1 : 1;
     const out: Vec[] = [];
-    for (const dx of [-1, 1]) {
+    for (const [dx, dy] of pawnCaptureVectors(piece)) {
       const x = piece.x + dx;
-      const y = piece.y + dir;
-      if (inBounds(x, y, size)) out.push({ x, y });
+      const y = piece.y + dy;
+      if (inBounds(x, y, size) && !blockedByTerrain(env, originElev, x, y)) out.push({ x, y });
     }
     return out;
   }
   if (piece.type === 'knight') {
-    return KNIGHT.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy })).filter((p) => inBounds(p.x, p.y, size));
+    return KNIGHT.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
+      .filter((p) => inBounds(p.x, p.y, size) && !blockedByTerrain(env, originElev, p.x, p.y));
   }
   if (piece.type === 'king') {
-    return ALL8.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy })).filter((p) => inBounds(p.x, p.y, size));
+    return ALL8.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
+      .filter((p) => inBounds(p.x, p.y, size) && !blockedByTerrain(env, originElev, p.x, p.y));
   }
   const dirs = piece.type === 'bishop' ? DIAG : piece.type === 'rook' ? ORTHO : ALL8;
   const out: Vec[] = [];
@@ -202,18 +332,20 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
       const x = piece.x + dx * step;
       const y = piece.y + dy * step;
       if (!inBounds(x, y, size)) break;
+      if (blockedByTerrain(env, originElev, x, y)) break; // a terrain wall ends the threat ray
       out.push({ x, y });
       if (pieceAt(pieces, x, y)) break;
+      if (haltsTravelAt(env, x, y)) break; // water: threatened itself, nothing beyond
     }
   }
   return out;
 }
 
 /** True when any living `bySide` piece attacks the square `sq` on this board. */
-function squareAttackedBy(sq: Vec, bySide: Side, pieces: readonly Piece[], size: BoardSize): boolean {
+function squareAttackedBy(sq: Vec, bySide: Side, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): boolean {
   for (const p of pieces) {
     if (!p.alive || p.side !== bySide || isObstacle(p)) continue;
-    for (const a of attackedSquares(p, pieces, size)) {
+    for (const a of attackedSquares(p, pieces, size, env)) {
       if (a.x === sq.x && a.y === sq.y) return true;
     }
   }
@@ -221,20 +353,20 @@ function squareAttackedBy(sq: Vec, bySide: Side, pieces: readonly Piece[], size:
 }
 
 /** Ids of the opponents of `p` that currently sit on a square `p` attacks. */
-function opponentsUnderAttackBy(p: Piece, pieces: readonly Piece[], size: BoardSize): Set<string> {
+function opponentsUnderAttackBy(p: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Set<string> {
   const ids = new Set<string>();
-  for (const sq of attackedSquares(p, pieces, size)) {
+  for (const sq of attackedSquares(p, pieces, size, env)) {
     const t = pieceAt(pieces, sq.x, sq.y);
     if (t && t.alive && t.side !== p.side && !isObstacle(t)) ids.add(t.id);
   }
   return ids;
 }
 
-/** Union of every living enemy's attacked squares. */
-export function enemyThreats(pieces: readonly Piece[], size: BoardSize): Vec[] {
+/** Union of every living enemy's attacked squares (terrain-aware when `env` is given). */
+export function enemyThreats(pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Vec[] {
   const map = new Map<string, Vec>();
   for (const p of livingPieces(pieces, 'enemy')) {
-    for (const sq of attackedSquares(p, pieces, size)) map.set(`${sq.x},${sq.y}`, sq);
+    for (const sq of attackedSquares(p, pieces, size, env)) map.set(`${sq.x},${sq.y}`, sq);
   }
   return [...map.values()];
 }
@@ -270,14 +402,16 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
 
   // Service-record bookkeeping: only player/enemy units accrue stats, and only
   // from this (committed) move. Snapshot the threat picture BEFORE the move while
-  // the piece still sits on `from`.
+  // the piece still sits on `from`. Threats respect terrain so escapes/threats are
+  // counted against the same board movement uses.
+  const statEnv: MoveEnv | undefined = state.terrain ? { terrain: buildTerrainIndex(state.terrain) } : undefined;
   const tracksStats = piece.side === 'player' || piece.side === 'enemy';
   const opponentSide: Side | null = piece.side === 'player' ? 'enemy' : piece.side === 'enemy' ? 'player' : null;
   const escapedThreat = tracksStats && opponentSide
-    ? squareAttackedBy(from, opponentSide, state.pieces, state.size)
+    ? squareAttackedBy(from, opponentSide, state.pieces, state.size, statEnv)
     : false;
   const threatenedBefore = tracksStats
-    ? opponentsUnderAttackBy(piece, state.pieces, state.size)
+    ? opponentsUnderAttackBy(piece, state.pieces, state.size, statEnv)
     : new Set<string>();
 
   const nextFacing = facingFromDelta(move.x - from.x, move.y - from.y);
@@ -311,8 +445,7 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
     events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
 
     if (piece.type === 'pawn') {
-      const farRank = piece.side === 'player' ? 0 : state.size.rows - 1;
-      if (piece.y === farRank) {
+      if (reachedPawnFarEdge(piece, state.size)) {
         piece.type = 'queen';
         events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
       }
@@ -331,7 +464,7 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
       if (escapedThreat) piece.escapes = (piece.escapes ?? 0) + 1;
     }
     // Opponents this piece newly placed under attack (in its post-move position).
-    const threatenedAfter = opponentsUnderAttackBy(piece, pieces, state.size);
+    const threatenedAfter = opponentsUnderAttackBy(piece, pieces, state.size, statEnv);
     let newlyThreatened = 0;
     for (const id of threatenedAfter) if (!threatenedBefore.has(id)) newlyThreatened += 1;
     if (newlyThreatened > 0) piece.threatsMade = (piece.threatsMade ?? 0) + newlyThreatened;

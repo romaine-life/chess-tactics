@@ -1,19 +1,24 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { readDisabledUrls, writeDisabledUrls, sendBgmCommand, BGM_STATE_EVENT } from '../bgmPrefs.js';
-import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
+import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath, readValidatedReturnTo } from './navigation';
 import { KitScroll } from './KitScroll';
+import { NavButton } from './shared/NavButton';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { TitleBarSlot } from './shell/TitleBarSlot';
+import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
 const SETTINGS_KEY = 'chess-tactics-settings-v1';
 const ASSET_BASE = '/assets/ui/settings';
 // How long the panel body fades out before swapping in the next menu's controls,
-// then fades back in. MUST match the opacity transition on .settings-panel-content
-// in style.css (one constant, two places — keep them in sync).
-const PANEL_FADE_MS = 150;
+// then fades back in. MUST match --ds-duration-fade on .settings-panel-content in style.css
+// (the ONE shared fade duration, ADR-0046 — same speed as the screen entrance).
+const PANEL_FADE_MS = 350;
 
 type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools';
 type ButtonTone = 'neutral' | 'primary' | 'danger';
@@ -31,6 +36,15 @@ interface BgmTrack {
   url: string;
   artist?: string;
   album?: string;
+}
+
+interface NowPlayingState {
+  playing: boolean;
+  paused: boolean;
+  currentUrl: string | null;
+  otherTab: boolean;
+  otherPaused: boolean;
+  otherTitle: string | null;
 }
 
 interface TabDefinition {
@@ -105,37 +119,28 @@ function asset(file: string): string {
 
 // Build / server provenance, stamped by vite.config buildInfo, surfaced in About so
 // "which server/build am I actually on?" is summonable from one place — dev or prod.
-// In dev it names the WORKTREE + commit + live port (a server from the wrong worktree
-// reports its own name, so being on the wrong one is a glance, not a 2-hour hunt).
+// Every build carries the app's semver. In dev it also names the WORKTREE + commit +
+// live port (a server from the wrong worktree reports its own name, so being on the
+// wrong one is a glance, not a 2-hour hunt). In prod the deploy-time PR/commit is not
+// knowable at build time (Docker has no .git) — it's fetched at runtime from
+// /api/build-info (see BuildInfoRemote below).
 declare const __BUILD_INFO__:
-  | { mode: 'dev'; worktree: string; commit: string; dirty: boolean; startedAt: number }
-  | { mode: 'prod'; commit: string; dirty: boolean }
+  | { mode: 'dev'; version: string; worktree: string; commit: string; dirty: boolean; startedAt: number }
+  | { mode: 'prod'; version: string; commit: string; dirty: boolean }
   | undefined;
 
-// The deployed entry-chunk hash (empty in dev) — the live asset-bundle id for prod.
-function bootedEntryHash(): string {
-  const el = document.querySelector('script[type="module"][src*="/assets/index-"]') as HTMLScriptElement | null;
-  return (el?.src || '').match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/)?.[1] || '';
-}
+// Deploy-time provenance served by the backend from k8s env (backend/server.js
+// GET /api/build-info; populated by build-and-deploy.yaml into k8s/values.yaml's
+// `build:` block on each deploy). All fields optional — the endpoint never 500s and
+// non-prod lanes leave it empty, so About degrades to just the baked app version.
+type BuildInfoRemote = { prTitle?: string; prNumber?: string | number; prUrl?: string; commit?: string };
 
-function buildSummary(): { headline: string; detail: string } {
-  const info = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
-  if (info && info.mode === 'dev') {
-    const port = window.location.port || 'default';
-    return {
-      headline: `${info.worktree} · ${info.commit}${info.dirty ? '*' : ''}`,
-      detail: `Local dev server · :${port} · started ${new Date(info.startedAt).toLocaleTimeString()}`,
-    };
-  }
-  const hash = bootedEntryHash();
-  return {
-    headline: `${info?.commit ?? '(unknown)'}${info?.dirty ? '*' : ''}${hash ? ` · ${hash}` : ''}`,
-    detail: 'Production build',
-  };
-}
+const BUILD_MONO: CSSProperties = { fontFamily: 'ui-monospace, monospace' };
 
 function readMuted(): boolean {
-  try { return localStorage.getItem(MUTE_KEY) === 'true'; } catch { return false; }
+  // Default OFF — music is muted until explicitly enabled (kept in sync with bgm.js
+  // readMuted). Only an explicit 'false' (user turned it on) counts as un-muted.
+  try { return localStorage.getItem(MUTE_KEY) !== 'false'; } catch { return true; }
 }
 
 function writeMuted(muted: boolean): void {
@@ -191,14 +196,21 @@ function SettingsButton({
   external?: boolean;
 }): ReactElement {
   const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
-  if (href) {
-    // External links open in a new tab; rel guards against reverse-tabnabbing.
-    // Internal routes (the default) stay in the SPA.
-    const externalProps = external ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+  if (href && external) {
+    // External destinations still open a new tab — via a button, not an anchor
+    // (ADR-0052): no hover URL leaks into the game shell; noopener guards the opener.
     return (
-      <a className={classes} href={href} aria-label={ariaLabel} {...externalProps}>
+      <button type="button" className={classes} aria-label={ariaLabel} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
         <span>{children}</span>
-      </a>
+      </button>
+    );
+  }
+  if (href) {
+    // Internal routes are game controls — a NavButton, not a hyperlink (ADR-0052).
+    return (
+      <NavButton className={classes} to={href} aria-label={ariaLabel}>
+        <span>{children}</span>
+      </NavButton>
     );
   }
   return (
@@ -286,15 +298,21 @@ function Slider({
 export function Settings(): ReactElement {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => tabFromPath(window.location.pathname));
   const [showTracks, setShowTracks] = useState<boolean>(() => isTracksView(window.location.pathname));
-  // What the panel body is currently rendering. It lags the URL-derived
-  // activeTab/showTracks by one fade so the outgoing menu's controls fade out, swap
-  // at zero opacity, then the incoming ones fade in. The rail highlight still tracks
-  // activeTab directly, so clicking a tab lights it instantly while the body crossfades.
+  // The INCOMING/target panel (switches immediately on a tab change). `previous` holds the
+  // OUTGOING panel only during a crossfade, rendered stacked under `display` so the two
+  // overlap-fade (old 1->0 while new 0->1) in one --ds-duration-fade pass (ADR-0046). The
+  // rail highlight tracks activeTab directly, so the clicked tab lights instantly.
   const [display, setDisplay] = useState<{ tab: SettingsTab; tracks: boolean }>(() => ({
     tab: tabFromPath(window.location.pathname),
     tracks: isTracksView(window.location.pathname),
   }));
-  const [panelPhase, setPanelPhase] = useState<'in' | 'out'>('in');
+  const [previous, setPrevious] = useState<{ tab: SettingsTab; tracks: boolean } | null>(null);
+  const [xfade, setXfade] = useState<'idle' | 'enter' | 'active'>('idle');
+  // The origin the user opened Settings from (null on a direct URL open). Rendered as the
+  // "‹ Back" control portaled into the title bar's trailing actions slot (below), and
+  // THREADED through every in-Settings link (withReturnTo) so the ?returnTo param — and
+  // thus that Back — survives each tab/tracks hop.
+  const [returnTo, setReturnTo] = useState<string | null>(readValidatedReturnTo);
   const [muted, setMuted] = useState(readMuted());
   const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
@@ -304,35 +322,34 @@ export function Settings(): ReactElement {
   // render snapshot (otherwise rapid toggles clobber each other before re-render).
   const disabledRef = useRef<string[]>(disabledUrls);
   // The single BGM player owns playback; we just reflect its broadcast transport
-  // state so the currently-playing row shows ■ Stop and the rest show ▶ Play.
-  const [nowPlaying, setNowPlaying] = useState<{ playing: boolean; currentUrl: string | null; otherTab: boolean; otherTitle: string | null }>({ playing: false, currentUrl: null, otherTab: false, otherTitle: null });
+  // state so the sounding row shows ■ Stop, paused music stays selected, and the
+  // rest show ▶ Play.
+  const [nowPlaying, setNowPlaying] = useState<NowPlayingState>({
+    playing: false,
+    paused: false,
+    currentUrl: null,
+    otherTab: false,
+    otherPaused: false,
+    otherTitle: null,
+  });
   const [confirmingReset, setConfirmingReset] = useState(false);
-  // Drives the one-time fade-in when the Settings screen mounts (entering settings).
-  // Starts false so .settings-shell paints at opacity 0, then flips true after the first
-  // paint so the opacity transition runs it in. It resets on each mount, so it replays
-  // every time you enter settings — but NOT on tab toggles (Settings stays mounted for
-  // the whole /settings/* subtree, so toggles re-render without remounting).
-  const [entered, setEntered] = useState(false);
-
+  const [buildRemote, setBuildRemote] = useState<BuildInfoRemote | null>(null);
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
-    // Flip after the first paint so the entry fade (opacity 0 -> 1) actually transitions.
-    const raf = requestAnimationFrame(() => setEntered(true));
-    return () => {
-      cancelAnimationFrame(raf);
-      shell?.classList.remove('settings-art-active');
-    };
+    return () => shell?.classList.remove('settings-art-active');
   }, []);
 
   useEffect(() => {
     // Bare /settings normalizes to the first section so the URL always names a tab.
+    // The query string rides along — dropping it here would strip ?returnTo and kill Back.
     if (normalizeRoutePath(window.location.pathname) === '/settings') {
-      navigateApp(TAB_PATHS.general, { replace: true, scroll: false });
+      navigateApp(`${TAB_PATHS.general}${window.location.search}`, { replace: true, scroll: false });
     }
     const sync = () => {
       setActiveTab(tabFromPath(window.location.pathname));
       setShowTracks(isTracksView(window.location.pathname));
+      setReturnTo(readValidatedReturnTo());
     };
     window.addEventListener('popstate', sync);
     window.addEventListener(APP_NAVIGATION_EVENT, sync);
@@ -355,6 +372,10 @@ export function Settings(): ReactElement {
   useEffect(() => {
     saveLocalSettings(settings);
     applyUiScale(settings.uiScale);
+    // Let the running SFX service pick up master-audio / effects-volume changes live
+    // (it re-reads localStorage on this event), so the Effects slider takes effect
+    // without a reload — the SFX analogue of the BGM mute-change event.
+    window.dispatchEvent(new CustomEvent(SFX_SETTINGS_CHANGE_EVENT));
   }, [settings]);
 
   // Load the soundtrack list whenever the dedicated tracks view is opened. A fresh
@@ -392,14 +413,17 @@ export function Settings(): ReactElement {
     return () => { active = false; };
   }, [showTracks]);
 
-  // Reflect the BGM player's transport state so the playing row shows ■ Stop.
+  // Reflect the BGM player's transport state so the current row distinguishes
+  // sounding playback from paused/muted playback.
   useEffect(() => {
     const onState = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { playing?: boolean; currentUrl?: string | null; otherTab?: boolean; otherTitle?: string | null };
+      const detail = (event as CustomEvent).detail as Partial<NowPlayingState>;
       setNowPlaying({
         playing: Boolean(detail.playing),
+        paused: Boolean(detail.paused),
         currentUrl: detail.currentUrl ?? null,
         otherTab: Boolean(detail.otherTab),
+        otherPaused: Boolean(detail.otherPaused),
         otherTitle: detail.otherTitle ?? null,
       });
     };
@@ -407,33 +431,53 @@ export function Settings(): ReactElement {
     return () => window.removeEventListener(BGM_STATE_EVENT, onState);
   }, []);
 
-  // Crossfade the panel body when the target menu changes: fade the current controls
-  // out, swap in the next menu's controls at zero opacity, then fade them in. The data
-  // fetch keys off showTracks (not display), so the soundtrack list is already loading
-  // while the fade-out plays. This is a pure opacity fade (no movement), which is safe
-  // under prefers-reduced-motion, so it runs for everyone — including the common case of
-  // Windows "Animation effects" off, which makes Chrome report reduced-motion.
+  // Deploy-time build provenance for About (prod only). Dev already knows its
+  // worktree + commit from the baked __BUILD_INFO__, so it skips the call. Best-
+  // effort and defensively parsed: any failure (no backend, non-JSON SPA fallback,
+  // empty env) just leaves About showing the baked app version.
+  useEffect(() => {
+    const info = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
+    if (info?.mode === 'dev') return undefined;
+    const controller = new AbortController();
+    fetch('/api/build-info', { signal: controller.signal, headers: { Accept: 'application/json' } })
+      .then((res) => (res.ok && (res.headers.get('content-type') || '').includes('application/json') ? res.json() : null))
+      .then((data) => { if (data && typeof data === 'object') setBuildRemote(data as BuildInfoRemote); })
+      .catch(() => { /* provenance is chrome; never block or surface */ });
+    return () => controller.abort();
+  }, []);
+
+  // Start a crossfade when the target menu changes: keep the current panel as `previous`,
+  // swap `display` to the new one, and render both stacked. The data fetch keys off
+  // showTracks, so the soundtrack list loads during the fade. Pure opacity = reduced-motion
+  // safe (runs even with Windows animations off → Chrome `reduce`).
   useEffect(() => {
     if (display.tab === activeTab && display.tracks === showTracks) return;
-    setPanelPhase('out');
-    const timer = window.setTimeout(() => {
-      setDisplay({ tab: activeTab, tracks: showTracks });
-      setPanelPhase('in');
-    }, PANEL_FADE_MS);
-    return () => window.clearTimeout(timer);
+    setPrevious(display);
+    setDisplay({ tab: activeTab, tracks: showTracks });
+    setXfade('enter');
   }, [activeTab, showTracks, display.tab, display.tracks]);
+
+  // Drive enter -> active one frame later, so the start opacities (prev 1 / next 0) paint
+  // before the transition runs — then the two overlap-fade simultaneously.
+  useEffect(() => {
+    if (xfade !== 'enter') return undefined;
+    const raf = requestAnimationFrame(() => setXfade('active'));
+    return () => cancelAnimationFrame(raf);
+  }, [xfade]);
+
+  // Once a crossfade has run its --ds-duration-fade pass, drop the outgoing layer. Keyed on
+  // `previous` so a new tab click mid-fade cleanly restarts the timer (queue-last).
+  useEffect(() => {
+    if (!previous) return undefined;
+    const timer = window.setTimeout(() => { setPrevious(null); setXfade('idle'); }, PANEL_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [previous]);
 
   const active = useMemo(() => tabs.find((tab) => tab.id === display.tab) || tabs[0], [display.tab]);
 
   const updateSetting = <Key extends keyof LocalSettings>(key: Key, value: LocalSettings[Key]) => {
     setConfirmingReset(false);
     setSettings((current) => ({ ...current, [key]: value }));
-  };
-
-  const setBackgroundMusic = (enabled: boolean) => {
-    setConfirmingReset(false);
-    setMuted(!enabled);
-    writeMuted(!enabled);
   };
 
   const setMasterAudio = (enabled: boolean) => {
@@ -485,13 +529,61 @@ export function Settings(): ReactElement {
     updateSetting('uiScale', clamp(settings.uiScale + delta, 90, 120, DEFAULT_SETTINGS.uiScale));
   };
 
-  const build = buildSummary();
+  // The About → Build row. Dev keeps its worktree · commit line; prod shows the
+  // baked semver plus the most recent PR (title links to the GitHub pull request),
+  // with the deploy's short commit in the muted subtitle. Replaces the old
+  // "(no-git) · <asset-hash>" line, which said nothing to a human.
+  const buildInfo = typeof __BUILD_INFO__ === 'undefined' ? undefined : __BUILD_INFO__;
+  let buildDetail: string;
+  let buildValue: ReactNode;
+  if (buildInfo?.mode === 'dev') {
+    const port = window.location.port || 'default';
+    buildDetail = `Local dev server · :${port} · started ${new Date(buildInfo.startedAt).toLocaleTimeString()}`;
+    buildValue = (
+      <span style={{ ...BUILD_MONO, fontSize: 12 }}>
+        {`${buildInfo.worktree} · ${buildInfo.commit}${buildInfo.dirty ? '*' : ''}`}
+      </span>
+    );
+  } else {
+    const version = buildInfo?.version ? `v${buildInfo.version}` : '(unknown)';
+    const commit = (buildRemote?.commit || '').trim();
+    buildDetail = `Production build${commit ? ` · ${commit}` : ''}`;
+    const prTitle = (buildRemote?.prTitle || '').trim();
+    const prUrl = (buildRemote?.prUrl || '').trim();
+    const prNumber = buildRemote?.prNumber != null ? String(buildRemote.prNumber).trim() : '';
+    // Lead with #NNN so the durable PR handle survives the ellipsis on long titles;
+    // the full title is on the tooltip and one click away.
+    const prLabel = [prNumber ? `#${prNumber}` : '', prTitle].filter(Boolean).join(' ');
+    const prClamp: CSSProperties = { maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+    const prLink: CSSProperties = { ...prClamp, color: 'var(--ds-accent)' };
+    buildValue = (
+      <span style={{ fontSize: 12, display: 'inline-flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <span style={BUILD_MONO}>{version}</span>
+        {prLabel ? <span aria-hidden style={{ opacity: 0.4 }}>·</span> : null}
+        {prLabel
+          ? (prUrl
+              ? <a href={prUrl} target="_blank" rel="noreferrer noopener" title={prTitle || prLabel} style={prLink}>{prLabel}</a>
+              : <span title={prTitle || prLabel} style={prClamp}>{prLabel}</span>)
+          : null}
+      </span>
+    );
+  }
 
-  // The track currently coming out of the speakers, looked up in the loaded list by
-  // the player's broadcast url — drives the permanent "Now Playing" row.
-  const nowPlayingTrack = nowPlaying.playing && tracks
+  // Decorate an intra-settings href so the ?returnTo thread survives every hop —
+  // rail tabs, View Tracks, and the tracks bar's ← Back. Drop it on any one of these
+  // and the screen-level Back silently vanishes after that click.
+  const withReturnTo = (path: string): string =>
+    returnTo ? `${path}?returnTo=${encodeURIComponent(returnTo)}` : path;
+
+  // The track currently selected in the player, looked up in the loaded list by
+  // the player's broadcast url — drives the permanent "Now Playing" row. Muting
+  // pauses the current track; it does not clear the now-playing identity.
+  const nowPlayingTrack = nowPlaying.currentUrl && tracks
     ? tracks.find((track) => track.url === nowPlaying.currentUrl) ?? null
     : null;
+  const nowPlayingEyebrow = nowPlayingTrack
+    ? [nowPlaying.paused ? 'Paused' : null, nowPlayingTrack.artist].filter(Boolean).join(' · ')
+    : '';
 
   const renderGeneral = () => (
     <>
@@ -530,9 +622,9 @@ export function Settings(): ReactElement {
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Music">
-        <SettingsRow title="Background Music" description="Preserves the existing background music mute preference.">
-          <Toggle checked={!muted} label="Toggle Background Music" onChange={setBackgroundMusic} />
-        </SettingsRow>
+        {/* Background-music on/off lives on the persistent title-bar mute control now
+            (ADR-0044) — it drove the same MUTE_KEY as this row, so the row was a dup.
+            Master Audio above is the all-sound master; this section keeps mix + tracks. */}
         <SettingsRow title="Music Volume" description="Set the target music mix for this browser.">
           <Slider
             value={settings.musicVolume}
@@ -540,7 +632,7 @@ export function Settings(): ReactElement {
             label="Music Volume"
             onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.musicVolume))}
           />
-          <SettingsButton href={TRACKS_PATH} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
+          <SettingsButton href={withReturnTo(TRACKS_PATH)} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Effects">
@@ -551,6 +643,7 @@ export function Settings(): ReactElement {
             label="Effects Volume"
             onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
           />
+          <SettingsButton onClick={() => previewTerrain('water')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
         </SettingsRow>
         <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
           <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
@@ -630,24 +723,47 @@ export function Settings(): ReactElement {
       <SettingsSection title="About">
         <SettingsRow
           title="Build"
-          description={build.detail}
-          value={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{build.headline}</span>}
+          description={buildDetail}
+          value={buildValue}
         />
       </SettingsSection>
     </>
   );
 
+  // One panel's content, by tab — used for BOTH the incoming and (during a crossfade) the
+  // outgoing layer, so the two stack and overlap-fade in a single pass.
+  const renderPanel = (d: { tab: SettingsTab; tracks: boolean }) => (
+    <>
+      {d.tab === 'general' ? renderGeneral() : null}
+      {d.tab === 'audio' ? (d.tracks ? renderTracks() : renderAudio()) : null}
+      {d.tab === 'gameplay' ? renderGameplay() : null}
+      {d.tab === 'creator-tools' ? renderCreatorTools() : null}
+    </>
+  );
+
   return (
     <section className="settings-art-route" aria-label="Settings" data-testid="settings">
-      {/* Same art-directed backdrop + synced rain as the main menu, behind the frames. */}
+      {/* Return to where the user opened Settings from. It rides the trailing actions slot
+          with the account/settings cluster (the app's nav home) — the same title-bar spot
+          the Level Editor's back uses — so every return control is in one consistent place;
+          the brand lockup stays a fixed leading anchor. Shown only when the URL carries a
+          valid origin; on a direct open the brand lockup is the way home. */}
+      <TitleBarSlot region="actions">
+        {returnTo ? (
+          <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
+        ) : null}
+      </TitleBarSlot>
+      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu,
+          behind the frames. */}
+      <SceneBackdrop />
       <AmbienceBackground />
       <div className="settings-screen app-shell-bar-pad">
-        <div className={`settings-shell ${entered ? 'is-entered' : ''}`}>
+        <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
             {tabs.map((tab) => (
-              <a
+              <NavButton
                 key={tab.id}
-                href={TAB_PATHS[tab.id]}
+                to={withReturnTo(TAB_PATHS[tab.id])}
                 className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
                 aria-current={tab.id === activeTab ? 'page' : undefined}
                 onClick={() => setConfirmingReset(false)}
@@ -658,7 +774,7 @@ export function Settings(): ReactElement {
                 <span>
                   <strong>{tab.label}</strong>
                 </span>
-              </a>
+              </NavButton>
             ))}
           </aside>
 
@@ -671,7 +787,7 @@ export function Settings(): ReactElement {
               <div className="settings-tracks-bar">
                 <div className="settings-tracks-bar-col">
                   <div className="settings-tracks-bar-actions">
-                    <SettingsButton href={TAB_PATHS.audio} ariaLabel="Back to Audio settings">← Back</SettingsButton>
+                    <SettingsButton href={withReturnTo(TAB_PATHS.audio)} ariaLabel="Back to Audio settings">← Back</SettingsButton>
                     <SettingsButton onClick={shuffleTracks} ariaLabel="Shuffle and play the soundtrack">⇄ Shuffle</SettingsButton>
                   </div>
                   <section className="settings-row settings-nowplaying-row" aria-label="Now playing">
@@ -679,12 +795,12 @@ export function Settings(): ReactElement {
                       <span className="settings-nowplaying-label">Now Playing</span>
                       {nowPlaying.otherTab ? (
                         <>
-                          <span className="settings-row-eyebrow">Playing in another tab</span>
+                          <span className="settings-row-eyebrow">{nowPlaying.otherPaused ? 'Paused in another tab' : 'Playing in another tab'}</span>
                           <h4 className="settings-nowplaying-empty">{nowPlaying.otherTitle ?? '—'}</h4>
                         </>
                       ) : nowPlayingTrack ? (
                         <>
-                          {nowPlayingTrack.artist ? <span className="settings-row-eyebrow">{nowPlayingTrack.artist}</span> : null}
+                          {nowPlayingEyebrow ? <span className="settings-row-eyebrow">{nowPlayingEyebrow}</span> : null}
                           <h4>{nowPlayingTrack.title}</h4>
                         </>
                       ) : (
@@ -697,15 +813,19 @@ export function Settings(): ReactElement {
               </div>
             ) : null}
             <KitScroll className="settings-scroll">
-              <div className={`settings-panel-content ${panelPhase === 'out' ? 'is-leaving' : 'is-entering'}`}>
-                {display.tab === 'general' ? renderGeneral() : null}
-                {display.tab === 'audio' ? (display.tracks ? renderTracks() : renderAudio()) : null}
-                {display.tab === 'gameplay' ? renderGameplay() : null}
-                {display.tab === 'creator-tools' ? renderCreatorTools() : null}
+              <div className={`settings-panel-content settings-xfade-${xfade}`}>
+                {previous ? (
+                  <div className="settings-xfade-layer settings-xfade-prev" aria-hidden="true">
+                    {renderPanel(previous)}
+                  </div>
+                ) : null}
+                <div className="settings-xfade-layer settings-xfade-next">
+                  {renderPanel(display)}
+                </div>
               </div>
             </KitScroll>
           </main>
-        </div>
+        </ArtRouteChrome>
       </div>
     </section>
   );

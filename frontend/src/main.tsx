@@ -11,6 +11,8 @@ import { App } from './ui/App';
 import { armForColdHome, isMainMenuPath } from './ui/shell/coldReveal';
 // @ts-ignore — bgm.js is untyped legacy JS, imported for its side-effecting init.
 import { initBgm } from './bgm.js';
+import { primeSfx } from './sfx';
+import { initProgressSync } from './campaign/progressSync';
 
 // Stale-deploy self-heal. index.html is served no-cache and the chunks are
 // content-hashed + immutable — correct — but that does NOT save a tab that
@@ -51,6 +53,14 @@ if (isMainMenuPath(window.location.pathname)) {
 armForColdHome();
 
 try { initBgm(); } catch { /* background music is decorative */ }
+// Arm the procedural terrain SFX on the first user gesture (mirrors initBgm). Only
+// attaches listeners — no AudioContext until a gesture, so it's cheap + autoplay-safe.
+try { primeSfx(); } catch { /* sound effects are decorative */ }
 
 const root = document.getElementById('root');
 if (root) createRoot(root).render(<App />);
+
+// Fold this browser's campaign progress together with the signed-in account's, so clears/stars
+// follow you across devices (and a guest's local progress merges up on first sign-in). Fail-soft:
+// signed out / offline is a no-op, and it never blocks the render above.
+void initProgressSync();

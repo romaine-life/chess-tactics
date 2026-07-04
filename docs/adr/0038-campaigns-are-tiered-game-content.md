@@ -6,6 +6,14 @@ deciders: Nelson, Claude
 
 # ADR-0038: Campaigns are tiered game content — a global official tier (file + DB override) plus per-user campaigns
 
+> **Amendment (2026-07-03):** The committed `official.json` fixture, its dev-only client
+> fallback, and the weekly "Bake official campaigns" workflow described below have been
+> **removed**. The live `official_campaigns` DB row is now the SOLE source of official
+> campaigns — no file mirror, no fallback. A DB miss (or a frontend with no backend in
+> dev) shows no officials rather than stale content. The sections below are kept as the
+> original decision record; read every "file"/`official.json`/"weekly bake" reference as
+> historical.
+
 The first persistence/content-architecture ADR (the rest govern UI chrome). It
 sits alongside `docs/persistence.md`, which it updates: campaigns stop being a
 purely per-user, sign-in-gated document and become **game content with two
@@ -144,6 +152,33 @@ swappable to a real role check later, inside the same helper, with zero call-sit
 churn. We deliberately do **not** reuse `requireDesignPortfolioWriter` (which
 falls through to any-signed-in-user in prod).
 
+### Editing model: tier-aware inline, not a global mode (updated)
+
+The original Step 2 sketch flipped a global `officialMode` to make the *whole*
+store editable official drafts behind one "Publish" button. That flag was
+removed (see `docs/level-editor-save-and-officials-inline.md`). The editing model
+is now **tier-aware inline**: every campaign/level already carries its tier
+(`origin`/`off-` id), and a save routes by the *thing's* tier, not a mode. A new
+shared `frontend/src/campaign/save.ts` is the single spine for both the Campaign
+Editor and the Level Editor:
+
+- **Private tier** → `saveUserWorkspace()` (`PUT /api/campaign-workspace`), verb
+  **"Save"**, light, no confirm. Serializes only the user slice
+  (`userWorkspaceForSave`: `origin !== 'official'`, non-`off-` levels).
+- **Official tier** → `publishOfficialWorkspace()`
+  (`PUT /api/official-campaigns/default`), verb **"Publish to all players"**,
+  confirm dialog, admin-gated. `officialWorkspaceForSave` serializes **only** the
+  official slice (`origin === 'official'`, `off-` levels) — a change from the old
+  whole-store serialize, which was safe only because `officialMode` made the store
+  officials-only.
+
+`readOnly` is **UI-derived**, never trusted from a baked tag: an official campaign
+is read-only (padlock) only for non-admins; an admin edits officials in place and
+sees an **"OFFICIAL"** tag. `mapSaveError` centralizes error handling: `401` →
+sign-in, `403` → "Admin access required to publish official campaigns." (proves the
+server fails closed), **`503` → "Server unavailable — try again in a moment."** (a
+DB-down branch that previously had no message), else a generic failure.
+
 ### Load-bearing guardrails (verified against the code)
 
 1. **Official ids are namespaced and digit-free** — `off-c-<slug>` / `off-l-<slug>`
@@ -159,11 +194,13 @@ falls through to any-signed-in-user in prod).
 3. **Progress stays correct for free** — `progress.ts` keys by `levelId` alone in
    localStorage; the disjoint `off-` prefix means official and per-user progress
    can never collide, and all existing per-user entries keep resolving verbatim.
-4. **Save never persists officials** — `saveWorkspaceNow` filters
-   `origin !== 'official'` (and drops their levels) and strips `origin`/`readOnly`
-   tags before PUT, so the per-user row stays byte-identical to today. This single
-   guard at the one Save call site is the accepted mitigation for officials sharing
-   the in-memory store array.
+4. **Save never persists officials, and publish never persists private** —
+   `userWorkspaceForSave` filters `origin !== 'official'` (and drops `off-` levels);
+   `officialWorkspaceForSave` filters to `origin === 'official'` (and `off-` levels);
+   both strip `origin`/`readOnly` before PUT, so the per-user row stays
+   byte-identical to today and the official row carries only officials. These two
+   filters in `frontend/src/campaign/save.ts` (used by both editors) are the accepted
+   mitigation for officials sharing the in-memory store array.
 5. **PUT validation reuses `validateWorkspaceBody`** plus an added check that every
    campaign/level id carries the `off-` prefix and is digit-free.
 

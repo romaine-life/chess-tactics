@@ -30,3 +30,58 @@ prop inside the frame's ~69px of headroom above the foot.
 
 `grass-tuft` predates this recipe — rendered from the `grass-02` OBJ via the original
 `render_doodad.py` (grass-specific import + scatter).
+
+## Multi-cell props (trees, houses)
+
+Props (`frontend/src/core/props.ts`) occupy a W×H block and render as ONE un-sliced stand-up
+sprite via `<PropSprite>` (`frontend/src/render/BoardStructure.tsx`). Each prop carries its OWN
+`sprite` frame (`{w,h,anchorX,anchorY}`) — measured per image, not a fixed canvas — and the
+renderer seats the ground-contact pixel with `translate(-(anchorX/w)%, -(anchorY/h)%)`. px/unit is
+held at the 1×1-doodad rig (137.4) so every prop reads at true relative scale.
+
+House art is STYLIZED, never photoreal (he reads scanned-mesh renders as "too realistic" — see the
+`stylized-over-photoreal-props` memory). Two pipelines:
+
+1. **Low-poly stylized mesh → Blender render** (e.g. `cottage`). Render uncut into a generous frame,
+   then crop-to-content + measure the foot anchor (PIL `alpha.getbbox()`):
+   ```
+   # scales by horizontal FOOTPRINT (not largest-dim, which clipped boxy houses); handles
+   # .blend (open it) / .fbx / .obj / .gltf; relinks + auto-wires textures from <texdir>:
+   blender [scene.blend] -b -P docs/art/doodad-concepts/render_prop_mesh.py -- \
+     <out.png> <none|mesh.fbx|.obj|.gltf> <footprint~1.1> full <none|x90|autoz> <texdir> <FW> <FH> [TZ]
+   # then: crop to alpha bbox + ~10px margin, anchor = (bbox center-x, bbox bottom). Set def.sprite.
+   ```
+2. **Photoreal mesh → gated Codex RESTYLE** (e.g. `cabin`, `lodge`). Keep the real shape/iso, re-skin
+   to pixel-art. Render a Blender capture as above, then:
+   ```
+   node frontend/scripts/forge-prop-restyle.mjs <capture.png> <out.png>
+   ```
+   This goes through `codex-imagegen.mjs` → `imageGenVerdict` (rollout `image_generation_call`), so a
+   code-drawn run is REJECTED (never call `codex.exe` raw). Output is flat-green → chroma-keyed to
+   alpha; then crop-to-content + downscale to ~210px wide + re-binarise alpha + measure anchor.
+
+Output `/assets/props/<propId>/{back,front}.png` (flat sprites use the same image for both halves).
+
+| prop id | kind  | footprint | pipeline | source mesh (CC0) | notes |
+|---------|-------|-----------|----------|-------------------|-------|
+| oak     | tree  | 2×2       | Blender render (glTF) | `island_tree_01` (Poly Haven) | **NOT READY** — still photoreal; needs the Codex restyle to match the stylized houses |
+| cottage | house | 2×2       | low-poly mesh render | `lowvpoly stylized home` (user-supplied `/houses`) | stylized as-is |
+| cabin   | house | 2×2       | Codex restyle of capture | `forest-loner` `house_final.fbx` (user-supplied) | photoreal cabin → pixel-art restyle |
+| lodge   | house | 2×2       | Codex restyle of capture | `forest-house` `nice_house.blend` (user-supplied) | photoreal green-roof → pixel-art restyle |
+| rock    | rock  | 1×1       | Codex restyle of capture | `boulder-rock-3d-model-free` `Meshy_AI_Layered_Mossy_Boulder…glb` (user-supplied `/rocks`) | 1×1 blocking obstacle — the placeable rock (mossy layered). 40px native @ `scale 1` baseline |
+| fieldstone | rock | 1×1     | Codex restyle of capture | `lone-granite-boulder-stone` `round-boulder.fbx` (user-supplied `/rocks`) | 1×1 blocking obstacle — round weathered boulder. 51px native @ `scale 1` baseline. NOT named `granite`: that id is the obstacle-piece sprite variant (`/assets/units/rock/granite/`), a separate system |
+
+Source meshes for the houses arrived as zips in the repo-root `houses/` staging folder (outside
+git); the 4th, `dae-diorama-forest-loner`, is a `.rar` and needs an extractor. The two rock meshes
+arrived the same way in `/rocks`. 1×1 props must FIT WITHIN THEIR TILE (owner call, 2026-07-02):
+the base sits inside the 96px cell diamond with margin.
+
+Sizing baseline (owner call, 2026-07-03): a small 1×1 prop is baked at ~its on-board size so its
+NATURAL `scale: 1` IS the intended size — the scale slider then centers on 1× and you tune ± from a
+sane baseline, and the sprite renders crisp 1:1. `rock` is 40px native @ `scale 1` and `fieldstone` 51px @ `scale 1`. (This differs from big props
+like `cabin`/`cottage`, which ship large and shrink via a fractional `scale` so they stay detailed
+when scaled up — the right trade-off there; for a rock that's always small, 1:1 wins.)
+
+Fences are NOT props — they are an edge-autotile feature (`featureAutotile.ts`, kind `fence`),
+visual-only in v1; the brush is gated until a 16-mask wood/stone set is baked (via the feature-tile
+pipeline, not this recipe).

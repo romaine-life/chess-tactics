@@ -9,7 +9,8 @@ import { isPassableTerrain } from '../core/terrain';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import type { TileFamilyId } from '../core/tileSockets';
-import { defaultFacingForSide } from '../core/pieces';
+import { PLAYABLE_PIECE_TYPES, defaultFacingForSide } from '../core/pieces';
+import { propCells, propDef } from '../core/props';
 
 const DEFAULT_SIZE: BoardSize = { cols: 8, rows: 12 };
 const ENEMY_CHOICES: readonly PieceType[] = ['knight', 'bishop', 'rook', 'queen'];
@@ -46,22 +47,130 @@ export interface SkirmishOptions {
   party?: PieceType[];
   /** Authored campaign level to test play. */
   level?: Level;
+  /** Enemy decision policy (consumed by the store, not by setup): 'search' is the
+   * objective-aware search AI; 'greedy' keeps the legacy policy as an A/B lever. */
+  ai?: 'search' | 'greedy';
 }
 
-function createFromLevel(level: Level): GameState {
-  const pieces: Piece[] = level.layers.units.map((unit, index) => ({
-    id: `${unit.side}-${unit.type}-${index}`,
-    side: unit.side,
-    type: unit.type,
-    x: unit.x,
-    y: unit.y,
-    alive: true,
-    startY: unit.side === 'player' ? level.board.rows - 1 : 0,
-  }));
+function pawnForwardFields(type: PieceType, facing: Piece['facing']): Pick<Piece, 'pawnForward'> {
+  return type === 'pawn' && facing ? { pawnForward: facing } : {};
+}
+
+/** Build the initial GameState for an authored level. Exported for headless
+ * self-play (game/selfplay.ts) — the store path reaches it via createSkirmish. */
+export function createFromLevel(level: Level, seed: number): GameState {
+  const pieces: Piece[] = level.layers.units.map((unit, index) => {
+    // Honor the authored facing so test-play shows the painted direction; fall back to
+    // the side's default when a level (legacy / facing-free) doesn't carry one. Pawns
+    // also snapshot this as their immutable forward direction for the whole fight.
+    const facing = unit.facing ?? defaultFacingForSide(unit.side);
+    return {
+      id: `${unit.side}-${unit.type}-${index}`,
+      side: unit.side,
+      type: unit.type,
+      x: unit.x,
+      y: unit.y,
+      facing,
+      alive: true,
+      // Fixed campaign levels author the battle's initial position directly, so a pawn's
+      // double-step belongs to the cell it was placed on, matching random/free setup.
+      startX: unit.x,
+      startY: unit.y,
+      ...pawnForwardFields(unit.type, facing),
+    };
+  });
+
+  // Realise multi-cell BLOCKING props as single-cell neutral `rock` colliders — one per
+  // footprint cell. This is why blocking needs ZERO rules.ts changes: a rock is already an
+  // obstacle (legalMoves returns [], rays break on it, it's never an enemy/capture target, and
+  // victory counts only player/enemy living pieces). An unknown prop id is SKIPPED (no
+  // collider, no crash). A cell already taken by an authored unit/piece keeps the unit — the
+  // collider for that one cell is dropped so we never double-occupy a square.
+  const props = level.layers.props ?? [];
+  const occupied = new Set(pieces.map((p) => `${p.x},${p.y}`));
+  for (const placed of props) {
+    const def = propDef(placed.propId);
+    if (!def || !def.blocking) continue;
+    propCells(placed.x, placed.y, def).forEach((cell, cellIndex) => {
+      const key = `${cell.x},${cell.y}`;
+      if (occupied.has(key)) return; // authored unit wins this cell
+      occupied.add(key);
+      pieces.push({
+        id: `prop-${placed.propId}-${placed.x}-${placed.y}-${cellIndex}`,
+        side: 'neutral',
+        type: 'rock',
+        x: cell.x,
+        y: cell.y,
+        alive: true,
+        startX: -1,
+        startY: -1,
+      });
+    });
+  }
+
+  // Random placement (ADR-0050): deal the authored roster onto seeded-random free cells
+  // of each side's pooled spawn zones instead of reading authored positions (a playable
+  // random level has `layers.units` empty — the editor's playability gate enforces it).
+  // Order of operations matters: terrain + the blocking-prop colliders above joined the
+  // taken set FIRST, so no piece is ever dealt inside a tree footprint or onto impassable
+  // ground. Restarting with a new seed reshuffles the deal — that's the mode's point.
+  if (level.placement === 'random') {
+    const rng = createRng(seed);
+    const taken = new Set(occupied);
+    for (const c of level.layers.terrain) if (!isPassableTerrain(c.terrain)) taken.add(`${c.x},${c.y}`);
+    for (const side of ['player', 'enemy'] as const) {
+      const zoneType = side === 'player' ? 'player-spawn' : 'enemy-spawn';
+      // Pool the side's spawn tiles (multiple zones of a type pool), deduped, in-bounds,
+      // minus taken cells — the same usable-tile math validatePlayability promised on.
+      const free: Array<{ x: number; y: number }> = [];
+      const seen = new Set<string>();
+      for (const zone of level.layers.zones) {
+        if (zone.type !== zoneType) continue;
+        for (const [x, y] of zone.tiles) {
+          const k = `${x},${y}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          if (taken.has(k)) continue;
+          if (x < 0 || x >= level.board.cols || y < 0 || y >= level.board.rows) continue;
+          free.push({ x, y });
+        }
+      }
+      const roster = level.roster?.[side] ?? {};
+      // Iterate piece types in the canonical order, never Object.keys — object key order
+      // is authoring-insertion order, which would silently change the deal between two
+      // otherwise identical levels. Same seed must always mean the same layout.
+      for (const type of PLAYABLE_PIECE_TYPES) {
+        const count = roster[type] ?? 0;
+        for (let i = 0; i < count && free.length; i += 1) {
+          const cell = free.splice(rng.int(free.length), 1)[0];
+          taken.add(`${cell.x},${cell.y}`);
+          pieces.push({
+            id: `${side}-${type}-${i}`,
+            side,
+            type,
+            x: cell.x,
+            y: cell.y,
+            facing: defaultFacingForSide(side),
+            alive: true,
+            // The dealt cell is the piece's home rank, so a dealt pawn keeps its
+            // double-step — matching the free-skirmish spawn behavior.
+            startX: cell.x,
+            startY: cell.y,
+            ...pawnForwardFields(type, defaultFacingForSide(side)),
+          });
+        }
+      }
+    }
+  }
+
   return {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
     terrain: level.layers.terrain,
+    boardCode: level.boardCode,
+    // The render channel: the board draws the tall prop sprite from this list, while the
+    // colliders above do the blocking. Defaults to [] so a prop-free level stays prop-free.
+    props,
     turn: 'player',
     winner: null,
   };
@@ -78,7 +187,7 @@ function pickEmptyCell(taken: Set<string>, cols: number, ys: readonly number[], 
 }
 
 export function createSkirmish(opts: SkirmishOptions): GameState {
-  if (opts.level) return createFromLevel(opts.level);
+  if (opts.level) return createFromLevel(opts.level, opts.seed);
   const size = opts.size ?? DEFAULT_SIZE;
   const party = opts.party ?? ['knight', 'bishop'];
   const rng = createRng(opts.seed);
@@ -101,7 +210,9 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
         y: cell.y,
         facing: defaultFacingForSide(side),
         alive: true,
+        startX: cell.x,
         startY: cell.y,
+        ...pawnForwardFields(type, defaultFacingForSide(side)),
       });
     });
   };
@@ -116,7 +227,7 @@ export function createSkirmish(opts: SkirmishOptions): GameState {
     const cell = pickEmptyCell(taken, size.cols, midYs, rng);
     if (!cell) break;
     taken.add(`${cell.x},${cell.y}`);
-    pieces.push({ id: `rock-${i}`, side: 'neutral', type: 'rock', x: cell.x, y: cell.y, alive: true, startY: -1 });
+    pieces.push({ id: `rock-${i}`, side: 'neutral', type: 'rock', x: cell.x, y: cell.y, alive: true, startX: -1, startY: -1 });
   }
 
   return { size, pieces, terrain, turn: 'player', winner: null };

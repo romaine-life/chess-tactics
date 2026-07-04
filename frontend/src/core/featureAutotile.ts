@@ -18,11 +18,14 @@
 //   8    W    (x-1, y)         upper-left  (NW)
 
 // Linear-feature kinds. Each kind is its OWN connectivity class — a road connects to
-// roads, a river to rivers (never to each other). Roads/rivers AUTOTILE (their piece is
-// derived from same-kind neighbours); a BRIDGE does NOT — it's a straight-only span whose
-// orientation the author sets explicitly (see BridgeOrientation). All baked by
-// build-feature-tiles.py.
-export type FeatureKind = 'road' | 'river' | 'bridge';
+// roads, a river to rivers, a bridge to bridges, a fence to fences (never to each other).
+// Roads/rivers AUTOTILE (their piece is derived from same-kind neighbours) and are baked by
+// build-feature-tiles.py. A BRIDGE is a straight-only span whose orientation the author sets
+// explicitly (see BridgeOrientation); its two ends react to same-axis bridge neighbours
+// (thru/cap/single) and it is baked by the stone-span pipeline (scripts/build-bridge-tiles.py).
+// FENCES are PLUMBING ONLY in v1 (no baked mask art yet, brush gated in the editor, visual-only
+// when art lands — they add nothing to collision).
+export type FeatureKind = 'road' | 'river' | 'bridge' | 'fence';
 
 // A feature's surface look. Within a kind, all cells connect regardless of material
 // (the shape flows, the surface can change per cell); the author picks which to paint.
@@ -30,14 +33,21 @@ export type FeatureKind = 'road' | 'river' | 'bridge';
 // only the two straight spans (masks 5 & 10).
 export type RoadMaterial = 'dirt' | 'cobble' | 'stone' | 'pebble';
 export type RiverMaterial = 'water';
-export type BridgeMaterial = 'wood';
-export type FeatureMaterial = RoadMaterial | RiverMaterial | BridgeMaterial;
+// A bridge ships one material for now (the stone-span tiling pipeline). More can follow the same
+// render-continuous-then-slice pipeline later.
+export type BridgeMaterial = 'stone';
+// Fence materials — plumbing only; the mask art does not exist yet (see ROAD/RIVER comment).
+export type FenceMaterial = 'wood' | 'stone';
+export type FeatureMaterial = RoadMaterial | RiverMaterial | BridgeMaterial | FenceMaterial;
 
 // Authored codex-heal materials that ship (build-feature-tiles.py). stone/pebble stay
 // valid types but aren't in the palette until they get the same treatment.
 export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'cobble'];
 export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
-export const BRIDGE_MATERIALS: readonly BridgeMaterial[] = ['wood'];
+export const BRIDGE_MATERIALS: readonly BridgeMaterial[] = ['stone'];
+// Fence materials exist as types/plumbing, but the brush is gated until mask art ships, so the
+// palette is intentionally empty for now (nothing selectable yet).
+export const FENCE_MATERIALS: readonly FenceMaterial[] = [];
 export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
   dirt: 'Dirt',
   cobble: 'Cobblestone',
@@ -50,15 +60,34 @@ export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
 export const ROAD_MATERIAL_LABELS = FEATURE_MATERIAL_LABELS;
 export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'dirt';
 export const DEFAULT_RIVER_MATERIAL: RiverMaterial = 'water';
-export const DEFAULT_BRIDGE_MATERIAL: BridgeMaterial = 'wood';
+export const DEFAULT_BRIDGE_MATERIAL: BridgeMaterial = 'stone';
+export const DEFAULT_FENCE_MATERIAL: FenceMaterial = 'wood';
+
+// Fences are PLUMBING-ONLY in v1: the kind, materials, wire key (`fn`) and editor brush all
+// exist, but there is no baked mask art yet, so the brush is GATED (disabled) in the editor and
+// any fence cell renders no image (never a broken/404 sprite). Edge-blocking is deferred —
+// fences add NOTHING to collision.
+export const FENCE_ART_PENDING = true;
 
 /** Selectable materials for a feature kind (editor palette). */
 export const featureMaterials = (kind: FeatureKind): readonly FeatureMaterial[] =>
-  kind === 'river' ? RIVER_MATERIALS : kind === 'bridge' ? BRIDGE_MATERIALS : ROAD_MATERIALS;
+  kind === 'river'
+    ? RIVER_MATERIALS
+    : kind === 'bridge'
+      ? BRIDGE_MATERIALS
+      : kind === 'fence'
+        ? FENCE_MATERIALS
+        : ROAD_MATERIALS;
 
 /** The default brush material for a feature kind. */
 export const defaultFeatureMaterial = (kind: FeatureKind): FeatureMaterial =>
-  kind === 'river' ? DEFAULT_RIVER_MATERIAL : kind === 'bridge' ? DEFAULT_BRIDGE_MATERIAL : DEFAULT_ROAD_MATERIAL;
+  kind === 'river'
+    ? DEFAULT_RIVER_MATERIAL
+    : kind === 'bridge'
+      ? DEFAULT_BRIDGE_MATERIAL
+      : kind === 'fence'
+        ? DEFAULT_FENCE_MATERIAL
+        : DEFAULT_ROAD_MATERIAL;
 
 // A bridge is straight-only: it spans either vertically (N–S) or horizontally (E–W). The
 // orientation is explicit (the brush sets it) — NOT auto-derived from neighbours like a road —
@@ -158,8 +187,10 @@ export const featureKey = (x: number, y: number): string => `${x},${y}`;
 
 /**
  * Canonical key for the EDGE between two adjacent cells (order-independent), used to
- * record a manually SEVERED connection. A cut is a property of the shared edge, so
- * severing from either tile cuts it for both — `roadEdgeKey(a,b) === roadEdgeKey(b,a)`.
+ * record a manually SEVERED connection (a cut) or a forced outward stub (an exit). Both
+ * are properties of the shared edge, so toggling from either tile applies to both —
+ * `roadEdgeKey(a,b) === roadEdgeKey(b,a)`. An exit's "neighbour" may be off-board (a
+ * negative or out-of-range coord); the string key handles that fine.
  */
 export const roadEdgeKey = (ax: number, ay: number, bx: number, by: number): string => {
   const a = featureKey(ax, ay);
@@ -172,20 +203,31 @@ export const roadEdgeKey = (ax: number, ay: number, bx: number, by: number): str
  * A neighbour contributes its bit only if it carries the feature AND the shared edge
  * isn't severed — so `isSevered` lets an author cut a connection that would otherwise
  * auto-join. Omit `isSevered` for pure auto-connect.
+ *
+ * `isExit` is the mirror image: it FORCES a bit on an edge that has NO same-kind
+ * neighbour (a board boundary, or an adjacent non-feature tile), so the ribbon runs to
+ * the diamond's edge — "off the board" — instead of capping. Severing always wins over
+ * an exit: an edge with a present-but-cut neighbour stays cut (exit is never consulted
+ * there). Like a cut, an exit is keyed by `roadEdgeKey` on the shared (off-board) edge.
  */
 export function featureMaskAt(
   present: ReadonlySet<string>,
   x: number,
   y: number,
   isSevered?: (edgeKey: string) => boolean,
+  isExit?: (edgeKey: string) => boolean,
 ): number {
   let mask = 0;
   for (const dir of FEATURE_DIRS) {
     const nx = x + dir.dx;
     const ny = y + dir.dy;
-    if (!present.has(featureKey(nx, ny))) continue;
-    if (isSevered?.(roadEdgeKey(x, y, nx, ny))) continue;
-    mask |= dir.bit;
+    const edgeKey = roadEdgeKey(x, y, nx, ny);
+    if (present.has(featureKey(nx, ny))) {
+      if (isSevered?.(edgeKey)) continue; // a real neighbour, but the author cut the join
+      mask |= dir.bit;
+    } else if (isExit?.(edgeKey)) {
+      mask |= dir.bit; // no neighbour, but the author forced an outward stub off this edge
+    }
   }
   return mask;
 }
@@ -194,11 +236,12 @@ export function featureMaskAt(
 export function featureMaskMap(
   present: ReadonlySet<string>,
   isSevered?: (edgeKey: string) => boolean,
+  isExit?: (edgeKey: string) => boolean,
 ): Map<string, number> {
   const masks = new Map<string, number>();
   for (const key of present) {
     const [x, y] = key.split(',').map(Number);
-    masks.set(key, featureMaskAt(present, x, y, isSevered));
+    masks.set(key, featureMaskAt(present, x, y, isSevered, isExit));
   }
   return masks;
 }

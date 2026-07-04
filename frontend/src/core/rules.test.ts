@@ -42,6 +42,17 @@ describe('pawn movement', () => {
     const m = find(legalMoves(pawn, [pawn, target], SIZE), 3, 5);
     expect(m?.capture).toBe(target.id);
   });
+  it('uses a stable authored forward direction for movement and captures', () => {
+    const pawn = P('player', 'pawn', 2, 6, { startX: 2, startY: 6, facing: 'north', pawnForward: 'east' });
+    const northEastTarget = P('enemy', 'pawn', 3, 5);
+    const southEastTarget = P('enemy', 'pawn', 3, 7);
+    const moves = legalMoves(pawn, [pawn, northEastTarget, southEastTarget], SIZE);
+    expect(has(moves, 3, 6)).toBe(true);
+    expect(has(moves, 4, 6)).toBe(true);
+    expect(has(moves, 2, 5)).toBe(false);
+    expect(find(moves, 3, 5)?.capture).toBe(northEastTarget.id);
+    expect(find(moves, 3, 7)?.capture).toBe(southEastTarget.id);
+  });
   it('can capture en passant immediately after an adjacent pawn double-step', () => {
     const pawn = P('player', 'pawn', 4, 3);
     const target = P('enemy', 'pawn', 3, 3);
@@ -58,6 +69,15 @@ describe('pawn movement', () => {
       lastMove: { pieceId: target.id, pieceType: 'pawn', side: 'enemy', from: { x: 3, y: 2 }, to: { x: 3, y: 3 } },
     });
     expect(find(moves, 3, 2)?.enPassant).toBeUndefined();
+  });
+  it('applies en passant relative to the pawn forward direction', () => {
+    const pawn = P('player', 'pawn', 4, 4, { startX: 4, startY: 4, pawnForward: 'east' });
+    const target = P('enemy', 'pawn', 4, 3, { startX: 4, startY: 1, pawnForward: 'south' });
+    const moves = legalMoves(pawn, [pawn, target], SIZE, {
+      lastMove: { pieceId: target.id, pieceType: 'pawn', side: 'enemy', from: { x: 4, y: 1 }, to: { x: 4, y: 3 } },
+    });
+    const ep = find(moves, 5, 3);
+    expect(ep).toMatchObject({ capture: target.id, enPassant: true });
   });
 });
 
@@ -116,6 +136,123 @@ describe('sliding pieces', () => {
   });
 });
 
+describe('king may not move into check', () => {
+  // A far-off enemy king keeps a board legal (both sides fielded) without
+  // touching the squares under test.
+  const farKing = () => P('enemy', 'king', 7, 0);
+  const farPlayerKing = () => P('player', 'king', 7, 11);
+
+  it('skips squares an enemy rook attacks', () => {
+    const king = P('player', 'king', 4, 6);
+    const rook = P('enemy', 'rook', 0, 5); // rakes row 5
+    const moves = legalMoves(king, [king, rook, farKing()], SIZE);
+    expect(has(moves, 3, 5)).toBe(false);
+    expect(has(moves, 4, 5)).toBe(false);
+    expect(has(moves, 5, 5)).toBe(false);
+    expect(has(moves, 3, 6)).toBe(true);
+    expect(has(moves, 4, 7)).toBe(true);
+  });
+
+  it('cannot retreat straight back along the checking line (slider x-rays the vacated square)', () => {
+    const king = P('player', 'king', 4, 3);
+    const rook = P('enemy', 'rook', 4, 0); // checks down column 4, blocked at the king
+    const moves = legalMoves(king, [king, rook, farPlayerKing()], SIZE);
+    expect(has(moves, 4, 4)).toBe(false); // stepping away in-line is still check
+    expect(has(moves, 4, 2)).toBe(false); // toward the rook, still on the file
+    expect(has(moves, 3, 3)).toBe(true); // sidestep off the file escapes
+    expect(has(moves, 5, 4)).toBe(true);
+  });
+
+  it('may capture an undefended attacker', () => {
+    const king = P('player', 'king', 4, 6);
+    const rook = P('enemy', 'rook', 4, 5); // adjacent, giving check, undefended
+    const m = find(legalMoves(king, [king, rook, farKing()], SIZE), 4, 5);
+    expect(m?.capture).toBe(rook.id);
+  });
+
+  it('may not capture a defended attacker', () => {
+    const king = P('player', 'king', 4, 6);
+    const rook = P('enemy', 'rook', 4, 5); // adjacent checker...
+    const guard = P('enemy', 'rook', 0, 5); // ...defended along row 5
+    expect(has(legalMoves(king, [king, rook, guard, farKing()], SIZE), 4, 5)).toBe(false);
+    expect(has(legalMoves(king, [king, rook, guard, farKing()], SIZE), 3, 6)).toBe(true); // still has an out
+  });
+
+  it('may not attack-in-place a multi-hp checker it cannot kill (still in check)', () => {
+    const king = P('player', 'king', 4, 6);
+    const tank = P('enemy', 'rook', 4, 5, { hp: 2, maxHp: 2 }); // survives the hit, keeps checking
+    expect(has(legalMoves(king, [king, tank, farKing()], SIZE), 4, 5)).toBe(false);
+  });
+
+  it('keeps the two kings apart (cannot step next to the enemy king)', () => {
+    const king = P('player', 'king', 4, 6);
+    const foeKing = P('enemy', 'king', 4, 4); // guards row 5 around (4,5)
+    const moves = legalMoves(king, [king, foeKing], SIZE);
+    expect(has(moves, 4, 5)).toBe(false);
+    expect(has(moves, 3, 5)).toBe(false);
+    expect(has(moves, 5, 5)).toBe(false);
+    expect(has(moves, 4, 7)).toBe(true);
+  });
+
+  it('still offers every genuinely safe square on an open board', () => {
+    const king = P('player', 'king', 4, 6);
+    expect(legalMoves(king, [king, farKing()], SIZE)).toHaveLength(8);
+  });
+
+  it('applies symmetrically to the enemy king', () => {
+    const foeKing = P('enemy', 'king', 4, 6);
+    const rook = P('player', 'rook', 0, 5); // player rook rakes row 5
+    const moves = legalMoves(foeKing, [foeKing, rook, farPlayerKing()], SIZE);
+    expect(has(moves, 4, 5)).toBe(false);
+    expect(has(moves, 3, 6)).toBe(true);
+  });
+});
+
+describe('no move may leave your own king in check (pins & check evasion)', () => {
+  const farKing = () => P('enemy', 'king', 7, 0);
+
+  it('a pinned piece may only move along the pinning line', () => {
+    const king = P('player', 'king', 4, 6);
+    const rook = P('player', 'rook', 4, 4); // pinned to the king down column 4
+    const pinner = P('enemy', 'rook', 4, 0);
+    const moves = legalMoves(rook, [king, rook, pinner, farKing()], SIZE);
+    expect(moves.every((m) => m.x === 4)).toBe(true); // never leaves the file
+    expect(has(moves, 4, 5)).toBe(true); // slide toward the king
+    expect(has(moves, 3, 4)).toBe(false); // stepping off the file exposes the king
+    expect(has(moves, 5, 4)).toBe(false);
+    expect(find(moves, 4, 0)?.capture).toBe(pinner.id); // capturing the pinner is fine
+  });
+
+  it('while in check, only moves that answer the check are legal (interpose)', () => {
+    const king = P('player', 'king', 4, 6);
+    const checker = P('enemy', 'rook', 4, 0); // checks down column 4
+    const knight = P('player', 'knight', 2, 3); // can jump onto the checking file
+    const moves = legalMoves(knight, [king, checker, knight, farKing()], SIZE);
+    expect(moves).toHaveLength(2); // only the two interposing squares
+    expect(has(moves, 4, 2)).toBe(true);
+    expect(has(moves, 4, 4)).toBe(true);
+    expect(has(moves, 0, 2)).toBe(false); // any non-blocking jump leaves the king in check
+    expect(has(moves, 3, 5)).toBe(false);
+  });
+
+  it('while in check, capturing the checker is legal (and is the only out for that piece)', () => {
+    const king = P('player', 'king', 0, 0);
+    const checker = P('enemy', 'rook', 0, 4); // checks down column 0
+    const rook = P('player', 'rook', 4, 4); // can take the checker along row 4
+    const moves = legalMoves(rook, [king, checker, rook, farKing()], SIZE);
+    expect(moves).toHaveLength(1);
+    expect(find(moves, 0, 4)?.capture).toBe(checker.id);
+  });
+
+  it('does not constrain a side that fields no king (pure movement is unaffected)', () => {
+    const rook = P('player', 'rook', 4, 4); // no friendly king on the board
+    const enemyRook = P('enemy', 'rook', 4, 0);
+    const moves = legalMoves(rook, [rook, enemyRook, farKing()], SIZE);
+    expect(has(moves, 3, 4)).toBe(true); // free to move anywhere legal — nothing to protect
+    expect(has(moves, 5, 4)).toBe(true);
+  });
+});
+
 describe('threats', () => {
   it('pawn attacks the two forward diagonals', () => {
     const pawn = P('player', 'pawn', 4, 6);
@@ -123,6 +260,13 @@ describe('threats', () => {
     expect(sq).toHaveLength(2);
     expect(has(sq, 3, 5)).toBe(true);
     expect(has(sq, 5, 5)).toBe(true);
+  });
+  it('pawn attacks follow its authored forward direction', () => {
+    const pawn = P('player', 'pawn', 4, 6, { pawnForward: 'east' });
+    const sq = attackedSquares(pawn, [pawn], SIZE);
+    expect(sq).toHaveLength(2);
+    expect(has(sq, 5, 5)).toBe(true);
+    expect(has(sq, 5, 7)).toBe(true);
   });
   it('enemyThreats unions every living enemy', () => {
     const ep = P('enemy', 'pawn', 4, 2);
@@ -156,11 +300,32 @@ describe('applyMove', () => {
     expect(res.state.pieces.find((p) => p.id === queen.id)?.facing).toBe('north-east');
     expect(state.pieces.find((p) => p.id === queen.id)?.facing).toBe('south');
   });
+  it('keeps a pawn moving in its original forward direction after its sprite turns', () => {
+    const pawn = P('player', 'pawn', 4, 4, { startX: 4, startY: 4, facing: 'east', pawnForward: 'east' });
+    const foePawn = P('enemy', 'pawn', 5, 3);
+    const foeKing = P('enemy', 'king', 7, 0);
+    const state = { size: SIZE, pieces: [pawn, foePawn, foeKing], turn: 'player' as const, winner: null };
+    const res = applyMove(state, pawn.id, { x: 5, y: 3, capture: foePawn.id });
+    const moved = res.state.pieces.find((p) => p.id === pawn.id)!;
+    expect(moved.facing).toBe('north-east');
+    expect(moved.pawnForward).toBe('east');
+    const nextMoves = legalMoves(moved, res.state.pieces, SIZE);
+    expect(has(nextMoves, 6, 3)).toBe(true);
+    expect(has(nextMoves, 6, 2)).toBe(false);
+  });
   it('promotes a pawn reaching the far rank', () => {
     const pawn = P('player', 'pawn', 4, 1);
     const foe = P('enemy', 'queen', 7, 0);
     const state = { size: SIZE, pieces: [pawn, foe], turn: 'player' as const, winner: null };
     const res = applyMove(state, pawn.id, { x: 4, y: 0 });
+    expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
+    expect(res.events.some((e) => e.kind === 'promoted')).toBe(true);
+  });
+  it('promotes a pawn reaching its authored forward edge', () => {
+    const pawn = P('player', 'pawn', 6, 4, { startX: 6, startY: 4, pawnForward: 'east' });
+    const foe = P('enemy', 'queen', 7, 0);
+    const state = { size: SIZE, pieces: [pawn, foe], turn: 'player' as const, winner: null };
+    const res = applyMove(state, pawn.id, { x: 7, y: 4 });
     expect(res.state.pieces.find((p) => p.id === pawn.id)?.type).toBe('queen');
     expect(res.events.some((e) => e.kind === 'promoted')).toBe(true);
   });

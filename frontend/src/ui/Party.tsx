@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
+import { NavButton } from './shared/NavButton';
+import { ArtRouteChrome } from './shell/ArtRouteChrome';
 
 const OPTIONS = PLAYABLE_PIECE_TYPES.filter((piece) => piece !== 'pawn');
 
@@ -23,9 +26,11 @@ export function Party() {
 
   return (
     <section className="settings-art-route" aria-label="Party" data-testid="party">
+      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu. */}
+      <SceneBackdrop />
       <AmbienceBackground />
       <div className="settings-screen utility-twin-screen app-shell-bar-pad">
-        <div className="utility-screen utility-party">
+        <ArtRouteChrome className="utility-screen utility-party">
           <section className="utility-panel">
             <p className="utility-lead">Pawn is locked in. Choose two more ({picks.length}/2).</p>
             <div className="utility-squad-grid">
@@ -44,15 +49,17 @@ export function Party() {
             </div>
           </section>
           <div className="utility-actions">
-            <a
-              href="/play"
+            {/* Native disabled (a button CAN be disabled, unlike the anchor this replaced,
+                which needed aria-disabled + pointer-events:none to fake it). */}
+            <NavButton
+              to="/play"
               data-testid="party-deploy"
-              aria-disabled={picks.length !== 2}
-              className={`utility-button utility-button-primary ${picks.length === 2 ? '' : 'is-disabled'}`.trim()}
-            >Deploy</a>
-            <a href="/" className="utility-button utility-button-neutral">Menu</a>
+              disabled={picks.length !== 2}
+              className="utility-button utility-button-primary"
+            >Deploy</NavButton>
+            <NavButton to="/" className="utility-button utility-button-neutral">Menu</NavButton>
           </div>
-        </div>
+        </ArtRouteChrome>
       </div>
     </section>
   );

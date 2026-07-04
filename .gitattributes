@@ -1,0 +1,4 @@
+# The generated server-render bundle is built with LF (esbuild) and freshness-checked byte-for-byte
+# by `npm run build:server-render -- --check`. Pin it to LF so a Windows/autocrlf checkout doesn't
+# rewrite it to CRLF and make the check diverge from the committed blob.
+backend/generated/board-render.cjs text eol=lf

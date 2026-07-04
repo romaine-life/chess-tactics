@@ -124,9 +124,29 @@ function stopEmbeddedPostgres() {
 
 process.on('exit', stopEmbeddedPostgres);
 
+// SAFETY GUARD. resetDb() below TRUNCATEs every document table on startup — a known-empty
+// state is fine for a throwaway test DB, but catastrophic against production. This is a
+// hard, structural stop: no matter how DATABASE_URL got set (env, shell, a wrapper, an
+// agent running `npm test`), refuse to run if it points at the PROD Postgres server.
+// It is not a rule anyone has to remember — the script simply will not touch prod.
+// CI's self-provisioned localhost DB and disposable test databases are unaffected.
+function assertSafeSmokeTarget() {
+  let host = '';
+  try { host = new URL(process.env.DATABASE_URL || '').hostname; } catch { host = ''; }
+  if (/(^|\.)chess-tactics-pg(\.|$)/i.test(host) || /chess-tactics-pg\.postgres\.database\.azure\.com/i.test(host)) {
+    console.error(
+      `\nREFUSING TO RUN: DATABASE_URL points at the PRODUCTION Postgres (${host}).\n` +
+      `smoke-test.js TRUNCATEs levels/campaigns/portfolios on startup and would wipe prod data.\n` +
+      `Run it with DATABASE_URL unset (self-provisions a throwaway local DB) or a disposable test database.\n`,
+    );
+    process.exit(1);
+  }
+}
+
 if (!process.env.DATABASE_URL) {
   startEmbeddedPostgres();
 }
+assertSafeSmokeTarget();
 
 const child = spawn(process.execPath, ['supervisor.js'], {
   cwd: __dirname,
@@ -136,6 +156,9 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     PORT: String(port),
     PUBLIC_ORIGIN: 'https://chess.romaine.life',
     BGM_BASE_URL: `http://127.0.0.1:${bgmPort}`,
+    // Non-Azure base: exercise the static-index path (the mock serves index.json).
+    // Prod sets no BGM_READ_URL and lists the Azure container live instead.
+    BGM_READ_URL: `http://127.0.0.1:${bgmPort}`,
     HOT_BACKEND_DIR: hotBackendDir,
     STATIC_FRONTEND_DIR: hotStaticDir,
     // The mock auth returns player@example.com for any non-rival session; make that
@@ -177,12 +200,72 @@ function get(path, headers) {
   return request('GET', path, headers);
 }
 
+// Open a long-lived SSE stream and expose its parsed `data:` frames. Unlike request()
+// (which reads to end with a 1s socket timeout), this keeps the connection open and lets
+// a test await stream conditions. Heartbeat comments (`:keepalive`) carry no `data:` line
+// and are skipped, so they never count as frames.
+function openSse(path, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { hostname: '127.0.0.1', port, method: 'GET', path, headers: { accept: 'text/event-stream', ...headers } },
+      (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          reject(new Error(`SSE ${path} returned ${res.statusCode}`));
+          return;
+        }
+        res.setEncoding('utf8');
+        let buffer = '';
+        const frames = [];
+        const waiters = [];
+        const check = () => {
+          for (let i = waiters.length - 1; i >= 0; i -= 1) {
+            if (waiters[i].fn(frames)) {
+              clearTimeout(waiters[i].timer);
+              waiters[i].resolve(frames.length);
+              waiters.splice(i, 1);
+            }
+          }
+        };
+        res.on('data', (chunk) => {
+          buffer += chunk;
+          let idx;
+          while ((idx = buffer.indexOf('\n\n')) !== -1) {
+            const evt = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            const data = evt.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).join('\n');
+            if (data) { frames.push(data); check(); }
+          }
+        });
+        resolve({
+          frames,
+          waitUntil(fn, timeoutMs = 2000, label = 'condition') {
+            if (fn(frames)) return Promise.resolve(frames.length);
+            return new Promise((res2, rej2) => {
+              const w = { fn, resolve: res2 };
+              w.timer = setTimeout(() => {
+                const i = waiters.indexOf(w);
+                if (i !== -1) waiters.splice(i, 1);
+                rej2(new Error(`SSE ${path}: ${label} not met within ${timeoutMs}ms; frames=${JSON.stringify(frames)}`));
+              }, timeoutMs);
+              waiters.push(w);
+            });
+          },
+          close() { req.destroy(); },
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 // Reset the Postgres-backed document tables so re-runs (and a freshly migrated
 // CI database) start from a known-empty state. Tables exist by now because the
 // server applies migrations before it begins listening (and /health gates on
 // that), so waitForServer() has already returned by the time this runs.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns');
+  await queryDb('TRUNCATE levels, campaign_workspaces, design_portfolios, campaigns, official_campaigns, lab_runs');
 }
 
 async function queryDb(sql, params = []) {
@@ -250,6 +333,7 @@ async function main() {
   if (fallback.statusCode !== 200 || !fallback.body.includes('Chess Tactics')) {
     throw new Error(`Unexpected fallback response: ${fallback.statusCode}`);
   }
+
   const missingAsset = await get('/assets/missing.png');
   if (missingAsset.statusCode !== 404) {
     throw new Error(`Missing asset-like routes should return 404: ${missingAsset.statusCode}`);
@@ -701,6 +785,89 @@ async function main() {
     throw new Error(`Workspace should be scoped to owner: ${rivalWorkspace.statusCode} ${rivalWorkspace.body}`);
   }
 
+  // --- Game Lab runs (/api/lab-runs): per-user, DB-backed --------------------
+  const anonymousLabRuns = await get('/api/lab-runs');
+  if (anonymousLabRuns.statusCode !== 401) {
+    throw new Error(`Anonymous lab runs should require sign-in: ${anonymousLabRuns.statusCode}`);
+  }
+
+  const emptyLabRuns = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const emptyLabRunsBody = JSON.parse(emptyLabRuns.body);
+  if (emptyLabRuns.statusCode !== 200 || emptyLabRunsBody.runs.length !== 0) {
+    throw new Error(`Empty lab run list should be empty: ${emptyLabRuns.statusCode} ${emptyLabRuns.body}`);
+  }
+
+  const invalidLabRun = await request(
+    'POST', '/api/lab-runs',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ meta: 'nope', body: { games: [] } }),
+  );
+  const invalidLabRunBody = JSON.parse(invalidLabRun.body);
+  if (invalidLabRun.statusCode !== 400 || invalidLabRunBody.error !== 'invalid_lab_run') {
+    throw new Error(`Invalid lab run should fail: ${invalidLabRun.statusCode} ${invalidLabRun.body}`);
+  }
+
+  const savedLabRun = await request(
+    'POST', '/api/lab-runs',
+    { cookie: 'better-auth.session=abc', 'content-type': 'application/json' },
+    JSON.stringify({ meta: { name: 't' }, body: { games: [1, 2] } }),
+  );
+  const savedLabRunBody = JSON.parse(savedLabRun.body);
+  if (savedLabRun.statusCode !== 200 || savedLabRunBody.ok !== true || !savedLabRunBody.id || !savedLabRunBody.created_at) {
+    throw new Error(`Unexpected lab run save: ${savedLabRun.statusCode} ${savedLabRun.body}`);
+  }
+  const labRunId = savedLabRunBody.id;
+
+  const listedLabRuns = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const listedLabRunsBody = JSON.parse(listedLabRuns.body);
+  if (
+    listedLabRuns.statusCode !== 200 ||
+    listedLabRunsBody.runs.length !== 1 ||
+    listedLabRunsBody.runs[0].id !== labRunId ||
+    listedLabRunsBody.runs[0].meta.name !== 't' ||
+    'body' in listedLabRunsBody.runs[0]
+  ) {
+    throw new Error(`Lab run list should carry meta but never body: ${listedLabRuns.statusCode} ${listedLabRuns.body}`);
+  }
+
+  const loadedLabRun = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  const loadedLabRunBody = JSON.parse(loadedLabRun.body);
+  if (
+    loadedLabRun.statusCode !== 200 ||
+    loadedLabRunBody.id !== labRunId ||
+    loadedLabRunBody.meta.name !== 't' ||
+    JSON.stringify(loadedLabRunBody.body) !== JSON.stringify({ games: [1, 2] })
+  ) {
+    throw new Error(`Lab run body did not round-trip: ${loadedLabRun.statusCode} ${loadedLabRun.body}`);
+  }
+
+  // Per-user scoping: the rival can neither read the player's run nor delete
+  // it (their DELETE is a 200 no-op).
+  const rivalLabRunRead = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=rival' });
+  if (rivalLabRunRead.statusCode !== 404) {
+    throw new Error(`Rival should not read the player's lab run: ${rivalLabRunRead.statusCode} ${rivalLabRunRead.body}`);
+  }
+  const rivalLabRunDelete = await request('DELETE', `/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=rival' });
+  const rivalLabRunDeleteBody = JSON.parse(rivalLabRunDelete.body);
+  if (rivalLabRunDelete.statusCode !== 200 || rivalLabRunDeleteBody.ok !== true) {
+    throw new Error(`Rival lab run delete should be an idempotent 200: ${rivalLabRunDelete.statusCode} ${rivalLabRunDelete.body}`);
+  }
+  const labRunSurvived = await get(`/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  if (labRunSurvived.statusCode !== 200) {
+    throw new Error(`Rival's delete must not remove the player's lab run: ${labRunSurvived.statusCode} ${labRunSurvived.body}`);
+  }
+
+  const deletedLabRun = await request('DELETE', `/api/lab-runs/${labRunId}`, { cookie: 'better-auth.session=abc' });
+  const deletedLabRunBody = JSON.parse(deletedLabRun.body);
+  if (deletedLabRun.statusCode !== 200 || deletedLabRunBody.ok !== true) {
+    throw new Error(`Unexpected lab run delete: ${deletedLabRun.statusCode} ${deletedLabRun.body}`);
+  }
+  const labRunsAfterDelete = await get('/api/lab-runs', { cookie: 'better-auth.session=abc' });
+  const labRunsAfterDeleteBody = JSON.parse(labRunsAfterDelete.body);
+  if (labRunsAfterDelete.statusCode !== 200 || labRunsAfterDeleteBody.runs.length !== 0) {
+    throw new Error(`Lab run list should be empty after delete: ${labRunsAfterDelete.statusCode} ${labRunsAfterDelete.body}`);
+  }
+
   const createdCampaign = await request(
     'POST',
     '/api/campaigns',
@@ -916,6 +1083,54 @@ async function main() {
     throw new Error(`Deleted campaign should be removed from Postgres: ${JSON.stringify(deletedCampaignRows.rows)}`);
   }
 
+  // --- Live lobby sync (SSE) ---------------------------------------------------
+  // Regression guard for the reported bug: "host created a lobby, a friend joined, and the
+  // guest never appeared on the host's screen." The host's waiting screen learns about a
+  // join ONLY through the global lobby-list SSE channel (GET /api/lobbies/events). The rest
+  // of this suite is plain request/response and never opened that stream — which is exactly
+  // why the live-sync break shipped green. This exercises the channel end to end at the
+  // server layer. (The browser-side reconnect resync + guest eviction are covered by the
+  // two-browser E2E, frontend/scripts/lobby-e2e.mjs; the gateway timeout that severs the
+  // stream is guarded by backend/check-sse-route.js.)
+  {
+    const sseHost = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+    if (sseHost.statusCode !== 201) {
+      throw new Error(`SSE test: could not host lobby: ${sseHost.statusCode} ${sseHost.body}`);
+    }
+    const sseLobbyId = JSON.parse(sseHost.body).lobby.id;
+
+    const stream = await openSse('/api/lobbies/events', { cookie: 'better-auth.session=abc' });
+    try {
+      // 1) Connect-time snapshot: the stream must push a frame immediately on open, so a
+      //    freshly (re)connected host resyncs without waiting for a future mutation.
+      await stream.waitUntil((f) => f.some((d) => d.includes('lobbies-changed')), 2000, 'connect-time snapshot frame');
+      const beforeJoin = stream.frames.length;
+
+      // 2) A guest join must reach the connected host as a NEW live frame — the actual
+      //    "friend joined" event that was silently dropped in production.
+      const sseJoin = await request('POST', `/api/lobbies/${sseLobbyId}/join`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+      if (sseJoin.statusCode !== 200) {
+        throw new Error(`SSE test: guest join failed: ${sseJoin.statusCode} ${sseJoin.body}`);
+      }
+      await stream.waitUntil((f) => f.length > beforeJoin, 2000, 'live lobbies-changed frame after guest join');
+
+      // 3) And the host's authoritative view now shows the guest (the visible symptom).
+      const afterJoin = JSON.parse((await get('/api/lobbies', { cookie: 'better-auth.session=abc' })).body);
+      if (!afterJoin.current || afterJoin.current.seats.filled !== 2 || !afterJoin.current.guest) {
+        throw new Error(`SSE test: host list should show the joined guest: ${JSON.stringify(afterJoin.current)}`);
+      }
+    } finally {
+      stream.close();
+    }
+
+    // Clean up so the lobby-lifecycle test below starts from an empty state (host leave
+    // closes + deletes the lobby, freeing both abc and rival).
+    const sseCleanup = await request('POST', `/api/lobbies/${sseLobbyId}/leave`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+    if (sseCleanup.statusCode !== 204) {
+      throw new Error(`SSE test: host leave/cleanup failed: ${sseCleanup.statusCode} ${sseCleanup.body}`);
+    }
+  }
+
   const hosted = await request('POST', '/api/lobbies', { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
   const hostedBody = JSON.parse(hosted.body);
   if (hosted.statusCode !== 201 || hostedBody.lobby.phase !== 'waiting' || hostedBody.lobby.viewer_role !== 'host') {
@@ -943,10 +1158,111 @@ async function main() {
     throw new Error(`Guest should not be able to start lobby: ${rivalStart.statusCode} ${rivalStart.body}`);
   }
 
+  // Start now requires a level (netplay: both clients build the same board from
+  // the shared (level, seed)). Starting without one is a 409 no_level.
+  const startNoLevel = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  if (startNoLevel.statusCode !== 409 || JSON.parse(startNoLevel.body).error !== 'no_level') {
+    throw new Error(`Start without a level should 409 no_level: ${startNoLevel.statusCode} ${startNoLevel.body}`);
+  }
+
+  // Only the host may pick the level; a missing levelId is a 400.
+  const rivalSetLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  if (rivalSetLevel.statusCode !== 403) {
+    throw new Error(`Guest should not be able to set the lobby level: ${rivalSetLevel.statusCode} ${rivalSetLevel.body}`);
+  }
+  const missingLevelId = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  if (missingLevelId.statusCode !== 400 || JSON.parse(missingLevelId.body).error !== 'missing_level_id') {
+    throw new Error(`Setting a level without an id should 400 missing_level_id: ${missingLevelId.statusCode} ${missingLevelId.body}`);
+  }
+  const setLevel = await request('POST', `/api/lobbies/${lobbyId}/level`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ levelId: 'off-l-crown-valoria-01' }));
+  const setLevelBody = JSON.parse(setLevel.body);
+  if (setLevel.statusCode !== 200 || setLevelBody.lobby.level_id !== 'off-l-crown-valoria-01' || setLevelBody.lobby.your_side !== 'player') {
+    throw new Error(`Unexpected set-level response: ${setLevel.statusCode} ${setLevel.body}`);
+  }
+
   const started = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
   const startedBody = JSON.parse(started.body);
-  if (started.statusCode !== 200 || startedBody.lobby.phase !== 'started') {
+  if (started.statusCode !== 200 || startedBody.lobby.phase !== 'started' || !Number.isInteger(startedBody.lobby.seed) || startedBody.lobby.seed <= 0) {
     throw new Error(`Unexpected start lobby response: ${started.statusCode} ${started.body}`);
+  }
+
+  // Relay moves. Host ('player') moves first (index 0), then guest ('enemy') at index 1 —
+  // strict one-move-per-turn alternation is enforced server-side (host=even, guest=odd).
+  const hostMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 3, y: 4 } }));
+  const hostMoveBody = JSON.parse(hostMove.body);
+  if (hostMove.statusCode !== 200 || hostMoveBody.move.i !== 0 || hostMoveBody.move.side !== 'player' || hostMoveBody.move.pieceId !== 'p-1') {
+    throw new Error(`Unexpected host move response: ${hostMove.statusCode} ${hostMove.body}`);
+  }
+  // Turn integrity: the host cannot move again out of turn (index 1 belongs to the guest).
+  const outOfTurn = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 1, y: 1 } }));
+  if (outOfTurn.statusCode !== 409 || JSON.parse(outOfTurn.body).error !== 'not_your_turn') {
+    throw new Error(`Out-of-turn move should 409 not_your_turn: ${outOfTurn.statusCode} ${outOfTurn.body}`);
+  }
+  const guestMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'e-1', move: { x: 3, y: 4 } }));
+  const guestMoveBody = JSON.parse(guestMove.body);
+  if (guestMove.statusCode !== 200 || guestMoveBody.move.i !== 1 || guestMoveBody.move.side !== 'enemy' || guestMoveBody.move.pieceId !== 'e-1') {
+    throw new Error(`Unexpected guest move response: ${guestMove.statusCode} ${guestMove.body}`);
+  }
+  // Payload validation runs before the turn check, so a malformed move is 400 bad_move.
+  const badMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-1', move: { x: 'nope' } }));
+  if (badMove.statusCode !== 400 || JSON.parse(badMove.body).error !== 'bad_move') {
+    throw new Error(`Malformed move should 400 bad_move: ${badMove.statusCode} ${badMove.body}`);
+  }
+  const outsiderMove = await request('POST', `/api/lobbies/${lobbyId}/moves`, { 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'x-1', move: { x: 1, y: 1 } }));
+  if (outsiderMove.statusCode !== 401) {
+    throw new Error(`Anonymous move should require sign-in: ${outsiderMove.statusCode} ${outsiderMove.body}`);
+  }
+  const backfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
+  const backfillBody = JSON.parse(backfill.body);
+  if (backfill.statusCode !== 200 || backfillBody.moves.length !== 2 || backfillBody.moves[0].pieceId !== 'p-1' || backfillBody.moves[1].pieceId !== 'e-1') {
+    throw new Error(`Unexpected moves backfill: ${backfill.statusCode} ${backfill.body}`);
+  }
+  const startedList = await get('/api/lobbies', { cookie: 'better-auth.session=abc' });
+  const startedListBody = JSON.parse(startedList.body);
+  if (startedList.statusCode !== 200 || startedListBody.current.move_count !== 2 || startedListBody.current.level_id !== 'off-l-crown-valoria-01') {
+    throw new Error(`Started lobby should expose move_count/level_id: ${startedList.statusCode} ${startedList.body}`);
+  }
+
+  // --- Resignation --------------------------------------------------------------
+  // Resigning is a non-move terminal event: it records a result on the lobby (the OTHER
+  // side wins) that both clients read off the lobby frame. Anonymous callers can't resign.
+  const anonResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { 'content-type': 'application/json' }, '{}');
+  if (anonResign.statusCode !== 401) {
+    throw new Error(`Anonymous resign should require sign-in: ${anonResign.statusCode} ${anonResign.body}`);
+  }
+  // Guest ('enemy') resigns → 'player' (the host) wins.
+  const guestResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { cookie: 'better-auth.session=rival', 'content-type': 'application/json' }, '{}');
+  const guestResignBody = JSON.parse(guestResign.body);
+  if (guestResign.statusCode !== 200 || !guestResignBody.lobby.result || guestResignBody.lobby.result.winner !== 'player' || guestResignBody.lobby.result.reason !== 'resign') {
+    throw new Error(`Unexpected resign response: ${guestResign.statusCode} ${guestResign.body}`);
+  }
+  // The result is visible to the other seat too (how the host learns the match ended).
+  const resignedView = await get(`/api/lobbies/${lobbyId}`, { cookie: 'better-auth.session=abc' });
+  const resignedViewBody = JSON.parse(resignedView.body);
+  if (resignedView.statusCode !== 200 || !resignedViewBody.lobby.result || resignedViewBody.lobby.result.winner !== 'player') {
+    throw new Error(`Resigned lobby should expose the result to the host: ${resignedView.statusCode} ${resignedView.body}`);
+  }
+  // The match is over — further moves are rejected rather than re-opening a decided game.
+  const moveAfterResign = await request('POST', `/api/lobbies/${lobbyId}/moves`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, JSON.stringify({ pieceId: 'p-2', move: { x: 5, y: 5 } }));
+  if (moveAfterResign.statusCode !== 409 || JSON.parse(moveAfterResign.body).error !== 'match_over') {
+    throw new Error(`Move after resign should 409 match_over: ${moveAfterResign.statusCode} ${moveAfterResign.body}`);
+  }
+  // Idempotent: the host resigning now keeps the first result rather than flipping the winner.
+  const hostResign = await request('POST', `/api/lobbies/${lobbyId}/resign`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const hostResignBody = JSON.parse(hostResign.body);
+  if (hostResign.statusCode !== 200 || hostResignBody.lobby.result.winner !== 'player') {
+    throw new Error(`Resign should be idempotent (first result kept): ${hostResign.statusCode} ${hostResign.body}`);
+  }
+  // Re-starting the lobby begins a fresh match: the prior game's move log AND result are
+  // cleared, so a reused lobby never replays the old game or carries a stale outcome.
+  const restart = await request('POST', `/api/lobbies/${lobbyId}/start`, { cookie: 'better-auth.session=abc', 'content-type': 'application/json' }, '{}');
+  const restartBody = JSON.parse(restart.body);
+  if (restart.statusCode !== 200 || restartBody.lobby.phase !== 'started' || restartBody.lobby.move_count !== 0 || restartBody.lobby.result !== null) {
+    throw new Error(`Re-start should clear moves + result: ${restart.statusCode} ${restart.body}`);
+  }
+  const restartBackfill = await get(`/api/lobbies/${lobbyId}/moves?since=0`, { cookie: 'better-auth.session=abc' });
+  if (restartBackfill.statusCode !== 200 || JSON.parse(restartBackfill.body).moves.length !== 0) {
+    throw new Error(`Re-started lobby should have an empty move log: ${restartBackfill.statusCode} ${restartBackfill.body}`);
   }
 
   const redirect = await get('/api/auth/sign-in?returnTo=%2Fplay');

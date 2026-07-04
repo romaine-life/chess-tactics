@@ -1,8 +1,8 @@
 // Minimal ID3v2 (2.2 / 2.3 / 2.4) text-frame reader for the BGM pipeline. The mp3s
-// carry clean title / artist / album tags; the filename-derived index.json titles are
-// coarser. This pulls the good fields straight from the tag. Shared by the dev
-// /api/bgm mock (and, later, the playlist generator). Returns cleaned, junk-filtered
-// fields — any field may be '' and the caller falls back.
+// carry clean title / artist / album tags. Used by tools/bgm/sync-metadata.mjs to
+// seed each blob's title/artist/album metadata, which the backend then lists to
+// build /api/bgm. Returns cleaned, junk-filtered fields — any field may be '' and
+// the caller falls back to the filename.
 
 function synchsafe(b, o) {
   return ((b[o] & 0x7f) << 21) | ((b[o + 1] & 0x7f) << 14) | ((b[o + 2] & 0x7f) << 7) | (b[o + 3] & 0x7f);

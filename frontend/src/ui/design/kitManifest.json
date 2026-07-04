@@ -1,9 +1,9 @@
 {
-  "generated": "2026-06-27",
+  "generated": "2026-07-04",
   "gate": "verify-kit-asset.mjs --glyph (transparency hygiene: magenta despill + edge bleed; anti-aliasing allowed)",
   "summary": {
-    "pass": 32,
-    "total": 32,
+    "pass": 47,
+    "total": 47,
     "frames": 12
   },
   "groups": [
@@ -23,12 +23,67 @@
           "fails": []
         },
         {
+          "name": "bishop",
+          "url": "/assets/ui/kit/icons/bishop.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
           "name": "brand-shield",
           "url": "/assets/ui/kit/icons/brand-shield.png",
           "w": 256,
           "h": 256,
           "magenta": 0,
           "semiPct": 1.5,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "castle",
+          "url": "/assets/ui/kit/icons/castle.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "chevron-down",
+          "url": "/assets/ui/kit/icons/chevron-down.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "chevron-up",
+          "url": "/assets/ui/kit/icons/chevron-up.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "delete",
+          "url": "/assets/ui/kit/icons/delete.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -61,7 +116,7 @@
           "w": 64,
           "h": 64,
           "magenta": 0,
-          "semiPct": 13.3,
+          "semiPct": 17.7,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -89,12 +144,34 @@
           "fails": []
         },
         {
+          "name": "king",
+          "url": "/assets/ui/kit/icons/king.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
           "name": "knight",
           "url": "/assets/ui/kit/icons/knight.png",
           "w": 64,
           "h": 64,
           "magenta": 0,
           "semiPct": 8.2,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "lock",
+          "url": "/assets/ui/kit/icons/lock.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -133,6 +210,39 @@
           "fails": []
         },
         {
+          "name": "pawn",
+          "url": "/assets/ui/kit/icons/pawn.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "players",
+          "url": "/assets/ui/kit/icons/players.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "queen",
+          "url": "/assets/ui/kit/icons/queen.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
           "name": "reset",
           "url": "/assets/ui/kit/icons/reset.png",
           "w": 64,
@@ -155,12 +265,67 @@
           "fails": []
         },
         {
+          "name": "sign-out",
+          "url": "/assets/ui/kit/icons/sign-out.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
           "name": "speaker",
           "url": "/assets/ui/kit/icons/speaker.png",
           "w": 64,
           "h": 64,
           "magenta": 0,
           "semiPct": 13.2,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "star",
+          "url": "/assets/ui/kit/icons/star.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 0,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "studio-catalog",
+          "url": "/assets/ui/kit/icons/studio-catalog.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 10,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "studio-lab",
+          "url": "/assets/ui/kit/icons/studio-lab.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 8.5,
+          "edge": 0,
+          "pass": true,
+          "fails": []
+        },
+        {
+          "name": "studio-viewer",
+          "url": "/assets/ui/kit/icons/studio-viewer.png",
+          "w": 64,
+          "h": 64,
+          "magenta": 0,
+          "semiPct": 10.5,
           "edge": 0,
           "pass": true,
           "fails": []
@@ -394,20 +559,20 @@
     {
       "name": "button-neutral",
       "url": "/assets/ui/kit/button-neutral.png",
-      "w": 114,
-      "h": 46
+      "w": 72,
+      "h": 72
     },
     {
       "name": "button-primary",
       "url": "/assets/ui/kit/button-primary.png",
-      "w": 114,
-      "h": 46
+      "w": 72,
+      "h": 72
     },
     {
       "name": "button-danger",
       "url": "/assets/ui/kit/button-danger.png",
-      "w": 114,
-      "h": 46
+      "w": 72,
+      "h": 72
     },
     {
       "name": "mode-button",

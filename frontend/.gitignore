@@ -5,6 +5,7 @@ tmp-shots/
 # Local generation scratch: badge review output, codex method-gate evidence, desc files
 tmp-badges/
 tmp-forge-evidence/
+tmp-forge-studio/
 tmp/
 
 # Local append-only audit trail of nine-slice bakes (scripts/nine-slice-kit.mjs)

@@ -25,16 +25,15 @@ export interface TitleBarConfig {
 }
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
-  // The design/asset Studio + its deep-link aliases: brand left, account cluster right.
-  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor') {
-    return { screenName: 'Studio' };
+  // The design/asset Studio + its deep-link aliases: brand left, then the workspace
+  // switcher (Catalog/Lab/Viewer icons) in the actions slot, account cluster right. The
+  // Studio portals its icon nav there via <TitleBarSlot region="actions">; studio-topbar
+  // adds the 3rd grid column (brand · actions · cluster) that slot needs.
+  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') {
+    return { screenName: 'Studio', barClass: 'studio-topbar', actionsSlot: true };
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
-  if (path === '/doodad-editor') return { screenName: 'Doodad Editor' };
-  if (path === '/tile-compare') return { screenName: 'Tile Compare' };
-  if (path === '/artwork-compare') return { screenName: 'Artwork Compare' };
-  if (path === '/surface-lab') return { screenName: 'Surface Lab' };
 
   if (path === '/play' || path === '/skirmish') {
     return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true };
@@ -49,7 +48,7 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, actionsSlot: true };
   }
   if (path === '/campaigns-next' || path === '/campaigns') {
-    return { screenName: 'Campaign Editor', barClass: 'ce-topbar', centerSlot: true, actionsSlot: true };
+    return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
     // screen, so only Settings scales.
@@ -57,7 +56,11 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
     // (/settings/<tab>, /settings/audio/tracks), so the gear is a muscle-memory
     // "back to settings root" from any sub-page. href="/settings" normalizes to
     // the first tab. (Default showSettingsGear=true, so it's simply not hidden.)
-    return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled' };
+    // actionsSlot hosts the "‹ Back" return control (Settings portals it there when the URL
+    // carries a valid ?returnTo) — the same trailing slot the Level Editor's back uses, so
+    // every return control sits with the account/settings cluster. settings-topbar adds the
+    // 3rd grid column (brand · actions · cluster) that slot needs.
+    return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled settings-topbar', actionsSlot: true };
   }
   if (path === '/campaign' || path.startsWith('/campaign/')) {
     return { screenName: 'Campaign', signInReturnTo: '/campaign', barClass: 'main-menu-twin-header' };

@@ -386,32 +386,80 @@ h1 {
 /* The background scene as a fade-able layer (cold-load reveal step 1, see
    shell/coldReveal). Sits above the floor and BELOW the rain (z2) + UI (z3), exactly
    where the layer's own background used to paint. Hidden until the director opens the
-   'bg' stage, then fades in over the SAME 320ms used by the old menu reveal. */
-.main-menu-layer::after {
-  content: "";
+   'bg' stage, then fades in over the SAME 320ms used by the old menu reveal.
+   REAL elements rather than a ::after (see ui/SceneBackdrop.tsx): the scene canvas
+   reproduces the `center / cover` crop as an element so animated scene regions
+   (waterfalls) can anchor in scene coordinates, sandwiched UNDER the scrim gradients
+   that used to ride the same background stack. */
+.scene-backdrop {
   position: absolute;
   inset: 0;
   z-index: 1;
+  overflow: hidden;
   pointer-events: none;
+  /* Size container so the canvas can compute the cover crop from cq units. */
+  container-type: size;
+  opacity: 1;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+}
+.main-menu-layer:not([data-reveal-bg]) .scene-backdrop { opacity: 0; }
+
+/* Exact `center / cover` as an element: at least as wide and as tall as the
+   backdrop, at the scene's own aspect ratio, centered — identical crop math. */
+.scene-backdrop-canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100cqw, calc(100cqh * (1586 / 991)));
+  aspect-ratio: 1586 / 991;
   /* PNG fallback declaration for browsers without image-set()/type() support. */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat;
+  background: url("/assets/ui/main-menu/background-scene-v1.png") 0 0 / 100% 100% no-repeat;
   /* Preferred: AVIF -> WebP -> PNG. The whole declaration is dropped (falling back to
      the one above) on engines that don't support image-set() type(). */
   background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
     image-set(
       url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
       url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
       url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat;
-  opacity: 1;
-  transition: opacity 320ms ease;
+    ) 0 0 / 100% 100% no-repeat;
 }
-.main-menu-layer:not([data-reveal-bg])::after { opacity: 0; }
+
+/* The two darkening scrims the old pseudo stacked over the scene — now a layer
+   ABOVE the animated regions, so moving water is darkened like the art around it. */
+.scene-backdrop-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46));
+}
+
+/* An animated scene region (menu twin of the board's .tile-layer-top-anim): a
+   BAKED horizontal frame sheet (scripts/build-scene-anim.py), only water pixels
+   opaque, frame 0 = the shipped scene; steps() just advances the frame index.
+   !important clears the global `* { animation: none }` OS-reduce reset (~6477):
+   Windows "animations off" reports prefers-reduced-motion falsely, and ambient
+   scenery must not freeze for those players (deploy-drop/ADR-0048 precedent).
+   The EXPLICIT in-game choice (:root.reduce-motion) does freeze it, to frame 0 =
+   the exact static art. NO image-rendering override: the sheet must be resampled
+   exactly like the scene canvas under it (smooth cover scaling, not pixelated). */
+.scene-backdrop-anim {
+  position: absolute;
+  background-repeat: no-repeat;
+  background-size: calc(var(--scene-anim-frames, 1) * 100%) 100%;
+  animation: scene-anim-flow var(--scene-anim-dur, 1.2s) steps(var(--scene-anim-frames, 1)) infinite !important;
+  will-change: background-position;
+}
+
+:root.reduce-motion .scene-backdrop-anim {
+  animation: none !important;
+}
+
+@keyframes scene-anim-flow {
+  from { background-position-x: 0; }
+  to { background-position-x: var(--scene-anim-travel, 0); }
+}
 
 .main-menu-screen {
   --menu-blue: #1f84f5;
@@ -462,7 +510,7 @@ h1 {
   inline-size: 100%;
   display: grid;
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
-  gap: clamp(6px, .72vw, 12px);
+  gap: clamp(6px, calc(var(--layout-vw, 100vw) * .0072), 12px);
   min-block-size: 0;
   /* .menu-layer.main-menu-layer is pointer-events:none (so the rain stays click-through);
      the old menu re-enabled interaction on .main-menu-left/right. Re-enable it for the whole
@@ -506,6 +554,67 @@ h1 {
   z-index: 5;
   pointer-events: none;
   image-rendering: pixelated;
+}
+
+/* Ambience effect credit — a quiet bottom-right stamp naming the scene the
+   shared rain world is running right now (read live off the vendored client;
+   rendered by AmbienceBackground, so every screen with the shared backdrop
+   carries it). Links to ambience's read-only monitor for the same broadcast.
+   z4: above the screens' z3 UI tier so the corner stays clickable under
+   footers/panels that reach it, still below the near-drop overlay (z5) so the
+   promoted drops cross in front of it like the rest of the chrome. */
+.ambience-credit {
+  /* A <button> since ADR-0052: clear the UA button chrome AND the global `button`
+     base (radius/shadow/line-height); everything else below is the same label
+     styling the anchor version had. min-height/padding/letter-spacing are already
+     declared by this class, so those base leaks can't reach it. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  line-height: inherit;
+  text-shadow: inherit;
+  position: absolute;
+  /* The ~10px text line alone is far under the 24px minimum hit target (WCAG
+     2.5.8) — a padded flex box supplies the target while the TEXT keeps
+     sitting at the space-3/space-2 corner inset (4px offset + 8px pad = 12px
+     right; 24px box centering ≈ 8px bottom). */
+  right: var(--ds-space-1);
+  bottom: 0;
+  min-height: 24px;
+  padding: 0 var(--ds-space-2);
+  display: inline-flex;
+  align-items: center;
+  z-index: 4;
+  /* .menu-layer (menu/campaign) is pointer-events:none so the rain stays
+     click-through, and the credit would inherit that inertness — opt back in,
+     like .main-menu-twin-screen does for the menu UI. */
+  pointer-events: auto;
+  font-family: var(--ds-font-pixel);
+  font-size: var(--ds-text-2xs);
+  letter-spacing: var(--ds-tracking-tight);
+  color: rgba(214, 232, 242, .55);
+  text-decoration: none;
+  opacity: 1;
+  /* Opacity TRANSITION for the first-ever appearance. Route swaps never replay it:
+     the label is module-cached, so remounts render already-entered (ADR-0046 B/G, the
+     backdrop layer stays continuous across navigation). */
+  transition:
+    opacity var(--ds-duration-fade) var(--ds-ease-standard),
+    color var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+/* One start frame at opacity 0; AmbienceBackground drops this class on the
+   next frame and the transition above plays. */
+.ambience-credit-start {
+  opacity: 0;
+}
+
+.ambience-credit:hover,
+.ambience-credit:focus-visible {
+  color: rgba(214, 232, 242, .88);
+  text-decoration: underline;
 }
 
 /* Asset-backed mode button family, assembled from the asset catalog. The
@@ -988,13 +1097,20 @@ h1 {
    gate — repointed from the retired .main-menu-left/right layout to the elements that
    render today. Rain is unaffected (it fades in on its own when its runtime is ready). */
 .main-menu-twin-screen {
-  transition: opacity 320ms ease;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
+/* Buttons hidden until revealed. On COLD load the director opens this stage in order
+   (bg -> title -> buttons). On a SOFT nav INTO the menu (e.g. campaign editor -> menu),
+   the store is already fully revealed, so MainMenu withholds data-reveal-buttons for one
+   frame after mount (its `entered` state) — that runs this same opacity transition as an
+   arrival fade, matching the editor's entrance so the hop dissolves the chrome both ways
+   while the shared backdrop + rain stay put. (Campaign reuses this class but hardcodes
+   data-reveal-buttons, so its play surface is never gated by this.) */
 .main-menu-layer:not([data-reveal-buttons]) .main-menu-twin-screen {
   opacity: 0;
 }
 .app-shell-titlebar {
-  transition: opacity 320ms ease;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
 .app-shell-titlebar.reveal-pending {
   opacity: 0;
@@ -1009,6 +1125,11 @@ h1 {
 :root {
   --route-veil-cover-ms: 260ms;
   --route-veil-reveal-ms: 340ms;
+  /* Light-hop exit dissolve (ADR-0051) — the veil-less counterpart of the cover phase:
+     the outgoing chrome fades over this, then the route swaps. Keep in lockstep with
+     SCREEN_EXIT_MS in ui/shell/screenExit.ts. Shorter than the entrance fade on purpose
+     (exits accelerate; arriving matters more than leaving). */
+  --route-exit-ms: 200ms;
   /* cold, rainy dark — never white (white is what reads as "browser loading") */
   --route-veil-field: radial-gradient(130% 130% at 50% 34%, #151c29 0%, #0a0d13 62%, #05070b 100%);
 }
@@ -1032,6 +1153,61 @@ h1 {
   pointer-events: none;
   transition-duration: var(--route-veil-reveal-ms);
 }
+
+/* In-game confirmation dialog (ui/shared/ConfirmDialog.tsx) — replaces window.confirm() on
+   player surfaces so an "are you sure?" wears the game's own chrome, not the browser's. The
+   scrim dims + blurs the board (and swallows clicks); the panel wears the SAME kit panel.png
+   9-slice as the HUD, and its buttons are the SAME .le-seg-btn kit frames — nothing here is a
+   hand-rolled border (ADR-0002/0011/0014). */
+.confirm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10000; /* above the route-veil (9999) so a mid-transition veil can't cover it */
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 8, 13, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: confirm-scrim-in 140ms ease both;
+}
+.confirm-panel {
+  box-sizing: border-box;
+  width: min(92vw, 430px);
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  padding: 6px 10px 10px;
+  color: #f3ead8;
+  animation: confirm-panel-in 160ms ease both;
+}
+/* The panel is only a focus anchor (a11y: move focus into the dialog on open), never an
+   interactive control — so it must not paint a focus outline. The kit frame IS its boundary. */
+.confirm-panel:focus,
+.confirm-panel:focus-visible { outline: none; }
+.confirm-panel h2 {
+  color: #94daf5;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.1;
+  margin: 0 0 12px;
+  text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+}
+.confirm-body {
+  font-size: var(--ds-text-sm);
+  line-height: 1.42;
+  margin: 0 0 18px;
+}
+.confirm-actions {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 8px;
+  justify-content: end;
+}
+.confirm-actions .le-seg-btn { min-width: 116px; padding: 0 16px; }
+@keyframes confirm-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes confirm-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* "New version available" prompt — quiet, fixed, non-blocking. Shown only after
    a newer build is detected (src/net/appUpdate.ts). */
@@ -1169,21 +1345,26 @@ h1 {
      only for hero moments. Sized to seat the ~54px content with an ADR-0031
      --ds-space-2 (8px) inset above the forged bottom rule (ADR-0037): 54 + 14 rule
      + 2×8 inset = 84. Grown from clamp(64,5vw,72) when the rule replaced the frame. */
-  --app-header-h: clamp(84px, 5vw, 88px);
-  /* motion — duration + easing tokens (ADR-0043). Map MOTION ROLES onto these; don't
-     hand-pick ms per element. Two interactive tiers + an entrance tier:
+  /* vw-relative pieces of the chrome family use --layout-vw (zoom-corrected viewport
+     width, ui/shell/layoutViewport.ts) so browser zoom magnifies them instead of
+     re-flowing; identical to plain vw at 100% zoom. */
+  --app-header-h: clamp(84px, calc(var(--layout-vw, 100vw) * .05), 88px);
+  /* motion — duration + easing tokens (ADR-0043, revised by ADR-0046). Map MOTION ROLES
+     onto these; don't hand-pick ms per element. Just TWO durations, by design:
        fast = instant feedback (hover / toggle / focus / filter swap),
-       base = content fades & crossfade legs (the settings menu crossfade),
-       slow = screen / large-surface entrances.
-     Easing (Material 3): standard for in-place changes; out (emphasized-decelerate)
-     for entrances — motion settles, never accelerates in; linear for pure opacity
-     crossfades (a fade reads fine linear). */
+       fade = EVERY fade/crossfade — screen entrances AND in-panel control swaps share ONE
+              fade speed. (Product decision: fades do NOT vary by surface; a fade is a fade.
+              This supersedes the earlier base/slow split.)
+     Easing (Material 3): standard for the fades + in-place changes; out kept available for a
+     decelerated entrance if ever needed; linear for the bgm button's opacity. */
   --ds-duration-fast: 100ms;
-  --ds-duration-base: 150ms;
-  --ds-duration-slow: 300ms;
+  --ds-duration-fade: 350ms;
   --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ds-ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ds-ease-linear: linear;
+  /* Gap between sequenced reveals (ADR-0046 choreography) — e.g. the cold-load menu
+     reveal once migrated; the stagger between items in a sequence. */
+  --ds-stagger: 50ms;
 }
 
 .main-assets-header .eyebrow {
@@ -2603,6 +2784,83 @@ h1 {
   padding: 6px;
 }
 
+/* Netplay level picker — the host chooses one of the 7 official levels for the
+   lobby. Cards reuse the panel frame (ADR-0032: no bare boxes) and the lobby type
+   ramp; the grid auto-fills so 7 cards flow to as many columns as fit. */
+.utility-level-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.utility-level-picker-head {
+  color: var(--power);
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .46rem;
+  letter-spacing: .04em;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.utility-level-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+}
+
+.utility-level-card {
+  background: transparent;
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/row.png") 18 fill / 14px stretch;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  image-rendering: pixelated;
+  padding: 4px 6px 8px;
+  position: relative;
+  text-align: left;
+}
+
+.utility-level-card:hover {
+  filter: brightness(1.08);
+}
+
+.utility-level-card:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.utility-level-card.is-selected {
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+}
+
+.utility-level-thumb {
+  background: rgba(3, 10, 16, .48);
+  border: 1px solid rgba(205, 165, 74, .55);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.utility-level-card strong {
+  color: #f6ecd8;
+  display: block;
+  font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
+  font-size: .58rem;
+  line-height: 1.45;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.utility-level-card small {
+  color: var(--muted);
+  font-size: .96rem;
+  line-height: 1.2;
+}
+
 .utility-button {
   align-items: center;
   background: transparent;
@@ -2612,12 +2870,12 @@ h1 {
   cursor: pointer;
   display: inline-flex;
   font-family: "Advance Wars 2 GBA", "Press Start 2P", "VT323", ui-monospace, monospace;
-  font-size: .55rem;
+  font-size: var(--ds-text-sm);
   gap: 7px;
   justify-content: center;
   letter-spacing: 0;
   line-height: 1.35;
-  min-height: 48px;
+  min-height: 40px;
   min-width: 104px;
   padding: 0 4px;
   text-align: center;
@@ -2650,7 +2908,8 @@ h1 {
 }
 
 .utility-button.is-disabled,
-.utility-button[aria-disabled="true"] {
+.utility-button[aria-disabled="true"],
+.utility-button:disabled {
   filter: grayscale(.4);
   opacity: .48;
   pointer-events: none;
@@ -3394,11 +3653,6 @@ h1 {
   overflow: hidden;
 }
 
-.shell.skirmish-active + .bgm-control,
-.shell.skirmish-active ~ .bgm-control,
-.shell.is-immersive + .bgm-control,
-.shell.is-immersive ~ .bgm-control { display: none; }
-
 /* Studio/dev editor & inspector surfaces (Portrait Editor, Doodad Editor, Surface Lab,
    Artwork/Tile Compare) on the standard title bar (ADR-0004/0023): a full-bleed bar on
    top, the existing tool body filling and scrolling in the row below it. The shell runs
@@ -3430,6 +3684,11 @@ h1 {
   z-index: -1;
 }
 
+/* The skirmish picker is a light-art route: LightArtRouteShell renders the animated menu
+   scene (still art + waterfalls + scrim) as a <SceneBackdrop> element, so the picker no
+   longer overrides the base ::before with the menu scene — the base dark floor rides behind
+   the backdrop like every other light-art screen. */
+
 .skirmish-war-room {
   display: grid;
   grid-column: 1;
@@ -3445,6 +3704,144 @@ h1 {
      where they overlap. Cut only at the screen edge (.skirmish-screen: overflow hidden). */
   position: relative;
   z-index: 0;
+}
+
+.skirmish-picker {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-height: 0;
+  overflow: auto;
+  padding: clamp(16px, 2.2vw, 28px);
+  position: relative;
+  z-index: 3;
+}
+
+.skirmish-picker-header {
+  align-items: end;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-inline: auto;
+  max-width: 1180px;
+  width: 100%;
+}
+
+.skirmish-picker-header h1 {
+  color: #f4fbff;
+  font-family: var(--ds-font-display);
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  line-height: 1;
+  margin: 4px 0 0;
+  text-transform: uppercase;
+}
+
+.skirmish-picker-random {
+  min-width: 178px;
+}
+
+.skirmish-map-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  margin-inline: auto;
+  max-width: 1180px;
+  width: 100%;
+}
+
+.skirmish-map-card {
+  background: linear-gradient(180deg, rgba(10, 29, 42, .92), rgba(5, 15, 24, .9));
+  border: 1px solid rgba(149, 216, 234, .2);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 0 16px 30px rgba(0, 0, 0, .26);
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto minmax(120px, 1fr) auto;
+  min-height: 0;
+  padding: 10px;
+}
+
+.skirmish-map-thumb {
+  align-items: center;
+  background: rgba(1, 7, 12, .48);
+  border: 1px solid rgba(149, 216, 234, .16);
+  border-radius: 6px;
+  display: grid;
+  justify-items: center;
+  min-height: 132px;
+  overflow: hidden;
+}
+
+.skirmish-map-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.skirmish-map-copy h2,
+.skirmish-picker-empty-card h2 {
+  color: #f1cf86;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  line-height: 1.15;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.skirmish-map-copy dl {
+  color: var(--skirmish-muted);
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.skirmish-map-copy dl div {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.skirmish-map-copy dt {
+  color: rgba(149, 216, 234, .78);
+  font-size: var(--ds-text-2xs);
+  text-transform: uppercase;
+}
+
+.skirmish-map-copy dd {
+  color: var(--skirmish-ink);
+  font-size: var(--ds-text-xs);
+  margin: 0;
+  text-align: right;
+}
+
+.skirmish-map-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.skirmish-map-actions .ce-link-button {
+  min-height: 38px;
+}
+
+.skirmish-picker-empty {
+  justify-self: center;
+  margin-top: 18px;
+}
+
+.skirmish-picker-empty-card {
+  justify-self: center;
+  max-width: 520px;
+  padding: 18px;
+  text-align: center;
+}
+
+.skirmish-picker-empty-card p {
+  color: var(--skirmish-muted);
+  line-height: 1.45;
+  margin: 8px 0 16px;
 }
 
 .skirmish-topbar {
@@ -3464,13 +3861,24 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-/* Editor bars (level + campaign editor) carry a 4th, trailing column for the always-on
-   account/settings cluster (ADR-0042): brand · live save-state · editor actions ·
-   cluster. Two classes out-rank the base .settings-header-frame grid (same trick the
-   skirmish override uses), so the cluster gets its own track instead of overflowing. */
-.app-shell-titlebar.le-topbar,
-.app-shell-titlebar.ce-topbar {
+/* Level Editor bar: 4 columns — brand · live save-state (center) · return-nav (‹ Catalog /
+   ‹ Back, actions slot) · account cluster. Two classes out-rank the base grid so the cluster
+   keeps its own track. (Undo/Test/Save moved into the editor's rail dock, so the actions slot
+   now carries only the return-nav.) */
+.app-shell-titlebar.le-topbar {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+/* Campaign Editor bar: 3 columns — brand · save-state (center) · account cluster. Its actions
+   (Save/Publish) moved into the editor's own footer, so the bar has no actions slot. */
+.app-shell-titlebar.ce-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+/* Studio bar: 3 columns — brand · workspace switcher (Catalog/Lab/Viewer icons, actions
+   slot) · account cluster. The extra track lets the icon nav sit before the always-present
+   cluster (ADR-0042). */
+.app-shell-titlebar.studio-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .skirmish-topbar-status {
@@ -3583,9 +3991,38 @@ h1 {
 .skirmish-turn-plate {
   /* Frame/height come from .skirmish-status-chip; this is inner layout only. */
   display: grid;
+  /* Reset the chip's inline gap (var(--ds-inline) ≈ 12px): on this column grid it
+     becomes a ROW gap that shoves the second line ("Live Board") out the bottom
+     frame. The two lines must sit tight inside the 30px content box (46px − 2×8px
+     frame). align-content centers the compact stack within the fixed-height chip. */
+  align-content: center;
+  gap: 0;
   justify-items: center;
   min-width: 0;
   text-align: center;
+}
+
+/* Battle-clock chip: sits between the turn plate and the objective on timed games,
+   same two-line centered stack as the turn plate. The time line needs a stable
+   width (digits tick every second) so the flanking chips don't breathe with it;
+   tabular figures are a best-effort on the pixel font stack. */
+.skirmish-clock {
+  align-content: center;
+  display: grid;
+  gap: 0;
+  justify-items: center;
+  min-inline-size: 112px;
+  text-align: center;
+}
+
+.skirmish-clock strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The final seconds read as danger — the telegraph palette's threat tone, the same
+   urgency channel the board uses. */
+.skirmish-topbar .skirmish-clock.is-low strong {
+  color: var(--threat);
 }
 
 .skirmish-field {
@@ -3645,6 +4082,18 @@ h1 {
   background: transparent;
 }
 
+/* Coordinated board reveal (render/boardArtReady). The board's dozens of tile <img>s each
+   load independently; without this they'd pop in one at a time ("popcorn"). The board is
+   held hidden until its whole art set has DECODED, then fades in as one unit on the same
+   320ms opacity fade the cold-load menu uses (ui/shell/coldReveal). A failsafe in the hook
+   reveals anyway if an asset stalls, so the board can never hang invisible. */
+.skirmish-board-lab {
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+}
+.skirmish-board-lab.is-board-loading {
+  opacity: 0;
+}
+
 /* Strip the default .tileset-view-stage box (checkerboard fill + border + radius) on
    both in-game boards: the live skirmish board AND the level editor. They share the
    same world background, so they must read identically — the editor board floats on
@@ -3678,6 +4127,8 @@ h1 {
   pointer-events: auto;
   position: absolute;
   top: -4px;
+  /* Don't let a touch-drag on a piece scroll the page — the board owns the gesture. */
+  touch-action: none;
   width: 104px;
   transform: translateX(-4px);
   z-index: 5;
@@ -3689,6 +4140,24 @@ h1 {
   inset: 0;
   opacity: 0;
   position: absolute;
+}
+
+/* Army-wide display layers from the in-match shortcut grid. Side-coded: player = cool
+   blue/green, enemy = warm magenta/red. Declared before .is-threat / .is-move so the
+   focused-piece cyan and the enemy danger-zone red win where layers overlap a cell. */
+.skirmish-board-cell-hit.is-player-move::before {
+  background: rgba(70, 140, 255, .30);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-enemy-move::before {
+  background: rgba(222, 92, 190, .30);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-player-attack::before {
+  background: rgba(74, 210, 132, .32);
+  opacity: 1;
 }
 
 .skirmish-board-cell-hit.is-threat::before {
@@ -3740,6 +4209,23 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(245, 252, 255, .82);
 }
 
+/* Drag-to-move: the legal square the held piece is hovering over. Declared last so it wins
+   over .is-move / :hover on the same cell — a bright green "drop here" fill + ring. */
+.skirmish-board-cell-hit.is-drop-hover::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(150, 255, 200, .34), transparent 60%),
+    rgba(70, 240, 170, .32);
+  opacity: 1;
+}
+
+.skirmish-board-cell-hit.is-drop-hover::after {
+  opacity: 1;
+  box-shadow:
+    inset 0 0 0 2px rgba(232, 255, 242, .98),
+    inset 0 0 0 4px rgba(26, 150, 100, .5),
+    0 0 16px rgba(90, 255, 190, .7);
+}
+
 /* THE single source of truth for seating a unit sprite on a tile — shared by the game
    board (.skirmish-board-unit) and the Studio editor so a unit sits identically in both.
    Each board adds only its own chrome (move animation/HP, or selection/hit) around this;
@@ -3782,6 +4268,37 @@ h1 {
   z-index: 30000 !important;
 }
 
+/* Drag-to-move: the piece being carried fades in its home seat (a faint "lifted from here"
+   trace, like lichess/chess.com) while the cursor-following ghost is what you actually drag.
+   No transition so it doesn't glide while held; its hop is also suppressed on landing (JS). */
+.skirmish-board-unit.is-dragging {
+  opacity: .3;
+  transition: none;
+}
+
+.skirmish-board-unit.is-dragging .skirmish-board-hp {
+  opacity: 0;
+}
+
+/* The carried piece, in screen space (position: fixed), portaled to <body>. Its left/top track
+   the pointer; the transform lifts it so it reads as held above the fingertip/cursor. Sized in
+   JS to the piece's on-screen sprite. pointer-events:none keeps drop hit-testing on the cells. */
+.skirmish-drag-ghost {
+  position: fixed;
+  z-index: 60000;
+  pointer-events: none;
+  transform: translate(-50%, -64%);
+  object-fit: contain;
+  filter: drop-shadow(0 15px 13px rgba(0, 0, 0, .5));
+  will-change: left, top;
+}
+
+/* Grabbing cursor for the whole board while a piece is in hand. */
+.skirmish-board-lab.is-dragging,
+.skirmish-board-lab.is-dragging .skirmish-board-cell-hit {
+  cursor: grabbing;
+}
+
 /* A move is a small sequence, not a teleport: anticipation lift → arc through the
    air → overshoot → settle. The container owns the travel (left/top); the sprite
    owns the vertical hop spanning the same duration, so the two compose into an arc. */
@@ -3808,6 +4325,43 @@ h1 {
   78% { transform: translateY(4px) scale(.96); }    /* heavier landing */
   90% { transform: translateY(-1px) scale(1.01); }  /* small bounce-back */
   100% { transform: translateY(0) scale(1); }       /* settle */
+}
+
+/* Deploy arrival (render/SkirmishBoard). On board start each unit MATERIALIZES a short
+   distance above its own square and FALLS into the seat with an ease-out settle + a tiny
+   rebound — "setting the pieces on the board." Staggered per unit via --arrival-delay
+   (player wave, then the enemy answers; see computeArrivalDelays). `both` fill holds the
+   unit hidden at the 0% frame until its delay elapses, so it waits its turn instead of
+   flashing then dropping. Same motion family as the move-hop (ADR-0043); the per-tile
+   landing effect + sound cue hook in at the settle. */
+/* The deploy drop plays by DEFAULT, even under OS prefers-reduced-motion: this machine (and
+   many players' — Windows "Animation effects" off) reports reduce FALSELY, and gating on it
+   would hide the deploy from the very people it's for. Hence !important, to clear the global
+   `* { animation: none }` OS-reduce reset (style.css ~6036). Reduced motion is instead an
+   EXPLICIT in-game choice: `:root.reduce-motion` swaps the fall for a calm staggered fade
+   (below). A Settings toggle that sets that class is the remaining follow-up (see ADR). This
+   mirrors the repo's existing "a pure fade isn't gated on the OS query" precedent. */
+.skirmish-board-unit.is-arriving img {
+  animation: unit-arrival var(--arrival-anim, 620ms) linear var(--arrival-delay, 0ms) both !important;
+  transform-origin: center bottom; /* the impact squash compresses onto the feet, not the center */
+}
+:root.reduce-motion .skirmish-board-unit.is-arriving img {
+  animation: unit-arrival-soft 280ms ease var(--arrival-delay, 0ms) both !important;
+}
+
+/* The unit SPAWNS high above its square and hangs there MOTIONLESS, then drops under gravity
+   (ease-in builds speed over enough height to feel weighty) and hits the ground with a THUD:
+   a quick impact squash that recovers, no pre-jiggle and no upward bounce. Per-unit
+   --arrival-delay staggers the whole spawn→drop into a wave. The impact is ~85% of the
+   duration (≈ --arrival-delay + 525ms) — the hook point for the landing sound cue + the
+   per-tile dust/splash effect (wired later). */
+@keyframes unit-arrival {
+  0%   { opacity: 0; transform: translateY(-60px); animation-timing-function: ease-out; }     /* spawn high above, fading in */
+  26%  { opacity: 1; transform: translateY(-60px); animation-timing-function: linear; }        /* materialized, hanging still */
+  46%  { opacity: 1; transform: translateY(-60px); animation-timing-function: cubic-bezier(.55, 0, .9, .2); } /* release: fall, building speed */
+  82%  { transform: translateY(0) scaleX(1) scaleY(1); animation-timing-function: cubic-bezier(.3, 0, .2, 1); } /* contact */
+  88%  { transform: translateY(0) scaleX(1.16) scaleY(.82); animation-timing-function: ease-out; } /* THUD: impact squash */
+  100% { transform: translateY(0) scaleX(1) scaleY(1); }                                        /* recover */
 }
 
 .skirmish-board-unit img {
@@ -3879,12 +4433,20 @@ h1 {
   .skirmish-board-unit.is-enemy.is-moving img {
     animation: unit-move-hop-soft var(--move-duration) ease-in-out !important;
   }
+  /* NOTE: the deploy arrival is deliberately NOT swapped here on the OS query — it keys off
+     the explicit `:root.reduce-motion` class instead (see the .is-arriving rules above), so
+     a falsely-reported OS reduce never hides the drop from the maintainer/most players. */
 }
 
 @keyframes unit-move-hop-soft {
   0% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
   100% { transform: translateY(0); }
+}
+
+@keyframes unit-arrival-soft {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 .skirmish-left-panel {
@@ -3999,7 +4561,8 @@ h1 {
   border: 14px solid transparent;
   border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
   box-sizing: border-box;
-  gap: var(--ds-stack);
+  /* Sections are separated by the GUTTER, not the within-section stack (ADR-0056). */
+  gap: var(--ds-gutter);
   height: 100%;
   max-height: none;
   min-height: 0;
@@ -4026,14 +4589,20 @@ h1 {
 
 .skirmish-hud-tab {
   appearance: none;
+  align-items: center;
   background: transparent;
-  /* Grow to fill each row; wraps to a second row past ~3 tabs in the narrow panel. */
-  flex: 1 1 76px;
+  display: flex;
+  justify-content: center;
+  /* Icon-only: equal-share basis (0) keeps all five on ONE compact row instead of
+     stretching to a text width and wrapping to a second row. */
+  flex: 1 1 0;
   /* Kit mode-button frame — atom-assembled (ADR-0012/0016), the SAME tab/header
      frame the settings nav uses; gold brackets, cyan when active. Chrome must be
-     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014). */
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+     the kit 9-slice, never hand-rolled CSS borders/gradients (ADR-0002/0011/0014).
+     Slimmed to 7px now the cell only carries a glyph, not a word; stretch (not round)
+     so the scaled frame's uniform pipes render continuous instead of re-tiling. */
+  border: 7px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 7px stretch;
   border-radius: 0;
   color: var(--skirmish-muted);
   cursor: pointer;
@@ -4042,8 +4611,8 @@ h1 {
   image-rendering: pixelated;
   letter-spacing: .04em;
   line-height: 1;
-  min-block-size: 44px;
-  padding: 0 var(--ds-inline);
+  min-block-size: 0;
+  padding: 2px;
   text-transform: uppercase;
 }
 
@@ -4061,6 +4630,24 @@ h1 {
   border-image-source: url("/assets/ui/kit/mode-button-active.png");
   color: #f3fbff;
 }
+
+/* Icon-based tab glyphs — reused curated kit icons (ADR-0011/0032), full-colour on
+   the dark panel like the count-pip rooks. Sized to sit inside the 44px kit frame. */
+.skirmish-tab-icon {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  block-size: 20px;
+  display: block;
+  image-rendering: pixelated;
+  inline-size: 20px;
+}
+
+.skirmish-tab-icon-unit { background-image: url("/assets/ui/kit/icons/unit-studio.png"); }
+.skirmish-tab-icon-roster { background-image: url("/assets/ui/kit/icons/players.png"); }
+.skirmish-tab-icon-log { background-image: url("/assets/ui/kit/icons/info.png"); }
+.skirmish-tab-icon-view { background-image: url("/assets/ui/kit/icons/monitor.png"); }
+.skirmish-tab-icon-controls { background-image: url("/assets/ui/kit/icons/gear.png"); }
 
 .skirmish-hud-panel {
   display: flex;
@@ -4097,12 +4684,71 @@ h1 {
   padding: 0 var(--ds-gutter);
 }
 
+/* Resign is a concede/caution action — swap the neutral kit frame for the danger (red)
+   one so it reads as distinct from the other match controls (same treatment as the
+   editor's Delete/Clear buttons). */
+.skirmish-view-row .app-header-button.skirmish-resign-button {
+  border-image-source: url("/assets/ui/kit/button-danger.png");
+}
+
 .skirmish-zoom-readout {
   color: var(--skirmish-ink);
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
   font-size: var(--ds-text-sm);
   min-width: 44px;
   text-align: center;
+}
+
+/* In-match shortcut grid (Controls tab). Cells reuse the kit mode-button frame
+   (.app-header-button / .app-header-button-active), so this block is layout + the
+   key-cap badge only — no raw-CSS chrome. */
+.skirmish-grid {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.skirmish-grid-key.app-header-button {
+  block-size: auto;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
+  min-block-size: 60px;
+  min-width: 0;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.skirmish-grid-cap {
+  color: #bfe9ff;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  line-height: 1;
+}
+
+.skirmish-grid-label {
+  font-size: var(--ds-text-xs);
+  letter-spacing: .01em;
+  line-height: 1.05;
+  max-width: 100%;
+  opacity: .92;
+  white-space: normal;
+}
+
+.skirmish-grid-key.is-empty {
+  cursor: default;
+  opacity: .32;
+  pointer-events: none;
+}
+
+.skirmish-grid-key.is-empty .skirmish-grid-label {
+  display: none;
+}
+
+.skirmish-grid-hint {
+  color: #7fb2c9;
+  font-size: var(--ds-text-xs);
+  margin: 6px 0 0;
 }
 
 .skirmish-score-panel,
@@ -4138,7 +4784,9 @@ h1 {
   font-size: .9rem;
   font-weight: 400;
   line-height: 1;
-  margin: 0 0 10px;
+  /* Headings bind DOWNWARD (ADR-0056): stack below to their own content; the larger
+     gutter above them comes from the section gap, never from heading margins. */
+  margin: 0 0 var(--ds-stack);
   text-transform: uppercase;
 }
 
@@ -4184,29 +4832,29 @@ h1 {
 .level-editor-screen .skirmish-hud { grid-area: rail; }
 
 .level-editor-screen .skirmish-card h2 { color: #f1cf86; letter-spacing: .03em; }
-.level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: 12px; }
+.level-editor-screen .skirmish-card h2.le-card-subhead { margin-top: var(--ds-gutter); }
 
 /* Title bar = the standard app bar (ADR-0004/0023/0037): the oak frame, height, grid
    columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
-   on the element itself. Only the editor placement (.le-topbar grid-area, above) and the
-   stats/actions content below are scoped here — three sections: brand · save-state ·
-   labeled header buttons (.app-header-button on the kit gold frame). */
-/* Bar-content rules are scoped to the bar class (.le-topbar), NOT the screen — the
-   bar now lives in the app shell, outside .level-editor-screen, so the stats/actions
-   (portaled into the bar via <TitleBarSlot>) are descendants of .le-topbar there. */
-.le-topbar .le-topbar-stats { align-items: center; color: #d6e8f2; display: flex; gap: 14px; justify-content: end; min-width: 0; }
-.le-topbar .le-level-name { color: #f0e7d3; font: inherit; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.le-topbar .le-save-state { border-left: 1px solid rgba(149, 216, 234, .22); color: rgba(149, 216, 234, .88); font: inherit; font-size: var(--ds-text-sm); padding-left: 14px; text-transform: uppercase; white-space: nowrap; }
-.le-topbar .le-save-state.is-dirty { color: #f0bd55; text-shadow: 0 0 8px rgba(240, 189, 85, .28); }
+   on the element itself. The editor puts NO status in the bar (the level name and
+   save-state cluster were removed — that state lives in the Status layer card); only the
+   return-nav buttons ride it (.app-header-button on the kit gold frame). Bar-content
+   rules are scoped to the bar class (.le-topbar), NOT the screen — the bar lives in the
+   app shell, outside .level-editor-screen. */
 .le-topbar .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
+/* Editor buttons wear the SHARED kit frame (ADR-0002/0011/0012): the 9-slice border-image
+   button atoms, same art as the Settings action buttons — never hand-rolled gradients.
+   neutral = gold (default/inactive), primary = cyan (active/selected), danger = red (Clear).
+   The icon+label grid layout stays the editor's own; only the frame comes from the kit. */
 .le-seg-btn {
-  background: linear-gradient(180deg, rgba(18, 45, 60, .9), rgba(7, 18, 27, .94));
-  border: 1px solid rgba(82, 142, 170, .34);
-  border-radius: 5px;
-  color: #cfe6f1;
+  appearance: none;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
   cursor: pointer;
   display: grid;
   font: inherit;
@@ -4214,24 +4862,155 @@ h1 {
   gap: 5px;
   grid-auto-flow: column;
   line-height: 1;
-  min-height: 30px;
-  padding: 4px 6px;
+  min-height: 38px;
+  padding: 0 2px;
   place-items: center;
+  text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
 }
 .le-seg-btn:disabled { cursor: default; opacity: .4; }
-.le-seg-btn:not(:disabled):hover {
-  color: #f4fbff;
-}
+.le-seg-btn:not(:disabled):hover { filter: brightness(1.08); }
 .le-seg-btn:focus-visible {
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
 }
-.le-seg-btn.active {
-  background: linear-gradient(180deg, rgba(31, 105, 153, .95), rgba(12, 45, 80, .95));
-  border-color: var(--skirmish-cyan);
-  box-shadow: 0 0 0 1px rgba(56, 215, 255, .3);
-  color: #eafaff;
+.le-seg-btn.active { border-image-source: url("/assets/ui/kit/button-primary.png"); }
+.le-seg-btn.danger { border-image-source: url("/assets/ui/kit/button-danger.png"); }
+/* Save when blocked by a playability violation: clickable (it explains why) but dimmed like a
+   disabled control, matching the retired title-bar Save's is-disabled look. */
+.le-seg-btn.is-blocked { opacity: .45; }
+/* Pinned Actions dock in the rail — only the universal per-edit verbs (Undo/Redo), as
+   COMPACT icon-only squares (owner: icons, not letters — the labels ride aria-label +
+   title). Glyphs come from the editor icon set (.le-ico/.ic-*), same treatment as the
+   tool row; press swaps to the set's gold -active variant. Test + Save/Publish are
+   session verbs and live in the Status layer card (.le-status-actions, 2-col grid; the
+   base grid stays 3-col for the Board layer's row). Spacing rides the ADR-0056 ladder —
+   no per-row margin hand-picks. */
+.le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
+.le-board-actions.le-history-actions { display: flex; }
+.le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Undo/Redo glyph PNGs already carry their OWN kit frame, so we drop the outer .le-seg-btn
+   button frame (same treatment as the .le-seg-icons tool row) — otherwise the two frames nest
+   into a double border. The icon fills the square so its single frame IS the button edge. */
+.le-icon-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 38px; height: 38px; }
+.le-icon-btn .le-ico { width: 100%; height: 100%; }
+.le-icon-btn:not(:disabled):active .ic-undo { background-image: url("/assets/ui/level-editor/icons/undo-active.png"); }
+.le-icon-btn:not(:disabled):active .ic-redo { background-image: url("/assets/ui/level-editor/icons/redo-active.png"); }
+/* The status card is a live flex column (ADR-0056) — its gap spaces the row; no extra margin. */
+.le-board-actions.le-status-actions { margin-top: 0; }
+.le-board-actions .le-seg-btn { min-width: 0; }
+
+/* Level settings live under the Board layer: rule readout + faction-control assignment. */
+.le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
+.le-settings-list div { align-items: start; display: grid; gap: 8px; grid-template-columns: 74px minmax(0, 1fr); }
+.le-settings-list dt,
+.le-settings-label { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
+.le-settings-list dd { color: #f3ead8; font-size: var(--ds-text-sm); line-height: 1.25; margin: 0; word-break: break-word; }
+.le-faction-control { display: grid; gap: 7px; }
+.le-faction-assignments { display: grid; gap: 6px; }
+.le-faction-assignment { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(92px, .72fr); }
+.le-faction-name { align-items: center; color: #f3ead8; display: grid; font-size: var(--ds-text-sm); gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
+.le-faction-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.le-faction-name b { color: #9fe0ff; font-size: var(--ds-text-xs); font-weight: 700; }
+.le-faction-dot { border: 1px solid rgba(240, 231, 211, .36); border-radius: 2px; display: inline-block; height: 12px; width: 12px; }
+.le-faction-dot.is-navy-blue { background: #2f7fd4; }
+.le-faction-dot.is-crimson { background: #bf3e4a; }
+.le-faction-dot.is-golden { background: #d9a73f; }
+.le-faction-dot.is-emerald { background: #3ca66b; }
+.le-faction-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  min-height: 38px;
+  min-width: 0;
+  outline: none;
+  padding: 0 8px;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
+  width: 100%;
+}
+.le-faction-select:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
+.le-faction-select option {
+  background: #0a1f2e;
+  color: #cfe6f1;
+  text-transform: none;
+}
+.le-board-warning { color: #f0bd55; font-size: var(--ds-text-sm); line-height: 1.3; margin: 0; text-shadow: 0 0 8px rgba(240, 189, 85, .22); }
+
+/* Layer picker — a dropdown (the tab count outgrew a single segmented row). Wears the same
+   kit frame (border-image button atom) as the editor buttons so it reads as one control family,
+   not a lone gradient; the native select keeps its dropdown chevron. */
+/* The 10px kit frame's fill slice paints over the select's own background, and a <select>
+   can't host a reliable ::after — so the dropdown chevron rides on the wrapper, above the frame. */
+.le-layer-select-wrap { position: relative; }
+.le-layer-select-wrap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 12px;
+  height: 8px;
+  transform: translateY(-50%);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23cfe6f1' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
+  pointer-events: none;
+}
+.le-layer-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/button-neutral.png") 24 fill / 10px round;
+  box-sizing: border-box;
+  color: #eff9ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--ds-text-xs);
+  min-height: 40px;
+  outline: none;
+  padding: 0 22px 0 6px;
+  text-shadow: 0 2px 0 #010407;
+  text-transform: uppercase;
+  width: 100%;
+}
+.le-layer-select:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+.le-layer-select option {
+  background: #0a1f2e;
+  color: #cfe6f1;
+  text-transform: none;
+}
+.le-layer-select option:disabled { color: rgba(207, 230, 241, .4); }
+/* The board-link field wears the kit `field-input` 9-slice (its own navy well is the frame's
+   fill slice), never a hand-rolled border (ADR-0032/0034) — the same input chrome the Codex
+   editor uses. Single-line control: horizontal inset on the role token, vertical centring from
+   min-height (ADR-0055). */
+.le-board-link-input {
+  appearance: none;
+  background: transparent;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 8px stretch;
+  box-sizing: border-box;
+  color: #eff9ff;
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  image-rendering: pixelated;
+  margin-top: 8px;
+  min-height: 38px;
+  outline: none;
+  padding: 0 var(--ds-inset);
+  width: 100%;
+}
+.le-board-link-input::placeholder { color: rgba(207, 230, 241, .52); }
+.le-board-link-input:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
 }
 
 /* active brush picker */
@@ -4244,13 +5023,97 @@ h1 {
   height: 44px;
   overflow: hidden;
   place-items: center;
+  position: relative;
   width: 48px;
 }
 /* Fit the brush preview INSIDE the thumb. The old height:90% mis-resolved against the
    auto grid row, so portrait sprites (roads) overflowed to ~88px and clipped. */
 .le-brush-thumb img { display: block; max-width: 100%; max-height: 100%; image-rendering: pixelated; object-fit: contain; }
+/* Tile chip: the surface sprite is a tall 96x180 frame (diamond up top, empty below), so
+   `contain` shrinks it to a low sliver. Fill the chip and frame the diamond so the preview
+   focuses on the surface. object-position pulls the upper diamond into the box center. */
+.le-brush-thumb img.le-thumb-tile { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 26%; }
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
+
+/* ---- Gameplay zones (ADR-0050) ------------------------------------------------------------
+   Zone tint palette — one accent per paintable zone type: player placement (cyan), enemy
+   placement (crimson), goal (gold). Shared by the board overlay diamond, the brush preview,
+   and the swatch dots so a colour always means the same zone. */
+.le-zone-player { --le-zone-accent: 90, 200, 255; }
+.le-zone-enemy { --le-zone-accent: 235, 96, 96; }
+.le-zone-goal { --le-zone-accent: 245, 200, 90; }
+
+/* The on-board zone overlay: a translucent tinted diamond. It COPIES the selection ring's
+   seating exactly — top: --iso-tile-surface-top + the diamond clip-path — so it sits on the
+   tile EQUATOR (y69), never at iso-tile-height/2. That equator seating is the fix for the
+   recurring "board overlay diamonds sit too low" bug (see .tileset-cell-ring). z-index below the
+   selection ring (3) so a selected zoned tile still shows its ring on top. */
+.le-zone-cell {
+  position: absolute;
+  left: 0;
+  top: var(--iso-tile-surface-top);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(var(--le-zone-accent), .28);
+  box-shadow: inset 0 0 0 2px rgba(var(--le-zone-accent), .85);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Zone brush preview (fills the 48px thumb) + the small swatch dot in the zone picker. */
+.le-brush-thumb-zone {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: rgba(var(--le-zone-accent), .3);
+  box-shadow: inset 0 0 0 2px rgba(var(--le-zone-accent), .9);
+}
+.le-zone-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(var(--le-zone-accent), .95);
+  box-shadow: 0 0 0 1px rgba(var(--le-zone-accent), .5);
+}
+
+/* A wrapping segmented row for controls with more items than fit one line (the 5-mode picker). */
+.le-seg-wrap { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: 1fr 1fr; }
+
+/* The Layer picker now has 11 entries — too many for one row. Let it wrap into an even auto-fit
+   grid so every layer (Zone / Rules included) stays reachable without a horizontal overflow. */
+.le-seg-layers { grid-auto-flow: row; grid-auto-columns: unset; grid-template-columns: repeat(4, 1fr); }
+
+/* Tool picker: each icon is a self-framed tile (its own navy + gold-corner border), so it needs
+   no outer kit button — the tile IS the square button. No text, tooltip-only. The selected tool
+   swaps to its cyan `-active.png` variant instead of the shared button-primary frame. */
+.le-seg-icons { grid-auto-flow: column; grid-auto-columns: max-content; justify-content: start; gap: 6px; }
+.le-seg-icons .le-seg-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 44px; height: 44px; }
+.le-seg-icons .le-seg-btn .le-ico { width: 100%; height: 100%; }
+.le-seg-icons .le-seg-btn.active { border-image: none; }
+.le-seg-icons .le-seg-btn.active .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser-active.png"); }
+.le-seg-icons .le-seg-btn.active .ic-move { background-image: url("/assets/ui/level-editor/icons/move-active.png"); }
+
+/* ---- Playability violations list (ADR-0050) -----------------------------------------------
+   The to-fix list (Status layer only). A warm/blocking kit line frame (the `warm` tone twin of
+   panel-line, ADR-0034) marks it as blocking — no hand-rolled outline (ADR-0032). Its interior is
+   transparent, so the HUD panel's navy reads straight through; the ornament is the only surface.
+   Because it DRAWS a box around its text, the content insets by the role token (ADR-0055): text
+   never sits flush against the drawn edge. */
+.le-violations {
+  --le-frame: 12px;
+  border: var(--le-frame) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line-warm.png") 24 / var(--le-frame) round;
+  image-rendering: pixelated;
+  padding: var(--ds-inset);
+}
+.le-violation-list { display: flex; flex-direction: column; gap: var(--ds-stack); list-style: none; margin: 0; padding: 0; }
+.le-violation { align-items: center; color: #f4d8d2; display: flex; font-size: var(--ds-text-sm); gap: 8px; justify-content: space-between; line-height: 1.3; }
+.le-violation-msg { flex: 1 1 auto; min-width: 0; }
+.le-violation-action { flex: none; padding: 4px 8px; }
 
 /* Brush palettes render at full height and let the ONE side-panel scrollbar (.le-hud-scroll,
    ADR-0030) do the scrolling — no scroll-within-a-scroll. (Supersedes the earlier per-palette
@@ -4260,7 +5123,7 @@ h1 {
    Cover — never clip their bottom controls. Layer tabs stay fixed above it; this fills the
    remaining panel height and carries the same stack gap the sections had as aside children. */
 .le-hud-scroll { flex: 1 1 auto; min-height: 0; }
-.le-hud-scroll > .kit-scroll-content { display: flex; flex-direction: column; gap: var(--ds-stack); }
+.le-hud-scroll > .kit-scroll-content { display: flex; flex-direction: column; gap: var(--ds-gutter); }
 
 /* kit-scroll — the DRAWN scroll primitive (ADR-0030), rendered by <KitScroll>. The native bar is
    hidden; we draw an ALWAYS-PRESENT rail (a real DOM element the browser can't hide) + a grip thumb
@@ -4310,18 +5173,108 @@ h1 {
 .le-details dt { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
 .le-details dd { color: #f3ead8; font-size: var(--ds-text-sm); margin: 0; word-break: break-word; }
 
-/* View card controls: a label on the left, the shared kit control on the right. Footprint uses
+/* Display card controls: a label on the left, the shared kit control on the right. Footprint uses
    the shared <Toggle> and Zoom the shared <Stepper> (.settings-toggle / .settings-stepper) so
    they read the same everywhere; we only lay out the label + control row. */
-.le-ctrlrow { align-items: center; display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
+.le-ctrlrow { align-items: center; display: flex; gap: var(--ds-inline-tight); justify-content: space-between; margin-top: var(--ds-stack); }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
-.le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: 10px 2px 0; }
+.le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: var(--ds-stack) 2px 0; }
+/* A LIVE flex column (ADR-0056): the gap actually applies — it was declared on a block
+   container for this card's whole life and silently did nothing (children sat flush).
+   Gap-driven container ⇒ children carry no vertical margins of their own (flex margins
+   don't collapse; they'd ADD to the gap). */
+.le-status-card { display: flex; flex-direction: column; gap: var(--ds-stack); }
+.le-status-card > h2 { margin: 0; }
+.le-status-log .le-board-note { margin: 0; }
+/* The level's identity (name + OFFICIAL tag) — moved here from the title bar; global
+   chrome carries no editor status. */
+.le-status-level { align-items: baseline; display: flex; gap: var(--ds-inline-tight); min-width: 0; }
+.le-status-level .le-level-name { color: #f0e7d3; font-size: var(--ds-text-sm); letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.le-official-tag { color: #f1cf86; flex: none; font-size: var(--ds-text-2xs); letter-spacing: .08em; }
+/* Drawn text boxes wear a kit line frame (ADR-0032/0034): the transparent-interior panel-line
+   9-slice over the box's own navy surface (a border-box background layer, reaching the frame
+   edge). Ready/blocked swap the SOURCE to the success/warning tone twin — one frame, tone at the
+   corners. Content insets by the role token (ADR-0055). */
+.le-status-current {
+  --le-frame: 12px;
+  background: rgba(4, 13, 20, .7);
+  background-clip: border-box;
+  background-origin: border-box;
+  border: var(--le-frame) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  image-rendering: pixelated;
+  padding: var(--ds-inset);
+}
+.le-status-current strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
+.le-status-current span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.35; }
+.le-status-current.is-ready { border-image-source: url("/assets/ui/explore/frames/panel-line-success.png"); }
+.le-status-current.is-blocked { border-image-source: url("/assets/ui/explore/frames/panel-line-warning.png"); }
+/* Drawn text box → kit line frame (panel-line over its own navy surface, ADR-0032/0034) +
+   role-token inset + ladder gaps (ADR-0055/0056). */
+.le-material-values {
+  --le-frame: 12px;
+  background: rgba(3, 12, 19, .48);
+  background-clip: border-box;
+  background-origin: border-box;
+  border: var(--le-frame) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
+  display: grid;
+  gap: var(--ds-stack);
+  image-rendering: pixelated;
+  padding: var(--ds-inset);
+}
+.le-material-values-head { align-items: baseline; display: flex; gap: var(--ds-inline); justify-content: space-between; }
+.le-material-values-head strong { color: #fff5df; font-size: var(--ds-text-sm); text-transform: uppercase; }
+.le-material-values-head span { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.25; text-align: right; }
+.le-material-values dl { display: grid; gap: var(--ds-inline-tight); margin: 0; }
+.le-material-values dl div { align-items: center; display: grid; gap: var(--ds-inline); grid-template-columns: minmax(0, 1fr) auto; }
+.le-material-values dt {
+  align-items: center;
+  color: #d6ecf5;
+  display: grid;
+  font-size: var(--ds-text-sm);
+  gap: var(--ds-inline-tight);
+  grid-template-columns: auto minmax(0, 1fr);
+  margin: 0;
+  min-width: 0;
+}
+.le-material-values dt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.le-material-values dd { color: #9fe0ff; font-size: var(--ds-text-sm); font-weight: 800; margin: 0; }
+.le-status-log { display: grid; gap: var(--ds-stack); }
+/* Each log entry is a kit line frame (panel-line over its own navy surface, ADR-0032/0034);
+   its tone swaps the SOURCE to the success/warning/error twin — the semantic accent that was a
+   raw border-left stripe now lives in the frame's corners. Content insets by the role token
+   (ADR-0055). */
+.le-status-entry {
+  --le-frame: 10px;
+  background: rgba(3, 12, 19, .58);
+  background-clip: border-box;
+  background-origin: border-box;
+  border: var(--le-frame) solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / var(--le-frame) round;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: 58px minmax(0, 1fr);
+  image-rendering: pixelated;
+  padding: var(--ds-inset);
+}
+.le-status-entry time { color: #8fb6c6; font-size: var(--ds-text-2xs); line-height: 1.2; }
+.le-status-entry strong { color: #f3ead8; display: block; font-size: var(--ds-text-sm); line-height: 1.2; }
+.le-status-entry span { color: var(--skirmish-muted); display: block; font-size: var(--ds-text-sm); line-height: 1.35; margin-top: 3px; }
+.le-status-entry.is-success { border-image-source: url("/assets/ui/explore/frames/panel-line-success.png"); }
+.le-status-entry.is-warning { border-image-source: url("/assets/ui/explore/frames/panel-line-warning.png"); }
+.le-status-entry.is-error { border-image-source: url("/assets/ui/explore/frames/panel-line-error.png"); }
 
 /* road connection editor — clickable diamond edges for the selected road tile */
 .le-roadconn { display: block; width: 132px; height: 99px; margin: 6px auto 2px; }
-.le-roadconn-edge.is-joined, .le-roadconn-edge.is-cut { cursor: pointer; }
+.le-roadconn-edge { cursor: pointer; }
 .le-roadconn-edge.is-joined:hover line:last-child { stroke: #8fefff; }
 .le-roadconn-edge.is-cut:hover line:last-child { stroke: #ffd089; }
+.le-roadconn-edge.is-exit:hover line:last-child { stroke: #9bf0bb; }
+/* No same-kind neighbour: dim until hovered, where it previews the green "run off this edge" stub. */
+.le-roadconn-edge.is-none:hover line:last-child { stroke: #67d98a; }
 .le-roadconn-edge:focus-visible { outline: none; }
 .le-roadconn-edge:focus-visible line:last-child { stroke-width: 9; }
 
@@ -4333,6 +5286,7 @@ h1 {
 .le-ico { background-position: center; background-repeat: no-repeat; background-size: contain; display: inline-block; flex: none; height: 18px; image-rendering: pixelated; width: 18px; }
 .ic-brush { background-image: url("/assets/ui/level-editor/icons/brush.png"); }
 .ic-eraser { background-image: url("/assets/ui/level-editor/icons/eraser.png"); }
+.ic-move { background-image: url("/assets/ui/level-editor/icons/move.png"); }
 .ic-eyedropper { background-image: url("/assets/ui/level-editor/icons/eyedropper.png"); }
 .ic-grid { background-image: url("/assets/ui/level-editor/icons/grid.png"); }
 .ic-zone { background-image: url("/assets/ui/level-editor/icons/zone.png"); }
@@ -4782,11 +5736,6 @@ h1 {
     grid-column: 2;
     justify-self: start;
   }
-
-  .shell.skirmish-active + .bgm-control {
-    right: 14px;
-    top: 88px;
-  }
 }
 
 /* ---------------- Responsive ---------------- */
@@ -4960,10 +5909,12 @@ body { font-size: 17px; }
   --ce-slate: #b7cad4;
   --ce-gold-bright: #f5bb45;
   --ce-eyebrow: #c9a877;
-  background:
-    radial-gradient(720px 460px at 74% 24%, rgba(28, 106, 149, .24), transparent 62%),
-    radial-gradient(520px 320px at 34% 68%, rgba(64, 89, 59, .16), transparent 68%),
-    linear-gradient(180deg, #07131d 0%, #04080d 100%);
+  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
+     the <SceneBackdrop> element the editor renders (ui/SceneBackdrop.tsx), the same way the
+     main menu paints it, so the editor sits over the menu scene + synced rain. The editor's
+     panels overlap most of it; the scene + rain only show in the gaps, for a consistent
+     feel. This floor keeps the screen dark (never white) before the scene decodes. */
+  background: #02070b;
   color: var(--ce-ink);
   display: grid;
   font-family: var(--ds-font-pixel);
@@ -4982,6 +5933,10 @@ body { font-size: 17px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Sit above the scene backdrop (<SceneBackdrop>, z1) so this cyan edge tint still colors
+     the menu scene — it used to ride over the .ce-screen background scene, which now lives
+     in a z1 element. Rain field (z2, later in the DOM) still falls in front of the tint. */
+  z-index: 2;
   background:
     linear-gradient(90deg, rgba(48, 214, 255, .08), transparent 16% 84%, rgba(48, 214, 255, .08)),
     linear-gradient(180deg, rgba(255, 255, 255, .03), transparent 14% 86%, rgba(0, 0, 0, .28));
@@ -4990,9 +5945,16 @@ body { font-size: 17px; }
 .ce-topbar,
 .ce-footer,
 .ce-layout {
+  /* Above the rain field (.ambience-background, z2), below the overlay drops
+     (.ambience-overlay, z5) — mirrors the menu's z3 UI layer so the synced rain
+     falls behind the editor chrome (and the near drops cross in front of it). */
   position: relative;
-  z-index: 1;
+  z-index: 3;
 }
+
+/* Editor chrome entrance is the SHARED screen-entrance primitive (ADR-0046): CampaignEditor
+   renders .ce-layout + .ce-footer through ArtRouteChrome, so only the chrome fades in while
+   the .ce-screen backdrop + rain stay continuous. */
 
 /* Migrated to the shell bar: the in-screen <header> is gone, so keep row 1 sized for
    the fixed bar overlay and pin the layout + footer to rows 2/3 (3-row grid). */
@@ -5077,8 +6039,9 @@ body { font-size: 17px; }
   text-shadow: 0 0 8px rgba(240, 189, 85, .28);
 }
 
-/* Admin "Edit Officials" mode marker — the editor is a dev/admin surface, so a
-   plain high-contrast tag is fine (out of scope for player chrome polish). */
+/* "OFFICIAL" tier tag + read-only badge on official campaigns — the editor is a
+   dev/admin surface, so a plain high-contrast tag is fine (out of scope for player
+   chrome polish). */
 .ce-official-badge {
   color: var(--ce-gold-bright);
   font-weight: 700;
@@ -5212,6 +6175,7 @@ body { font-size: 17px; }
 .ce-footer-link {
   align-items: center;
   background: transparent;
+  cursor: pointer;
   border: 12px solid transparent;
   border-image: url("/assets/ui/kit/button-primary.png") 24 fill / 12px round;
   box-sizing: border-box;
@@ -5271,6 +6235,21 @@ body { font-size: 17px; }
 }
 
 .ce-sign-in {
+  /* A <button> since ADR-0052: clear BOTH the UA button chrome AND the global
+     `button { … }` base at the top of this file (its 44px min-height/padding/shadow
+     leaked in — caught by pixel diff); `inherit` restores what the anchor version
+     inherited. Font-size comes from the shared .ce-sign-in/.ce-empty rule above. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: inherit;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  text-shadow: inherit;
   color: var(--ce-cyan-bright);
   text-decoration: none;
 }
@@ -5323,6 +6302,11 @@ body { font-size: 17px; }
   position: relative;
   text-align: left;
   width: 100%;
+  /* Windowing (web.dev): off-screen rows skip layout/paint. The intrinsic size keeps the
+     scrollbar + row footprint stable so nothing reflows when a row is virtualised out. The
+     value matches each row's min-height below; visible layout is unchanged. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
 }
 
 .ce-campaign-row.is-selected {
@@ -5345,11 +6329,16 @@ body { font-size: 17px; }
   opacity: .78;
 }
 
+.ce-campaign-row-meta {
+  border-image-source: url("/assets/ui/kit/row.png");
+}
+
 .ce-level-row {
   gap: 8px;
   grid-template-columns: 76px minmax(0, 1fr) auto auto;
   min-height: 70px;
   padding-block: 4px;
+  contain-intrinsic-size: auto 70px;
 }
 
 .ce-level-row.is-selected {
@@ -5462,10 +6451,25 @@ body { font-size: 17px; }
   width: 58px;
 }
 
-.ce-level-thumb .level-preview-board,
-.ce-level-thumb .level-preview-empty {
+.ce-level-thumb .level-thumbnail,
+.ce-level-thumb .ce-level-thumb-empty {
+  display: block;
   height: 100%;
   width: 100%;
+}
+
+/* The baked board thumbnail (one flat <img>) is letterboxed to the board's native aspect
+   inside the row's thumb box; its pending placeholder shares the calm panel fill. */
+.ce-level-thumb .level-thumbnail img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+.level-thumbnail-placeholder,
+.ce-level-thumb-empty,
+.settings-row-thumb-empty {
+  background: linear-gradient(180deg, #0a2a50 0%, #061322 100%);
 }
 
 .ce-row-actions {
@@ -5762,6 +6766,7 @@ body { font-size: 17px; }
 .terrain-dirt { background: #7d6a4a; }
 .terrain-pebble { background: #9aa6ad; }
 .terrain-sand { background: #c8b87e; }
+.terrain-void { background: #1f2430; }
 /* ===== end Compact Level Info ===== */
 
 .ce-preview-frame {
@@ -5773,7 +6778,6 @@ body { font-size: 17px; }
   padding: 2px;
 }
 
-.level-preview-board,
 .level-preview-empty {
   align-items: center;
   background:
@@ -5789,64 +6793,34 @@ body { font-size: 17px; }
   position: relative;
 }
 
-.level-preview-board.is-compact,
 .level-preview-empty.is-compact {
   min-height: 0;
+}
+
+/* The SELECTED-level LIVE viewer: a pan/zoom ViewPane (StudioReadOnlyBoard inside) filling the
+   preview frame. Mirrors the old static preview's footprint so the panel doesn't resize when a
+   level is selected. The stage owns its own dark grid fill (.tileset-view-stage). */
+.ce-level-viewer {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 220px;
+  overflow: hidden;
+}
+
+.ce-level-viewer .tileset-view-stage {
+  border: 0;
+  border-radius: 0;
+}
+
+/* The read-only board sprites mustn't show the editor's grab/select cursors in this preview. */
+.ce-level-viewer .tileset-placement-board.is-readonly .tileset-generated-board-tile {
+  cursor: default;
 }
 
 .level-preview-empty {
   color: var(--ce-slate);
   font-size: var(--ds-text-md);
-  place-items: center;
-}
-
-.level-preview-board-surface {
-  height: 100%;
-  min-height: inherit;
-  pointer-events: none;
-  width: 100%;
-}
-
-.level-preview-board-surface .tileset-generated-board-tile {
-  cursor: default;
-}
-
-.level-preview-unit {
-  align-items: end;
-  display: grid;
-  height: 70px;
-  justify-items: center;
-  pointer-events: none;
-  position: absolute;
-  transform: translate(-50%, -76%);
-  width: 58px;
-}
-
-.level-preview-unit img {
-  display: block;
-  image-rendering: pixelated;
-  max-height: 64px;
-  max-width: 64px;
-}
-
-.level-preview-unit.is-compact {
-  height: 44px;
-  width: 38px;
-}
-
-.level-preview-unit.is-compact img {
-  max-height: 34px;
-  max-width: 34px;
-}
-
-.level-preview-unit span {
-  background: transparent;
-  border: 5px solid transparent;
-  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 5px stretch;
-  color: #f4ead6;
-  display: grid;
-  min-height: 20px;
-  min-width: 20px;
   place-items: center;
 }
 
@@ -5859,6 +6833,50 @@ body { font-size: 17px; }
 
 .ce-preview-actions .ce-link-button {
   min-width: 0;
+}
+
+.ce-preview-actions.has-assign .ce-assign-field {
+  grid-column: 1 / -1;
+}
+
+.ce-assign-field {
+  display: grid;
+  min-width: 0;
+}
+
+.ce-assign-field select {
+  appearance: none;
+  background: transparent;
+  border: 12px solid transparent;
+  border-image: url("/assets/ui/kit/field-select.png") 18 fill / 12px stretch;
+  box-sizing: border-box;
+  color: var(--ce-ink);
+  cursor: pointer;
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xs);
+  image-rendering: pixelated;
+  min-height: 40px;
+  min-width: 0;
+  outline: none;
+  padding: 0 12px;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.ce-assign-field select:disabled {
+  cursor: default;
+  filter: grayscale(.7) brightness(.7);
+  opacity: .58;
+}
+
+.ce-assign-field select:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
+.ce-assign-field option {
+  background: #061019;
+  color: var(--ce-ink);
 }
 
 .ce-link-button-ghost {
@@ -5882,6 +6900,10 @@ body { font-size: 17px; }
 .ce-footer .ce-asset-button:not(.is-danger) {
   border-image-source: url("/assets/ui/kit/button-neutral.png");
 }
+
+/* Workspace commits (Save · Publish) at the top of the Campaigns panel — full-width primary
+   buttons matching + New Campaign; the base .ce-asset-button is already button-primary. */
+.ce-workspace-commit { display: grid; gap: 6px; margin: 0 4px 8px; }
 
 @media (max-width: 1180px) {
   .ce-screen {
@@ -5984,35 +7006,40 @@ body { font-size: 17px; }
   }
 }
 
-/* ── Background music toggle ─────────────────────────────────────────────── */
-/* Self-contained floating control appended by bgm.js. Themed to the cobalt/gold
-   chrome palette; glows gently while a track is playing. */
-/* Floating BGM control — kit chrome (the symmetric mode-button frame) holding the
-   music glyph, so it reads as part of the art instead of a raw rounded button. The
-   active frame marks "playing"; the icon dims when muted / silent. */
+/* ── Background music mute control ───────────────────────────────────────── */
+/* Persistent mute control — the trailing cluster's media member (ADR-0044). The vanilla
+   BGM player (bgm.js) re-homes its own button into the title bar's .cluster-bgm-slot, so
+   this is no longer floating chrome docked bottom-right: it's an icon-only cluster button
+   sized to match the gear/avatar on the kit mode-button 9-slice frame (ADR-0002/0036), on
+   every route. The active frame marks "playing"; the icon dims when muted / silent. */
+.cluster-bgm-slot {
+  /* Boxless wrapper: when bgm hides the control (no soundtrack configured) or hasn't
+     re-homed it yet, the slot adds no width and no cluster gap; with the control present
+     it joins the .header-account-cluster flex row directly as its leading member. */
+  display: contents;
+}
+
 .bgm-control {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 50;
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
+  align-items: center;
+  block-size: 52px;
+  inline-size: 52px;
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
   padding: 0;
   cursor: pointer;
   appearance: none;
-  border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
   image-rendering: pixelated;
   /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
      fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
-  transition: transform var(--ds-duration-fast) var(--ds-ease-standard), opacity var(--ds-duration-base) var(--ds-ease-linear);
+  transition: transform var(--ds-duration-fast) var(--ds-ease-standard), opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 
 .bgm-control-icon {
-  width: 22px;
-  height: 22px;
+  block-size: 26px;
+  inline-size: 26px;
   image-rendering: pixelated;
   pointer-events: none;
 }
@@ -6022,38 +7049,18 @@ body { font-size: 17px; }
   outline-offset: 2px;
 }
 
-.bgm-control.is-playing {
-  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. */
+.bgm-control.is-playing,
+.bgm-control.is-othertab {
+  /* Playing = kit active-frame swap (no glow halo), per main's bgm rework. is-othertab is
+     a follower tab: same lit frame (music IS playing, elsewhere), but its icon stays
+     dimmed via is-muted, so it reads as "on, not here" — distinct from the base-frame
+     muted state it used to be pixel-identical to. */
   border-image-source: url("/assets/ui/kit/mode-button-active.png");
 }
 
 .bgm-control.is-muted .bgm-control-icon {
   opacity: 0.4;
   filter: grayscale(0.7);
-}
-
-.shell.main-menu-active ~ .bgm-control,
-.shell.main-menu-active + .bgm-control {
-  display: none !important;
-}
-
-@media (max-width: 560px) {
-  .bgm-control {
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-    right: 10px;
-    bottom: 10px;
-  }
-
-  .shell.main-menu-active + .bgm-control {
-    bottom: auto;
-    top: 96px;
-  }
-
-  .shell.main-menu-active .main-menu-screen {
-    padding-bottom: 64px;
-  }
 }
 
 .tile-preview-page {
@@ -6298,10 +7305,6 @@ body { font-size: 17px; }
   overflow: hidden;
 }
 
-.shell.tileset-studio-active + .bgm-control {
-  display: none;
-}
-
 .tile-template-guides {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -6349,7 +7352,6 @@ body { font-size: 17px; }
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
 }
 
-.tileset-mode-tabs button,
 .tileset-view-action {
   min-height: 36px;
   padding: 9px 12px;
@@ -6362,52 +7364,54 @@ body { font-size: 17px; }
   font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
 
-.tileset-mode-tabs {
-  display: grid;
-  grid-auto-columns: minmax(66px, 1fr);
-  grid-auto-flow: column;
-  gap: 3px;
-  padding: 3px;
-  background: rgba(2, 8, 13, 0.5);
-  border: 1px solid rgba(67, 127, 179, 0.24);
-  border-radius: 6px;
+/* The Studio workspace switcher (Catalog / Lab / Viewer). It rides the title bar's
+   actions slot as three kit-framed icon buttons, so it reads as a sibling of the trailing
+   gear/account cluster instead of eating a row on every Viewer's control rail. */
+.studio-mode-nav {
+  align-items: center;
+  display: flex;
+  gap: 6px;
 }
 
-.tileset-mode-tabs button {
-  min-width: 64px;
-  min-height: 28px;
-  padding: 5px 12px;
-  font-size: 11px;
-  border-color: transparent;
+.studio-mode-icon {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  block-size: 52px;
+  border: 10px solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  image-rendering: pixelated;
+  inline-size: 52px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
 }
 
-.tileset-mode-tabs button.is-active {
-  color: #f3fbff;
-  background: rgba(25, 94, 132, 0.95);
-  border-color: rgba(111, 210, 255, 0.76);
+/* Active mode gets the lit frame — same swap the settings gear / mode buttons use. */
+.studio-mode-icon.is-active {
+  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 10px stretch;
 }
 
-.tileset-mode-tabs button:disabled {
-  color: rgba(216, 234, 255, 0.42);
-  background: rgba(12, 31, 48, 0.42);
-  border-color: transparent;
-  cursor: not-allowed;
+.studio-mode-icon:focus-visible {
+  outline: 2px solid rgba(101, 184, 255, 0.72);
+  outline-offset: 2px;
 }
 
-/* The relocated workspace switcher, as a labelled field at the top of the control
-   panel (catalog rail + each Viewer lab's controls). */
-.tileset-mode-field {
-  display: grid;
-  gap: 5px;
+/* Forged pixel-art glyph, sized like the neighbouring gear's icon (26px in its frame). */
+.studio-mode-icon > img {
+  block-size: 28px;
+  image-rendering: pixelated;
+  inline-size: 28px;
+  object-fit: contain;
 }
 
-.tileset-mode-field .tileset-control-label {
-  color: #72bde8;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+/* Idle glyphs sit a touch dimmed so the lit (active) mode reads as selected; hover/active full. */
+.studio-mode-icon > img { opacity: 0.82; }
+.studio-mode-icon.is-active > img,
+.studio-mode-icon:hover > img { opacity: 1; }
 
 .tileset-context-tabs {
   flex: none;
@@ -6448,6 +7452,42 @@ body { font-size: 17px; }
    panel; only its contents reflow. (See docs/studio-control-architecture.md.) */
 .tileset-studio-shell.is-lab {
   grid-template-columns: minmax(0, 1fr) 260px;
+}
+
+/* Narrow effective widths — a genuinely small window OR high browser zoom, which
+   shrinks the CSS viewport. The main pane shrinks toward 0 but the Controls stay a
+   fixed 260px, so below ~560px the panel was pushed past the right edge and clipped
+   (overflow-x:hidden). Stack to a single scrolling column instead — main on top,
+   Controls beneath — so the whole panel stays reachable. Mirrors the .tileset-view-mode
+   breakpoint. Wide layouts are untouched. */
+@media (max-width: 640px) {
+  .tileset-studio-shell.is-catalog,
+  .tileset-studio-shell.is-lab,
+  .tileset-studio-shell.is-viewer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  /* Each pane sizes to its content and the SHELL scrolls, instead of two fixed-height
+     columns fighting over a too-narrow row. */
+  .tileset-studio-shell.is-catalog > *,
+  .tileset-studio-shell.is-lab > *,
+  .tileset-studio-shell.is-viewer > * {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .tileset-studio-shell.is-catalog .tileset-view-controls,
+  .tileset-studio-shell.is-lab .tileset-view-controls,
+  .tileset-studio-shell.is-viewer .tileset-view-controls {
+    overflow-y: visible;
+  }
+  /* In the editing viewers the Controls ARE the task (the stage is just a preview),
+     so surface them first when stacked — otherwise a tall canvas buries them. */
+  .tileset-studio-shell.is-viewer .tileset-view-controls {
+    order: -1;
+  }
 }
 
 .tileset-candidate-shell {
@@ -6991,7 +8031,8 @@ body { font-size: 17px; }
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 10px;
+  padding: 10px 22px 10px 10px;
+  scrollbar-gutter: stable;
 }
 
 .tileset-view-controls h2 {
@@ -8027,18 +9068,6 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-.tileset-relationship-card.has-footprint .tileset-relationship-cell.is-center::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.72);
-  pointer-events: none;
-}
-
 .tileset-studio-tab-panel {
   display: grid;
   align-content: start;
@@ -8108,6 +9137,7 @@ button.tileset-relationship-cell {
   overflow-wrap: anywhere;
 }
 
+
 /* Per-focus layer-visibility toggle (the "vision" eye). Amber when the layer is hidden,
    so it's obvious the board is concealing something rather than empty. */
 .tileset-vision-toggle {
@@ -8155,6 +9185,11 @@ button.tileset-relationship-cell {
 .tileset-inspector-section,
 .tileset-control-stack {
   display: grid;
+  /* Single column pinned to the container width (not max-content) — without this an auto track
+     sizes to the widest child, so one long button/label drags the whole stack past the fixed
+     panel width and its right edge (steppers, reset ↺) gets clipped. min-width:0 alone isn't
+     enough; the grid track has to be told to shrink. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
 }
@@ -8476,24 +9511,6 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
-.tileset-studio-card.has-footprint .tileset-studio-card-image::after {
-  filter: drop-shadow(0 0 0 rgba(104, 198, 255, 0.6));
-}
-
-.tileset-studio-card.has-footprint .tileset-studio-card-image::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: calc(var(--iso-tile-width) * var(--tile-zoom, 1));
-  height: calc(var(--iso-tile-height) * var(--tile-zoom, 1));
-  transform: translate(-50%, -77%);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.82);
-  box-shadow: 0 0 14px rgba(42, 166, 255, 0.22);
-  pointer-events: none;
-}
-
 .tileset-studio-card-meta {
   display: flex;
   align-items: center;
@@ -8699,6 +9716,42 @@ button.tileset-relationship-cell {
   top: 0;
 }
 
+/* Animated tile TOP (water ripple). The motion is BAKED frames in a horizontal sheet
+   (<tile>-top-anim.png, each frame the full 96x180 tile frame); this rule only advances
+   the frame index via steps() — the same model as .gc-tuft below. Per-cell phase is a
+   negative delay set from --tile-anim-phase (a whole-frame fraction) so open water
+   shimmers loosely instead of pulsing in unison. The animation is !important to clear
+   the global `* { animation: none }` OS-reduce reset (~6055): OS "animations off"
+   (Windows) reports prefers-reduced-motion falsely, and ambient board art is scenery,
+   not a UI transition — the deploy drop (~3842) sets the same precedent. The EXPLICIT
+   in-game reduce-motion choice (:root.reduce-motion) does freeze it, to frame 0 = the
+   exact static art. */
+.tileset-generated-board-tile .tile-layer-top-anim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 96px;
+  height: 180px;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: tile-top-anim var(--tile-anim-dur, 1.6s) steps(var(--tile-anim-frames, 1)) infinite !important;
+  animation-delay: calc(-1 * var(--tile-anim-phase, 0) * var(--tile-anim-dur, 1.6s)) !important;
+  will-change: background-position;
+}
+
+:root.reduce-motion .tileset-generated-board-tile .tile-layer-top-anim {
+  animation: none !important;
+}
+
+@keyframes tile-top-anim {
+  from { background-position-x: 0; }
+  to { background-position-x: var(--tile-anim-travel, 0); }
+}
+
 /* Units and doodads no longer render inside cells here — both boards seat them at grid
    level via the shared .board-unit-seat and <DoodadSprite> (see render/BoardDoodad.tsx).
    The old per-cell .tileset-board-unit / .tileset-board-doodad rules were removed with them. */
@@ -8710,16 +9763,16 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
   background-repeat: no-repeat;
   pointer-events: none;
-  animation: gc-sway var(--gc-dur, 1.14s) steps(6) infinite;
-  animation-delay: var(--gc-delay, 0s);
+  animation: gc-sway var(--gc-dur, 1.14s) steps(6) infinite !important;
+  animation-delay: var(--gc-delay, 0s) !important;
   will-change: background-position;
 }
 @keyframes gc-sway {
   from { background-position-x: 0; }
   to { background-position-x: var(--gc-travel, 0); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .gc-tuft { animation: none; }
+:root.reduce-motion .gc-tuft {
+  animation: none !important;
 }
 
 .tileset-generated-board-overlay-cell {
@@ -8759,20 +9812,6 @@ button.tileset-relationship-cell {
   background: rgba(2, 8, 13, 0.72);
   border: 1px solid rgba(111, 210, 255, 0.28);
   border-radius: 3px;
-}
-
-.tileset-generated-board.has-footprint .tileset-generated-board-tile::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  /* Same top-surface plane as the grid diamond, so the footprint guide overlays
-     the tile's top face instead of floating above it. */
-  top: var(--iso-tile-surface-top);
-  width: var(--iso-tile-width);
-  height: var(--iso-tile-height);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  border: 1px solid rgba(111, 210, 255, 0.28);
-  pointer-events: none;
 }
 
 /* Manual tile placement board (temporary preview-in-context). */
@@ -8890,6 +9929,13 @@ button.tileset-relationship-cell {
 .tileset-placement-board.is-tool-select .tileset-cell-hit {
   cursor: pointer;
 }
+/* Move tool: an open hand over grabbable cells, closed while dragging a held unit. */
+.tileset-placement-board.is-tool-move .tileset-cell-hit {
+  cursor: grab;
+}
+.tileset-placement-board.is-tool-move .tileset-cell-hit:active {
+  cursor: grabbing;
+}
 
 /* Selection highlight (a child element — pseudo-elements are used by footprint/empty). */
 .tileset-cell-ring {
@@ -8905,6 +9951,19 @@ button.tileset-relationship-cell {
   box-shadow: inset 0 0 0 2px rgba(255, 214, 102, 0.9);
   pointer-events: none;
   z-index: 3;
+}
+/* Move-tool variants of the tile-ring: the held unit's cell, and a can/can't-drop destination. */
+.tileset-cell-ring.is-move-from {
+  background: rgba(120, 180, 255, 0.20);
+  box-shadow: inset 0 0 0 2px rgba(120, 180, 255, 0.9);
+}
+.tileset-cell-ring.is-move-ok {
+  background: rgba(80, 220, 140, 0.24);
+  box-shadow: inset 0 0 0 2px rgba(80, 220, 140, 0.95);
+}
+.tileset-cell-ring.is-move-blocked {
+  background: rgba(240, 90, 90, 0.24);
+  box-shadow: inset 0 0 0 2px rgba(240, 90, 90, 0.95);
 }
 
 /* Catalog card actions (paint / open-as-board). The card body itself is no
@@ -9906,21 +10965,11 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
-  /* Same art-directed backdrop as the main menu (.main-menu-layer, ~line 712) so the
-     settings frames sit over the menu scene + the synced rain. Keep the two in sync.
-     First declaration = PNG fallback for engines without image-set()/type(). */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat #02070b;
+  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
+     the <SceneBackdrop> element these screens render (ui/SceneBackdrop.tsx), the same way
+     the main menu paints it, so the settings frames sit over the menu scene + synced rain.
+     This floor keeps the screen dark (never white) before the scene decodes. */
+  background: #02070b;
   display: grid;
   height: 100%;
   justify-items: center;
@@ -9936,7 +10985,8 @@ button.tileset-relationship-cell {
    so the in-front rain matches the menu's restraint. The field rain behind the
    frames is untouched, and the menu overlay is unaffected (scoped via the
    re-parented overlay living under .settings-art-route only while on settings). */
-.settings-art-route .ambience-overlay {
+.settings-art-route .ambience-overlay,
+.ce-screen .ambience-overlay {
   opacity: 0.3;
 }
 
@@ -9951,7 +11001,7 @@ button.tileset-relationship-cell {
   --settings-action-label: var(--ds-text-sm);
   block-size: 100%;
   display: grid;
-  gap: clamp(6px, .72vw, 12px);
+  gap: clamp(6px, calc(var(--layout-vw, 100vw) * .0072), 12px);
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
   inline-size: 100%;
   max-inline-size: none;
@@ -10024,6 +11074,14 @@ button.tileset-relationship-cell {
   grid-row: 2;
 }
 
+/* Settings carries the return "‹ Back" in its actions slot (portaled by the Settings
+   screen when a valid ?returnTo is present), so its bar needs a 3rd, trailing column for
+   the account cluster: brand · actions · cluster. Two classes out-rank the base
+   .settings-header-frame 2-column grid (the same trick the skirmish/editor bars use). */
+.app-shell-titlebar.settings-topbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 /* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
    height, always labeled (ADR-0016). The cyan `-active` variant marks a single
    primary action (e.g. Save / Sign In). Used by every app title bar's controls;
@@ -10032,7 +11090,7 @@ button.tileset-relationship-cell {
   align-items: center;
   block-size: 46px;
   border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px round;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 12px stretch;
   box-sizing: border-box;
   color: #eef6ff;
   cursor: pointer;
@@ -10049,7 +11107,15 @@ button.tileset-relationship-cell {
 }
 
 .app-header-button-active {
-  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px round;
+  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 12px stretch;
+}
+
+.app-header-button.is-disabled,
+.app-header-button[aria-disabled="true"],
+.app-header-button:disabled {
+  cursor: help;
+  filter: grayscale(.12);
+  opacity: .55;
 }
 
 .app-header-button:hover {
@@ -10067,8 +11133,17 @@ button.tileset-relationship-cell {
   align-items: center;
   block-size: var(--app-header-h);
   display: grid;
-  gap: clamp(10px, 1.1vw, 18px);
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .011), 18px);
+  /* The DEFAULT bar is two sections: brand (1fr, leading) · account cluster (auto,
+     trailing) — the invariant chrome every screen carries (ADR-0042). The cluster is the
+     last DOM child, so it lands in this final column flush to the right padding edge.
+     A screen that ADDS optional center/actions slots ALSO sets a barClass that overrides
+     this with the extra columns (skirmish-topbar=3, le/ce-topbar=4); those overrides carry
+     two classes so they out-rank this base. Do NOT pad this with an extra empty `auto`
+     column "for the slots" — an unused trailing track + its gap would push the cluster a
+     gap-width left on every plain bar, so the cluster would jump when navigating to a
+     bar that DOES override (e.g. menu -> skirmish). Keep it at exactly two. */
+  grid-template-columns: minmax(0, 1fr) auto;
   /* Fork A (ADR-0037): full-bleed oak whose bottom edge is a forged NAILHEAD iron rule
      (a studded band) capped by a centred diamond stud, replacing the panel-LINE frame.
      With no border the wood reaches the element edge — no side/top frame and no 1px keyline
@@ -10098,20 +11173,34 @@ button.tileset-relationship-cell {
    brand-then-name, so no reordering is needed. Component: src/ui/shared/BrandLockup. */
 .brand-lockup {
   align-items: center;
+  /* Rendered as a <button> since ADR-0052 (the title mark is a game control, not a
+     hyperlink): clear the UA button chrome AND the global `button { … }` base rule
+     (min-height/radius/shadow/tracking), restoring the inheritance the anchor had. */
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  text-shadow: inherit;
   color: #eef8ff;
   display: inline-grid;
-  gap: clamp(10px, 1vw, 16px);
-  grid-template-columns: clamp(40px, 4vw, 54px) minmax(0, 1fr);
+  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px);
+  grid-template-columns: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px) minmax(0, 1fr);
   min-width: 0;
   text-decoration: none;
 }
 
 .brand-lockup-mark {
   display: block;
-  height: clamp(40px, 4vw, 54px);
+  height: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px);
   image-rendering: auto;
   object-fit: contain;
-  width: clamp(40px, 4vw, 54px);
+  width: clamp(40px, calc(var(--layout-vw, 100vw) * .04), 54px);
 }
 
 .brand-lockup-copy {
@@ -10180,9 +11269,13 @@ button.tileset-relationship-cell {
    carries a glyph/avatar without the frame dominating. */
 .cluster-icon-button {
   align-items: center;
+  /* Rendered as a <button> since ADR-0052 (the gear): clear the UA button surface so
+     only the kit mode-button frame paints, exactly as the anchor version did. */
+  appearance: none;
+  background: transparent;
   block-size: 52px;
   border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px round;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
   box-sizing: border-box;
   cursor: pointer;
   display: inline-flex;
@@ -10392,32 +11485,81 @@ button.tileset-relationship-cell {
 
 .settings-shell {
   display: grid;
-  grid-template-columns: minmax(244px, 304px) minmax(0, 1fr);
-  gap: clamp(8px, .85vw, 14px);
+  /* Button (rail) width + body cap are the baked output of the Main Menu tuner. SHARED by the
+     menu and Settings so the Settings rail tabs stay faithful to the menu's buttons (they're the
+     alignment reference for the Settings rows). overflow:visible lets the rail's offset (below)
+     show past the shell edge. Re-tune via the dressing room (MainMenuViewer) — it bakes these
+     same shared selectors. */
+  grid-template-columns: 487px minmax(0, 1fr);
+  gap: clamp(8px, calc(var(--layout-vw, 100vw) * .0085), 14px);
   /* Body (rail + content) is a centred contained block beneath the full-bleed top
-     bar, so rows don't stretch the full width while the title bar stays flush. */
-  inline-size: 100%;
-  max-inline-size: clamp(900px, 88vw, 1240px);
-  justify-self: center;
+     bar, so rows don't stretch the full width while the title bar stays flush.
+     Centred with an EXPLICIT margin computed from --layout-vw (the width the window
+     would have at 100% browser zoom — shell/layoutViewport.ts) instead of
+     justify-self:center against the live viewport. At 100% zoom the two are
+     pixel-identical (--layout-vw == 100vw). Under browser zoom the margin — like
+     every other px in this chrome, e.g. the rail's fixed -230px offset below —
+     simply magnifies, so the whole composition scales as ONE piece instead of
+     re-centring against the shrunken viewport and shoving the rail sideways. */
+  --settings-shell-w: max(clamp(900px, calc(var(--layout-vw, 100vw) * .88), 1240px), 487px);
+  inline-size: var(--settings-shell-w);
+  margin-inline-start: max(0px, calc((var(--layout-vw, 100vw) - var(--settings-shell-w)) / 2));
+  justify-self: start;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
-/* Entry fade (ADR-0043): the chrome (rail + panel) fades in when the Settings screen
-   mounts. Settings.tsx adds .is-entered after the first paint so this opacity transition
-   runs (entrance tier — slow + decelerate). Pure opacity = reduced-motion-safe, so it is
-   intentionally not gated (same rationale as the menu crossfade); the rain backdrop sits
-   behind and is untouched — only the chrome fades in over it.
-   SCOPED to .settings-art-route: the main menu REUSES the .settings-shell class but has no
-   JS to add .is-entered, so an unscoped `opacity: 0` here left the whole main menu stuck
-   invisible (the rail/buttons inherited it). Only the real Settings screen, wrapped in
-   .settings-art-route, starts hidden and fades in. */
-.settings-art-route .settings-shell {
+/* Screen entrance (ADR-0046): the SHARED entrance fade, applied through ArtRouteChrome to a
+   screen's CHROME ROOT (.settings-shell in Settings/menu, .skirmish-picker for map select) —
+   never the screen's outer element, so the ambience backdrop (a sibling) stays continuous and
+   never re-fades across art-background screens (ADR-0046 B/G). Entrance tier (slow +
+   decelerate). Pure opacity = reduced-motion-safe -> not gated (ADR-0043). The hook only
+   engages on a navigation-driven mount; the cold-load menu reveal owns the first paint (no
+   double-fade). */
+.screen-enter {
+  animation: screen-enter-fade var(--ds-duration-fade) var(--ds-ease-standard) both !important;
+}
+
+@keyframes screen-enter-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Inert while the fade plays (ADR-0046 D): can't trigger a new transition mid-transition. */
+.screen-enter.screen-enter-lock {
+  pointer-events: none;
+}
+
+/* Readiness hold (ADR-0046 C.1, ADR-0051): chrome whose content is still arriving sits
+   invisible and inert; the entrance fade only starts once the screen reports ready, so
+   the reveal always shows real content — never an empty frame with the content popping
+   in after. Screens opt in via ArtRouteChrome's `ready` prop. */
+.screen-enter-hold {
   opacity: 0;
-  transition: opacity var(--ds-duration-slow) var(--ds-ease-out);
+  pointer-events: none;
 }
 
-.settings-art-route .settings-shell.is-entered { opacity: 1; }
+/* Light-hop exit dissolve (ADR-0051): the outgoing screen's chrome fades down, THEN the
+   route swaps (App holds the swap for SCREEN_EXIT_MS in ui/shell/screenExit.ts — keep
+   that and --route-exit-ms in lockstep). This is an ANIMATION, not a transition, on
+   purpose: settled chrome still carries .screen-enter's filled animation, and Chrome
+   does not start a transition off an animation being removed in the same style change
+   (verified live — the transition version faded the menu but froze settled campaign
+   chrome at 1 until the swap). Replacing the animation out-cascades .screen-enter's
+   !important fill by source order. --screen-exit-from is stamped per element by
+   ArtRouteChrome at exit start (the current computed opacity), so an exit interrupting
+   a mid-flight entrance fades from wherever the fade had reached — no up-blip to 1.
+   The duration is route choreography — the veil's bespoke family (ADR-0043
+   out-of-scope), NOT the one-fade-speed law: exits read shorter than entrances across
+   the motion canon. */
+.screen-exit {
+  animation: screen-exit-fade var(--route-exit-ms) var(--ds-ease-linear) both !important;
+  pointer-events: none;
+}
+
+@keyframes screen-exit-fade {
+  from { opacity: var(--screen-exit-from, 1); }
+  to { opacity: 0; }
+}
 
 .settings-rail-frame,
 .settings-main-frame {
@@ -10428,8 +11570,33 @@ button.tileset-relationship-cell {
 .settings-rail-frame {
   align-content: start;
   display: grid;
-  gap: clamp(9px, .8vw, 13px);
-  padding: clamp(8px, .8vw, 12px) clamp(6px, .6vw, 10px);
+  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  padding: clamp(8px, calc(var(--layout-vw, 100vw) * .008), 12px) clamp(6px, calc(var(--layout-vw, 100vw) * .006), 10px);
+  /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
+     sit identically (the menu is the alignment reference). Re-tune in the dressing room. */
+  transform: translate(-230px, -21px);
+}
+
+/* HOME MENU rail: keep the tuned centred placement, but FLOOR it so it can't clip.
+   Scoped to .main-menu-home (the home menu only — Campaign shares .main-menu-twin-screen /
+   .main-menu-layer but has a rows box tuned to the same centred shell, so it keeps the base
+   rules above).
+
+   The bug: the shell centres its body with margin = (layout-vw - shellW)/2, and the rail is
+   then pulled left a fixed -230px (the .settings-rail-frame transform above). At wide widths
+   that lands the buttons where they were TUNED to sit — do NOT disturb that. But as the window
+   narrows the centring margin shrinks while -230px stays put, so below ~1748px CSS width the
+   rail's left edge crosses x=0 and the buttons clip off the screen (labels sheared). A 1920
+   display at 125%/150% Windows scaling reports a CSS viewport of ~1536/1280 — squarely in the
+   clip zone.
+
+   The fix keeps the EXACT centred value wherever it already clears the floor (rail-left =
+   margin-230 stays put), and only floors the margin at 230px + a 40px gutter so the rail-left
+   can never fall below ~40px. So it is byte-identical to the tuned/production placement at every
+   width >= ~1748px, and merely stops the clip on narrower viewports. The rail keeps its shared
+   translate(-230px,-21px) — placement is corrected here, at the shell, not by moving the rail. */
+.main-menu-home .settings-shell {
+  margin-inline-start: max(270px, calc((var(--layout-vw, 100vw) - var(--settings-shell-w)) / 2));
 }
 
 /* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label
@@ -10452,6 +11619,10 @@ button.tileset-relationship-cell {
   --settings-tab-icon-size: 64px;
   align-items: center;
   appearance: none;
+  /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
+     get the arrow cursor — restore the exact look/feel the anchor version had. */
+  cursor: pointer;
+  font: inherit;
   overflow: hidden; /* clip the enlarged carved icon at the button edge */
   /* Baked surface skin: panel-LINE frame over a fixed stone surface (was the filled
      mode-button frame). Active swaps the marker, not the frame (below). ADR-0034. */
@@ -10500,7 +11671,7 @@ button.tileset-relationship-cell {
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
-  transform: translateX(18px); /* nudge the label clear of the enlarged icon */
+  transform: translateX(37px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
 }
 
 .settings-tab:not(.is-active):hover {
@@ -10553,12 +11724,26 @@ button.tileset-relationship-cell {
      which must stay put while row 2 scrolls. It collapses to 0 when there's no header. */
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  padding: clamp(10px, 1vw, 16px) clamp(14px, 1.5vw, 24px);
+  padding: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px) clamp(14px, calc(var(--layout-vw, 100vw) * .015), 24px);
+}
+
+/* Rows-box placement, baked from the Settings dressing room: widened, padding tightened to the
+   edges, and nudged into position. SHARED by the real Settings screen AND the Campaign play
+   screen (a settings-twin) so the rail↔rows relationship is identical on both — the menu,
+   settings, and campaign are one chrome family, positioned by the same rules. The main menu
+   has no rows box, so the .main-menu-twin-screen arm only ever matches Campaign. The shell's
+   overflow:visible lets the offset/wider box sit where it's placed. Re-tune in the Settings
+   dressing room (Rows box). */
+.settings-art-route .settings-main-frame,
+.main-menu-twin-screen .settings-main-frame {
+  padding: 16px 0;
+  width: 931px;
+  transform: translate(-270px, -28px);
 }
 
 .settings-panel-heading {
   align-content: center;
-  block-size: clamp(64px, 6vw, 80px);
+  block-size: clamp(64px, calc(var(--layout-vw, 100vw) * .06), 80px);
   display: grid;
   gap: 3px;
   inline-size: min(100%, 880px);
@@ -10575,32 +11760,40 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
+/* Crossfade STACK: the panel body holds up to two layers in ONE grid cell — the incoming
+   (.settings-xfade-next) and, during a tab change, the outgoing (.settings-xfade-prev) — so
+   they OVERLAP-fade (old 1->0 while new 0->1) in a single --ds-duration-fade pass (ADR-0046),
+   not sequentially. Width constraint + centring stay here; the section layout lives on each
+   layer so both render identically. Scrolling + the drawn rail (ADR-0030) are owned by the
+   wrapping <KitScroll>. */
 .settings-panel-content {
-  align-content: start;
   display: grid;
-  /* Inter-section spacing — looser than the row gap so groups read as distinct. */
-  gap: clamp(14px, 1.3vw, 22px);
-  /* Contain the row column to a comfortable reading width and centre it inside the
-     scroll viewport, so rows don't stretch the full bleed. Scrolling + the always-on
-     drawn rail (ADR-0030) are owned by the wrapping <KitScroll>, not this element. */
   inline-size: min(100%, 880px);
   margin-inline: auto;
   min-height: 0;
-  padding-block-end: 4px;
-  /* Toggling settings menus crossfades the body: the outgoing controls fade out, the
-     next menu's controls swap in at zero opacity, then fade in (driven by the
-     is-leaving/is-entering classes from Settings.tsx). Duration MUST match
-     PANEL_FADE_MS there. A pure opacity fade (no movement) is safe under
-     prefers-reduced-motion, so it is intentionally NOT gated on that query — many
-     players run with Windows "Animation effects" off (which Chrome reads as
-     reduced-motion) and should still get this transition. The duration is the
-     content-fade token (ADR-0043); --ds-duration-base is 150ms, which MUST stay in
-     sync with PANEL_FADE_MS in Settings.tsx (the JS that times the swap). */
-  transition: opacity var(--ds-duration-base) var(--ds-ease-standard);
 }
 
-.settings-panel-content.is-leaving { opacity: 0; }
-.settings-panel-content.is-entering { opacity: 1; }
+.settings-xfade-layer {
+  grid-area: 1 / 1;            /* stack both layers in the same cell; cell sizes to the larger */
+  align-content: start;
+  display: grid;
+  /* Inter-section spacing — looser than the row gap so groups read as distinct. */
+  gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
+  min-width: 0;
+  padding-block-end: 4px;
+  /* Pure opacity fade (no movement) = reduced-motion-safe, so NOT gated (ADR-0043); many
+     players run Windows "Animation effects" off (Chrome `reduce`) and still get it. The ONE
+     shared fade token — kept in sync with PANEL_FADE_MS in Settings.tsx (the JS swap timer). */
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+}
+
+/* enter = paint the start opacities instantly (prev visible, next hidden); JS flips to active
+   one frame later so the transition has a start value. */
+.settings-xfade-enter .settings-xfade-prev { opacity: 1; transition: none; }
+.settings-xfade-enter .settings-xfade-next { opacity: 0; transition: none; }
+/* active = end opacities; both layers transition at once → the overlap crossfade. */
+.settings-xfade-active .settings-xfade-prev { opacity: 0; }
+.settings-xfade-active .settings-xfade-next { opacity: 1; }
 
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
@@ -10613,7 +11806,7 @@ button.tileset-relationship-cell {
 /* Labeled row groups: an uppercase eyebrow over a tight cluster of rows. */
 .settings-section {
   display: grid;
-  gap: clamp(5px, .5vw, 9px);
+  gap: clamp(5px, calc(var(--layout-vw, 100vw) * .005), 9px);
 }
 
 .settings-section-title {
@@ -10676,6 +11869,39 @@ button.tileset-relationship-cell {
 
 .settings-row-tall {
   min-height: 80px;
+}
+
+/* Leading board preview in a campaign level-select row. Same framed-thumb treatment as
+   the Campaign Editor's list (.ce-level-thumb), scaled up for the hero browse surface:
+   a panel.png frame around one flat baked <img>, letterboxed to the board's native aspect. */
+.settings-row-thumb {
+  flex: none;
+  background: transparent;
+  border: 6px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 18 fill / 6px stretch;
+  box-sizing: border-box;
+  display: block;
+  width: 84px;
+  height: 60px;
+  overflow: hidden;
+}
+
+.settings-row-thumb .level-thumbnail,
+.settings-row-thumb .settings-row-thumb-empty {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.settings-row-thumb .level-thumbnail img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+/* Locked levels still show their board, dimmed — a peek at what's ahead. */
+.settings-row.is-disabled .settings-row-thumb {
+  opacity: .5;
 }
 
 .settings-row h4 {
@@ -10910,6 +12136,42 @@ button.tileset-relationship-cell {
   text-align: center;
   text-shadow: 0 2px 0 #02070b;
 }
+
+/* Editable readout (opt-in via <Stepper edit>): the value between the +/- keys becomes
+   a typeable field — click it and type an exact value; the keys still walk the ladder.
+   The BOX is this wrapper, a fixed width so it's identical on every row and the +/- keys
+   line up column-for-column. The input sits borderless inside it, and any unit (e.g. "s")
+   rides INSIDE the same box — putting it outside would widen one row and break alignment. */
+.settings-stepper-field {
+  align-items: center;
+  background: rgba(3, 12, 19, .55);
+  border: 1px solid rgba(87, 153, 184, .38);
+  border-radius: 5px;
+  box-sizing: border-box;
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  padding: 4px 8px;
+  width: 78px;
+}
+.settings-stepper-field:focus-within {
+  border-color: rgba(101, 184, 255, .72);
+  box-shadow: 0 0 0 2px rgba(101, 184, 255, .2);
+}
+.settings-stepper-input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: #f8fcff;
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+}
+.settings-stepper-input:focus-visible { outline: none; }
+.settings-stepper-unit { color: #9fbdcb; flex: 0 0 auto; font-size: var(--ds-text-sm); }
 
 /* Volume slider — ADR-0025 natural palette, NOT a forced UI-blue: a dark STONE
    channel that fills warm BRONZE up to a beveled bronze handle (the kit gold/bronze
@@ -11357,3 +12619,157 @@ button.tileset-relationship-cell {
 }
 .campaign-result-stars { display: inline-flex; gap: 8px; }
 .campaign-result-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 4px; }
+
+/* ============================================================================
+   MOBILE SUPPORT — landscape-only phones (added 2026-07-01)
+   ----------------------------------------------------------------------------
+   The app is built desktop-first; on a phone it is played in LANDSCAPE. Three
+   media contexts drive it:
+
+     • portrait + coarse         -> the rotate-to-landscape gate (touch phones only:
+                                     never nag a desktop user to rotate a window)
+     • max-width <= 960px        -> fix the shared chrome family at ANY narrow width
+     • narrow AND short (<=540h) -> the landscape-phone tweaks (shorter app bar,
+                                     board + HUD side-by-side)
+
+   IMPORTANT: only the rotate GATE is gated on `pointer: coarse`. The layout fix is
+   width-based, NOT pointer-based — the baked desktop offsets break the chrome at any
+   narrow width (a narrow desktop window, or DevTools' plain "Responsive" mode, which
+   reports a fine pointer), so gating the fix on coarse-pointer left those broken. 960
+   is the ceiling because the largest landscape phone (iPhone Pro Max) is 932px wide,
+   while a real desktop layout wants >= ~1000px.
+
+   A true OS orientation lock is impossible in a mobile browser (screen.orientation
+   .lock is unsupported on iOS Safari), so portrait shows a prompt instead of forcing
+   rotation. The layout rules NEUTRALISE the desktop dressing-room offsets baked into
+   the shared menu/settings/campaign chrome — a rail `translate(-230px)` and a 931px
+   content panel `translate(-270px)` that are never otherwise reset (they push both
+   mostly off a narrow screen). Layout only; no chrome art is hand-rolled (ADR-0032).
+   Placed last so these overrides win the cascade; the two-class panel reset below is
+   specificity-matched (0,2,0) so it beats the baked `.settings-art-route
+   .settings-main-frame` rule (a single-class override would silently lose — the
+   original bug). */
+
+/* -- Rotate-to-landscape gate. Hidden everywhere except a touch device in portrait. */
+.rotate-gate { display: none; }
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;               /* above the fixed title bar (10000) and route veil (9999) */
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    text-align: center;
+    background: #05090d;
+    color: var(--ds-ink-2, #dbe7ea);
+  }
+}
+
+.rotate-gate-inner { display: grid; gap: 16px; justify-items: center; max-width: 300px; }
+.rotate-gate-icon { width: 76px; height: 76px; color: var(--ds-ink-2, #dbe7ea); opacity: .92; }
+.rotate-gate-title {
+  margin: 0;
+  font-family: var(--ds-font-display, ui-monospace, monospace);
+  font-size: 1.5rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.rotate-gate-copy { margin: 0; color: var(--ds-ink-3, #948C7E); font-size: 1rem; line-height: 1.4; }
+
+/* -- Narrow-viewport chrome fix (any narrow width — phones AND narrow windows). ---- */
+@media (max-width: 960px) {
+  /* --- Shared menu / settings / campaign chrome family --------------------- */
+  .settings-screen { inline-size: 100%; min-block-size: 100%; zoom: 1; }
+
+  .settings-shell {
+    grid-template-columns: 1fr;              /* default single column (the menu is rail-only) */
+    /* Neutralise the desktop centring (explicit width + --layout-vw margin) — the
+       narrow layout is a plain full-width column, exactly as before the zoom fix. */
+    inline-size: 100%;
+    max-inline-size: 100%;
+    margin-inline-start: 0;
+    justify-self: stretch;
+    gap: 10px;
+    overflow: hidden auto;                   /* short viewport scrolls vertically, never sideways */
+    -webkit-overflow-scrolling: touch;
+    padding-inline: 10px;
+  }
+  /* Settings & Campaign carry a content panel: put the rail beside it to use the wide
+     screen. Progressive enhancement — where :has() is unsupported the shell stays a
+     single column (rail on top, panel below), which is a fine fallback. */
+  .settings-shell:has(.settings-main-frame) {
+    grid-template-columns: minmax(0, 210px) minmax(0, 1fr);
+  }
+
+  .settings-rail-frame {
+    transform: none;                         /* was translate(-230px, -21px) */
+    grid-template-columns: repeat(2, minmax(0, 1fr));  /* menu: 2-up button grid */
+    gap: 8px;
+    padding: 6px;
+    overflow: visible;
+  }
+  /* In the two-column (settings/campaign) case the rail column is narrow — stack 1-up. */
+  .settings-shell:has(.settings-main-frame) .settings-rail-frame {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-tab {
+    min-height: 48px;
+    padding: 10px 12px;
+    gap: 8px;
+    --settings-tab-icon-size: 40px;
+  }
+  .settings-tab > span:not(.settings-tab-icon) { transform: none; }  /* was translateX(37px) */
+  .settings-tab strong { font-size: var(--ds-text-md, 1rem); }
+
+  /* Content panel — specificity-matched (0,2,0) so it beats the baked 931px + transform. */
+  .settings-art-route .settings-main-frame,
+  .main-menu-twin-screen .settings-main-frame {
+    width: 100%;
+    transform: none;                         /* was translate(-270px, -28px) */
+    min-height: 0;
+    padding: 10px;
+    overflow: hidden auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .settings-panel-content,
+  .settings-panel-heading { inline-size: 100%; }
+
+  /* Stack each row's copy/value/control — the desktop label-right split is too wide here. */
+  .settings-row { grid-template-columns: 1fr; }
+  .settings-row-value,
+  .settings-row-control { grid-column: 1; justify-content: start; text-align: left; }
+
+  /* Touch-target floor for the small in-panel controls (WCAG ~44px). */
+  .settings-chrome-button,
+  .app-header-button { min-block-size: 44px; }
+}
+
+/* -- Landscape-phone tweaks (narrow AND short — i.e. a phone held sideways). ------- */
+@media (max-width: 960px) and (max-height: 540px) {
+  /* A shorter app bar reclaims scarce vertical space; every route reserves its header
+     row from this token, so the fixed bar and the reserved track shrink together. */
+  :root { --app-header-h: 60px; }
+
+  /* Title bar: drop the desktop UI-Scale zoom and tighten padding so the brand + account
+     cluster sit comfortably in the shorter bar. */
+  .app-shell-titlebar.app-titlebar--ui-scaled { zoom: 1; }
+  .app-shell-titlebar.settings-header-frame { padding-block: 6px; padding-inline: 12px; }
+
+  /* Skirmish: keep the board + HUD side-by-side. The 860px block stacks them, which
+     forces an awkward vertical page-scroll on a short landscape screen; the base 2-column
+     layout fits a wide phone far better, just with a slimmer HUD. */
+  .skirmish-screen {
+    grid-template-columns: minmax(0, 1fr) clamp(176px, 30vw, 300px);
+    grid-template-rows: var(--app-header-h) minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .skirmish-war-room { grid-column: 1; grid-row: 2; min-height: 0; }
+  .skirmish-hud {
+    grid-column: 2; grid-row: 2;
+    height: 100%; max-height: none;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+}
