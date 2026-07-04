@@ -22,7 +22,6 @@ import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey } from '
 import { SCREEN_EXIT_MS, setScreenExiting } from './shell/screenExit';
 import {
   importCampaignEditor,
-  importDoodadEditor,
   importLevelEditor,
   importPortraitEditor,
   importSkirmish,
@@ -42,7 +41,6 @@ const CampaignEditor = lazy(() => importCampaignEditor().then((m) => ({ default:
 const TilesetStudio = lazy(() => importTilePreview().then((m) => ({ default: m.TilesetStudio })));
 const LevelEditor = lazy(() => importLevelEditor().then((m) => ({ default: m.LevelEditor })));
 const PortraitEditor = lazy(() => importPortraitEditor().then((m) => ({ default: m.PortraitEditor })));
-const DoodadEditor = lazy(() => importDoodadEditor().then((m) => ({ default: m.DoodadEditor })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 
@@ -347,7 +345,9 @@ function renderRoute(path: string): ReactElement {
   // catalog/lab/brush flow stays a single mounted component (no route swaps).
   if (path === '/unit-studio') return <TilesetStudio initialCategory="units" />;
   if (path === '/portrait-editor') return <PortraitEditor />;
-  if (path === '/doodad-editor') return <DoodadEditor />;
+  // /doodad-editor: alias into the Studio's Doodads category, opening the composition
+  // composer (Viewer 'doodadcomp' kind). Not its own route or 3-panel shell (ADR-0058).
+  if (path === '/doodad-editor') return <TilesetStudio initialCategory="doodads" />;
   // /nine-slice-editor is a deep-link alias into the one Studio (like /unit-studio):
   // the 9-slice editor is an embedded Viewer surface, not its own route. The studio
   // reads ?asset=<frame> off this path and canonicalises the URL to /tileset-studio.

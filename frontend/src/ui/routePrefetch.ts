@@ -16,7 +16,6 @@ export const importCampaignEditor = () => import('./CampaignEditor');
 export const importTilePreview = () => import('./TilePreview');
 export const importLevelEditor = () => import('./LevelEditor');
 export const importPortraitEditor = () => import('./PortraitEditor');
-export const importDoodadEditor = () => import('./DoodadEditor');
 
 // Mirror of renderRoute's lazy routes: which chunk a path needs, if any. Eager
 // routes (Campaign, Lobbies, Settings…) return null — they're already in the main
@@ -24,10 +23,9 @@ export const importDoodadEditor = () => import('./DoodadEditor');
 function chunkForPath(path: string): (() => Promise<unknown>) | null {
   if (path === '/play') return importSkirmish;
   if (path === '/skirmish') return importSkirmishMapPicker;
-  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab') return importTilePreview;
+  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor') return importTilePreview;
   if (path === '/edit' || path === '/level-editor') return importLevelEditor;
   if (path === '/portrait-editor') return importPortraitEditor;
-  if (path === '/doodad-editor') return importDoodadEditor;
   if (path === '/campaigns-next' || path === '/campaigns') return importCampaignEditor;
   return null;
 }
