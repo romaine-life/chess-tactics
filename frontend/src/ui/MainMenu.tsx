@@ -123,7 +123,7 @@ export function MainMenu(): ReactElement {
       <AmbienceBackground />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings. */}
-      <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
+      <div className="settings-screen main-menu-twin-screen main-menu-home app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
             {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
