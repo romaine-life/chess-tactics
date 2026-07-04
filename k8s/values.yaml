@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-bd2a52dd8ba4ebeacae5510696328ff7f7ed86f147b6a8c25821d87828261a15"
+  tag: "app-fb6335302a010f54f5a6afa822a6bcac3508097ac4488338dc79651ebd150f13"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "feat(trainer): decisive (UHO) books + train/holdout split + held-out validation"
-  prNumber: "372"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/372"
-  commit: "dad4fe8"
+  prTitle: "feat(gym): Cluster tab — launch / watch / adopt headless cluster tuning runs"
+  prNumber: "373"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/373"
+  commit: "13c7470"
 
 name: chess-tactics
 namespace: chess-tactics
