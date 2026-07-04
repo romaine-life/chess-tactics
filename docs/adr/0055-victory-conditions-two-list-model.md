@@ -11,21 +11,26 @@ field on the `Level` schema (after `placement`/`roster`/`surviveTurns`/`timeCont
 and follows their exact authoring, validation and back-compat patterns.
 
 > **SUPERSEDED SHAPE (final decision).** This ADR was first written around a flat
-> two-list `victory: { win: Condition[]; lose: Condition[] }`. In authoring it, the
-> owner found the two buckets read as *state*, not *intent*, and asked for an
-> "if-this-then-that" model. The shipped shape is therefore an **ordered list of
-> if-then RULES**: `victory?: VictoryRule[]`, each `{ if: VictoryCondition[] (all
-> ANDed), then: 'win' | 'lose' }` — the RTS-editor trigger model. `evaluateVictory`
-> walks rules top-to-bottom and the FIRST whose conditions all hold decides, so
-> precedence is **rule order**; presets seed lose rules above win rules, which
-> reproduces the defeat-first default described below (now visible + reorderable).
-> The `all` condition is gone — a rule's `if` array is the AND. The editor's
-> condition "side" is a dropdown of the board's factions (mapping to player/enemy).
-> The model is phase-ready: a future `then`/condition can move and read a phase with
-> no reshape. The rest of this ADR describes the two-list origin; every "win-list /
-> lose-list" reads as "win-rules / lose-rules" and "defeat-first check order" reads
-> as "lose rules seeded above win rules." No prod migration (this ADR was unmerged
-> when the shape changed).
+> two-list `victory: { win: Condition[]; lose: Condition[] }`. Authoring it, the owner
+> found the buckets read as *state*, not *intent*, and drove it to an event/trigger
+> model (Event–Condition–Action). The shipped shape is an **ordered list of event
+> rules**: `victory?: VictoryRule[]`, each `{ if: VictoryCondition[] (ANDed), do:
+> VictoryAction[] }`. An **action** is `{ kind: 'win' | 'lose', side }` — win/lose are
+> *actions tagged to a faction*, and the `do` ARRAY is the extension point for spawn /
+> open-gate / phase effects later (a `when` trigger — "each turn" today — reserves the
+> Event half). `evaluateVictory` checks rules top-to-bottom; the first whose conditions
+> all hold decides via `ruleOutcome` (win(side)→that side wins, lose(side)→the other).
+> Precedence is **rule order**; presets seed lose rules above win rules (defeat-first,
+> now visible/reorderable). The `all` condition is gone (a rule's `if` is the AND).
+>
+> Editor: **two surfaces** — a "Victory templates" card (the presets, out of the logic
+> view) that fills a "Victory events" rules-bar; each rule reads `IF <conditions> THEN
+> <faction> wins|loses`, sides picked from a dropdown of the board's factions. The save
+> gate (validatePlayability **P6**) is **per faction**: every faction with units on the
+> board must be able to both win and lose. The rest of this ADR describes the two-list
+> origin — read "win-list/lose-list" as "win-rules/lose-rules," "then" as "a `do`
+> action," and "defeat-first check order" as "lose rules seeded above win rules." No
+> prod migration (this ADR was unmerged when the shape changed).
 
 ## Context and Problem Statement
 
