@@ -146,6 +146,37 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Bump app version (patch) for this release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Auto-increment the PATCH on every deploy so each release carries a
+          # distinct, INCREASING semver — the "which release is this" the human
+          # reads in Settings → About → Build (baked into the bundle by vite.config
+          # buildInfo from frontend/package.json). Committed back to main below in
+          # the SAME commit as the image-tag bump, so this adds ZERO extra commits.
+          #
+          # Runs BEFORE the fingerprint + docker build on purpose: the bumped
+          # version is thereby baked into the image that actually deploys, AND it
+          # changes the content fingerprint — so a new version always yields a fresh
+          # image tag and never reuses a content-identical prior image (which would
+          # otherwise ship a stale version). frontend + backend package.json and the
+          # Helm appVersion move in lockstep = one coherent app version.
+          #
+          # To jump MINOR/MAJOR, hand-edit package.json (e.g. to 0.2.0) in a normal
+          # PR; the next deploy patches from there (0.2.1, 0.2.2, …).
+          new_version="$(cd frontend && npm version patch --no-git-tag-version)"
+          new_version="${new_version#v}"
+          (cd backend && npm version "${new_version}" --no-git-tag-version --allow-same-version)
+          # appVersion is metadata (no template reads it), kept in sync so it never
+          # drifts from the real app version. Quoted per Helm's string convention.
+          sed -i "s|^appVersion: .*|appVersion: \"${new_version}\"|" k8s/Chart.yaml
+          grep -qx "appVersion: \"${new_version}\"" k8s/Chart.yaml \
+            || { echo "::error::k8s/Chart.yaml appVersion was not updated"; exit 1; }
+          echo "APP_VERSION=${new_version}" >> "$GITHUB_ENV"
+          echo "Released app version v${new_version}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Compute image fingerprint
         id: fingerprint
         shell: bash
@@ -210,15 +241,19 @@ jobs:
           COMMIT: ${{ steps.meta.outputs.commit }}
         run: node scripts/write-build-info.mjs k8s/values.yaml
 
-      - name: Commit and push tag bump
+      - name: Commit and push version + tag bump
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add k8s/values.yaml
+          # One commit carries the whole release: the bumped semver (package.json +
+          # lockfiles + Helm appVersion) and the image fingerprint it produced.
+          git add k8s/values.yaml k8s/Chart.yaml \
+            frontend/package.json frontend/package-lock.json \
+            backend/package.json backend/package-lock.json
           if git diff --cached --quiet; then
-            echo "No image tag changes to commit"
+            echo "No release changes to commit"
             exit 0
           fi
-          git commit -m "chore: bump chess-tactics image to fingerprint ${{ env.TAG }} [skip ci]"
+          git commit -m "chore: release v${{ env.APP_VERSION }} — image ${{ env.TAG }} [skip ci]"
           git push origin HEAD:main
