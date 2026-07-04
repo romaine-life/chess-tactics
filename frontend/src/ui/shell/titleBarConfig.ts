@@ -22,6 +22,11 @@ export interface TitleBarConfig {
    *  <TitleBarSlot region="actions">. Laid out BEFORE the cluster — additive, never
    *  a replacement for it (ADR-0042). */
   actionsSlot?: boolean;
+  /** Render the bottom-centre "stud" portal slot — the decorative nailhead diamond
+   *  becomes an interactive control the screen fills via <TitleBarSlot region="stud">.
+   *  Absolutely positioned over the ornament, out of the grid, so it never shifts the
+   *  brand/center/cluster layout. Only single-player Skirmish uses it (a Retry button). */
+  studSlot?: boolean;
 }
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
@@ -36,7 +41,10 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
 
   if (path === '/play' || path === '/skirmish') {
-    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true };
+    // studSlot lets a single-player battle turn the ornament diamond into a Retry button
+    // (the Skirmish screen portals it in, netplay omitted). The map-picker (/skirmish)
+    // simply never fills it, so its diamond stays the plain decoration.
+    return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true, studSlot: true };
   }
   if (path === '/lobbies' || path.startsWith('/lobbies/')) {
     return { screenName: 'Lobbies', signInReturnTo: '/lobbies' };

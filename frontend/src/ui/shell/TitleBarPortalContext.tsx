@@ -10,6 +10,9 @@ import { createContext } from 'react';
 export interface TitleBarPortals {
   centerNode: HTMLElement | null;
   actionsNode: HTMLElement | null;
+  /** Bottom-centre "stud" target (the ornament diamond) — filled only by a single-player
+   *  Skirmish with its Retry button. Absolutely positioned, so it never shifts the layout. */
+  studNode: HTMLElement | null;
 }
 
-export const TitleBarPortalContext = createContext<TitleBarPortals>({ centerNode: null, actionsNode: null });
+export const TitleBarPortalContext = createContext<TitleBarPortals>({ centerNode: null, actionsNode: null, studNode: null });
