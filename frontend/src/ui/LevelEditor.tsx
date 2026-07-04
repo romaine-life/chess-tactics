@@ -5,6 +5,7 @@
 // compass, the per-frame src) comes from ./studioBoard.
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
+import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
@@ -299,11 +300,17 @@ function StudioEditableBoard({
             left,
             top,
             zIndex: zIndex + 19000,
-            width: 96,
-            height: 55,
+            // Match the tile's top-face diamond (stepX/stepY*2), centred on the projected
+            // equator point — same shape/seating as the prop-lab guide and the zone/selection
+            // overlays. A rectangle here (the old 96×55 box + outline) reads as "off the grid".
+            width: TILE_TEMPLATE.stepX * 2,
+            height: TILE_TEMPLATE.stepY * 2,
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none',
-            outline: `2px solid ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
+            clipPath: 'polygon(50% 0, 100% 50%, 50% 100%, 0 50%)',
+            // Border via inset box-shadow, not `outline`: clip-path doesn't clip an outline,
+            // so an outline would still paint the old axis-aligned square around the diamond.
+            boxShadow: `inset 0 0 0 2px ${placeable ? 'rgba(80,220,140,.95)' : 'rgba(240,90,90,.95)'}`,
             background: placeable ? 'rgba(80,220,140,.18)' : 'rgba(240,90,90,.18)',
           }}
         />,
