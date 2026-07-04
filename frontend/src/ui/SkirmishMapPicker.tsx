@@ -4,8 +4,7 @@ import { useCampaigns } from '../campaign/store';
 import type { Level } from '../core/level';
 import { LevelThumbnail } from '../render/LevelThumbnail';
 import { NavButton } from './shared/NavButton';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { SkirmishClockControl } from './SkirmishClockControl';
@@ -140,8 +139,7 @@ export function SkirmishMapPickerRoute(): ReactElement {
       data-reveal-bg=""
       data-reveal-buttons=""
     >
-      <SceneBackdrop />
-      <AmbienceBackground />
+      <HomepageBackdrop />
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell" ready={contentReady}>
           <aside className="settings-frame settings-rail-frame" aria-label="Skirmish">
