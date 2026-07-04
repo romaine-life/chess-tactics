@@ -28,10 +28,6 @@ function childEnv() {
     FRONTEND_DIR: bakedFrontendDir,
     STATIC_FRONTEND_DIR: staticFrontendDir,
     NODE_PATH: nodePath,
-    // server.js is hot-copied to and run from hotBackendDir, so its __dirname is NOT the baked
-    // backend dir. Tell it where the baked backend lives so it can require sibling assets that
-    // travel with the image (the board-render bundle + the thumbnail compositor).
-    BAKED_BACKEND_DIR: __dirname,
   };
 }
 

@@ -3,20 +3,6 @@ const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
-// Pure board-render geometry (committed bundle of the SAME code the editor uses — see
-// frontend/scripts/build-server-render.mjs) so the server can compute a level's draw plan + content
-// hash. server.js is hot-copied to and run from a hot dir (supervisor.js), so a bare './generated'
-// require would resolve against that dir; resolve sibling assets against the BAKED backend dir instead
-// (BAKED_BACKEND_DIR from the supervisor; __dirname when run directly in dev/test). Fail-soft: a
-// missing/broken bundle just means thumbnails fall back to the default share image, never a crash
-// (the game must stay up). The @napi-rs/canvas compositor is required lazily in the render route too.
-const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
-let serverRender = null;
-try {
-  serverRender = require(path.join(bakedBackendDir, 'generated', 'board-render.cjs'));
-} catch (error) {
-  console.error('board-render bundle unavailable; level thumbnails will use the default image:', error && error.message);
-}
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -2541,9 +2527,8 @@ app.post('/api/maps/publish', async (req, res) => {
     const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
       ? row.body.levels[levelId] : null;
     if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
-    let contentHash = null;
-    try { contentHash = serverRender.boardHashForLevel(level); } catch { contentHash = null; }
-    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
+    // content_hash was only a server-thumbnail cache-buster; that path is gone, so it's null now.
+    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, null);
     res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
   } catch (error) {
     dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
@@ -2653,13 +2638,11 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
-// --- Open Graph unfurl + on-demand board thumbnails ------------------------
+// --- Open Graph unfurl ------------------------------------------------------
 // A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
-// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
-// ON-DEMAND board render served here — no CI bake, no browser (the board composites in Node via
-// generated/board-render.cjs + boardThumbnail.js). Officials resolve from the LIVE DB (never the
-// committed seed fixture); user maps from public_maps. A render/resolve failure degrades to the
-// branded default image.
+// JS, no auth). The SPA fallback injects per-level og:/twitter: title/description tags; og:image is
+// the branded default card. (Per-level server-rendered preview images were removed — the in-app
+// thumbnails are client-baked and nothing else consumed the server render path.)
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 const DEFAULT_OG_IMAGE = '/assets/og/default.png';
@@ -2742,39 +2725,6 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
   return null;
 }
 
-// On-demand board thumbnail: /assets/level-thumb/<id>.png (?v=<hash> only busts caches). Rendered once
-// per (id, board-content-hash), cached in-process (single replica). Registered BEFORE express.static
-// so the .png isn't 404'd by the SPA fallback's static-extension guard.
-const _thumbCache = new Map(); // `${id}:${hash}` -> Buffer
-const THUMB_CACHE_MAX = 200;
-app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
-  const id = String(req.params[0] || '');
-  const isOfficial = /^off-[a-z-]+$/.test(id);
-  const isMap = PUBLIC_ID_RE.test(id);
-  if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
-  try {
-    if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; } // bundle unavailable → default card
-    const target = await resolveShareTarget(isOfficial ? { levelId: id } : { mapId: id });
-    if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
-    const plan = serverRender.levelRenderPlan(target.level);
-    const cacheKey = `${id}:${plan.contentHash}`;
-    let png = _thumbCache.get(cacheKey);
-    if (!png) {
-      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
-      const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle, backgroundSrc });
-      if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
-      _thumbCache.set(cacheKey, png);
-    }
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.status(200).end(png);
-  } catch (error) {
-    console.error('level-thumb render failed:', error && error.message);
-    res.redirect(302, DEFAULT_OG_IMAGE); // never fail an unfurl — fall back to the branded card
-  }
-});
-
 async function ogTagsFor(req) {
   const origin = publicOrigin; // TRUSTED canonical origin, never the spoofable Host header
   const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
@@ -2788,14 +2738,7 @@ async function ogTagsFor(req) {
   if (target) {
     title = target.title || OG_SITE_NAME;
     description = target.description || target.subtitle || OG_DEFAULT_DESC;
-    // Only point og:image at the on-demand render when the bundle is available; else keep the
-    // default (avoids advertising an endpoint that would just 302 to the default anyway).
-    if (serverRender) {
-      const key = mapId || levelId;
-      let hash = '';
-      try { hash = serverRender.boardHashForLevel(target.level); } catch { hash = ''; }
-      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${hash ? `?v=${hash}` : ''}`;
-    }
+    // og:image stays the branded default card — per-level server-rendered previews were removed.
   }
   const url = `${origin}${req.originalUrl}`;
   const meta = [
