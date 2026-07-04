@@ -30,6 +30,7 @@ import { TILE_SIDE_ITEMS, tileSideFamilyCount, type TileSideItem } from './tileS
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
+import { GymCatalog, GymViewer } from './Gym';
 import { PAGE_ENTRIES } from './pagesCatalog';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
 import { SfxLibraryStudio, SfxViewer } from './SfxLibraryStudio';
@@ -73,13 +74,13 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -106,6 +107,7 @@ interface TilesetStudioRouteState {
   selectedGlossaryName?: string;
   selectedPageName?: string;
   selectedGameLabLevelId?: string;
+  selectedGymLevelId?: string;
   selectedTileSideId?: string;
   selectedFrameName?: string;
   viewerKind?: ViewerKind;
@@ -159,7 +161,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -177,6 +179,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   const gloss = params.get('gloss');
   const page = params.get('page');
   const glvl = params.get('glvl');
+  const gymlvl = params.get('gymlvl');
   const side = params.get('side');
   const vk = params.get('vk');
   const lab = params.get('lab');
@@ -218,10 +221,11 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedGlossaryName: gloss || undefined,
     selectedPageName: page || undefined,
     selectedGameLabLevelId: glvl || undefined,
+    selectedGymLevelId: gymlvl || undefined,
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
     viewerKind: isNineSliceAlias ? 'nineslice'
-      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' ? vk : undefined,
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -274,6 +278,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'glossary' && route.selectedGlossaryName) params.set('gloss', route.selectedGlossaryName);
     else if (route.viewerKind === 'page' && route.selectedPageName) params.set('page', route.selectedPageName);
     else if (route.viewerKind === 'gamelab' && route.selectedGameLabLevelId) params.set('glvl', route.selectedGameLabLevelId);
+    else if (route.viewerKind === 'gym' && route.selectedGymLevelId) params.set('gymlvl', route.selectedGymLevelId);
     else if (route.viewerKind === 'tileside' && route.selectedTileSideId) params.set('side', route.selectedTileSideId);
     else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
   }
@@ -345,6 +350,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedPageName, setSelectedPageName] = useState<string | undefined>(initialRoute.selectedPageName);
   const [gameLabSearch, setGameLabSearch] = useState('');
   const [selectedGameLabLevelId, setSelectedGameLabLevelId] = useState<string | undefined>(initialRoute.selectedGameLabLevelId);
+  const [gymSearch, setGymSearch] = useState('');
+  const [selectedGymLevelId, setSelectedGymLevelId] = useState<string | undefined>(initialRoute.selectedGymLevelId);
   const [glossarySearch, setGlossarySearch] = useState('');
   // Assets and artwork each own their own selection — never one shared field
   // (that's how an Assets id like 'gear' used to leak into the Artwork stage).
@@ -1087,6 +1094,19 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
       ),
     },
+    {
+      id: 'gym', label: 'Training Gym', hint: 'Tune the AI’s eval weights on a level with SPSA — step through the training and watch a champion establish.',
+      main: <GymCatalog search={gymSearch} selected={selectedGymLevelId} onSelect={setSelectedGymLevelId} />,
+      controls: (
+        <>
+          <label className="tileset-catalog-search">
+            <span>Search</span>
+            <input type="search" value={gymSearch} onChange={(event) => setGymSearch(event.target.value)} placeholder="level, mode…" />
+          </label>
+          <button type="button" className="tileset-view-action" onClick={() => openViewer('gym')} disabled={!selectedGymLevelId}>Open Gym</button>
+        </>
+      ),
+    },
   ];
   const activeCatalog = catalogCategories.find((entry) => entry.id === category) ?? catalogCategories[0];
 
@@ -1109,6 +1129,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="sfx">Sound Assignments</option>
         <option value="page">Page</option>
         <option value="gamelab">Game Lab</option>
+        <option value="gym">Training Gym</option>
         <option value="tileside">Tile Sides</option>
       </select>
     </label>
@@ -1181,6 +1202,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                         ? <PagesViewer name={selectedPageName} header={studioViewerHeader} />
                         : viewerKind === 'gamelab'
                         ? <GameLabViewer levelId={selectedGameLabLevelId} header={studioViewerHeader} />
+                        : viewerKind === 'gym'
+                        ? <GymViewer levelId={selectedGymLevelId} header={studioViewerHeader} />
                         : viewerKind === 'tileside'
                           ? <TileSidesViewer name={selectedTileSideId} header={studioViewerHeader} />
                           : viewerKind === 'sfx'
