@@ -179,8 +179,8 @@ describe('bridge (straight-only span)', () => {
     expect(featurePiece(bridgeOrientationMask('h'))).toBe('straight');
   });
 
-  it('exposes a single wood material with wood as the default brush', () => {
-    expect(featureMaterials('bridge')).toEqual(['wood']);
-    expect(defaultFeatureMaterial('bridge')).toBe('wood');
+  it('exposes a single stone material with stone as the default brush', () => {
+    expect(featureMaterials('bridge')).toEqual(['stone']);
+    expect(defaultFeatureMaterial('bridge')).toBe('stone');
   });
 });

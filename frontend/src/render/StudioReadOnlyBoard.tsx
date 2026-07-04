@@ -17,7 +17,7 @@ import {
   type UnitAsset,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { featureMaskAt, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -37,9 +37,10 @@ export interface BoardLayerVisibility {
   doodad: boolean;
 }
 
-// Linear-feature overlays (roads + rivers) already resolved to a connection mask, keyed by
-// "x,y". The editor derives these live; the read-only viewer derives them from the painted set.
-export type FeatureOverlayMap = Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
+// Linear-feature overlays already resolved to their sprite selector (road/river/fence → mask;
+// bridge → bridgeKey), keyed by "x,y". The editor derives these live; the read-only viewer derives
+// them from the painted set. Reuses the canonical ResolvedFeatureOverlay shape.
+export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
 const allTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
 const resolveTileAsset = (id: string): StudioAsset | undefined => allTiles.find((asset) => asset.id === id);
@@ -57,14 +58,7 @@ export function deriveFeatureOverlays(
   featureCuts: EditorBoard['featureCuts'],
 ): FeatureOverlayMap {
   const isSevered = (edge: string): boolean => featureCuts[edge] === true;
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, f] of Object.entries(features)) presentByKind[f.kind].add(key);
-  const out: FeatureOverlayMap = {};
-  for (const [key, f] of Object.entries(features)) {
-    const [x, y] = key.split(',').map(Number);
-    out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered) };
-  }
-  return out;
+  return resolveFeatureOverlays(features, isSevered);
 }
 
 /** The tile + feature-overlay <img>s for one cell (no interaction chrome). Shared by both boards. */
@@ -77,7 +71,7 @@ export function studioCellArt({
   y = 0,
 }: {
   tileAsset: StudioAsset | undefined;
-  feature: { kind: FeatureKind; material: FeatureMaterial; mask: number } | undefined;
+  feature: ResolvedFeatureOverlay | undefined;
   animationFrame: number;
   hidden?: BoardLayerVisibility;
   /** Board coords; only used to phase-stagger an animated top (water ripple). */
@@ -104,7 +98,7 @@ export function studioCellArt({
       {feature ? (
         <img
           className="tileset-feature-overlay"
-          src={featureFrameSrc(feature.kind, feature.material, feature.mask)}
+          src={featureFrameSrc(feature.kind, feature.material, feature.mask, feature.bridgeKey)}
           alt=""
           draggable={false}
         />

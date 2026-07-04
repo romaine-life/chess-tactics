@@ -33,7 +33,7 @@ import {
   type Faction,
 } from '../ui/unitCatalog';
 import { DOODAD_ASSETS, type DoodadAsset } from '../ui/doodadCatalog';
-import { featureMaskAt, type FeatureKind } from '../core/featureAutotile';
+import { resolveFeatureOverlays, FENCE_ART_PENDING } from '../core/featureAutotile';
 import { propHalfSrc, propZBracket, structureSeatPoint } from './BoardStructure';
 import { propDef } from '../core/props';
 import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
@@ -97,10 +97,11 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
   const ops: DrawOp[] = [];
 
   // Tiles + feature overlays. Each cell's frame origin is the projected point shifted by the
-  // CSS translate(-stepX, -equator); the img fills the 96x180 frame.
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, f] of Object.entries(board.features)) presentByKind[f.kind].add(key);
+  // CSS translate(-stepX, -equator); the img fills the 96x180 frame. One shared autotile pass
+  // resolves road/river/fence masks + bridge thru/cap/single keys (see resolveFeatureOverlays).
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
+  const isExit = (edge: string): boolean => board.featureExits[edge] === true;
+  const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -114,11 +115,11 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
         ops.push({ src: assetFrameSrc(tile, 0), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
       }
 
-      const feature = board.features[key];
-      if (feature) {
-        const mask = featureMaskAt(presentByKind[feature.kind], x, y, isSevered);
+      const feature = overlays[key];
+      // Fences are PLUMBING-ONLY (no baked mask art yet) — skip them so featureFrameSrc never 404s.
+      if (feature && !(FENCE_ART_PENDING && feature.kind === 'fence')) {
         ops.push({
-          src: featureFrameSrc(feature.kind, feature.material, mask),
+          src: featureFrameSrc(feature.kind, feature.material, feature.mask, feature.bridgeKey),
           dx: frameX,
           dy: frameY,
           dw: TILE_FRAME_W,

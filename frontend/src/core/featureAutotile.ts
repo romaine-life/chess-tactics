@@ -232,6 +232,57 @@ export function featureMaskAt(
   return mask;
 }
 
+/**
+ * A feature cell resolved to its sprite selector. road/river/fence carry a 4-bit connection
+ * `mask`; a bridge carries a neighbour-aware `bridgeKey` (plus a nominal straight `mask` for
+ * back-compat / the unique-src set). This is what every board renderer draws from.
+ */
+export interface ResolvedFeatureOverlay {
+  kind: FeatureKind;
+  material: FeatureMaterial;
+  mask: number;
+  bridgeKey?: BridgeSpriteKey;
+}
+
+/** A source feature cell (pre-resolution): its kind + material and, for bridges, the axis. */
+export interface FeatureSource {
+  kind: FeatureKind;
+  material: FeatureMaterial;
+  orientation?: BridgeOrientation;
+}
+
+/**
+ * Resolve EVERY painted feature cell to its sprite selector in one pass — the single autotile
+ * table the editor, the socket solver, and all board renderers share (so ribbons + bridges knit
+ * identically everywhere). road/river/fence autotile against a same-KIND neighbour set; a bridge
+ * is neighbour-aware but SPLIT BY ORIENTATION (a 'v' end never joins an 'h' bridge), so each axis
+ * gets its own presence set and resolves to a thru/cap/single `bridgeKey`.
+ */
+export function resolveFeatureOverlays(
+  features: Record<string, FeatureSource>,
+  isSevered?: (edgeKey: string) => boolean,
+  isExit?: (edgeKey: string) => boolean,
+): Record<string, ResolvedFeatureOverlay> {
+  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), bridge: new Set(), fence: new Set() };
+  const bridgePresence: Record<BridgeOrientation, Set<string>> = { h: new Set(), v: new Set() };
+  for (const [key, f] of Object.entries(features)) {
+    presentByKind[f.kind].add(key);
+    if (f.kind === 'bridge') bridgePresence[f.orientation ?? DEFAULT_BRIDGE_ORIENTATION].add(key);
+  }
+  const out: Record<string, ResolvedFeatureOverlay> = {};
+  for (const [key, f] of Object.entries(features)) {
+    const [x, y] = key.split(',').map(Number);
+    if (f.kind === 'bridge') {
+      const orientation = f.orientation ?? DEFAULT_BRIDGE_ORIENTATION;
+      const ends = bridgeEndMask(bridgePresence[orientation], x, y, orientation);
+      out[key] = { kind: f.kind, material: f.material, mask: bridgeOrientationMask(orientation), bridgeKey: bridgeSpriteKey(orientation, ends) };
+    } else {
+      out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered, isExit) };
+    }
+  }
+  return out;
+}
+
 /** Compute the mask for every featured cell. Keys are "x,y"; values are 0–15. */
 export function featureMaskMap(
   present: ReadonlySet<string>,

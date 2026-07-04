@@ -41,7 +41,7 @@ import {
   type StudioFamily,
 } from './studioBoard';
 import { featureThumbSrc, tileTopSrc } from '../art/tileset';
-import { featureMaskAt, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_ART_PENDING, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { resolveFeatureOverlays, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_ART_PENDING, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
@@ -623,6 +623,7 @@ export function LevelEditor(): ReactElement {
   const [featureBrushMaterial, setFeatureBrushMaterial] = useState<Record<FeatureKind, FeatureMaterial>>({
     road: defaultFeatureMaterial('road'),
     river: defaultFeatureMaterial('river'),
+    bridge: defaultFeatureMaterial('bridge'),
     fence: defaultFeatureMaterial('fence'),
   });
   // Manually SEVERED feature connections, keyed by the shared edge between two cells
@@ -923,14 +924,7 @@ export function LevelEditor(): ReactElement {
   const featureOverlays = useMemo(() => {
     const isSevered = (edge: string): boolean => featureCuts[edge] === true;
     const isExit = (edge: string): boolean => featureExits[edge] === true;
-    const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-    for (const [key, f] of Object.entries(boardFeatures)) presentByKind[f.kind].add(key);
-    const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
-    for (const [key, f] of Object.entries(boardFeatures)) {
-      const [x, y] = key.split(',').map(Number);
-      out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered, isExit) };
-    }
-    return out;
+    return resolveFeatureOverlays(boardFeatures, isSevered, isExit);
   }, [boardFeatures, featureCuts, featureExits]);
 
   const paintCell = (x: number, y: number): void => {

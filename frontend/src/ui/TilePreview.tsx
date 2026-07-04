@@ -25,8 +25,6 @@ import { CroppedView, loadCrops, type Piece as PortraitPiece } from './PortraitE
 import { PORTRAIT_METHODS, PORTRAIT_PIECES, portraitMasterSrc, type PortraitMethod } from './portraitCandidates';
 import { GlossaryLibraryStudio, GlossaryLab } from './design/GlossaryLibraryStudio';
 import { SurfaceLibraryStudio, SurfaceViewer } from './SurfaceLibraryStudio';
-import { BridgeBakeoffStudio } from './BridgeBakeoffStudio';
-import { BRIDGE_METHODS } from './bridgeBakeoff';
 import { TileSidesViewer } from './TileSidesViewer';
 import { TILE_SIDE_ITEMS, tileSideFamilyCount, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
@@ -388,9 +386,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedPortraitMethods, setSelectedPortraitMethods] = useState<PortraitMethod[]>(PORTRAIT_METHODS.map((m) => m.key));
   const [selectedPortraitId, setSelectedPortraitId] = useState<string | undefined>(undefined);
   const [surfaceSearch, setSurfaceSearch] = useState('');
-  const [bridgeSearch, setBridgeSearch] = useState('');
-  const [bridgeMethod, setBridgeMethod] = useState<string>('all');
-  const [selectedBridgeId, setSelectedBridgeId] = useState<string | undefined>(undefined);
   const [scrollbarSearch, setScrollbarSearch] = useState('');
   const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
   const [selectedSurfaceName, setSelectedSurfaceName] = useState<string | undefined>(undefined);
@@ -1228,31 +1223,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('surface')}>View Selected</button>
-        </>
-      ),
-    },
-    {
-      id: 'bridges', label: 'Bridges', hint: 'Bridge-deck bake-off — every generation method × material, shown as a straight span (H + V) on water. Pick the winner to promote to the production bridge art.',
-      main: <BridgeBakeoffStudio search={bridgeSearch} zoom={zoom} method={bridgeMethod} selected={selectedBridgeId} onSelect={setSelectedBridgeId} />,
-      controls: (
-        <>
-          <label className="tileset-catalog-search">
-            <span>Search</span>
-            <input type="search" value={bridgeSearch} onChange={(event) => setBridgeSearch(event.target.value)} placeholder="material, method…" />
-          </label>
-          <label className="tileset-catalog-zoom">
-            <span>Zoom</span>
-            <input type="range" min="0.75" max="2.5" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
-          </label>
-          <div className="tileset-filter-field">
-            <span>Method</span>
-            <div className="tileset-tier-seg" aria-label="Filter by generation method">
-              <button type="button" className={bridgeMethod === 'all' ? 'is-active' : ''} onClick={() => setBridgeMethod('all')}>All</button>
-              {BRIDGE_METHODS.map((m) => (
-                <button key={m.key} type="button" className={bridgeMethod === m.key ? 'is-active' : ''} onClick={() => setBridgeMethod(m.key)}>{m.label}</button>
-              ))}
-            </div>
-          </div>
         </>
       ),
     },

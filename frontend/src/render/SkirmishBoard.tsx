@@ -17,7 +17,7 @@ import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
 import { featureFrameSrc } from '../art/tileset';
-import { FENCE_ART_PENDING, featureMaskAt, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { FENCE_ART_PENDING, resolveFeatureOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay } from '../core/featureAutotile';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
@@ -106,19 +106,10 @@ function legacyFeatureMapForGame(game: GameState): Map<string, { kind: FeatureKi
   return map.size ? map : undefined;
 }
 
-function featureOverlaysForBoard(board: EditorBoard): Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> {
+function featureOverlaysForBoard(board: EditorBoard): Record<string, ResolvedFeatureOverlay> {
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, feature] of Object.entries(board.features)) presentByKind[feature.kind].add(key);
-
-  const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
-  for (const [key, feature] of Object.entries(board.features)) {
-    const [x, y] = key.split(',').map(Number);
-    const mask = featureMaskAt(presentByKind[feature.kind], x, y, isSevered, isExit);
-    out[key] = { kind: feature.kind, material: feature.material, mask };
-  }
-  return out;
+  return resolveFeatureOverlays(board.features, isSevered, isExit);
 }
 
 function resolveBoardCode(game: GameState): EditorBoard | null {
@@ -289,7 +280,7 @@ function collectBoardArt(
       const side = cell.sideAsset ? tileFrameSrc(cell.sideAsset) : top;
       tiles.add(side.replace(/\.png$/, '-side.png'));
     }
-    if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask));
+    if (cell.feature) tiles.add(featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask, cell.feature.bridgeKey));
     const cover = cell.groundCover;
     if (cover) {
       const set = groundCoverSet(cell.terrain);
