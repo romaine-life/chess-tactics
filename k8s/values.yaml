@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-034fc5eedfd5541a763c285189f50535e8f3ff2edd0012ee0d379baa815d38bb"
+  tag: "app-1d94686594d00ef3718080f96c5713ec24347dcb130a08e4d6d7146289e17d99"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "OG thumbnails read live official campaigns, not the stale baked file"
-  prNumber: "347"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/347"
-  commit: "1e02f8c"
+  prTitle: "CI: give each deploy an increasing app semver (Settings → About → Build)"
+  prNumber: "354"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/354"
+  commit: "1e422c0"
 
 name: chess-tactics
 namespace: chess-tactics
