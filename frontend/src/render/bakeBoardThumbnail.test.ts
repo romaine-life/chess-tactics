@@ -70,10 +70,13 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
   it('collapses a board tiled with one family to a single tile src', () => {
     const board: EditorBoard = { ...blank(2, 2), cells: { '0,0': TILE, '1,0': TILE, '0,1': TILE, '1,1': TILE } };
     const srcs = uniqueDrawSrcs(board);
-    expect(srcs).toEqual([expect.stringContaining('grass')]);
-    expect(srcs).toHaveLength(1);
-    // The op list itself has one per cell — dedup is what saves the decodes.
-    expect(boardDrawOps(board)).toHaveLength(4);
+    // The TILE itself dedups to one src across all four cells — one op per cell, one decode…
+    const tileSrcs = srcs.filter((s) => s.includes('grass') && !s.includes('groundcover'));
+    expect(tileSrcs).toHaveLength(1);
+    expect(boardDrawOps(board).filter((op) => op.src === tileSrcs[0])).toHaveLength(4);
+    // …though grassland now ALSO scatters ground-cover tufts (the same vegetation the game draws),
+    // which contribute their own deduped sprite srcs on top of the bare tile.
+    expect(srcs.some((s) => s.includes('groundcover'))).toBe(true);
   });
 
   it('returns no srcs for a blank (untiled) board', () => {

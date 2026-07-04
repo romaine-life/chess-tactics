@@ -2153,6 +2153,7 @@ function zonesFromLayers(zones, cols, rows) {
   }
   return channel;
 }
+var familyOfTile = (tileId) => studioFamilies.find((family) => family.assets.some((asset) => asset.id === tileId))?.id;
 var defaultTileOfFamily = (family) => {
   const fam = studioFamilies.find((f) => f.id === family);
   const tile = fam?.assets.find((asset) => asset.kind === "tile") ?? fam?.assets[0];
@@ -2358,6 +2359,101 @@ function propHalfSrc(propId, half) {
   return `/assets/props/${propId}/${half}.png`;
 }
 
+// src/art/groundcover/grass.generated.ts
+var grass_generated_default = { "terrain": "grass", "frameCount": 6, "variants": [{ "id": 0, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 28, "w": 18 }, { "id": 1, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 28, "w": 22 }, { "id": 2, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 28, "w": 15 }, { "id": 3, "frameW": 40, "frameH": 37, "baseX": 19, "baseY": 28, "w": 20 }, { "id": 4, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 28 }, { "id": 5, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 22 }, { "id": 6, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 19 }, { "id": 7, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 16 }, { "id": 8, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 19 }, { "id": 9, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 24 }, { "id": 10, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 20 }, { "id": 11, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 14 }, { "id": 12, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 19 }, { "id": 13, "frameW": 40, "frameH": 37, "baseX": 21, "baseY": 27, "w": 23 }, { "id": 14, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 16 }, { "id": 15, "frameW": 40, "frameH": 37, "baseX": 19, "baseY": 27, "w": 23 }] };
+
+// src/art/groundcover/water.generated.ts
+var water_generated_default = { "terrain": "water", "frameCount": 6, "variants": [{ "id": 0, "frameW": 40, "frameH": 37, "baseX": 19, "baseY": 31, "w": 29 }, { "id": 1, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 31, "w": 22 }, { "id": 2, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 31, "w": 30 }, { "id": 3, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 31, "w": 22 }, { "id": 4, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 31, "w": 28 }, { "id": 5, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 31, "w": 14 }, { "id": 6, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 31, "w": 28 }, { "id": 7, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 31, "w": 28 }] };
+
+// src/art/groundcover/sand.generated.ts
+var sand_generated_default = { "terrain": "sand", "frameCount": 6, "variants": [{ "id": 0, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 28, "w": 18 }, { "id": 1, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 28, "w": 22 }, { "id": 2, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 28, "w": 15 }, { "id": 3, "frameW": 40, "frameH": 37, "baseX": 19, "baseY": 28, "w": 20 }, { "id": 4, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 28 }, { "id": 5, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 22 }, { "id": 6, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 19 }, { "id": 7, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 16 }, { "id": 8, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 19 }, { "id": 9, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 24 }, { "id": 10, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 20 }, { "id": 11, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 14 }, { "id": 12, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 19 }, { "id": 13, "frameW": 40, "frameH": 37, "baseX": 21, "baseY": 27, "w": 23 }, { "id": 14, "frameW": 40, "frameH": 37, "baseX": 20, "baseY": 27, "w": 16 }, { "id": 15, "frameW": 40, "frameH": 37, "baseX": 19, "baseY": 27, "w": 23 }] };
+
+// src/core/groundCover.ts
+var SETS = {
+  grass: { ...grass_generated_default, basePath: "/assets/groundcover/grass" },
+  water: { ...water_generated_default, basePath: "/assets/groundcover/water", edgeOnly: true, count: { sparse: 2, filled: 3 } },
+  sand: { ...sand_generated_default, basePath: "/assets/groundcover/sand", count: { sparse: 2, filled: 4 } }
+};
+function groundCoverSet(terrain) {
+  return SETS[terrain];
+}
+var DIAMOND_HW = 44;
+var DIAMOND_HH = 24;
+var inDiamond = (dx, dy) => Math.abs(dx) / 46 + Math.abs(dy) / 26 <= 1;
+function mulberry(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = s + 1831565813 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+var COUNT = { sparse: 3, filled: 7 };
+var MIN_DIST = { sparse: 17, filled: 11 };
+function rollGroundCover(terrain, x, y, seed, density) {
+  const set = SETS[terrain];
+  if (!set || set.variants.length === 0) return [];
+  const rnd = mulberry((Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(seed, 83492791)) >>> 0);
+  const target = (set.count ?? COUNT)[density];
+  const minD = MIN_DIST[density];
+  const tufts = [];
+  for (let tries = 0; tufts.length < target && tries < target * 14; tries += 1) {
+    const dx = Math.round((rnd() * 2 - 1) * DIAMOND_HW);
+    const dy = Math.round((rnd() * 2 - 1) * DIAMOND_HH);
+    if (!inDiamond(dx, dy)) continue;
+    if (tufts.some((t) => {
+      const a = t.dx - dx, b = (t.dy - dy) * 1.7;
+      return a * a + b * b < minD * minD;
+    })) continue;
+    tufts.push({
+      dx,
+      dy,
+      variant: set.variants[Math.floor(rnd() * set.variants.length)].id,
+      flip: rnd() > 0.5,
+      phase: Math.floor(rnd() * 6)
+    });
+  }
+  tufts.sort((a, b) => a.dy - b.dy);
+  return tufts;
+}
+var hash2 = (ix, iy, s) => {
+  let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(s, 2654435761) >>> 0;
+  h = Math.imul(h ^ h >>> 13, 1274126177) >>> 0;
+  return ((h ^ h >>> 16) >>> 0) / 4294967296;
+};
+var smooth = (t) => t * t * (3 - 2 * t);
+function densityFieldAt(x, y, seed) {
+  const L = 5;
+  const ix = Math.floor(x / L), iy = Math.floor(y / L), tx = x / L - ix, ty = y / L - iy;
+  const sx = smooth(tx), sy = smooth(ty);
+  const v = hash2(ix, iy, seed) * (1 - sx) * (1 - sy) + hash2(ix + 1, iy, seed) * sx * (1 - sy) + hash2(ix, iy + 1, seed) * (1 - sx) * sy + hash2(ix + 1, iy + 1, seed) * sx * sy;
+  if (v < 0.42) return null;
+  if (v > 0.72) return "filled";
+  return "sparse";
+}
+function resolveGroundCover(cells, seed, densityFor) {
+  const terrainAt = new Map(cells.map((c) => [`${c.x},${c.y}`, c.terrain]));
+  const bordersOther = (c) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
+    const n = terrainAt.get(`${c.x + dx},${c.y + dy}`);
+    return n !== void 0 && n !== c.terrain;
+  });
+  for (const cell of cells) {
+    const set = SETS[cell.terrain];
+    if (!set) continue;
+    if (set.edgeOnly && !bordersOther(cell)) {
+      cell.groundCover = void 0;
+      continue;
+    }
+    const density = densityFor(cell);
+    if (!density) {
+      cell.groundCover = void 0;
+      continue;
+    }
+    cell.groundCover = { density, tufts: rollGroundCover(cell.terrain, cell.x, cell.y, seed, density) };
+  }
+}
+
 // src/render/bakeBoardThumbnail.ts
 var TILE_FRAME_W = TILE_STEP_X * 2;
 var TILE_FRAME_H = TILE_FRAME_HEIGHT;
@@ -2434,6 +2530,41 @@ function boardDrawOps(board) {
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
     ops.push({ src: propHalfSrc(placement.propId, "back"), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: back });
     ops.push({ src: propHalfSrc(placement.propId, "front"), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: front });
+  }
+  const COVER_SEED = 1234;
+  const coverCells = [];
+  for (let y = 0; y < board.rows; y += 1) {
+    for (let x = 0; x < board.cols; x += 1) {
+      const tileId = board.cells[`${x},${y}`];
+      const terrain = tileId ? familyOfTile(tileId) : void 0;
+      if (terrain && groundCoverSet(terrain)) coverCells.push({ x, y, terrain });
+    }
+  }
+  const hasPaintedCover = Object.keys(board.cover ?? {}).length > 0;
+  resolveGroundCover(coverCells, COVER_SEED, (cell) => board.cover?.[`${cell.x},${cell.y}`] ?? (hasPaintedCover ? null : densityFieldAt(cell.x, cell.y, COVER_SEED)));
+  for (const cell of coverCells) {
+    if (!cell.groundCover) continue;
+    const set = groundCoverSet(cell.terrain);
+    if (!set) continue;
+    const { left, top, zIndex } = boardLabCellPosition(cell);
+    const base = zIndex + 2e4;
+    for (const tuft of cell.groundCover.tufts) {
+      const meta = set.variants.find((v) => v.id === tuft.variant);
+      if (!meta) continue;
+      ops.push({
+        src: `${set.basePath}/v${tuft.variant}.png`,
+        sx: 0,
+        sy: 0,
+        sw: meta.frameW,
+        sh: meta.frameH,
+        // frame 0 of the horizontal sway sheet
+        dx: left + tuft.dx - meta.baseX,
+        dy: top + tuft.dy - meta.baseY,
+        dw: meta.frameW,
+        dh: meta.frameH,
+        z: base + (tuft.dy > 0 ? 1 : -1)
+      });
+    }
   }
   ops.sort((a, b) => a.z - b.z);
   return ops;
