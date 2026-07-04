@@ -4,19 +4,21 @@ import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { PropSprite } from '../render/BoardStructure';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { PROP_DEFS, propCells, type PropDef } from '../core/props';
+import { PROP_DEFS, propCells, currentSeats, type PropDef } from '../core/props';
 import { pieceSpritePath } from '../core/pieces';
 import { ViewPane } from './shared/ViewPane';
 import { SliderRow } from './dressing/SliderRow';
-import COMMITTED_SEATS from '../core/propSeats.json';
+import { saveLiveSeats } from '../net/propSeats';
+import { mapSaveError } from '../campaign/save';
 
 // The prop-seat editor as an embedded Studio Viewer kind (docs/studio-control-architecture.md,
 // ADR-0058): it renders into the shared studio shell — the board in `.al-lab-main`, EVERY
 // control in the one `.tileset-view-controls` panel, the workspace tabs + kind selector in the
 // `header` slot — exactly like NineSliceLab / PortraitLab. It is reached from the Props catalog
 // category's Inspect affordance, never a standalone route. It tunes how a multi-cell prop
-// (tree/house) SITS on its tiles through the real PropSprite path, then Saves the seat map to
-// src/core/propSeats.json (dev endpoint) — the checked-in source PROP_DEFS composes from.
+// (tree/house) SITS on its tiles through the real PropSprite path, then Saves the seat map LIVE to
+// the DB (PUT /api/prop-seats/default, admin-gated, instant-live per ADR-0061) — the overlay
+// PROP_DEFS composes on top of the committed baseline.
 
 type Seat = { anchorX: number; anchorY: number; scale: number; w?: number; h?: number; base?: string; label?: string };
 type Seats = Record<string, Seat>;
@@ -68,7 +70,11 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const [renameText, setRenameText] = useState('');
   const drag = useRef<{ px: number; py: number; anchorX: number; anchorY: number } | null>(null);
 
-  const committedSeats = COMMITTED_SEATS as Seats;
+  // The currently-SAVED live map (committed baseline ∪ live DB overrides) that PROP_DEFS is derived
+  // from — NOT the static propSeats.json import, which would show a DB-overridden prop's stale
+  // committed value and lack any DB-only variant entirely (indexing it would then throw). This is
+  // the "saved" state to diff against and to re-publish untouched.
+  const committedSeats = currentSeats() as Seats;
   const seats: Seats = { ...committedSeats, ...overrides };
   const def = PROP_DEFS.find((d) => d.id === activeId) as PropDef;
   const liveSeat = seats[activeId];
@@ -167,19 +173,17 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const onDragEnd = () => { drag.current = null; };
 
   const save = async () => {
-    // POST only edited entries — the endpoint MERGES, so a save can't drop props this tab
-    // didn't touch (stale-tab / two-tab safety).
-    const changed = Object.fromEntries(Object.entries(overrides).filter(([id, s]) => !sameSeat(s, committedSeats[id])));
-    if (!Object.keys(changed).length) return;
+    // Instant-live publish (ADR-0061): PUT the WHOLE live map (baseline ∪ overrides) to the DB — the
+    // endpoint REPLACES the document, so we always send the full map (never just the edited entries)
+    // or an omitted prop would vanish. Admin-gated; mapSaveError turns 401/403/503 into a message.
+    if (!dirty) return;
     setStatus('saving…');
     try {
-      const res = await fetch('/__prop-seat/save', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changed),
-      });
-      const json = await res.json();
-      setStatus(json.ok ? `saved ${(json.updated ?? []).join(', ')} → ${json.path}` : `error: ${json.error}`);
+      await saveLiveSeats(seats);
+      setStatus('saved — live now');
     } catch (err) {
-      setStatus(`error: ${String(err)} — use Copy JSON`);
+      const r = mapSaveError(err);
+      setStatus(`error: ${'action' in r ? 'sign in required' : r.message} — use Copy JSON`);
     }
   };
   const copy = async () => {
@@ -214,16 +218,16 @@ export function PropSeatLab({ propId, onPropId, header }: {
     // base's cells by default but keeps a changed footprint if you set one.
     const footprint = (liveW !== baseDef.w || liveH !== baseDef.h) ? { w: liveW, h: liveH } : {};
     setStatus('saving variant…');
+    // PUT the whole live map with the new variant added (the endpoint replaces, not merges). The
+    // variant references `base: baseId`, which is present, so server-side base-integrity passes.
+    const next: Seats = { ...seats, [variantId]: { base: baseId, label: `${baseDef.label} — ${suffix}`, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY, scale: liveSeat.scale, ...footprint } };
     try {
-      const res = await fetch('/__prop-seat/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [variantId]: { base: baseId, label: `${baseDef.label} — ${suffix}`, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY, scale: liveSeat.scale, ...footprint } }),
-      });
-      const json = await res.json();
-      if (json.ok) { setStatus(`saved variant "${variantId}" — pick it from Prop after reload`); setVariantName(''); }
-      else setStatus(`error: ${json.error}`);
-    } catch (err) { setStatus(`error: ${String(err)}`); }
+      await saveLiveSeats(next);
+      setStatus(`saved variant "${variantId}" — pick it from Prop after reload`); setVariantName('');
+    } catch (err) {
+      const r = mapSaveError(err);
+      setStatus(`error: ${'action' in r ? 'sign in required' : r.message}`);
+    }
   };
 
   // Rename a copy: change its display name only — id, sprite, seat and footprint are untouched (the
@@ -232,34 +236,40 @@ export function PropSeatLab({ propId, onPropId, header }: {
     const label = renameText.trim();
     if (!isCopy || !label || label === def.label) return;
     setStatus('renaming…');
+    // PUT the whole live map with this copy's label changed; preserve its base + current seat/footprint
+    // (the endpoint replaces the document, so an omitted field would be dropped).
+    const cur = seats[activeId];
+    const next: Seats = { ...seats, [activeId]: { ...cur, base: def.spriteId, label } };
     try {
-      const res = await fetch('/__prop-seat/save', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [activeId]: { base: def.spriteId, label, anchorX: committed.anchorX, anchorY: committed.anchorY, scale: committed.scale } }),
-      });
-      const json = await res.json();
-      setStatus(json.ok ? `renamed to "${label}"` : `error: ${json.error}`);
-    } catch (err) { setStatus(`error: ${String(err)}`); }
+      await saveLiveSeats(next);
+      setStatus(`renamed to "${label}"`);
+    } catch (err) {
+      const r = mapSaveError(err);
+      setStatus(`error: ${'action' in r ? 'sign in required' : r.message}`);
+    }
   };
 
-  // Delete a copy. Only copies are deletable — the base is safe both here (no button) and at the
-  // endpoint (it refuses any entry without a `base`). Switch back to the base and drop the override.
+  // Delete a copy. Only copies are deletable — the base is safe both here (no button) and server-side
+  // (validatePropSeatsData rejects any surviving variant orphaned by the delete). Switch back to the
+  // base and drop the override.
   const deleteCopy = async () => {
     if (!isCopy) return;
     setStatus('deleting…');
+    // Delete = PUT the whole live map MINUS this copy (the endpoint replaces the document). Server-side
+    // base-integrity refuses to leave an orphan variant; a base has no delete button (and the baseline
+    // overlay keeps base seats present regardless), so only copies reach here.
+    const removed = activeId;
+    const next: Seats = { ...seats };
+    delete next[removed];
     try {
-      const res = await fetch('/__prop-seat/delete', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: activeId }),
-      });
-      const json = await res.json();
-      if (json.ok) {
-        const removed = activeId;
-        onPropId(def.spriteId); // fall back to the base prop
-        setOverrides((o) => { const n = { ...o }; delete n[removed]; return n; });
-        setStatus(`deleted "${removed}"`);
-      } else setStatus(`error: ${json.error}`);
-    } catch (err) { setStatus(`error: ${String(err)}`); }
+      await saveLiveSeats(next);
+      onPropId(def.spriteId); // fall back to the base prop
+      setOverrides((o) => { const n = { ...o }; delete n[removed]; return n; });
+      setStatus(`deleted "${removed}"`);
+    } catch (err) {
+      const r = mapSaveError(err);
+      setStatus(`error: ${'action' in r ? 'sign in required' : r.message}`);
+    }
   };
 
   const toggle = (on: boolean, set: (v: boolean) => void, label: string, title?: string) => (
@@ -368,7 +378,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
 
             <p className="ps-saved">saved: ({committed.anchorX}, {committed.anchorY}) @ {committed.scale.toFixed(2)}× · {def.w}×{def.h} cells</p>
             <div className="ps-actions">
-              <button type="button" className="tileset-view-action ps-primary" onClick={save} disabled={!dirty}>Save to disk</button>
+              <button type="button" className="tileset-view-action ps-primary" onClick={save} disabled={!dirty} title="Publish these seats live (instant, no deploy)">Save live</button>
               <button type="button" className="tileset-view-action" onClick={copy}>Copy JSON</button>
               <button type="button" className="tileset-view-action" onClick={() => setSeat({ ...committed })} disabled={!dirty} title="Reset all three controls to the saved seat">Reset all</button>
             </div>
