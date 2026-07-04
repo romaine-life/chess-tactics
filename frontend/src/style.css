@@ -4882,7 +4882,11 @@ h1 {
 .le-board-actions { display: grid; gap: var(--ds-inline-tight); grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--ds-stack); }
 .le-board-actions.le-history-actions { display: flex; }
 .le-board-actions.le-status-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.le-icon-btn { padding: 0; width: 38px; }
+/* Undo/Redo glyph PNGs already carry their OWN kit frame, so we drop the outer .le-seg-btn
+   button frame (same treatment as the .le-seg-icons tool row) — otherwise the two frames nest
+   into a double border. The icon fills the square so its single frame IS the button edge. */
+.le-icon-btn { border: 0; border-image: none; min-height: 0; padding: 0; width: 38px; height: 38px; }
+.le-icon-btn .le-ico { width: 100%; height: 100%; }
 .le-icon-btn:not(:disabled):active .ic-undo { background-image: url("/assets/ui/level-editor/icons/undo-active.png"); }
 .le-icon-btn:not(:disabled):active .ic-redo { background-image: url("/assets/ui/level-editor/icons/redo-active.png"); }
 /* The status card is a live flex column (ADR-0056) — its gap spaces the row; no extra margin. */
