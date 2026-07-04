@@ -6,6 +6,7 @@ import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
+import { loadSkirmishClockPref } from '../game/skirmishClockPref';
 import { fetchLobby, postMove, resignLobby, leaveLobby, fetchMovesSince, subscribeLobbyChannel, type MoveEvent } from '../net/lobbies';
 import type { Level } from '../core/level';
 import type { Side } from '../core/types';
@@ -54,6 +55,9 @@ export function Skirmish() {
   // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
   // campaign). The dead-link message shows if the id is unknown/removed.
   const routeMap = routeParams.get('map');
+  // The Skirmish hub's "Start" enters as `?random=1`: always roll a FRESH random battle on
+  // the player's chosen clock, rather than resuming a prior in-progress skirmish.
+  const routeRandom = routeParams.get('random') === '1';
   const [netError, setNetError] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   // Netplay has no campaign result flow, so a decided match shows its own result card.
@@ -146,7 +150,10 @@ export function Skirmish() {
   // stud is hidden there, since a local reset would desync the shared board.
   const retrySkirmish = () => {
     if (routeLevel) { replayLevel(); return; }
-    newSkirmish({ seed: useSkirmish.getState().seed });
+    // A free skirmish rebuilds from its seed on the player's current clock preference, so
+    // retrying keeps the same time control (or untimed) rather than resetting to the 5:00
+    // default — matching what "New skirmish" and the hub's Start produce.
+    newSkirmish({ seed: useSkirmish.getState().seed, timeControl: loadSkirmishClockPref() });
   };
   // Show the Retry stud only once a single-player board is up (no netplay, no dead map link).
   const showRetryStud = boardSettled && !mapError && !routeLobby && !net;
@@ -234,8 +241,26 @@ export function Skirmish() {
           return;
         }
       }
-      newSkirmish({ seed: freshSeed(), level: levelDoc ?? undefined, ai });
+      // A FREE skirmish (no level) is timed from the player's saved clock preference
+      // (default 5:00); a level carries its own authored control, so leave timeControl
+      // unset there and let the level decide.
+      newSkirmish({
+        seed: freshSeed(),
+        level: levelDoc ?? undefined,
+        ai,
+        ...(levelDoc ? {} : { timeControl: loadSkirmishClockPref() }),
+      });
     };
+
+    // The Skirmish hub's "Start" (`?random=1`) ALWAYS rolls a fresh random battle on the
+    // chosen clock — never resumes — then strips the flag so a later reload resumes THIS
+    // battle instead of re-rolling a different one.
+    if (routeRandom) {
+      newSkirmish({ seed: freshSeed(), ai, timeControl: loadSkirmishClockPref() });
+      navigateApp('/play', { replace: true, scroll: false });
+      setBoardSettled(true);
+      return;
+    }
 
     // A `?board=<code>` link plays an authored position straight away — decode it into a
     // fixed-placement level and start fresh (ephemeral, never persisted; see the
@@ -299,7 +324,7 @@ export function Skirmish() {
       })
       .catch(() => { startOrResume(routeLevelId, null); setBoardSettled(true); });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeMap, routeObjective, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeMap, routeObjective, routeCampaignId, routeLevel, routeLevelId, routeLobby, routeRandom]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -433,19 +458,29 @@ export function Skirmish() {
           center section (turn/objective read from the game store, in scope here). The
           brand + account cluster are rendered by the shell bar itself. */}
       <TitleBarSlot region="center">
-        {/* Timed games put the battle clock in the middle; the turn plate and objective
-            chips flank it left and right (they simply sit adjacent when untimed). */}
+        {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
+            counts down, an untimed one (a free skirmish with the clock off, or a level with
+            no authored control) reads "∞ / No limit". Keeping the centre chip present means
+            the turn plate and objective always flank a real element, so the clock stays
+            page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
         <div className="skirmish-topbar-status">
           <div className="skirmish-status-chip skirmish-turn-plate">
             <strong>{turnLabel}</strong>
             <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
           </div>
-          {clock ? (
-            <div className={`skirmish-status-chip skirmish-clock${clock.remainingMs <= 20_000 ? ' is-low' : ''}`}>
-              <strong>{formatClockMs(clock.remainingMs)}</strong>
-              <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
-            </div>
-          ) : null}
+          <div className={`skirmish-status-chip skirmish-clock${clock && clock.remainingMs <= 20_000 ? ' is-low' : ''}`}>
+            {clock ? (
+              <>
+                <strong>{formatClockMs(clock.remainingMs)}</strong>
+                <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
+              </>
+            ) : (
+              <>
+                <strong className="skirmish-clock-unlimited" aria-label="No time limit">∞</strong>
+                <small>No limit</small>
+              </>
+            )}
+          </div>
           <div className="skirmish-status-chip skirmish-objective">
             <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
             <span>

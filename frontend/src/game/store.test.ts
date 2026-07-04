@@ -27,7 +27,10 @@ afterEach(() => {
 });
 
 function playFirstMove(seed: number) {
-  useSkirmish.getState().newSkirmish({ seed });
+  // Untimed: these flow tests drive the enemy reply with runAllTimers, which would
+  // otherwise drain the now-default 5:00 free-skirmish clock to a flag-fall and end the
+  // game mid-assertion. The clock is covered on its own by the "battle clock" suite.
+  useSkirmish.getState().newSkirmish({ seed, timeControl: null });
   const moves = useSkirmish.getState().movesForSelected();
   if (moves.length) useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
   vi.runAllTimers(); // resolve the staged enemy reply
@@ -55,7 +58,7 @@ describe('skirmish store', () => {
   });
 
   it('a legal move applies immediately and stages the enemy reply on a beat', () => {
-    useSkirmish.getState().newSkirmish({ seed: 5 });
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null }); // untimed: runAllTimers below must not flag-fall the clock
     const before = useSkirmish.getState().game;
     const moves = useSkirmish.getState().movesForSelected();
     expect(moves.length).toBeGreaterThan(0);
@@ -74,7 +77,7 @@ describe('skirmish store', () => {
   });
 
   it('keeps the piece you moved selected through the enemy turn and into your next turn', () => {
-    useSkirmish.getState().newSkirmish({ seed: 5 });
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null }); // untimed: runAllTimers below must not flag-fall the clock
     const movedId = useSkirmish.getState().selectedId!;
     const moves = useSkirmish.getState().movesForSelected();
     expect(moves.length).toBeGreaterThan(0);
@@ -144,7 +147,7 @@ describe('skirmish store', () => {
   });
 
   it('resumeMatch re-stages the enemy reply that a reload interrupts', () => {
-    useSkirmish.getState().newSkirmish({ seed: 5 });
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null }); // untimed: runAllTimers below must not flag-fall the clock
     const moves = useSkirmish.getState().movesForSelected();
     useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
     expect(useSkirmish.getState().game.turn).toBe('enemy'); // reply staged on a timer
@@ -355,13 +358,31 @@ describe('skirmish store: battle clock', () => {
 
   const clock = () => useSkirmish.getState().clock;
 
-  it('stays untimed for a free skirmish and for a level without a time control', () => {
+  it('defaults a free skirmish to the 5:00 clock; a level without a control stays untimed', () => {
+    // A free skirmish (no level, no explicit control) is timed by default so random
+    // battles play like a real game — DEFAULT_TIME_CONTROL is 5:00 with no increment.
     useSkirmish.getState().newSkirmish({ seed: 5 });
-    expect(clock()).toBeNull();
+    expect(clock()).toEqual({ remainingMs: 300_000, running: true, incrementMs: 0 });
+    // A level uses its OWN authored control...
     useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60) });
-    expect(clock()).not.toBeNull();
-    // A new untimed game must clear the previous game's clock.
-    useSkirmish.getState().newSkirmish({ seed: 6 });
+    expect(clock()).toEqual({ remainingMs: 60_000, running: true, incrementMs: 0 });
+    // ...and a level WITHOUT one stays untimed (undefined ⇒ no clock).
+    const untimedLevel = createBlankLevel('lvl-untimed', 'Untimed', 8, 8);
+    untimedLevel.layers.units = [
+      { x: 0, y: 7, type: 'rook', side: 'player' },
+      { x: 7, y: 0, type: 'king', side: 'enemy' },
+    ];
+    useSkirmish.getState().newSkirmish({ seed: 6, level: untimedLevel });
+    expect(clock()).toBeNull();
+  });
+
+  it('honors an explicit free-skirmish time control: a value arms it, null plays untimed', () => {
+    // The HUD clock picker / "New skirmish" passes timeControl explicitly; it wins over
+    // the 5:00 default — a TimeControl arms exactly that clock...
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: { initialSeconds: 120, incrementSeconds: 2 } });
+    expect(clock()).toEqual({ remainingMs: 120_000, running: true, incrementMs: 2_000 });
+    // ...and null forces an untimed skirmish (and clears the prior game's clock).
+    useSkirmish.getState().newSkirmish({ seed: 6, timeControl: null });
     expect(clock()).toBeNull();
   });
 
