@@ -233,8 +233,14 @@ let migrationPromise = null;
 
 function buildPool() {
   if (databaseUrl) {
+    // Azure managed Postgres requires TLS. Prod connects through the POSTGRES_HOST
+    // (AAD) branch below, so this only affects DATABASE_URL targets: turn SSL on when
+    // the URL points at an Azure Postgres or asks for it (sslmode=require); a local/CI
+    // Postgres (localhost) stays plaintext, unchanged.
+    const needsSsl = /sslmode=require/i.test(databaseUrl) || /\.postgres\.database\.azure\.com/i.test(databaseUrl);
     return new Pool({
       connectionString: databaseUrl,
+      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
       max: 8,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
@@ -876,15 +882,34 @@ function applyLevelPatch(level, raw) {
   Object.assign(level, next);
 }
 
+// Dev sign-in bypass — skips the Microsoft round-trip so sign-in is testable
+// off-network. Two triggers, BOTH dev-only:
+//   - a *.tank.dev.romaine.life host — the deployed dev-slot domain (unchanged), and
+//   - a loopback host when DEV_AUTH=1 — a local `node server.js` for exercising the
+//     real sign-in flow / lobbies without Postgres or Microsoft (see CLAUDE.md).
+// Prod pods never set DEV_AUTH and their ingress Host is chess.romaine.life, so a
+// spoofed `Host: localhost` header cannot switch this on in production.
+function isDevAuthHost(req) {
+  const host = (req.get('host') || '').toLowerCase();
+  if (host.includes('.tank.dev.romaine.life')) return true;
+  if (process.env.DEV_AUTH === '1') {
+    const bare = host.replace(/:\d+$/, ''); // strip :port (IPv6 stays bracketed)
+    if (bare === 'localhost' || bare === '127.0.0.1' || bare === '[::1]') return true;
+  }
+  return false;
+}
+
 async function readSession(req) {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     const cookie = req.get('cookie') || '';
     if (cookie.includes('better-auth.session=mock-dev-session')) {
+      // Who the dev session signs in as. Defaults to a throwaway player; set
+      // DEV_AUTH_EMAIL (+ DEV_AUTH_NAME) to sign in as a real account so its
+      // owner-scoped data shows. Admin affordances still come from ADMIN_EMAILS.
       return {
         user: {
-          email: 'player@example.com',
-          name: 'Tactics Player',
+          email: process.env.DEV_AUTH_EMAIL || 'player@example.com',
+          name: process.env.DEV_AUTH_NAME || 'Tactics Player',
           role: 'pending',
         }
       };
@@ -938,8 +963,7 @@ async function requireAdmin(req, res) {
 }
 
 async function requireDesignPortfolioWriter(req, res) {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     return {
       email: 'test-slot@chess-tactics.local',
       name: 'Test Slot',
@@ -1787,8 +1811,7 @@ app.put('/api/design-portfolios/:id', async (req, res) => {
 });
 
 app.get('/api/auth/sign-in', (req, res) => {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     res.setHeader('Set-Cookie', 'better-auth.session=mock-dev-session; Path=/; HttpOnly');
     const returnTo = req.query.returnTo || '/';
     res.redirect(302, returnTo);

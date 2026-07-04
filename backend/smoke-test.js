@@ -124,9 +124,29 @@ function stopEmbeddedPostgres() {
 
 process.on('exit', stopEmbeddedPostgres);
 
+// SAFETY GUARD. resetDb() below TRUNCATEs every document table on startup — a known-empty
+// state is fine for a throwaway test DB, but catastrophic against production. This is a
+// hard, structural stop: no matter how DATABASE_URL got set (env, shell, a wrapper, an
+// agent running `npm test`), refuse to run if it points at the PROD Postgres server.
+// It is not a rule anyone has to remember — the script simply will not touch prod.
+// CI's self-provisioned localhost DB and disposable test databases are unaffected.
+function assertSafeSmokeTarget() {
+  let host = '';
+  try { host = new URL(process.env.DATABASE_URL || '').hostname; } catch { host = ''; }
+  if (/(^|\.)chess-tactics-pg(\.|$)/i.test(host) || /chess-tactics-pg\.postgres\.database\.azure\.com/i.test(host)) {
+    console.error(
+      `\nREFUSING TO RUN: DATABASE_URL points at the PRODUCTION Postgres (${host}).\n` +
+      `smoke-test.js TRUNCATEs levels/campaigns/portfolios on startup and would wipe prod data.\n` +
+      `Run it with DATABASE_URL unset (self-provisions a throwaway local DB) or a disposable test database.\n`,
+    );
+    process.exit(1);
+  }
+}
+
 if (!process.env.DATABASE_URL) {
   startEmbeddedPostgres();
 }
+assertSafeSmokeTarget();
 
 const child = spawn(process.execPath, ['supervisor.js'], {
   cwd: __dirname,
