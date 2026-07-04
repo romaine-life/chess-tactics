@@ -16,6 +16,13 @@ export interface TileGridCell {
   className?: string;
   /** data-* attributes for tooling/tests. */
   data?: Record<string, string | number | undefined>;
+  /**
+   * Added to the cell's paint order (x+y). For a cell whose art PROTRUDES far past its own tile
+   * into the cells in front — a bridge's near rail + pier hang ~2.5 rows below the equator — so the
+   * front (higher-z) tiles don't paint over that overhang. Sorts identically among bumped cells, so
+   * a run stays correctly layered; kept small so it never climbs into the unit band (+20000).
+   */
+  zBump?: number;
   /** Tile content: the <img>, a missing-tile label, plus any per-cell editor chrome. */
   children?: ReactNode;
 }
@@ -75,7 +82,7 @@ export function TileGrid({
           <div
             key={cell.key}
             className={`tileset-generated-board-tile ${cell.className ?? ''}`.trim()}
-            style={{ left, top, zIndex }}
+            style={{ left, top, zIndex: zIndex + (cell.zBump ?? 0) }}
             {...dataAttributes(cell.data)}
           >
             {cell.children}

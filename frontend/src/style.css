@@ -9866,6 +9866,25 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
+/* Fence tool: highlight the diamond SIDE under the cursor (where the rail will drop). The SVG is
+   seated exactly like the hit diamond and stretched to it (viewBox 0..100, preserveAspectRatio
+   none), so the line traces the real edge. Above the tile/feature, below units. */
+.le-fence-edge-hint {
+  position: absolute;
+  left: 0;
+  top: var(--iso-tile-surface-top);
+  width: var(--iso-tile-width);
+  height: var(--iso-tile-height);
+  pointer-events: none;
+  overflow: visible;
+  z-index: 6;
+}
+.le-fence-edge-hint line {
+  stroke: rgba(126, 236, 174, 0.95);
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+
 .tileset-brush-display {
   display: flex;
   align-items: center;

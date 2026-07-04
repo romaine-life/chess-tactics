@@ -261,6 +261,7 @@ interface SearchState {
   aborted: boolean;
   weights: EvalWeights;
   terrainEnv: MoveEnv['terrain'];
+  fences: MoveEnv['fences'];
   sctx: SearchContext;
 }
 
@@ -308,7 +309,7 @@ function quiesce(
 ): number {
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
-  const env: MoveEnv = { terrain: s.terrainEnv, lastMove };
+  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
 
   // Same terminal check as negamax, BEFORE stand-pat: a King capture inside the
   // exchange must resolve as a mate via the objective, not as a bag of material.
@@ -380,7 +381,7 @@ function negamax(
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
 
-  const env: MoveEnv = { terrain: s.terrainEnv, lastMove };
+  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
   const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
   if (winner) return color * terminalScore(winner, ply);
   if (depth === 0) return quiesce(s, state, lastMove, ply, alpha, beta, turnsElapsed, QUIESCE_MAX_PLY);
@@ -456,6 +457,7 @@ export function searchBestAction(
     aborted: false,
     weights,
     terrainEnv: env.terrain,
+    fences: env.fences,
     sctx,
   };
 

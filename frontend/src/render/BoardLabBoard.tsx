@@ -4,7 +4,8 @@ import { TileGrid } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
-import { featureFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
+import type { ResolvedFenceOverlay } from '../core/featureAutotile';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -24,6 +25,11 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   className?: string;
   ariaLabel?: string;
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
+  /**
+   * Edge fences resolved to a per-cell rail overlay (E/S mask + material), keyed by "x-y" — the
+   * cell composites its own owned rails over the tile top. Omit for a fence-free board.
+   */
+  fenceOverlays?: ReadonlyMap<string, ResolvedFenceOverlay>;
   children?: ReactNode;
 }
 
@@ -36,6 +42,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   className = '',
   ariaLabel = 'Generated board',
   renderCellOverlay,
+  fenceOverlays,
   children,
 }: BoardLabBoardProps<TAsset>) {
   const sourceCells = board.cells;
@@ -52,6 +59,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
     // overlay (road) composites OVER the top, on the walkable surface.
     const topSrc = cell.asset ? assetFrameSrc(cell.asset) : undefined;
     const sideSrc = cell.sideAsset ? assetFrameSrc(cell.sideAsset) : topSrc;
+    const fence = fenceOverlays?.get(`${cell.x},${cell.y}`);
     return {
       key: `${cell.x}-${cell.y}`,
       x: cell.x,
@@ -64,21 +72,36 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
         'data-board-x': cell.x,
         'data-board-y': cell.y,
       },
-      children: topSrc ? (
+      // A fence draws even when its owner cell has no base tile, so a rail on the boundary of a
+      // hole never silently vanishes in the game board while the editor/thumbnail still show it
+      // (cross-renderer parity — the other renderers draw the fence unconditionally).
+      children: topSrc || fence || cell.missing ? (
         <>
-          <img className="tile-layer-side" src={(sideSrc ?? topSrc).replace(/\.png$/, '-side.png')} alt="" draggable={false} />
-          <TileTopLayer baseSrc={topSrc} animFrames={cell.asset?.topAnimFrames} x={cell.x} y={cell.y} />
-          {cell.feature ? (
+          {topSrc ? (
+            <>
+              <img className="tile-layer-side" src={(sideSrc ?? topSrc).replace(/\.png$/, '-side.png')} alt="" draggable={false} />
+              <TileTopLayer baseSrc={topSrc} animFrames={cell.asset?.topAnimFrames} x={cell.x} y={cell.y} />
+              {cell.feature ? (
+                <img
+                  className="tileset-feature-overlay"
+                  src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask)}
+                  alt=""
+                  draggable={false}
+                />
+              ) : null}
+            </>
+          ) : cell.missing ? (
+            <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
+          ) : null}
+          {fence ? (
             <img
-              className="tileset-feature-overlay"
-              src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask)}
+              className="tileset-feature-overlay tileset-fence-overlay"
+              src={fenceFrameSrc(fence.material, fence.mask)}
               alt=""
               draggable={false}
             />
           ) : null}
         </>
-      ) : cell.missing ? (
-        <span>{cell.missing?.mask?.toString(2).padStart(4, '0') ?? 'Missing'}</span>
       ) : null,
     };
   });

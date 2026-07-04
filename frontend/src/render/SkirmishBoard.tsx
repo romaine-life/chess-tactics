@@ -16,8 +16,8 @@ import { PropSprite } from './BoardStructure';
 import { ViewPane } from '../ui/shared/ViewPane';
 import { useBoardArtReveal } from './boardArtReady';
 import { groundCoverSet } from '../core/groundCover';
-import { featureFrameSrc } from '../art/tileset';
-import { FENCE_ART_PENDING, featureMaskAt, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
+import { resolveFeatureOverlays, resolveFenceOverlays, type FeatureKind, type FeatureMaterial, type ResolvedFeatureOverlay, type ResolvedFenceOverlay } from '../core/featureAutotile';
 import { decodeBoard, type EditorBoard } from '../ui/boardCode';
 
 const TERRAIN_TO_FAMILY: Record<Exclude<TerrainType, 'void'>, TileFamilyId> = {
@@ -106,19 +106,10 @@ function legacyFeatureMapForGame(game: GameState): Map<string, { kind: FeatureKi
   return map.size ? map : undefined;
 }
 
-function featureOverlaysForBoard(board: EditorBoard): Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> {
+function featureOverlaysForBoard(board: EditorBoard): Record<string, ResolvedFeatureOverlay> {
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
   const isExit = (edge: string): boolean => board.featureExits[edge] === true;
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, feature] of Object.entries(board.features)) presentByKind[feature.kind].add(key);
-
-  const out: Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }> = {};
-  for (const [key, feature] of Object.entries(board.features)) {
-    const [x, y] = key.split(',').map(Number);
-    const mask = featureMaskAt(presentByKind[feature.kind], x, y, isSevered, isExit);
-    out[key] = { kind: feature.kind, material: feature.material, mask };
-  }
-  return out;
+  return resolveFeatureOverlays(board.features, isSevered, isExit);
 }
 
 function resolveBoardCode(game: GameState): EditorBoard | null {
@@ -184,8 +175,7 @@ function exactSkirmishBoard(
   const cells: SocketBoardCell<TileAsset>[] = base.cells.map((cell) => {
     const key = `${cell.x},${cell.y}`;
     const exactAsset = tileAssetById.get(exactBoard.cells[key]);
-    const exactFeature = featureOverlays[key];
-    const feature = exactFeature && !(FENCE_ART_PENDING && exactFeature.kind === 'fence') ? exactFeature : undefined;
+    const feature = featureOverlays[key] ?? undefined;
     if (!exactAsset) return { ...cell, feature };
 
     const terrain = familyIdForAsset(exactAsset, tileFamilies);
@@ -280,8 +270,10 @@ function blockedCandidateSquares(piece: Piece, pieces: readonly Piece[], size: B
 function collectBoardArt(
   board: SocketBoardResult<TileAsset>,
   livePieces: readonly Piece[],
+  fenceOverlays: ReadonlyMap<string, ResolvedFenceOverlay>,
 ): { urls: string[]; signature: string } {
   const tiles = new Set<string>();
+  for (const fence of fenceOverlays.values()) tiles.add(fenceFrameSrc(fence.material, fence.mask));
   for (const cell of board.cells) {
     if (cell.asset) {
       const top = tileFrameSrc(cell.asset);
@@ -508,6 +500,12 @@ export function SkirmishBoard() {
     return piece ? legalMoves(piece, game.pieces, game.size, env) : [];
   }, [env, game.pieces, game.size, game.turn, game.winner, selectedId, localSide]);
   const board = useMemo(() => buildSkirmishBoard(game, seed), [game, seed]);
+  // Edge fences resolve from the authored board code (each shared edge → its upper-left cell's
+  // E/S rail). Keyed "x,y" to match resolveFenceOverlays; empty for a generated/fence-free board.
+  const fenceOverlays = useMemo<ReadonlyMap<string, ResolvedFenceOverlay>>(() => {
+    const eb = game.boardCode ? decodeBoard(game.boardCode) : null;
+    return eb ? resolveFenceOverlays(eb.fences ?? {}) : new Map();
+  }, [game.boardCode]);
   const livePieces = useMemo(
     // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
     // seat — exclude them so they don't paint an empty/phantom seat over their footprint cells.
@@ -517,7 +515,7 @@ export function SkirmishBoard() {
   // Hold the board hidden until its whole art set has decoded, then fade it in as one
   // unit — no per-tile popcorn (see render/boardArtReady). The signature is the tile set
   // (stable across moves), so this arms once per board/seed, not on every move.
-  const boardArt = useMemo(() => collectBoardArt(board, livePieces), [board, livePieces]);
+  const boardArt = useMemo(() => collectBoardArt(board, livePieces, fenceOverlays), [board, livePieces, fenceOverlays]);
   const boardReady = useBoardArtReveal(boardArt.urls, boardArt.signature);
   // Deploy arrival: once the board reveals, play the staggered drop ONCE per board. Keyed off
   // the tile signature so a new skirmish/replay re-arms it, but moves (signature stable) don't.
@@ -730,6 +728,7 @@ export function SkirmishBoard() {
         <BoardLabBoard
           board={board}
           assetFrameSrc={tileFrameSrc}
+          fenceOverlays={fenceOverlays}
           boardZoom={boardZoom}
           boardPan={boardPan}
           className="skirmish-board-surface"

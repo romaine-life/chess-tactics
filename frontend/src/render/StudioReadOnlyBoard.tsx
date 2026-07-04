@@ -7,7 +7,7 @@ import { GroundCoverLayer } from './GroundCoverLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
 import {
   MISSING_DIRECTION_SPRITE,
   hasDirectionSprite,
@@ -17,7 +17,7 @@ import {
   type UnitAsset,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { featureMaskAt, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { resolveFeatureOverlays, resolveFenceOverlays, type ResolvedFeatureOverlay, type ResolvedFenceOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -37,9 +37,10 @@ export interface BoardLayerVisibility {
   doodad: boolean;
 }
 
-// Linear-feature overlays (roads + rivers) already resolved to a connection mask, keyed by
+// Linear-feature overlays already resolved to their sprite selector (road/river → mask), keyed by
 // "x,y". The editor derives these live; the read-only viewer derives them from the painted set.
-export type FeatureOverlayMap = Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
+// Reuses the canonical ResolvedFeatureOverlay shape.
+export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
 const allTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
 const resolveTileAsset = (id: string): StudioAsset | undefined => allTiles.find((asset) => asset.id === id);
@@ -57,27 +58,23 @@ export function deriveFeatureOverlays(
   featureCuts: EditorBoard['featureCuts'],
 ): FeatureOverlayMap {
   const isSevered = (edge: string): boolean => featureCuts[edge] === true;
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, f] of Object.entries(features)) presentByKind[f.kind].add(key);
-  const out: FeatureOverlayMap = {};
-  for (const [key, f] of Object.entries(features)) {
-    const [x, y] = key.split(',').map(Number);
-    out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered) };
-  }
-  return out;
+  return resolveFeatureOverlays(features, isSevered);
 }
 
 /** The tile + feature-overlay <img>s for one cell (no interaction chrome). Shared by both boards. */
 export function studioCellArt({
   tileAsset,
   feature,
+  fence,
   animationFrame,
   hidden,
   x = 0,
   y = 0,
 }: {
   tileAsset: StudioAsset | undefined;
-  feature: { kind: FeatureKind; material: FeatureMaterial; mask: number } | undefined;
+  feature: ResolvedFeatureOverlay | undefined;
+  /** Edge-fence rails this cell owns (its E/S sides), if any. */
+  fence?: ResolvedFenceOverlay | undefined;
   animationFrame: number;
   hidden?: BoardLayerVisibility;
   /** Board coords; only used to phase-stagger an animated top (water ripple). */
@@ -105,6 +102,14 @@ export function studioCellArt({
         <img
           className="tileset-feature-overlay"
           src={featureFrameSrc(feature.kind, feature.material, feature.mask)}
+          alt=""
+          draggable={false}
+        />
+      ) : null}
+      {fence ? (
+        <img
+          className="tileset-feature-overlay tileset-fence-overlay"
+          src={fenceFrameSrc(fence.material, fence.mask)}
           alt=""
           draggable={false}
         />
@@ -217,6 +222,7 @@ export function StudioReadOnlyBoard({
   ariaLabel?: string;
 }): ReactElement {
   const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts);
+  const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
 
   const gridCells: TileGridCell[] = [];
   for (let y = 0; y < board.rows; y += 1) {
@@ -228,7 +234,7 @@ export function StudioReadOnlyBoard({
         x,
         y,
         className: `tileset-placement-cell ${tileAsset ? '' : 'is-empty'}`.trim(),
-        children: studioCellArt({ tileAsset, feature: featureOverlays[key], animationFrame, x, y }),
+        children: studioCellArt({ tileAsset, feature: featureOverlays[key], fence: fenceOverlays.get(key), animationFrame, x, y }),
       });
     }
   }

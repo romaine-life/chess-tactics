@@ -6,6 +6,7 @@
 import type { BoardSize, PieceType, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { PlacedProp } from './props';
 import { isPlayablePieceType } from './pieces';
+import { parseEdgeKey, isOrthogonalPair } from './featureAutotile';
 
 // Terrain vocabulary now lives in the foundational type module so the editor's
 // `Level` and the live `GameState` share one definition; re-exported here so
@@ -111,6 +112,11 @@ export interface Level {
     // (createFromLevel reads `layers`, not `boardCode`); boardCode carries a parallel 'p' map
     // only to re-seed the editor losslessly.
     props?: PlacedProp[];
+    // Edge fences: walls on the boundary between two orthogonally-adjacent tiles, as canonical
+    // edge keys (roadEdgeKey "x,y|x,y"). Optional + back-compat like `props`. This is the durable
+    // GAMEPLAY channel (createFromLevel → GameState.fences → movement blocking); boardCode carries
+    // a parallel `fe` map (edge → material) to re-seed the editor + render the rails.
+    fences?: string[];
   };
 }
 
@@ -155,7 +161,7 @@ export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows 
     difficulty: 'normal',
     economy: { startingFunds: 1200, incomePerTurn: 150 },
     theme: 'grassland',
-    layers: { terrain, decals: [], zones: [], units: [], props: [] },
+    layers: { terrain, decals: [], zones: [], units: [], props: [], fences: [] },
   };
 }
 
@@ -283,6 +289,26 @@ export function validateLevel(value: unknown): ValidateResult {
           // stamp off-board rock colliders in createFromLevel (propCells does not clamp).
           if (b && (p.x < 0 || p.x >= b.cols || p.y < 0 || p.y >= b.rows)) {
             errors.push(`prop out of bounds at (${p.x}, ${p.y})`);
+            break;
+          }
+        }
+      }
+    }
+    // Fences are an OPTIONAL layer (back-compat like props). Each entry is a canonical edge key
+    // "x,y|x,y" between two in-bounds, orthogonally-adjacent cells — an off-board or diagonal
+    // "edge" would block nothing meaningful and points at corrupt data, so reject it.
+    if (layers.fences !== undefined) {
+      if (!Array.isArray(layers.fences)) {
+        errors.push('layers.fences must be an array');
+      } else {
+        for (const edge of layers.fences) {
+          const cells = typeof edge === 'string' ? parseEdgeKey(edge) : null;
+          if (!cells || !isOrthogonalPair(cells.ax, cells.ay, cells.bx, cells.by)) {
+            errors.push('malformed fence edge (need "x,y|x,y" between two orthogonally-adjacent cells)');
+            break;
+          }
+          if (b && [[cells.ax, cells.ay], [cells.bx, cells.by]].some(([x, y]) => x < 0 || x >= b.cols || y < 0 || y >= b.rows)) {
+            errors.push(`fence edge "${edge}" out of bounds`);
             break;
           }
         }

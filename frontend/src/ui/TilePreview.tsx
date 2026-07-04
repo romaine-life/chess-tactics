@@ -82,7 +82,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
@@ -179,7 +179,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -1252,6 +1252,27 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('surface')}>View Selected</button>
+        </>
+      ),
+    },
+    {
+      id: 'fences', label: 'Fences', hint: 'Edge fences — a low rail you paint on a tile edge to make that edge untraversable. Paint them in the Level Editor.',
+      main: (
+        <div className="al-lab-main" style={{ display: 'grid', placeItems: 'center', padding: 24, overflow: 'auto' }}>
+          <div style={{ display: 'flex', gap: 18, alignItems: 'center', maxWidth: 560, background: '#0f1728', border: '1px solid #223350', borderRadius: 10, padding: 20 }}>
+            <img src="/assets/tiles/feature/fence-wood-thumb.png" alt="Wooden fence" width={120} height={120} style={{ imageRendering: 'pixelated', flex: 'none' }} draggable={false} />
+            <div>
+              <h3 style={{ margin: '0 0 6px', color: '#eaf3ff' }}>Edge fences</h3>
+              <p style={{ margin: '0 0 12px', color: '#9fb6d6', fontSize: 13, lineHeight: 1.5 }}>A low rail that sits on the boundary between two tiles and blocks a piece from crossing that edge — both tiles stay walkable, and knights hop it. Paint them on tile edges in the Level Editor.</p>
+              <button type="button" className="tileset-view-action" onClick={() => navigateApp('/level-editor?from=studio&layer=fence')}>Paint fences in the editor</button>
+            </div>
+          </div>
+        </div>
+      ),
+      controls: (
+        <>
+          <p className="tileset-catalog-note" style={{ color: '#9fb6d6', fontSize: 12, lineHeight: 1.5 }}>Fences live on tile edges and block crossing. Paint them in the Level Editor&rsquo;s Fence layer.</p>
+          <button type="button" className="tileset-view-action" onClick={() => navigateApp('/level-editor?from=studio&layer=fence')}>Paint fences in the editor</button>
         </>
       ),
     },

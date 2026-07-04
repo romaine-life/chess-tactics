@@ -16,8 +16,7 @@ import type { Level } from '../core/level';
 import type { GameState, Move, Piece, Side, Vec } from '../core/types';
 import { createFromLevel } from './setup';
 import { createRng } from '../core/rng';
-import { applyMove, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
-import { buildTerrainIndex } from '../core/terrain';
+import { applyMove, gameEnv, legalMoves, livingPieces, type MoveEnv } from '../core/rules';
 import {
   DEFAULT_EVAL_WEIGHTS,
   evaluateGameState,
@@ -60,9 +59,10 @@ interface RankedCandidate {
   score: number;
 }
 
-function terrainEnv(game: GameState): MoveEnv {
-  const terrain = game.terrain ? buildTerrainIndex(game.terrain) : undefined;
-  return { terrain, lastMove: game.lastMove };
+// The book's move env: the static terrain + fence env (gameEnv) plus the current lastMove, so book
+// plies on a FENCED level obey the same crossing rules as live play (not just terrain).
+function bookEnv(game: GameState): MoveEnv {
+  return { ...gameEnv(game), lastMove: game.lastMove };
 }
 
 /** All legal (piece, move) pairs for the living pieces of `side`, ranked by the
@@ -141,7 +141,7 @@ export function generateOpeningBook(
       if (game.turn !== 'player' && game.turn !== 'enemy') break; // terminal
       if (evaluateObjective(game, level.objective, { ...sctx.ctx, turnsElapsed: 0 })) break;
       const side: Side = game.turn;
-      const env = terrainEnv(game);
+      const env = bookEnv(game);
       const ranked = rankedCandidates(game, side, env, sctx);
       if (ranked.length === 0) break; // stuck: stop the walk early
 

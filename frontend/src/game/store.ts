@@ -4,12 +4,12 @@
 
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
-import { applyMove, enemyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
+import { applyMove, enemyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { searchEnemyMove } from '../core/ai';
 import { adoptedWeightsFor } from './adoptedWeights';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
-import { buildTerrainIndex, terrainAt } from '../core/terrain';
+import { terrainAt } from '../core/terrain';
 import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
 import { createRng, type Rng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
@@ -100,9 +100,9 @@ function objectiveOutcomeCopy(objective: ObjectiveType, winner: Winner, kingSide
   }
 }
 
-/** Movement environment for a state: indexes its terrain layer (if authored). */
+/** Movement environment for a state: its static terrain + fence env (gameEnv) plus lastMove. */
 function envFor(game: GameState): MoveEnv {
-  return { terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined, lastMove: game.lastMove };
+  return { ...gameEnv(game), lastMove: game.lastMove };
 }
 
 /**

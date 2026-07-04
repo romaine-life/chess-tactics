@@ -23,7 +23,7 @@ import {
   TILE_STEP_Y,
 } from '../art/projectionContract';
 import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
 import {
   unitAssets,
   hasDirectionSprite,
@@ -33,7 +33,7 @@ import {
   type Faction,
 } from '../ui/unitCatalog';
 import { DOODAD_ASSETS, type DoodadAsset } from '../ui/doodadCatalog';
-import { featureMaskAt, type FeatureKind } from '../core/featureAutotile';
+import { resolveFeatureOverlays, resolveFenceOverlays } from '../core/featureAutotile';
 import { propHalfSrc, propZBracket, structureSeatPoint } from './BoardStructure';
 import { propDef } from '../core/props';
 import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
@@ -97,10 +97,12 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
   const ops: DrawOp[] = [];
 
   // Tiles + feature overlays. Each cell's frame origin is the projected point shifted by the
-  // CSS translate(-stepX, -equator); the img fills the 96x180 frame.
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, f] of Object.entries(board.features)) presentByKind[f.kind].add(key);
+  // CSS translate(-stepX, -equator); the img fills the 96x180 frame. One shared autotile pass
+  // resolves road/river masks (see resolveFeatureOverlays); fences resolve to per-cell E/S rails.
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
+  const isExit = (edge: string): boolean => board.featureExits[edge] === true;
+  const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
+  const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -114,17 +116,29 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
         ops.push({ src: assetFrameSrc(tile, 0), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
       }
 
-      const feature = board.features[key];
+      const feature = overlays[key];
       if (feature) {
-        const mask = featureMaskAt(presentByKind[feature.kind], x, y, isSevered);
+        // road/river ribbons stay in their own cell band at +0.5, over the tile top.
         ops.push({
-          src: featureFrameSrc(feature.kind, feature.material, mask),
+          src: featureFrameSrc(feature.kind, feature.material, feature.mask),
           dx: frameX,
           dy: frameY,
           dw: TILE_FRAME_W,
           dh: TILE_FRAME_H,
-          // Feature rides OVER its own tile but stays within the cell band (DOM: same cell div).
           z: zIndex + 0.5,
+        });
+      }
+
+      const fence = fenceOverlays.get(key);
+      if (fence) {
+        // Edge rails ride just above the ribbon band (still under the +20000 unit/prop band).
+        ops.push({
+          src: fenceFrameSrc(fence.material, fence.mask),
+          dx: frameX,
+          dy: frameY,
+          dw: TILE_FRAME_W,
+          dh: TILE_FRAME_H,
+          z: zIndex + 0.6,
         });
       }
     }

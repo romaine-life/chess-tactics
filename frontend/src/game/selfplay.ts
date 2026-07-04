@@ -12,8 +12,7 @@ import { createFromLevel } from './setup';
 import { searchBestAction, type SearchOptions } from '../core/ai';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
-import { applyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
-import { buildTerrainIndex } from '../core/terrain';
+import { applyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { createRng } from '../core/rng';
 import type { GameState, Move, PieceType, Side, Vec, Winner } from '../core/types';
 
@@ -88,7 +87,9 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
     if (game.turn !== 'player' && game.turn !== 'enemy') break;
     game = applyMove(game, om.pieceId, om.move).state;
   }
-  const terrain = game.terrain ? buildTerrainIndex(game.terrain) : undefined;
+  // Static terrain + fence env, built once and reused per ply (only lastMove changes). Threading
+  // fences here is what keeps self-play/tuning honest on FENCED levels — see rules.gameEnv.
+  const baseEnv = gameEnv(game);
   const startPieces = game.pieces.map((p) => ({ id: p.id, side: p.side, type: p.type }));
 
   const moves: RecordedMove[] = [];
@@ -102,7 +103,7 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
   // stuck check (a player with no legal move at the start is a stalemate/checkmate,
   // exactly as resolveIfPlayerStuck decides it), then the objective, so a degenerate
   // level (e.g. a runner authored on a reach cell) is recorded as a zero-move game.
-  const startEnv: MoveEnv = { terrain, lastMove: game.lastMove };
+  const startEnv: MoveEnv = { ...baseEnv, lastMove: game.lastMove };
   const playerHasMove = livingPieces(game.pieces, 'player').some(
     (p) => legalMoves(p, game.pieces, game.size, startEnv).length > 0,
   );
@@ -117,7 +118,7 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
 
   while (!game.winner && plies < maxPlies && (game.turn === 'player' || game.turn === 'enemy')) {
     const side: Side = game.turn;
-    const env: MoveEnv = { terrain, lastMove: game.lastMove };
+    const env: MoveEnv = { ...baseEnv, lastMove: game.lastMove };
     // Champion-vs-challenger: each side may search with its own eval weights.
     const sideSearch = opts.searchForSide?.[side] ?? opts.search;
     const chosen = searchBestAction(game, env, { objective, ctx, turnsElapsed }, createRng(seed + tick), sideSearch);

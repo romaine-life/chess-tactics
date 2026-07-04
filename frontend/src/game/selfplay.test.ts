@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { playLevelGame, replayStates, aggregateRecords } from './selfplay';
 import { createBlankLevel, type Level } from '../core/level';
 import { livingPieces } from '../core/rules';
+import { roadEdgeKey } from '../core/featureAutotile';
 
 // Shallow, node-bounded (NO wall clock) so self-play is fully deterministic — a
 // seed must replay identically regardless of machine speed. Decisions don't need
@@ -42,6 +43,25 @@ describe('playLevelGame', () => {
     level.layers.units = [
       { x: 0, y: 1, type: 'pawn', side: 'player' },
       { x: 0, y: 0, type: 'king', side: 'enemy' },
+    ];
+    const record = playLevelGame(level, { seed: 1, ...SHORT });
+    expect(record.winner).toBe('draw');
+    expect(record.plies).toBe(0);
+  });
+
+  it('obeys fences: a lone fully fenced-in player piece is stuck at the start (draw, 0 plies)', () => {
+    // A single player rook walled on all four edges has zero legal moves — every orthogonal
+    // crossing is fenced. Self-play must see the fence (its env now goes through rules.gameEnv,
+    // like the store) and resolve the start-of-game stalemate as a draw. BEFORE fences were
+    // threaded into self-play's env, the rook slid across a fenced edge and the game played on.
+    const level = createBlankLevel('sp-fenced', 'Fenced', 8, 8);
+    level.objective = 'capture-all';
+    level.layers.units = [
+      { x: 3, y: 3, type: 'rook', side: 'player' },
+      { x: 6, y: 0, type: 'king', side: 'enemy' },
+    ];
+    level.layers.fences = [
+      roadEdgeKey(3, 3, 3, 2), roadEdgeKey(3, 3, 4, 3), roadEdgeKey(3, 3, 3, 4), roadEdgeKey(3, 3, 2, 3),
     ];
     const record = playLevelGame(level, { seed: 1, ...SHORT });
     expect(record.winner).toBe('draw');
