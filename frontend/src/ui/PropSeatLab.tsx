@@ -7,6 +7,7 @@ import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PROP_DEFS, propCells, type PropDef } from '../core/props';
 import { pieceSpritePath } from '../core/pieces';
 import { ViewPane } from './shared/ViewPane';
+import { SliderRow } from './dressing/SliderRow';
 import COMMITTED_SEATS from '../core/propSeats.json';
 
 // The prop-seat editor as an embedded Studio Viewer kind (docs/studio-control-architecture.md,
@@ -47,27 +48,6 @@ function DirArrow({ deg }: { deg: number }): ReactElement {
     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style={{ display: 'block', transform: `rotate(${deg}deg)` }}>
       <path d="M12 4 L19 13 L14.5 13 L14.5 20 L9.5 20 L9.5 13 L5 13 Z" fill="currentColor" />
     </svg>
-  );
-}
-
-// Anchor value row: label, exact-entry number box (nudging is the pad's job), per-control ↺
-// that resets JUST this axis to its saved value (ADR-0057). Native spinner hidden (dark scheme).
-function SeatNumber({ label, value, onCommit, onReset, atSaved }: {
-  label: string; value: number; onCommit: (n: number) => void; onReset: () => void; atSaved: boolean;
-}) {
-  return (
-    <div className="ps-axis">
-      <span className="ps-axis-name">{label}</span>
-      <input
-        type="number"
-        className="ps-axis-input"
-        value={value}
-        aria-label={label}
-        onChange={(ev) => { const v = ev.target.value; if (v !== '' && Number.isFinite(Number(v))) onCommit(Number(v)); }}
-      />
-      <button type="button" className="ps-mini-reset" title={`Reset ${label} to saved`} aria-label={`reset ${label}`}
-        disabled={atSaved} onClick={onReset}>↺</button>
-    </div>
   );
 }
 
@@ -232,6 +212,13 @@ export function PropSeatLab({ propId, onPropId, header }: {
     <button type="button" className={`ps-toggle ${on ? 'is-on' : ''}`} title={title} onClick={() => set(!on)}>{label}</button>
   );
 
+  // Anchor slider bounds — a generous per-frame window (negatives reachable, well past the frame),
+  // derived from the frame dims so the thumb doesn't rescale mid-drag.
+  const axMin = -Math.round(def.sprite.w * 0.5);
+  const axMax = Math.round(def.sprite.w * 1.5);
+  const ayMin = -Math.round(def.sprite.h * 0.5);
+  const ayMax = Math.round(def.sprite.h * 1.5);
+
   return (
     <>
       <style>{PS_CSS}</style>
@@ -308,24 +295,14 @@ export function PropSeatLab({ propId, onPropId, header }: {
               </div>
             </div>
 
-            <div className="ps-axes">
-              <SeatNumber label="Anchor X" value={liveSeat.anchorX} onCommit={(n) => setSeat({ anchorX: n })}
-                onReset={() => setSeat({ anchorX: committed.anchorX })} atSaved={liveSeat.anchorX === committed.anchorX} />
-              <SeatNumber label="Anchor Y" value={liveSeat.anchorY} onCommit={(n) => setSeat({ anchorY: n })}
-                onReset={() => setSeat({ anchorY: committed.anchorY })} atSaved={liveSeat.anchorY === committed.anchorY} />
-            </div>
-
-            <div className="ps-block">
-              <span className="ps-ctl-label">Scale <em>{liveSeat.scale.toFixed(2)}×</em></span>
-              <span className="ps-scale-row">
-                <input type="range" min={0.25} max={2} step={0.01} value={liveSeat.scale} aria-label="Scale"
-                  onChange={(e) => setSeat({ scale: round2(Number(e.target.value)) })} />
-                <input type="number" min={0.25} max={2} step={0.05} value={liveSeat.scale} aria-label="Scale exact" className="ps-scale-exact"
-                  onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v > 0) setSeat({ scale: round2(v) }); }} />
-                <button type="button" className="ps-mini-reset" title="Reset scale to saved" aria-label="reset scale"
-                  disabled={liveSeat.scale === committed.scale} onClick={() => setSeat({ scale: committed.scale })}>↺</button>
-              </span>
-            </div>
+            {/* Anchors + scale use the shared SliderRow (ADR-0059): slider to drag, −/+ for single
+                increments, ↺ to reset to the saved value. Negatives reach via the slider/steppers. */}
+            <SliderRow label={`Anchor X · ${liveSeat.anchorX}`} value={liveSeat.anchorX} set={(v) => setSeat({ anchorX: Math.round(v) })}
+              min={axMin} max={axMax} step={1} nudge={1} dflt={committed.anchorX} />
+            <SliderRow label={`Anchor Y · ${liveSeat.anchorY}`} value={liveSeat.anchorY} set={(v) => setSeat({ anchorY: Math.round(v) })}
+              min={ayMin} max={ayMax} step={1} nudge={1} dflt={committed.anchorY} />
+            <SliderRow label={`Scale · ${liveSeat.scale.toFixed(2)}×`} value={liveSeat.scale} set={(v) => setSeat({ scale: round2(v) })}
+              min={0.25} max={2} step={0.01} nudge={0.05} dflt={committed.scale} />
 
             <p className="ps-saved">saved: ({committed.anchorX}, {committed.anchorY}) @ {committed.scale.toFixed(2)}×</p>
             <div className="ps-actions">
@@ -386,27 +363,6 @@ const PS_CSS = `
 .ps-pad-btn:hover { background: #1e3054; color: #eaf3ff; }
 .ps-pad-btn:active { background: #244071; }
 .ps-pad-center::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #33415e; }
-
-/* Anchor X / Y: label-left rows, each with its own per-control reset. */
-.ps-axes { display: grid; gap: 8px; }
-.ps-axis { display: grid; grid-template-columns: 68px 1fr 34px; gap: 8px; align-items: center; }
-.ps-axis-name { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8fa8cc; }
-.ps-axis-input { min-width: 0; box-sizing: border-box; height: 34px; text-align: center; font: inherit; font-size: 15px;
-  color: #eaf3ff; background: #101a2e; border: 1px solid #2a3c5e; border-radius: 6px; }
-.ps-axis-input::-webkit-outer-spin-button, .ps-axis-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.ps-axis-input[type=number] { appearance: textfield; -moz-appearance: textfield; }
-
-.ps-scale-row { display: flex; gap: 8px; align-items: center; }
-.ps-scale-row input[type=range] { flex: 1 1 auto; min-width: 0; }
-.ps-scale-exact { flex: none; box-sizing: border-box; width: 52px; height: 34px; text-align: center; font: inherit; font-size: 13px;
-  color: #eaf3ff; background: #101a2e; border: 1px solid #2a3c5e; border-radius: 6px; }
-.ps-scale-exact::-webkit-outer-spin-button, .ps-scale-exact::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.ps-scale-exact[type=number] { appearance: textfield; -moz-appearance: textfield; }
-
-.ps-mini-reset { flex: none; box-sizing: border-box; width: 34px; height: 34px; padding: 0; font-size: 15px; cursor: pointer;
-  background: #0f1930; color: #9fd0ff; border: 1px solid #2a3c5e; border-radius: 6px; display: grid; place-items: center; }
-.ps-mini-reset:hover:not(:disabled) { background: #17233f; color: #d7ecff; }
-.ps-mini-reset:disabled { opacity: 0.3; cursor: default; }
 
 .ps-saved { margin: 0; font-size: 11px; color: #6b83a8; font-variant-numeric: tabular-nums; }
 .ps-actions { display: flex; gap: 6px; }
