@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-8771ea2deea603672add39a1253f3115cfc47e8729d5e3c2df5d3717d1658326"
+  tag: "app-a5889b5a6d3862d51ec800d366566812fa9d9a0073d877e4974ac26ec76be55d"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "feat(trainer): ship-to-everyone — global admin AI-weight tier + three-tier resolver"
-  prNumber: "376"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/376"
-  commit: "75630fe"
+  prTitle: "refactor(dev): rename DEV_OFFLINE → DEV_NO_BACKEND (alias kept)"
+  prNumber: "377"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/377"
+  commit: "49e1d59"
 
 name: chess-tactics
 namespace: chess-tactics
