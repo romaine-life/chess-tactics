@@ -68,16 +68,21 @@ Output `/assets/props/<propId>/{back,front}.png` (flat sprites use the same imag
 | cottage | house | 2×2       | low-poly mesh render | `lowvpoly stylized home` (user-supplied `/houses`) | stylized as-is |
 | cabin   | house | 2×2       | Codex restyle of capture | `forest-loner` `house_final.fbx` (user-supplied) | photoreal cabin → pixel-art restyle |
 | lodge   | house | 2×2       | Codex restyle of capture | `forest-house` `nice_house.blend` (user-supplied) | photoreal green-roof → pixel-art restyle |
-| rock    | rock  | 1×1       | Codex restyle of capture | `boulder-rock-3d-model-free` `Meshy_AI_Layered_Mossy_Boulder…glb` (user-supplied `/rocks`) | 1×1 blocking obstacle — the placeable rock (mossy layered) |
+| rock    | rock  | 1×1       | Codex restyle of capture | `boulder-rock-3d-model-free` `Meshy_AI_Layered_Mossy_Boulder…glb` (user-supplied `/rocks`) | 1×1 blocking obstacle — the placeable rock (mossy layered). 40px native @ `scale 1` baseline |
 | fieldstone | rock | 1×1     | Codex restyle of capture | `lone-granite-boulder-stone` `round-boulder.fbx` (user-supplied `/rocks`) | 1×1 blocking obstacle — round weathered boulder. NOT named `granite`: that id is the obstacle-piece sprite variant (`/assets/units/rock/granite/`), a separate system |
 
 Source meshes for the houses arrived as zips in the repo-root `houses/` staging folder (outside
 git); the 4th, `dae-diorama-forest-loner`, is a `.rar` and needs an extractor. The two rock meshes
 arrived the same way in `/rocks`. 1×1 props must FIT WITHIN THEIR TILE (owner call, 2026-07-02):
-the base sits inside the 96px cell diamond with margin. Under the ADR-0059 prop model, sizing is
-NOT baked into the PNG — ship the sprite at native resolution (rock/fieldstone are 300px wide) and
-set the tile-fit via `scale` in `propSeats.json` (both at `0.24`, eye-tunable in `/prop-lab`), the
-same way `cabin`/`cottage` shrink. Do NOT re-render a small PNG for sizing.
+the base sits inside the 96px cell diamond with margin.
+
+Sizing baseline (owner call, 2026-07-03): a small 1×1 prop is baked at ~its on-board size so its
+NATURAL `scale: 1` IS the intended size — the scale slider then centers on 1× and you tune ± from a
+sane baseline, and the sprite renders crisp 1:1. `rock` is 40px native @ `scale 1`. (This differs
+from big props like `cabin`/`cottage`, which ship large and shrink via a fractional `scale` so they
+stay detailed when scaled up — the right trade-off there; for a rock that's always small, 1:1 wins.)
+`fieldstone` still uses the old 300px-native @ `scale 0.24` approach — rebaseline it the same way if
+it's kept.
 
 Fences are NOT props — they are an edge-autotile feature (`featureAutotile.ts`, kind `fence`),
 visual-only in v1; the brush is gated until a 16-mask wood/stone set is baked (via the feature-tile
