@@ -6,7 +6,6 @@ import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
-import { ArtworkCompare } from './ArtworkCompare';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
@@ -371,6 +370,8 @@ function renderRoute(path: string): ReactElement {
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
   if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
-  if (path === '/artwork-compare') return <ArtworkCompare />;
+  // /artwork-compare: alias into the Studio's Art Compare viewer (ADR-0058 supersedes
+  // ADR-0005's standalone-route choice). It reads its own ?opts/l/r/lcss/rcss on mount.
+  if (path === '/artwork-compare') return <TilesetStudio initialCategory="pages" />;
   return <MainMenu />;
 }

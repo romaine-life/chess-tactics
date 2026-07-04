@@ -60,14 +60,13 @@ export function routeScreenKey(pathname: string): string {
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
   if (path === '/edit' || path === '/level-editor') return 'level-editor';
-  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor') return 'studio';
+  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return 'studio';
   // Each remaining explicit renderRoute entry is its own screen…
   if (
     path === '/play' ||
     path === '/skirmish' ||
     path === '/portrait-editor' ||
-    path === '/party' ||
-    path === '/artwork-compare'
+    path === '/party'
   ) {
     return path;
   }

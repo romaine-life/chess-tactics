@@ -23,7 +23,7 @@ export const importPortraitEditor = () => import('./PortraitEditor');
 function chunkForPath(path: string): (() => Promise<unknown>) | null {
   if (path === '/play') return importSkirmish;
   if (path === '/skirmish') return importSkirmishMapPicker;
-  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor') return importTilePreview;
+  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return importTilePreview;
   if (path === '/edit' || path === '/level-editor') return importLevelEditor;
   if (path === '/portrait-editor') return importPortraitEditor;
   if (path === '/campaigns-next' || path === '/campaigns') return importCampaignEditor;

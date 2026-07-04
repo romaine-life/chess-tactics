@@ -66,11 +66,20 @@ governs where the *editor* lives, not where placement goes.
   and your Viewer kind?" and a standalone-route editor is now a named ADR violation.
 - Good: the prop-seat editor was rebuilt to this shape — a **Props** catalog category +
   a **`propseat`** Viewer kind (`PropSeatLab`), the `/prop-lab` route retired to an alias.
-- Cost/debt: the pre-existing standalone labs (`/surface-lab`, `/scene-anim-lab`,
-  `/doodad-editor`, `/artwork-compare`, `/tile-compare`) predate this and still violate it.
-  This ADR names them as debt to migrate, not blessed exceptions. Inspector/compare tools
-  that only *look* (no editing, no committed baseline) are the weakest case for migration;
-  anything that *edits* a committed asset should become a Viewer kind.
+- Good: **the pre-existing standalone labs are now all migrated** (2026-07-03). Each became a
+  Viewer kind rendered into the shared shell, its route retired to a deep-link alias:
+  `/tile-compare` → `tilecompare` (+ Tile Pipeline catalog); `/surface-lab` → `surfacetiles`
+  (+ Tileset Surfaces catalog — named distinctly from the pre-existing UI-texture `surface`
+  kind); `/scene-anim-lab` → `sceneanim` (+ Scene Animations catalog, JS frame clock intact);
+  `/doodad-editor` → `doodadcomp` (`DoodadCompLab`, reached from the Doodads catalog's "Compose
+  arrangement" rail affordance); `/artwork-compare` → `artworkcompare` (`ArtworkCompareLab`,
+  reached from the Pages catalog's "Compare to art" affordance; ADR-0005's standalone-route
+  choice is superseded here and annotated on that ADR).
+- Cost: the guidance still holds for anything new — inspector/compare tools that only *look*
+  (no editing, no committed baseline) are the weakest case, but they too now live in the shell
+  for one consistent navigation. One accepted regression: `ArtworkCompareLab` reads its curated
+  `?opts/l/r/lcss/rcss` deep-link on mount (so existing links load) but no longer re-serialises
+  a *modified* comparison to the URL — the studio owns the URL; the live compare is unaffected.
 
 ## More Information
 
