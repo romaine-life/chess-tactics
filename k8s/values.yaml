@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-fb6335302a010f54f5a6afa822a6bcac3508097ac4488338dc79651ebd150f13"
+  tag: "app-0bb8e83382b3de679792f5ea82d1e3622224935f41804813d3f0f99abcd1817b"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "feat(gym): Cluster tab — launch / watch / adopt headless cluster tuning runs"
-  prNumber: "373"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/373"
-  commit: "13c7470"
+  prTitle: "Retry/restart controls for single-player skirmish & campaign"
+  prNumber: "374"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/374"
+  commit: "3e0b0c3"
 
 name: chess-tactics
 namespace: chess-tactics
