@@ -7,7 +7,6 @@ import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
 import { ArtworkCompare } from './ArtworkCompare';
-import { SurfaceLab } from './SurfaceLab';
 import { SceneAnimLab } from './SceneAnimLab';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
@@ -359,6 +358,8 @@ function renderRoute(path: string): ReactElement {
   if (path === '/prop-lab') return <TilesetStudio initialCategory="props" />;
   // /tile-compare: alias into the Studio's Tile Pipeline category (ADR-0058 debt migration).
   if (path === '/tile-compare') return <TilesetStudio initialCategory="tilecompare" />;
+  // /surface-lab: alias into the Studio's Tileset Surfaces category (ADR-0058 debt migration).
+  if (path === '/surface-lab') return <TilesetStudio initialCategory="surfacetiles" />;
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return <LevelEditor />;
@@ -370,7 +371,6 @@ function renderRoute(path: string): ReactElement {
   if (path === '/party') return <Party />;
   if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
   if (path === '/artwork-compare') return <ArtworkCompare />;
-  if (path === '/surface-lab') return <SurfaceLab />;
   if (path === '/scene-anim-lab') return <SceneAnimLab />;
   return <MainMenu />;
 }

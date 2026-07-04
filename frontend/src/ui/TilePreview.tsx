@@ -37,6 +37,7 @@ import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { PropSeatLab } from './PropSeatLab';
 import { PROP_DEFS, type PropDef, type PropKind } from '../core/props';
 import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, type CompareTile } from './TileCompareLab';
+import { SurfaceTilesLab, SURFACE_TILE_FAMILIES, surfaceTileCap } from './SurfaceTilesLab';
 import { DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import kitManifest from './design/kitManifest.json';
 import artworkManifest from './design/artworkManifest.json';
@@ -75,13 +76,13 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'scrollbars' | 'sliders' | 'pages' | 'sfx';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'tilecompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx';
 
 // Default selection for the Artwork viewer, so the Viewer shows a real piece
 // instead of an empty stage before anything is opened.
@@ -111,6 +112,7 @@ interface TilesetStudioRouteState {
   selectedFrameName?: string;
   selectedPropName?: string;
   selectedTileCompareId?: string;
+  selectedSurfaceFamily?: string;
   viewerKind?: ViewerKind;
   labMode: LabMode;
   tileFilter: TileFilter;
@@ -162,7 +164,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -202,13 +204,16 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
   // /tile-compare is another deep-link alias into the studio (ADR-0058): the Tile Pipeline
   // category, Viewer mode, 'tilecompare' kind, ?tile=<id>.
   const isTileCompareAlias = window.location.pathname === '/tile-compare';
+  // /surface-lab: alias into the Tileset Surfaces category, 'surfacetiles' viewer, ?sfamily=<f>.
+  const isSurfaceLabAlias = window.location.pathname === '/surface-lab';
   const prop = params.get('prop') || (isPropLabAlias ? params.get('prop') : null);
   const tile = params.get('tile');
+  const sfamily = params.get('sfamily');
   const frame = params.get('frame') || (isNineSliceAlias ? asset : null);
   // Destination is decoupled from category — any mode is valid with any category,
   // so the URL is taken at face value (no normalization).
-  const studioMode = isNineSliceAlias || isPropLabAlias || isTileCompareAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
-  const routeCategory = isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isStudioCategory(cat) ? cat : undefined;
+  const studioMode = isNineSliceAlias || isPropLabAlias || isTileCompareAlias || isSurfaceLabAlias ? 'viewer' : isStudioMode(mode) ? mode : studioDefaults.studioMode;
+  const routeCategory = isNineSliceAlias ? 'assets' : isPropLabAlias ? 'props' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isStudioCategory(cat) ? cat : undefined;
   const routeTileFilter = view === 'board' ? 'board' : isTileFilter(collection) ? collection : studioDefaults.tileFilter;
   const explicitLabMode = isLabMode(lab) ? lab : undefined;
   const brushParam = params.get('brush');
@@ -233,8 +238,9 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedFrameName: frame || undefined,
     selectedPropName: prop || undefined,
     selectedTileCompareId: tile || undefined,
-    viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare'
-      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'tilecompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' ? vk : undefined,
+    selectedSurfaceFamily: sfamily || undefined,
+    viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles'
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -255,7 +261,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   // Canonicalise to /tileset-studio even when entered via the /nine-slice-editor
   // alias, so the alias is a pure entry point and all subsequent state rides the
   // one studio URL (the embedded 9-slice surface is not its own route).
-  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab' && window.location.pathname !== '/tile-compare') return;
+  if (window.location.pathname !== STUDIO_PATH && window.location.pathname !== '/nine-slice-editor' && window.location.pathname !== '/prop-lab' && window.location.pathname !== '/tile-compare' && window.location.pathname !== '/surface-lab') return;
   if (route.studioMode === 'catalog') {
     // Tiles is the default, so it stays a clean bare URL; Units/Assets get a
     // ?cat= so the chosen catalog survives a reload and is directly linkable.
@@ -290,6 +296,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     else if (route.viewerKind === 'nineslice' && route.selectedFrameName) params.set('frame', route.selectedFrameName);
     else if (route.viewerKind === 'propseat' && route.selectedPropName) params.set('prop', route.selectedPropName);
     else if (route.viewerKind === 'tilecompare' && route.selectedTileCompareId) params.set('tile', route.selectedTileCompareId);
+    else if (route.viewerKind === 'surfacetiles' && route.selectedSurfaceFamily) params.set('sfamily', route.selectedSurfaceFamily);
   }
   params.set('collection', route.tileFilter);
   if (route.selectedAssetId) params.set('asset', route.selectedAssetId);
@@ -369,6 +376,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedPropName, setSelectedPropName] = useState(initialRoute.selectedPropName ?? PROP_DEFS[0].id);
   // Which pipeline tile the embedded Tile Pipeline compare (Viewer 'tilecompare' kind) shows.
   const [selectedTileCompareId, setSelectedTileCompareId] = useState(initialRoute.selectedTileCompareId ?? COMPARE_TILES[0].id);
+  // Which family the embedded Tileset Surfaces inspector (Viewer 'surfacetiles' kind) opens on.
+  const [selectedSurfaceFamily, setSelectedSurfaceFamily] = useState(initialRoute.selectedSurfaceFamily ?? SURFACE_TILE_FAMILIES[0]);
   // Which item the Viewer is showing (independent of the catalog category).
   const [viewerKind, setViewerKind] = useState<ViewerKind>(initialRoute.viewerKind ?? 'artwork');
   const [selectedUnitFamilies, setSelectedUnitFamilies] = useState<PieceId[]>(activeUnitFamilies);
@@ -564,6 +573,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       selectedFrameName,
       selectedPropName,
       selectedTileCompareId,
+      selectedSurfaceFamily,
       viewerKind,
       labMode,
       tileFilter,
@@ -577,7 +587,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       brushKind,
       selectedUnitId: unitBrushId,
     });
-  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
+  }, [boardMode, boardScope, boardSeed, boardSize, brushKind, category, familyId, labMode, selectedAsset.id, selectedAssetName, selectedArtworkName, selectedGlossaryName, selectedPageName, selectedTileSideId, selectedFrameName, selectedPropName, selectedTileCompareId, selectedSurfaceFamily, viewerKind, selectedPairId, selectedSlotMask, studioMode, tileFilter, unitBrushId, viewHasTarget]);
 
   // Returning to the Catalog (from the Viewer/Lab, or a deep-link) must land you on
   // the card you came from — not the top of the grid. The selection is already kept
@@ -853,6 +863,28 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     note: 'Inspect a tile to see the raw PixelLab vs the snapped-to-grid result side by side.',
   };
 
+  // Tileset Surfaces — the production board tileset by family (distinct from the `surface`
+  // UI-texture kind). Inspect opens the board/tiles inspector (Viewer 'surfacetiles' kind).
+  const surfaceFamilyAssets = SURFACE_TILE_FAMILIES.map((f) => ({ id: f, label: surfaceTileCap(f) }));
+  const surfaceTilesCatalogType: CatalogType<{ id: string; label: string }> = {
+    id: 'surfacetiles',
+    label: 'Tileset Surfaces',
+    assets: surfaceFamilyAssets,
+    card: (f) => ({ img: `/assets/tiles/surface/${f.id}-0.png`, title: f.label, badge: 'board tileset' }),
+    sections: (visible) => [{ id: 'surfacetiles', label: 'Families', assets: [...visible] }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'family...',
+      match: (f, q) => f.label.toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    onSelect: (f) => setSelectedSurfaceFamily(f.id),
+    onView: (f) => { setSelectedSurfaceFamily(f.id); openViewer('surfacetiles'); },
+    selectedId: selectedSurfaceFamily,
+    note: 'Inspect a family to review its board tiles (and their flat top-down surfaces).',
+  };
+
   // Artwork browses via a bespoke library component (not a CatalogType), so it wires the
   // shared Filters dropdown directly: one dimension, the manifest Group. memberOf is unused
   // here (CatalogFilters only reads options/selected/toggle); the grid filters in the component.
@@ -996,6 +1028,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'tilecompare', label: 'Tile Pipeline', hint: 'The QA tile set — Inspect one to compare the raw PixelLab tile against the snapped-to-grid result.',
       main: <CatalogGrid type={tileCompareCatalogType} />,
       controls: <CatalogControls type={tileCompareCatalogType} />,
+    },
+    {
+      id: 'surfacetiles', label: 'Tileset Surfaces', hint: 'The production board tileset by family — Inspect one to review its tiles on a board.',
+      main: <CatalogGrid type={surfaceTilesCatalogType} />,
+      controls: <CatalogControls type={surfaceTilesCatalogType} />,
     },
     {
       id: 'assets', label: 'Assets', hint: 'Browse the UI-kit asset library.',
@@ -1193,6 +1230,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="nineslice">9-Slice</option>
         <option value="propseat">Prop Seat</option>
         <option value="tilecompare">Tile Pipeline</option>
+        <option value="surfacetiles">Tileset Surfaces</option>
         <option value="glossary">Glossary</option>
         <option value="surface">Surface</option>
         <option value="scrollbar">Scrollbar</option>
@@ -1261,6 +1299,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <PropSeatLab propId={selectedPropName} onPropId={setSelectedPropName} header={studioViewerHeader} />
             : viewerKind === 'tilecompare'
             ? <TileCompareLab tileId={selectedTileCompareId} onTileId={setSelectedTileCompareId} header={studioViewerHeader} />
+            : viewerKind === 'surfacetiles'
+            ? <SurfaceTilesLab family={selectedSurfaceFamily} onFamily={setSelectedSurfaceFamily} header={studioViewerHeader} />
             : viewerKind === 'artwork'
               ? <ArtworkLab name={selectedArtworkName} header={studioViewerHeader} />
               : viewerKind === 'glossary'
