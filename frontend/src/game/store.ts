@@ -8,7 +8,8 @@ import { applyMove, enemyMove, gameEnv, legalMoves, livingPieces, sideInCheck, t
 import { searchEnemyMove } from '../core/ai';
 import { adoptedWeightsFor } from './adoptedWeights';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
-import type { Level, ObjectiveType } from '../core/level';
+import type { Level, ObjectiveType, TimeControl } from '../core/level';
+import { DEFAULT_TIME_CONTROL } from '../core/clock';
 import { terrainAt } from '../core/terrain';
 import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
 import { createRng, type Rng } from '../core/rng';
@@ -542,8 +543,16 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
       : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
     const selectedId = firstPlayerId(game);
-    // Arm the battle clock from the level's authored time control (null = untimed).
-    const tc = opts.level?.timeControl;
+    // Arm the battle clock. An explicit opts.timeControl wins (the HUD's clock control /
+    // "New skirmish" — a TimeControl times the game, null plays it untimed). Otherwise a
+    // level uses its authored control (undefined ⇒ untimed), and a FREE skirmish (no
+    // level) defaults to DEFAULT_TIME_CONTROL (5:00) so random battles are timed like a
+    // real game rather than open-ended.
+    const tc: TimeControl | null = opts.timeControl !== undefined
+      ? opts.timeControl
+      : opts.level
+        ? opts.level.timeControl ?? null
+        : DEFAULT_TIME_CONTROL;
     const clock: ClockState | null = tc
       ? { remainingMs: tc.initialSeconds * 1000, running: false, incrementMs: tc.incrementSeconds * 1000 }
       : null;
