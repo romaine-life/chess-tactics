@@ -1,10 +1,15 @@
-// Linear-feature autotiling (roads and rivers). A "feature" is a ribbon a
-// level author DRAWS across cells — the engine derives each cell's art from which
+// Linear-feature autotiling (roads and rivers) + edge fences. A "linear feature" is a
+// ribbon a level author DRAWS across cells — the engine derives each cell's art from which
 // of its 4 cardinal neighbours also carry the same feature. This is the canonical
 // 4-bit connection / "edge Wang" autotile (Godot "Match Sides", Tiled edge set,
 // RPG Maker wall autotile): 16 masks → straight / corner / T / cross / dead-end /
 // isolated. Pure + deterministic; the editor, the solver, and the renderer all
 // resolve a cell's piece through this one table.
+//
+// A FENCE is a different animal (see the fence section at the bottom): it lives on the
+// EDGE between two orthogonally-adjacent cells and BLOCKS crossing it. It is stored
+// edge-keyed (roadEdgeKey), exactly like the manual cut/exit overrides, not as a
+// per-cell FeatureKind.
 //
 // Bit + direction convention is pinned to the board projection (boardProjection.ts:
 // left=(x-y)·stepX, top=(x+y)·stepY) AND to the baked sprite geometry
@@ -18,153 +23,41 @@
 //   8    W    (x-1, y)         upper-left  (NW)
 
 // Linear-feature kinds. Each kind is its OWN connectivity class — a road connects to
-// roads, a river to rivers, a bridge to bridges, a fence to fences (never to each other).
-// Roads/rivers AUTOTILE (their piece is derived from same-kind neighbours) and are baked by
-// build-feature-tiles.py. A BRIDGE is a straight-only span whose orientation the author sets
-// explicitly (see BridgeOrientation); its two ends react to same-axis bridge neighbours
-// (thru/cap/single) and it is baked by the stone-span pipeline (scripts/build-bridge-tiles.py).
-// FENCES are PLUMBING ONLY in v1 (no baked mask art yet, brush gated in the editor, visual-only
-// when art lands — they add nothing to collision).
-export type FeatureKind = 'road' | 'river' | 'bridge' | 'fence';
+// roads, a river to rivers (never to each other). Both AUTOTILE (their piece is derived
+// from same-kind neighbours) and are baked by build-feature-tiles.py. (Fences are NOT a
+// FeatureKind — they are edge-based; see the fence section below.)
+export type FeatureKind = 'road' | 'river';
 
 // A feature's surface look. Within a kind, all cells connect regardless of material
 // (the shape flows, the surface can change per cell); the author picks which to paint.
-// Each is a baked 16-mask set (<kind>-<material>-<mask>.png) — except bridges, which bake
-// only the two straight spans (masks 5 & 10).
+// Each is a baked 16-mask set (<kind>-<material>-<mask>.png).
 export type RoadMaterial = 'dirt' | 'cobble' | 'stone' | 'pebble';
 export type RiverMaterial = 'water';
-// A bridge ships one material for now (the stone-span tiling pipeline). More can follow the same
-// render-continuous-then-slice pipeline later.
-export type BridgeMaterial = 'stone';
-// Fence materials — plumbing only; the mask art does not exist yet (see ROAD/RIVER comment).
-export type FenceMaterial = 'wood' | 'stone';
-export type FeatureMaterial = RoadMaterial | RiverMaterial | BridgeMaterial | FenceMaterial;
+export type FeatureMaterial = RoadMaterial | RiverMaterial;
 
 // Authored codex-heal materials that ship (build-feature-tiles.py). stone/pebble stay
 // valid types but aren't in the palette until they get the same treatment.
 export const ROAD_MATERIALS: readonly RoadMaterial[] = ['dirt', 'cobble'];
 export const RIVER_MATERIALS: readonly RiverMaterial[] = ['water'];
-export const BRIDGE_MATERIALS: readonly BridgeMaterial[] = ['stone'];
-// Fence materials exist as types/plumbing, but the brush is gated until mask art ships, so the
-// palette is intentionally empty for now (nothing selectable yet).
-export const FENCE_MATERIALS: readonly FenceMaterial[] = [];
 export const FEATURE_MATERIAL_LABELS: Record<FeatureMaterial, string> = {
   dirt: 'Dirt',
   cobble: 'Cobblestone',
   stone: 'Stone',
   pebble: 'Gravel',
   water: 'Water',
-  wood: 'Wood',
 };
 // Back-compat alias (roads referenced this name before rivers existed).
 export const ROAD_MATERIAL_LABELS = FEATURE_MATERIAL_LABELS;
 export const DEFAULT_ROAD_MATERIAL: RoadMaterial = 'dirt';
 export const DEFAULT_RIVER_MATERIAL: RiverMaterial = 'water';
-export const DEFAULT_BRIDGE_MATERIAL: BridgeMaterial = 'stone';
-export const DEFAULT_FENCE_MATERIAL: FenceMaterial = 'wood';
-
-// Fences are PLUMBING-ONLY in v1: the kind, materials, wire key (`fn`) and editor brush all
-// exist, but there is no baked mask art yet, so the brush is GATED (disabled) in the editor and
-// any fence cell renders no image (never a broken/404 sprite). Edge-blocking is deferred —
-// fences add NOTHING to collision.
-export const FENCE_ART_PENDING = true;
 
 /** Selectable materials for a feature kind (editor palette). */
 export const featureMaterials = (kind: FeatureKind): readonly FeatureMaterial[] =>
-  kind === 'river'
-    ? RIVER_MATERIALS
-    : kind === 'bridge'
-      ? BRIDGE_MATERIALS
-      : kind === 'fence'
-        ? FENCE_MATERIALS
-        : ROAD_MATERIALS;
+  kind === 'river' ? RIVER_MATERIALS : ROAD_MATERIALS;
 
 /** The default brush material for a feature kind. */
 export const defaultFeatureMaterial = (kind: FeatureKind): FeatureMaterial =>
-  kind === 'river'
-    ? DEFAULT_RIVER_MATERIAL
-    : kind === 'bridge'
-      ? DEFAULT_BRIDGE_MATERIAL
-      : kind === 'fence'
-        ? DEFAULT_FENCE_MATERIAL
-        : DEFAULT_ROAD_MATERIAL;
-
-// A bridge is straight-only: it spans either vertically (N–S) or horizontally (E–W). The
-// orientation is explicit (the brush sets it) — NOT auto-derived from neighbours like a road —
-// so a bridge never bends, T's, or crosses. It maps to the baked straight masks: V = N+S = 5,
-// H = E+W = 10. The default brush axis is horizontal.
-export type BridgeOrientation = 'h' | 'v';
-export const DEFAULT_BRIDGE_ORIENTATION: BridgeOrientation = 'h';
-export const bridgeOrientationMask = (o: BridgeOrientation): number => (o === 'v' ? 5 : 10);
-
-// NEIGHBOUR-AWARE straight bridge. Unlike a road it never bends, but its two ENDS still react to
-// same-orientation bridge neighbours: an end is OPEN (deck + rails continue) when another bridge
-// of the SAME axis abuts it, else CAPPED with an end post. Only the two same-axis ends matter —
-// a 'v' bridge looks N/S, an 'h' bridge looks E/W — so a bridge only ever connects to a bridge
-// pointing the same way (never corners/T/cross). This is a 2-bit end mask, not the 4-bit road mask.
-
-/** One end of a bridge, by which of the two same-axis ends is open. */
-export interface BridgeEndMask {
-  /** For 'v': the N end is a same-axis bridge. For 'h': the E end is a same-axis bridge. */
-  aheadOpen: boolean;
-  /** For 'v': the S end is a same-axis bridge. For 'h': the W end is a same-axis bridge. */
-  behindOpen: boolean;
-}
-
-/**
- * Which of a bridge cell's two SAME-AXIS ends abut another bridge (of the same orientation).
- * For 'v' the ends are N (0,-1) and S (0,+1); for 'h' they are E (+1,0) and W (-1,0). `present`
- * is the set of same-orientation bridge cell keys ("x,y"). Cross-axis neighbours are ignored — a
- * bridge only ever joins a bridge pointing the same way, so it stays a straight span.
- */
-export function bridgeEndMask(
-  present: ReadonlySet<string>,
-  x: number,
-  y: number,
-  orientation: BridgeOrientation,
-): BridgeEndMask {
-  if (orientation === 'v') {
-    return {
-      aheadOpen: present.has(featureKey(x, y - 1)), // N
-      behindOpen: present.has(featureKey(x, y + 1)), // S
-    };
-  }
-  return {
-    aheadOpen: present.has(featureKey(x + 1, y)), // E
-    behindOpen: present.has(featureKey(x - 1, y)), // W
-  };
-}
-
-/**
- * The 8 baked straight-bridge sprite keys. Each end is OPEN (deck + rails run off the tile) or
- * CAPPED with an end post; a cap is named for the CAPPED end:
- *   v-thru   both ends open (N & S)          h-thru   both ends open (E & W)
- *   v-capN   open S, capped N                h-capE   open W, capped E
- *   v-capS   open N, capped S                h-capW   open E, capped W
- *   v-single both ends capped               h-single both ends capped
- * Files: bridge-<material>-<key>.png (feature dir).
- */
-export type BridgeSpriteKey =
-  | 'v-thru' | 'v-capN' | 'v-capS' | 'v-single'
-  | 'h-thru' | 'h-capE' | 'h-capW' | 'h-single';
-
-/**
- * Resolve a bridge cell's baked sprite key from its axis + which ends are open. `aheadOpen` is the
- * N end for 'v' / the E end for 'h'; `behindOpen` is the S end for 'v' / the W end for 'h'. Both
- * open ⇒ `-thru`; both capped ⇒ `-single`; one capped ⇒ a `-cap<END>` naming the CAPPED end
- * (v: N/S, h: E/W).
- */
-export function bridgeSpriteKey(orientation: BridgeOrientation, endMask: BridgeEndMask): BridgeSpriteKey {
-  const { aheadOpen, behindOpen } = endMask;
-  if (orientation === 'v') {
-    if (aheadOpen && behindOpen) return 'v-thru';
-    if (!aheadOpen && !behindOpen) return 'v-single';
-    return aheadOpen ? 'v-capS' /* open N, cap S */ : 'v-capN' /* open S, cap N */;
-  }
-  if (aheadOpen && behindOpen) return 'h-thru';
-  if (!aheadOpen && !behindOpen) return 'h-single';
-  return aheadOpen ? 'h-capW' /* open E, cap W */ : 'h-capE' /* open W, cap E */;
-}
+  kind === 'river' ? DEFAULT_RIVER_MATERIAL : DEFAULT_ROAD_MATERIAL;
 
 export type FeatureEdge = 'N' | 'E' | 'S' | 'W';
 
@@ -187,10 +80,10 @@ export const featureKey = (x: number, y: number): string => `${x},${y}`;
 
 /**
  * Canonical key for the EDGE between two adjacent cells (order-independent), used to
- * record a manually SEVERED connection (a cut) or a forced outward stub (an exit). Both
- * are properties of the shared edge, so toggling from either tile applies to both —
- * `roadEdgeKey(a,b) === roadEdgeKey(b,a)`. An exit's "neighbour" may be off-board (a
- * negative or out-of-range coord); the string key handles that fine.
+ * record a manually SEVERED connection (a cut), a forced outward stub (an exit), OR a
+ * fence. All three are properties of the shared edge, so toggling from either tile
+ * applies to both — `roadEdgeKey(a,b) === roadEdgeKey(b,a)`. An exit's "neighbour" may be
+ * off-board (a negative or out-of-range coord); the string key handles that fine.
  */
 export const roadEdgeKey = (ax: number, ay: number, bx: number, by: number): string => {
   const a = featureKey(ax, ay);
@@ -233,52 +126,37 @@ export function featureMaskAt(
 }
 
 /**
- * A feature cell resolved to its sprite selector. road/river/fence carry a 4-bit connection
- * `mask`; a bridge carries a neighbour-aware `bridgeKey` (plus a nominal straight `mask` for
- * back-compat / the unique-src set). This is what every board renderer draws from.
+ * A feature cell resolved to its sprite selector. road/river carry a 4-bit connection
+ * `mask`. This is what every board renderer draws from.
  */
 export interface ResolvedFeatureOverlay {
   kind: FeatureKind;
   material: FeatureMaterial;
   mask: number;
-  bridgeKey?: BridgeSpriteKey;
 }
 
-/** A source feature cell (pre-resolution): its kind + material and, for bridges, the axis. */
+/** A source feature cell (pre-resolution): its kind + material. */
 export interface FeatureSource {
   kind: FeatureKind;
   material: FeatureMaterial;
-  orientation?: BridgeOrientation;
 }
 
 /**
  * Resolve EVERY painted feature cell to its sprite selector in one pass — the single autotile
- * table the editor, the socket solver, and all board renderers share (so ribbons + bridges knit
- * identically everywhere). road/river/fence autotile against a same-KIND neighbour set; a bridge
- * is neighbour-aware but SPLIT BY ORIENTATION (a 'v' end never joins an 'h' bridge), so each axis
- * gets its own presence set and resolves to a thru/cap/single `bridgeKey`.
+ * table the editor, the socket solver, and all board renderers share (so ribbons knit
+ * identically everywhere). road/river autotile against a same-KIND neighbour set.
  */
 export function resolveFeatureOverlays(
   features: Record<string, FeatureSource>,
   isSevered?: (edgeKey: string) => boolean,
   isExit?: (edgeKey: string) => boolean,
 ): Record<string, ResolvedFeatureOverlay> {
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), bridge: new Set(), fence: new Set() };
-  const bridgePresence: Record<BridgeOrientation, Set<string>> = { h: new Set(), v: new Set() };
-  for (const [key, f] of Object.entries(features)) {
-    presentByKind[f.kind].add(key);
-    if (f.kind === 'bridge') bridgePresence[f.orientation ?? DEFAULT_BRIDGE_ORIENTATION].add(key);
-  }
+  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set() };
+  for (const [key, f] of Object.entries(features)) presentByKind[f.kind].add(key);
   const out: Record<string, ResolvedFeatureOverlay> = {};
   for (const [key, f] of Object.entries(features)) {
     const [x, y] = key.split(',').map(Number);
-    if (f.kind === 'bridge') {
-      const orientation = f.orientation ?? DEFAULT_BRIDGE_ORIENTATION;
-      const ends = bridgeEndMask(bridgePresence[orientation], x, y, orientation);
-      out[key] = { kind: f.kind, material: f.material, mask: bridgeOrientationMask(orientation), bridgeKey: bridgeSpriteKey(orientation, ends) };
-    } else {
-      out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered, isExit) };
-    }
+    out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered, isExit) };
   }
   return out;
 }
@@ -331,4 +209,108 @@ export function featurePiece(mask: number): FeaturePiece {
     default:
       return 'cross';
   }
+}
+
+// ────────────────────────────────────────────────────────────────────────────────────
+// EDGE FENCES
+//
+// A fence sits on the EDGE between two orthogonally-adjacent cells and blocks a piece from
+// stepping across that edge (both cells stay walkable — a fence is a wall, not an obstacle).
+// It is NOT a FeatureKind: it is stored edge-keyed (roadEdgeKey), like a cut/exit, as
+// `Record<edgeKey, FenceMaterial>` in the editor and a parallel channel through the level.
+//
+//   • COLLISION reads the raw edge set: a crossing (ax,ay)→(bx,by) is blocked iff its
+//     roadEdgeKey is fenced. Only orthogonal steps ever cross an edge, so knights (whose
+//     jumps are never orthogonally-adjacent) and diagonal slides pass a lone fence freely.
+//   • RENDERING draws each shared edge exactly once: a cell paints rails on its OWN E (SE)
+//     and S (SW) diamond sides, so the upper-left cell of every fenced pair owns the draw
+//     (see resolveFenceOverlays). Bits: E = 2, S = 4 (same as FEATURE_DIRS), so a per-cell
+//     fence frame is `fence-<material>-<mask>.png` with mask ∈ {2, 4, 6}.
+// ────────────────────────────────────────────────────────────────────────────────────
+
+/** Fence surface look — one baked rail set per material (fence-<material>-<mask>.png). */
+export type FenceMaterial = 'wood' | 'stone';
+export const FENCE_MATERIALS: readonly FenceMaterial[] = ['wood', 'stone'];
+export const DEFAULT_FENCE_MATERIAL: FenceMaterial = 'wood';
+export const FENCE_MATERIAL_LABELS: Record<FenceMaterial, string> = { wood: 'Wood', stone: 'Stone' };
+
+/** The E(2) and S(4) render bits — a per-cell fence frame only ever shows its two FRONT sides. */
+export const FENCE_RENDER_MASKS = [2, 4, 6] as const;
+
+/** Parse an edge key "ax,ay|bx,by" into its two cells, or null if malformed. */
+export function parseEdgeKey(edge: string): { ax: number; ay: number; bx: number; by: number } | null {
+  const parts = edge.split('|');
+  if (parts.length !== 2) return null;
+  const [a, b] = parts;
+  const [ax, ay] = a.split(',').map(Number);
+  const [bx, by] = b.split(',').map(Number);
+  if (![ax, ay, bx, by].every((n) => Number.isFinite(n))) return null;
+  return { ax, ay, bx, by };
+}
+
+/** The canonical fence edge key between two cells (alias of roadEdgeKey for intent clarity). */
+export const fenceEdgeKey = roadEdgeKey;
+
+/** True iff the two cells are orthogonally adjacent (share a diamond edge). */
+export function isOrthogonalPair(ax: number, ay: number, bx: number, by: number): boolean {
+  return Math.abs(ax - bx) + Math.abs(ay - by) === 1;
+}
+
+/**
+ * True iff a fence blocks the crossing (ax,ay)→(bx,by). Only orthogonal crossings can be
+ * fenced, so a diagonal/knight step (whose cells aren't orthogonally adjacent) is never
+ * blocked by a lone fence — it hops. Safe on any input: a non-adjacent pair returns false.
+ */
+export function fenceBlocksCrossing(
+  fences: ReadonlySet<string> | undefined,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): boolean {
+  if (!fences || fences.size === 0) return false;
+  if (!isOrthogonalPair(ax, ay, bx, by)) return false;
+  return fences.has(roadEdgeKey(ax, ay, bx, by));
+}
+
+/** A fenced cell resolved to its render selector: an E(2)/S(4) mask + which rail material. */
+export interface ResolvedFenceOverlay {
+  mask: number;
+  material: FenceMaterial;
+}
+
+/**
+ * Resolve an edge-keyed fence map to the per-cell render overlay (E=2 / S=4 mask + material) —
+ * each shared edge is assigned to its UPPER-LEFT cell (smaller x for a horizontal-screen pair,
+ * smaller y for a vertical-screen pair) so every rail is drawn exactly once. Returns a
+ * `cellKey → { mask, material }` map; cells with no owned fenced edge are absent. If one cell
+ * owns two edges of different materials, the first-seen material wins (a cosmetic v1 limit —
+ * the collision path reads the raw edge set, unaffected).
+ */
+export function resolveFenceOverlays(fences: Record<string, FenceMaterial>): Map<string, ResolvedFenceOverlay> {
+  const out = new Map<string, ResolvedFenceOverlay>();
+  for (const [edge, material] of Object.entries(fences)) {
+    const cells = parseEdgeKey(edge);
+    if (!cells) continue;
+    const { ax, ay, bx, by } = cells;
+    if (!isOrthogonalPair(ax, ay, bx, by)) continue;
+    let ownerX: number;
+    let ownerY: number;
+    let bit: number;
+    if (ay === by) {
+      // horizontal-screen pair (E/W neighbours): owner is the smaller-x cell, its E edge.
+      ownerX = Math.min(ax, bx);
+      ownerY = ay;
+      bit = 2;
+    } else {
+      // vertical-screen pair (N/S neighbours): owner is the smaller-y cell, its S edge.
+      ownerX = ax;
+      ownerY = Math.min(ay, by);
+      bit = 4;
+    }
+    const key = featureKey(ownerX, ownerY);
+    const prev = out.get(key);
+    out.set(key, { mask: (prev?.mask ?? 0) | bit, material: prev?.material ?? material });
+  }
+  return out;
 }

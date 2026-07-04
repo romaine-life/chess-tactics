@@ -138,6 +138,13 @@ export interface GameState {
    */
   terrain?: TerrainCell[];
   /**
+   * Edge fences: walls on the boundary between two orthogonally-adjacent cells, as canonical
+   * edge keys (roadEdgeKey "x,y|x,y"). A move that crosses a fenced edge is blocked (knights,
+   * whose steps are never orthogonally adjacent, hop over — like water). Optional + serializable,
+   * mirroring `terrain?`: a fence-free state omits it, and movement is unaffected when absent.
+   */
+  fences?: string[];
+  /**
    * Lossless Level Editor board encoding for authored maps. Gameplay still reads `terrain`
    * and `props`; the renderer uses this to keep the exact painted tile IDs/features instead
    * of regenerating visual variants from terrain + seed.

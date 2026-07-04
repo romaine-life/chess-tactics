@@ -167,6 +167,9 @@ export function createFromLevel(level: Level, seed: number): GameState {
     size: { cols: level.board.cols, rows: level.board.rows },
     pieces,
     terrain: level.layers.terrain,
+    // Edge fences the game blocks crossing (knights hop). Undefined when the level has none, so a
+    // fence-free level's movement is byte-identical to before (see MoveEnv.fences in the store).
+    fences: level.layers.fences && level.layers.fences.length ? level.layers.fences : undefined,
     boardCode: level.boardCode,
     // The render channel: the board draws the tall prop sprite from this list, while the
     // colliders above do the blocking. Defaults to [] so a prop-free level stays prop-free.

@@ -7,7 +7,7 @@ import { GroundCoverLayer } from './GroundCoverLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
 import {
   MISSING_DIRECTION_SPRITE,
   hasDirectionSprite,
@@ -17,8 +17,7 @@ import {
   type UnitAsset,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
-import { committedBridgeTune, bridgeTuneStyle, BRIDGE_CELL_Z_BUMP } from '../core/bridgeTune';
+import { resolveFeatureOverlays, resolveFenceOverlays, type ResolvedFeatureOverlay, type ResolvedFenceOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -38,9 +37,9 @@ export interface BoardLayerVisibility {
   doodad: boolean;
 }
 
-// Linear-feature overlays already resolved to their sprite selector (road/river/fence → mask;
-// bridge → bridgeKey), keyed by "x,y". The editor derives these live; the read-only viewer derives
-// them from the painted set. Reuses the canonical ResolvedFeatureOverlay shape.
+// Linear-feature overlays already resolved to their sprite selector (road/river → mask), keyed by
+// "x,y". The editor derives these live; the read-only viewer derives them from the painted set.
+// Reuses the canonical ResolvedFeatureOverlay shape.
 export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
 const allTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
@@ -66,6 +65,7 @@ export function deriveFeatureOverlays(
 export function studioCellArt({
   tileAsset,
   feature,
+  fence,
   animationFrame,
   hidden,
   x = 0,
@@ -73,6 +73,8 @@ export function studioCellArt({
 }: {
   tileAsset: StudioAsset | undefined;
   feature: ResolvedFeatureOverlay | undefined;
+  /** Edge-fence rails this cell owns (its E/S sides), if any. */
+  fence?: ResolvedFenceOverlay | undefined;
   animationFrame: number;
   hidden?: BoardLayerVisibility;
   /** Board coords; only used to phase-stagger an animated top (water ripple). */
@@ -99,10 +101,17 @@ export function studioCellArt({
       {feature ? (
         <img
           className="tileset-feature-overlay"
-          src={featureFrameSrc(feature.kind, feature.material, feature.mask, feature.bridgeKey)}
+          src={featureFrameSrc(feature.kind, feature.material, feature.mask)}
           alt=""
           draggable={false}
-          style={feature.kind === 'bridge' ? bridgeTuneStyle(committedBridgeTune(feature.material)) : undefined}
+        />
+      ) : null}
+      {fence ? (
+        <img
+          className="tileset-feature-overlay tileset-fence-overlay"
+          src={fenceFrameSrc(fence.material, fence.mask)}
+          alt=""
+          draggable={false}
         />
       ) : null}
     </>
@@ -213,6 +222,7 @@ export function StudioReadOnlyBoard({
   ariaLabel?: string;
 }): ReactElement {
   const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts);
+  const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
 
   const gridCells: TileGridCell[] = [];
   for (let y = 0; y < board.rows; y += 1) {
@@ -223,9 +233,8 @@ export function StudioReadOnlyBoard({
         key,
         x,
         y,
-        zBump: featureOverlays[key]?.kind === 'bridge' ? BRIDGE_CELL_Z_BUMP : undefined,
         className: `tileset-placement-cell ${tileAsset ? '' : 'is-empty'}`.trim(),
-        children: studioCellArt({ tileAsset, feature: featureOverlays[key], animationFrame, x, y }),
+        children: studioCellArt({ tileAsset, feature: featureOverlays[key], fence: fenceOverlays.get(key), animationFrame, x, y }),
       });
     }
   }

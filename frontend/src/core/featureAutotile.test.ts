@@ -7,9 +7,13 @@ import {
   featureMaskMap,
   featurePiece,
   roadEdgeKey,
-  bridgeOrientationMask,
   featureMaterials,
   defaultFeatureMaterial,
+  resolveFenceOverlays,
+  fenceBlocksCrossing,
+  parseEdgeKey,
+  FENCE_MATERIALS,
+  DEFAULT_FENCE_MATERIAL,
 } from './featureAutotile';
 
 const setOf = (...keys: string[]): Set<string> => new Set(keys);
@@ -168,19 +172,37 @@ describe('featureKey', () => {
   });
 });
 
-describe('bridge (straight-only span)', () => {
-  it('maps each axis to the matching straight mask: V = N+S = 5, H = E+W = 10', () => {
-    expect(bridgeOrientationMask('v')).toBe(0b0101);
-    expect(bridgeOrientationMask('h')).toBe(0b1010);
+describe('edge fences', () => {
+  it('parses an edge key into its two cells (or null when malformed)', () => {
+    expect(parseEdgeKey('1,2|1,3')).toEqual({ ax: 1, ay: 2, bx: 1, by: 3 });
+    expect(parseEdgeKey('nope')).toBeNull();
   });
 
-  it('only ever resolves to a STRAIGHT piece (never a corner/T/cross)', () => {
-    expect(featurePiece(bridgeOrientationMask('v'))).toBe('straight');
-    expect(featurePiece(bridgeOrientationMask('h'))).toBe('straight');
+  it('blocks only the orthogonal crossing it sits on (knights + diagonals hop)', () => {
+    const fences = setOf(roadEdgeKey(1, 1, 2, 1)); // a wall between (1,1) and (2,1)
+    expect(fenceBlocksCrossing(fences, 1, 1, 2, 1)).toBe(true);
+    expect(fenceBlocksCrossing(fences, 2, 1, 1, 1)).toBe(true); // order-independent
+    expect(fenceBlocksCrossing(fences, 1, 1, 1, 2)).toBe(false); // a different edge
+    expect(fenceBlocksCrossing(fences, 1, 1, 2, 2)).toBe(false); // diagonal — never blocked
+    expect(fenceBlocksCrossing(fences, 1, 1, 3, 1)).toBe(false); // 2 apart — not a crossing
+    expect(fenceBlocksCrossing(undefined, 1, 1, 2, 1)).toBe(false);
   });
 
-  it('exposes a single stone material with stone as the default brush', () => {
-    expect(featureMaterials('bridge')).toEqual(['stone']);
-    expect(defaultFeatureMaterial('bridge')).toBe('stone');
+  it('assigns each shared edge to its upper-left cell (E=2 / S=4), drawn once', () => {
+    // vertical-screen pair (N/S neighbours) → smaller-y cell's S(4) edge
+    const vertical = resolveFenceOverlays({ [roadEdgeKey(1, 1, 1, 2)]: 'wood' });
+    expect(vertical.get('1,1')).toEqual({ mask: 4, material: 'wood' });
+    expect(vertical.has('1,2')).toBe(false);
+    // horizontal-screen pair (E/W neighbours) → smaller-x cell's E(2) edge
+    const horizontal = resolveFenceOverlays({ [roadEdgeKey(1, 1, 2, 1)]: 'stone' });
+    expect(horizontal.get('1,1')).toEqual({ mask: 2, material: 'stone' });
+    // a cell owning both its E and S edges combines to mask 6
+    const both = resolveFenceOverlays({ [roadEdgeKey(0, 0, 1, 0)]: 'wood', [roadEdgeKey(0, 0, 0, 1)]: 'wood' });
+    expect(both.get('0,0')).toEqual({ mask: 6, material: 'wood' });
+  });
+
+  it('exposes wood + stone fence materials with wood as the default', () => {
+    expect(FENCE_MATERIALS).toEqual(['wood', 'stone']);
+    expect(DEFAULT_FENCE_MATERIAL).toBe('wood');
   });
 });

@@ -7,6 +7,7 @@ import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piec
 import type { Rng } from './rng';
 import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
+import { fenceBlocksCrossing } from './featureAutotile';
 
 const KNIGHT: ReadonlyArray<readonly [number, number]> = [
   [-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1],
@@ -87,12 +88,24 @@ export function isEnemy(piece: Piece, target: Piece | null): boolean {
  */
 export interface MoveEnv {
   terrain?: TerrainIndex;
+  /**
+   * Edge fences as canonical edge keys (roadEdgeKey "x,y|x,y"). A move that CROSSES a fenced edge
+   * is forbidden. Only an orthogonal step crosses an edge, so a knight (never orthogonally
+   * adjacent) and a diagonal slide/step pass a lone fence freely — the "knights hop" rule, like
+   * water. Omit for no fences.
+   */
+  fences?: ReadonlySet<string>;
   lastMove?: LastMove;
 }
 
 /** Whether terrain in `env` forbids moving into (x, y) from `originElev`. */
 function blockedByTerrain(env: MoveEnv | undefined, originElev: number, x: number, y: number): boolean {
   return !!env?.terrain && !canTraverse(env.terrain, originElev, x, y);
+}
+
+/** Whether a fence in `env` blocks the orthogonal crossing (ax,ay)→(bx,by). No-op off-fence/diagonal. */
+function fenceBlocks(env: MoveEnv | undefined, ax: number, ay: number, bx: number, by: number): boolean {
+  return fenceBlocksCrossing(env?.fences, ax, ay, bx, by);
 }
 
 /** Whether terrain in `env` halts a multi-square move that enters (x, y). */
@@ -144,6 +157,7 @@ function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs:
       const x = piece.x + dx * step;
       const y = piece.y + dy * step;
       if (!inBounds(x, y, size)) break;
+      if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // a fence walls this step (orthogonal rays)
       if (blockedByTerrain(env, originElev, x, y)) break; // terrain wall ends the ray
       const occ = pieceAt(pieces, x, y);
       if (occ) {
@@ -163,6 +177,7 @@ function stepMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, delt
     const x = piece.x + dx;
     const y = piece.y + dy;
     if (!inBounds(x, y, size)) continue;
+    if (fenceBlocks(env, piece.x, piece.y, x, y)) continue; // an orthogonal step across a fence is walled (knights hop)
     if (blockedByTerrain(env, originElev, x, y)) continue;
     const occ = pieceAt(pieces, x, y);
     if (!occ) {
@@ -179,12 +194,14 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
   const moves: Move[] = [];
   const oneX = piece.x + forwardX;
   const oneY = piece.y + forwardY;
-  if (inBounds(oneX, oneY, size) && !pieceAt(pieces, oneX, oneY) && !blockedByTerrain(env, originElev, oneX, oneY)) {
+  // A forward step across a fenced edge is walled (only matters for an orthogonal-forward pawn;
+  // a diagonally-oriented pawn crosses a corner, which a lone fence never blocks).
+  if (inBounds(oneX, oneY, size) && !pieceAt(pieces, oneX, oneY) && !blockedByTerrain(env, originElev, oneX, oneY) && !fenceBlocks(env, piece.x, piece.y, oneX, oneY)) {
     moves.push({ x: oneX, y: oneY });
     const twoX = piece.x + forwardX * 2;
     const twoY = piece.y + forwardY * 2;
-    // The double step passes through the one-step square, so water there halts it.
-    if (onPawnStart(piece) && !haltsTravelAt(env, oneX, oneY) && inBounds(twoX, twoY, size) && !pieceAt(pieces, twoX, twoY) && !blockedByTerrain(env, originElev, twoX, twoY)) {
+    // The double step passes through the one-step square, so water — or a fence on the second edge — halts it.
+    if (onPawnStart(piece) && !haltsTravelAt(env, oneX, oneY) && !fenceBlocks(env, oneX, oneY, twoX, twoY) && inBounds(twoX, twoY, size) && !pieceAt(pieces, twoX, twoY) && !blockedByTerrain(env, originElev, twoX, twoY)) {
       moves.push({ x: twoX, y: twoY });
     }
   }
@@ -323,7 +340,7 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
   }
   if (piece.type === 'king') {
     return ALL8.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
-      .filter((p) => inBounds(p.x, p.y, size) && !blockedByTerrain(env, originElev, p.x, p.y));
+      .filter((p) => inBounds(p.x, p.y, size) && !blockedByTerrain(env, originElev, p.x, p.y) && !fenceBlocks(env, piece.x, piece.y, p.x, p.y));
   }
   const dirs = piece.type === 'bishop' ? DIAG : piece.type === 'rook' ? ORTHO : ALL8;
   const out: Vec[] = [];
@@ -332,6 +349,7 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
       const x = piece.x + dx * step;
       const y = piece.y + dy * step;
       if (!inBounds(x, y, size)) break;
+      if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // a fence walls the threat ray (orthogonal)
       if (blockedByTerrain(env, originElev, x, y)) break; // a terrain wall ends the threat ray
       out.push({ x, y });
       if (pieceAt(pieces, x, y)) break;

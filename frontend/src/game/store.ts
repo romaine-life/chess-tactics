@@ -99,9 +99,13 @@ function objectiveOutcomeCopy(objective: ObjectiveType, winner: Winner, kingSide
   }
 }
 
-/** Movement environment for a state: indexes its terrain layer (if authored). */
+/** Movement environment for a state: indexes its terrain layer + edge fences (if authored). */
 function envFor(game: GameState): MoveEnv {
-  return { terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined, lastMove: game.lastMove };
+  return {
+    terrain: game.terrain ? buildTerrainIndex(game.terrain) : undefined,
+    fences: game.fences && game.fences.length ? new Set(game.fences) : undefined,
+    lastMove: game.lastMove,
+  };
 }
 
 /**

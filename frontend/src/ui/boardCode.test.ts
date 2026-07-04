@@ -16,31 +16,24 @@ const emptyBoard = (over: Partial<EditorBoard> = {}): EditorBoard => ({
 });
 
 describe('boardCode round-trip', () => {
-  it('preserves a mixed board of tiles, a river, and a bridge with its orientation', () => {
+  it('preserves a mixed board of tiles, a river, a road, and edge fences', () => {
     const board = emptyBoard({
       cells: { '0,0': 'grass-surf-0', '2,2': 'water-surf-0' },
       features: {
         '2,1': { kind: 'river', material: 'water' },
-        '2,2': { kind: 'bridge', material: 'stone', orientation: 'h' },
-        '3,2': { kind: 'bridge', material: 'stone', orientation: 'v' },
         '4,4': { kind: 'road', material: 'cobble' },
       },
+      fences: { '1,1|2,1': 'wood', '3,3|3,4': 'stone' },
     });
     const decoded = decodeBoard(encodeBoard(board));
     expect(decoded).not.toBeNull();
     expect(decoded!.features).toEqual(board.features);
+    expect(decoded!.fences).toEqual(board.fences);
   });
 
-  it('keeps each bridge cell axis distinct (h vs v survive the wire)', () => {
-    const board = emptyBoard({
-      features: {
-        '1,1': { kind: 'bridge', material: 'stone', orientation: 'h' },
-        '1,2': { kind: 'bridge', material: 'stone', orientation: 'v' },
-      },
-    });
-    const decoded = decodeBoard(encodeBoard(board))!;
-    expect(decoded.features['1,1'].orientation).toBe('h');
-    expect(decoded.features['1,2'].orientation).toBe('v');
-    expect(decoded.features['1,1'].kind).toBe('bridge');
+  it('encodes a fence-free board byte-identically to a code that predates fences', () => {
+    expect(encodeBoard(emptyBoard({ fences: {} }))).toBe(encodeBoard(emptyBoard()));
+    // an old code with no `fe` decodes fences to an empty map (back-compat contract).
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.fences).toEqual({});
   });
 });

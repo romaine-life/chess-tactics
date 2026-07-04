@@ -4,8 +4,8 @@ import { TileGrid } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
-import { featureFrameSrc } from '../art/tileset';
-import { committedBridgeTune, bridgeTuneStyle, BRIDGE_CELL_Z_BUMP, type BridgeTune } from '../core/bridgeTune';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
+import type { ResolvedFenceOverlay } from '../core/featureAutotile';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -26,11 +26,10 @@ export interface BoardLabBoardProps<TAsset extends TileSocketAsset> {
   ariaLabel?: string;
   renderCellOverlay?: (context: BoardLabBoardOverlayContext<TAsset>) => ReactNode;
   /**
-   * Live seating override for bridge overlays (the /bridge-tuner lab passes its unsaved tune so the
-   * preview updates as you drag). Omitted everywhere else, so the game + all boards use the COMMITTED
-   * seating (committedBridgeTune) — see core/bridgeTune.
+   * Edge fences resolved to a per-cell rail overlay (E/S mask + material), keyed by "x-y" — the
+   * cell composites its own owned rails over the tile top. Omit for a fence-free board.
    */
-  bridgeTuneOverride?: BridgeTune;
+  fenceOverlays?: ReadonlyMap<string, ResolvedFenceOverlay>;
   children?: ReactNode;
 }
 
@@ -43,7 +42,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
   className = '',
   ariaLabel = 'Generated board',
   renderCellOverlay,
-  bridgeTuneOverride,
+  fenceOverlays,
   children,
 }: BoardLabBoardProps<TAsset>) {
   const sourceCells = board.cells;
@@ -60,11 +59,11 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
     // overlay (road) composites OVER the top, on the walkable surface.
     const topSrc = cell.asset ? assetFrameSrc(cell.asset) : undefined;
     const sideSrc = cell.sideAsset ? assetFrameSrc(cell.sideAsset) : topSrc;
+    const fence = fenceOverlays?.get(`${cell.x},${cell.y}`);
     return {
       key: `${cell.x}-${cell.y}`,
       x: cell.x,
       y: cell.y,
-      zBump: cell.feature?.kind === 'bridge' ? BRIDGE_CELL_Z_BUMP : undefined,
       className: cell.missing ? 'is-missing' : !cell.asset ? 'is-empty' : '',
       data: {
         'data-asset-id': cell.asset?.id,
@@ -80,14 +79,17 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
           {cell.feature ? (
             <img
               className="tileset-feature-overlay"
-              src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask, cell.feature.bridgeKey)}
+              src={featureFrameSrc(cell.feature.kind, cell.feature.material, cell.feature.mask)}
               alt=""
               draggable={false}
-              style={
-                cell.feature.kind === 'bridge'
-                  ? bridgeTuneStyle(bridgeTuneOverride ?? committedBridgeTune(cell.feature.material))
-                  : undefined
-              }
+            />
+          ) : null}
+          {fence ? (
+            <img
+              className="tileset-feature-overlay tileset-fence-overlay"
+              src={fenceFrameSrc(fence.material, fence.mask)}
+              alt=""
+              draggable={false}
             />
           ) : null}
         </>

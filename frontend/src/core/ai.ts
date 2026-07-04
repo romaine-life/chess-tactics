@@ -245,6 +245,7 @@ interface SearchState {
   aborted: boolean;
   weights: EvalWeights;
   terrainEnv: MoveEnv['terrain'];
+  fences: MoveEnv['fences'];
   sctx: SearchContext;
 }
 
@@ -287,7 +288,7 @@ function negamax(
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
 
-  const env: MoveEnv = { terrain: s.terrainEnv, lastMove };
+  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
   const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
   if (winner) return color * terminalScore(winner, ply);
   if (depth === 0) return color * evaluateGameState(state, { ...s.sctx, turnsElapsed }, s.weights, env);
@@ -363,6 +364,7 @@ export function searchBestAction(
     aborted: false,
     weights,
     terrainEnv: env.terrain,
+    fences: env.fences,
     sctx,
   };
 
