@@ -4,8 +4,23 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-4277247e9225b53438366c83cfbe5ce4e1ed73e8a45553d65f9bb01f739becc6"
+  tag: "app-034fc5eedfd5541a763c285189f50535e8f3ff2edd0012ee0d379baa815d38bb"
   pullPolicy: IfNotPresent
+
+# Human-facing build provenance surfaced in Settings → About via /api/build-info
+# (backend/server.js reads these as env; deployment.yaml wires them onto the
+# container). Written by .github/workflows/build-and-deploy.yaml on every push to
+# main — the SAME commit that bumps the image tag above — via
+# scripts/write-build-info.mjs (a targeted per-line replace, so these are the only
+# lines it touches). Deliberately carried in the manifest, NOT baked into the
+# image: the tag is a pure content fingerprint and a content-identical rebuild is
+# skipped, so baking these in would let a reused image show a stale PR. Empty by
+# default; non-main lanes (test slots / dev) show just the baked app version.
+build:
+  prTitle: "OG thumbnails read live official campaigns, not the stale baked file"
+  prNumber: "347"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/347"
+  commit: "1e02f8c"
 
 name: chess-tactics
 namespace: chess-tactics

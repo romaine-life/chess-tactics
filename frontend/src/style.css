@@ -3684,20 +3684,10 @@ h1 {
   z-index: -1;
 }
 
-.skirmish-screen.skirmish-picker-screen::before {
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat;
-}
+/* The skirmish picker is a light-art route: LightArtRouteShell renders the animated menu
+   scene (still art + waterfalls + scrim) as a <SceneBackdrop> element, so the picker no
+   longer overrides the base ::before with the menu scene — the base dark floor rides behind
+   the backdrop like every other light-art screen. */
 
 .skirmish-war-room {
   display: grid;
@@ -4685,6 +4675,13 @@ h1 {
   font-size: var(--ds-text-xs);
   min-block-size: 40px;
   padding: 0 var(--ds-gutter);
+}
+
+/* Resign is a concede/caution action — swap the neutral kit frame for the danger (red)
+   one so it reads as distinct from the other match controls (same treatment as the
+   editor's Delete/Clear buttons). */
+.skirmish-view-row .app-header-button.skirmish-resign-button {
+  border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
 .skirmish-zoom-readout {
@@ -5924,23 +5921,12 @@ body { font-size: 17px; }
   --ce-slate: #b7cad4;
   --ce-gold-bright: #f5bb45;
   --ce-eyebrow: #c9a877;
-  /* Same art-directed backdrop as the main menu (.main-menu-layer / .settings-art-route)
-     so the editor sits over the menu scene + the synced rain (AmbienceBackground, below).
-     Keep this declaration in sync with .settings-art-route. The editor's panels overlap
-     most of it; the scene + rain only show in the gaps, for a consistent feel.
-     First declaration = PNG fallback for engines without image-set()/type(). */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat #02070b;
+  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
+     the <SceneBackdrop> element the editor renders (ui/SceneBackdrop.tsx), the same way the
+     main menu paints it, so the editor sits over the menu scene + synced rain. The editor's
+     panels overlap most of it; the scene + rain only show in the gaps, for a consistent
+     feel. This floor keeps the screen dark (never white) before the scene decodes. */
+  background: #02070b;
   color: var(--ce-ink);
   display: grid;
   font-family: var(--ds-font-pixel);
@@ -5959,6 +5945,10 @@ body { font-size: 17px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Sit above the scene backdrop (<SceneBackdrop>, z1) so this cyan edge tint still colors
+     the menu scene — it used to ride over the .ce-screen background scene, which now lives
+     in a z1 element. Rain field (z2, later in the DOM) still falls in front of the tint. */
+  z-index: 2;
   background:
     linear-gradient(90deg, rgba(48, 214, 255, .08), transparent 16% 84%, rgba(48, 214, 255, .08)),
     linear-gradient(180deg, rgba(255, 255, 255, .03), transparent 14% 86%, rgba(0, 0, 0, .28));
@@ -10992,21 +10982,11 @@ button.tileset-relationship-cell {
 
 .settings-art-route {
   align-items: center;
-  /* Same art-directed backdrop as the main menu (.main-menu-layer, ~line 712) so the
-     settings frames sit over the menu scene + the synced rain. Keep the two in sync.
-     First declaration = PNG fallback for engines without image-set()/type(). */
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    url("/assets/ui/main-menu/background-scene-v1.png") center / cover no-repeat #02070b;
-  background:
-    linear-gradient(90deg, rgba(2, 7, 11, .62) 0%, rgba(2, 7, 11, .24) 35%, rgba(2, 7, 11, .1) 58%, rgba(2, 7, 11, .44) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .46)),
-    image-set(
-      url("/assets/ui/main-menu/background-scene-v1.avif") type("image/avif"),
-      url("/assets/ui/main-menu/background-scene-v1.webp") type("image/webp"),
-      url("/assets/ui/main-menu/background-scene-v1.png") type("image/png")
-    ) center / cover no-repeat #02070b;
+  /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
+     the <SceneBackdrop> element these screens render (ui/SceneBackdrop.tsx), the same way
+     the main menu paints it, so the settings frames sit over the menu scene + synced rain.
+     This floor keeps the screen dark (never white) before the scene decodes. */
+  background: #02070b;
   display: grid;
   height: 100%;
   justify-items: center;
@@ -11612,6 +11592,28 @@ button.tileset-relationship-cell {
   /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
      sit identically (the menu is the alignment reference). Re-tune in the dressing room. */
   transform: translate(-230px, -21px);
+}
+
+/* HOME MENU rail: keep the tuned centred placement, but FLOOR it so it can't clip.
+   Scoped to .main-menu-home (the home menu only — Campaign shares .main-menu-twin-screen /
+   .main-menu-layer but has a rows box tuned to the same centred shell, so it keeps the base
+   rules above).
+
+   The bug: the shell centres its body with margin = (layout-vw - shellW)/2, and the rail is
+   then pulled left a fixed -230px (the .settings-rail-frame transform above). At wide widths
+   that lands the buttons where they were TUNED to sit — do NOT disturb that. But as the window
+   narrows the centring margin shrinks while -230px stays put, so below ~1748px CSS width the
+   rail's left edge crosses x=0 and the buttons clip off the screen (labels sheared). A 1920
+   display at 125%/150% Windows scaling reports a CSS viewport of ~1536/1280 — squarely in the
+   clip zone.
+
+   The fix keeps the EXACT centred value wherever it already clears the floor (rail-left =
+   margin-230 stays put), and only floors the margin at 230px + a 40px gutter so the rail-left
+   can never fall below ~40px. So it is byte-identical to the tuned/production placement at every
+   width >= ~1748px, and merely stops the clip on narrower viewports. The rail keeps its shared
+   translate(-230px,-21px) — placement is corrected here, at the shell, not by moving the rail. */
+.main-menu-home .settings-shell {
+  margin-inline-start: max(270px, calc((var(--layout-vw, 100vw) - var(--settings-shell-w)) / 2));
 }
 
 /* Tier divider in the campaign rail (Official vs Your Campaigns) — an eyebrow label

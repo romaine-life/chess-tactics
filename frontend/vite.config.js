@@ -1,29 +1,39 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, readFile, mkdir } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
 import { nineSliceDevSave } from './scripts/vite-nine-slice-plugin.mjs';
 
 // Stamp build/server provenance into the bundle so Settings → About can always
-// say exactly what's serving this page. In dev that's the WORKTREE + commit (the
-// thing that would have made "you're on the wrong worktree's server" a glance
-// instead of a two-hour hunt — a server from another worktree injects its own
-// name). In a production build it's just the commit. Always defined, so the
+// say exactly what's serving this page. Every build carries the app's semver
+// (package.json) — the human-facing "which release is this". In dev it also names
+// the WORKTREE + commit (the thing that would have made "you're on the wrong
+// worktree's server" a glance instead of a two-hour hunt — a server from another
+// worktree injects its own name). Prod builds run inside Docker with no .git, so
+// the commit is unknowable here (it falls back to nothing) and the deploy-time
+// PR/commit provenance is served separately at runtime by /api/build-info — see
+// backend/server.js and k8s/values.yaml's `build:` block. Always defined, so the
 // reader never hits an undefined global.
 function buildInfo() {
   return {
     name: 'build-info',
     config(_config, { command }) {
       const sh = (c) => { try { return execSync(c, { cwd: process.cwd() }).toString().trim(); } catch { return ''; } };
+      const version = (() => {
+        try { return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version || ''; }
+        catch { return ''; }
+      })();
       const commit = sh('git rev-parse --short HEAD') || '(no-git)';
       const dirty = sh('git status --porcelain').length > 0;
       if (command !== 'serve') {
-        return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'prod', commit, dirty }) } };
+        return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'prod', version, commit, dirty }) } };
       }
       const cwd = process.cwd();
       const worktree = cwd.replace(/[\\/]frontend[\\/]?$/, '').split(/[\\/]/).pop() || cwd;
-      return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'dev', worktree, commit, dirty, startedAt: Date.now() }) } };
+      return { define: { __BUILD_INFO__: JSON.stringify({ mode: 'dev', version, worktree, commit, dirty, startedAt: Date.now() }) } };
     },
   };
 }
@@ -59,6 +69,112 @@ function doodadCompositionSave() {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ ok: false, error: String(err) }));
+          }
+        });
+      });
+    },
+  };
+}
+
+// Dev-only endpoint: /prop-lab's Save POSTs the EDITED prop seats here and they are MERGED
+// into src/core/propSeats.json — the checked-in single source of truth the game composes
+// into PROP_DEFS. Merge (never replace): props.ts throws at module load for a missing seat,
+// so a whole-file replace from a stale tab (or an empty POST) would white-screen every dev
+// route and silently drop other tabs' saved tuning. Vite's JSON-module HMR then reloads
+// every open board with the new seats.
+function propSeatSave() {
+  return {
+    name: 'prop-seat-save',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__prop-seat/save', (req, res) => {
+        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            const posted = JSON.parse(body);
+            const entries = posted && typeof posted === 'object' && !Array.isArray(posted) ? Object.entries(posted) : [];
+            const okFoot = (v) => v === undefined || (Number.isInteger(v) && v >= 1 && v <= 12);
+            const ok = entries.length > 0 && entries.every(([id, s]) => /^[a-z0-9_-]+$/i.test(id)
+              && s && typeof s === 'object'
+              && Number.isFinite(s.anchorX) && Number.isFinite(s.anchorY)
+              && Number.isFinite(s.scale) && s.scale > 0
+              && okFoot(s.w) && okFoot(s.h)
+              && (s.base === undefined || typeof s.base === 'string')
+              && (s.label === undefined || typeof s.label === 'string'));
+            if (!ok) throw new Error('body must be a non-empty { [propId]: { anchorX, anchorY, scale, w?, h?, base?, label? } } map with finite numbers');
+            const rel = 'src/core/propSeats.json';
+            const out = join(process.cwd(), rel);
+            const existing = JSON.parse(await readFile(out, 'utf8'));
+            const merged = { ...existing };
+            for (const [id, s] of entries) {
+              // A `base`/`label` marks a size variant; preserve them across a plain seat re-tune
+              // (which posts only anchor/scale) so re-saving a variant can't demote it to a base.
+              const prev = existing[id] || {};
+              const base = s.base ?? prev.base;
+              const label = s.label ?? prev.label;
+              const w = s.w ?? prev.w;
+              const h = s.h ?? prev.h;
+              merged[id] = {
+                ...(base ? { base } : {}),
+                ...(label ? { label } : {}),
+                anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale,
+                ...(w !== undefined ? { w } : {}),
+                ...(h !== undefined ? { h } : {}),
+              };
+            }
+            await writeFile(out, `${JSON.stringify(merged, null, 2)}\n`);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true, path: rel, updated: entries.map(([id]) => id) }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, error: String(err) }));
+          }
+        });
+      });
+    },
+  };
+}
+
+// Dev-only endpoint: /prop-lab's "Delete this copy" POSTs { id } here to remove ONE size-variant
+// entry from src/core/propSeats.json. Base protection lives HERE, not only in the UI: a base prop's
+// seat has no `base` field and backs a real PNG + PROP_DEF (props.ts throws at load for a missing
+// base seat), so this refuses to delete any entry that isn't a copy — a base can never be deleted,
+// even by a hand-rolled request. Vite's JSON-module HMR then drops the variant from every open board.
+function propSeatDelete() {
+  return {
+    name: 'prop-seat-delete',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__prop-seat/delete', (req, res) => {
+        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            const posted = JSON.parse(body);
+            const id = posted && typeof posted.id === 'string' ? posted.id : '';
+            if (!/^[a-z0-9_-]+$/i.test(id)) throw new Error('body must be { id: "<propId>" }');
+            const rel = 'src/core/propSeats.json';
+            const out = join(process.cwd(), rel);
+            const existing = JSON.parse(await readFile(out, 'utf8'));
+            const entry = existing[id];
+            if (!entry) throw new Error(`no prop "${id}" in propSeats.json`);
+            // BASE PROTECTION: only a copy (an entry with a `base`) is deletable. A base seat has no
+            // `base` and is required by props.ts at load — deleting it would white-screen every route.
+            if (!entry.base) throw new Error(`"${id}" is a base prop — bases can't be deleted, only copies`);
+            const { [id]: _removed, ...rest } = existing;
+            await writeFile(out, `${JSON.stringify(rest, null, 2)}\n`);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true, path: rel, deleted: id }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, error: String(err && err.message ? err.message : err) }));
           }
         });
       });
@@ -106,6 +222,97 @@ function bgmDevMock() {
   };
 }
 
+// Dev-only mock of the auth backend. frontend/src/net/auth.ts talks to relative
+// /api/auth/* paths that the deployed backend proxies to auth.romaine.life (Microsoft
+// sign-in). Local `vite` has no backend process, so the real "Sign In" button was a
+// dead redirect and nothing signed-in was testable. This middleware makes the WHOLE
+// round-trip work with just the dev server: click Sign In -> mock session cookie set
+// -> redirect back -> /api/auth/me reports a signed-in user -> the account menu
+// (rename, sign out) works. It mirrors the backend's own dev bypass EXACTLY — same
+// cookie (`better-auth.session=mock-dev-session`) and the same mock identity as
+// `node server.js` run with DEV_AUTH=1 (backend/server.js isDevAuthHost) — so the
+// two local modes show the same player and are interchangeable. `apply: 'serve'`
+// means this exists only under `vite dev`; it is never part of a production build.
+function devAuthMock() {
+  const COOKIE_NAME = 'better-auth.session';
+  const COOKIE_VALUE = 'mock-dev-session';
+  const EMAIL = process.env.DEV_AUTH_EMAIL || 'player@example.com';
+  const DEFAULT_NAME = process.env.DEV_AUTH_NAME || 'Tactics Player';
+  // Match backend gravatarUrl(): md5 of the lowercased email, retro (pixel-art) fallback.
+  const avatar = (() => {
+    const hash = createHash('md5').update(EMAIL).digest('hex');
+    return `https://www.gravatar.com/avatar/${hash}?d=retro&s=96`;
+  })();
+  // In-memory rename override for the running dev session (the DB-backed store the
+  // real PATCH /api/auth/me writes to isn't available locally). Reset on sign-out.
+  let displayName = null;
+  const user = () => ({
+    signed_in: true,
+    email: EMAIL,
+    name: displayName || DEFAULT_NAME,
+    image: null,
+    gravatar_url: avatar,
+    avatar_url: avatar,
+    role: 'pending',
+    is_admin: false,
+  });
+  return {
+    name: 'dev-auth-mock',
+    apply: 'serve',
+    configureServer(server) {
+      // Mounted at /api/auth, so req.url here is the remainder (/sign-in, /me, /sign-out).
+      server.middlewares.use('/api/auth', (req, res) => {
+        const url = req.url || '/';
+        const signedIn = (req.headers.cookie || '').includes(`${COOKIE_NAME}=${COOKIE_VALUE}`);
+        const json = (code, body) => {
+          res.statusCode = code;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(body));
+        };
+        // GET /api/auth/sign-in?returnTo=/path — set the session cookie and bounce back.
+        if (req.method === 'GET' && url.startsWith('/sign-in')) {
+          const raw = new URLSearchParams(url.split('?')[1] || '').get('returnTo') || '/';
+          const returnTo = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+          res.statusCode = 302;
+          res.setHeader('Set-Cookie', `${COOKIE_NAME}=${COOKIE_VALUE}; Path=/; HttpOnly; SameSite=Lax`);
+          res.setHeader('Location', returnTo);
+          res.end();
+          server.config.logger.info(`[dev-auth-mock] signed in as ${EMAIL} -> ${returnTo}`);
+          return;
+        }
+        // POST /api/auth/sign-out — clear the cookie and any rename override.
+        if (req.method === 'POST' && url.startsWith('/sign-out')) {
+          res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`);
+          displayName = null;
+          json(200, { ok: true });
+          return;
+        }
+        // GET /api/auth/me — the session probe fetchMe() calls on mount.
+        if (req.method === 'GET' && url.startsWith('/me')) {
+          json(200, signedIn ? user() : { signed_in: false });
+          return;
+        }
+        // PATCH /api/auth/me — rename the account (in-memory only for local dev).
+        if (req.method === 'PATCH' && url.startsWith('/me')) {
+          if (!signedIn) { json(401, { error: 'sign_in_required' }); return; }
+          let body = '';
+          req.on('data', (chunk) => { body += chunk; });
+          req.on('end', () => {
+            try {
+              const parsed = JSON.parse(body || '{}');
+              const next = typeof parsed.name === 'string' ? parsed.name.trim().slice(0, 48) : '';
+              displayName = next || null;
+            } catch { /* keep prior name on a bad body */ }
+            json(200, user());
+          });
+          return;
+        }
+        json(404, { error: 'not_found' });
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave(), bgmDevMock()],
+  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), propSeatDelete(), nineSliceDevSave(), bgmDevMock(), devAuthMock()],
 });

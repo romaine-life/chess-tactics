@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { DoodadSprite } from '../render/BoardDoodad';
-import { PropSprite } from '../render/BoardStructure';
+import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
@@ -51,6 +51,8 @@ import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
+import { publishMap } from '../net/maps';
+import { HttpError } from '../net/http';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
 import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
@@ -1224,6 +1226,34 @@ export function LevelEditor(): ReactElement {
     void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
     reportStatus('Copied board link.', 'success');
   };
+  // Publish this map to the server and copy a public /play?map=<id> link. Unlike the board-code
+  // link, this one UNFURLS on Discord (the server can resolve it) and is a short, stable URL anyone
+  // can play. Requires the map to be saved & clean (publish reads the stored copy) and signed in (a
+  // public link needs an owner).
+  const [sharing, setSharing] = useState(false);
+  const copyShareLink = async (): Promise<void> => {
+    if (sharing) return;
+    if (!editingId || dirty) {
+      reportStatus('Save this map first.', 'warning', dirty ? 'You have unsaved changes — Save, then Share Link.' : 'Give it a name and Save, then Share Link.');
+      return;
+    }
+    setSharing(true);
+    try {
+      const { url } = await publishMap(editingId);
+      await navigator.clipboard?.writeText(url);
+      reportStatus('Copied share link.', 'success', 'Anyone with the link can preview and play this map.');
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 401) {
+        reportStatus('Sign in to share.', 'warning', 'A public share link needs a signed-in owner.');
+      } else if (err instanceof HttpError && err.status === 404) {
+        reportStatus('Save this map first.', 'warning', 'The saved copy wasn’t found — Save, then Share Link.');
+      } else {
+        reportStatus('Couldn’t create a share link.', 'error');
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
   const loadBoardLink = (): void => {
     setLayer('status');
     setTool('select');
@@ -1687,6 +1717,7 @@ export function LevelEditor(): ReactElement {
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
               <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy Link</button>
+              <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>
             <input
               className="le-board-link-input"
@@ -1880,7 +1911,7 @@ export function LevelEditor(): ReactElement {
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'prop'
-                ? <img src={`/assets/props/${propBrushDef.id}/front.png`} alt="" draggable={false} />
+                ? <img src={propHalfSrc(propBrushDef.spriteId, 'front')} alt="" draggable={false} />
                 : brushKind === 'zone'
                 ? <span className={`le-brush-thumb-zone le-zone-${LE_ZONE_TINT[zoneBrushType] ?? 'goal'}`} aria-hidden="true" />
                 : featureKind === 'fence'
@@ -2011,7 +2042,7 @@ export function LevelEditor(): ReactElement {
                         title={`${def.label} · ${def.w}×${def.h} · ${def.terrains.join(', ')}${def.blocking ? ' · blocks' : ''}`}
                         onClick={() => { setPropBrushId(def.id); setBrushKind('prop'); setLayer('prop'); setTool('brush'); }}
                       >
-                        <img src={`/assets/props/${def.id}/front.png`} alt="" draggable={false} />
+                        <img src={propHalfSrc(def.spriteId, 'front')} alt="" draggable={false} />
                         <small>{def.label}</small>
                       </button>
                     ))}

@@ -3,6 +3,20 @@ const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
+// Pure board-render geometry (committed bundle of the SAME code the editor uses — see
+// frontend/scripts/build-server-render.mjs) so the server can compute a level's draw plan + content
+// hash. server.js is hot-copied to and run from a hot dir (supervisor.js), so a bare './generated'
+// require would resolve against that dir; resolve sibling assets against the BAKED backend dir instead
+// (BAKED_BACKEND_DIR from the supervisor; __dirname when run directly in dev/test). Fail-soft: a
+// missing/broken bundle just means thumbnails fall back to the default share image, never a crash
+// (the game must stay up). The @napi-rs/canvas compositor is required lazily in the render route too.
+const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+let serverRender = null;
+try {
+  serverRender = require(path.join(bakedBackendDir, 'generated', 'board-render.cjs'));
+} catch (error) {
+  console.error('board-render bundle unavailable; level thumbnails will use the default image:', error && error.message);
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -44,6 +58,12 @@ const BGM_CACHE_TTL_MS = 5 * 60 * 1000;
 let bgmCache = { tracks: null, expiry: 0 };
 let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode only)
 
+// Game Lab runs carry whole recorded-game batches (validateLabRun allows up to
+// ~8 MB of JSON), far past the global 256kb ceiling. Mount their larger parser
+// first: once it has consumed the body, the global parser below sees the
+// request as already read and skips it, so every other route keeps the 256kb
+// limit.
+app.use('/api/lab-runs', express.json({ limit: '10mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -159,6 +179,52 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 6,
+    name: 'game lab runs',
+    // Account-scoped Game Lab run archive: append-only run documents. `meta` is
+    // the small list-view summary (listing never returns `body`); `body` is the
+    // full run payload, fetched per run. The composite index serves the
+    // owner-scoped newest-first listing.
+    sql: `
+      CREATE TABLE IF NOT EXISTS lab_runs (
+        id          text        PRIMARY KEY,
+        owner_email text        NOT NULL,
+        meta        jsonb       NOT NULL,
+        body        jsonb       NOT NULL,
+        created_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS lab_runs_owner_idx ON lab_runs (owner_email, created_at DESC);
+    `,
+  },
+  {
+    version: 7,
+    name: 'shareable public maps + account campaign progress',
+    // public_maps: a global, owner-free address for a user's map so a pasted /play?map=<id> link
+    // resolves for an anonymous crawler/visitor (the per-owner l<n> id has no global meaning). Stores
+    // a SNAPSHOT of the level body (decoupled from the owner's live workspace — re-publish updates it)
+    // + the board content hash for the thumbnail/og cache key. The unguessable public_id is the
+    // share capability (maps are intentionally public-by-link).
+    // campaign_progress: account-scoped cleared/stars, mirroring the per-owner campaign_workspaces blob.
+    sql: `
+      CREATE TABLE IF NOT EXISTS public_maps (
+        public_id    text        PRIMARY KEY,
+        owner_email  text        NOT NULL,
+        level_id     text        NOT NULL,
+        name         text,
+        content_hash text,
+        body         jsonb       NOT NULL,
+        created_at   timestamptz NOT NULL DEFAULT now(),
+        updated_at   timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS public_maps_owner_idx ON public_maps (owner_email, level_id);
+      CREATE TABLE IF NOT EXISTS campaign_progress (
+        owner_email text        PRIMARY KEY,
+        body        jsonb       NOT NULL,
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -167,8 +233,14 @@ let migrationPromise = null;
 
 function buildPool() {
   if (databaseUrl) {
+    // Azure managed Postgres requires TLS. Prod connects through the POSTGRES_HOST
+    // (AAD) branch below, so this only affects DATABASE_URL targets: turn SSL on when
+    // the URL points at an Azure Postgres or asks for it (sslmode=require); a local/CI
+    // Postgres (localhost) stays plaintext, unchanged.
+    const needsSsl = /sslmode=require/i.test(databaseUrl) || /\.postgres\.database\.azure\.com/i.test(databaseUrl);
     return new Pool({
       connectionString: databaseUrl,
+      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
       max: 8,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
@@ -349,6 +421,8 @@ function publicLobby(lobby, viewerEmail) {
     level_id: lobby.levelId ?? null,
     seed: lobby.seed ?? null,
     move_count: lobby.moves ? lobby.moves.length : 0,
+    // Terminal outcome (resignation) in board terms, or null while the match is live.
+    result: lobby.result ?? null,
     your_side: viewerEmail === lobby.host.email
       ? 'player'
       : (lobby.guest && viewerEmail === lobby.guest.email ? 'enemy' : null),
@@ -808,15 +882,34 @@ function applyLevelPatch(level, raw) {
   Object.assign(level, next);
 }
 
+// Dev sign-in bypass — skips the Microsoft round-trip so sign-in is testable
+// off-network. Two triggers, BOTH dev-only:
+//   - a *.tank.dev.romaine.life host — the deployed dev-slot domain (unchanged), and
+//   - a loopback host when DEV_AUTH=1 — a local `node server.js` for exercising the
+//     real sign-in flow / lobbies without Postgres or Microsoft (see CLAUDE.md).
+// Prod pods never set DEV_AUTH and their ingress Host is chess.romaine.life, so a
+// spoofed `Host: localhost` header cannot switch this on in production.
+function isDevAuthHost(req) {
+  const host = (req.get('host') || '').toLowerCase();
+  if (host.includes('.tank.dev.romaine.life')) return true;
+  if (process.env.DEV_AUTH === '1') {
+    const bare = host.replace(/:\d+$/, ''); // strip :port (IPv6 stays bracketed)
+    if (bare === 'localhost' || bare === '127.0.0.1' || bare === '[::1]') return true;
+  }
+  return false;
+}
+
 async function readSession(req) {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     const cookie = req.get('cookie') || '';
     if (cookie.includes('better-auth.session=mock-dev-session')) {
+      // Who the dev session signs in as. Defaults to a throwaway player; set
+      // DEV_AUTH_EMAIL (+ DEV_AUTH_NAME) to sign in as a real account so its
+      // owner-scoped data shows. Admin affordances still come from ADMIN_EMAILS.
       return {
         user: {
-          email: 'player@example.com',
-          name: 'Tactics Player',
+          email: process.env.DEV_AUTH_EMAIL || 'player@example.com',
+          name: process.env.DEV_AUTH_NAME || 'Tactics Player',
           role: 'pending',
         }
       };
@@ -870,8 +963,7 @@ async function requireAdmin(req, res) {
 }
 
 async function requireDesignPortfolioWriter(req, res) {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     return {
       email: 'test-slot@chess-tactics.local',
       name: 'Test Slot',
@@ -948,7 +1040,10 @@ const SSE_HEADERS = {
   'Connection': 'keep-alive',
   'X-Accel-Buffering': 'no',
 };
-const SSE_KEEPALIVE_MS = 15000;
+// Kept comfortably under any proxy/gateway timeout. The lobby SSE routes disable
+// Envoy Gateway's default 15s HTTPRoute request timeout (k8s/templates/httproute.yaml);
+// this heartbeat is the belt-and-suspenders for any other idle timer in the path.
+const SSE_KEEPALIVE_MS = 10000;
 
 // Start an SSE response: write headers, kick off a heartbeat, and wire cleanup on
 // close. Returns the interval so the route can clear it in its own close handler.
@@ -983,6 +1078,24 @@ function frontendIndexFile() {
 
 app.get('/health', (_req, res) => {
   res.status(200).send('ok');
+});
+
+// Human-facing build/deploy provenance for Settings → About. The frontend bakes
+// the app semver at build time; the deploy-time PR/commit are not knowable then
+// (the frontend builds inside Docker with no .git), so they ride as env stamped
+// into k8s/values.yaml's `build:` block by .github/workflows/build-and-deploy.yaml
+// on each deploy — the SAME commit that bumps the image tag. That means the labels
+// stay correct even when a content-identical rebuild is skipped and the old image
+// is reused (the image bytes never carry this — only the k8s manifest does). Pure
+// chrome: never 500s; unset fields degrade to '' and the client shows just the
+// baked version.
+app.get('/api/build-info', (_req, res) => {
+  res.status(200).json({
+    prTitle: process.env.BUILD_PR_TITLE || '',
+    prNumber: process.env.BUILD_PR_NUMBER || '',
+    prUrl: process.env.BUILD_PR_URL || '',
+    commit: process.env.BUILD_COMMIT || '',
+  });
 });
 
 // Readable fallback title from a slugged blob name, used only when a track has no
@@ -1168,6 +1281,11 @@ app.post('/api/lobbies', async (req, res) => {
     levelId: null,
     seed: null,
     moves: [],
+    // Terminal outcome from a non-move event (a player resigning). `null` while the
+    // match is live; once set, both clients read it off the lobby frame and end the
+    // game — so it survives reconnect/late-join the way the move log does. Checkmate/
+    // stalemate/objective ends stay purely client-side (deterministic replay).
+    result: null,
   };
   lobbies.set(id, lobby);
   broadcastLobbies();
@@ -1182,6 +1300,12 @@ app.get('/api/lobbies/events', async (req, res) => {
   if (!user) return;
   const heartbeat = startSse(res);
   lobbyListSubscribers.add(res);
+  // Connect-time snapshot: push an immediate change ping so the client refetches the
+  // current list the instant the stream opens (mirrors the per-lobby channel's on-connect
+  // frame at the /:id/events route). Combined with the client's onopen refetch, this makes
+  // every (re)connection self-healing — a mutation missed while the socket was down is
+  // recovered on reconnect instead of being lost until a manual Refresh.
+  sseWrite(res, 'data: {"type":"lobbies-changed"}\n\n');
   req.on('close', () => {
     clearInterval(heartbeat);
     lobbyListSubscribers.delete(res);
@@ -1280,6 +1404,11 @@ app.post('/api/lobbies/:id/start', async (req, res) => {
   // Lock a positive-integer seed for deterministic shared placement (crypto so it
   // is not predictable). Both clients build the identical board from (level, seed).
   lobby.seed = 1 + (crypto.randomInt ? crypto.randomInt(900000) : Math.floor(Math.random() * 900000));
+  // Fresh match: drop any relayed moves and terminal result from a prior game played in
+  // this lobby (a lobby is reusable — e.g. a guest leaves after a match and a new one
+  // joins), so both clients start from an empty log rather than backfilling the old game.
+  lobby.moves = [];
+  lobby.result = null;
   lobby.phase = 'started';
   lobby.updatedAt = new Date().toISOString();
   broadcastLobbies();
@@ -1305,6 +1434,13 @@ app.post('/api/lobbies/:id/moves', async (req, res) => {
   }
   if (lobby.phase !== 'started') {
     res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  // The match is already decided by a resignation — no further moves are relayed. (A
+  // well-behaved client stops sending once its board shows a winner; this guards a
+  // stale/racing POST from re-opening a finished game.)
+  if (lobby.result) {
+    res.status(409).json({ error: 'match_over' });
     return;
   }
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -1338,6 +1474,39 @@ app.post('/api/lobbies/:id/moves', async (req, res) => {
   lobby.updatedAt = new Date().toISOString();
   broadcastToLobby(lobby.id, { type: 'move', move: event });
   res.status(200).json({ move: event });
+});
+
+// Resign the match. Caller must be host/guest; lobby must be started. Records a
+// terminal result (the OTHER side wins) on the lobby and pushes it to both clients
+// over the game channel — they end the game from their own seat's perspective. Unlike
+// a move, resignation isn't turn-gated (a player may resign any time) and it's stored
+// on the lobby (not the move log) so a reconnecting/late client learns the match ended.
+app.post('/api/lobbies/:id/resign', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const isHost = lobby.host.email === user.email;
+  const isGuest = lobby.guest && lobby.guest.email === user.email;
+  if (!isHost && !isGuest) {
+    res.status(409).json({ error: 'not_in_lobby' });
+    return;
+  }
+  if (lobby.phase !== 'started') {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  // Idempotent: a double-tap (or both players racing to resign) keeps the first result.
+  if (!lobby.result) {
+    lobby.result = { winner: isHost ? 'enemy' : 'player', reason: 'resign' };
+    lobby.updatedAt = new Date().toISOString();
+    broadcastLobbyState(lobby);
+    broadcastLobbies();
+  }
+  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
 });
 
 // Backfill relayed moves since index N (reconnect / late join). Same visibility
@@ -1642,8 +1811,7 @@ app.put('/api/design-portfolios/:id', async (req, res) => {
 });
 
 app.get('/api/auth/sign-in', (req, res) => {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     res.setHeader('Set-Cookie', 'better-auth.session=mock-dev-session; Path=/; HttpOnly');
     const returnTo = req.query.returnTo || '/';
     res.redirect(302, returnTo);
@@ -1979,6 +2147,111 @@ app.put('/api/campaign-workspace', async (req, res) => {
   }
 });
 
+// Game Lab run persistence: account-scoped, append-only run documents in the
+// Postgres `lab_runs` table. `meta` is the small list-view summary; `body` is
+// the full run payload (list responses never include it). Every query filters
+// by owner_email so a user can never read or delete another user's run.
+const LAB_RUN_BODY_MAX_JSON_CHARS = 8_000_000;
+
+function validateLabRun(raw) {
+  if (!isObjectRecord(raw.meta)) return 'meta must be an object';
+  if (!isObjectRecord(raw.body)) return 'body must be an object';
+  if (JSON.stringify(raw.body).length > LAB_RUN_BODY_MAX_JSON_CHARS) return 'body_too_large';
+  return null;
+}
+
+async function dbListLabRuns(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, meta, created_at FROM lab_runs WHERE owner_email = $1 ORDER BY created_at DESC LIMIT 100',
+    [ownerEmail],
+  );
+  return rows;
+}
+
+async function dbGetLabRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, meta, body, created_at FROM lab_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rows[0] || null;
+}
+
+async function dbInsertLabRun(ownerEmail, id, meta, body) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO lab_runs (id, owner_email, meta, body)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb)
+     RETURNING created_at`,
+    [id, ownerEmail, JSON.stringify(meta), JSON.stringify(body)],
+  );
+  return rows[0].created_at;
+}
+
+async function dbDeleteLabRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rowCount } = await pool.query(
+    'DELETE FROM lab_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rowCount > 0;
+}
+
+app.get('/api/lab-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ runs: await dbListLabRuns(user.email) });
+  } catch (error) {
+    dbUnavailable(res, 'lab run list failed', error, 'lab_runs_unavailable');
+  }
+});
+
+app.post('/api/lab-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const validationError = validateLabRun(raw);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_lab_run', details: validationError });
+    return;
+  }
+  const id = crypto.randomUUID();
+  try {
+    const createdAt = await dbInsertLabRun(user.email, id, raw.meta, raw.body);
+    res.status(200).json({ ok: true, id, created_at: createdAt });
+  } catch (error) {
+    dbUnavailable(res, 'lab run write failed', error, 'lab_runs_unavailable');
+  }
+});
+
+app.get('/api/lab-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetLabRun(user.email, req.params.id);
+    if (!run) { res.status(404).json({ error: 'run_not_found' }); return; }
+    res.status(200).json({ id: run.id, meta: run.meta, body: run.body, created_at: run.created_at });
+  } catch (error) {
+    dbUnavailable(res, 'lab run read failed', error, 'lab_runs_unavailable');
+  }
+});
+
+// Idempotent: deleting an unknown (or another owner's) run still answers
+// {ok:true} — the owner filter in dbDeleteLabRun means it simply deletes
+// nothing in that case.
+app.delete('/api/lab-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    await dbDeleteLabRun(user.email, req.params.id);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    dbUnavailable(res, 'lab run delete failed', error, 'lab_runs_unavailable');
+  }
+});
+
 // --- Official (global) campaign tier (ADR-0038) ----------------------------
 // Global game content readable by everyone (public GET) and authored by admins
 // (requireAdmin PUT). One upserted row per id holding a complete Workspace. The
@@ -2101,6 +2374,145 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
   }
 });
 
+// --- Shareable public maps -------------------------------------------------
+// A user's map lives in their per-owner workspace blob keyed by a per-owner l<n> id, so it has no
+// global name a signed-out crawler/visitor could resolve. Publishing mints a stable, owner-free
+// public_id and snapshots the level into public_maps, which the UNAUTH GET /api/maps/:id and the OG
+// thumbnail path read. Officials keep their global off-* ids and are unaffected.
+const PUBLIC_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'; // no 0/o/1/l ambiguity
+const PUBLIC_ID_RE = /^[a-hjkmnp-z2-9]{8,24}$/;
+function newPublicId() {
+  const bytes = crypto.randomBytes(12);
+  let out = '';
+  for (const b of bytes) out += PUBLIC_ID_ALPHABET[b % 32];
+  return out;
+}
+async function dbEnsurePublicId(ownerEmail, levelId, level, contentHash) {
+  await ensureDbReady();
+  const name = level && typeof level.name === 'string' ? level.name : null;
+  const bodyJson = JSON.stringify(level);
+  const existing = await pool.query(
+    'SELECT public_id FROM public_maps WHERE owner_email = $1 AND level_id = $2', [ownerEmail, levelId],
+  );
+  if (existing.rows[0]) {
+    const id = existing.rows[0].public_id;
+    await pool.query(
+      'UPDATE public_maps SET name = $2, content_hash = $3, body = $4::jsonb, updated_at = now() WHERE public_id = $1',
+      [id, name, contentHash, bodyJson],
+    );
+    return id;
+  }
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const id = newPublicId();
+    try {
+      await pool.query(
+        'INSERT INTO public_maps (public_id, owner_email, level_id, name, content_hash, body) VALUES ($1,$2,$3,$4,$5,$6::jsonb)',
+        [id, ownerEmail, levelId, name, contentHash, bodyJson],
+      );
+      return id;
+    } catch (error) {
+      if (error && error.code === '23505') continue; // PK collision — retry with a fresh id
+      throw error;
+    }
+  }
+  throw new Error('public_id_allocation_failed');
+}
+async function dbGetPublicMap(publicId) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT public_id, owner_email, level_id, name, content_hash, body FROM public_maps WHERE public_id = $1',
+    [publicId],
+  );
+  return rows[0] || null;
+}
+
+// POST /api/maps/publish { levelId } -> { public_id, url }. Mints/refreshes the shareable id for one
+// of the CALLER's own maps (verified against their workspace blob). Copy-link data source — no
+// rendering here; the thumbnail is produced on demand at crawl time.
+app.post('/api/maps/publish', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const levelId = req.body && typeof req.body.levelId === 'string' ? req.body.levelId : '';
+  if (!levelId) { res.status(400).json({ error: 'invalid_level_id' }); return; }
+  try {
+    const row = await dbGetWorkspace(user.email);
+    const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
+      ? row.body.levels[levelId] : null;
+    if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
+    let contentHash = null;
+    try { contentHash = serverRender.boardHashForLevel(level); } catch { contentHash = null; }
+    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
+    res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
+  } catch (error) {
+    dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
+  }
+});
+// GET /api/maps/:publicId — PUBLIC: the level snapshot for a shared map, so a signed-out visitor can
+// play it and the SPA can hydrate it. Officials are served by their own tier, not here.
+app.get('/api/maps/:publicId', async (req, res) => {
+  const publicId = String(req.params.publicId || '');
+  if (!PUBLIC_ID_RE.test(publicId)) { res.status(400).json({ error: 'invalid_map_id' }); return; }
+  try {
+    const row = await dbGetPublicMap(publicId);
+    if (!row) { res.status(404).json({ error: 'map_not_found' }); return; }
+    res.status(200).json({ public_id: row.public_id, level: row.body });
+  } catch (error) {
+    dbUnavailable(res, 'map read failed', error, 'map_store_unavailable');
+  }
+});
+
+// --- Account-scoped campaign progress --------------------------------------
+// Per-owner cleared/stars, mirroring the workspace-blob pattern. localStorage stays the offline/guest
+// source of truth on the client; this is the durable cross-device copy that a monotonic merge folds
+// guest progress into on sign-in. Body: { "<levelId>": { completed: bool, stars: 0..3 } }.
+function sanitizeProgress(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [levelId, v] of Object.entries(raw)) {
+    if (typeof levelId !== 'string' || !levelId || levelId.length > 128) continue;
+    if (!v || typeof v !== 'object') continue;
+    const stars = Number(v.stars);
+    out[levelId] = {
+      completed: Boolean(v.completed),
+      stars: Number.isFinite(stars) ? Math.max(0, Math.min(3, Math.round(stars))) : 0,
+    };
+  }
+  return out;
+}
+async function dbGetProgress(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query('SELECT body FROM campaign_progress WHERE owner_email = $1', [ownerEmail]);
+  return rows[0] ? rows[0].body : null;
+}
+async function dbPutProgress(ownerEmail, body) {
+  await ensureDbReady();
+  await pool.query(
+    `INSERT INTO campaign_progress (owner_email, body) VALUES ($1, $2::jsonb)
+     ON CONFLICT (owner_email) DO UPDATE SET body = EXCLUDED.body, updated_at = now()`,
+    [ownerEmail, JSON.stringify(body)],
+  );
+}
+app.get('/api/campaign-progress', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ progress: sanitizeProgress(await dbGetProgress(user.email)) });
+  } catch (error) {
+    dbUnavailable(res, 'progress read failed', error, 'progress_store_unavailable');
+  }
+});
+app.put('/api/campaign-progress', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const progress = sanitizeProgress(req.body && req.body.progress);
+  try {
+    await dbPutProgress(user.email, progress);
+    res.status(200).json({ ok: true, progress });
+  } catch (error) {
+    dbUnavailable(res, 'progress write failed', error, 'progress_store_unavailable');
+  }
+});
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'not_found' });
 });
@@ -2139,8 +2551,177 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
+// --- Open Graph unfurl + on-demand board thumbnails ------------------------
+// A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
+// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
+// ON-DEMAND board render served here — no CI bake, no browser (the board composites in Node via
+// generated/board-render.cjs + boardThumbnail.js). Officials resolve from the LIVE DB (never the
+// committed seed fixture); user maps from public_maps. A render/resolve failure degrades to the
+// branded default image.
+const OG_SITE_NAME = 'Chess Tactics';
+const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
+const DEFAULT_OG_IMAGE = '/assets/og/default.png';
+// Owner-facing objective labels — mirrors frontend core/objectives.ts MODE_NAME (5 stable entries).
+const OG_MODE_NAME = {
+  'capture-all': 'Last Man Standing', 'capture-king': 'King Assault',
+  'rival-kings': 'Rival Kings', survive: 'Survive', reach: 'Reach',
+};
+
+// mtime-cached file read: HTML is served no-cache so crawlers re-hit — keep it allocation-light while
+// still reflecting a STATIC_FRONTEND_DIR hot-swap. null-safe (never throws).
+const _fileCache = new Map();
+function readFileCached(absPath) {
+  let stat;
+  try { stat = fs.statSync(absPath); } catch { return null; }
+  const hit = _fileCache.get(absPath);
+  if (hit && hit.mtimeMs === stat.mtimeMs) return hit.content;
+  let content;
+  try { content = fs.readFileSync(absPath, 'utf8'); } catch { return null; }
+  _fileCache.set(absPath, { mtimeMs: stat.mtimeMs, content });
+  return content;
+}
+function htmlEscape(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// Official campaigns for the OG/thumbnail path come ONLY from the LIVE DB — the same source the game
+// loads (GET /api/official-campaigns/default) — so a thumbnail can never drift from a re-published
+// level. A short TTL keeps the crawler hot path off the DB (≤1 query/minute); the last SUCCESSFUL
+// read is kept in memory so a transient DB blip still serves REAL (last-known) data. The committed
+// official.json is a DEV-ONLY seed fixture and is deliberately NOT read here (and not shipped to
+// prod): stale/test data must be impossible to show on a remote unfurl. On a cold start during a DB
+// outage (no cached read yet) this resolves to empty → the generic card, never the fixture.
+const OFFICIAL_WS_TTL_MS = 60 * 1000;
+let _officialCache = { at: 0, ws: null }; // last SUCCESSFUL DB read
+async function officialWorkspace() {
+  const now = Date.now();
+  if (_officialCache.ws && now - _officialCache.at < OFFICIAL_WS_TTL_MS) return _officialCache.ws;
+  try {
+    const doc = await dbGetOfficialCampaigns('default');
+    const data = doc && doc.data;
+    if (data && Array.isArray(data.campaigns) && data.campaigns.length) {
+      _officialCache = {
+        at: now,
+        ws: { campaigns: data.campaigns, levels: data.levels && typeof data.levels === 'object' ? data.levels : {} },
+      };
+      return _officialCache.ws;
+    }
+  } catch { /* DB unreachable — fall through to the last-good real read below, else empty */ }
+  return _officialCache.ws || { campaigns: [], levels: {} };
+}
+// Resolve a share reference to { level, title, subtitle, description }. Officials read the on-disk
+// baked file (sync, no DB); user maps read public_maps (async). Returns null when unresolvable.
+async function resolveShareTarget({ levelId, campaignId, mapId }) {
+  if (mapId) {
+    const row = await dbGetPublicMap(mapId).catch(() => null);
+    if (!row || !row.body || typeof row.body !== 'object') return null;
+    const level = row.body;
+    const objective = OG_MODE_NAME[level.objective] || null;
+    return {
+      level,
+      title: row.name || level.name || OG_SITE_NAME,
+      subtitle: objective ? `Community map · ${objective}` : 'Community map',
+      description: objective ? `A community-made ${objective} map.` : OG_DEFAULT_DESC,
+    };
+  }
+  if (levelId && /^off-[a-z-]+$/.test(levelId)) {
+    const ws = await officialWorkspace();
+    const level = Object.hasOwn(ws.levels, levelId) && ws.levels[levelId] && typeof ws.levels[levelId] === 'object'
+      ? ws.levels[levelId] : null;
+    if (!level) return null;
+    const campaign = campaignId ? ws.campaigns.find((c) => c && c.id === campaignId) || null : null;
+    const objective = OG_MODE_NAME[level.objective] || null;
+    return {
+      level,
+      title: campaign && campaign.name ? `${level.name} — ${campaign.name}` : (level.name || OG_SITE_NAME),
+      subtitle: [campaign && campaign.name, objective].filter(Boolean).join(' · ') || null,
+      description: level.notes || (campaign && campaign.name ? `A level in ${campaign.name}.` : OG_DEFAULT_DESC),
+    };
+  }
+  return null;
+}
+
+// On-demand board thumbnail: /assets/level-thumb/<id>.png (?v=<hash> only busts caches). Rendered once
+// per (id, board-content-hash), cached in-process (single replica). Registered BEFORE express.static
+// so the .png isn't 404'd by the SPA fallback's static-extension guard.
+const _thumbCache = new Map(); // `${id}:${hash}` -> Buffer
+const THUMB_CACHE_MAX = 200;
+app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
+  const id = String(req.params[0] || '');
+  const isOfficial = /^off-[a-z-]+$/.test(id);
+  const isMap = PUBLIC_ID_RE.test(id);
+  if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
+  try {
+    if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; } // bundle unavailable → default card
+    const target = await resolveShareTarget(isOfficial ? { levelId: id } : { mapId: id });
+    if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    const plan = serverRender.levelRenderPlan(target.level);
+    const cacheKey = `${id}:${plan.contentHash}`;
+    let png = _thumbCache.get(cacheKey);
+    if (!png) {
+      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle });
+      if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
+      _thumbCache.set(cacheKey, png);
+    }
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.status(200).end(png);
+  } catch (error) {
+    console.error('level-thumb render failed:', error && error.message);
+    res.redirect(302, DEFAULT_OG_IMAGE); // never fail an unfurl — fall back to the branded card
+  }
+});
+
+async function ogTagsFor(req) {
+  const origin = publicOrigin; // TRUSTED canonical origin, never the spoofable Host header
+  const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
+  const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
+  const mapId = typeof req.query.map === 'string' && PUBLIC_ID_RE.test(req.query.map) ? req.query.map : null;
+  const target = await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
+
+  let title = OG_SITE_NAME;
+  let description = OG_DEFAULT_DESC;
+  let image = `${origin}${DEFAULT_OG_IMAGE}`;
+  if (target) {
+    title = target.title || OG_SITE_NAME;
+    description = target.description || target.subtitle || OG_DEFAULT_DESC;
+    // Only point og:image at the on-demand render when the bundle is available; else keep the
+    // default (avoids advertising an endpoint that would just 302 to the default anyway).
+    if (serverRender) {
+      const key = mapId || levelId;
+      let hash = '';
+      try { hash = serverRender.boardHashForLevel(target.level); } catch { hash = ''; }
+      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${hash ? `?v=${hash}` : ''}`;
+    }
+  }
+  const url = `${origin}${req.originalUrl}`;
+  const meta = [
+    ['og:type', 'website'], ['og:site_name', OG_SITE_NAME], ['og:title', title],
+    ['og:description', description], ['og:url', url], ['og:image', image],
+    ['og:image:width', '1200'], ['og:image:height', '630'],
+  ].map(([p, c]) => `<meta property="${p}" content="${htmlEscape(c)}">`);
+  const tw = [
+    ['twitter:card', 'summary_large_image'], ['twitter:title', title],
+    ['twitter:description', description], ['twitter:image', image],
+  ].map(([n, c]) => `<meta name="${n}" content="${htmlEscape(c)}">`);
+  return { title, headTags: [...meta, ...tw].join('') };
+}
+async function renderShellWithOg(req) {
+  const html = readFileCached(frontendIndexFile());
+  if (html == null) return null;
+  const { title, headTags } = await ogTagsFor(req);
+  // Function replacers: a level name/notes can contain `$`, which a STRING replacement would treat
+  // as a special pattern ($&/$'/$$) and corrupt the head.
+  let out = html.replace('</head>', () => `${headTags}</head>`);
+  if (title !== OG_SITE_NAME) out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${htmlEscape(title)}</title>`);
+  return out;
+}
+
 if (staticFrontendDir) {
-  app.use(express.static(staticFrontendDir, { setHeaders: makeStaticCacheHeaders(staticFrontendDir) }));
+  // index:false so a request for '/' (or a directory) is NOT served the untagged index.html here —
+  // it falls through to the OG-injecting SPA fallback below.
+  app.use(express.static(staticFrontendDir, { index: false, setHeaders: makeStaticCacheHeaders(staticFrontendDir) }));
 }
 app.use((req, res, next) => {
   if (MIGRATED_RAW_ASSET_PATHS.has(req.path)) {
@@ -2149,7 +2730,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(frontendDir, { setHeaders: makeStaticCacheHeaders(frontendDir) }));
+app.use(express.static(frontendDir, { index: false, setHeaders: makeStaticCacheHeaders(frontendDir) }));
 
 // SPA fallback: serve index.html for client routes. Only 404 for genuine
 // static-asset extensions (a missing .png/.js/etc.) — NOT for app routes whose
@@ -2161,13 +2742,21 @@ const STATIC_ASSET_EXTENSIONS = new Set([
   '.woff', '.woff2', '.ttf', '.eot', '.webmanifest',
   '.mp3', '.wav', '.ogg', '.mp4', '.webm',
 ]);
-app.use((req, res) => {
+app.use(async (req, res) => {
   if (STATIC_ASSET_EXTENSIONS.has(path.extname(req.path).toLowerCase())) {
     res.status(404).send('not found');
     return;
   }
   res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(frontendIndexFile(), { dotfiles: 'allow' });
+  // Inject per-level Open Graph tags so the link unfurls on Discord/Slack/Twitter; on any failure
+  // fall back to streaming the untagged shell so the app never fails to serve.
+  let html = null;
+  try { html = await renderShellWithOg(req); } catch { html = null; }
+  if (html == null) {
+    res.sendFile(frontendIndexFile(), { dotfiles: 'allow' });
+    return;
+  }
+  res.type('html').send(html);
 });
 
 function startServer() {

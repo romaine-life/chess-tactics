@@ -1,13 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, terminalIfStuck, sideHasLegalMove, shouldStartFreshSkirmish } from './store';
+import { useSkirmish, resolveIfPlayerStuck, playerHasLegalMove, terminalIfStuck, sideHasLegalMove, shouldStartFreshSkirmish, setNetResignSink } from './store';
 import { livingPieces } from '../core/rules';
 import type { MoveEnv } from '../core/rules';
 import type { GameState, Piece, PieceType, Side } from '../core/types';
 import { createBlankLevel } from '../core/level';
 
+// A handful of tests here compute one or two full enemy replies, each of which runs
+// the rung-1 search AI (core/ai searchEnemyMove) synchronously and DELIBERATELY with
+// no wall-clock budget — bounded only by LIVE_SEARCH's 40k-node cap so a seed replays
+// identically on any machine (that determinism is exactly what "is fully deterministic"
+// asserts). A 40k-node search is ~1s/move on a fast core; two of them plus CI's slower,
+// contended cores blow past vitest's 5s default and wedged every deploy (issue: the
+// build-and-deploy "Test app" gate). These tests are compute-heavy by design, not hung,
+// so give the file honest headroom rather than weakening the AI or the determinism check.
+vi.setConfig({ testTimeout: 20_000 });
+
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as
-// turn-taking rather than a simultaneous swap. Fake timers let us drive that
-// reply deterministically and keep pending timeouts from leaking between tests.
+// turn-taking rather than a simultaneous swap. Fake timers (Date included) let us
+// drive both that reply and the battle clock deterministically. The search enemy
+// carries no wall-clock budget in the live store (LIVE_SEARCH is node-bounded), so
+// a frozen Date can't make it run away — it terminates on maxNodes, deterministically.
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   vi.clearAllTimers();
@@ -59,6 +71,32 @@ describe('skirmish store', () => {
     vi.runAllTimers();
     const after = useSkirmish.getState().game;
     expect(['player', 'done']).toContain(after.turn);
+  });
+
+  it('keeps the piece you moved selected through the enemy turn and into your next turn', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    const movedId = useSkirmish.getState().selectedId!;
+    const moves = useSkirmish.getState().movesForSelected();
+    expect(moves.length).toBeGreaterThan(0);
+    useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+
+    // Through the enemy turn: the mover always survives its own move, so the piece the
+    // player just commanded stays selected rather than being cleared. Input is gated by
+    // turn, so it shows no move-dots — it just keeps the player's context on the board.
+    expect(useSkirmish.getState().selectedId).toBe(movedId);
+
+    // Into the next player turn: the selection follows that same piece, only falling
+    // back to a living player piece if the enemy captured it.
+    vi.runAllTimers();
+    const after = useSkirmish.getState();
+    const movedStillAlive = after.game.pieces.some((p) => p.id === movedId && p.alive && p.side === 'player');
+    if (movedStillAlive) {
+      expect(after.selectedId).toBe(movedId);
+    } else {
+      const sel = after.game.pieces.find((p) => p.id === after.selectedId);
+      expect(sel?.side).toBe('player');
+      expect(sel?.alive).toBe(true);
+    }
   });
 
   it('ignores an illegal destination', () => {
@@ -508,5 +546,59 @@ describe('soft-lock guard (no manual End Turn)', () => {
     const trapped = stateOf([piece('p', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 0, 0)], 1, 2);
     expect(resolveIfPlayerStuck({ ...trapped, turn: 'enemy' }, OPEN_ENV).stuck).toBe(false);
     expect(resolveIfPlayerStuck({ ...trapped, winner: 'player', turn: 'done' }, OPEN_ENV).stuck).toBe(false);
+  });
+});
+
+describe('netplay resign', () => {
+  const netMatch = (localSide: Side) =>
+    useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide, level: createBlankLevel('net-1', 'Net'), seed: 7 });
+
+  afterEach(() => setNetResignSink(null));
+
+  it('relays a resignation via the sink but does NOT decide the game locally (server-sequenced)', () => {
+    netMatch('player');
+    let relayed = 0;
+    setNetResignSink(() => { relayed += 1; });
+    useSkirmish.getState().resign();
+    expect(relayed).toBe(1);
+    // The winner is set only when the server's result echoes back (concludeNet) — never optimistically.
+    expect(useSkirmish.getState().game.winner).toBeNull();
+  });
+
+  it('resign is a no-op in single-player and once the game is decided', () => {
+    let relayed = 0;
+    setNetResignSink(() => { relayed += 1; });
+    // Single-player: no net context, so nothing is relayed.
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    useSkirmish.getState().resign();
+    expect(relayed).toBe(0);
+    // Netplay but already decided: a second resign can't re-fire.
+    netMatch('player');
+    useSkirmish.getState().concludeNet('enemy', 'resign');
+    useSkirmish.getState().resign();
+    expect(relayed).toBe(0);
+  });
+
+  it('concludeNet ends the match as a win for the non-resigning seat and is idempotent', () => {
+    // Host seat ('player'); the opponent ('enemy') resigned → we win.
+    netMatch('player');
+    useSkirmish.getState().concludeNet('player', 'resign');
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player');
+    expect(s.game.turn).toBe('done');
+    expect(s.selectedId).toBeNull();
+    expect(s.log[0]).toMatch(/opponent resigned/i);
+    // A redelivered result frame must not overwrite the decided game.
+    useSkirmish.getState().concludeNet('enemy', 'resign');
+    expect(useSkirmish.getState().game.winner).toBe('player');
+  });
+
+  it('concludeNet frames the loss from the resigning seat', () => {
+    // Guest seat ('enemy') that resigned → winner is 'player' (not our side) = defeat copy.
+    netMatch('enemy');
+    useSkirmish.getState().concludeNet('player', 'resign');
+    const s = useSkirmish.getState();
+    expect(s.game.winner).toBe('player');
+    expect(s.log[0]).toMatch(/you resigned/i);
   });
 });

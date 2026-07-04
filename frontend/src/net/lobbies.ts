@@ -24,6 +24,11 @@ export interface Lobby {
   seed: number | null;
   move_count: number;
   your_side: 'player' | 'enemy' | null;
+  // Terminal outcome from a non-move event (a player resigned), in board terms, or null
+  // while the match is live. Clients end the game off this — it rides the lobby frame so
+  // it survives reconnect/late-join. Checkmate/stalemate/objective ends never set it (they
+  // resolve identically on both boards from the deterministic move replay).
+  result: { winner: 'player' | 'enemy'; reason: 'resign' } | null;
 }
 
 export interface LobbyList {
@@ -85,6 +90,13 @@ export function postMove(id: string, pieceId: string, move: MoveEvent['move']): 
   return request<{ move: MoveEvent }>('POST', `/api/lobbies/${encodeURIComponent(id)}/moves`, { pieceId, move });
 }
 
+// Concede the match. The server records the terminal result (the other side wins) and
+// pushes it to both clients over the lobby channel; this seat ends the game when that
+// frame arrives (see Skirmish's onLobby), not optimistically — mirroring the move relay.
+export function resignLobby(id: string): Promise<{ lobby: Lobby }> {
+  return request<{ lobby: Lobby }>('POST', `/api/lobbies/${encodeURIComponent(id)}/resign`);
+}
+
 export function fetchMovesSince(id: string, since: number): Promise<{ moves: MoveEvent[] }> {
   return request<{ moves: MoveEvent[] }>('GET', `/api/lobbies/${encodeURIComponent(id)}/moves?since=${since}`);
 }
@@ -106,6 +118,13 @@ function parseFrame(data: string): unknown {
 // EventSource auto-reconnects on transient errors, so onerror only logs.
 export function subscribeLobbies(onChange: () => void): () => void {
   const source = new EventSource('/api/lobbies/events');
+  // Resync on every (re)connect. EventSource silently auto-reconnects after any drop
+  // (gateway timeout, network blip, sleep/wake); the server's mutation pings are
+  // fire-and-forget, so a ping emitted during the gap is otherwise lost forever. An
+  // onopen refetch makes every connection self-heal: whatever we missed, we re-read.
+  // THIS (with the server-side connect snapshot) is what actually keeps the host's
+  // list truthful — onmessage alone only ever caught live-while-connected pings.
+  source.onopen = () => { onChange(); };
   source.onmessage = (event: MessageEvent<string>) => {
     const frame = parseFrame(event.data);
     if (frame && typeof frame === 'object' && (frame as { type?: string }).type === 'lobbies-changed') {

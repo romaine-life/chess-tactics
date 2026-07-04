@@ -31,10 +31,11 @@ export async function saveWorkspace(ws: Workspace): Promise<{ ok: boolean }> {
 }
 
 // --- Official (global) tier ------------------------------------------------
-// Officials are dual-homed: the live source is a global DB row (public GET), and a
-// committed static file is the durable fallback (DB-down / pre-Step-2). This loader
-// is the read-path that makes officials visible to EVERYONE, signed in or not, and
-// it NEVER throws — officials must survive any backend failure.
+// The live global DB row (public GET) is the SINGLE source of truth for official campaigns. The
+// committed official.json is a DEV-ONLY seed fixture — it is NOT shipped to the prod image and is
+// only read as a fallback under `import.meta.env.DEV`. In production a DB miss yields NO officials
+// rather than STALE test data (a stale snapshot shown to real players is worse than an outage).
+// Never throws — officials must survive any backend failure.
 const OFFICIAL_ID = 'default';
 const OFFICIAL_FILE = '/assets/campaigns/official.json';
 
@@ -46,7 +47,10 @@ function asWorkspace(value: unknown): Workspace {
   };
 }
 
-async function loadOfficialFromFile(): Promise<Workspace> {
+// DEV-ONLY: the committed seed fixture, so a local frontend with no backend still shows officials.
+// In a production build this returns empty — the fixture is never a prod data source.
+async function loadOfficialFallback(): Promise<Workspace> {
+  if (!import.meta.env.DEV) return { campaigns: [], levels: {} };
   try {
     const res = await fetch(OFFICIAL_FILE, { cache: 'no-cache' });
     if (!res.ok) return { campaigns: [], levels: {} };
@@ -57,17 +61,16 @@ async function loadOfficialFromFile(): Promise<Workspace> {
 }
 
 export async function loadOfficialCampaigns(): Promise<Workspace> {
-  // Prefer the live DB row (public GET, design_portfolios envelope); fall back to the
-  // committed static file on any error or a synthesized-empty miss.
+  // The live DB row (public GET, design_portfolios envelope) is authoritative. On any error or a
+  // synthesized-empty miss, fall back to the DEV-only fixture (empty in prod).
   try {
     const res = await fetch(`/api/official-campaigns/${OFFICIAL_ID}`, { cache: 'no-cache' });
-    if (!res.ok) return loadOfficialFromFile();
+    if (!res.ok) return loadOfficialFallback();
     const body = (await res.json()) as { portfolio?: { data?: unknown } };
     const ws = asWorkspace(body.portfolio?.data);
-    // A never-published row synthesizes an empty doc — use the baked file instead.
-    return ws.campaigns.length ? ws : loadOfficialFromFile();
+    return ws.campaigns.length ? ws : loadOfficialFallback();
   } catch {
-    return loadOfficialFromFile();
+    return loadOfficialFallback();
   }
 }
 

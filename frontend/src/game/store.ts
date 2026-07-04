@@ -5,11 +5,12 @@
 import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
+import { searchEnemyMove } from '../core/ai';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
-import { playArrival, playTerrain } from '../sfx';
-import { createRng } from '../core/rng';
+import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
+import { createRng, type Rng } from '../core/rng';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
 
@@ -48,6 +49,13 @@ export interface RelayMove { x: number; y: number }
 export type NetMoveSink = (pieceId: string, move: RelayMove) => void;
 let netMoveSink: NetMoveSink | null = null;
 export function setNetMoveSink(sink: NetMoveSink | null): void { netMoveSink = sink; }
+
+/** Relay hook: fired when the local player resigns, so the netplay layer POSTs the
+ *  resignation to the lobby. Like moves, the game only ENDS when the server echoes the
+ *  result back over the lobby channel (concludeNet) — never optimistically. */
+export type NetResignSink = () => void;
+let netResignSink: NetResignSink | null = null;
+export function setNetResignSink(sink: NetResignSink | null): void { netResignSink = sink; }
 
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
@@ -131,6 +139,16 @@ function firstOwnId(game: GameState, side: Side): string | null {
   return game.pieces.find((p) => p.side === side && p.alive)?.id ?? null;
 }
 
+/**
+ * The current selection if that piece is still a living piece of `side`, else null.
+ * Lets the selection FOLLOW the piece the player is working with across a turn instead
+ * of resetting — an enemy capture of that piece drops it, so callers fall back to a
+ * default (the first own piece).
+ */
+function livingSelected(game: GameState, selectedId: string | null, side: Side): string | null {
+  return game.pieces.some((p) => p.id === selectedId && p.alive && p.side === side) ? selectedId : null;
+}
+
 /** Result copy from THIS client's seat: in netplay 'you' is the local side, not 'player'. */
 function netOutcomeCopy(winner: Winner, localSide: Side): string {
   if (winner === 'draw') return 'Draw — the skirmish is even.';
@@ -176,11 +194,24 @@ export function resolveIfPlayerStuck(game: GameState, env: MoveEnv): { game: Gam
   return { game: { ...game, winner: t.winner, turn: 'done' }, stuck: true, checkmate: t.checkmate };
 }
 
+/** How an enemy decision is made: same call shape as the core's `enemyMove`. */
+type EnemyPolicy = (game: GameState, rng: Rng, env: MoveEnv) => { pieceId: string; move: Move } | null;
+
+/** Enemy decision policies (dev A/B lever: `?ai=greedy` on the skirmish route). */
+export type AiMode = 'search' | 'greedy';
+
+// Think budget for the live search enemy. Bounded by NODES, not wall clock: the
+// reply runs synchronously inside the staged "enemy thinks" beat, and a node cap
+// keeps it deterministic (a frozen clock in tests can't make it run to full depth)
+// while still bounding real-play latency — ~40k nodes lands well under the 520ms
+// reply beat on skirmish-sized boards (see aibench). maxDepth caps the ceiling.
+const LIVE_SEARCH = { maxDepth: 6, maxNodes: 40_000 };
+
 /** Resolve the enemy half-turn(s) deterministically until it's the player's move again. */
-function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv): { game: GameState; tick: number; events: GameEvent[] } {
+function resolveEnemy(game: GameState, seed: number, tick: number, env: MoveEnv, pick: EnemyPolicy): { game: GameState; tick: number; events: GameEvent[] } {
   const events: GameEvent[] = [];
   while (game.turn === 'enemy' && !game.winner) {
-    const move = enemyMove(game, createRng(seed + tick), env);
+    const move = pick(game, createRng(seed + tick), env);
     tick += 1;
     if (!move) { game = { ...game, turn: 'player' }; break; }
     const res = applyMove(game, move.pieceId, move.move);
@@ -224,6 +255,10 @@ export interface SkirmishState {
   /** Level this game is testing (null = free skirmish). Lets the screen tell
    * "resume the same board" from "launch a different level". */
   levelId: string | null;
+  /** Enemy decision policy for this game. 'search' is the rung-1 objective-aware
+   * search AI (core/ai); 'greedy' keeps the legacy capture-else-random policy
+   * reachable for A/B feel comparison via `?ai=greedy`. */
+  aiMode: AiMode;
   /** The battle clock, when the level authored one (null = untimed). */
   clock: ClockState | null;
   /** Multiplayer context (null = single-player). When set, the AI never fires and
@@ -237,6 +272,14 @@ export interface SkirmishState {
   /** Apply a move that arrived from the OTHER player over the relay (no AI, no
    *  re-emit). Re-validates legality before applying. */
   applyRemoteMove: (pieceId: string, move: RelayMove) => void;
+  /** Concede a multiplayer match: relay the resignation to the lobby. The game itself
+   *  ends only when the server's terminal result echoes back via `concludeNet`. No-op
+   *  outside netplay or once the game is decided. */
+  resign: () => void;
+  /** End a netplay match by a non-move terminal event (a resignation relayed by the
+   *  server). Sets the winner directly and logs the outcome from this seat. Idempotent —
+   *  a duplicate/redelivered lobby frame is ignored once the game is decided. */
+  concludeNet: (winner: Winner, reason: 'resign') => void;
   /** Rehydrate a match saved to disk (see matchPersistence) — used to resume the
    * live board after a page reload instead of starting a fresh game. */
   resumeMatch: (match: PersistedMatch) => void;
@@ -335,7 +378,17 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       const cur = get();
       // Bail if a new game reset the turn, or it somehow already resolved.
       if (cur.game.turn !== 'enemy' || cur.game.winner) return;
-      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game));
+      // The search enemy needs the objective framing so it plays the MODE (hunt
+      // the King, rush the survive clock, garrison the reach zone) — that's the
+      // whole point of the rung-1 AI. The greedy policy ignores it.
+      const pick: EnemyPolicy = cur.aiMode === 'greedy'
+        ? enemyMove
+        : (g, rng, env) => searchEnemyMove(g, rng, env, {
+            objective: cur.objective,
+            ctx: cur.objectiveCtx ?? {},
+            turnsElapsed: cur.turnsElapsed ?? 0,
+          }, LIVE_SEARCH);
+      const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game), pick);
       const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
       // With no manual End Turn, a player handed the turn with no legal move would
       // soft-lock — resolve that as a loss (you can't pass in chess).
@@ -356,13 +409,17 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
           msgs.push(objectiveOutcomeCopy(cur.objective, winner, cur.objectiveCtx?.kingSide));
         }
       }
+      // Turn returns to the player: keep the piece they were working with selected so
+      // the board reads continuously, only falling back to their first piece if the
+      // enemy captured it (or nothing was selected — e.g. resumed match).
+      const keep = livingSelected(game, cur.selectedId, 'player') ?? firstPlayerId(game);
       set({
         game,
         env: envFor(game),
         tick: enemyRes.tick,
         turnsElapsed,
-        selectedId: firstPlayerId(game),
-        focusedId: firstPlayerId(game),
+        selectedId: keep,
+        focusedId: keep,
         log: [...msgs.reverse(), ...cur.log].slice(0, 12),
       });
       // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
@@ -450,6 +507,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   turnsElapsed: 0,
   started: false,
   levelId: null,
+  aiMode: 'search',
   clock: null,
   net: null,
 
@@ -478,7 +536,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     const clock: ClockState | null = tc
       ? { remainingMs: tc.initialSeconds * 1000, running: false, incrementMs: tc.incrementSeconds * 1000 }
       : null;
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, clock, net: null });
+    // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
+    // preserves the A/B lever the route set on entry).
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, net: null });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -494,7 +554,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       .forEach((pc, i) => {
         const delay = SPAWN_SFX_BASE_DELAY + i * SPAWN_SFX_STAGGER;
         playLandingSfx(env, pc.x, pc.y, delay, 0.7);
-        setTimeout(() => playArrival({ gain: 0.55 }), delay);
+        setTimeout(() => playArrival({ gain: ARRIVAL_BAKED.gain }), delay);
       });
     // Snapshot the fresh board immediately, so a reload before the first move
     // resumes THIS game rather than re-rolling a different random start.
@@ -542,6 +602,30 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
 
   applyRemoteMove: (pieceId, move) => { commitNet(pieceId, move); },
 
+  resign: () => {
+    const s = get();
+    // Only meaningful in a live netplay match. The winner isn't set here — the server
+    // echoes the terminal result back over the lobby channel and concludeNet ends the
+    // game on both boards symmetrically (same single-apply discipline as moves).
+    if (!s.net || s.game.winner) return;
+    if (netResignSink) netResignSink();
+  },
+
+  concludeNet: (winner, reason) => {
+    const s = get();
+    if (!s.net || s.game.winner) return; // idempotent: already decided (or not netplay)
+    const localSide = s.net.localSide;
+    const copy = reason === 'resign'
+      ? (winner === localSide ? 'Victory — your opponent resigned.' : 'Defeat — you resigned.')
+      : netOutcomeCopy(winner, localSide);
+    set({
+      game: { ...s.game, winner, turn: 'done' },
+      selectedId: null,
+      focusedId: null,
+      log: [copy, ...s.log].slice(0, 12),
+    });
+  },
+
   resumeMatch: (match) => {
     // A previous game's ticker must never outlive its game.
     stopClockTicker();
@@ -558,6 +642,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       objectiveCtx: match.objectiveCtx,
       log: match.log,
       levelId: match.levelId,
+      // Restore the enemy policy so the ?ai=greedy A/B lever survives a reload
+      // (older snapshots predate the field ⇒ default to the search AI).
+      aiMode: match.aiMode ?? 'search',
       selectedId,
       focusedId: selectedId,
       started: true,
@@ -656,12 +743,15 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     }
     // Beat 1: commit the player's move on its own so it animates and the board
     // reads before the enemy answers. applyMove flips the turn to 'enemy', which
-    // also locks further player input until the reply resolves.
+    // also locks further player input until the reply resolves. Keep the moved piece
+    // selected (the mover always survives its own move) so its highlight carries
+    // through the enemy turn — input is gated by turn, so it shows no move-dots and
+    // isn't actionable, it just keeps the player's context visible.
     set({
       game,
       env: enemyEnv,
-      selectedId: null,
-      focusedId: null,
+      selectedId: p.id,
+      focusedId: p.id,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
     });
     // Beats 2–3: a read beat, then the enemy "thinks" and answers.

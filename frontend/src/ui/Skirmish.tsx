@@ -3,9 +3,9 @@ import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { NavButton } from './shared/NavButton';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink } from '../game/store';
+import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
-import { fetchLobby, postMove, fetchMovesSince, subscribeLobbyChannel, type MoveEvent } from '../net/lobbies';
+import { fetchLobby, postMove, resignLobby, leaveLobby, fetchMovesSince, subscribeLobbyChannel, type MoveEvent } from '../net/lobbies';
 import type { Level } from '../core/level';
 import type { Side } from '../core/types';
 import { objectiveSummary } from '../core/objectives';
@@ -14,6 +14,7 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
 import { editorBoardToLevel } from '../core/levelBoard';
+import { fetchPublicMap } from '../net/maps';
 import { OBJECTIVE_TYPES, type ObjectiveType } from '../core/level';
 import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
@@ -49,7 +50,14 @@ export function Skirmish() {
   const routeObjective = routeParams.get('obj');
   // Multiplayer: `?lobby=<id>` enters a lobby's shared board as one of the two seats.
   const routeLobby = routeParams.get('lobby');
+  // A shared USER map: `?map=<publicId>` fetches its public snapshot and plays it (no sign-in, no
+  // campaign). The dead-link message shows if the id is unknown/removed.
+  const routeMap = routeParams.get('map');
   const [netError, setNetError] = useState<string | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
+  // Netplay has no campaign result flow, so a decided match shows its own result card.
+  // "View board" dismisses it to review the final position (re-armed for the next match).
+  const [netResultDismissed, setNetResultDismissed] = useState(false);
   // Real campaign play (records progress + shows the result flow), as opposed to the
   // editor's "Test Play" (mode=test) or a free skirmish (no campaign/level).
   const isCampaignPlay = Boolean(routeCampaignId && routeLevelId && routeMode !== 'test');
@@ -90,6 +98,15 @@ export function Skirmish() {
     ? game.winner === 'draw' ? 'Stalemate' : game.winner === localSide ? 'Victory' : 'Defeat'
     : game.turn === localSide ? (net ? 'Your Turn' : 'Player Turn') : (net ? 'Opponent Turn' : 'Enemy Turn');
 
+  // Leave a decided netplay match and return to the lobby list. Host leaving closes the
+  // lobby (which returns the guest too via the onLobby 'closed' path); guest leaving frees
+  // the seat. The leave is best-effort — the player wants out now and the list self-heals
+  // from the server broadcast — so navigate immediately rather than awaiting it.
+  const returnToLobbies = () => {
+    if (net) leaveLobby(net.lobbyId).catch((err) => console.warn('[netplay] leave on match end failed', err));
+    navigateApp('/lobbies', { replace: true });
+  };
+
   // Stars earned this clear (3 flawless, 2 light losses, 1 any win), from the level's
   // authored player force vs. who's still standing.
   const stars = useMemo(() => {
@@ -103,8 +120,22 @@ export function Skirmish() {
     if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id, stars);
   }, [isCampaignPlay, routeLevel, game.winner, stars]);
 
+  // Re-arm the netplay result card whenever a fresh game is built (winner clears), so a
+  // dismissal from the previous match doesn't suppress the next one's result.
+  useEffect(() => { if (!game.winner) setNetResultDismissed(false); }, [game.winner]);
+
   const replayLevel = () => {
-    if (routeLevel) newSkirmish({ seed: Math.floor(Math.random() * 999999) + 1, level: routeLevel });
+    if (!routeLevel) return;
+    // Retry the SAME position: a fixed-placement level reuses the current seed so it rebuilds
+    // byte-identical. The board art signature is then unchanged, so the deploy "arrival" drop
+    // never re-arms (SkirmishBoard) — the pieces simply hop back to their starting seats, which
+    // is the whole reset the player wants. Rolling a fresh seed would leave every piece on its
+    // authored square yet still re-hide the board and re-play the drop, reading as "move back,
+    // disappear, fall again." A random-placement level instead re-rolls: reshuffling the deal is
+    // that mode's point (ADR-0050), and a fresh deal reads better as a new deploy than as pieces
+    // sliding to random new homes.
+    const seed = routeLevel.placement === 'random' ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
+    newSkirmish({ seed, level: routeLevel });
   };
 
   // The next level in this campaign after the one just cleared (null on the last level or
@@ -162,7 +193,7 @@ export function Skirmish() {
     // the in-memory store from scratch; without a saved copy that would silently
     // restart a live battle. Turn disk persistence on for real play, off for the
     // editor's ephemeral Test Play and for one-off `?board=` link positions.
-    setMatchPersistenceEnabled(!isTestPlay && !routeBoard);
+    setMatchPersistenceEnabled(!isTestPlay && !routeBoard && !routeMap);
 
     // Returning here from the menu (or any other screen) should resume, not
     // restart: the store is a singleton that already holds the live board. Only
@@ -171,6 +202,9 @@ export function Skirmish() {
     const shouldStartFresh = (levelId: string | null): boolean =>
       shouldStartFreshSkirmish(useSkirmish.getState(), levelId);
     const freshSeed = () => Math.floor(Math.random() * 999999) + 1;
+    // Dev A/B lever: `?ai=greedy` pits you against the legacy random-capture
+    // enemy; anything else gets the objective-aware search AI.
+    const ai = new URLSearchParams(window.location.search).get('ai') === 'greedy' ? 'greedy' as const : 'search' as const;
 
     // Enter the board for `levelId`: keep the live in-memory match if it's the one
     // asked for (a route change, not a reload); else resume the match saved to disk
@@ -186,7 +220,7 @@ export function Skirmish() {
           return;
         }
       }
-      newSkirmish({ seed: freshSeed(), level: levelDoc ?? undefined });
+      newSkirmish({ seed: freshSeed(), level: levelDoc ?? undefined, ai });
     };
 
     // A `?board=<code>` link plays an authored position straight away — decode it into a
@@ -198,10 +232,36 @@ export function Skirmish() {
         const objective: ObjectiveType = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
           ? (routeObjective as ObjectiveType) : 'capture-all';
         const level = editorBoardToLevel(decoded, { id: 'board-link', name: 'Board Link', objective });
-        if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level });
+        if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level, ai });
         setBoardSettled(true);
         return;
       }
+    }
+
+    // A `?map=<publicId>` link plays a SHARED user map: fetch its public snapshot (no sign-in) and
+    // start fresh (ephemeral, like ?board=). Once fetched, routeLevel is set and this branch just
+    // re-affirms the game on the effect's re-run (guarded so it never re-fetches in a loop).
+    if (routeMap) {
+      if (routeLevel) {
+        if (shouldStartFresh(routeLevel.id)) newSkirmish({ seed: freshSeed(), level: routeLevel, ai });
+        setBoardSettled(true);
+        return undefined;
+      }
+      let active = true;
+      fetchPublicMap(routeMap)
+        .then((level) => {
+          if (!active) return;
+          setMapError(null);
+          if (shouldStartFresh(level.id)) newSkirmish({ seed: freshSeed(), level, ai });
+          setRouteLevel(level);
+          setBoardSettled(true);
+        })
+        .catch(() => {
+          if (!active) return;
+          setMapError('This shared map isn’t available — the link may be wrong or the map was removed.');
+          setBoardSettled(true);
+        });
+      return () => { active = false; };
     }
 
     if (!routeLevelId || routeLevel) {
@@ -225,7 +285,7 @@ export function Skirmish() {
       })
       .catch(() => { startOrResume(routeLevelId, null); setBoardSettled(true); });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeObjective, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeMap, routeObjective, routeCampaignId, routeLevel, routeLevelId, routeLobby]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -288,17 +348,37 @@ export function Skirmish() {
             if (active) setNetError('Move didn’t send — check your connection and try again.');
           });
         });
+        // Relay a resignation the same way: the game ends only when the server's result
+        // frame echoes back (onLobby → concludeNet), so a failed POST is a retryable no-op.
+        setNetResignSink(() => {
+          resignLobby(routeLobby).catch((err) => {
+            console.warn('[netplay] resign POST failed', err);
+            if (active) setNetError('Couldn’t send your resignation — try again.');
+          });
+        });
         // Catch up on any moves already made (reconnect / entering mid-game), then stream.
         try {
           const back = await fetchMovesSince(routeLobby, 0);
           if (active) back.moves.forEach(applyRelayMove);
         } catch (err) { console.warn('[netplay] initial backfill failed', err); }
         if (!active) return;
+        // If the match was already conceded before we entered (late join / reload after a
+        // resign), the lobby snapshot carries the terminal result — end the game now. The
+        // SSE connect frame re-delivers it too, but concludeNet is idempotent.
+        if (lobby.result) useSkirmish.getState().concludeNet(lobby.result.winner, lobby.result.reason);
         unsubscribe = subscribeLobbyChannel(routeLobby, {
           onMove: applyRelayMove,
           onLobby: (l) => {
             if (!active) return;
-            if (l.phase === 'closed') { setNetError('The other player left the match.'); return; }
+            if (l.phase === 'closed') {
+              // The lobby is gone (host left / closed). Don't just banner and strand the
+              // guest on a dead board — tear down the stream and return them to the lobby
+              // list, mirroring the "not started yet" bail-out above.
+              setNetError('The other player left the match. Returning to lobbies…');
+              if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+              window.setTimeout(() => { if (active) navigateApp('/lobbies', { replace: true }); }, 1600);
+              return;
+            }
             // Reconnect gap-heal: this snapshot fires on every (re)connect. If the server has
             // more moves than we've applied, a move frame was missed during a drop — backfill
             // it (applyRelayMove is idempotent on moveCount, so this races safely).
@@ -308,6 +388,9 @@ export function Skirmish() {
                 .then((res) => { if (active) res.moves.forEach(applyRelayMove); })
                 .catch((err) => console.warn('[netplay] reconnect backfill failed', err));
             }
+            // A player resigned: the lobby frame carries the terminal result. End the game
+            // from this seat (concludeNet is idempotent, so a redelivered frame is harmless).
+            if (l.result) useSkirmish.getState().concludeNet(l.result.winner, l.result.reason);
           },
         });
         setBoardSettled(true);
@@ -321,6 +404,7 @@ export function Skirmish() {
     return () => {
       active = false;
       setNetMoveSink(null);
+      setNetResignSink(null);
       if (unsubscribe) unsubscribe();
     };
   }, [routeLobby]);
@@ -361,15 +445,28 @@ export function Skirmish() {
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
-            {boardSettled ? <SkirmishBoard /> : routeLobby ? (
+            {mapError ? (
+              <div className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
+                <strong>{mapError}</strong>
+                <NavButton className="app-header-button app-header-button-active" to="/">Home</NavButton>
+              </div>
+            ) : boardSettled ? <SkirmishBoard /> : routeLobby ? (
               <div className="skirmish-status-chip skirmish-turn-plate" role="status">
                 <strong>{netError ?? 'Connecting…'}</strong>
                 <small>Multiplayer</small>
               </div>
+            ) : routeMap ? (
+              // A cold shared-map link fetches its snapshot before the board can mount.
+              <div className="skirmish-status-chip skirmish-turn-plate" role="status">
+                <strong>Loading map…</strong>
+                <small>Shared map</small>
+              </div>
             ) : null}
           </div>
         </div>
-        {boardSettled && netError ? (
+        {/* Transient connection errors sit bottom-center — but once the match is decided
+            they're moot, and the post-game chip owns that spot, so suppress them then. */}
+        {boardSettled && netError && !game.winner ? (
           <div className="skirmish-status-chip skirmish-turn-plate" role="status" style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40 }}>
             <strong>{netError}</strong>
             <small>Multiplayer</small>
@@ -403,6 +500,43 @@ export function Skirmish() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Netplay has no campaign result flow: a decided match gets its own result card with
+          the way out (leaving via the app-shell nav was the only prior option). "View board"
+          dismisses it to review the final position, leaving the persistent exit chip below. */}
+      {net && game.winner && !netResultDismissed && (
+        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Match result" data-testid="netplay-result">
+          <div className="settings-frame campaign-result-panel">
+            <h2>{turnLabel}</h2>
+            <p>Multiplayer skirmish — {objectiveGoal}</p>
+            <div className="campaign-result-actions">
+              <button type="button" className="app-header-button" data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
+                View board
+              </button>
+              <button type="button" className="app-header-button app-header-button-active" data-testid="netplay-return" onClick={returnToLobbies}>
+                Return to lobbies
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Persistent, non-blocking exit once the result card is dismissed — so reviewing the
+          final board never strands the player without a way back to the lobby list. */}
+      {net && game.winner && netResultDismissed && (
+        <div
+          role="status"
+          style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40, display: 'flex', alignItems: 'center', gap: 12 }}
+        >
+          <div className="skirmish-status-chip skirmish-turn-plate">
+            <strong>{turnLabel}</strong>
+            <small>Match complete</small>
+          </div>
+          <button type="button" className="app-header-button app-header-button-active" data-testid="netplay-return-persistent" onClick={returnToLobbies}>
+            Return to lobbies
+          </button>
         </div>
       )}
     </div>
