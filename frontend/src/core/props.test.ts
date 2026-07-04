@@ -58,30 +58,39 @@ describe('props core', () => {
     }
   });
 
-  it('footprint comes from propSeats (default 2×2); a variant inherits the base cells', () => {
-    // No footprint override in the seed → the default 2×2.
-    expect(propDef('cottage')!.w).toBe(2);
-    expect(propDef('cottage')!.h).toBe(2);
-    // The variant has no w/h in its entry, so it inherits the base's footprint.
-    expect(propDef('cottage-small')!.w).toBe(propDef('cottage')!.w);
-    expect(propDef('cottage-small')!.h).toBe(propDef('cottage')!.h);
+  it('footprint is data-driven: a base defaults to 2×2 absent a w/h; a copy follows its own w/h or inherits the base', () => {
+    // Assert the RULE for every def (robust to whatever copies are authored in propSeats.json —
+    // they can now be created/renamed/deleted and given their own footprint in /prop-lab).
+    const seats = propSeats as Record<string, { w?: number; h?: number; base?: string }>;
+    for (const d of PROP_DEFS) {
+      const s = seats[d.id] ?? {};
+      if (s.base) {
+        const base = propDef(s.base)!;
+        expect(d.w, `${d.id} w (copy: own w or base)`).toBe(s.w ?? base.w);
+        expect(d.h, `${d.id} h (copy: own h or base)`).toBe(s.h ?? base.h);
+      } else {
+        expect(d.w, `${d.id} w (base: own w or default 2)`).toBe(s.w ?? 2);
+        expect(d.h, `${d.id} h (base: own h or default 2)`).toBe(s.h ?? 2);
+      }
+    }
   });
 
-  it('a size variant shares the base sprite + footprint, differing only by seat', () => {
-    const variant = propDef('cottage-small');
-    const base = propDef('cottage')!;
-    expect(variant, 'cottage-small variant present').toBeDefined();
-    // SHARES the base's PNG asset + gameplay footprint + frame dims + family.
-    expect(variant!.spriteId).toBe('cottage');
-    expect(variant!.family).toBe(base.family);
-    expect(variant!.kind).toBe(base.kind);
-    expect(variant!.w).toBe(base.w);
-    expect(variant!.h).toBe(base.h);
-    expect(variant!.terrains).toEqual(base.terrains);
-    expect(variant!.sprite.w).toBe(base.sprite.w);
-    expect(variant!.sprite.h).toBe(base.sprite.h);
-    // DIFFERS only by its own seat (a smaller scale).
-    expect(variant!.sprite.scale).toBeLessThan(base.sprite.scale);
+  it('a copy shares its base sprite (asset + frame + family + kind + terrains), with its own seat', () => {
+    // Pick any authored copy — don't hard-code an id, since copies come and go via the editor.
+    const seats = propSeats as Record<string, { base?: string }>;
+    const copyId = Object.keys(seats).find((id) => seats[id].base);
+    if (!copyId) return; // no copies authored — nothing to assert
+    const copy = propDef(copyId)!;
+    const base = propDef(seats[copyId].base!)!;
+    // SHARES the base's PNG asset (spriteId points at the base), frame dims, family, kind, terrains.
+    expect(copy.spriteId).toBe(base.id);
+    expect(copy.family).toBe(base.family);
+    expect(copy.kind).toBe(base.kind);
+    expect(copy.terrains).toEqual(base.terrains);
+    expect(copy.sprite.w).toBe(base.sprite.w);
+    expect(copy.sprite.h).toBe(base.sprite.h);
+    // Its seat (anchor + scale) and footprint are its own — may match the base or differ.
+    expect(Number.isFinite(copy.sprite.scale)).toBe(true);
   });
 
   it('every def has a spriteId/family, and every variant base resolves', () => {

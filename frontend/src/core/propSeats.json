@@ -14,11 +14,11 @@
     "h": 2
   },
   "cabin": {
-    "anchorX": 117,
-    "anchorY": 100,
-    "scale": 1,
-    "w": 2,
-    "h": 2
+    "anchorX": 118,
+    "anchorY": 107,
+    "scale": 0.35,
+    "w": 1,
+    "h": 1
   },
   "lodge": {
     "anchorX": 103,
@@ -32,6 +32,24 @@
     "label": "Cottage — small",
     "anchorX": 91,
     "anchorY": 110,
-    "scale": 0.42
+    "scale": 0.42,
+    "w": 1,
+    "h": 1
+  },
+  "cabin-2x2-house": {
+    "base": "cabin",
+    "label": "Log cabin — 2x2 house",
+    "anchorX": 118,
+    "anchorY": 107,
+    "scale": 0.72
+  },
+  "cabin-1x1-house": {
+    "base": "cabin",
+    "label": "Log cabin — 1x1 house",
+    "anchorX": 118,
+    "anchorY": 107,
+    "scale": 0.35,
+    "w": 1,
+    "h": 1
   }
 }

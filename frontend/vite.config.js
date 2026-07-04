@@ -129,6 +129,49 @@ function propSeatSave() {
   };
 }
 
+// Dev-only endpoint: /prop-lab's "Delete this copy" POSTs { id } here to remove ONE size-variant
+// entry from src/core/propSeats.json. Base protection lives HERE, not only in the UI: a base prop's
+// seat has no `base` field and backs a real PNG + PROP_DEF (props.ts throws at load for a missing
+// base seat), so this refuses to delete any entry that isn't a copy — a base can never be deleted,
+// even by a hand-rolled request. Vite's JSON-module HMR then drops the variant from every open board.
+function propSeatDelete() {
+  return {
+    name: 'prop-seat-delete',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__prop-seat/delete', (req, res) => {
+        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            const posted = JSON.parse(body);
+            const id = posted && typeof posted.id === 'string' ? posted.id : '';
+            if (!/^[a-z0-9_-]+$/i.test(id)) throw new Error('body must be { id: "<propId>" }');
+            const rel = 'src/core/propSeats.json';
+            const out = join(process.cwd(), rel);
+            const existing = JSON.parse(await readFile(out, 'utf8'));
+            const entry = existing[id];
+            if (!entry) throw new Error(`no prop "${id}" in propSeats.json`);
+            // BASE PROTECTION: only a copy (an entry with a `base`) is deletable. A base seat has no
+            // `base` and is required by props.ts at load — deleting it would white-screen every route.
+            if (!entry.base) throw new Error(`"${id}" is a base prop — bases can't be deleted, only copies`);
+            const { [id]: _removed, ...rest } = existing;
+            await writeFile(out, `${JSON.stringify(rest, null, 2)}\n`);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true, path: rel, deleted: id }));
+          } catch (err) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: false, error: String(err && err.message ? err.message : err) }));
+          }
+        });
+      });
+    },
+  };
+}
+
 // Dev-only stand-in for the backend's /api/bgm. Local dev has no backend process,
 // so this proxies the DEPLOYED backend's playlist (which lists the blob container
 // live, each track's title/artist/album coming from blob metadata) and serves it
@@ -170,5 +213,5 @@ function bgmDevMock() {
 }
 
 export default defineConfig({
-  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), nineSliceDevSave(), bgmDevMock()],
+  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), propSeatDelete(), nineSliceDevSave(), bgmDevMock()],
 });

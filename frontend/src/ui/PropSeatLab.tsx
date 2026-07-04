@@ -65,6 +65,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const [overrides, setOverrides] = useState<Record<string, Seat>>({});
   const [status, setStatus] = useState('');
   const [variantName, setVariantName] = useState('');
+  const [renameText, setRenameText] = useState('');
   const drag = useRef<{ px: number; py: number; anchorX: number; anchorY: number } | null>(null);
 
   const committedSeats = COMMITTED_SEATS as Seats;
@@ -72,6 +73,11 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const def = PROP_DEFS.find((d) => d.id === activeId) as PropDef;
   const liveSeat = seats[activeId];
   const committed = committedSeats[activeId];
+  // Base vs copy (the user's model): a base OWNS its sprite (spriteId === id) and can't be deleted;
+  // a copy shares another prop's sprite (spriteId !== id) and is free to rename/delete. baseDef is
+  // the sprite owner either way (itself for a base), so "make/rename a copy" always roots at the base.
+  const isCopy = def.spriteId !== def.id;
+  const baseDef = PROP_DEFS.find((d) => d.id === def.spriteId) ?? def;
   // Live gameplay footprint — an override's w/h if set, else the committed def's cells.
   const liveW = liveSeat.w ?? def.w;
   const liveH = liveSeat.h ?? def.h;
@@ -90,6 +96,10 @@ export function PropSeatLab({ propId, onPropId, header }: {
       return next;
     });
   });
+
+  // Keep the Rename field showing the selected copy's current name — and re-sync after a rename
+  // lands (def.label changes) so it reflects the new name rather than a stale one.
+  useEffect(() => { setRenameText(isCopy ? def.label : ''); }, [activeId, def.label, isCopy]);
 
   const board = useMemo(
     () => solveSocketBoard({
@@ -216,6 +226,42 @@ export function PropSeatLab({ propId, onPropId, header }: {
     } catch (err) { setStatus(`error: ${String(err)}`); }
   };
 
+  // Rename a copy: change its display name only — id, sprite, seat and footprint are untouched (the
+  // endpoint preserves base/w/h when they're omitted). Copies only; bases show no rename control.
+  const renameCopy = async () => {
+    const label = renameText.trim();
+    if (!isCopy || !label || label === def.label) return;
+    setStatus('renaming…');
+    try {
+      const res = await fetch('/__prop-seat/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [activeId]: { base: def.spriteId, label, anchorX: committed.anchorX, anchorY: committed.anchorY, scale: committed.scale } }),
+      });
+      const json = await res.json();
+      setStatus(json.ok ? `renamed to "${label}"` : `error: ${json.error}`);
+    } catch (err) { setStatus(`error: ${String(err)}`); }
+  };
+
+  // Delete a copy. Only copies are deletable — the base is safe both here (no button) and at the
+  // endpoint (it refuses any entry without a `base`). Switch back to the base and drop the override.
+  const deleteCopy = async () => {
+    if (!isCopy) return;
+    setStatus('deleting…');
+    try {
+      const res = await fetch('/__prop-seat/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: activeId }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        const removed = activeId;
+        onPropId(def.spriteId); // fall back to the base prop
+        setOverrides((o) => { const n = { ...o }; delete n[removed]; return n; });
+        setStatus(`deleted "${removed}"`);
+      } else setStatus(`error: ${json.error}`);
+    } catch (err) { setStatus(`error: ${String(err)}`); }
+  };
+
   const toggle = (on: boolean, set: (v: boolean) => void, label: string, title?: string) => (
     <button type="button" className={`ps-toggle ${on ? 'is-on' : ''}`} title={title} onClick={() => set(!on)}>{label}</button>
   );
@@ -330,14 +376,32 @@ export function PropSeatLab({ propId, onPropId, header }: {
             {dirty && !status ? <p className="ps-status">unsaved changes</p> : null}
 
             <div className="ps-variant">
-              <span className="ps-ctl-label">New size variant</span>
+              {isCopy ? (
+                <>
+                  <span className="ps-ctl-label">Copy of {baseDef.label}</span>
+                  <span className="ps-variant-row">
+                    <input className="ps-variant-input" value={renameText} onChange={(e) => setRenameText(e.target.value)}
+                      placeholder={def.label} aria-label="Rename this copy"
+                      onKeyDown={(e) => { if (e.key === 'Enter') renameCopy(); }} />
+                    <button type="button" className="tileset-view-action" disabled={!renameText.trim() || renameText.trim() === def.label}
+                      onClick={renameCopy} title="Rename this copy — its sprite, seat and footprint stay">Rename</button>
+                  </span>
+                  <span className="ps-variant-row">
+                    <button type="button" className="tileset-view-action ps-danger" onClick={deleteCopy}
+                      title={`Delete this copy. ${baseDef.label} (the base) is unaffected.`}>Delete this copy</button>
+                  </span>
+                </>
+              ) : (
+                <p className="ps-variant-hint"><strong>{def.label}</strong> is a base prop — it owns the sprite and can’t be deleted, only tuned. Make a copy below to vary its size or footprint.</p>
+              )}
+              <span className="ps-ctl-label" style={{ marginTop: 4 }}>New copy of {baseDef.label}</span>
               <span className="ps-variant-row">
                 <input className="ps-variant-input" value={variantName} onChange={(e) => setVariantName(e.target.value)}
                   placeholder="name (e.g. small)" onKeyDown={(e) => { if (e.key === 'Enter') saveVariant(); }} />
                 <button type="button" className="tileset-view-action" disabled={!variantName.trim()} onClick={saveVariant}
-                  title="Save the current size as a new pickable variant of this prop">Save variant</button>
+                  title={`Save the current size as a new copy of ${baseDef.label}`}>Create copy</button>
               </span>
-              <p className="ps-variant-hint">Duplicates {def.label} at {liveSeat.scale.toFixed(2)}× as a new prop that shares its sprite. Then pick it above to fine-tune.</p>
+              <p className="ps-variant-hint">A copy shares {baseDef.label}’s sprite at {liveSeat.scale.toFixed(2)}×; tune its scale + footprint on its own. Pick it above after reload.</p>
             </div>
           </div>
         </section>
@@ -387,6 +451,10 @@ const PS_CSS = `
 .ps-primary:disabled { opacity: 0.45; }
 .ps-status { margin: 0; font-size: 12px; color: #8fd0a0; }
 .ps-status.is-error { color: #f0a0a0; }
+
+/* Delete a copy — a quiet danger tone so it reads as destructive without shouting. */
+.ps-danger { flex: 1; background: rgba(74,29,29,0.9) !important; border-color: rgba(156,63,63,0.7) !important; color: #ffe7e7 !important; }
+.ps-danger:hover { background: rgba(96,36,36,0.95) !important; }
 
 .ps-variant { display: grid; gap: 6px; margin-top: 6px; padding-top: 12px; border-top: 1px solid #1b2740; }
 .ps-variant-row { display: flex; gap: 6px; }
