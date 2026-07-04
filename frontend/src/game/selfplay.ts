@@ -61,6 +61,12 @@ export interface SelfPlayOptions {
   searchForSide?: Partial<Record<'player' | 'enemy', SearchOptions>>;
   /** Hard game-length cap; hitting it scores a draw. */
   maxPlies?: number;
+  /** Opening plies (from an opening book) applied via applyMove from the seeded
+   * start BEFORE the search loop, so self-play continues from a book position
+   * instead of the level's fixed start. Additive: callers that omit this play
+   * from the start exactly as before. These plies are NOT recorded in the
+   * result's `moves` (they are the fixed opening, not decisions of this game). */
+  openingMoves?: RecordedMove[];
 }
 
 const DEFAULT_MAX_PLIES = 300;
@@ -73,6 +79,15 @@ export function playLevelGame(level: Level, opts: SelfPlayOptions): GameRecord {
 
   let game: GameState = createFromLevel(level, seed);
   const ctx: ObjectiveContext = { ...objectiveContextForLevel(level), kingSide: kingSideOf(game.pieces) };
+
+  // Opening book: fast-forward through the fixed opening plies (if any) BEFORE the
+  // search loop. applyMove advances turn parity, so self-play resumes from the book
+  // position with the correct side to move. Stop early if an opening move already
+  // decides the game (degenerate books) so we never search a finished board.
+  for (const om of opts.openingMoves ?? []) {
+    if (game.turn !== 'player' && game.turn !== 'enemy') break;
+    game = applyMove(game, om.pieceId, om.move).state;
+  }
   const terrain = game.terrain ? buildTerrainIndex(game.terrain) : undefined;
   const startPieces = game.pieces.map((p) => ({ id: p.id, side: p.side, type: p.type }));
 

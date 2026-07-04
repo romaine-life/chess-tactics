@@ -13,16 +13,24 @@ import { LevelThumbnail } from '../render/LevelThumbnail';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { ViewPane } from './shared/ViewPane';
+import { SliderRow } from './dressing/SliderRow';
 import { createFromLevel } from '../game/setup';
-import { PARAM_LABELS, encodeWeights, makeBook } from '../game/tuning';
+import { PARAM_LABELS, encodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
-import type { GymRequest, GymResponse, GymPoint } from '../lab/gymWorker';
+import { stateAtPosition, positionBalance, type BookPosition, type OpeningBookSettings } from '../game/openingBook';
+import type { GymRequest, GymResponse } from '../lab/gymWorker';
+import {
+  loadBooks, saveBooks, makeNewBook, deleteBook, updateBook,
+  DEFAULT_BOOK_SETTINGS, type BooksBlob, type GymSession,
+} from '../lab/openingBooks';
 
 const GYM_CSS = `
-.gym-main { overflow-y:auto; padding:14px 16px 40px; color:#e7ebf0; font:13px/1.45 system-ui,sans-serif; }
-.gym-main h3 { font-size:13px; margin:14px 0 6px; color:#93a0b0; }
-.gym-board { display:grid; grid-template-rows:minmax(0,1fr); height:360px; border:1px solid #29323f; border-radius:8px; overflow:hidden; background:#0b1016; }
-.gym-conv { margin-top:14px; }
+/* Fill the stage like every other Studio viewer (ADR-0059): the board is the item,
+   grown via ViewPane — never a bespoke fixed-height box. */
+.gym-main { display:flex; flex-direction:column; overflow:hidden; padding:14px 16px; color:#e7ebf0; font:13px/1.45 system-ui,sans-serif; }
+.gym-main h3 { font-size:13px; margin:0 0 6px; color:#93a0b0; }
+.gym-head { flex:0 0 auto; }
+.gym-board { flex:1 1 auto; min-height:220px; display:grid; grid-template-rows:minmax(0,1fr); border:1px solid #29323f; border-radius:8px; overflow:hidden; background:#0b1016; }
 .gym-conv canvas { width:100%; height:150px; display:block; background:#0b1016; border:1px solid #29323f; border-radius:8px; }
 .gym-scorebig { font:600 24px ui-monospace,monospace; font-variant-numeric:tabular-nums; }
 .gym-hint { color:#5c6875; font-size:12px; }
@@ -45,6 +53,34 @@ const GYM_CSS = `
 .gym-bookhead label,.gym-pager label { display:inline-flex; align-items:center; gap:6px; color:#93a0b0; font-size:12px; }
 .gym-bookhead input,.gym-pager input { width:80px; background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:4px 7px; font:12px ui-monospace,monospace; }
 .gym-pager .gym-num { color:#46d6b8; }
+/* Positions table (Stage 1 'book' mode) — a compact, scrollable list above the board. */
+.gym-postable-wrap { flex:0 0 auto; max-height:40%; overflow:auto; border:1px solid #29323f; border-radius:8px; margin-bottom:10px; background:#0b1016; }
+.gym-postable { width:100%; border-collapse:collapse; font:12px ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+.gym-postable th { position:sticky; top:0; background:#161d26; color:#93a0b0; text-align:left; font-weight:600; padding:6px 10px; border-bottom:1px solid #29323f; font-size:11px; }
+.gym-postable td { padding:5px 10px; border-bottom:1px solid #1a222c; color:#c6d0dc; vertical-align:middle; }
+.gym-postable tr { cursor:pointer; }
+.gym-postable tr.is-sel td { background:#212b37; color:#e7ebf0; }
+.gym-postable tr:hover td { background:#1a222c; }
+.gym-postable td.moves { max-width:340px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#93a0b0; }
+.gym-postable td.bal { text-align:right; white-space:nowrap; }
+.gym-bal { display:inline-flex; align-items:center; gap:6px; justify-content:flex-end; }
+.gym-bal-meter { width:44px; height:6px; border-radius:3px; background:#0c1116; border:1px solid #29323f; position:relative; overflow:hidden; }
+.gym-bal-meter i { position:absolute; top:0; bottom:0; }
+.gym-bal-meter i.pos { left:50%; background:#5ad19a; } .gym-bal-meter i.neg { right:50%; background:#e0685f; }
+.gym-empty-book { color:#5c6875; font-size:12px; padding:16px; text-align:center; }
+/* Book-management block in the rail. */
+.gym-bookmgr { display:flex; flex-direction:column; gap:8px; margin-bottom:6px; padding-bottom:10px; border-bottom:1px solid #29323f; }
+.gym-bookmgr select { background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:6px 8px; font-size:13px; }
+.gym-bookmgr-btns { display:flex; gap:8px; }
+.gym-bookmgr-btns button { flex:1; border:1px solid #3a4657; background:#161d26; color:#c6d0dc; border-radius:6px; padding:6px 8px; font-size:12px; cursor:pointer; }
+.gym-bookmgr-btns button.new { border-color:#46d6b8; color:#8ff0dc; }
+.gym-bookmgr-btns button.del:not(:disabled):hover { border-color:#e0685f; color:#f0a49d; }
+.gym-bookmgr-btns button:disabled { opacity:.45; cursor:default; }
+.gym-gen { display:flex; flex-direction:column; gap:2px; margin:6px 0; }
+.gym-gen .gl-field { margin-bottom:6px; }
+.gym-gen-btn { border:1px solid #46d6b8; background:#46d6b8; color:#06231d; font-weight:700; border-radius:6px; padding:7px 10px; font-size:13px; cursor:pointer; }
+.gym-gen-btn:disabled { opacity:.5; cursor:default; }
+.gym-count { color:#93a0b0; font-size:12px; }
 `;
 
 /** Catalog grid — the levels you can train on, with board thumbnails. */
@@ -85,75 +121,184 @@ export function GymCatalog({ search, selected, onSelect }: { search: string; sel
 
 const REF_VEC = encodeWeights(DEFAULT_EVAL_WEIGHTS);
 
-/** The gym bench for one level: board-grounded, stepped SPSA tuning in the frame. */
+/** Piece type read from a stable piece id ("player-knight-2" -> "knight"). Falls
+ * back to the raw id so a promoted/oddly-named piece still renders something. */
+function pieceLabel(pieceId: string): string {
+  const parts = pieceId.split('-');
+  return parts.length >= 3 ? parts[1] : pieceId;
+}
+
+/** Compact one-line move summary, e.g. "pawn (3,10)->(3,8), knight (1,11)->(2,9)". */
+function movesLabel(moves: BookPosition['moves']): string {
+  if (moves.length === 0) return '(start — no plies)';
+  return moves.map((m) => `${pieceLabel(m.pieceId)} (${m.from.x},${m.from.y})->(${m.move.x},${m.move.y})`).join(', ');
+}
+
+/** The gym bench for one level: opening-book management + inspection (Stage 1) and
+ * retained-session SPSA training over the active book (Stage 2). Each book keeps its
+ * own training session, so switching books restores champion + curve exactly. */
 export function GymViewer({ levelId, header }: { levelId?: string; header?: ReactNode }): ReactElement {
   const workspaceLevels = useCampaigns((s) => s.levels);
   useEffect(() => { void ensureCampaignsHydrated(); }, []);
   const level = levelId ? workspaceLevels[levelId] : undefined;
 
-  // Kept small by default so a step lands in a few seconds (each step plays
-  // bookSize×4 real games); crank both up for a more trustworthy signal.
-  const [bookSize, setBookSize] = useState(2);
-  const [depth, setDepth] = useState(2);
-  // Workflow: seed the book first, then train. bookBaseSeed + bookIndex address the
-  // position being inspected; the book is [base .. base+size-1].
+  // Per-level book store (localStorage-backed). blob + activeId are the source of
+  // truth; positions and each book's training session live inside the blob.
+  const [blob, setBlob] = useState<BooksBlob>(() => (levelId ? loadBooks(levelId) : { nextId: 1, books: [] }));
+  const [activeId, setActiveId] = useState<number | undefined>(() => blob.books[0]?.id);
   const [mode, setMode] = useState<'book' | 'train'>('book');
-  const [bookBaseSeed, setBookBaseSeed] = useState(1);
-  const [bookIndex, setBookIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [depth, setDepth] = useState(2);
   const [viewZoom, setViewZoom] = useState(0.72);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
 
-  const [traj, setTraj] = useState<GymPoint[]>([]);
-  const [champion, setChampion] = useState<{ step: number; score: number; theta: number[] }>({ step: -1, score: 0.5, theta: REF_VEC });
-  const [established, setEstablished] = useState(0);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const playingRef = useRef(false);
-  const [playing, setPlaying] = useState(false);
+  // The auto-run loop calls the LATEST stepOnce through this ref, so the worker's
+  // long-lived onmessage never fires a stale (ready=false) closure.
+  const stepOnceRef = useRef<() => void>(() => {});
 
-  // (Re)create the worker whenever the level or the run knobs change.
+  const activeBook = useMemo(() => blob.books.find((b) => b.id === activeId), [blob, activeId]);
+
+  // Latest blob/activeId in refs so the async worker callbacks (step results, the
+  // auto-run loop) always read/write the freshest state, not a stale closure.
+  const blobRef = useRef(blob); blobRef.current = blob;
+  const activeIdRef = useRef(activeId); activeIdRef.current = activeId;
+
+  // Persist + set state together — every meaningful change goes through here.
+  const commit = useCallback((next: BooksBlob) => {
+    blobRef.current = next;
+    setBlob(next);
+    if (levelId) saveBooks(levelId, next);
+  }, [levelId]);
+
+  // When the level changes, load its books and reset selection/session view.
   useEffect(() => {
-    if (!level) return undefined;
     playingRef.current = false; setPlaying(false);
-    setTraj([]); setChampion({ step: -1, score: 0.5, theta: REF_VEC }); setEstablished(0); setReady(false);
+    const loaded = levelId ? loadBooks(levelId) : { nextId: 1, books: [] };
+    blobRef.current = loaded;
+    setBlob(loaded);
+    setActiveId(loaded.books[0]?.id);
+    setSelectedIndex(0);
+    setMode('book');
+  }, [levelId]);
+
+  // (Re)create the worker whenever the level or the search depth changes. The worker
+  // is a PURE stepper — books/sessions travel in messages — so it never re-inits on a
+  // book switch or a training step.
+  useEffect(() => {
+    if (!level) { setReady(false); return undefined; }
+    playingRef.current = false; setPlaying(false); setReady(false); setGenerating(false); setBusy(false);
     const worker = new Worker(new URL('../lab/gymWorker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
     worker.onmessage = (event: MessageEvent<GymResponse>) => {
       const msg = event.data;
-      if (msg.type === 'ready') { setReady(true); }
-      else if (msg.type === 'point') {
-        setTraj((t) => [...t, msg.point]);
-        setChampion(msg.champion);
-        setEstablished(msg.sinceImprovement);
+      if (msg.type === 'ready') {
+        setReady(true);
+      } else if (msg.type === 'book') {
+        setGenerating(false);
+        // Store the freshly generated positions on the active book (session unchanged
+        // — regenerating positions doesn't reset training unless the user makes a new
+        // book). Reset the inspected index into range.
+        const id = activeIdRef.current;
+        const cur = blobRef.current.books.find((b) => b.id === id);
+        if (cur) commit(updateBook(blobRef.current, { ...cur, positions: msg.positions }));
+        setSelectedIndex(0);
+      } else if (msg.type === 'point') {
         setBusy(false);
-        if (playingRef.current) setTimeout(() => stepOnce(), 20);
-      } else { setBusy(false); playingRef.current = false; setPlaying(false); }
+        // Write the updated session back onto the active book and persist.
+        const id = activeIdRef.current;
+        const cur = blobRef.current.books.find((b) => b.id === id);
+        if (cur) commit(updateBook(blobRef.current, { ...cur, session: msg.session }));
+        if (playingRef.current) setTimeout(() => stepOnceRef.current(), 20);
+      } else {
+        setBusy(false); setGenerating(false); playingRef.current = false; setPlaying(false);
+      }
     };
     const init: GymRequest = {
-      type: 'init', level, bookSize, bookBaseSeed,
+      type: 'init', level,
       match: { search: { maxDepth: depth, maxNodes: 2500 }, maxPlies: 80 },
     };
     worker.postMessage(init);
     return () => { worker.terminate(); workerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, bookSize, bookBaseSeed, depth]);
+  }, [level, depth]);
 
-  // Keep the inspected position inside the book when its size shrinks.
-  useEffect(() => { if (bookIndex > bookSize - 1) setBookIndex(Math.max(0, bookSize - 1)); }, [bookSize, bookIndex]);
+  // Keep the inspected position inside the active book as it changes size.
+  const posCount = activeBook?.positions.length ?? 0;
+  useEffect(() => { if (selectedIndex > posCount - 1) setSelectedIndex(Math.max(0, posCount - 1)); }, [posCount, selectedIndex]);
 
+  // --- Book management -------------------------------------------------------
+  const settings = activeBook?.settings ?? DEFAULT_BOOK_SETTINGS;
+  const setSettings = useCallback((patch: Partial<OpeningBookSettings>) => {
+    const id = activeIdRef.current;
+    const cur = blobRef.current.books.find((b) => b.id === id);
+    if (!cur) return;
+    commit(updateBook(blobRef.current, { ...cur, settings: { ...cur.settings, ...patch } }));
+  }, [commit]);
+
+  const onNewBook = useCallback(() => {
+    playingRef.current = false; setPlaying(false);
+    const seed = activeBook ? { ...activeBook.settings } : { ...DEFAULT_BOOK_SETTINGS };
+    const { blob: next, book } = makeNewBook(blobRef.current, seed);
+    commit(next);
+    setActiveId(book.id);
+    setSelectedIndex(0);
+    setMode('book');
+  }, [activeBook, commit]);
+
+  const onDeleteBook = useCallback(() => {
+    if (activeId === undefined) return;
+    playingRef.current = false; setPlaying(false);
+    const next = deleteBook(blobRef.current, activeId);
+    commit(next);
+    setActiveId(next.books[0]?.id);
+    setSelectedIndex(0);
+  }, [activeId, commit]);
+
+  const onSelectBook = useCallback((id: number) => {
+    playingRef.current = false; setPlaying(false);
+    setActiveId(id);
+    setSelectedIndex(0);
+  }, []);
+
+  const generate = useCallback(() => {
+    if (!workerRef.current || !ready || !activeBook) return;
+    setGenerating(true);
+    workerRef.current.postMessage({ type: 'generate', settings: activeBook.settings } as GymRequest);
+  }, [ready, activeBook]);
+
+  // --- Training --------------------------------------------------------------
+  const canTrain = ready && !!activeBook && activeBook.positions.length > 0;
   const stepOnce = useCallback(() => {
-    if (!workerRef.current || !ready) return;
+    const worker = workerRef.current;
+    const id = activeIdRef.current;
+    const cur = blobRef.current.books.find((b) => b.id === id);
+    if (!worker || !ready || !cur || cur.positions.length === 0) { playingRef.current = false; setPlaying(false); return; }
     setBusy(true);
-    workerRef.current.postMessage({ type: 'step' } as GymRequest);
+    worker.postMessage({ type: 'step', book: cur.positions, session: cur.session } as GymRequest);
   }, [ready]);
+  stepOnceRef.current = stepOnce;
 
   const togglePlay = useCallback(() => {
     if (playingRef.current) { playingRef.current = false; setPlaying(false); return; }
     playingRef.current = true; setPlaying(true); stepOnce();
   }, [stepOnce]);
 
-  // Convergence chart.
+  // --- Derived training view (from the active book's retained session) -------
+  const session: GymSession | undefined = activeBook?.session;
+  const traj = session?.traj ?? [];
+  const champion = session?.champion ?? { step: -1, score: 0.5, theta: REF_VEC };
+  const established = session?.established ?? 0;
+  const lastScore = traj.length ? traj[traj.length - 1].score : 0.5;
+  const champVec = champion.theta;
+  const estabPct = champion.step < 0 ? 0 : Math.min(96, 40 + established * 4);
+
+  // Convergence chart (reads the active book's trajectory).
   const convRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     const cvs = convRef.current; if (!cvs) return;
@@ -165,7 +310,6 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     const lo = 0.35, hi = 0.65, n = traj.length;
     const X = (i: number) => pad + (W - 2 * pad) * (n <= 1 ? 0.5 : i / (n - 1));
     const Y = (v: number) => H - pad - (H - 2 * pad) * ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo));
-    // 0.5 baseline (even with the reference)
     ctx.strokeStyle = 'rgba(147,160,176,.4)'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(pad, Y(0.5)); ctx.lineTo(W - pad, Y(0.5)); ctx.stroke(); ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(X(0), Y(traj[0].score));
     traj.forEach((p, i) => ctx.lineTo(X(i), Y(p.score)));
@@ -174,21 +318,25 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     ctx.beginPath(); ctx.arc(X(n - 1), Y(last.score), 4, 0, 7); ctx.fillStyle = '#46d6b8'; ctx.fill();
   }, [traj]);
 
-  const book = useMemo(() => makeBook(bookSize, bookBaseSeed), [bookSize, bookBaseSeed]);
-  const currentSeed = book[Math.min(bookIndex, book.length - 1)] ?? bookBaseSeed;
-
-  // Board at the current book position.
+  // Board at the inspected position (the SELECTED book position, both modes).
+  const selectedPos = activeBook?.positions[Math.min(selectedIndex, posCount - 1)];
   const board = useMemo(() => {
     if (!level) return null;
     const base = levelToEditorBoard(level);
-    const game = createFromLevel(level, currentSeed);
+    const game = selectedPos ? stateAtPosition(level, selectedPos) : createFromLevel(level, settings.seedBase);
     return { ...base, units: unitsForGamePieces(game.pieces) };
-  }, [level, currentSeed]);
+  }, [level, selectedPos, settings.seedBase]);
 
-  const lastScore = traj.length ? traj[traj.length - 1].score : 0.5;
-  const champVec = champion.theta;
-  // Grows as steps pass without the champion improving — a rough "settling" read.
-  const estabPct = champion.step < 0 ? 0 : Math.min(96, 40 + established * 4);
+  // Balance scaled to a small meter (roughly one minor piece per half-bar).
+  const balMeter = (bal: number): ReactElement => {
+    const pct = Math.min(50, Math.abs(bal) / 6 * 50);
+    return (
+      <span className="gym-bal">
+        <span className="gym-num">{bal > 0 ? '+' : ''}{bal.toFixed(1)}</span>
+        <span className="gym-bal-meter"><i className={bal >= 0 ? 'pos' : 'neg'} style={{ width: pct + '%' }} /></span>
+      </span>
+    );
+  };
 
   return (
     <>
@@ -198,31 +346,55 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
           <p className="gym-hint">Pick a level from the Gym catalog to train the AI on it.</p>
         ) : (
           <>
-            <nav className="gym-steps" aria-label="Gym steps">
-              <button type="button" className={mode === 'book' ? 'active' : ''} onClick={() => setMode('book')}>1 · Seed book</button>
-              <button type="button" className={mode === 'train' ? 'active' : ''} onClick={() => setMode('train')}>2 · Train</button>
-            </nav>
+            <div className="gym-head">
+              <nav className="gym-steps" aria-label="Gym steps">
+                <button type="button" className={mode === 'book' ? 'active' : ''} onClick={() => setMode('book')}>1 · Opening book</button>
+                <button type="button" className={mode === 'train' ? 'active' : ''} onClick={() => setMode('train')} disabled={!activeBook}>2 · Train</button>
+              </nav>
 
-            {mode === 'book' ? (
-              <div className="gym-bookhead">
-                <span>Book: <b className="gym-num">{bookSize}</b> starting positions from seed <b className="gym-num">#{bookBaseSeed}</b></span>
-                <label className="gym-num">seed base
-                  <input type="number" min={1} value={bookBaseSeed} onChange={(e) => { setBookBaseSeed(Math.max(1, Number(e.target.value) || 1)); setBookIndex(0); }} />
-                </label>
-              </div>
-            ) : (
-              <h3 style={{ margin: '0 0 8px' }}>Board — position <span className="gym-num">#{currentSeed}</span> of the book</h3>
-            )}
+              {mode === 'book' ? (
+                activeBook ? (
+                  <>
+                    <div className="gym-bookhead">
+                      <span>Book <b className="gym-num">#{activeBook.id}</b> — <b className="gym-num">{posCount}</b> position{posCount === 1 ? '' : 's'} · plies <b className="gym-num">{activeBook.settings.plies}</b> · variety <b className="gym-num">{activeBook.settings.variety.toFixed(2)}</b></span>
+                    </div>
+                    {posCount > 0 ? (
+                      <div className="gym-pager">
+                        <button type="button" onClick={() => setSelectedIndex((i) => Math.max(0, i - 1))} disabled={selectedIndex === 0}>◂ prev</button>
+                        <span>position <span className="gym-num">{Math.min(selectedIndex, posCount - 1) + 1}</span> of <span className="gym-num">{posCount}</span></span>
+                        <button type="button" onClick={() => setSelectedIndex((i) => Math.min(posCount - 1, i + 1))} disabled={selectedIndex >= posCount - 1}>next ▸</button>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="gym-hint" style={{ margin: '4px 0 8px' }}>No opening book yet — make one in the rail, then <b>Generate</b> its positions.</p>
+                )
+              ) : (
+                <h3 style={{ margin: '4px 0 8px' }}>
+                  Training book <span className="gym-num">#{activeBook?.id}</span> — board shows position <span className="gym-num">{posCount ? Math.min(selectedIndex, posCount - 1) + 1 : 0}</span> of <span className="gym-num">{posCount}</span>
+                </h3>
+              )}
+            </div>
 
-            {mode === 'book' ? (
-              <div className="gym-pager">
-                <button type="button" onClick={() => setBookIndex((i) => Math.max(0, i - 1))} disabled={bookIndex === 0}>◂ prev</button>
-                <span>position <span className="gym-num">{bookIndex + 1}</span> of <span className="gym-num">{bookSize}</span> — seed <span className="gym-num">#{currentSeed}</span></span>
-                <button type="button" onClick={() => setBookIndex((i) => Math.min(bookSize - 1, i + 1))} disabled={bookIndex >= bookSize - 1}>next ▸</button>
-                <label className="gym-num">go to seed
-                  <input type="number" min={bookBaseSeed} max={bookBaseSeed + bookSize - 1} value={currentSeed}
-                    onChange={(e) => setBookIndex(Math.max(0, Math.min(bookSize - 1, (Number(e.target.value) || bookBaseSeed) - bookBaseSeed)))} />
-                </label>
+            {mode === 'book' && activeBook && posCount > 0 ? (
+              <div className="gym-postable-wrap">
+                <table className="gym-postable">
+                  <thead>
+                    <tr><th style={{ width: 52 }}>seed</th><th>opening moves</th><th style={{ width: 96, textAlign: 'right' }}>balance</th></tr>
+                  </thead>
+                  <tbody>
+                    {activeBook.positions.map((pos, i) => {
+                      const label = movesLabel(pos.moves);
+                      return (
+                        <tr key={`${pos.seed}-${i}`} className={i === selectedIndex ? 'is-sel' : ''} onClick={() => setSelectedIndex(i)}>
+                          <td className="gym-num">#{pos.seed}</td>
+                          <td className="moves" title={label}>{label}</td>
+                          <td className="bal">{balMeter(positionBalance(level, pos))}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : null}
 
@@ -231,25 +403,10 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                 <ViewPane kind="board" ariaLabel="Board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
                   <div className="tileset-view-board-content is-board"><StudioReadOnlyBoard board={board} boardZoom={viewZoom} boardPan={viewPan} ariaLabel="Board" /></div>
                 </ViewPane>
-              ) : null}
+              ) : (
+                <div className="gym-empty-book">Generate a book to inspect its positions here.</div>
+              )}
             </div>
-
-            {mode === 'book' ? (
-              <p className="gym-hint" style={{ marginTop: 10 }}>
-                These are the starts the champion and challengers play across, both sides. Page through to verify they exist and look right — set <b>book size</b> and <b>seed base</b> on the right to change how many and where from — then switch to <b>Train</b>. (They're varied but not yet <em>unbalanced</em>, which is why training draws — the next real step.)
-              </p>
-            ) : (
-              <div className="gym-conv">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                  <span className="gym-hint">Champion strength vs the shipped AI ({traj.length} steps)</span>
-                  <span className="gym-scorebig" style={{ color: lastScore > 0.505 ? '#5ad19a' : lastScore < 0.495 ? '#e0685f' : '#e7ebf0' }}>{lastScore.toFixed(3)}</span>
-                </div>
-                <canvas ref={convRef} width={900} height={300} aria-label="convergence curve" />
-                <p className="gym-hint" style={{ marginTop: 8 }}>
-                  0.5 = even with the shipped weights. Above 0.5 = the tuner found something stronger. A flat line at 0.5 means the games are drawing — no signal to climb (the unbalanced-book / oracle-fitness work).
-                </p>
-              </div>
-            )}
           </>
         )}
       </section>
@@ -261,38 +418,95 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
             {header}
             <p className="gym-hint">{level ? `Training: ${level.name} (${MODE_NAME[level.objective]})` : 'No level — pick one in the Catalog.'}</p>
 
-            <label className="gl-field">book size
-              <input type="number" min={1} max={32} value={bookSize} onChange={(e) => setBookSize(Math.max(1, Number(e.target.value) || 1))} />
-            </label>
-            <label className="gl-field">search depth
-              <input type="number" min={1} max={5} value={depth} onChange={(e) => setDepth(Math.max(1, Number(e.target.value) || 1))} />
-            </label>
+            {level ? (
+              <div className="gym-bookmgr">
+                <label className="gl-field">Opening book
+                  <select value={activeId ?? ''} onChange={(e) => onSelectBook(Number(e.target.value))} disabled={blob.books.length === 0}>
+                    {blob.books.length === 0 ? <option value="">— none yet —</option> : null}
+                    {blob.books.map((b) => (
+                      <option key={b.id} value={b.id}>{`Book #${b.id} — size ${b.settings.size} · plies ${b.settings.plies} · variety ${b.settings.variety.toFixed(2)}`}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="gym-bookmgr-btns">
+                  <button type="button" className="new" onClick={onNewBook}>+ New Opening Book</button>
+                  <button type="button" className="del" onClick={onDeleteBook} disabled={activeId === undefined}>Delete</button>
+                </div>
+                <span className="gym-count">{blob.books.length} book{blob.books.length === 1 ? '' : 's'} for this level (that many regenerations).</span>
+              </div>
+            ) : null}
 
-            <div className="gym-run-row">
-              <button type="button" className="play" onClick={togglePlay} disabled={!ready}>{playing ? '⏸ pause' : '▶ run'}</button>
-              <button type="button" onClick={stepOnce} disabled={!ready || busy || playing}>⏭ step</button>
-            </div>
-            {!ready ? <p className="gym-hint">Preparing…</p> : busy && !playing ? <p className="gym-hint">Playing this step's games…</p> : null}
+            {mode === 'book' && level ? (
+              activeBook ? (
+                <div className="gym-gen">
+                  <h3>Generate positions</h3>
+                  <label className="gl-field">size (positions)
+                    <input type="number" min={1} max={64} value={settings.size} onChange={(e) => setSettings({ size: Math.max(1, Number(e.target.value) || 1) })} />
+                  </label>
+                  <label className="gl-field">opening plies
+                    <input type="number" min={0} max={12} value={settings.plies} onChange={(e) => setSettings({ plies: Math.max(0, Number(e.target.value) || 0) })} />
+                  </label>
+                  <label className="gl-field">seed base
+                    <input type="number" min={1} value={settings.seedBase} onChange={(e) => setSettings({ seedBase: Math.max(1, Number(e.target.value) || 1) })} />
+                  </label>
+                  <SliderRow label="variety" value={settings.variety} set={(v) => setSettings({ variety: v })} min={0} max={1} step={0.05} nudge={0.05} dflt={DEFAULT_BOOK_SETTINGS.variety} />
+                  <button type="button" className="gym-gen-btn" onClick={generate} disabled={!ready || generating}>
+                    {generating ? 'Generating…' : posCount > 0 ? 'Regenerate' : 'Generate'}
+                  </button>
+                  {!ready ? <p className="gym-hint">Preparing engine…</p> : null}
+                  <p className="gym-hint" style={{ marginTop: 6 }}>Each seed walks a few random legal opening plies from the level start, so seeds diverge into slightly-imbalanced boards to train on.</p>
+                </div>
+              ) : (
+                <p className="gym-hint">Make an opening book above to generate and inspect positions.</p>
+              )
+            ) : null}
 
-            <h3>Champion</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }} className="gym-num">
-              <span className="gym-hint">score</span><span>{champion.score.toFixed(3)}</span>
-            </div>
-            <div className="gym-hint" style={{ marginBottom: 4 }}>how established</div>
-            <div className="gym-estab">
-              <span className="gym-meter"><i style={{ width: estabPct + '%' }} /></span>
-              <span className="gym-hint gym-num">{champion.step < 0 ? 'no gain yet' : `+${established} since best`}</span>
-            </div>
+            {mode === 'train' && level ? (
+              <>
+                <label className="gl-field">search depth
+                  <input type="number" min={1} max={5} value={depth} onChange={(e) => setDepth(Math.max(1, Number(e.target.value) || 1))} />
+                </label>
 
-            <h3>Eval weights <span className="gym-hint">(champion vs shipped)</span></h3>
-            <div className="gym-weights">
-              {PARAM_LABELS.map((lab, i) => {
-                const d = champVec[i] - REF_VEC[i];
-                const cls = d > 0.001 ? 'up' : d < -0.001 ? 'dn' : 'z';
-                const txt = Math.abs(d) < 0.001 ? '—' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(3)}`;
-                return (<Fragment key={lab}><div className="k">{lab}</div><div className="v">{champVec[i].toFixed(2)}</div><div className={`d ${cls}`}>{txt}</div></Fragment>);
-              })}
-            </div>
+                <div className="gym-run-row">
+                  <button type="button" className="play" onClick={togglePlay} disabled={!canTrain}>{playing ? '⏸ pause' : '▶ run'}</button>
+                  <button type="button" onClick={stepOnce} disabled={!canTrain || busy || playing}>⏭ step</button>
+                </div>
+                {!ready ? <p className="gym-hint">Preparing…</p>
+                  : !activeBook ? <p className="gym-hint">No active book.</p>
+                  : activeBook.positions.length === 0 ? <p className="gym-hint">This book has no positions — generate them in step 1 first.</p>
+                  : busy && !playing ? <p className="gym-hint">Playing this step's games…</p> : null}
+
+                <h3>Convergence <span className="gym-hint">({traj.length} steps)</span></h3>
+                <div className="gym-conv">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                    <span className="gym-hint">strength vs shipped AI</span>
+                    <span className="gym-scorebig" style={{ fontSize: 18, color: lastScore > 0.505 ? '#5ad19a' : lastScore < 0.495 ? '#e0685f' : '#e7ebf0' }}>{lastScore.toFixed(3)}</span>
+                  </div>
+                  <canvas ref={convRef} width={560} height={170} aria-label="convergence curve" />
+                  <p className="gym-hint" style={{ marginTop: 6 }}>0.5 = even with the shipped weights. A flat line at 0.5 = the games are drawing, no signal to climb.</p>
+                </div>
+
+                <h3>Champion</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }} className="gym-num">
+                  <span className="gym-hint">score</span><span>{champion.score.toFixed(3)}</span>
+                </div>
+                <div className="gym-hint" style={{ marginBottom: 4 }}>how established</div>
+                <div className="gym-estab">
+                  <span className="gym-meter"><i style={{ width: estabPct + '%' }} /></span>
+                  <span className="gym-hint gym-num">{champion.step < 0 ? 'no gain yet' : `+${established} since best`}</span>
+                </div>
+
+                <h3>Eval weights <span className="gym-hint">(champion vs shipped)</span></h3>
+                <div className="gym-weights">
+                  {PARAM_LABELS.map((lab, i) => {
+                    const d = champVec[i] - REF_VEC[i];
+                    const cls = d > 0.001 ? 'up' : d < -0.001 ? 'dn' : 'z';
+                    const txt = Math.abs(d) < 0.001 ? '—' : `${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(3)}`;
+                    return (<Fragment key={lab}><div className="k">{lab}</div><div className="v">{champVec[i].toFixed(2)}</div><div className={`d ${cls}`}>{txt}</div></Fragment>);
+                  })}
+                </div>
+              </>
+            ) : null}
           </div>
         </section>
       </aside>
