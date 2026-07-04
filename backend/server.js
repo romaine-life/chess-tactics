@@ -3,6 +3,20 @@ const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
+// Pure board-render geometry (committed bundle of the SAME code the editor uses — see
+// frontend/scripts/build-server-render.mjs) so the server can compute a level's draw plan + content
+// hash. server.js is hot-copied to and run from a hot dir (supervisor.js), so a bare './generated'
+// require would resolve against that dir; resolve sibling assets against the BAKED backend dir instead
+// (BAKED_BACKEND_DIR from the supervisor; __dirname when run directly in dev/test). Fail-soft: a
+// missing/broken bundle just means thumbnails fall back to the default share image, never a crash
+// (the game must stay up). The @napi-rs/canvas compositor is required lazily in the render route too.
+const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
+let serverRender = null;
+try {
+  serverRender = require(path.join(bakedBackendDir, 'generated', 'board-render.cjs'));
+} catch (error) {
+  console.error('board-render bundle unavailable; level thumbnails will use the default image:', error && error.message);
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -181,6 +195,34 @@ const MIGRATIONS = [
         created_at  timestamptz NOT NULL DEFAULT now()
       );
       CREATE INDEX IF NOT EXISTS lab_runs_owner_idx ON lab_runs (owner_email, created_at DESC);
+    `,
+  },
+  {
+    version: 7,
+    name: 'shareable public maps + account campaign progress',
+    // public_maps: a global, owner-free address for a user's map so a pasted /play?map=<id> link
+    // resolves for an anonymous crawler/visitor (the per-owner l<n> id has no global meaning). Stores
+    // a SNAPSHOT of the level body (decoupled from the owner's live workspace — re-publish updates it)
+    // + the board content hash for the thumbnail/og cache key. The unguessable public_id is the
+    // share capability (maps are intentionally public-by-link).
+    // campaign_progress: account-scoped cleared/stars, mirroring the per-owner campaign_workspaces blob.
+    sql: `
+      CREATE TABLE IF NOT EXISTS public_maps (
+        public_id    text        PRIMARY KEY,
+        owner_email  text        NOT NULL,
+        level_id     text        NOT NULL,
+        name         text,
+        content_hash text,
+        body         jsonb       NOT NULL,
+        created_at   timestamptz NOT NULL DEFAULT now(),
+        updated_at   timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS public_maps_owner_idx ON public_maps (owner_email, level_id);
+      CREATE TABLE IF NOT EXISTS campaign_progress (
+        owner_email text        PRIMARY KEY,
+        body        jsonb       NOT NULL,
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
     `,
   },
 ];
@@ -2309,6 +2351,145 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
   }
 });
 
+// --- Shareable public maps -------------------------------------------------
+// A user's map lives in their per-owner workspace blob keyed by a per-owner l<n> id, so it has no
+// global name a signed-out crawler/visitor could resolve. Publishing mints a stable, owner-free
+// public_id and snapshots the level into public_maps, which the UNAUTH GET /api/maps/:id and the OG
+// thumbnail path read. Officials keep their global off-* ids and are unaffected.
+const PUBLIC_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'; // no 0/o/1/l ambiguity
+const PUBLIC_ID_RE = /^[a-hjkmnp-z2-9]{8,24}$/;
+function newPublicId() {
+  const bytes = crypto.randomBytes(12);
+  let out = '';
+  for (const b of bytes) out += PUBLIC_ID_ALPHABET[b % 32];
+  return out;
+}
+async function dbEnsurePublicId(ownerEmail, levelId, level, contentHash) {
+  await ensureDbReady();
+  const name = level && typeof level.name === 'string' ? level.name : null;
+  const bodyJson = JSON.stringify(level);
+  const existing = await pool.query(
+    'SELECT public_id FROM public_maps WHERE owner_email = $1 AND level_id = $2', [ownerEmail, levelId],
+  );
+  if (existing.rows[0]) {
+    const id = existing.rows[0].public_id;
+    await pool.query(
+      'UPDATE public_maps SET name = $2, content_hash = $3, body = $4::jsonb, updated_at = now() WHERE public_id = $1',
+      [id, name, contentHash, bodyJson],
+    );
+    return id;
+  }
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const id = newPublicId();
+    try {
+      await pool.query(
+        'INSERT INTO public_maps (public_id, owner_email, level_id, name, content_hash, body) VALUES ($1,$2,$3,$4,$5,$6::jsonb)',
+        [id, ownerEmail, levelId, name, contentHash, bodyJson],
+      );
+      return id;
+    } catch (error) {
+      if (error && error.code === '23505') continue; // PK collision — retry with a fresh id
+      throw error;
+    }
+  }
+  throw new Error('public_id_allocation_failed');
+}
+async function dbGetPublicMap(publicId) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT public_id, owner_email, level_id, name, content_hash, body FROM public_maps WHERE public_id = $1',
+    [publicId],
+  );
+  return rows[0] || null;
+}
+
+// POST /api/maps/publish { levelId } -> { public_id, url }. Mints/refreshes the shareable id for one
+// of the CALLER's own maps (verified against their workspace blob). Copy-link data source — no
+// rendering here; the thumbnail is produced on demand at crawl time.
+app.post('/api/maps/publish', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const levelId = req.body && typeof req.body.levelId === 'string' ? req.body.levelId : '';
+  if (!levelId) { res.status(400).json({ error: 'invalid_level_id' }); return; }
+  try {
+    const row = await dbGetWorkspace(user.email);
+    const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
+      ? row.body.levels[levelId] : null;
+    if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
+    let contentHash = null;
+    try { contentHash = serverRender.boardHashForLevel(level); } catch { contentHash = null; }
+    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
+    res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
+  } catch (error) {
+    dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
+  }
+});
+// GET /api/maps/:publicId — PUBLIC: the level snapshot for a shared map, so a signed-out visitor can
+// play it and the SPA can hydrate it. Officials are served by their own tier, not here.
+app.get('/api/maps/:publicId', async (req, res) => {
+  const publicId = String(req.params.publicId || '');
+  if (!PUBLIC_ID_RE.test(publicId)) { res.status(400).json({ error: 'invalid_map_id' }); return; }
+  try {
+    const row = await dbGetPublicMap(publicId);
+    if (!row) { res.status(404).json({ error: 'map_not_found' }); return; }
+    res.status(200).json({ public_id: row.public_id, level: row.body });
+  } catch (error) {
+    dbUnavailable(res, 'map read failed', error, 'map_store_unavailable');
+  }
+});
+
+// --- Account-scoped campaign progress --------------------------------------
+// Per-owner cleared/stars, mirroring the workspace-blob pattern. localStorage stays the offline/guest
+// source of truth on the client; this is the durable cross-device copy that a monotonic merge folds
+// guest progress into on sign-in. Body: { "<levelId>": { completed: bool, stars: 0..3 } }.
+function sanitizeProgress(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [levelId, v] of Object.entries(raw)) {
+    if (typeof levelId !== 'string' || !levelId || levelId.length > 128) continue;
+    if (!v || typeof v !== 'object') continue;
+    const stars = Number(v.stars);
+    out[levelId] = {
+      completed: Boolean(v.completed),
+      stars: Number.isFinite(stars) ? Math.max(0, Math.min(3, Math.round(stars))) : 0,
+    };
+  }
+  return out;
+}
+async function dbGetProgress(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query('SELECT body FROM campaign_progress WHERE owner_email = $1', [ownerEmail]);
+  return rows[0] ? rows[0].body : null;
+}
+async function dbPutProgress(ownerEmail, body) {
+  await ensureDbReady();
+  await pool.query(
+    `INSERT INTO campaign_progress (owner_email, body) VALUES ($1, $2::jsonb)
+     ON CONFLICT (owner_email) DO UPDATE SET body = EXCLUDED.body, updated_at = now()`,
+    [ownerEmail, JSON.stringify(body)],
+  );
+}
+app.get('/api/campaign-progress', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ progress: sanitizeProgress(await dbGetProgress(user.email)) });
+  } catch (error) {
+    dbUnavailable(res, 'progress read failed', error, 'progress_store_unavailable');
+  }
+});
+app.put('/api/campaign-progress', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const progress = sanitizeProgress(req.body && req.body.progress);
+  try {
+    await dbPutProgress(user.email, progress);
+    res.status(200).json({ ok: true, progress });
+  } catch (error) {
+    dbUnavailable(res, 'progress write failed', error, 'progress_store_unavailable');
+  }
+});
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'not_found' });
 });
@@ -2347,8 +2528,175 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
+// --- Open Graph unfurl + on-demand board thumbnails ------------------------
+// A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
+// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
+// ON-DEMAND board render served here — no CI bake, no browser (the board composites in Node via
+// generated/board-render.cjs + boardThumbnail.js). Officials resolve from the baked official.json;
+// user maps from public_maps. A render/resolve failure degrades to the branded default image.
+const OG_SITE_NAME = 'Chess Tactics';
+const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
+const DEFAULT_OG_IMAGE = '/assets/og/default.png';
+const OFFICIAL_WORKSPACE_REL = path.join('assets', 'campaigns', 'official.json');
+// Owner-facing objective labels — mirrors frontend core/objectives.ts MODE_NAME (5 stable entries).
+const OG_MODE_NAME = {
+  'capture-all': 'Last Man Standing', 'capture-king': 'King Assault',
+  'rival-kings': 'Rival Kings', survive: 'Survive', reach: 'Reach',
+};
+
+// mtime-cached file read: HTML is served no-cache so crawlers re-hit — keep it allocation-light while
+// still reflecting a STATIC_FRONTEND_DIR hot-swap. null-safe (never throws).
+const _fileCache = new Map();
+function readFileCached(absPath) {
+  let stat;
+  try { stat = fs.statSync(absPath); } catch { return null; }
+  const hit = _fileCache.get(absPath);
+  if (hit && hit.mtimeMs === stat.mtimeMs) return hit.content;
+  let content;
+  try { content = fs.readFileSync(absPath, 'utf8'); } catch { return null; }
+  _fileCache.set(absPath, { mtimeMs: stat.mtimeMs, content });
+  return content;
+}
+function frontendAssetPath(relPath) {
+  if (staticFrontendDir) {
+    const override = path.join(staticFrontendDir, relPath);
+    if (fs.existsSync(override)) return override;
+  }
+  return path.join(frontendDir, relPath);
+}
+function htmlEscape(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+let _wsRaw = null;
+let _wsParsed = { campaigns: [], levels: {} };
+function officialWorkspace() {
+  const raw = readFileCached(frontendAssetPath(OFFICIAL_WORKSPACE_REL));
+  if (!raw) return { campaigns: [], levels: {} };
+  if (raw === _wsRaw) return _wsParsed;
+  try {
+    const doc = JSON.parse(raw);
+    _wsParsed = {
+      campaigns: Array.isArray(doc.campaigns) ? doc.campaigns : [],
+      levels: doc.levels && typeof doc.levels === 'object' ? doc.levels : {},
+    };
+  } catch { _wsParsed = { campaigns: [], levels: {} }; }
+  _wsRaw = raw;
+  return _wsParsed;
+}
+// Resolve a share reference to { level, title, subtitle, description }. Officials read the on-disk
+// baked file (sync, no DB); user maps read public_maps (async). Returns null when unresolvable.
+async function resolveShareTarget({ levelId, campaignId, mapId }) {
+  if (mapId) {
+    const row = await dbGetPublicMap(mapId).catch(() => null);
+    if (!row || !row.body || typeof row.body !== 'object') return null;
+    const level = row.body;
+    const objective = OG_MODE_NAME[level.objective] || null;
+    return {
+      level,
+      title: row.name || level.name || OG_SITE_NAME,
+      subtitle: objective ? `Community map · ${objective}` : 'Community map',
+      description: objective ? `A community-made ${objective} map.` : OG_DEFAULT_DESC,
+    };
+  }
+  if (levelId && /^off-[a-z-]+$/.test(levelId)) {
+    const ws = officialWorkspace();
+    const level = Object.hasOwn(ws.levels, levelId) && ws.levels[levelId] && typeof ws.levels[levelId] === 'object'
+      ? ws.levels[levelId] : null;
+    if (!level) return null;
+    const campaign = campaignId ? ws.campaigns.find((c) => c && c.id === campaignId) || null : null;
+    const objective = OG_MODE_NAME[level.objective] || null;
+    return {
+      level,
+      title: campaign && campaign.name ? `${level.name} — ${campaign.name}` : (level.name || OG_SITE_NAME),
+      subtitle: [campaign && campaign.name, objective].filter(Boolean).join(' · ') || null,
+      description: level.notes || (campaign && campaign.name ? `A level in ${campaign.name}.` : OG_DEFAULT_DESC),
+    };
+  }
+  return null;
+}
+
+// On-demand board thumbnail: /assets/level-thumb/<id>.png (?v=<hash> only busts caches). Rendered once
+// per (id, board-content-hash), cached in-process (single replica). Registered BEFORE express.static
+// so the .png isn't 404'd by the SPA fallback's static-extension guard.
+const _thumbCache = new Map(); // `${id}:${hash}` -> Buffer
+const THUMB_CACHE_MAX = 200;
+app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
+  const id = String(req.params[0] || '');
+  const isOfficial = /^off-[a-z-]+$/.test(id);
+  const isMap = PUBLIC_ID_RE.test(id);
+  if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
+  try {
+    if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; } // bundle unavailable → default card
+    const target = await resolveShareTarget(isOfficial ? { levelId: id } : { mapId: id });
+    if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
+    const plan = serverRender.levelRenderPlan(target.level);
+    const cacheKey = `${id}:${plan.contentHash}`;
+    let png = _thumbCache.get(cacheKey);
+    if (!png) {
+      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
+      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle });
+      if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
+      _thumbCache.set(cacheKey, png);
+    }
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.status(200).end(png);
+  } catch (error) {
+    console.error('level-thumb render failed:', error && error.message);
+    res.redirect(302, DEFAULT_OG_IMAGE); // never fail an unfurl — fall back to the branded card
+  }
+});
+
+async function ogTagsFor(req) {
+  const origin = publicOrigin; // TRUSTED canonical origin, never the spoofable Host header
+  const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
+  const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
+  const mapId = typeof req.query.map === 'string' && PUBLIC_ID_RE.test(req.query.map) ? req.query.map : null;
+  const target = await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
+
+  let title = OG_SITE_NAME;
+  let description = OG_DEFAULT_DESC;
+  let image = `${origin}${DEFAULT_OG_IMAGE}`;
+  if (target) {
+    title = target.title || OG_SITE_NAME;
+    description = target.description || target.subtitle || OG_DEFAULT_DESC;
+    // Only point og:image at the on-demand render when the bundle is available; else keep the
+    // default (avoids advertising an endpoint that would just 302 to the default anyway).
+    if (serverRender) {
+      const key = mapId || levelId;
+      let hash = '';
+      try { hash = serverRender.boardHashForLevel(target.level); } catch { hash = ''; }
+      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${hash ? `?v=${hash}` : ''}`;
+    }
+  }
+  const url = `${origin}${req.originalUrl}`;
+  const meta = [
+    ['og:type', 'website'], ['og:site_name', OG_SITE_NAME], ['og:title', title],
+    ['og:description', description], ['og:url', url], ['og:image', image],
+    ['og:image:width', '1200'], ['og:image:height', '630'],
+  ].map(([p, c]) => `<meta property="${p}" content="${htmlEscape(c)}">`);
+  const tw = [
+    ['twitter:card', 'summary_large_image'], ['twitter:title', title],
+    ['twitter:description', description], ['twitter:image', image],
+  ].map(([n, c]) => `<meta name="${n}" content="${htmlEscape(c)}">`);
+  return { title, headTags: [...meta, ...tw].join('') };
+}
+async function renderShellWithOg(req) {
+  const html = readFileCached(frontendIndexFile());
+  if (html == null) return null;
+  const { title, headTags } = await ogTagsFor(req);
+  // Function replacers: a level name/notes can contain `$`, which a STRING replacement would treat
+  // as a special pattern ($&/$'/$$) and corrupt the head.
+  let out = html.replace('</head>', () => `${headTags}</head>`);
+  if (title !== OG_SITE_NAME) out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${htmlEscape(title)}</title>`);
+  return out;
+}
+
 if (staticFrontendDir) {
-  app.use(express.static(staticFrontendDir, { setHeaders: makeStaticCacheHeaders(staticFrontendDir) }));
+  // index:false so a request for '/' (or a directory) is NOT served the untagged index.html here —
+  // it falls through to the OG-injecting SPA fallback below.
+  app.use(express.static(staticFrontendDir, { index: false, setHeaders: makeStaticCacheHeaders(staticFrontendDir) }));
 }
 app.use((req, res, next) => {
   if (MIGRATED_RAW_ASSET_PATHS.has(req.path)) {
@@ -2357,7 +2705,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(frontendDir, { setHeaders: makeStaticCacheHeaders(frontendDir) }));
+app.use(express.static(frontendDir, { index: false, setHeaders: makeStaticCacheHeaders(frontendDir) }));
 
 // SPA fallback: serve index.html for client routes. Only 404 for genuine
 // static-asset extensions (a missing .png/.js/etc.) — NOT for app routes whose
@@ -2369,13 +2717,21 @@ const STATIC_ASSET_EXTENSIONS = new Set([
   '.woff', '.woff2', '.ttf', '.eot', '.webmanifest',
   '.mp3', '.wav', '.ogg', '.mp4', '.webm',
 ]);
-app.use((req, res) => {
+app.use(async (req, res) => {
   if (STATIC_ASSET_EXTENSIONS.has(path.extname(req.path).toLowerCase())) {
     res.status(404).send('not found');
     return;
   }
   res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(frontendIndexFile(), { dotfiles: 'allow' });
+  // Inject per-level Open Graph tags so the link unfurls on Discord/Slack/Twitter; on any failure
+  // fall back to streaming the untagged shell so the app never fails to serve.
+  let html = null;
+  try { html = await renderShellWithOg(req); } catch { html = null; }
+  if (html == null) {
+    res.sendFile(frontendIndexFile(), { dotfiles: 'allow' });
+    return;
+  }
+  res.type('html').send(html);
 });
 
 function startServer() {
