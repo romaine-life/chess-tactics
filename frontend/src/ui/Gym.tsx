@@ -22,6 +22,7 @@ import { stateAtPosition, type BookPosition, type OpeningBookSettings } from '..
 import type { GymRequest, GymResponse } from '../lab/gymWorker';
 import type { ValState } from '../lab/validate';
 import { setAdoptedWeights, readAdoptedVector } from '../game/adoptedWeights';
+import { ClusterRuns } from './ClusterRuns';
 import {
   emptyBlob, makeNewBook, deleteBook, updateBook,
   DEFAULT_BOOK_SETTINGS, type BooksBlob, type GymSession,
@@ -54,6 +55,24 @@ const GYM_CSS = `
 .gym-steps button { border:1px solid #29323f; background:#161d26; color:#93a0b0; padding:6px 16px; font-size:12px; }
 .gym-steps button:first-child { border-radius:6px 0 0 6px; } .gym-steps button:last-child { border-radius:0 6px 6px 0; border-left:none; }
 .gym-steps button.active { background:#212b37; color:#e7ebf0; }
+.cluster-runs { display:flex; flex-direction:column; gap:10px; }
+.cluster-runs-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.cluster-runs-note { font-size:11px; color:#7c8a9c; max-width:420px; }
+.cluster-runs-err { color:#e2a0a0; font-size:12px; margin:0; }
+.cluster-runs-body { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+.cluster-runs-list { list-style:none; margin:0; padding:0; min-width:220px; max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+.cluster-runs-empty { color:#7c8a9c; font-size:12px; padding:6px; }
+.cluster-run-row { display:flex; gap:8px; align-items:center; width:100%; text-align:left; border:1px solid #29323f; background:#161d26; color:#c3ccd8; padding:6px 8px; border-radius:6px; font-size:12px; cursor:pointer; }
+.cluster-run-row.active { background:#212b37; color:#e7ebf0; border-color:#3a4757; }
+.cluster-run-id { font-family:monospace; color:#93a0b0; }
+.cluster-run-status { margin-left:auto; text-transform:uppercase; font-size:10px; letter-spacing:.04em; }
+.cluster-run-status.s-running, .cluster-run-status.s-pending { color:#d9b871; }
+.cluster-run-status.s-done { color:#8fce9b; }
+.cluster-run-status.s-error, .cluster-run-status.s-cancelled { color:#e2a0a0; }
+.cluster-run-time { color:#6b7888; font-size:10px; }
+.cluster-run-detail { flex:1; min-width:260px; border:1px solid #29323f; background:#12181f; border-radius:6px; padding:10px; min-height:120px; }
+.cluster-run-detail-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.cluster-run-line { font-size:12px; color:#c3ccd8; margin:4px 0; }
 .gym-bookhead,.gym-pager { display:flex; align-items:center; gap:14px; margin-bottom:10px; flex-wrap:wrap; font-size:13px; }
 .gym-bookhead label,.gym-pager label { display:inline-flex; align-items:center; gap:6px; color:#93a0b0; font-size:12px; }
 .gym-bookhead input,.gym-pager input { width:80px; background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:4px 7px; font:12px ui-monospace,monospace; }
@@ -207,7 +226,7 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const [activeId, setActiveId] = useState<number | undefined>(undefined);
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [mode, setMode] = useState<'book' | 'train'>('book');
+  const [mode, setMode] = useState<'book' | 'train' | 'cluster'>('book');
   const [selectedIndex, setSelectedIndex] = useState(0);
   // Depth 4 by default — depth 2 is a toy (the owner knows it). Honestly slower, but
   // the games are real enough to actually separate two weight sets.
@@ -425,15 +444,18 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   // Adopt the champion for this level's LIVE enemy AI: write the winning vector to the
   // local cache (the live AI's synchronous source) AND the account blob (durable,
   // cross-device). The next enemy reply on this level plays with these weights.
-  const adoptChampion = useCallback(() => {
+  // Adopt any weight vector (a local champion OR a cluster champion) for this level.
+  const adoptVector = useCallback((vec: number[]) => {
     if (!levelId) return;
-    const cur = blobRef.current.books.find((b) => b.id === activeIdRef.current);
-    if (!cur || cur.session.champion.step < 0) return;
-    const vec = cur.session.champion.theta.slice();
     setAdoptedWeights(levelId, vec);
     setAdoptedVec(vec);
     commit({ ...blobRef.current, adoptedWeights: vec });
   }, [levelId, commit]);
+  const adoptChampion = useCallback(() => {
+    const cur = blobRef.current.books.find((b) => b.id === activeIdRef.current);
+    if (!cur || cur.session.champion.step < 0) return;
+    adoptVector(cur.session.champion.theta.slice());
+  }, [adoptVector]);
 
   // Revert to the shipped weights for this level (clears both cache and account blob).
   const unadopt = useCallback(() => {
@@ -536,7 +558,8 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
             <div className="gym-head">
               <nav className="gym-steps" aria-label="Gym steps">
                 <button type="button" className={mode === 'book' ? 'active' : ''} onClick={() => setMode('book')}>1 · Opening book</button>
-                <button type="button" className={mode === 'train' ? 'active' : ''} onClick={() => setMode('train')} disabled={!activeBook}>2 · Train</button>
+                <button type="button" className={mode === 'train' ? 'active' : ''} onClick={() => setMode('train')} disabled={!activeBook}>2 · Train (local)</button>
+                <button type="button" className={mode === 'cluster' ? 'active' : ''} onClick={() => setMode('cluster')}>3 · Cluster</button>
               </nav>
 
               {mode === 'book' ? (
@@ -556,12 +579,18 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
                 ) : (
                   <p className="gym-hint" style={{ margin: '4px 0 8px' }}>No opening book yet — make one in the rail, then <b>Generate</b> its positions.</p>
                 )
-              ) : (
+              ) : mode === 'train' ? (
                 <h3 style={{ margin: '4px 0 8px' }}>
                   Training book <span className="gym-num">#{activeBook?.id}</span> — <span className="gym-num">{posCount}</span> position{posCount === 1 ? '' : 's'}, live run
                 </h3>
+              ) : (
+                <h3 style={{ margin: '4px 0 8px' }}>Cluster training — headless tuning on the D8als_v7 pool</h3>
               )}
             </div>
+
+            {mode === 'cluster' && level ? (
+              <ClusterRuns level={level} levelId={levelId} onAdopt={adoptVector} />
+            ) : null}
 
             {mode === 'book' ? (
               <>
