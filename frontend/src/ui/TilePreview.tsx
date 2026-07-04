@@ -40,7 +40,7 @@ import { PropSeatLab } from './PropSeatLab';
 import { PROP_DEFS, type PropDef, type PropKind } from '../core/props';
 import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, type CompareTile } from './TileCompareLab';
 import { SurfaceTilesLab, SURFACE_TILE_FAMILIES, surfaceTileCap } from './SurfaceTilesLab';
-import { SceneAnimLab, SCENE_ANIM_REGIONS, SceneRegionThumb, type SceneRegion } from './SceneAnimLab';
+import { SceneAnimLab, SceneRegionPicker, SCENE_ANIM_REGIONS, SCENE_ANIM_SCENES, SceneRegionThumb, type SceneRegion, type SceneAnimScene } from './SceneAnimLab';
 import { DoodadCompLab } from './DoodadCompLab';
 import { ArtworkCompareLab } from './ArtworkCompareLab';
 import { DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
@@ -82,13 +82,13 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'scrollbars' | 'sliders' | 'pages' | 'sfx' | 'gamelab' | 'gym';
 
 // What the Viewer is currently holding. Assets and artwork feed read-only stages;
 // 'portrait' is the embedded portrait crop editor and 'nineslice' the embedded
 // 9-slice frame editor (the two in-studio editing kinds); 'glossary' reads one term
 // in full (definition + any long-form process doc). This records the active kind.
-type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'doodadcomp' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
+type ViewerKind = 'asset' | 'artwork' | 'portrait' | 'nineslice' | 'propseat' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscene' | 'doodadcomp' | 'artworkcompare' | 'glossary' | 'surface' | 'scrollbar' | 'slider' | 'page' | 'tileside' | 'sfx' | 'gamelab' | 'gym';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -179,7 +179,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => value === 'grass' || value === 'stone' || value === 'water';
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'sfx' || value === 'gamelab' || value === 'gym';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -270,7 +270,7 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedRegionId: regionParam || undefined,
     selectedCompositionName: comp || undefined,
     viewerKind: isNineSliceAlias ? 'nineslice' : isPropLabAlias ? 'propseat' : isTileCompareAlias ? 'tilecompare' : isSurfaceLabAlias ? 'surfacetiles' : isSceneAnimAlias ? 'sceneanim' : isDoodadEditorAlias ? 'doodadcomp' : isArtworkCompareAlias ? 'artworkcompare'
-      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'sceneanim' || vk === 'doodadcomp' || vk === 'artworkcompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' ? vk : undefined,
+      : vk === 'asset' || vk === 'artwork' || vk === 'portrait' || vk === 'nineslice' || vk === 'propseat' || vk === 'tilecompare' || vk === 'surfacetiles' || vk === 'sceneanim' || vk === 'animscene' || vk === 'doodadcomp' || vk === 'artworkcompare' || vk === 'glossary' || vk === 'surface' || vk === 'scrollbar' || vk === 'slider' || vk === 'page' || vk === 'tileside' || vk === 'sfx' || vk === 'gamelab' || vk === 'gym' ? vk : undefined,
     labMode: routeLabMode,
     tileFilter: effectiveTileFilter,
     selectedPairId: isTerrainPairId(pair) ? pair : studioDefaults.selectedPairId,
@@ -418,6 +418,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedSurfaceFamily, setSelectedSurfaceFamily] = useState(initialRoute.selectedSurfaceFamily ?? SURFACE_TILE_FAMILIES[0]);
   // Which menu region the embedded Scene Animations inspector (Viewer 'sceneanim' kind) shows.
   const [selectedRegionId, setSelectedRegionId] = useState(initialRoute.selectedRegionId ?? SCENE_ANIM_REGIONS[0].id);
+  const [selectedSceneId, setSelectedSceneId] = useState(SCENE_ANIM_SCENES[0].id);
   // Which composition the embedded doodad composer (Viewer 'doodadcomp' kind) is editing (save/load name).
   const [selectedCompositionName, setSelectedCompositionName] = useState(initialRoute.selectedCompositionName ?? 'untitled');
   // Which item the Viewer is showing (independent of the catalog category).
@@ -957,6 +958,29 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     note: 'Inspect a region to step its animation frame-by-frame and watch the wrap.',
   };
 
+  // Animated Scenes — whole backdrops (scene-level, above the per-region Scene Animations). Inspect
+  // opens the region picker (Viewer 'animscene'): the full scene with a clickable box over each
+  // animated region, each linking to that region's Scene Animations view pane. Descriptor path, so
+  // Search + Zoom + View-Selected come free (ADR-0029).
+  const animScenesCatalogType: CatalogType<SceneAnimScene> = {
+    id: 'animscenes',
+    label: 'Animated Scenes',
+    assets: SCENE_ANIM_SCENES,
+    card: (s) => ({ img: s.url, title: s.label, badge: `${s.regionIds.length} waterfalls` }),
+    sections: (visible) => [{ id: 'scenes', label: 'Scenes', assets: [...visible] }],
+    query: {
+      value: catalogQuery,
+      set: setCatalogQuery,
+      placeholder: 'scene...',
+      match: (s, q) => s.label.toLowerCase().includes(q),
+    },
+    zoom: { value: zoom, set: setZoom, min: 0.75, max: 2, step: 0.05, cssVar: '--tile-zoom' },
+    onSelect: (s) => setSelectedSceneId(s.id),
+    onView: (s) => { setSelectedSceneId(s.id); openViewer('animscene'); },
+    selectedId: selectedSceneId,
+    note: 'Inspect a scene to map its waterfalls — click a box to open that one’s animation.',
+  };
+
   // Artwork browses via a bespoke library component (not a CatalogType), so it wires the
   // shared Filters dropdown directly: one dimension, the manifest Group. memberOf is unused
   // here (CatalogFilters only reads options/selected/toggle); the grid filters in the component.
@@ -1110,6 +1134,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       id: 'sceneanim', label: 'Scene Animations', hint: 'The menu-backdrop waterfall regions — Inspect one to step its animation frame-by-frame.',
       main: <CatalogGrid type={sceneAnimCatalogType} />,
       controls: <CatalogControls type={sceneAnimCatalogType} />,
+    },
+    {
+      id: 'animscenes', label: 'Animated Scenes', hint: 'Whole animated backdrops — Inspect one to map its waterfalls and click into each.',
+      main: <CatalogGrid type={animScenesCatalogType} />,
+      controls: <CatalogControls type={animScenesCatalogType} />,
     },
     {
       id: 'assets', label: 'Assets', hint: 'Browse the UI-kit asset library.',
@@ -1357,6 +1386,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         <option value="tilecompare">Tile Pipeline</option>
         <option value="surfacetiles">Tileset Surfaces</option>
         <option value="sceneanim">Scene Animation</option>
+        <option value="animscene">Animated Scene</option>
         <option value="doodadcomp">Doodad Composition</option>
         <option value="artworkcompare">Art Compare</option>
         <option value="glossary">Glossary</option>
@@ -1431,6 +1461,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <TileCompareLab tileId={selectedTileCompareId} onTileId={setSelectedTileCompareId} header={studioViewerHeader} />
             : viewerKind === 'surfacetiles'
             ? <SurfaceTilesLab family={selectedSurfaceFamily} onFamily={setSelectedSurfaceFamily} header={studioViewerHeader} />
+            : viewerKind === 'animscene'
+            ? <SceneRegionPicker sceneId={selectedSceneId} onSceneId={setSelectedSceneId} onPickRegion={(id) => { setSelectedRegionId(id); openViewer('sceneanim'); }} header={studioViewerHeader} />
             : viewerKind === 'sceneanim'
             ? <SceneAnimLab regionId={selectedRegionId} onRegionId={setSelectedRegionId} header={studioViewerHeader} />
             : viewerKind === 'doodadcomp'

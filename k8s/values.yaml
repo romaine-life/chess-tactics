@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-6fab34b56e315316d38ff5b9b53b4c8116243bceb7b4656d8ecdaca08a05001f"
+  tag: "app-6a73bb0e21275a02c9b7addd644c15ddf73f1c8feb1c7b8653b90e12d24a6317"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Training Gym: real trainer — honest scoring, SPRT validation, adopt-to-live"
-  prNumber: "364"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/364"
-  commit: "42e0272"
+  prTitle: "Menu waterfalls: fix the left-side falls + Animated Scenes picker & right-side candidates"
+  prNumber: "369"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/369"
+  commit: "2954475"
 
 name: chess-tactics
 namespace: chess-tactics

@@ -7,6 +7,8 @@ RUN npm ci
 
 COPY frontend/ ./
 RUN npm run build
+# DOM-free engine bundle for the headless training Job (backend/train-worker.mjs).
+RUN npm run build:trainer
 
 FROM node:20-alpine
 
@@ -17,6 +19,7 @@ RUN cd backend && npm install --omit=dev
 
 COPY backend/ backend/
 COPY --from=frontend-build /app/frontend/dist frontend/dist
+COPY --from=frontend-build /app/frontend/trainer-bundle frontend/trainer-bundle
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \

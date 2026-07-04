@@ -1,0 +1,34 @@
+{{- if eq (include "chess-tactics.renderHot" .) "true" }}
+# RBAC so the app pod can create/manage the headless AI training Jobs it launches
+# (POST /api/train-runs → backend/train/k8s.mjs). Namespace-scoped, jobs + pod reads
+# only — the least privilege needed to start a run, watch it, and cancel it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "chess-tactics.resourceName" . }}-trainer
+  namespace: {{ include "chess-tactics.namespace" . }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "chess-tactics.resourceName" . }}-trainer
+  namespace: {{ include "chess-tactics.namespace" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount }}
+    namespace: {{ include "chess-tactics.namespace" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "chess-tactics.resourceName" . }}-trainer
+{{- end }}

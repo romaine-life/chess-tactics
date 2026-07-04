@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   encodeWeights, decodeWeights, matchScore, matchStats, runTuning, spsaStep,
-  PARAM_LABELS, DEFAULT_HYPERPARAMS,
+  PARAM_LABELS, DEFAULT_HYPERPARAMS, deriveScales, tailAverageTheta,
 } from './tuning';
 import { generateOpeningBook, type BookPosition, type OpeningBookSettings } from './openingBook';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
@@ -108,5 +108,28 @@ describe('runTuning', () => {
     // The champion is the best point actually seen in the trajectory.
     const best = Math.max(0.5, ...a.trajectory.map((p) => p.score));
     expect(a.champion.score).toBeCloseTo(best, 6);
+  });
+});
+
+describe('per-parameter SPSA scaling', () => {
+  it('scales each axis by its own magnitude — piece values ≫ term weights, floored so a zero weight still moves', () => {
+    const s = deriveScales(DEFAULT_EVAL_WEIGHTS);
+    expect(s).toHaveLength(PARAM_LABELS.length);
+    // A pawn's value (1) must get a far bigger perturbation scale than `advance` (0.05).
+    expect(s[PARAM_LABELS.indexOf('pawn')]).toBeGreaterThan(s[PARAM_LABELS.indexOf('advance')] * 5);
+    // hangingDefended defaults to 0 post-quiescence; the 0.05 floor keeps it tunable.
+    expect(s.every((v) => v >= 0.05)).toBe(true);
+    expect(s[PARAM_LABELS.indexOf('hanging (def)')]).toBe(0.05);
+  });
+});
+
+describe('tailAverageTheta (Polyak–Ruppert)', () => {
+  it('averages the last fraction of the trajectory', () => {
+    const traj = [{ theta: [0, 10] }, { theta: [2, 20] }, { theta: [4, 30] }, { theta: [6, 40] }];
+    // last 50% = last 2 points: mean of [4,30] and [6,40] = [5,35]
+    expect(tailAverageTheta(traj, 0.5)).toEqual([5, 35]);
+    // whole trajectory when fraction covers it
+    expect(tailAverageTheta(traj, 1)).toEqual([3, 25]);
+    expect(tailAverageTheta([], 0.5)).toBeNull();
   });
 });

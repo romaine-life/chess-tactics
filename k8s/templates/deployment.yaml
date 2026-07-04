@@ -78,6 +78,15 @@ spec:
             - name: ADMIN_EMAILS
               value: {{ .Values.adminEmails | quote }}
             {{- end }}
+            {{- if and (ne (include "chess-tactics.isTestEnv" .) "true") .Values.serviceAccountClientId }}
+            # Headless AI training Jobs (POST /api/train-runs) run THIS image with a
+            # different command on the tainted trainer pool, under this same SA so
+            # they reach Postgres via workload identity. Prod (AAD) lane only.
+            - name: TRAINER_IMAGE
+              value: {{ $imageRef | quote }}
+            - name: TRAINER_SA
+              value: {{ .Values.serviceAccount | quote }}
+            {{- end }}
             {{- if .Values.bgm.baseUrl }}
             # Public blob base for BGM track streaming. The backend also LISTS this
             # container (each blob's metadata -> title/artist/album) to build
