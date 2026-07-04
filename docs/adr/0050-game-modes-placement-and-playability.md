@@ -38,8 +38,8 @@ levels with **clear violations**.
 
 - Owner-specified mode semantics and the freedom-to-edit / gated-save principle.
 - Zero data migration: persisted `objective` ids exist in the live DB (user workspaces +
-  official campaigns) and the baked `official.json`; a rename would force either a prod
-  data migration or a load-time compat shim (prohibited by `docs/migration-policy.md`).
+  official campaigns); a rename would force either a prod data migration or a load-time
+  compat shim (prohibited by `docs/migration-policy.md`).
 - One vocabulary: the shipped `survive`/`reach` objectives stay first-class modes
   (official campaign levels already use them).
 - The whole-workspace PUT must keep working for workspaces containing legacy levels.

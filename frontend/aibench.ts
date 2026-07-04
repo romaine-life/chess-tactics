@@ -1,40 +1,11 @@
 // Throwaway benchmark: branching factor + achievable alpha-beta depth on real boards.
 // Run: compile with tsc (main checkout) then node. Not part of the app.
-import * as fs from 'fs';
-import * as path from 'path';
 import { legalMoves, applyMove, livingPieces } from './src/core/rules';
-import { buildTerrainIndex } from './src/core/terrain';
-import { propCells, propDef } from './src/core/props';
 import type { GameState, Piece, PieceType, Side, Move } from './src/core/types';
 
 const VAL: Record<string, number> = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100, rock: 0, 'random-rock': 0 };
 
 interface Board { name: string; state: GameState; env: any }
-
-function stateFromLevel(name: string, level: any): Board {
-  const pieces: Piece[] = level.layers.units.map((u: any, i: number) => ({
-    id: `${u.side}-${u.type}-${i}`, side: u.side, type: u.type, x: u.x, y: u.y,
-    alive: true, startY: u.side === 'player' ? level.board.rows - 1 : 0,
-  }));
-  const occupied = new Set(pieces.map((p) => `${p.x},${p.y}`));
-  for (const placed of level.layers.props ?? []) {
-    const def = propDef(placed.propId);
-    if (!def || !def.blocking) continue;
-    propCells(placed.x, placed.y, def).forEach((cell: any, ci: number) => {
-      const key = `${cell.x},${cell.y}`;
-      if (occupied.has(key)) return;
-      occupied.add(key);
-      pieces.push({ id: `prop-${placed.propId}-${ci}-${cell.x}-${cell.y}`, side: 'neutral', type: 'rock', x: cell.x, y: cell.y, alive: true, startY: cell.y });
-    });
-  }
-  const state: GameState = {
-    size: { cols: level.board.cols, rows: level.board.rows },
-    pieces, turn: 'enemy', winner: null,
-    terrain: level.layers.terrain,
-  };
-  const env = level.layers.terrain?.length ? { terrain: buildTerrainIndex(level.layers.terrain) } : {};
-  return { name, state, env };
-}
 
 function bigBoard(): Board {
   // 20x20, 40 units/side: 20 pawns + 20 back pieces per side, chess-like rows.
@@ -110,9 +81,8 @@ function bench(b: Board, budgetMs: number): void {
   }
 }
 
-const wsPath = path.join(__dirname, '..', 'public', 'assets', 'campaigns', 'official.json');
-const ws = JSON.parse(fs.readFileSync(wsPath, 'utf-8'));
-const boards: Board[] = Object.entries(ws.levels).map(([id, lvl]: [string, any]) => stateFromLevel(lvl.name ?? id, lvl));
-boards.push(bigBoard());
+// Official levels used to be benched from the committed official.json fixture (now removed);
+// this throwaway now benches the in-code big board. Add more Board literals here as needed.
+const boards: Board[] = [bigBoard()];
 
 for (const b of boards) bench(b, 3000);

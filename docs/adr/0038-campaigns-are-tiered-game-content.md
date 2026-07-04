@@ -6,6 +6,14 @@ deciders: Nelson, Claude
 
 # ADR-0038: Campaigns are tiered game content — a global official tier (file + DB override) plus per-user campaigns
 
+> **Amendment (2026-07-03):** The committed `official.json` fixture, its dev-only client
+> fallback, and the weekly "Bake official campaigns" workflow described below have been
+> **removed**. The live `official_campaigns` DB row is now the SOLE source of official
+> campaigns — no file mirror, no fallback. A DB miss (or a frontend with no backend in
+> dev) shows no officials rather than stale content. The sections below are kept as the
+> original decision record; read every "file"/`official.json`/"weekly bake" reference as
+> historical.
+
 The first persistence/content-architecture ADR (the rest govern UI chrome). It
 sits alongside `docs/persistence.md`, which it updates: campaigns stop being a
 purely per-user, sign-in-gated document and become **game content with two

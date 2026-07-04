@@ -1,7 +1,6 @@
 // @ts-nocheck — node built-ins are untyped in the app tsconfig (same posture as
 // forgeAtomCanvas.test.ts); vitest runs this via esbuild, which doesn't typecheck.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { playLevelGame, replayStates, aggregateRecords } from './selfplay';
 import { createBlankLevel, type Level } from '../core/level';
 import { livingPieces } from '../core/rules';
@@ -14,12 +13,6 @@ const FAST = { maxDepth: 2, maxNodes: 20_000 };
 // draw cap, and check-legal move-gen makes each ply costly. A short cap keeps the
 // mechanics tests quick without changing what they verify.
 const SHORT = { search: FAST, maxPlies: 60 };
-
-function loadOfficialLevels(): Level[] {
-  const url = new URL('../../public/assets/campaigns/official.json', import.meta.url);
-  const ws = JSON.parse(readFileSync(url, 'utf-8')) as { levels: Record<string, Level> };
-  return Object.values(ws.levels);
-}
 
 function duelLevel(): Level {
   const level = createBlankLevel('lab-duel', 'Duel', 8, 8);
@@ -34,17 +27,6 @@ function duelLevel(): Level {
 }
 
 describe('playLevelGame', () => {
-  it('plays every official campaign level to a decision', { timeout: 120_000 }, () => {
-    const levels = loadOfficialLevels();
-    expect(levels.length).toBeGreaterThan(0);
-    for (const level of levels) {
-      const record = playLevelGame(level, { seed: 7, search: FAST });
-      expect(record.winner, `${level.name} must decide`).not.toBeNull();
-      expect(record.plies).toBeLessThanOrEqual(300);
-      expect(record.moves.length).toBe(record.plies);
-    }
-  });
-
   it('is deterministic per seed', { timeout: 60_000 }, () => {
     const a = playLevelGame(duelLevel(), { seed: 11, ...SHORT });
     const b = playLevelGame(duelLevel(), { seed: 11, ...SHORT });

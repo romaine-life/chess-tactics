@@ -25,7 +25,7 @@ export type ZoneType = 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'object
 export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock'] as const satisfies readonly ZoneType[];
 
 // The win-rule MODE ids (ADR-0050). Stored ids stay the legacy objective ids deliberately —
-// they exist in the live DB and the baked official.json, and `capture-all` ≡ Last Man
+// they exist in the live DB, and `capture-all` ≡ Last Man
 // Standing / `capture-king` ≡ King Assault semantically, so a rename would buy nothing but
 // a prod data migration. Players only ever see the display names (MODE_NAME in objectives.ts).
 export type ObjectiveType = 'capture-all' | 'capture-king' | 'rival-kings' | 'survive' | 'reach';
