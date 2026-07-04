@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-8c51e637b9b9423ef2bdfc0e5ab1f687b019a7355e5fe0c34317f439fffa9428"
+  tag: "app-11c0d9f1490c0160997418d1f6ee9e071350dcea19e85d7d684a50ee73f35f57"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "fix(skirmish): wire --tab-index on the hub rail tabs (ADR-0063)"
-  prNumber: "380"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/380"
-  commit: "a727e04"
+  prTitle: "Victory conditions: authorable win/lose event rules (ADR-0064)"
+  prNumber: "381"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/381"
+  commit: "8b288f2"
 
 name: chess-tactics
 namespace: chess-tactics
