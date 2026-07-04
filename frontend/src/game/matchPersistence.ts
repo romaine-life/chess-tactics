@@ -24,7 +24,10 @@ const VERSION = 1;
 export type PersistedMatch = Pick<
   SkirmishState,
   'game' | 'seed' | 'tick' | 'log' | 'objective' | 'objectiveCtx' | 'victoryOverride' | 'turnsElapsed' | 'levelId' | 'clock'
->;
+> &
+  // Optional: snapshots written before the enemy-policy lever existed lack it, and
+  // resumeMatch defaults a missing value to the search AI.
+  Partial<Pick<SkirmishState, 'aiMode'>>;
 
 interface StoredEnvelope extends PersistedMatch {
   version: number;
@@ -63,6 +66,7 @@ function sliceOf(state: SkirmishState): PersistedMatch {
     turnsElapsed: state.turnsElapsed,
     levelId: state.levelId,
     clock: state.clock,
+    aiMode: state.aiMode,
   };
 }
 

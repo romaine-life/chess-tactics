@@ -9,8 +9,8 @@ import { TitleBarPortalContext } from './TitleBarPortalContext';
 // reads it). Use only on screens whose titleBarConfig sets centerSlot / actionsSlot.
 // The "actions" region is additive — it sits before the always-present account
 // cluster, never replacing it (ADR-0042).
-export function TitleBarSlot({ region, children }: { region: 'center' | 'actions'; children: ReactNode }): ReactElement | null {
-  const { centerNode, actionsNode } = useContext(TitleBarPortalContext);
-  const target = region === 'center' ? centerNode : actionsNode;
+export function TitleBarSlot({ region, children }: { region: 'center' | 'actions' | 'stud'; children: ReactNode }): ReactElement | null {
+  const { centerNode, actionsNode, studNode } = useContext(TitleBarPortalContext);
+  const target = region === 'center' ? centerNode : region === 'actions' ? actionsNode : studNode;
   return target ? createPortal(children, target) : null;
 }

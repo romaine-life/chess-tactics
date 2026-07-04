@@ -7,6 +7,13 @@ import {
   featureMaskMap,
   featurePiece,
   roadEdgeKey,
+  featureMaterials,
+  defaultFeatureMaterial,
+  resolveFenceOverlays,
+  fenceBlocksCrossing,
+  parseEdgeKey,
+  FENCE_MATERIALS,
+  DEFAULT_FENCE_MATERIAL,
 } from './featureAutotile';
 
 const setOf = (...keys: string[]): Set<string> => new Set(keys);
@@ -162,5 +169,40 @@ describe('featureDirtySet', () => {
 describe('featureKey', () => {
   it('formats as "x,y"', () => {
     expect(featureKey(3, 7)).toBe('3,7');
+  });
+});
+
+describe('edge fences', () => {
+  it('parses an edge key into its two cells (or null when malformed)', () => {
+    expect(parseEdgeKey('1,2|1,3')).toEqual({ ax: 1, ay: 2, bx: 1, by: 3 });
+    expect(parseEdgeKey('nope')).toBeNull();
+  });
+
+  it('blocks only the orthogonal crossing it sits on (knights + diagonals hop)', () => {
+    const fences = setOf(roadEdgeKey(1, 1, 2, 1)); // a wall between (1,1) and (2,1)
+    expect(fenceBlocksCrossing(fences, 1, 1, 2, 1)).toBe(true);
+    expect(fenceBlocksCrossing(fences, 2, 1, 1, 1)).toBe(true); // order-independent
+    expect(fenceBlocksCrossing(fences, 1, 1, 1, 2)).toBe(false); // a different edge
+    expect(fenceBlocksCrossing(fences, 1, 1, 2, 2)).toBe(false); // diagonal — never blocked
+    expect(fenceBlocksCrossing(fences, 1, 1, 3, 1)).toBe(false); // 2 apart — not a crossing
+    expect(fenceBlocksCrossing(undefined, 1, 1, 2, 1)).toBe(false);
+  });
+
+  it('assigns each shared edge to its upper-left cell (E=2 / S=4), drawn once', () => {
+    // vertical-screen pair (N/S neighbours) → smaller-y cell's S(4) edge
+    const vertical = resolveFenceOverlays({ [roadEdgeKey(1, 1, 1, 2)]: 'wood' });
+    expect(vertical.get('1,1')).toEqual({ mask: 4, material: 'wood' });
+    expect(vertical.has('1,2')).toBe(false);
+    // horizontal-screen pair (E/W neighbours) → smaller-x cell's E(2) edge
+    const horizontal = resolveFenceOverlays({ [roadEdgeKey(1, 1, 2, 1)]: 'stone' });
+    expect(horizontal.get('1,1')).toEqual({ mask: 2, material: 'stone' });
+    // a cell owning both its E and S edges combines to mask 6
+    const both = resolveFenceOverlays({ [roadEdgeKey(0, 0, 1, 0)]: 'wood', [roadEdgeKey(0, 0, 0, 1)]: 'wood' });
+    expect(both.get('0,0')).toEqual({ mask: 6, material: 'wood' });
+  });
+
+  it('exposes wood + stone fence materials with wood as the default', () => {
+    expect(FENCE_MATERIALS).toEqual(['wood', 'stone']);
+    expect(DEFAULT_FENCE_MATERIAL).toBe('wood');
   });
 });

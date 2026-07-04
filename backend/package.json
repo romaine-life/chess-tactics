@@ -1,12 +1,12 @@
 {
   "name": "chess-tactics-backend",
-  "version": "0.1.0",
+  "version": "0.1.15",
   "private": true,
   "description": "Static server for Chess Tactics.",
   "main": "server.js",
   "scripts": {
     "start": "node supervisor.js",
-    "test": "npm --prefix ../frontend ci && npm --prefix ../frontend run check && npm --prefix ../frontend run build && node --check server.js && node --check supervisor.js && node --check smoke-test.js && sh -n ../bin/agent-preview && sh -n ../bin/agent-preview-status && node smoke-test.js"
+    "test": "npm --prefix ../frontend ci && npm --prefix ../frontend run check && npm --prefix ../frontend run build && node --check server.js && node --check supervisor.js && node --check smoke-test.js && node --check netplay-smoke-test.js && node --check train-worker.mjs && node --check train/restart-thread.mjs && node --check train/db.mjs && node --check train/k8s.mjs && node check-sse-route.js && sh -n ../bin/agent-preview && sh -n ../bin/agent-preview-status && node netplay-smoke-test.js && node smoke-test.js"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

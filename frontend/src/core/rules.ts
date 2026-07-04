@@ -5,8 +5,9 @@
 
 import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, UnitFacing, Vec, Winner } from './types';
 import type { Rng } from './rng';
-import { buildTerrainIndex, canTraverse, elevationAt, type TerrainIndex } from './terrain';
+import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
+import { fenceBlocksCrossing } from './featureAutotile';
 
 const KNIGHT: ReadonlyArray<readonly [number, number]> = [
   [-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1],
@@ -87,12 +88,44 @@ export function isEnemy(piece: Piece, target: Piece | null): boolean {
  */
 export interface MoveEnv {
   terrain?: TerrainIndex;
+  /**
+   * Edge fences as canonical edge keys (roadEdgeKey "x,y|x,y"). A move that CROSSES a fenced edge
+   * is forbidden. Only an orthogonal step crosses an edge, so a knight (never orthogonally
+   * adjacent) and a diagonal slide/step pass a lone fence freely — the "knights hop" rule, like
+   * water. Omit for no fences.
+   */
+  fences?: ReadonlySet<string>;
   lastMove?: LastMove;
 }
 
 /** Whether terrain in `env` forbids moving into (x, y) from `originElev`. */
 function blockedByTerrain(env: MoveEnv | undefined, originElev: number, x: number, y: number): boolean {
   return !!env?.terrain && !canTraverse(env.terrain, originElev, x, y);
+}
+
+/** Whether a fence in `env` blocks the orthogonal crossing (ax,ay)→(bx,by). No-op off-fence/diagonal. */
+function fenceBlocks(env: MoveEnv | undefined, ax: number, ay: number, bx: number, by: number): boolean {
+  return fenceBlocksCrossing(env?.fences, ax, ay, bx, by);
+}
+
+/**
+ * The STATIC movement environment for a game state — its indexed terrain layer + edge-fence set.
+ * Neither changes across a game's plies (only `lastMove` does), so callers build this ONCE and
+ * spread it per ply as `{ ...gameEnv(state), lastMove }`. Centralised so EVERY consumer (the store,
+ * self-play, the opening book, applyMove's stat pass, the AI search) honours terrain AND fences
+ * identically — a gameplay layer omitted from one hand-rolled env is exactly the bug class this
+ * prevents. The returned env has no `lastMove`; add it at the call site when the caller needs it.
+ */
+export function gameEnv(state: GameState): MoveEnv {
+  return {
+    terrain: state.terrain ? buildTerrainIndex(state.terrain) : undefined,
+    fences: state.fences && state.fences.length ? new Set(state.fences) : undefined,
+  };
+}
+
+/** Whether terrain in `env` halts a multi-square move that enters (x, y). */
+function haltsTravelAt(env: MoveEnv | undefined, x: number, y: number): boolean {
+  return !!env?.terrain && haltsTravel(env.terrain, x, y);
 }
 
 function defaultPawnForward(piece: Piece): UnitFacing {
@@ -139,6 +172,7 @@ function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs:
       const x = piece.x + dx * step;
       const y = piece.y + dy * step;
       if (!inBounds(x, y, size)) break;
+      if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // a fence walls this step (orthogonal rays)
       if (blockedByTerrain(env, originElev, x, y)) break; // terrain wall ends the ray
       const occ = pieceAt(pieces, x, y);
       if (occ) {
@@ -146,6 +180,7 @@ function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs:
         break;
       }
       moves.push({ x, y });
+      if (haltsTravelAt(env, x, y)) break; // water: the ray may end here, not pass
     }
   }
   return moves;
@@ -157,6 +192,7 @@ function stepMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, delt
     const x = piece.x + dx;
     const y = piece.y + dy;
     if (!inBounds(x, y, size)) continue;
+    if (fenceBlocks(env, piece.x, piece.y, x, y)) continue; // an orthogonal step across a fence is walled (knights hop)
     if (blockedByTerrain(env, originElev, x, y)) continue;
     const occ = pieceAt(pieces, x, y);
     if (!occ) {
@@ -173,11 +209,14 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
   const moves: Move[] = [];
   const oneX = piece.x + forwardX;
   const oneY = piece.y + forwardY;
-  if (inBounds(oneX, oneY, size) && !pieceAt(pieces, oneX, oneY) && !blockedByTerrain(env, originElev, oneX, oneY)) {
+  // A forward step across a fenced edge is walled (only matters for an orthogonal-forward pawn;
+  // a diagonally-oriented pawn crosses a corner, which a lone fence never blocks).
+  if (inBounds(oneX, oneY, size) && !pieceAt(pieces, oneX, oneY) && !blockedByTerrain(env, originElev, oneX, oneY) && !fenceBlocks(env, piece.x, piece.y, oneX, oneY)) {
     moves.push({ x: oneX, y: oneY });
     const twoX = piece.x + forwardX * 2;
     const twoY = piece.y + forwardY * 2;
-    if (onPawnStart(piece) && inBounds(twoX, twoY, size) && !pieceAt(pieces, twoX, twoY) && !blockedByTerrain(env, originElev, twoX, twoY)) {
+    // The double step passes through the one-step square, so water — or a fence on the second edge — halts it.
+    if (onPawnStart(piece) && !haltsTravelAt(env, oneX, oneY) && !fenceBlocks(env, oneX, oneY, twoX, twoY) && inBounds(twoX, twoY, size) && !pieceAt(pieces, twoX, twoY) && !blockedByTerrain(env, originElev, twoX, twoY)) {
       moves.push({ x: twoX, y: twoY });
     }
   }
@@ -259,8 +298,10 @@ export function sideInCheck(state: GameState, side: Side, env?: MoveEnv): boolea
 
 /**
  * All legal destinations for a piece (excludes obstacles, which never move).
- * Pass `env.terrain` to apply terrain movement effects (cliff/rock barriers and
- * elevation limits); omit it for pure chess movement. Water is passable.
+ * Pass `env.terrain` to apply terrain movement effects (cliff/rock barriers,
+ * elevation limits, and water halting travel — a slide may end on water but
+ * never pass it, knights hop over, and leaving water is unrestricted); omit it
+ * for pure chess movement.
  *
  * A side that fields a king may not make any move that leaves one of its kings
  * in check: the king can't step into check, a pinned piece can't abandon the
@@ -290,10 +331,11 @@ export function legalMoves(piece: Piece, pieces: readonly Piece[], size: BoardSi
 /**
  * Squares a piece threatens (basis for the enemy threat telegraph overlay and
  * for check detection). Pass `env.terrain` to make threats respect the board the
- * same way movement does: a slider's ray stops at a terrain wall and a stepper
- * can't threaten across an impassable/un-climbable tile. Omit it for pure-chess
- * threats. A piece still "controls" the first occupied square on a ray (that
- * piece is threatened), so a king still guards its neighbours for opposition.
+ * same way movement does: a slider's ray stops at a terrain wall (and may end on
+ * but never pass water) and a stepper can't threaten across an impassable/
+ * un-climbable tile. Omit it for pure-chess threats. A piece still "controls"
+ * the first occupied square on a ray (that piece is threatened), so a king
+ * still guards its neighbours for opposition.
  */
 export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Vec[] {
   if (!piece || !piece.alive || isObstacle(piece)) return [];
@@ -313,7 +355,7 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
   }
   if (piece.type === 'king') {
     return ALL8.map(([dx, dy]) => ({ x: piece.x + dx, y: piece.y + dy }))
-      .filter((p) => inBounds(p.x, p.y, size) && !blockedByTerrain(env, originElev, p.x, p.y));
+      .filter((p) => inBounds(p.x, p.y, size) && !blockedByTerrain(env, originElev, p.x, p.y) && !fenceBlocks(env, piece.x, piece.y, p.x, p.y));
   }
   const dirs = piece.type === 'bishop' ? DIAG : piece.type === 'rook' ? ORTHO : ALL8;
   const out: Vec[] = [];
@@ -322,9 +364,11 @@ export function attackedSquares(piece: Piece, pieces: readonly Piece[], size: Bo
       const x = piece.x + dx * step;
       const y = piece.y + dy * step;
       if (!inBounds(x, y, size)) break;
+      if (fenceBlocks(env, x - dx, y - dy, x, y)) break; // a fence walls the threat ray (orthogonal)
       if (blockedByTerrain(env, originElev, x, y)) break; // a terrain wall ends the threat ray
       out.push({ x, y });
       if (pieceAt(pieces, x, y)) break;
+      if (haltsTravelAt(env, x, y)) break; // water: threatened itself, nothing beyond
     }
   }
   return out;
@@ -391,9 +435,9 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
 
   // Service-record bookkeeping: only player/enemy units accrue stats, and only
   // from this (committed) move. Snapshot the threat picture BEFORE the move while
-  // the piece still sits on `from`. Threats respect terrain so escapes/threats are
-  // counted against the same board movement uses.
-  const statEnv: MoveEnv | undefined = state.terrain ? { terrain: buildTerrainIndex(state.terrain) } : undefined;
+  // the piece still sits on `from`. Threats respect terrain AND fences so escapes/
+  // threats are counted against the same board movement uses.
+  const statEnv: MoveEnv = gameEnv(state);
   const tracksStats = piece.side === 'player' || piece.side === 'enemy';
   const opponentSide: Side | null = piece.side === 'player' ? 'enemy' : piece.side === 'enemy' ? 'player' : null;
   const escapedThreat = tracksStats && opponentSide

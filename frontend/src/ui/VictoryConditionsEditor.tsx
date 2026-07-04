@@ -4,7 +4,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 
-// The Level Editor's "Victory events" editor (ADR-0055) — a MASTER-DETAIL surface inside the
+// The Level Editor's "Victory events" editor (ADR-0064) — a MASTER-DETAIL surface inside the
 // events overlay: a scrollable list of NAMED rules on the left, the selected rule's `IF <conditions>
 // THEN <faction> wins|loses` on the right. Templates (passed in via `templates`) sit atop the list
 // and fill it. Chrome is the editor's kit idiom only — le-seg-btn buttons, the shared Toggle /

@@ -9,7 +9,9 @@
 //   - tile srcs from the studio tileset (assetFrameSrc over studioFamilies, same as the editor),
 //   - feature (road/river) masks from featureMaskAt + featureFrameSrc,
 //   - unit sprites from the unit roster (UnitAsset.sprite, ultimately pieceSpritePath),
-//   - doodad halves from the doodad catalog.
+//   - doodad halves from the doodad catalog,
+//   - multi-cell prop halves (trees/houses) via the shared BoardStructure seat geometry
+//     (structureSeatPoint + propZBracket — the same math <PropSprite> renders with).
 // The render happens at the board's NATIVE tile pixel size and is z-sorted exactly like the
 // DOM (tiles by x+y; doodad-back / unit / doodad-front bracket at +20000); the display layer
 // (LevelThumbnail) downscales the result with nearest-neighbour.
@@ -21,7 +23,7 @@ import {
   TILE_STEP_Y,
 } from '../art/projectionContract';
 import { studioFamilies, assetFrameSrc, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
 import {
   unitAssets,
   hasDirectionSprite,
@@ -31,7 +33,12 @@ import {
   type Faction,
 } from '../ui/unitCatalog';
 import { DOODAD_ASSETS, type DoodadAsset } from '../ui/doodadCatalog';
-import { featureMaskAt, type FeatureKind } from '../core/featureAutotile';
+import { resolveFeatureOverlays, resolveFenceOverlays } from '../core/featureAutotile';
+import { propHalfSrc, propZBracket, structureSeatPoint } from './BoardStructure';
+import { propDef } from '../core/props';
+import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
+import { familyOfTile } from '../core/levelBoard';
+import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 
 // --- Editor render geometry (mirrors style.css, kept in ONE place) -----------------------
@@ -64,6 +71,12 @@ interface DrawOp {
   z: number;
   /** When true, fit the natural image into (dw,dh) with object-fit:contain centring (units). */
   contain?: boolean;
+  /** Source sub-rect (sx,sy,sw,sh) for a sprite-sheet frame — ground-cover tufts draw frame 0 of
+   *  their horizontal sway sheet. Absent ⇒ the whole image is drawn. */
+  sx?: number;
+  sy?: number;
+  sw?: number;
+  sh?: number;
 }
 
 type Canvas2D = HTMLCanvasElement | OffscreenCanvas;
@@ -84,10 +97,12 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
   const ops: DrawOp[] = [];
 
   // Tiles + feature overlays. Each cell's frame origin is the projected point shifted by the
-  // CSS translate(-stepX, -equator); the img fills the 96x180 frame.
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, f] of Object.entries(board.features)) presentByKind[f.kind].add(key);
+  // CSS translate(-stepX, -equator); the img fills the 96x180 frame. One shared autotile pass
+  // resolves road/river masks (see resolveFeatureOverlays); fences resolve to per-cell E/S rails.
   const isSevered = (edge: string): boolean => board.featureCuts[edge] === true;
+  const isExit = (edge: string): boolean => board.featureExits[edge] === true;
+  const overlays = resolveFeatureOverlays(board.features, isSevered, isExit);
+  const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
 
   for (let y = 0; y < board.rows; y += 1) {
     for (let x = 0; x < board.cols; x += 1) {
@@ -101,17 +116,29 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
         ops.push({ src: assetFrameSrc(tile, 0), dx: frameX, dy: frameY, dw: TILE_FRAME_W, dh: TILE_FRAME_H, z: zIndex });
       }
 
-      const feature = board.features[key];
+      const feature = overlays[key];
       if (feature) {
-        const mask = featureMaskAt(presentByKind[feature.kind], x, y, isSevered);
+        // road/river ribbons stay in their own cell band at +0.5, over the tile top.
         ops.push({
-          src: featureFrameSrc(feature.kind, feature.material, mask),
+          src: featureFrameSrc(feature.kind, feature.material, feature.mask),
           dx: frameX,
           dy: frameY,
           dw: TILE_FRAME_W,
           dh: TILE_FRAME_H,
-          // Feature rides OVER its own tile but stays within the cell band (DOM: same cell div).
           z: zIndex + 0.5,
+        });
+      }
+
+      const fence = fenceOverlays.get(key);
+      if (fence) {
+        // Edge rails ride just above the ribbon band (still under the +20000 unit/prop band).
+        ops.push({
+          src: fenceFrameSrc(fence.material, fence.mask),
+          dx: frameX,
+          dy: frameY,
+          dw: TILE_FRAME_W,
+          dh: TILE_FRAME_H,
+          z: zIndex + 0.6,
         });
       }
     }
@@ -146,6 +173,69 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
     }
   }
 
+  // Multi-cell props (trees/houses): back/front halves bracketing the unit band exactly like
+  // <PropSprite> — seated at the footprint's ground centre, z off the front-most footprint cell.
+  // The DOM pulls the frame back by translate(-anchorX/w%, -anchorY/h%) of its own size, i.e.
+  // the frame origin is the seat point minus the contact-anchor pixel.
+  for (const [key, placement] of Object.entries(board.props ?? {})) {
+    const def = propDef(placement.propId);
+    if (!def) continue; // unknown prop id — skip, like the live renderer and collision bridge
+    const [ax, ay] = key.split(',').map(Number);
+    const { left, top } = structureSeatPoint({ x: ax, y: ay }, def.w, def.h);
+    // Apply the prop's render scale. A "copy"/size-variant prop shares the base's PNG + footprint and
+    // differs ONLY by scale (+ anchor) — the live <StructureSprite> sizes the frame at w/h*scale and
+    // seats the contact pixel with a PERCENTAGE translate, so the anchor offset scales too. Without
+    // this the variant renders at BASE size in the thumbnail.
+    const s = def.sprite.scale ?? 1;
+    const dx = left - def.sprite.anchorX * s;
+    const dy = top - def.sprite.anchorY * s;
+    const dw = def.sprite.w * s;
+    const dh = def.sprite.h * s;
+    const { back, front } = propZBracket(ax, ay, def.w, def.h);
+    // Size variants share the base's PNG — bake by spriteId (the base), not the placed variant id.
+    ops.push({ src: propHalfSrc(def.spriteId, 'back'), dx, dy, dw, dh, z: back });
+    ops.push({ src: propHalfSrc(def.spriteId, 'front'), dx, dy, dw, dh, z: front });
+  }
+
+  // Ground cover (grass/water/sand tufts) — the SAME vegetation the GAME scatters (SkirmishBoard),
+  // which bakeBoardThumbnail previously omitted so grass boards read as bare. Reuse the exact game
+  // logic: a board that painted NO cover densities gets the procedural densityFieldAt fill on
+  // grassland; a painted board honors its densities. A fixed seed keeps the thumbnail deterministic
+  // (and cacheable). Each tuft is frame 0 of its sway sheet, z-bracketed around units like
+  // GroundCoverLayer (front-half over shins, back-half behind).
+  const COVER_SEED = 1234;
+  const coverCells: Array<{ x: number; y: number; terrain: TileFamilyId; groundCover?: GroundCover }> = [];
+  for (let y = 0; y < board.rows; y += 1) {
+    for (let x = 0; x < board.cols; x += 1) {
+      const tileId = board.cells[`${x},${y}`];
+      const terrain = tileId ? familyOfTile(tileId) : undefined;
+      if (terrain && groundCoverSet(terrain)) coverCells.push({ x, y, terrain });
+    }
+  }
+  const hasPaintedCover = Object.keys(board.cover ?? {}).length > 0;
+  resolveGroundCover(coverCells, COVER_SEED, (cell) =>
+    board.cover?.[`${cell.x},${cell.y}`] ?? (hasPaintedCover ? null : densityFieldAt(cell.x, cell.y, COVER_SEED)));
+  for (const cell of coverCells) {
+    if (!cell.groundCover) continue;
+    const set = groundCoverSet(cell.terrain);
+    if (!set) continue;
+    const { left, top, zIndex } = boardLabCellPosition(cell);
+    const base = zIndex + 20000;
+    for (const tuft of cell.groundCover.tufts) {
+      const meta = set.variants.find((v) => v.id === tuft.variant);
+      if (!meta) continue;
+      ops.push({
+        src: `${set.basePath}/v${tuft.variant}.png`,
+        sx: 0, sy: 0, sw: meta.frameW, sh: meta.frameH, // frame 0 of the horizontal sway sheet
+        dx: left + tuft.dx - meta.baseX,
+        dy: top + tuft.dy - meta.baseY,
+        dw: meta.frameW,
+        dh: meta.frameH,
+        z: base + (tuft.dy > 0 ? 1 : -1),
+      });
+    }
+  }
+
   ops.sort((a, b) => a.z - b.z);
   return ops;
 }
@@ -173,6 +263,7 @@ export function boardContentHash(board: EditorBoard): string {
     `t:${sortedEntries(board.cells)}`,
     `u:${sortedEntries(board.units)}`,
     `d:${sortedEntries(board.doodads)}`,
+    `p:${sortedEntries(board.props ?? {})}`,
     `v:${sortedEntries(board.cover)}`,
     `f:${sortedEntries(board.features)}`,
     `x:${Object.keys(board.featureCuts).sort().join(',')}`,
@@ -311,6 +402,10 @@ export async function bakeBoardThumbnail(board: EditorBoard, opts?: { scale?: nu
       const cx = op.dx + (op.dw - w) / 2;
       const cy = op.dy + (op.dh - h) / 2;
       ctx.drawImage(img, (cx - bounds.minX) * scale, (cy - bounds.minY) * scale, w * scale, h * scale);
+    } else if (op.sw != null) {
+      // Sprite-sheet frame (ground-cover tuft): draw the source sub-rect (frame 0) into the dest.
+      ctx.drawImage(img, op.sx ?? 0, op.sy ?? 0, op.sw, op.sh ?? op.dh,
+        (op.dx - bounds.minX) * scale, (op.dy - bounds.minY) * scale, op.dw * scale, op.dh * scale);
     } else {
       ctx.drawImage(img, (op.dx - bounds.minX) * scale, (op.dy - bounds.minY) * scale, op.dw * scale, op.dh * scale);
     }

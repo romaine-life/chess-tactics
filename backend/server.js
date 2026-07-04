@@ -10,7 +10,17 @@ const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '..', 'fron
 const staticFrontendDir = process.env.STATIC_FRONTEND_DIR || '';
 const authBaseUrl = (process.env.AUTH_BASE_URL || 'https://auth.romaine.life').replace(/\/+$/, '');
 const publicOrigin = (process.env.PUBLIC_ORIGIN || 'https://chess.romaine.life').replace(/\/+$/, '');
+// Multiplayer lobbies + netplay relay live entirely in process: this Map is the
+// authoritative store and the SSE subscriber sets below hold live connections.
+// This is only correct because the deployment runs a SINGLE replica
+// (k8s/templates/deployment.yaml:17 `replicas: 1`, a hard invariant) — a second
+// pod would split the lobby state and the relay. No Redis; in-memory is fine for v1.
 const lobbies = new Map();
+// SSE subscribers. Global list channel (lobby list changed) and per-lobby game
+// channels. Each per-lobby entry is { res, email } so the lobby frame can be
+// projected per-viewer (your_side / viewer_role depend on the viewer's email).
+const lobbyListSubscribers = new Set(); // Set<res>
+const lobbyChannelSubscribers = new Map(); // Map<lobbyId, Set<{ res, email }>>
 
 // Background music. The browser streams tracks directly from BGM_BASE_URL (the
 // public-read blob container). The backend assembles the /api/bgm playlist one
@@ -34,6 +44,20 @@ const BGM_CACHE_TTL_MS = 5 * 60 * 1000;
 let bgmCache = { tracks: null, expiry: 0 };
 let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode only)
 
+// Game Lab runs carry whole recorded-game batches (validateLabRun allows up to
+// ~8 MB of JSON), far past the global 256kb ceiling. Mount their larger parser
+// first: once it has consumed the body, the global parser below sees the
+// request as already read and skips it, so every other route keeps the 256kb
+// limit.
+app.use('/api/lab-runs', express.json({ limit: '10mb' }));
+// Training run specs embed a whole level object (+ optionally a generated book), so
+// they exceed the 256kb global ceiling; mount a larger parser first, like lab-runs.
+app.use('/api/train-runs', express.json({ limit: '10mb' }));
+// Opening-book blobs carry every book's capped training trajectory (up to a few
+// hundred points each across several books), which can exceed the global 256kb
+// ceiling. Mount a larger parser first, same as lab-runs; the global parser below
+// then sees the body as already read and skips it.
+app.use('/api/opening-books', express.json({ limit: '4mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -120,8 +144,8 @@ const MIGRATIONS = [
     name: 'official campaigns global tier',
     // The global OFFICIAL campaign tier (ADR-0038): one upserted row per id (PK id
     // alone ⇒ global, mirroring design_portfolios), holding a complete Workspace
-    // {campaigns,levels}. Public GET / admin-gated PUT. The committed official.json
-    // is the durable fallback, so the game never depends on this row.
+    // {campaigns,levels}. Public GET / admin-gated PUT. This row is the SOLE source of
+    // official campaigns — there is no committed fixture fallback.
     sql: `
       CREATE TABLE IF NOT EXISTS official_campaigns (
         id                    text        PRIMARY KEY,
@@ -149,6 +173,127 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 6,
+    name: 'game lab runs',
+    // Account-scoped Game Lab run archive: append-only run documents. `meta` is
+    // the small list-view summary (listing never returns `body`); `body` is the
+    // full run payload, fetched per run. The composite index serves the
+    // owner-scoped newest-first listing.
+    sql: `
+      CREATE TABLE IF NOT EXISTS lab_runs (
+        id          text        PRIMARY KEY,
+        owner_email text        NOT NULL,
+        meta        jsonb       NOT NULL,
+        body        jsonb       NOT NULL,
+        created_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS lab_runs_owner_idx ON lab_runs (owner_email, created_at DESC);
+    `,
+  },
+  {
+    version: 7,
+    name: 'shareable public maps + account campaign progress',
+    // public_maps: a global, owner-free address for a user's map so a pasted /play?map=<id> link
+    // resolves for an anonymous crawler/visitor (the per-owner l<n> id has no global meaning). Stores
+    // a SNAPSHOT of the level body (decoupled from the owner's live workspace — re-publish updates it)
+    // + the board content hash for the thumbnail/og cache key. The unguessable public_id is the
+    // share capability (maps are intentionally public-by-link).
+    // campaign_progress: account-scoped cleared/stars, mirroring the per-owner campaign_workspaces blob.
+    sql: `
+      CREATE TABLE IF NOT EXISTS public_maps (
+        public_id    text        PRIMARY KEY,
+        owner_email  text        NOT NULL,
+        level_id     text        NOT NULL,
+        name         text,
+        content_hash text,
+        body         jsonb       NOT NULL,
+        created_at   timestamptz NOT NULL DEFAULT now(),
+        updated_at   timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS public_maps_owner_idx ON public_maps (owner_email, level_id);
+      CREATE TABLE IF NOT EXISTS campaign_progress (
+        owner_email text        PRIMARY KEY,
+        body        jsonb       NOT NULL,
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
+  {
+    version: 8,
+    name: 'training gym opening books',
+    // Account-scoped Training Gym opening books, one blob row per (owner, level),
+    // mirroring the per-owner campaign_workspaces model: a single JSON `data` column
+    // holding the level's whole BooksBlob {nextId, books}, upserted on save. Replaces
+    // the former per-browser localStorage store so books follow the account.
+    sql: `
+      CREATE TABLE IF NOT EXISTS opening_books (
+        owner_email text        NOT NULL,
+        level_id    text        NOT NULL,
+        data        jsonb       NOT NULL,
+        updated_at  timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (owner_email, level_id)
+      );
+    `,
+  },
+  {
+    version: 9,
+    name: 'prop seats global tier',
+    // The global PROP-SEAT tuning tier (ADR-0061): one upserted row per id (PK id
+    // alone ⇒ global, cloning official_campaigns), holding a map of propId → seat
+    // {anchorX,anchorY,scale,w?,h?,base?}. Public GET / admin-gated PUT. The committed
+    // propSeats.json is the always-render BASELINE the client overlays this row over,
+    // so props never depend on this row (an empty/missing row = "no overrides").
+    sql: `
+      CREATE TABLE IF NOT EXISTS prop_seats (
+        id                    text        PRIMARY KEY,
+        data                  jsonb       NOT NULL,
+        client_schema_version integer,
+        revision              integer     NOT NULL DEFAULT 0,
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
+      );
+    `,
+  },
+  {
+    version: 10,
+    name: 'training runs',
+    // Account-scoped headless AI training runs. `spec` is the immutable run config
+    // (level + SPSA/book/search settings) the trainer Job reads; `body` is the
+    // progressively-updated result (champion, trajectory, restart scores); `status`
+    // is pending|running|done|error|cancelled; `job_name` is the k8s Job the backend
+    // launched (so a cancel can delete it). Owner-scoped newest-first listing.
+    sql: `
+      CREATE TABLE IF NOT EXISTS train_runs (
+        id          text        PRIMARY KEY,
+        owner_email text        NOT NULL,
+        spec        jsonb       NOT NULL,
+        body        jsonb       NOT NULL DEFAULT '{}'::jsonb,
+        status      text        NOT NULL DEFAULT 'pending',
+        job_name    text,
+        created_at  timestamptz NOT NULL DEFAULT now(),
+        updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS train_runs_owner_idx ON train_runs (owner_email, created_at DESC);
+    `,
+  },
+  {
+    version: 11,
+    name: 'shipped per-level AI weights',
+    // The GLOBAL admin-tuned AI-weight tier (ship-to-everyone). One upserted row per
+    // level id (PK id alone ⇒ global, cloning prop_seats/official_campaigns) holding
+    // the encoded eval-weight vector every player's live AI uses on that level —
+    // unless the player has personally adopted their own. Public GET / admin PUT.
+    sql: `
+      CREATE TABLE IF NOT EXISTS level_ai_weights (
+        level_id   text        PRIMARY KEY,
+        weights    jsonb       NOT NULL,
+        updated_by text,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -157,8 +302,14 @@ let migrationPromise = null;
 
 function buildPool() {
   if (databaseUrl) {
+    // Azure managed Postgres requires TLS. Prod connects through the POSTGRES_HOST
+    // (AAD) branch below, so this only affects DATABASE_URL targets: turn SSL on when
+    // the URL points at an Azure Postgres or asks for it (sslmode=require); a local/CI
+    // Postgres (localhost) stays plaintext, unchanged.
+    const needsSsl = /sslmode=require/i.test(databaseUrl) || /\.postgres\.database\.azure\.com/i.test(databaseUrl);
     return new Pool({
       connectionString: databaseUrl,
+      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
       max: 8,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
@@ -282,8 +433,8 @@ function gravatarUrl(email, size = 96) {
 
 // Admins who may author the global OFFICIAL campaign tier (ADR-0038). Comma-separated
 // allowlist, parsed once into a lowercased Set. FAIL-CLOSED: unset/empty ⇒ nobody can
-// publish officials and the game runs on the committed official.json fallback. There
-// is no admin role upstream; this is the honest gate, swappable to a role check later.
+// publish officials and no official campaigns are shown (the DB row is the sole source).
+// There is no admin role upstream; this is the honest gate, swappable to a role check later.
 const adminEmails = new Set(
   String(process.env.ADMIN_EMAILS || '')
     .split(',')
@@ -336,6 +487,14 @@ function publicLobby(lobby, viewerEmail) {
       total: 2,
     },
     viewer_role: viewerEmail === lobby.host.email ? 'host' : (lobby.guest && viewerEmail === lobby.guest.email ? 'guest' : 'observer'),
+    level_id: lobby.levelId ?? null,
+    seed: lobby.seed ?? null,
+    move_count: lobby.moves ? lobby.moves.length : 0,
+    // Terminal outcome (resignation) in board terms, or null while the match is live.
+    result: lobby.result ?? null,
+    your_side: viewerEmail === lobby.host.email
+      ? 'player'
+      : (lobby.guest && viewerEmail === lobby.guest.email ? 'enemy' : null),
   };
 }
 
@@ -792,15 +951,34 @@ function applyLevelPatch(level, raw) {
   Object.assign(level, next);
 }
 
+// Dev sign-in bypass — skips the Microsoft round-trip so sign-in is testable
+// off-network. Two triggers, BOTH dev-only:
+//   - a *.tank.dev.romaine.life host — the deployed dev-slot domain (unchanged), and
+//   - a loopback host when DEV_AUTH=1 — a local `node server.js` for exercising the
+//     real sign-in flow / lobbies without Postgres or Microsoft (see CLAUDE.md).
+// Prod pods never set DEV_AUTH and their ingress Host is chess.romaine.life, so a
+// spoofed `Host: localhost` header cannot switch this on in production.
+function isDevAuthHost(req) {
+  const host = (req.get('host') || '').toLowerCase();
+  if (host.includes('.tank.dev.romaine.life')) return true;
+  if (process.env.DEV_AUTH === '1') {
+    const bare = host.replace(/:\d+$/, ''); // strip :port (IPv6 stays bracketed)
+    if (bare === 'localhost' || bare === '127.0.0.1' || bare === '[::1]') return true;
+  }
+  return false;
+}
+
 async function readSession(req) {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     const cookie = req.get('cookie') || '';
     if (cookie.includes('better-auth.session=mock-dev-session')) {
+      // Who the dev session signs in as. Defaults to a throwaway player; set
+      // DEV_AUTH_EMAIL (+ DEV_AUTH_NAME) to sign in as a real account so its
+      // owner-scoped data shows. Admin affordances still come from ADMIN_EMAILS.
       return {
         user: {
-          email: 'player@example.com',
-          name: 'Tactics Player',
+          email: process.env.DEV_AUTH_EMAIL || 'player@example.com',
+          name: process.env.DEV_AUTH_NAME || 'Tactics Player',
           role: 'pending',
         }
       };
@@ -854,8 +1032,7 @@ async function requireAdmin(req, res) {
 }
 
 async function requireDesignPortfolioWriter(req, res) {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     return {
       email: 'test-slot@chess-tactics.local',
       name: 'Test Slot',
@@ -873,6 +1050,79 @@ function activeLobbies() {
 
 function userActiveLobby(email) {
   return activeLobbies().find((lobby) => lobby.host.email === email || (lobby.guest && lobby.guest.email === email)) || null;
+}
+
+// ---------------------------------------------------------------------------
+// SSE relay for lobbies + netplay. Two channels:
+//   - the global lobby-list channel (lobbyListSubscribers): a viewer-neutral
+//     `{type:'lobbies-changed'}` ping; clients refetch GET /api/lobbies.
+//   - per-lobby game channels (lobbyChannelSubscribers): move relay + lobby
+//     state, projected per-subscriber (your_side/viewer_role need the viewer).
+// Every write is guarded — a dead socket throws — and the subscriber is dropped
+// on failure so the sets never leak. Single-replica invariant (see the lobbies
+// Map above) is what makes an in-process relay correct.
+// ---------------------------------------------------------------------------
+function sseWrite(res, payload) {
+  try {
+    res.write(payload);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+// Ping every global subscriber so clients refetch the lobby list. Called after
+// EVERY lobby mutation (create/join/leave/start/level/move).
+function broadcastLobbies() {
+  const payload = 'data: {"type":"lobbies-changed"}\n\n';
+  for (const res of lobbyListSubscribers) {
+    if (!sseWrite(res, payload)) {
+      lobbyListSubscribers.delete(res);
+    }
+  }
+}
+
+// Send a frame to every subscriber of one lobby's game channel. `frame` may be a
+// static object, or a function (sub) => frame to project per-subscriber (used for
+// lobby frames whose your_side/viewer_role depend on the viewer's email).
+function broadcastToLobby(lobbyId, frame) {
+  const subs = lobbyChannelSubscribers.get(lobbyId);
+  if (!subs) return;
+  for (const sub of subs) {
+    const value = typeof frame === 'function' ? frame(sub) : frame;
+    if (!sseWrite(sub.res, `data: ${JSON.stringify(value)}\n\n`)) {
+      subs.delete(sub);
+    }
+  }
+  if (subs.size === 0) lobbyChannelSubscribers.delete(lobbyId);
+}
+
+// Push the current lobby state to every game-channel subscriber, each correctly
+// projected for its own viewer. Use after any lobby-state change (start/leave/etc).
+function broadcastLobbyState(lobby) {
+  broadcastToLobby(lobby.id, (sub) => ({ type: 'lobby', lobby: publicLobby(lobby, sub.email) }));
+}
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache, no-transform',
+  'Connection': 'keep-alive',
+  'X-Accel-Buffering': 'no',
+};
+// Kept comfortably under any proxy/gateway timeout. The lobby SSE routes disable
+// Envoy Gateway's default 15s HTTPRoute request timeout (k8s/templates/httproute.yaml);
+// this heartbeat is the belt-and-suspenders for any other idle timer in the path.
+const SSE_KEEPALIVE_MS = 10000;
+
+// Start an SSE response: write headers, kick off a heartbeat, and wire cleanup on
+// close. Returns the interval so the route can clear it in its own close handler.
+function startSse(res) {
+  res.writeHead(200, SSE_HEADERS);
+  res.flushHeaders?.();
+  const heartbeat = setInterval(() => {
+    if (!sseWrite(res, ':keepalive\n\n')) clearInterval(heartbeat);
+  }, SSE_KEEPALIVE_MS);
+  return heartbeat;
 }
 
 function lobbyNameFor(user) {
@@ -897,6 +1147,24 @@ function frontendIndexFile() {
 
 app.get('/health', (_req, res) => {
   res.status(200).send('ok');
+});
+
+// Human-facing build/deploy provenance for Settings → About. The frontend bakes
+// the app semver at build time; the deploy-time PR/commit are not knowable then
+// (the frontend builds inside Docker with no .git), so they ride as env stamped
+// into k8s/values.yaml's `build:` block by .github/workflows/build-and-deploy.yaml
+// on each deploy — the SAME commit that bumps the image tag. That means the labels
+// stay correct even when a content-identical rebuild is skipped and the old image
+// is reused (the image bytes never carry this — only the k8s manifest does). Pure
+// chrome: never 500s; unset fields degrade to '' and the client shows just the
+// baked version.
+app.get('/api/build-info', (_req, res) => {
+  res.status(200).json({
+    prTitle: process.env.BUILD_PR_TITLE || '',
+    prNumber: process.env.BUILD_PR_NUMBER || '',
+    prUrl: process.env.BUILD_PR_URL || '',
+    commit: process.env.BUILD_COMMIT || '',
+  });
 });
 
 // Readable fallback title from a slugged blob name, used only when a track has no
@@ -1079,9 +1347,38 @@ app.post('/api/lobbies', async (req, res) => {
     updatedAt: now,
     host: user,
     guest: null,
+    levelId: null,
+    seed: null,
+    moves: [],
+    // Terminal outcome from a non-move event (a player resigning). `null` while the
+    // match is live; once set, both clients read it off the lobby frame and end the
+    // game — so it survives reconnect/late-join the way the move log does. Checkmate/
+    // stalemate/objective ends stay purely client-side (deterministic replay).
+    result: null,
   };
   lobbies.set(id, lobby);
+  broadcastLobbies();
   res.status(201).json({ lobby: publicLobby(lobby, user.email) });
+});
+
+// GLOBAL lobby-list SSE channel. Registered BEFORE `/api/lobbies/:id` so the
+// literal `/events` path is not swallowed by the :id param route. Auth before
+// headers; a viewer-neutral ping on every lobby mutation → clients refetch.
+app.get('/api/lobbies/events', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const heartbeat = startSse(res);
+  lobbyListSubscribers.add(res);
+  // Connect-time snapshot: push an immediate change ping so the client refetches the
+  // current list the instant the stream opens (mirrors the per-lobby channel's on-connect
+  // frame at the /:id/events route). Combined with the client's onopen refetch, this makes
+  // every (re)connection self-healing — a mutation missed while the socket was down is
+  // recovered on reconnect instead of being lost until a manual Refresh.
+  sseWrite(res, 'data: {"type":"lobbies-changed"}\n\n');
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    lobbyListSubscribers.delete(res);
+  });
 });
 
 app.get('/api/lobbies/:id', async (req, res) => {
@@ -1119,6 +1416,37 @@ app.post('/api/lobbies/:id/join', async (req, res) => {
   lobby.guest = user;
   lobby.phase = 'ready';
   lobby.updatedAt = new Date().toISOString();
+  broadcastLobbies();
+  broadcastLobbyState(lobby);
+  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+});
+
+// Host picks the level (before start). phase must be waiting|ready.
+app.post('/api/lobbies/:id/level', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  if (lobby.host.email !== user.email) {
+    res.status(403).json({ error: 'host_only' });
+    return;
+  }
+  if (lobby.phase !== 'waiting' && lobby.phase !== 'ready') {
+    res.status(409).json({ error: 'lobby_already_started' });
+    return;
+  }
+  const levelId = req.body && typeof req.body.levelId === 'string' ? req.body.levelId.trim() : '';
+  if (!levelId) {
+    res.status(400).json({ error: 'missing_level_id' });
+    return;
+  }
+  lobby.levelId = levelId;
+  lobby.updatedAt = new Date().toISOString();
+  broadcastLobbies();
+  broadcastLobbyState(lobby);
   res.status(200).json({ lobby: publicLobby(lobby, user.email) });
 });
 
@@ -1138,9 +1466,161 @@ app.post('/api/lobbies/:id/start', async (req, res) => {
     res.status(409).json({ error: 'missing_opponent' });
     return;
   }
+  if (!lobby.levelId) {
+    res.status(409).json({ error: 'no_level' });
+    return;
+  }
+  // Lock a positive-integer seed for deterministic shared placement (crypto so it
+  // is not predictable). Both clients build the identical board from (level, seed).
+  lobby.seed = 1 + (crypto.randomInt ? crypto.randomInt(900000) : Math.floor(Math.random() * 900000));
+  // Fresh match: drop any relayed moves and terminal result from a prior game played in
+  // this lobby (a lobby is reusable — e.g. a guest leaves after a match and a new one
+  // joins), so both clients start from an empty log rather than backfilling the old game.
+  lobby.moves = [];
+  lobby.result = null;
   lobby.phase = 'started';
   lobby.updatedAt = new Date().toISOString();
+  broadcastLobbies();
+  broadcastLobbyState(lobby);
   res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+});
+
+// Relay one applyMove. Caller must be host/guest; lobby must be started. The
+// server does NOT validate chess legality — clients do (deterministic replay).
+app.post('/api/lobbies/:id/moves', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const isHost = lobby.host.email === user.email;
+  const isGuest = lobby.guest && lobby.guest.email === user.email;
+  if (!isHost && !isGuest) {
+    res.status(409).json({ error: 'not_in_lobby' });
+    return;
+  }
+  if (lobby.phase !== 'started') {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  // The match is already decided by a resignation — no further moves are relayed. (A
+  // well-behaved client stops sending once its board shows a winner; this guards a
+  // stale/racing POST from re-opening a finished game.)
+  if (lobby.result) {
+    res.status(409).json({ error: 'match_over' });
+    return;
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const pieceId = typeof body.pieceId === 'string' ? body.pieceId : '';
+  const move = body.move;
+  if (
+    !pieceId ||
+    !move || typeof move !== 'object' || Array.isArray(move) ||
+    typeof move.x !== 'number' || !Number.isFinite(move.x) ||
+    typeof move.y !== 'number' || !Number.isFinite(move.y)
+  ) {
+    res.status(400).json({ error: 'bad_move' });
+    return;
+  }
+  // Turn integrity: the client store applies moves without AP mode, so every move flips
+  // the turn — strict one-move-per-turn alternation. Host ('player') therefore posts at
+  // EVEN relay indices, guest ('enemy') at odd. Reject a post from the side whose turn it
+  // isn't, so a tampered/misbehaving client can't move out of turn (which desyncs boards).
+  const expectHost = lobby.moves.length % 2 === 0;
+  if (isHost !== expectHost) {
+    res.status(409).json({ error: 'not_your_turn' });
+    return;
+  }
+  const event = {
+    i: lobby.moves.length,
+    side: isHost ? 'player' : 'enemy',
+    pieceId,
+    move,
+  };
+  lobby.moves.push(event);
+  lobby.updatedAt = new Date().toISOString();
+  broadcastToLobby(lobby.id, { type: 'move', move: event });
+  res.status(200).json({ move: event });
+});
+
+// Resign the match. Caller must be host/guest; lobby must be started. Records a
+// terminal result (the OTHER side wins) on the lobby and pushes it to both clients
+// over the game channel — they end the game from their own seat's perspective. Unlike
+// a move, resignation isn't turn-gated (a player may resign any time) and it's stored
+// on the lobby (not the move log) so a reconnecting/late client learns the match ended.
+app.post('/api/lobbies/:id/resign', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const isHost = lobby.host.email === user.email;
+  const isGuest = lobby.guest && lobby.guest.email === user.email;
+  if (!isHost && !isGuest) {
+    res.status(409).json({ error: 'not_in_lobby' });
+    return;
+  }
+  if (lobby.phase !== 'started') {
+    res.status(409).json({ error: 'lobby_not_started' });
+    return;
+  }
+  // Idempotent: a double-tap (or both players racing to resign) keeps the first result.
+  if (!lobby.result) {
+    lobby.result = { winner: isHost ? 'enemy' : 'player', reason: 'resign' };
+    lobby.updatedAt = new Date().toISOString();
+    broadcastLobbyState(lobby);
+    broadcastLobbies();
+  }
+  res.status(200).json({ lobby: publicLobby(lobby, user.email) });
+});
+
+// Backfill relayed moves since index N (reconnect / late join). Same visibility
+// as GET /api/lobbies/:id (host/guest/observer — lobby exists & not closed).
+app.get('/api/lobbies/:id/moves', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const parsed = Number.parseInt(req.query.since, 10);
+  const since = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  res.status(200).json({ moves: lobby.moves.slice(since) });
+});
+
+// PER-LOBBY game SSE channel. Auth; lobby must exist & be open. Sends the current
+// lobby frame immediately (projected for this viewer), then move + lobby frames.
+app.get('/api/lobbies/:id/events', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const lobby = lobbies.get(req.params.id);
+  if (!lobby || lobby.phase === 'closed') {
+    res.status(404).json({ error: 'lobby_not_found' });
+    return;
+  }
+  const heartbeat = startSse(res);
+  const sub = { res, email: user.email };
+  let subs = lobbyChannelSubscribers.get(lobby.id);
+  if (!subs) {
+    subs = new Set();
+    lobbyChannelSubscribers.set(lobby.id, subs);
+  }
+  subs.add(sub);
+  // Immediate current-state frame so the client has state without a refetch.
+  sseWrite(res, `data: ${JSON.stringify({ type: 'lobby', lobby: publicLobby(lobby, user.email) })}\n\n`);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    const set = lobbyChannelSubscribers.get(lobby.id);
+    if (set) {
+      set.delete(sub);
+      if (set.size === 0) lobbyChannelSubscribers.delete(lobby.id);
+    }
+  });
 });
 
 app.post('/api/lobbies/:id/leave', async (req, res) => {
@@ -1154,7 +1634,19 @@ app.post('/api/lobbies/:id/leave', async (req, res) => {
   if (lobby.host.email === user.email) {
     lobby.phase = 'closed';
     lobby.updatedAt = new Date().toISOString();
+    // Notify game-channel subscribers (guest sees the lobby close) before dropping it.
+    broadcastLobbyState(lobby);
+    // Proactively end the per-lobby SSE streams so their heartbeats/timers don't linger
+    // against a now-deleted lobby (ending each res fires its own 'close' handler, which
+    // clears the heartbeat and removes the sub). Otherwise it only self-heals whenever the
+    // guest's socket eventually drops.
+    const subs = lobbyChannelSubscribers.get(lobby.id);
+    if (subs) {
+      for (const sub of subs) { try { sub.res.end(); } catch { /* already closed */ } }
+      lobbyChannelSubscribers.delete(lobby.id);
+    }
     lobbies.delete(lobby.id);
+    broadcastLobbies();
     res.status(204).end();
     return;
   }
@@ -1162,6 +1654,8 @@ app.post('/api/lobbies/:id/leave', async (req, res) => {
     lobby.guest = null;
     lobby.phase = 'waiting';
     lobby.updatedAt = new Date().toISOString();
+    broadcastLobbies();
+    broadcastLobbyState(lobby);
     res.status(200).json({ lobby: publicLobby(lobby, user.email) });
     return;
   }
@@ -1386,8 +1880,7 @@ app.put('/api/design-portfolios/:id', async (req, res) => {
 });
 
 app.get('/api/auth/sign-in', (req, res) => {
-  const host = req.get('host') || '';
-  if (host.includes('.tank.dev.romaine.life')) {
+  if (isDevAuthHost(req)) {
     res.setHeader('Set-Cookie', 'better-auth.session=mock-dev-session; Path=/; HttpOnly');
     const returnTo = req.query.returnTo || '/';
     res.redirect(302, returnTo);
@@ -1442,8 +1935,8 @@ function isLevelBody(body) {
 }
 
 // `rival-kings` is the ADR-0050 addition (both sides field a King). The stored objective
-// ids stay the legacy set deliberately — they exist in the live DB / baked official.json,
-// and a rename would force a prod data migration (docs/migration-policy.md).
+// ids stay the legacy set deliberately — they exist in the live DB, and a rename would
+// force a prod data migration (docs/migration-policy.md).
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
 const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble', 'void']);
 const WORKSPACE_ZONE_TYPES = new Set(['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock']);
@@ -1452,10 +1945,10 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
 // frontend `isPlayablePieceType` gate on `Level.roster` (core/level.ts + core/pieces.ts).
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
-// ADR-0055 victory-condition kinds — mirror of core/level.ts VictoryCondition.
+// ADR-0064 victory-condition kinds — mirror of core/level.ts VictoryCondition.
 const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit']);
 
-/** Structural check for one ADR-0055 victory condition. Returns an error string or null. Shape/enum
+/** Structural check for one ADR-0064 victory condition. Returns an error string or null. Shape/enum
  * only, mirroring the frontend's conditionErrors (core/level.ts). */
 function validateWorkspaceCondition(c, label) {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return `${label} must be a condition object`;
@@ -1474,7 +1967,7 @@ function validateWorkspaceCondition(c, label) {
   return null;
 }
 
-/** Structural check for an authored `Level.victory` (ADR-0055) — an ORDERED array of if-then rules.
+/** Structural check for an authored `Level.victory` (ADR-0064) — an ORDERED array of if-then rules.
  * An empty list is legal shape here (the editor's validatePlayability P6 gates unwinnable/unlosable
  * sets); this only checks each rule has a conditions array + a valid `then`, and every condition is
  * well-formed. Returns an error string or null. */
@@ -1550,7 +2043,7 @@ function validateWorkspaceLevel(level, key) {
       return `levels.${key}.timeControl is invalid`;
     }
   }
-  // ADR-0055 authored victory — optional, structural mirror of the frontend's validateLevel
+  // ADR-0064 authored victory — optional, structural mirror of the frontend's validateLevel
   // (shape/enum only; the win/lose-non-empty gate stays editor-side, like P1–P6). Absent ⇒ the
   // objective preset defines win/lose; legacy bodies omit it and stay valid.
   if (level.victory !== undefined) {
@@ -1777,11 +2270,333 @@ app.put('/api/campaign-workspace', async (req, res) => {
   }
 });
 
+// Game Lab run persistence: account-scoped, append-only run documents in the
+// Postgres `lab_runs` table. `meta` is the small list-view summary; `body` is
+// the full run payload (list responses never include it). Every query filters
+// by owner_email so a user can never read or delete another user's run.
+const LAB_RUN_BODY_MAX_JSON_CHARS = 8_000_000;
+
+function validateLabRun(raw) {
+  if (!isObjectRecord(raw.meta)) return 'meta must be an object';
+  if (!isObjectRecord(raw.body)) return 'body must be an object';
+  if (JSON.stringify(raw.body).length > LAB_RUN_BODY_MAX_JSON_CHARS) return 'body_too_large';
+  return null;
+}
+
+async function dbListLabRuns(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, meta, created_at FROM lab_runs WHERE owner_email = $1 ORDER BY created_at DESC LIMIT 100',
+    [ownerEmail],
+  );
+  return rows;
+}
+
+async function dbGetLabRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, meta, body, created_at FROM lab_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rows[0] || null;
+}
+
+async function dbInsertLabRun(ownerEmail, id, meta, body) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO lab_runs (id, owner_email, meta, body)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb)
+     RETURNING created_at`,
+    [id, ownerEmail, JSON.stringify(meta), JSON.stringify(body)],
+  );
+  return rows[0].created_at;
+}
+
+async function dbDeleteLabRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rowCount } = await pool.query(
+    'DELETE FROM lab_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rowCount > 0;
+}
+
+// ── Training runs (headless cluster AI tuning) ────────────────────────────────
+async function dbListTrainRuns(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, spec, status, created_at, updated_at FROM train_runs WHERE owner_email = $1 ORDER BY created_at DESC LIMIT 100',
+    [ownerEmail],
+  );
+  return rows;
+}
+
+async function dbGetTrainRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT id, spec, body, status, job_name, created_at, updated_at FROM train_runs WHERE owner_email = $1 AND id = $2',
+    [ownerEmail, id],
+  );
+  return rows[0] || null;
+}
+
+async function dbInsertTrainRun(ownerEmail, id, spec) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'INSERT INTO train_runs (id, owner_email, spec) VALUES ($1, $2, $3::jsonb) RETURNING created_at',
+    [id, ownerEmail, JSON.stringify(spec)],
+  );
+  return rows[0].created_at;
+}
+
+async function dbSetTrainRunJob(id, jobName, status) {
+  await ensureDbReady();
+  await pool.query('UPDATE train_runs SET job_name = $2, status = $3, updated_at = now() WHERE id = $1', [id, jobName, status]);
+}
+
+async function dbDeleteTrainRun(ownerEmail, id) {
+  await ensureDbReady();
+  const { rowCount } = await pool.query('DELETE FROM train_runs WHERE owner_email = $1 AND id = $2', [ownerEmail, id]);
+  return rowCount > 0;
+}
+
+// ── Global shipped per-level AI weights (ship-to-everyone) ────────────────────
+async function dbGetAllAiWeights() {
+  await ensureDbReady();
+  const { rows } = await pool.query('SELECT level_id, weights FROM level_ai_weights');
+  const out = {};
+  for (const r of rows) out[r.level_id] = r.weights;
+  return out;
+}
+
+async function dbUpsertAiWeights(levelId, weights, updatedBy) {
+  await ensureDbReady();
+  await pool.query(
+    `INSERT INTO level_ai_weights (level_id, weights, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, now())
+       ON CONFLICT (level_id) DO UPDATE SET weights = EXCLUDED.weights, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+    [levelId, JSON.stringify(weights), updatedBy],
+  );
+}
+
+async function dbDeleteAiWeights(levelId) {
+  await ensureDbReady();
+  await pool.query('DELETE FROM level_ai_weights WHERE level_id = $1', [levelId]);
+}
+
+app.get('/api/lab-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ runs: await dbListLabRuns(user.email) });
+  } catch (error) {
+    dbUnavailable(res, 'lab run list failed', error, 'lab_runs_unavailable');
+  }
+});
+
+app.post('/api/lab-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const validationError = validateLabRun(raw);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_lab_run', details: validationError });
+    return;
+  }
+  const id = crypto.randomUUID();
+  try {
+    const createdAt = await dbInsertLabRun(user.email, id, raw.meta, raw.body);
+    res.status(200).json({ ok: true, id, created_at: createdAt });
+  } catch (error) {
+    dbUnavailable(res, 'lab run write failed', error, 'lab_runs_unavailable');
+  }
+});
+
+app.get('/api/lab-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetLabRun(user.email, req.params.id);
+    if (!run) { res.status(404).json({ error: 'run_not_found' }); return; }
+    res.status(200).json({ id: run.id, meta: run.meta, body: run.body, created_at: run.created_at });
+  } catch (error) {
+    dbUnavailable(res, 'lab run read failed', error, 'lab_runs_unavailable');
+  }
+});
+
+// Idempotent: deleting an unknown (or another owner's) run still answers
+// {ok:true} — the owner filter in dbDeleteLabRun means it simply deletes
+// nothing in that case.
+app.delete('/api/lab-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    await dbDeleteLabRun(user.email, req.params.id);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    dbUnavailable(res, 'lab run delete failed', error, 'lab_runs_unavailable');
+  }
+});
+
+// ── Training runs: launch a headless cluster tuning Job, read status, cancel ───
+// POST persists the run spec then creates a k8s Job on the D8als_v7 trainer pool
+// (the worker reads its own train_runs row via TRAIN_RUN_ID and writes progress
+// back). In local dev (not in-cluster) the row persists as 'pending' and simply
+// isn't launched, so dev stays functional without a cluster.
+app.post('/api/train-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const spec = req.body && typeof req.body === 'object' ? req.body : null;
+  if (!spec || !spec.level || typeof spec.level !== 'object') {
+    res.status(400).json({ error: 'invalid_train_spec', details: 'spec.level (a level object) is required' });
+    return;
+  }
+  const id = crypto.randomUUID();
+  try {
+    await dbInsertTrainRun(user.email, id, spec);
+  } catch (error) {
+    dbUnavailable(res, 'train run write failed', error, 'train_runs_unavailable');
+    return;
+  }
+  try {
+    const k8s = await import('./train/k8s.mjs');
+    if (k8s.inCluster()) {
+      const jobName = await k8s.createTrainerJob(id);
+      await dbSetTrainRunJob(id, jobName, 'running');
+      res.status(200).json({ ok: true, id, status: 'running', job: jobName });
+    } else {
+      res.status(200).json({ ok: true, id, status: 'pending', note: 'not in-cluster: run persisted but not launched' });
+    }
+  } catch (error) {
+    try { await dbSetTrainRunJob(id, null, 'error'); } catch { /* best effort */ }
+    console.error('train job launch failed', error);
+    res.status(502).json({ error: 'train_launch_failed', id, details: String((error && error.message) || error) });
+  }
+});
+
+app.get('/api/train-runs', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ runs: await dbListTrainRuns(user.email) });
+  } catch (error) {
+    dbUnavailable(res, 'train run list failed', error, 'train_runs_unavailable');
+  }
+});
+
+app.get('/api/train-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetTrainRun(user.email, req.params.id);
+    if (!run) { res.status(404).json({ error: 'run_not_found' }); return; }
+    res.status(200).json(run);
+  } catch (error) {
+    dbUnavailable(res, 'train run read failed', error, 'train_runs_unavailable');
+  }
+});
+
+// Cancel: delete the k8s Job (stops the run, releases the node) then the row.
+app.delete('/api/train-runs/:id', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    const run = await dbGetTrainRun(user.email, req.params.id);
+    if (run && run.job_name) {
+      try { const k8s = await import('./train/k8s.mjs'); await k8s.deleteTrainerJob(run.job_name); }
+      catch (e) { console.warn('trainer job delete failed', e && e.message); }
+    }
+    await dbDeleteTrainRun(user.email, req.params.id);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    dbUnavailable(res, 'train run delete failed', error, 'train_runs_unavailable');
+  }
+});
+
+// Training Gym opening-book persistence: account-scoped, one blob row per (owner,
+// level) in the Postgres `opening_books` table, mirroring the per-owner
+// campaign_workspaces model. `data` is the level's whole BooksBlob {nextId, books}.
+// Every query filters by owner_email so a user can never read another user's books.
+const OPENING_BOOKS_LEVEL_ID_MAX = 256;
+
+function validOpeningBooksLevelId(raw) {
+  const id = String(raw ?? '').trim();
+  if (!id || id.length > OPENING_BOOKS_LEVEL_ID_MAX) return null;
+  return id;
+}
+
+function validateOpeningBooksBody(raw) {
+  if (!isObjectRecord(raw.data)) return 'data must be an object';
+  if (!Array.isArray(raw.data.books)) return 'data.books must be an array';
+  return null;
+}
+
+async function dbGetOpeningBooks(ownerEmail, levelId) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT data, updated_at FROM opening_books WHERE owner_email = $1 AND level_id = $2',
+    [ownerEmail, levelId],
+  );
+  return rows[0] || null;
+}
+
+async function dbPutOpeningBooks(ownerEmail, levelId, data) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO opening_books (owner_email, level_id, data)
+       VALUES ($1, $2, $3::jsonb)
+     ON CONFLICT (owner_email, level_id) DO UPDATE SET
+       data = EXCLUDED.data,
+       updated_at = now()
+     RETURNING updated_at`,
+    [ownerEmail, levelId, JSON.stringify(data)],
+  );
+  return rows[0].updated_at;
+}
+
+app.get('/api/opening-books/:levelId', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const levelId = validOpeningBooksLevelId(req.params.levelId);
+  if (!levelId) {
+    res.status(400).json({ error: 'invalid_level_id' });
+    return;
+  }
+  try {
+    const row = await dbGetOpeningBooks(user.email, levelId);
+    const data = row && row.data && Array.isArray(row.data.books) ? row.data : { nextId: 1, books: [] };
+    res.status(200).json({ data });
+  } catch (error) {
+    dbUnavailable(res, 'opening books read failed', error, 'opening_books_unavailable');
+  }
+});
+
+app.put('/api/opening-books/:levelId', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const levelId = validOpeningBooksLevelId(req.params.levelId);
+  if (!levelId) {
+    res.status(400).json({ error: 'invalid_level_id' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const validationError = validateOpeningBooksBody(raw);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_opening_books', details: validationError });
+    return;
+  }
+  try {
+    const updatedAt = await dbPutOpeningBooks(user.email, levelId, raw.data);
+    res.status(200).json({ ok: true, updated_at: updatedAt });
+  } catch (error) {
+    dbUnavailable(res, 'opening books write failed', error, 'opening_books_unavailable');
+  }
+});
+
 // --- Official (global) campaign tier (ADR-0038) ----------------------------
 // Global game content readable by everyone (public GET) and authored by admins
-// (requireAdmin PUT). One upserted row per id holding a complete Workspace. The
-// client falls back to the committed official.json on any failure, so the game and
-// /play never depend on this — mirrors the design_portfolios global pattern.
+// (requireAdmin PUT). One upserted row per id holding a complete Workspace — the SOLE
+// source of official campaigns (no committed fixture fallback); a DB miss simply shows
+// no officials. Mirrors the design_portfolios global pattern.
 const OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION = 1;
 const OFFICIAL_CAMPAIGN_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
 function officialCampaignsRowId(raw) {
@@ -1899,6 +2714,294 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
   }
 });
 
+// --- Prop-seat tuning (global) tier (ADR-0061) -----------------------------
+// Live-tunable prop geometry: a map of propId → seat {anchorX,anchorY,scale,w?,h?,base?}.
+// Public GET / requireAdmin PUT, cloning official_campaigns. The committed propSeats.json is
+// the always-render BASELINE the client overlays this row over — an empty/missing row just
+// means "no overrides" (props still render), so props/`play` never depend on this row.
+const PROP_SEATS_STORE_SCHEMA_VERSION = 1;
+const PROP_SEATS_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+function propSeatsRowId(raw) {
+  const id = String(raw || '').trim();
+  return PROP_SEATS_ROW_ID_PATTERN.test(id) ? id : null;
+}
+
+// A prop id is a lowercase slug (letters/digits/hyphens, e.g. "oak", "cabin-2x2-house").
+const PROP_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+// Validate the seat map shape + base/variant integrity: every entry has numeric anchors and a
+// positive scale, optional positive-integer w/h, and any `base` must reference another entry IN
+// THE SAME document (no orphan size-variant — the server-side analog of /prop-lab base-protection).
+function validatePropSeatsData(data) {
+  if (!isObjectRecord(data)) return 'prop seats must be an object map of propId → seat';
+  for (const [id, seat] of Object.entries(data)) {
+    if (!PROP_ID_PATTERN.test(id)) return `prop id "${id}" must be a lowercase slug`;
+    if (!isObjectRecord(seat)) return `seat "${id}" must be an object`;
+    if (!Number.isFinite(seat.anchorX) || !Number.isFinite(seat.anchorY)) return `seat "${id}" needs numeric anchorX/anchorY`;
+    if (!(Number.isFinite(seat.scale) && seat.scale > 0)) return `seat "${id}" needs a positive scale`;
+    for (const dim of ['w', 'h']) {
+      if (Object.hasOwn(seat, dim) && !(Number.isInteger(seat[dim]) && seat[dim] >= 1)) return `seat "${id}" ${dim} must be a positive integer`;
+    }
+    if (Object.hasOwn(seat, 'base') && (typeof seat.base !== 'string' || !Object.hasOwn(data, seat.base))) {
+      return `seat "${id}" base "${seat.base}" must reference an existing prop in the same document`;
+    }
+  }
+  return null;
+}
+
+async function dbGetPropSeats(id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM prop_seats WHERE id = $1',
+    [id],
+  );
+  return rows[0] || null;
+}
+
+async function dbUpsertPropSeats(id, input) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
+       VALUES ($1, $2::jsonb, $3, 1, $4)
+     ON CONFLICT (id) DO UPDATE SET
+       data = EXCLUDED.data,
+       client_schema_version = EXCLUDED.client_schema_version,
+       revision = prop_seats.revision + 1,
+       updated_at = now(),
+       updated_by = EXCLUDED.updated_by
+     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+  );
+  return rows[0];
+}
+
+function publicPropSeatsDocument(id, document) {
+  return {
+    id,
+    data: isObjectRecord(document && document.data) ? document.data : {},
+    client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
+    revision: Number.isInteger(document && document.revision) ? document.revision : 0,
+    created_at: document && document.created_at ? document.created_at : null,
+    updated_at: document && document.updated_at ? document.updated_at : null,
+    updated_by: document && document.updated_by ? document.updated_by : null,
+  };
+}
+
+app.get('/api/prop-seats/:id', async (req, res) => {
+  const id = propSeatsRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_prop_seats_id' });
+    return;
+  }
+  try {
+    const document = await dbGetPropSeats(id);
+    res.status(200).json({
+      portfolio: publicPropSeatsDocument(id, document),
+      store_schema_version: PROP_SEATS_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'prop seats read failed', error, 'prop_seats_store_unavailable');
+  }
+});
+
+app.put('/api/prop-seats/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = propSeatsRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_prop_seats_id' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!isObjectRecord(raw.data)) {
+    res.status(400).json({ error: 'prop_seats_data_object_required' });
+    return;
+  }
+  const validationError = validatePropSeatsData(raw.data);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_prop_seats', details: validationError });
+    return;
+  }
+  try {
+    const document = await dbUpsertPropSeats(id, {
+      data: raw.data,
+      client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
+      updated_by: user.email,
+    });
+    res.status(200).json({
+      portfolio: publicPropSeatsDocument(id, document),
+      store_schema_version: PROP_SEATS_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'prop seats write failed', error, 'prop_seats_store_unavailable');
+  }
+});
+
+// Global shipped per-level AI weights (ship-to-everyone). Public GET returns the whole
+// map (every player's live AI reads it before falling back to DEFAULT weights);
+// admin-gated PUT sets one level's vector, or clears it with { weights: null }. A
+// player's PERSONAL adopted override (opening_books blob) still wins over this.
+const AI_WEIGHTS_LEN = 14; // 6 piece values + 8 term weights (encodeWeights order)
+function validAiWeightsVec(v) {
+  return Array.isArray(v) && v.length === AI_WEIGHTS_LEN && v.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0);
+}
+
+app.get('/api/ai-weights', async (_req, res) => {
+  try { res.status(200).json({ weights: await dbGetAllAiWeights() }); }
+  catch (error) { dbUnavailable(res, 'ai weights read failed', error, 'ai_weights_unavailable'); }
+});
+
+app.put('/api/ai-weights/:levelId', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const levelId = String(req.params.levelId || '').trim();
+  if (!levelId || levelId.length > 256) { res.status(400).json({ error: 'invalid_level_id' }); return; }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  try {
+    if (raw.weights === null) { await dbDeleteAiWeights(levelId); res.status(200).json({ ok: true, cleared: true }); return; }
+    if (!validAiWeightsVec(raw.weights)) { res.status(400).json({ error: 'invalid_ai_weights', details: `weights must be ${AI_WEIGHTS_LEN} finite non-negative numbers` }); return; }
+    await dbUpsertAiWeights(levelId, raw.weights, user.email);
+    res.status(200).json({ ok: true });
+  } catch (error) { dbUnavailable(res, 'ai weights write failed', error, 'ai_weights_unavailable'); }
+});
+
+// --- Shareable public maps -------------------------------------------------
+// A user's map lives in their per-owner workspace blob keyed by a per-owner l<n> id, so it has no
+// global name a signed-out crawler/visitor could resolve. Publishing mints a stable, owner-free
+// public_id and snapshots the level into public_maps, which the UNAUTH GET /api/maps/:id and the OG
+// thumbnail path read. Officials keep their global off-* ids and are unaffected.
+const PUBLIC_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'; // no 0/o/1/l ambiguity
+const PUBLIC_ID_RE = /^[a-hjkmnp-z2-9]{8,24}$/;
+function newPublicId() {
+  const bytes = crypto.randomBytes(12);
+  let out = '';
+  for (const b of bytes) out += PUBLIC_ID_ALPHABET[b % 32];
+  return out;
+}
+async function dbEnsurePublicId(ownerEmail, levelId, level, contentHash) {
+  await ensureDbReady();
+  const name = level && typeof level.name === 'string' ? level.name : null;
+  const bodyJson = JSON.stringify(level);
+  const existing = await pool.query(
+    'SELECT public_id FROM public_maps WHERE owner_email = $1 AND level_id = $2', [ownerEmail, levelId],
+  );
+  if (existing.rows[0]) {
+    const id = existing.rows[0].public_id;
+    await pool.query(
+      'UPDATE public_maps SET name = $2, content_hash = $3, body = $4::jsonb, updated_at = now() WHERE public_id = $1',
+      [id, name, contentHash, bodyJson],
+    );
+    return id;
+  }
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const id = newPublicId();
+    try {
+      await pool.query(
+        'INSERT INTO public_maps (public_id, owner_email, level_id, name, content_hash, body) VALUES ($1,$2,$3,$4,$5,$6::jsonb)',
+        [id, ownerEmail, levelId, name, contentHash, bodyJson],
+      );
+      return id;
+    } catch (error) {
+      if (error && error.code === '23505') continue; // PK collision — retry with a fresh id
+      throw error;
+    }
+  }
+  throw new Error('public_id_allocation_failed');
+}
+async function dbGetPublicMap(publicId) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT public_id, owner_email, level_id, name, content_hash, body FROM public_maps WHERE public_id = $1',
+    [publicId],
+  );
+  return rows[0] || null;
+}
+
+// POST /api/maps/publish { levelId } -> { public_id, url }. Mints/refreshes the shareable id for one
+// of the CALLER's own maps (verified against their workspace blob). Copy-link data source — no
+// rendering here; the thumbnail is produced on demand at crawl time.
+app.post('/api/maps/publish', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const levelId = req.body && typeof req.body.levelId === 'string' ? req.body.levelId : '';
+  if (!levelId) { res.status(400).json({ error: 'invalid_level_id' }); return; }
+  try {
+    const row = await dbGetWorkspace(user.email);
+    const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
+      ? row.body.levels[levelId] : null;
+    if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
+    // content_hash was only a server-thumbnail cache-buster; that path is gone, so it's null now.
+    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, null);
+    res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
+  } catch (error) {
+    dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
+  }
+});
+// GET /api/maps/:publicId — PUBLIC: the level snapshot for a shared map, so a signed-out visitor can
+// play it and the SPA can hydrate it. Officials are served by their own tier, not here.
+app.get('/api/maps/:publicId', async (req, res) => {
+  const publicId = String(req.params.publicId || '');
+  if (!PUBLIC_ID_RE.test(publicId)) { res.status(400).json({ error: 'invalid_map_id' }); return; }
+  try {
+    const row = await dbGetPublicMap(publicId);
+    if (!row) { res.status(404).json({ error: 'map_not_found' }); return; }
+    res.status(200).json({ public_id: row.public_id, level: row.body });
+  } catch (error) {
+    dbUnavailable(res, 'map read failed', error, 'map_store_unavailable');
+  }
+});
+
+// --- Account-scoped campaign progress --------------------------------------
+// Per-owner cleared/stars, mirroring the workspace-blob pattern. localStorage stays the offline/guest
+// source of truth on the client; this is the durable cross-device copy that a monotonic merge folds
+// guest progress into on sign-in. Body: { "<levelId>": { completed: bool, stars: 0..3 } }.
+function sanitizeProgress(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [levelId, v] of Object.entries(raw)) {
+    if (typeof levelId !== 'string' || !levelId || levelId.length > 128) continue;
+    if (!v || typeof v !== 'object') continue;
+    const stars = Number(v.stars);
+    out[levelId] = {
+      completed: Boolean(v.completed),
+      stars: Number.isFinite(stars) ? Math.max(0, Math.min(3, Math.round(stars))) : 0,
+    };
+  }
+  return out;
+}
+async function dbGetProgress(ownerEmail) {
+  await ensureDbReady();
+  const { rows } = await pool.query('SELECT body FROM campaign_progress WHERE owner_email = $1', [ownerEmail]);
+  return rows[0] ? rows[0].body : null;
+}
+async function dbPutProgress(ownerEmail, body) {
+  await ensureDbReady();
+  await pool.query(
+    `INSERT INTO campaign_progress (owner_email, body) VALUES ($1, $2::jsonb)
+     ON CONFLICT (owner_email) DO UPDATE SET body = EXCLUDED.body, updated_at = now()`,
+    [ownerEmail, JSON.stringify(body)],
+  );
+}
+app.get('/api/campaign-progress', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  try {
+    res.status(200).json({ progress: sanitizeProgress(await dbGetProgress(user.email)) });
+  } catch (error) {
+    dbUnavailable(res, 'progress read failed', error, 'progress_store_unavailable');
+  }
+});
+app.put('/api/campaign-progress', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const progress = sanitizeProgress(req.body && req.body.progress);
+  try {
+    await dbPutProgress(user.email, progress);
+    res.status(200).json({ ok: true, progress });
+  } catch (error) {
+    dbUnavailable(res, 'progress write failed', error, 'progress_store_unavailable');
+  }
+});
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'not_found' });
 });
@@ -1937,8 +3040,135 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
+// --- Open Graph unfurl ------------------------------------------------------
+// A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
+// JS, no auth). The SPA fallback injects per-level og:/twitter: title/description tags; og:image is
+// the branded default card. (Per-level server-rendered preview images were removed — the in-app
+// thumbnails are client-baked and nothing else consumed the server render path.)
+const OG_SITE_NAME = 'Chess Tactics';
+const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
+const DEFAULT_OG_IMAGE = '/assets/og/default.png';
+// Owner-facing objective labels — mirrors frontend core/objectives.ts MODE_NAME (5 stable entries).
+const OG_MODE_NAME = {
+  'capture-all': 'Last Man Standing', 'capture-king': 'King Assault',
+  'rival-kings': 'Rival Kings', survive: 'Survive', reach: 'Reach',
+};
+
+// mtime-cached file read: HTML is served no-cache so crawlers re-hit — keep it allocation-light while
+// still reflecting a STATIC_FRONTEND_DIR hot-swap. null-safe (never throws).
+const _fileCache = new Map();
+function readFileCached(absPath) {
+  let stat;
+  try { stat = fs.statSync(absPath); } catch { return null; }
+  const hit = _fileCache.get(absPath);
+  if (hit && hit.mtimeMs === stat.mtimeMs) return hit.content;
+  let content;
+  try { content = fs.readFileSync(absPath, 'utf8'); } catch { return null; }
+  _fileCache.set(absPath, { mtimeMs: stat.mtimeMs, content });
+  return content;
+}
+function htmlEscape(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// Official campaigns for the OG/thumbnail path come ONLY from the LIVE DB — the same source the game
+// loads (GET /api/official-campaigns/default) — so a thumbnail can never drift from a re-published
+// level. A short TTL keeps the crawler hot path off the DB (≤1 query/minute); the last SUCCESSFUL
+// read is kept in memory so a transient DB blip still serves REAL (last-known) data. There is no
+// committed fixture: stale/test data must be impossible to show on a remote unfurl. On a cold start
+// during a DB outage (no cached read yet) this resolves to empty → the generic card.
+const OFFICIAL_WS_TTL_MS = 60 * 1000;
+let _officialCache = { at: 0, ws: null }; // last SUCCESSFUL DB read
+async function officialWorkspace() {
+  const now = Date.now();
+  if (_officialCache.ws && now - _officialCache.at < OFFICIAL_WS_TTL_MS) return _officialCache.ws;
+  try {
+    const doc = await dbGetOfficialCampaigns('default');
+    const data = doc && doc.data;
+    if (data && Array.isArray(data.campaigns) && data.campaigns.length) {
+      _officialCache = {
+        at: now,
+        ws: { campaigns: data.campaigns, levels: data.levels && typeof data.levels === 'object' ? data.levels : {} },
+      };
+      return _officialCache.ws;
+    }
+  } catch { /* DB unreachable — fall through to the last-good real read below, else empty */ }
+  return _officialCache.ws || { campaigns: [], levels: {} };
+}
+// Resolve a share reference to { level, title, subtitle, description }. Officials read the on-disk
+// baked file (sync, no DB); user maps read public_maps (async). Returns null when unresolvable.
+async function resolveShareTarget({ levelId, campaignId, mapId }) {
+  if (mapId) {
+    const row = await dbGetPublicMap(mapId).catch(() => null);
+    if (!row || !row.body || typeof row.body !== 'object') return null;
+    const level = row.body;
+    const objective = OG_MODE_NAME[level.objective] || null;
+    return {
+      level,
+      title: row.name || level.name || OG_SITE_NAME,
+      subtitle: objective ? `Community map · ${objective}` : 'Community map',
+      description: objective ? `A community-made ${objective} map.` : OG_DEFAULT_DESC,
+    };
+  }
+  if (levelId && /^off-[a-z-]+$/.test(levelId)) {
+    const ws = await officialWorkspace();
+    const level = Object.hasOwn(ws.levels, levelId) && ws.levels[levelId] && typeof ws.levels[levelId] === 'object'
+      ? ws.levels[levelId] : null;
+    if (!level) return null;
+    const campaign = campaignId ? ws.campaigns.find((c) => c && c.id === campaignId) || null : null;
+    const objective = OG_MODE_NAME[level.objective] || null;
+    return {
+      level,
+      title: campaign && campaign.name ? `${level.name} — ${campaign.name}` : (level.name || OG_SITE_NAME),
+      subtitle: [campaign && campaign.name, objective].filter(Boolean).join(' · ') || null,
+      description: level.notes || (campaign && campaign.name ? `A level in ${campaign.name}.` : OG_DEFAULT_DESC),
+    };
+  }
+  return null;
+}
+
+async function ogTagsFor(req) {
+  const origin = publicOrigin; // TRUSTED canonical origin, never the spoofable Host header
+  const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
+  const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
+  const mapId = typeof req.query.map === 'string' && PUBLIC_ID_RE.test(req.query.map) ? req.query.map : null;
+  const target = await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
+
+  let title = OG_SITE_NAME;
+  let description = OG_DEFAULT_DESC;
+  let image = `${origin}${DEFAULT_OG_IMAGE}`;
+  if (target) {
+    title = target.title || OG_SITE_NAME;
+    description = target.description || target.subtitle || OG_DEFAULT_DESC;
+    // og:image stays the branded default card — per-level server-rendered previews were removed.
+  }
+  const url = `${origin}${req.originalUrl}`;
+  const meta = [
+    ['og:type', 'website'], ['og:site_name', OG_SITE_NAME], ['og:title', title],
+    ['og:description', description], ['og:url', url], ['og:image', image],
+    ['og:image:width', '1200'], ['og:image:height', '630'],
+  ].map(([p, c]) => `<meta property="${p}" content="${htmlEscape(c)}">`);
+  const tw = [
+    ['twitter:card', 'summary_large_image'], ['twitter:title', title],
+    ['twitter:description', description], ['twitter:image', image],
+  ].map(([n, c]) => `<meta name="${n}" content="${htmlEscape(c)}">`);
+  return { title, headTags: [...meta, ...tw].join('') };
+}
+async function renderShellWithOg(req) {
+  const html = readFileCached(frontendIndexFile());
+  if (html == null) return null;
+  const { title, headTags } = await ogTagsFor(req);
+  // Function replacers: a level name/notes can contain `$`, which a STRING replacement would treat
+  // as a special pattern ($&/$'/$$) and corrupt the head.
+  let out = html.replace('</head>', () => `${headTags}</head>`);
+  if (title !== OG_SITE_NAME) out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${htmlEscape(title)}</title>`);
+  return out;
+}
+
 if (staticFrontendDir) {
-  app.use(express.static(staticFrontendDir, { setHeaders: makeStaticCacheHeaders(staticFrontendDir) }));
+  // index:false so a request for '/' (or a directory) is NOT served the untagged index.html here —
+  // it falls through to the OG-injecting SPA fallback below.
+  app.use(express.static(staticFrontendDir, { index: false, setHeaders: makeStaticCacheHeaders(staticFrontendDir) }));
 }
 app.use((req, res, next) => {
   if (MIGRATED_RAW_ASSET_PATHS.has(req.path)) {
@@ -1947,7 +3177,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(frontendDir, { setHeaders: makeStaticCacheHeaders(frontendDir) }));
+app.use(express.static(frontendDir, { index: false, setHeaders: makeStaticCacheHeaders(frontendDir) }));
 
 // SPA fallback: serve index.html for client routes. Only 404 for genuine
 // static-asset extensions (a missing .png/.js/etc.) — NOT for app routes whose
@@ -1959,13 +3189,21 @@ const STATIC_ASSET_EXTENSIONS = new Set([
   '.woff', '.woff2', '.ttf', '.eot', '.webmanifest',
   '.mp3', '.wav', '.ogg', '.mp4', '.webm',
 ]);
-app.use((req, res) => {
+app.use(async (req, res) => {
   if (STATIC_ASSET_EXTENSIONS.has(path.extname(req.path).toLowerCase())) {
     res.status(404).send('not found');
     return;
   }
   res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(frontendIndexFile(), { dotfiles: 'allow' });
+  // Inject per-level Open Graph tags so the link unfurls on Discord/Slack/Twitter; on any failure
+  // fall back to streaming the untagged shell so the app never fails to serve.
+  let html = null;
+  try { html = await renderShellWithOg(req); } catch { html = null; }
+  if (html == null) {
+    res.sendFile(frontendIndexFile(), { dotfiles: 'allow' });
+    return;
+  }
+  res.type('html').send(html);
 });
 
 function startServer() {

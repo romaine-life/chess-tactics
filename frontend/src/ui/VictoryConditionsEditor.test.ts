@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { mergeRules, rulesEqual, conditionKey } from './VictoryConditionsEditor';
 import type { VictoryRules } from '../core/level';
 
-// The pure helpers behind the additive-preset / idempotent-add behaviour (ADR-0055 if-then rules).
+// The pure helpers behind the additive-preset / idempotent-add behaviour (ADR-0064 if-then rules).
 
-describe('victory rule helpers (ADR-0055)', () => {
+describe('victory rule helpers (ADR-0064)', () => {
   it('mergeRules adds rules but never duplicates, and re-merging is a no-op', () => {
     const base: VictoryRules = [{ if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] }];
     const add: VictoryRules = [

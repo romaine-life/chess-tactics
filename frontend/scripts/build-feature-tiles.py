@@ -57,6 +57,9 @@ FEATURES = [
     ('road', 'dirt'), ('road', 'cobble'),   # roads (variety)
     ('river', 'water'),                       # river (water body + bank)
 ]
+# Bridges are STRAIGHT-only spans (masks 5 & 10 from one deck source) — see bake_bridge. They
+# don't go through bake_feature (no 16-mask network), so they get their own list.
+BRIDGES = ['wood']
 
 
 def project_square(im):
@@ -150,6 +153,8 @@ def _heal(arr, mask, kind='road', bank_w=BANK_W):
     a, grass = _silhouette(arr, mask)
     if kind == 'river':
         return _river_layers(arr, a, mask, grass, bank_w)
+    if kind == 'bridge':
+        return _bridge_layers(arr, a, mask, grass, RAIL_W)
     rb = arr.copy(); need = (a > 0.4) & grass  # path-alpha pixels still grass-coloured -> fill path colour
     if ((a > 0.4) & ~grass).any():
         med = np.median(arr[(a > 0.4) & ~grass][:, :3], axis=0)
@@ -190,6 +195,54 @@ def _river_layers(arr, a, mask, grass, bank_w):
     return Image.fromarray(np.dstack([rb[:, :, 0], rb[:, :, 1], rb[:, :, 2], alpha * 255]).astype(np.uint8), 'RGBA')
 
 
+RAIL_W = 7        # bridge rail rim width (px) on the deck's two long sides
+
+
+def _bridge_layers(arr, a, mask, grass, rail_w):
+    """Author a wooden bridge DECK on OUR geometry — same band machinery as the river, but a
+    deck instead of water: the centred ribbon is the plank deck, the rim on the two long sides is
+    the RAIL, and the deck OPENS at every connected seam so consecutive spans join into one run.
+    For a straight (mask 5 / 10) that puts rails on the long sides and open ends top/bottom — a
+    bridge. Codex supplies only the plank colour + grain; the shape and the rail are ours, so the
+    deck width and rail are uniform on every span. Colour is read from the painted planks (not
+    hard-coded blue like the river), so any timber tone the source uses carries through."""
+    outer = _canonical_ribbon(mask)               # uniform deck silhouette — arms to each connected edge + centre
+    ys, xs = np.mgrid[0:T, 0:T]
+    edges = {1: (ys, xs), 4: (T - 1 - ys, xs), 2: (T - 1 - xs, ys), 8: (xs, ys)}  # bit:(depth, perp)
+    conn = np.zeros((T, T), bool)                 # near a connected edge, on-axis -> deck (no rail cap across the run)
+    for bit, (d, perp) in edges.items():
+        if mask & bit:
+            conn |= (d < rail_w * 1.6 + 3) & (np.abs(perp - T / 2) <= HEAL_W / 2)
+    deck_mask = (_erode(outer, rail_w) | conn) & outer
+    rail_mask = outer & ~deck_mask
+    plank = outer & ~grass                         # codex-painted timber (everything that isn't dropout green)
+    deck_med = np.median(arr[plank][:, :3], axis=0) if plank.any() else np.array([110, 74, 45.0])
+    rail_med = deck_med * np.array([0.62, 0.56, 0.5])  # a darker tone of the deck's own timber = the rail
+    rb = arr.copy()
+    fill_deck = deck_mask & ~plank                 # keep codex grain where it painted; fill any dropout holes
+    rb[fill_deck, 0], rb[fill_deck, 1], rb[fill_deck, 2] = deck_med[0], deck_med[1], deck_med[2]
+    rb[rail_mask, 0], rb[rail_mask, 1], rb[rail_mask, 2] = rail_med[0], rail_med[1], rail_med[2]
+    alpha = outer.astype(float)                    # silhouette is ours -> hard pixel edge (water shows on the sides)
+    return Image.fromarray(np.dstack([rb[:, :, 0], rb[:, :, 1], rb[:, :, 2], alpha * 255]).astype(np.uint8), 'RGBA')
+
+
+def bake_bridge(material, total, source=None):
+    """Bake a STRAIGHT-only bridge: just two spans (mask 5 = N-S, mask 10 = E-W) from one plank
+    deck source — no turns/junctions (the author picks the axis; orientation is explicit, not
+    derived from neighbours). 10 is 5 rotated 90deg, exactly like the road straight. `source`
+    overrides the deck filename stem (default = material)."""
+    src = Image.open(f'{CODEX}/bridges/{source or material}-deck.png').convert('RGBA').resize((T, T))
+    arr = np.array(src).astype(float)
+    straight = _heal(arr, 5, kind='bridge')        # vertical deck, rails on the W/E long sides
+    for mask, k in ((5, 0), (10, 1)):              # k=1 -> rotate -90deg CW: N+S(5) -> E+W(10)
+        project_square(straight.rotate(-90 * k, expand=False)).save(f'{OUT}/bridge-{material}-{mask}.png')
+        total[0] += 1
+    proj = project_square(straight); al = np.array(proj)[:, :, 3]; yy, xx = np.where(al > 10)
+    crop = proj.crop((int(xx.min()), int(yy.min()), int(xx.max()) + 1, int(yy.max()) + 1))
+    side = max(crop.size) + 8; thumb = Image.new('RGBA', (side, side), (0, 0, 0, 0))
+    thumb.paste(crop, ((side - crop.size[0]) // 2, (side - crop.size[1]) // 2)); thumb.save(f'{OUT}/bridge-{material}-thumb.png')
+
+
 def bake_feature(kind, material, total, source=None, bank_w=BANK_W):
     """Bake one 16-mask material set. `source` overrides the codex network filename stem
     (default = material) so comparison variants can share one source; `bank_w` is the river
@@ -221,15 +274,18 @@ def main():
     compare = '--compare' in sys.argv
     os.makedirs(OUT, exist_ok=True)
     for stale in os.listdir(OUT):
-        if stale.endswith('.png') and (stale.startswith('road-') or stale.startswith('river-')):
+        if stale.endswith('.png') and (stale.startswith('road-') or stale.startswith('river-') or stale.startswith('bridge-')):
             os.remove(os.path.join(OUT, stale))
     total = [0]
     for kind, material in FEATURES:
         bake_feature(kind, material, total)
+    for material in BRIDGES:
+        bake_bridge(material, total)
     if compare:
         for kind, material, source, bank_w in COMPARE:
             bake_feature(kind, material, total, source=source, bank_w=bank_w)
     print(f'wrote {total[0]} feature overlays ({", ".join(k+"/"+m for k, m in FEATURES)}'
+          f', {", ".join("bridge/"+m for m in BRIDGES)}'
           f'{" + compare variants" if compare else ""}) to {OUT}')
 
 

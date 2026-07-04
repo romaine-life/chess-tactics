@@ -1,11 +1,13 @@
 import type { ReactElement, ReactNode } from 'react';
 import { boardLabCellPosition } from './boardProjection';
 import { DoodadSprite } from './BoardDoodad';
+import { PropSprite } from './BoardStructure';
+import { propDef, type PropDef } from '../core/props';
 import { GroundCoverLayer } from './GroundCoverLayer';
 import { TileGrid, type TileGridCell } from './TileGrid';
 import { TileTopLayer } from './TileTopLayer';
 import { assetFrameSrc, studioFamilies, type StudioAsset } from '../ui/studioBoard';
-import { featureFrameSrc } from '../art/tileset';
+import { featureFrameSrc, fenceFrameSrc } from '../art/tileset';
 import {
   MISSING_DIRECTION_SPRITE,
   hasDirectionSprite,
@@ -15,14 +17,14 @@ import {
   type UnitAsset,
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
-import { featureMaskAt, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { resolveFeatureOverlays, resolveFenceOverlays, type ResolvedFeatureOverlay, type ResolvedFenceOverlay } from '../core/featureAutotile';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
 
 // THE shared, non-interactive board renderer — one source of truth for how an EditorBoard
-// draws (tiles + feature overlays in the cell band; units + doodads + ground cover bracketed
-// in the +20000 band, exactly like the game's SkirmishBoard). Both surfaces consume it:
+// draws (tiles + feature overlays in the cell band; units + doodads + props + ground cover
+// bracketed in the +20000 band, exactly like the game's SkirmishBoard). Both surfaces consume it:
 //   - the Level Editor's StudioEditableBoard layers its paint/erase/select interaction on top
 //     of these same cells + sprites (so the editable board and this viewer can never drift), and
 //   - the Campaign Editor's selected-level viewer renders it read-only inside a ViewPane.
@@ -35,9 +37,10 @@ export interface BoardLayerVisibility {
   doodad: boolean;
 }
 
-// Linear-feature overlays (roads + rivers) already resolved to a connection mask, keyed by
+// Linear-feature overlays already resolved to their sprite selector (road/river → mask), keyed by
 // "x,y". The editor derives these live; the read-only viewer derives them from the painted set.
-export type FeatureOverlayMap = Record<string, { kind: FeatureKind; material: FeatureMaterial; mask: number }>;
+// Reuses the canonical ResolvedFeatureOverlay shape.
+export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
 const allTiles: StudioAsset[] = studioFamilies.flatMap((family) => family.assets);
 const resolveTileAsset = (id: string): StudioAsset | undefined => allTiles.find((asset) => asset.id === id);
@@ -55,27 +58,23 @@ export function deriveFeatureOverlays(
   featureCuts: EditorBoard['featureCuts'],
 ): FeatureOverlayMap {
   const isSevered = (edge: string): boolean => featureCuts[edge] === true;
-  const presentByKind: Record<FeatureKind, Set<string>> = { road: new Set(), river: new Set(), fence: new Set() };
-  for (const [key, f] of Object.entries(features)) presentByKind[f.kind].add(key);
-  const out: FeatureOverlayMap = {};
-  for (const [key, f] of Object.entries(features)) {
-    const [x, y] = key.split(',').map(Number);
-    out[key] = { kind: f.kind, material: f.material, mask: featureMaskAt(presentByKind[f.kind], x, y, isSevered) };
-  }
-  return out;
+  return resolveFeatureOverlays(features, isSevered);
 }
 
 /** The tile + feature-overlay <img>s for one cell (no interaction chrome). Shared by both boards. */
 export function studioCellArt({
   tileAsset,
   feature,
+  fence,
   animationFrame,
   hidden,
   x = 0,
   y = 0,
 }: {
   tileAsset: StudioAsset | undefined;
-  feature: { kind: FeatureKind; material: FeatureMaterial; mask: number } | undefined;
+  feature: ResolvedFeatureOverlay | undefined;
+  /** Edge-fence rails this cell owns (its E/S sides), if any. */
+  fence?: ResolvedFenceOverlay | undefined;
   animationFrame: number;
   hidden?: BoardLayerVisibility;
   /** Board coords; only used to phase-stagger an animated top (water ripple). */
@@ -107,32 +106,54 @@ export function studioCellArt({
           draggable={false}
         />
       ) : null}
+      {fence ? (
+        <img
+          className="tileset-feature-overlay tileset-fence-overlay"
+          src={fenceFrameSrc(fence.material, fence.mask)}
+          alt=""
+          draggable={false}
+        />
+      ) : null}
     </>
   );
 }
 
 /**
- * The unit + doodad sprites for the whole board, seated via the shared `.board-unit-seat`
- * and `<DoodadSprite>` (identical to the game board). Pure (no interaction); the editor adds
- * its own doodad hit targets alongside these. `renderUnitDoodadExtra` lets a caller inject a
- * per-cell overlay (the editor's transparent doodad hit) without forking the seating logic.
+ * The unit + doodad + prop sprites for the whole board, seated via the shared `.board-unit-seat`,
+ * `<DoodadSprite>` and `<PropSprite>` (identical to the game board). Pure (no interaction); the
+ * editor adds its own doodad/prop hit targets alongside these — it draws its OWN props (so it can
+ * bracket them with hit spans) and simply omits `props` here. `renderDoodadExtra` lets a caller
+ * inject a per-cell overlay (the editor's transparent doodad hit) without forking the seating logic.
  */
 export function studioBoardSprites({
   units,
   doodads,
+  props = {},
   resolveUnit = resolveUnitAsset,
   resolveDoodad = doodadAsset,
+  resolveProp = propDef,
   hidden,
   renderDoodadExtra,
 }: {
   units: Record<string, { unitId: string; direction: string; faction: string }>;
   doodads: Record<string, { doodadId: string }>;
+  /** Multi-cell props keyed by ANCHOR cell "x,y" (optional — the editor renders its own). */
+  props?: Record<string, { propId: string }>;
   resolveUnit?: (id: string) => UnitAsset | undefined;
   resolveDoodad?: (id: string) => DoodadAsset | undefined;
+  resolveProp?: (id: string) => PropDef | undefined;
   hidden?: BoardLayerVisibility;
   renderDoodadExtra?: (cell: { x: number; y: number; left: number; top: number; zIndex: number }) => ReactNode;
 }): ReactNode[] {
   const sprites: ReactNode[] = [];
+  // Multi-cell props (trees/houses): the shared tall <PropSprite> (back/front halves), exactly
+  // as the game board seats it. Unknown ids skip silently (forward-compat, same as the bridge).
+  for (const [key, placement] of Object.entries(props)) {
+    const def = resolveProp(placement.propId);
+    if (!def || hidden?.doodad) continue;
+    const [ax, ay] = key.split(',').map(Number);
+    sprites.push(<PropSprite key={`prop-${key}`} prop={{ x: ax, y: ay, propId: placement.propId }} def={def} />);
+  }
   for (const key of new Set([...Object.keys(units), ...Object.keys(doodads)])) {
     const [cx, cy] = key.split(',').map(Number);
     const { left, top, zIndex } = boardLabCellPosition({ x: cx, y: cy });
@@ -178,7 +199,8 @@ export function studioCoverCells(
 
 /**
  * A static, read-only board rendered straight from an EditorBoard — tiles, feature ribbons,
- * units, doodads and ground cover, all through the SAME render core the editor uses. No
+ * units, doodads, multi-cell props and ground cover, all through the SAME render core the
+ * editor uses. No
  * painting, no selection, no animation clock (the frame is fixed). Wrap it in a ViewPane for
  * pan/zoom (the Campaign Editor's selected-level viewer does exactly that).
  */
@@ -200,6 +222,7 @@ export function StudioReadOnlyBoard({
   ariaLabel?: string;
 }): ReactElement {
   const featureOverlays = deriveFeatureOverlays(board.features, board.featureCuts);
+  const fenceOverlays = resolveFenceOverlays(board.fences ?? {});
 
   const gridCells: TileGridCell[] = [];
   for (let y = 0; y < board.rows; y += 1) {
@@ -211,12 +234,12 @@ export function StudioReadOnlyBoard({
         x,
         y,
         className: `tileset-placement-cell ${tileAsset ? '' : 'is-empty'}`.trim(),
-        children: studioCellArt({ tileAsset, feature: featureOverlays[key], animationFrame, x, y }),
+        children: studioCellArt({ tileAsset, feature: featureOverlays[key], fence: fenceOverlays.get(key), animationFrame, x, y }),
       });
     }
   }
 
-  const sprites = studioBoardSprites({ units: board.units, doodads: board.doodads });
+  const sprites = studioBoardSprites({ units: board.units, doodads: board.doodads, props: board.props });
   const coverCells = studioCoverCells(board.cells, board.cover, coverSeed);
 
   return (

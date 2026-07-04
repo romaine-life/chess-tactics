@@ -68,7 +68,7 @@ describe('evaluateObjective', () => {
     // A pawn on a target wins; off the target is undecided.
     expect(evaluateObjective(state([piece('p', 'player', 'pawn', 3, 3), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBe('player');
     expect(evaluateObjective(state([piece('p', 'player', 'pawn', 2, 2), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBeNull();
-    // A NON-pawn sitting on the target does NOT win — the pre-ADR-0055 any-piece looseness is fixed.
+    // A NON-pawn sitting on the target does NOT win — the pre-ADR-0064 any-piece looseness is fixed.
     expect(evaluateObjective(state([piece('k', 'player', 'knight', 3, 3), piece('e', 'enemy', 'pawn', 1, 1)]), 'reach', { reachCells: cells })).toBeNull();
   });
 
@@ -90,7 +90,7 @@ describe('evaluateObjective', () => {
   });
 });
 
-describe('evaluateVictory (ADR-0055 if-then rules)', () => {
+describe('evaluateVictory (ADR-0064 if-then rules)', () => {
   it('first-match ordering: a lose rule above a win rule resolves a tie as a loss', () => {
     // Survive-shaped: the lose rule (wipe) sits above the win rule (outlast). When the clock hits N
     // AND the last player piece is gone, the lose rule (checked first) decides → 'enemy'.

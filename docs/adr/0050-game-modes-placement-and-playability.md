@@ -38,8 +38,8 @@ levels with **clear violations**.
 
 - Owner-specified mode semantics and the freedom-to-edit / gated-save principle.
 - Zero data migration: persisted `objective` ids exist in the live DB (user workspaces +
-  official campaigns) and the baked `official.json`; a rename would force either a prod
-  data migration or a load-time compat shim (prohibited by `docs/migration-policy.md`).
+  official campaigns); a rename would force either a prod data migration or a load-time
+  compat shim (prohibited by `docs/migration-policy.md`).
 - One vocabulary: the shipped `survive`/`reach` objectives stay first-class modes
   (official campaign levels already use them).
 - The whole-workspace PUT must keep working for workspaces containing legacy levels.
@@ -124,8 +124,12 @@ Everything else (shapes, enums, bounds) stays structural (`validateLevel` +
 ### Enforcement: the editor gates saves per level; the backend stays structural
 
 The Level Editor validates live while editing — the user can freely produce a broken
-board; violations render as a persistent, plain-language list and **Save is disabled
-while any exist**. The backend deliberately does **NOT** enforce playability: the
+board; violations render as a plain-language list and **Save is disabled while any
+exist**. (The list first shipped as an always-visible rail fixture; the owner demoted
+it on 2026-07-02 — a blank board starts violating, so it permanently crowded every
+layer. It now renders in the Status layer beside the Save it gates. The title-bar
+save-state chip was removed the same day: no ambient editor status rides global
+chrome — the author discovers the state when they come to save.) The backend deliberately does **NOT** enforce playability: the
 workspace PUT carries *all* levels, so a legacy unplayable level would brick saving
 every other level. The trust boundary for playability is the editor's per-level gate;
 the backend keeps enforcing structure/enums/bounds. (Known gap, accepted: a hand-crafted

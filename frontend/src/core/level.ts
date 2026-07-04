@@ -6,6 +6,7 @@
 import type { BoardSize, PieceType, Side, TerrainCell, TerrainType, UnitFacing } from './types';
 import type { PlacedProp } from './props';
 import { isPlayablePieceType } from './pieces';
+import { parseEdgeKey, isOrthogonalPair } from './featureAutotile';
 
 // Terrain vocabulary now lives in the foundational type module so the editor's
 // `Level` and the live `GameState` share one definition; re-exported here so
@@ -25,13 +26,13 @@ export type ZoneType = 'player-spawn' | 'enemy-spawn' | 'enemy-threat' | 'object
 export const ZONE_TYPES = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock'] as const satisfies readonly ZoneType[];
 
 // The win-rule MODE ids (ADR-0050). Stored ids stay the legacy objective ids deliberately —
-// they exist in the live DB and the baked official.json, and `capture-all` ≡ Last Man
+// they exist in the live DB, and `capture-all` ≡ Last Man
 // Standing / `capture-king` ≡ King Assault semantically, so a rename would buy nothing but
 // a prod data migration. Players only ever see the display names (MODE_NAME in objectives.ts).
 export type ObjectiveType = 'capture-all' | 'capture-king' | 'rival-kings' | 'survive' | 'reach';
 export const OBJECTIVE_TYPES = ['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach'] as const satisfies readonly ObjectiveType[];
 
-// ---- Victory conditions (ADR-0055) -----------------------------------------------------------
+// ---- Victory conditions (ADR-0064) -----------------------------------------------------------
 // An ORDERED list of if-then RULES (the RTS-editor trigger model): each rule is `IF <conditions>
 // THEN <win|lose>`. Rules are checked top-to-bottom and the FIRST whose conditions all hold decides
 // the game — so precedence is rule ORDER (presets seed lose rules above win rules, which gives
@@ -50,7 +51,7 @@ export interface PieceFilter {
 }
 
 /**
- * One predicate over a settled GameState — the "IF" vocabulary (ADR-0055). Pure + serializable.
+ * One predicate over a settled GameState — the "IF" vocabulary (ADR-0064). Pure + serializable.
  * - `eliminate`: `side` has no living piece matching `filter` ({type:'king'} = royal capture; no
  *   filter = full wipe).
  * - `reach`: a PAWN of `side` reaches the level's objective zone (pawn-only; a pawn that promotes
@@ -84,7 +85,7 @@ export interface VictoryRule {
 }
 
 /**
- * A level's authored win/lose logic (ADR-0055): an ORDERED list of if-then rules, evaluated once
+ * A level's authored win/lose logic (ADR-0064): an ORDERED list of if-then rules, evaluated once
  * per settled turn top-to-bottom — the FIRST rule whose conditions all hold decides the game.
  * Absent on a Level ⇒ derived from the `objective` preset (`victoryRulesForObjective`), the same
  * opt-in back-compat pattern as the other rules fields. When present it OVERRIDES the preset (the
@@ -161,7 +162,7 @@ export interface Level {
   // The battle clock (see TimeControl). Absent ⇒ untimed — the back-compat default, same
   // optional-field pattern as placement/roster/surviveTurns.
   timeControl?: TimeControl;
-  // Authored victory conditions (ADR-0055). Absent ⇒ the `objective` preset defines win/lose
+  // Authored victory conditions (ADR-0064). Absent ⇒ the `objective` preset defines win/lose
   // (see victoryRulesForObjective); when present it OVERRIDES the preset — the two-list model
   // that lets one level combine several win and several lose conditions. Optional + back-compat
   // like the other rules fields; `objective` stays required (mode label + fallback outcome copy).
@@ -177,6 +178,11 @@ export interface Level {
     // (createFromLevel reads `layers`, not `boardCode`); boardCode carries a parallel 'p' map
     // only to re-seed the editor losslessly.
     props?: PlacedProp[];
+    // Edge fences: walls on the boundary between two orthogonally-adjacent tiles, as canonical
+    // edge keys (roadEdgeKey "x,y|x,y"). Optional + back-compat like `props`. This is the durable
+    // GAMEPLAY channel (createFromLevel → GameState.fences → movement blocking); boardCode carries
+    // a parallel `fe` map (edge → material) to re-seed the editor + render the rails.
+    fences?: string[];
   };
 }
 
@@ -221,7 +227,7 @@ export function createBlankLevel(id: string, name = 'Untitled', cols = 12, rows 
     difficulty: 'normal',
     economy: { startingFunds: 1200, incomePerTurn: 150 },
     theme: 'grassland',
-    layers: { terrain, decals: [], zones: [], units: [], props: [] },
+    layers: { terrain, decals: [], zones: [], units: [], props: [], fences: [] },
   };
 }
 
@@ -229,7 +235,7 @@ export type ValidateResult = { ok: true; level: Level } | { ok: false; errors: s
 
 const CONDITION_KINDS = ['eliminate', 'reach', 'turnLimit'] as const;
 
-/** Structural errors for a single victory condition (ADR-0055). Shape/enum checks only. */
+/** Structural errors for a single victory condition (ADR-0064). Shape/enum checks only. */
 function conditionErrors(c: unknown, path: string): string[] {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return [`${path} must be a condition object`];
   const cond = c as { kind?: unknown };
@@ -265,7 +271,7 @@ function conditionErrors(c: unknown, path: string): string[] {
   return errs;
 }
 
-/** Structural errors for one `do` action (ADR-0055): a win/lose declaration for a side. */
+/** Structural errors for one `do` action (ADR-0064): a win/lose declaration for a side. */
 function actionErrors(a: unknown, path: string): string[] {
   if (!a || typeof a !== 'object' || Array.isArray(a)) return [`${path} must be an action object`];
   const act = a as { kind?: unknown; side?: unknown };
@@ -275,7 +281,7 @@ function actionErrors(a: unknown, path: string): string[] {
   return errs;
 }
 
-/** Structural errors for an authored `Level.victory` (ADR-0055) — an ORDERED array of `{ if, do }`
+/** Structural errors for an authored `Level.victory` (ADR-0064) — an ORDERED array of `{ if, do }`
  * event rules. An empty list is legal SHAPE (validatePlayability P6 rejects a set that leaves a
  * faction unable to win/lose); this only checks each rule has conditions + actions arrays and every
  * condition / action is well-formed. */
@@ -418,6 +424,26 @@ export function validateLevel(value: unknown): ValidateResult {
           // stamp off-board rock colliders in createFromLevel (propCells does not clamp).
           if (b && (p.x < 0 || p.x >= b.cols || p.y < 0 || p.y >= b.rows)) {
             errors.push(`prop out of bounds at (${p.x}, ${p.y})`);
+            break;
+          }
+        }
+      }
+    }
+    // Fences are an OPTIONAL layer (back-compat like props). Each entry is a canonical edge key
+    // "x,y|x,y" between two in-bounds, orthogonally-adjacent cells — an off-board or diagonal
+    // "edge" would block nothing meaningful and points at corrupt data, so reject it.
+    if (layers.fences !== undefined) {
+      if (!Array.isArray(layers.fences)) {
+        errors.push('layers.fences must be an array');
+      } else {
+        for (const edge of layers.fences) {
+          const cells = typeof edge === 'string' ? parseEdgeKey(edge) : null;
+          if (!cells || !isOrthogonalPair(cells.ax, cells.ay, cells.bx, cells.by)) {
+            errors.push('malformed fence edge (need "x,y|x,y" between two orthogonally-adjacent cells)');
+            break;
+          }
+          if (b && [[cells.ax, cells.ay], [cells.bx, cells.by]].some(([x, y]) => x < 0 || x >= b.cols || y < 0 || y >= b.rows)) {
+            errors.push(`fence edge "${edge}" out of bounds`);
             break;
           }
         }

@@ -28,6 +28,14 @@ describe('createFromLevel — prop colliders + render channel', () => {
     expect(cells).toEqual(new Set(['0,0', '1,0', '0,1', '1,1']));
   });
 
+  it('a 1×1 rock yields exactly one collider on its own cell', () => {
+    const game = createSkirmish({ seed: 1, level: levelWithProps([{ x: 3, y: 4, propId: 'rock' }]) });
+    expect(game.props).toHaveLength(1);
+    const colliders = game.pieces.filter((p) => p.id.startsWith('prop-rock-3-4-'));
+    expect(colliders).toHaveLength(1);
+    expect(colliders[0]).toMatchObject({ side: 'neutral', type: 'rock', x: 3, y: 4 });
+  });
+
   it('an authored unit on a footprint cell suppresses only that collider cell', () => {
     const level = levelWithProps([{ x: 0, y: 0, propId: 'oak' }]);
     level.layers.units = [{ x: 1, y: 1, type: 'knight', side: 'player' }];

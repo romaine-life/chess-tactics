@@ -210,7 +210,7 @@ export function validatePlayability(level: Level): PlayabilityResult {
     }
   }
 
-  // P6 — authored victory (ADR-0055): when a level overrides the preset with its own event rules,
+  // P6 — authored victory (ADR-0064): when a level overrides the preset with its own event rules,
   // EVERY faction with units on the board must be able to win AND to lose — no player left in an
   // unwinnable or unloseable state. A faction can win if some rule's outcome makes it the winner,
   // and can lose if some rule makes the OTHER side win (in the 2-player game a win for one is a loss

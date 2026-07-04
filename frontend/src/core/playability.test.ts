@@ -299,7 +299,7 @@ describe('P5 — battle clock', () => {
   });
 });
 
-describe('P6 — authored victory conditions (ADR-0055)', () => {
+describe('P6 — authored victory conditions (ADR-0064)', () => {
   it('accepts a rule set with at least one win rule and one lose rule, and an absent field (preset)', () => {
     const authored = fixedLevel((l) => {
       l.victory = [

@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { AmbienceBackground } from './AmbienceBackground';
+import { SceneBackdrop } from './SceneBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { NavButton } from './shared/NavButton';
 import { APP_NAVIGATION_EVENT, navigateApp, normalizeRoutePath } from './navigation';
@@ -14,6 +15,7 @@ import {
 } from '../campaign/progress';
 import { MODE_NAME } from '../core/objectives';
 import { levelObjectiveLine } from './LevelInfoCompact';
+import { LevelThumbnail } from '../render/LevelThumbnail';
 import type { Campaign as CampaignDoc } from '../core/level';
 
 const ICONS = '/assets/ui/main-menu/icons-carved';
@@ -42,11 +44,16 @@ function Stars({ count }: { count: number }): ReactElement {
 
 // A campaign rendered as a settings-style rail tab — the same baked-skin chrome the
 // main menu's mode tabs use, so the Campaign screen reads as a twin of the menu.
-function CampaignTab({ campaign, active }: { campaign: CampaignDoc; active: boolean }): ReactElement {
+// `index` is the tab's position down the rail — counted CONTINUOUSLY across both tiers
+// (Official then Your Campaigns), skipping the group-divider rows, so the shared stone
+// slice (--tab-index, see .settings-tab in style.css) flows as one sheet through the whole
+// rail. A :nth-child ladder can't do this — the dividers are siblings and would shift it.
+function CampaignTab({ campaign, active, index }: { campaign: CampaignDoc; active: boolean; index: number }): ReactElement {
   return (
     <NavButton
       className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
       to={`/campaign/${campaign.id}`}
+      style={{ ['--tab-index' as string]: index }}
       aria-current={active ? 'page' : undefined}
     >
       <span className="settings-tab-icon" aria-hidden="true">
@@ -72,7 +79,7 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
               <section className="settings-row">
                 <div className="settings-row-copy">
                   <h4>No levels yet</h4>
-                  <p>This campaign has no levels. Add some in the Campaign Editor.</p>
+                  <p>This campaign has no levels. Add some in the Editor.</p>
                 </div>
               </section>
             )}
@@ -91,6 +98,14 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
               const playHref = `/play?campaignId=${encodeURIComponent(campaign.id)}&levelId=${encodeURIComponent(ref.levelId)}`;
               return (
                 <section className={`settings-row ${unlocked ? '' : 'is-disabled'}`.trim()} key={ref.levelId}>
+                  {/* Leading board preview — the same baked thumbnail the Campaign Editor's
+                      level list uses, so a level looks identical wherever it's shown. Locked
+                      levels still show their board (dimmed) as a peek at what's ahead. */}
+                  <span className="settings-row-thumb" aria-hidden="true">
+                    {level
+                      ? <LevelThumbnail level={level} width={72} height={48} alt="" />
+                      : <span className="settings-row-thumb-empty" />}
+                  </span>
                   <div className="settings-row-copy">
                     <h4>{index + 1}. {level?.name ?? `Level ${index + 1}`}</h4>
                     <p>{goalLine}{status}</p>
@@ -194,9 +209,9 @@ export function Campaign(): ReactElement {
   return (
     // The cold-load reveal director (shell/coldReveal) arms ONLY on the home menu path,
     // so it never sequences this screen. But its opt-OUT gates hide any .main-menu-layer's
-    // background (::after photo) and buttons (.main-menu-twin-screen) UNTIL data-reveal-* is
-    // present (#238). The Campaign reuses those twin classes without running the director, so
-    // declare both up front to render fully revealed — otherwise the photo + level buttons
+    // background (the SceneBackdrop) and buttons (.main-menu-twin-screen) UNTIL data-reveal-*
+    // is present (#238). The Campaign reuses those twin classes without running the director,
+    // so declare both up front to render fully revealed — otherwise the scene + level buttons
     // stay stuck at opacity 0.
     <div
       className="menu-layer main-menu-layer is-ready"
@@ -204,6 +219,8 @@ export function Campaign(): ReactElement {
       data-reveal-bg=""
       data-reveal-buttons=""
     >
+      {/* Same animated menu scene (still art + waterfalls) as the main menu, behind the rain. */}
+      <SceneBackdrop />
       <AmbienceBackground />
       {/* Settings-twin layout, mirroring the main menu: shared app title bar + a rail
           of campaign tabs and a level-select panel over the ambience. */}
@@ -215,16 +232,17 @@ export function Campaign(): ReactElement {
                 {/* Only label the tiers when the user actually has their own (myCampaigns
                     is non-empty only when signed in — it comes from the authed merge). */}
                 {myCampaigns.length > 0 ? <p className="campaign-rail-group">Official</p> : null}
-                {officialCampaigns.map((campaign) => (
-                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} />
+                {officialCampaigns.map((campaign, i) => (
+                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} index={i} />
                 ))}
               </>
             )}
             {myCampaigns.length > 0 && (
               <>
                 <p className="campaign-rail-group">Your Campaigns</p>
-                {myCampaigns.map((campaign) => (
-                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} />
+                {myCampaigns.map((campaign, i) => (
+                  // Continue the index past the official tier so the stone stays one sheet.
+                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} index={officialCampaigns.length + i} />
                 ))}
               </>
             )}

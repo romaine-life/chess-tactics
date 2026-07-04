@@ -89,7 +89,7 @@ describe('level editor draft codec', () => {
     expect(preset.victory).toBeUndefined();
   });
 
-  it('drops a non-array victory (e.g. a pre-ADR-0055 draft) back to the preset', () => {
+  it('drops a non-array victory (e.g. a pre-ADR-0064 draft) back to the preset', () => {
     const withVictory = (victory: unknown): LevelEditorDraft => {
       const raw = JSON.parse(serializeLevelEditorDraft(baseDraft())) as Record<string, unknown>;
       raw.victory = victory;

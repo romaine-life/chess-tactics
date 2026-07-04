@@ -41,10 +41,51 @@ spec:
           image: {{ $imageRef | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            # Pins the app's own public origin so backend/server.js requestOrigin()
+            # never falls back to reflecting the client-controllable Host /
+            # X-Forwarded-Host header (which would let a crafted header influence the
+            # OAuth callback origin — a host-spoofing / open-redirect-adjacent vector).
+            # hostname is the single served-hostname source of truth (cert dnsNames,
+            # XListenerSet listener, HTTPRoute match all key off it), so this is the
+            # correct per-lane public origin in prod, test slots, and the live-preview
+            # edge alike. `required` because the deployment renders under renderHot,
+            # where the warm-lane hostname guards do not run.
+            - name: PUBLIC_ORIGIN
+              value: {{ printf "https://%s" (required "hostname is required" .Values.hostname) | quote }}
+            {{- with .Values.build }}
+            # Human-facing build provenance for Settings → About (/api/build-info).
+            # Written into values.yaml by build-and-deploy.yaml at deploy time; empty
+            # on non-main lanes, where each `if` below renders nothing.
+            {{- if .prTitle }}
+            - name: BUILD_PR_TITLE
+              value: {{ .prTitle | quote }}
+            {{- end }}
+            {{- if .prNumber }}
+            - name: BUILD_PR_NUMBER
+              value: {{ .prNumber | quote }}
+            {{- end }}
+            {{- if .prUrl }}
+            - name: BUILD_PR_URL
+              value: {{ .prUrl | quote }}
+            {{- end }}
+            {{- if .commit }}
+            - name: BUILD_COMMIT
+              value: {{ .commit | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.adminEmails }}
             # ADR-0038: who may author/publish the global OFFICIAL campaign tier.
             - name: ADMIN_EMAILS
               value: {{ .Values.adminEmails | quote }}
+            {{- end }}
+            {{- if and (ne (include "chess-tactics.isTestEnv" .) "true") .Values.serviceAccountClientId }}
+            # Headless AI training Jobs (POST /api/train-runs) run THIS image with a
+            # different command on the tainted trainer pool, under this same SA so
+            # they reach Postgres via workload identity. Prod (AAD) lane only.
+            - name: TRAINER_IMAGE
+              value: {{ $imageRef | quote }}
+            - name: TRAINER_SA
+              value: {{ .Values.serviceAccount | quote }}
             {{- end }}
             {{- if .Values.bgm.baseUrl }}
             # Public blob base for BGM track streaming. The backend also LISTS this
