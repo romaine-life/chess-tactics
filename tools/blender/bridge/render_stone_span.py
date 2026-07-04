@@ -59,10 +59,47 @@ target = math.radians(90.0) if AXIS == "v" else math.radians(0.0)
 panel.rotation_euler = (0, 0, target - run_ang)
 bpy.context.view_layer.update()
 
-# optional run-axis squash to re-proportion the deck (cobblestone stretches fine)
-if SQUASH != 1.0:
-    panel.scale = (1.0, SQUASH, 1.0)
+# Re-proportion the panel: WIDEN (X, cross), SQUASH (Y, run), ZFLAT (Z, height). ZFLAT<1 collapses a
+# tall railed bridge into a FLAT stone road at tile height — the wide cobble deck stays, the rails +
+# base flatten into it (keeps the deck's shared verts, unlike a z-cut which deletes them).
+WIDEN = float(os.environ.get("WIDEN", "1.0"))
+ZFLAT = float(os.environ.get("ZFLAT", "1.0"))
+if SQUASH != 1.0 or WIDEN != 1.0 or ZFLAT != 1.0:
+    panel.scale = (WIDEN, SQUASH, ZFLAT)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+# DECK-ONLY cut (flat stone road): keep only the deck slab, z in [DECK_LO, DECK_HI]. Drops the tall
+# railings above and the deep pier/base below so the bridge reads as a flat stone ROAD across water,
+# flush at tile height (no overhang -> no z-bump needed). Z is unchanged by the run-align (Z-rot) and
+# squash (Y-scale), so the thresholds match analyze_deck_z.py. Default = keep everything.
+DECK_LO = float(os.environ.get("DECK_LO", "-1e9"))
+DECK_HI = float(os.environ.get("DECK_HI", "1e9"))
+if DECK_LO > -1e8 or DECK_HI < 1e8:
+    import bmesh
+    bm = bmesh.new(); bm.from_mesh(panel.data)
+    doomed = [v for v in bm.verts if not (DECK_LO <= (panel.matrix_world @ v.co).z <= DECK_HI)]
+    bmesh.ops.delete(bm, geom=doomed, context='VERTS')
+    bm.to_mesh(panel.data); bm.free()
+    bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
+    panel.location = (0, 0, 0)
+    bpy.context.view_layer.update()
+    print(f"DECK cut z in [{DECK_LO}, {DECK_HI}] -> {len(panel.data.vertices)} verts")
+
+# REMOVE_DECK: delete the UP-FACING walkable cobble faces (so only the railings/posts/base render) —
+# used to composite the 3D rails ON TOP of the authored on-grid deck (Option 2). Deletes faces whose
+# world normal points up AND whose centre sits in the deck band.
+if os.environ.get("REMOVE_DECK", "0") == "1":
+    import bmesh
+    dlo = float(os.environ.get("DECK_RM_LO", "-0.35"))   # the walkable deck is at z~-0.27 (probed)
+    dhi = float(os.environ.get("DECK_RM_HI", "-0.02"))
+    bm = bmesh.new(); bm.from_mesh(panel.data); bm.normal_update()
+    doomed = [f for f in bm.faces
+              if (panel.matrix_world.to_3x3() @ f.normal).z > 0.5
+              and dlo <= (panel.matrix_world @ f.calc_center_median()).z <= dhi]
+    bmesh.ops.delete(bm, geom=doomed, context='FACES')
+    bm.to_mesh(panel.data); bm.free()
+    bpy.context.view_layer.update()
+    print(f"REMOVE_DECK -> deleted {len(doomed)} up-facing deck faces z[{dlo},{dhi}], {len(panel.data.polygons)} left")
 
 def wext(o):
     cs = [o.matrix_world @ Vector(c) for c in o.bound_box]

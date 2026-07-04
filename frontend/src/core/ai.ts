@@ -309,7 +309,7 @@ function quiesce(
 ): number {
   if (outOfBudget(s)) return 0;
   const color = state.turn === 'player' ? 1 : -1;
-  const env: MoveEnv = { terrain: s.terrainEnv, lastMove };
+  const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
 
   // Same terminal check as negamax, BEFORE stand-pat: a King capture inside the
   // exchange must resolve as a mate via the objective, not as a bag of material.
