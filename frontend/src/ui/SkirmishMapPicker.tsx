@@ -145,11 +145,15 @@ export function SkirmishMapPickerRoute(): ReactElement {
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell" ready={contentReady}>
           <aside className="settings-frame settings-rail-frame" aria-label="Skirmish">
-            {TABS.map((t) => (
+            {TABS.map((t, index) => (
               <button
                 key={t.id}
                 type="button"
                 className={`settings-tab main-menu-mode-tab ${t.id === tab ? 'is-active' : ''}`.trim()}
+                // ADR-0063: each tab samples its own vertical slice of the rail's continuous
+                // stone sheet via --tab-index (see .settings-tab in style.css), so the texture
+                // reads as one sheet, not a per-tab restart. Guarded by settingsRailContinuity.test.
+                style={{ ['--tab-index' as string]: index }}
                 aria-current={t.id === tab ? 'page' : undefined}
                 onClick={() => setTab(t.id)}
               >
