@@ -31,13 +31,11 @@ export async function saveWorkspace(ws: Workspace): Promise<{ ok: boolean }> {
 }
 
 // --- Official (global) tier ------------------------------------------------
-// The live global DB row (public GET) is the SINGLE source of truth for official campaigns. The
-// committed official.json is a DEV-ONLY seed fixture — it is NOT shipped to the prod image and is
-// only read as a fallback under `import.meta.env.DEV`. In production a DB miss yields NO officials
-// rather than STALE test data (a stale snapshot shown to real players is worse than an outage).
-// Never throws — officials must survive any backend failure.
+// The live global DB row (public GET) is the SINGLE and ONLY source of truth for official
+// campaigns. There is no committed fixture and no fallback: a DB miss/error resolves to NO
+// officials (empty), never stale content. In dev this means a frontend running with no backend
+// shows no officials. Never throws — officials must survive any backend failure.
 const OFFICIAL_ID = 'default';
-const OFFICIAL_FILE = '/assets/campaigns/official.json';
 
 function asWorkspace(value: unknown): Workspace {
   const data = (value && typeof value === 'object' ? value : {}) as Partial<Workspace>;
@@ -47,30 +45,17 @@ function asWorkspace(value: unknown): Workspace {
   };
 }
 
-// DEV-ONLY: the committed seed fixture, so a local frontend with no backend still shows officials.
-// In a production build this returns empty — the fixture is never a prod data source.
-async function loadOfficialFallback(): Promise<Workspace> {
-  if (!import.meta.env.DEV) return { campaigns: [], levels: {} };
-  try {
-    const res = await fetch(OFFICIAL_FILE, { cache: 'no-cache' });
-    if (!res.ok) return { campaigns: [], levels: {} };
-    return asWorkspace(await res.json());
-  } catch {
-    return { campaigns: [], levels: {} };
-  }
-}
-
 export async function loadOfficialCampaigns(): Promise<Workspace> {
-  // The live DB row (public GET, design_portfolios envelope) is authoritative. On any error or a
-  // synthesized-empty miss, fall back to the DEV-only fixture (empty in prod).
+  // The live DB row (public GET, design_portfolios envelope) is authoritative. Any error or a
+  // synthesized-empty miss resolves to no officials rather than throwing.
+  const empty: Workspace = { campaigns: [], levels: {} };
   try {
     const res = await fetch(`/api/official-campaigns/${OFFICIAL_ID}`, { cache: 'no-cache' });
-    if (!res.ok) return loadOfficialFallback();
+    if (!res.ok) return empty;
     const body = (await res.json()) as { portfolio?: { data?: unknown } };
-    const ws = asWorkspace(body.portfolio?.data);
-    return ws.campaigns.length ? ws : loadOfficialFallback();
+    return asWorkspace(body.portfolio?.data);
   } catch {
-    return loadOfficialFallback();
+    return empty;
   }
 }
 

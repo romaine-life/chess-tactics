@@ -150,8 +150,8 @@ const MIGRATIONS = [
     name: 'official campaigns global tier',
     // The global OFFICIAL campaign tier (ADR-0038): one upserted row per id (PK id
     // alone ⇒ global, mirroring design_portfolios), holding a complete Workspace
-    // {campaigns,levels}. Public GET / admin-gated PUT. The committed official.json
-    // is the durable fallback, so the game never depends on this row.
+    // {campaigns,levels}. Public GET / admin-gated PUT. This row is the SOLE source of
+    // official campaigns — there is no committed fixture fallback.
     sql: `
       CREATE TABLE IF NOT EXISTS official_campaigns (
         id                    text        PRIMARY KEY,
@@ -364,8 +364,8 @@ function gravatarUrl(email, size = 96) {
 
 // Admins who may author the global OFFICIAL campaign tier (ADR-0038). Comma-separated
 // allowlist, parsed once into a lowercased Set. FAIL-CLOSED: unset/empty ⇒ nobody can
-// publish officials and the game runs on the committed official.json fallback. There
-// is no admin role upstream; this is the honest gate, swappable to a role check later.
+// publish officials and no official campaigns are shown (the DB row is the sole source).
+// There is no admin role upstream; this is the honest gate, swappable to a role check later.
 const adminEmails = new Set(
   String(process.env.ADMIN_EMAILS || '')
     .split(',')
@@ -1866,8 +1866,8 @@ function isLevelBody(body) {
 }
 
 // `rival-kings` is the ADR-0050 addition (both sides field a King). The stored objective
-// ids stay the legacy set deliberately — they exist in the live DB / baked official.json,
-// and a rename would force a prod data migration (docs/migration-policy.md).
+// ids stay the legacy set deliberately — they exist in the live DB, and a rename would
+// force a prod data migration (docs/migration-policy.md).
 const WORKSPACE_OBJECTIVES = new Set(['capture-all', 'capture-king', 'rival-kings', 'survive', 'reach']);
 const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 'cliff', 'rock', 'sand', 'dirt', 'pebble', 'void']);
 const WORKSPACE_ZONE_TYPES = new Set(['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock']);
@@ -2254,9 +2254,9 @@ app.delete('/api/lab-runs/:id', async (req, res) => {
 
 // --- Official (global) campaign tier (ADR-0038) ----------------------------
 // Global game content readable by everyone (public GET) and authored by admins
-// (requireAdmin PUT). One upserted row per id holding a complete Workspace. The
-// client falls back to the committed official.json on any failure, so the game and
-// /play never depend on this — mirrors the design_portfolios global pattern.
+// (requireAdmin PUT). One upserted row per id holding a complete Workspace — the SOLE
+// source of official campaigns (no committed fixture fallback); a DB miss simply shows
+// no officials. Mirrors the design_portfolios global pattern.
 const OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION = 1;
 const OFFICIAL_CAMPAIGN_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
 function officialCampaignsRowId(raw) {
@@ -2587,10 +2587,9 @@ function htmlEscape(value) {
 // Official campaigns for the OG/thumbnail path come ONLY from the LIVE DB — the same source the game
 // loads (GET /api/official-campaigns/default) — so a thumbnail can never drift from a re-published
 // level. A short TTL keeps the crawler hot path off the DB (≤1 query/minute); the last SUCCESSFUL
-// read is kept in memory so a transient DB blip still serves REAL (last-known) data. The committed
-// official.json is a DEV-ONLY seed fixture and is deliberately NOT read here (and not shipped to
-// prod): stale/test data must be impossible to show on a remote unfurl. On a cold start during a DB
-// outage (no cached read yet) this resolves to empty → the generic card, never the fixture.
+// read is kept in memory so a transient DB blip still serves REAL (last-known) data. There is no
+// committed fixture: stale/test data must be impossible to show on a remote unfurl. On a cold start
+// during a DB outage (no cached read yet) this resolves to empty → the generic card.
 const OFFICIAL_WS_TTL_MS = 60 * 1000;
 let _officialCache = { at: 0, ws: null }; // last SUCCESSFUL DB read
 async function officialWorkspace() {
