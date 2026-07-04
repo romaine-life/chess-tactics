@@ -94,5 +94,12 @@
     "scale": 0.25,
     "w": 1,
     "h": 1
+  },
+  "rock-med-rock": {
+    "base": "rock",
+    "label": "Rock — med rock",
+    "anchorX": 160,
+    "anchorY": 244,
+    "scale": 0.13
   }
 }
