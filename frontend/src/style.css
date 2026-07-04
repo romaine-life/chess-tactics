@@ -6467,7 +6467,8 @@ body { font-size: 17px; }
 }
 
 .level-thumbnail-placeholder,
-.ce-level-thumb-empty {
+.ce-level-thumb-empty,
+.settings-row-thumb-empty {
   background: linear-gradient(180deg, #0a2a50 0%, #061322 100%);
 }
 
@@ -11868,6 +11869,39 @@ button.tileset-relationship-cell {
 
 .settings-row-tall {
   min-height: 80px;
+}
+
+/* Leading board preview in a campaign level-select row. Same framed-thumb treatment as
+   the Campaign Editor's list (.ce-level-thumb), scaled up for the hero browse surface:
+   a panel.png frame around one flat baked <img>, letterboxed to the board's native aspect. */
+.settings-row-thumb {
+  flex: none;
+  background: transparent;
+  border: 6px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 18 fill / 6px stretch;
+  box-sizing: border-box;
+  display: block;
+  width: 84px;
+  height: 60px;
+  overflow: hidden;
+}
+
+.settings-row-thumb .level-thumbnail,
+.settings-row-thumb .settings-row-thumb-empty {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.settings-row-thumb .level-thumbnail img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+/* Locked levels still show their board, dimmed — a peek at what's ahead. */
+.settings-row.is-disabled .settings-row-thumb {
+  opacity: .5;
 }
 
 .settings-row h4 {
