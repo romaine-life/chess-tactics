@@ -12,6 +12,7 @@
 import type { Level } from '../core/level';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { boardDrawOps, boardBounds, boardContentHash } from './bakeBoardThumbnail';
+import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
 
 export interface ServerDrawOp {
   src: string;
@@ -43,4 +44,10 @@ export function levelRenderPlan(level: Level): ServerRenderPlan {
 /** Stable content hash of a level's board pixels — the thumbnail cache key / og:image ?v=. */
 export function boardHashForLevel(level: Level): string {
   return boardContentHash(levelToEditorBoard(level));
+}
+
+/** The board's world backdrop image (origin-absolute /assets path) — the SAME scene the game's
+ *  skirmish view seats the board over (DEFAULT_BACKGROUND_SET.world), so the thumbnail matches. */
+export function worldBackgroundSrc(): string {
+  return DEFAULT_BACKGROUND_SET.world;
 }

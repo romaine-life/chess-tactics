@@ -130,9 +130,11 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const unit = ops.find((op) => op.contain);
     expect(back!.z).toBeLessThan(unit!.z);
     expect(front!.z).toBeGreaterThan(unit!.z);
-    // The frame is the prop's own (177×184 for the cottage), not the 96×180 doodad frame.
-    expect(back!.dw).toBe(177);
-    expect(back!.dh).toBe(184);
+    // The frame is the prop's own (177×184 for the cottage) scaled by its render scale (0.62) —
+    // the SAME size the live <StructureSprite> draws. (Base props and size variants both carry a
+    // scale; without applying it here, props with scale≠1 rendered oversized in the thumbnail.)
+    expect(back!.dw).toBeCloseTo(177 * 0.62, 2);
+    expect(back!.dh).toBeCloseTo(184 * 0.62, 2);
   });
 
   it('places a feature overlay just above its own tile (same cell band)', () => {
