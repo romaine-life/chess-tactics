@@ -18,5 +18,12 @@
     "anchorX": 103,
     "anchorY": 126,
     "scale": 1
+  },
+  "cottage-small": {
+    "base": "cottage",
+    "label": "Cottage — small",
+    "anchorX": 91,
+    "anchorY": 110,
+    "scale": 0.42
   }
 }

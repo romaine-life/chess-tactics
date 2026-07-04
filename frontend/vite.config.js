@@ -88,13 +88,26 @@ function propSeatSave() {
             const ok = entries.length > 0 && entries.every(([id, s]) => /^[a-z0-9_-]+$/i.test(id)
               && s && typeof s === 'object'
               && Number.isFinite(s.anchorX) && Number.isFinite(s.anchorY)
-              && Number.isFinite(s.scale) && s.scale > 0);
-            if (!ok) throw new Error('body must be a non-empty { [propId]: { anchorX, anchorY, scale } } map with finite numbers');
+              && Number.isFinite(s.scale) && s.scale > 0
+              && (s.base === undefined || typeof s.base === 'string')
+              && (s.label === undefined || typeof s.label === 'string'));
+            if (!ok) throw new Error('body must be a non-empty { [propId]: { anchorX, anchorY, scale, base?, label? } } map with finite numbers');
             const rel = 'src/core/propSeats.json';
             const out = join(process.cwd(), rel);
             const existing = JSON.parse(await readFile(out, 'utf8'));
             const merged = { ...existing };
-            for (const [id, s] of entries) merged[id] = { anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale };
+            for (const [id, s] of entries) {
+              // A `base`/`label` marks a size variant; preserve them across a plain seat re-tune
+              // (which posts only anchor/scale) so re-saving a variant can't demote it to a base.
+              const prev = existing[id] || {};
+              const base = s.base ?? prev.base;
+              const label = s.label ?? prev.label;
+              merged[id] = {
+                ...(base ? { base } : {}),
+                ...(label ? { label } : {}),
+                anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale,
+              };
+            }
             await writeFile(out, `${JSON.stringify(merged, null, 2)}\n`);
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');

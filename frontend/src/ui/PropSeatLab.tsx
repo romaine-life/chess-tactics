@@ -84,6 +84,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const [showSavedGhost, setShowSavedGhost] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, Seat>>({});
   const [status, setStatus] = useState('');
+  const [variantName, setVariantName] = useState('');
   const drag = useRef<{ px: number; py: number; anchorX: number; anchorY: number } | null>(null);
 
   const committedSeats = COMMITTED_SEATS as Seats;
@@ -203,6 +204,30 @@ export function PropSeatLab({ propId, onPropId, header }: {
   };
   const unitCell = { x: ax + def.w, y: ay + def.h - 1 };
   const unitPos = boardLabCellPosition(unitCell);
+
+  // "Share base" size variants (ADR-0059): duplicate the CURRENT prop at its current seat as a new
+  // pickable prop that reuses the base sprite. Writes a propSeats.json entry with a `base`; props.ts
+  // synthesizes the PROP_DEF. Base = def.spriteId, so this works even when a variant is selected.
+  const saveVariant = async () => {
+    const suffix = variantName.trim();
+    const slug = suffix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    if (!slug) return;
+    const baseId = def.spriteId;
+    const baseDef = PROP_DEFS.find((d) => d.id === baseId) ?? def;
+    const variantId = `${baseId}-${slug}`;
+    setStatus('saving variant…');
+    try {
+      const res = await fetch('/__prop-seat/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [variantId]: { base: baseId, label: `${baseDef.label} — ${suffix}`, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY, scale: liveSeat.scale } }),
+      });
+      const json = await res.json();
+      if (json.ok) { setStatus(`saved variant "${variantId}" — pick it from Prop after reload`); setVariantName(''); }
+      else setStatus(`error: ${json.error}`);
+    } catch (err) { setStatus(`error: ${String(err)}`); }
+  };
+
   const toggle = (on: boolean, set: (v: boolean) => void, label: string, title?: string) => (
     <button type="button" className={`ps-toggle ${on ? 'is-on' : ''}`} title={title} onClick={() => set(!on)}>{label}</button>
   );
@@ -310,6 +335,17 @@ export function PropSeatLab({ propId, onPropId, header }: {
             </div>
             {status ? <p className={`ps-status ${status.startsWith('error') ? 'is-error' : ''}`}>{status}</p> : null}
             {dirty && !status ? <p className="ps-status">unsaved changes</p> : null}
+
+            <div className="ps-variant">
+              <span className="ps-ctl-label">New size variant</span>
+              <span className="ps-variant-row">
+                <input className="ps-variant-input" value={variantName} onChange={(e) => setVariantName(e.target.value)}
+                  placeholder="name (e.g. small)" onKeyDown={(e) => { if (e.key === 'Enter') saveVariant(); }} />
+                <button type="button" className="tileset-view-action" disabled={!variantName.trim()} onClick={saveVariant}
+                  title="Save the current size as a new pickable variant of this prop">Save variant</button>
+              </span>
+              <p className="ps-variant-hint">Duplicates {def.label} at {liveSeat.scale.toFixed(2)}× as a new prop that shares its sprite. Then pick it above to fine-tune.</p>
+            </div>
           </div>
         </section>
       </aside>
@@ -379,4 +415,11 @@ const PS_CSS = `
 .ps-primary:disabled { opacity: 0.45; }
 .ps-status { margin: 0; font-size: 12px; color: #8fd0a0; }
 .ps-status.is-error { color: #f0a0a0; }
+
+.ps-variant { display: grid; gap: 6px; margin-top: 6px; padding-top: 12px; border-top: 1px solid #1b2740; }
+.ps-variant-row { display: flex; gap: 6px; }
+.ps-variant-row .tileset-view-action { flex: none; }
+.ps-variant-input { flex: 1; min-width: 0; box-sizing: border-box; height: 32px; padding: 0 8px; font: inherit; font-size: 13px;
+  color: #eaf3ff; background: #101a2e; border: 1px solid #2a3c5e; border-radius: 5px; }
+.ps-variant-hint { margin: 0; font-size: 11px; color: #6b83a8; line-height: 1.4; }
 `;

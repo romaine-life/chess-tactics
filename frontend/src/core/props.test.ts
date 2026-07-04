@@ -23,7 +23,7 @@ describe('props core', () => {
   });
 
   it('a 2×1 def returns exactly 2 cells', () => {
-    const def: PropDef = { id: 'x', label: 'X', kind: 'tree', w: 2, h: 1, blocking: true, terrains: ['grass'], sprite: { w: 96, h: 96, anchorX: 48, anchorY: 80, scale: 1 } };
+    const def: PropDef = { id: 'x', label: 'X', kind: 'tree', w: 2, h: 1, blocking: true, terrains: ['grass'], spriteId: 'x', family: 'x', sprite: { w: 96, h: 96, anchorX: 48, anchorY: 80, scale: 1 } };
     expect(propCells(0, 0, def)).toHaveLength(2);
     expect(sortCells(propCells(0, 0, def))).toEqual([{ x: 0, y: 0 }, { x: 1, y: 0 }]);
   });
@@ -54,6 +54,33 @@ describe('props core', () => {
       expect(d.blocking).toBe(true);
       expect(d.w).toBe(2);
       expect(d.h).toBe(2);
+    }
+  });
+
+  it('a size variant shares the base sprite + footprint, differing only by seat', () => {
+    const variant = propDef('cottage-small');
+    const base = propDef('cottage')!;
+    expect(variant, 'cottage-small variant present').toBeDefined();
+    // SHARES the base's PNG asset + gameplay footprint + frame dims + family.
+    expect(variant!.spriteId).toBe('cottage');
+    expect(variant!.family).toBe(base.family);
+    expect(variant!.kind).toBe(base.kind);
+    expect(variant!.w).toBe(base.w);
+    expect(variant!.h).toBe(base.h);
+    expect(variant!.terrains).toEqual(base.terrains);
+    expect(variant!.sprite.w).toBe(base.sprite.w);
+    expect(variant!.sprite.h).toBe(base.sprite.h);
+    // DIFFERS only by its own seat (a smaller scale).
+    expect(variant!.sprite.scale).toBeLessThan(base.sprite.scale);
+  });
+
+  it('every def has a spriteId/family, and every variant base resolves', () => {
+    const ids = new Set(PROP_DEFS.map((d) => d.id));
+    for (const d of PROP_DEFS) {
+      expect(typeof d.spriteId, `${d.id} spriteId`).toBe('string');
+      expect(typeof d.family, `${d.id} family`).toBe('string');
+      // a variant's spriteId is another (base) prop that exists; a base points at itself.
+      expect(ids.has(d.spriteId), `${d.id} spriteId "${d.spriteId}" resolves`).toBe(true);
     }
   });
 });

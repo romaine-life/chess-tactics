@@ -106,7 +106,8 @@ export function PropSprite({ prop, def }: { prop: PlacedProp; def?: PropDef }) {
       w={resolved.w}
       h={resolved.h}
       sprite={resolved.sprite}
-      srcFor={(half) => `/assets/props/${prop.propId}/${half}.png`}
+      // Size variants SHARE the base's PNG — load by spriteId, not the placed prop id.
+      srcFor={(half) => `/assets/props/${resolved.spriteId}/${half}.png`}
       attrsFor={(half) => ({ 'data-prop': prop.propId, 'data-half': half })}
     />
   );

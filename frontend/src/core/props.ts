@@ -32,12 +32,18 @@ export interface PropSprite {
 // alpha-bbox measurements of the cropped renders (bbox bottom = the base's FRONT corner,
 // which the renderer then seats on the footprint's ground CENTRE — hence props that
 // floated until tuned). The JSON is the single source of truth for these values.
-type PropSeat = { anchorX: number; anchorY: number; scale: number };
+//
+// A propSeats.json entry with a `base` is a SIZE VARIANT (ADR-0059 "share base"): it reuses the
+// base prop's PNG + gameplay footprint and differs ONLY by its own seat (scale + anchor). A
+// variant is a distinct prop id, so placement/serialisation need no change; it just gets its own
+// PROP_DEFS entry synthesized from the base. Authored by eye in /prop-lab.
+type PropSeatEntry = { anchorX: number; anchorY: number; scale: number; base?: string; label?: string };
+const SEATS = propSeats as Record<string, PropSeatEntry>;
 
-function seat(id: string): PropSeat {
-  const s = (propSeats as Record<string, PropSeat>)[id];
+function seat(id: string): { anchorX: number; anchorY: number; scale: number } {
+  const s = SEATS[id];
   if (!s) throw new Error(`propSeats.json has no seat for prop "${id}"`);
-  return s;
+  return { anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale };
 }
 
 export interface PropDef {
@@ -54,6 +60,11 @@ export interface PropDef {
   terrains: string[];
   /** Sprite frame geometry + contact anchor (NOT the gameplay dims above). */
   sprite: PropSprite;
+  /** The asset folder to load (/assets/props/<spriteId>/…). Size variants SHARE the base's
+   *  PNG, so their spriteId is the base's id, not their own. Base props: spriteId === id. */
+  spriteId: string;
+  /** Catalog grouping — a base and its size variants share one family. Base props: family === id. */
+  family: string;
 }
 
 /** One placed prop: (x,y) is the ANCHOR = the min-(x,y) cell of its footprint. */
@@ -63,10 +74,10 @@ export interface PlacedProp {
   propId: string;
 }
 
-// The seed catalogue. All ship at a 2×2 gameplay footprint; each frame's w/h are facts of
-// the shipped PNGs (assets/props/<id>/{back,front}.png) while the contact anchor + scale
-// come from propSeats.json (eye-tuned in /prop-lab).
-export const PROP_DEFS: readonly PropDef[] = [
+// The BASE props. All ship at a 2×2 gameplay footprint; each frame's w/h are facts of the
+// shipped PNGs (assets/props/<id>/{back,front}.png) while the contact anchor + scale come from
+// propSeats.json (eye-tuned in /prop-lab). Each base is its own sprite asset + catalog family.
+const BASE_PROP_DEFS: readonly PropDef[] = [
   {
     id: 'oak',
     label: 'Oak tree',
@@ -75,6 +86,8 @@ export const PROP_DEFS: readonly PropDef[] = [
     h: 2,
     blocking: true,
     terrains: ['grass', 'dirt'],
+    spriteId: 'oak',
+    family: 'oak',
     sprite: { w: 192, h: 300, ...seat('oak') },
   },
   {
@@ -85,15 +98,39 @@ export const PROP_DEFS: readonly PropDef[] = [
     h: 2,
     blocking: true,
     terrains: ['grass', 'dirt', 'stone'],
+    spriteId: 'cottage',
+    family: 'cottage',
     sprite: { w: 177, h: 184, ...seat('cottage') },
   },
   // Houses — the stylized keeper set. `cottage` above is the low-poly mesh render; these two are
   // gated Codex img2img RESTYLES of real Blender captures (photoreal meshes read "too realistic"
   // raw, so the cabin/green-roof shapes are kept but re-skinned to pixel-art). Method-verified via
   // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
-  { id: 'cabin', label: 'Log cabin', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], sprite: { w: 220, h: 176, ...seat('cabin') } },
-  { id: 'lodge', label: 'Green-roof house', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], sprite: { w: 210, h: 177, ...seat('lodge') } },
+  { id: 'cabin', label: 'Log cabin', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'cabin', family: 'cabin', sprite: { w: 220, h: 176, ...seat('cabin') } },
+  { id: 'lodge', label: 'Green-roof house', kind: 'house', w: 2, h: 2, blocking: true, terrains: ['grass', 'dirt', 'stone'], spriteId: 'lodge', family: 'lodge', sprite: { w: 210, h: 177, ...seat('lodge') } },
 ];
+
+// Size variants: any propSeats.json entry with a `base` synthesizes a prop that SHARES the base's
+// PNG + gameplay footprint, differing only by its own seat (scale + anchor). It inherits the
+// base's spriteId (so it loads the base's asset) and family (so the catalog groups them).
+function variantDefs(bases: readonly PropDef[]): PropDef[] {
+  const byId = new Map(bases.map((d) => [d.id, d]));
+  const out: PropDef[] = [];
+  for (const [id, s] of Object.entries(SEATS)) {
+    if (!s.base) continue;
+    const base = byId.get(s.base);
+    if (!base) throw new Error(`prop variant "${id}" in propSeats.json references unknown base "${s.base}"`);
+    out.push({
+      ...base, // inherit kind/w/h/blocking/terrains/spriteId/family from the base
+      id,
+      label: s.label ?? `${base.label} (${id})`,
+      sprite: { w: base.sprite.w, h: base.sprite.h, anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale },
+    });
+  }
+  return out;
+}
+
+export const PROP_DEFS: readonly PropDef[] = [...BASE_PROP_DEFS, ...variantDefs(BASE_PROP_DEFS)];
 
 /**
  * Resolve a prop id to its definition, or `undefined` for an unknown id. Callers (the

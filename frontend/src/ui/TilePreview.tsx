@@ -830,7 +830,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     id: 'props',
     label: 'Props',
     assets: PROP_DEFS,
-    card: (p) => ({ img: `/assets/props/${p.id}/front.png`, title: p.label, badge: p.terrains.join(', ') }),
+    card: (p) => ({ img: `/assets/props/${p.spriteId}/front.png`, title: p.label, badge: p.terrains.join(', ') }),
     sections: (visible) => [{ id: 'props', label: 'Props', assets: [...visible] }],
     query: {
       value: catalogQuery,
