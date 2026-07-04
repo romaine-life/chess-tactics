@@ -5048,6 +5048,31 @@ h1 {
 .le-rule-remove { margin-left: auto; min-height: 30px; min-width: 0; padding: 0 10px; }
 .le-rule-add { margin-top: 12px; }
 .le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
+
+/* Victory events editor opens as a full-size overlay OVER the board (.skirmish-field is
+   position:relative), leaving the right control panel untouched. Two columns inside: templates on
+   the left, the rules grid on the right — room to breathe that the narrow panel couldn't give. */
+.le-events-open { width: 100%; }
+.le-events-overlay {
+  background: rgba(6, 13, 20, .96);
+  border: 1px solid rgba(120, 160, 180, .3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  inset: 8px;
+  position: absolute;
+  text-align: left;
+  z-index: 30;
+}
+.le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; justify-content: space-between; padding: 12px 18px; }
+.le-events-head h2 { color: #eafaff; margin: 0; }
+.le-events-body { display: grid; gap: 20px; grid-template-columns: minmax(200px, 240px) minmax(0, 1fr); overflow-y: auto; padding: 16px 20px; }
+.le-events-templates { align-self: start; }
+.le-events-templates .le-victory-presets { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.le-events-templates .le-seg-btn { width: 100%; }
+.le-events-rules .le-rules { align-items: start; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.le-events-rules .le-rule { margin-top: 0; }
+.le-events-rules .le-rule-add { grid-column: 1 / -1; }
 .le-status-card { gap: 10px; }
 .le-status-current {
   background: rgba(4, 13, 20, .7);
