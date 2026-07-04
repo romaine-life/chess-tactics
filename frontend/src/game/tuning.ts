@@ -57,6 +57,36 @@ export function decodeWeights(vec: readonly number[]): EvalWeights {
 /** Non-negativity floor: piece values and term weights below 0 are nonsensical. */
 const clampVec = (vec: number[]): number[] => vec.map((v) => (v > 0 ? v : 0));
 
+/**
+ * Per-parameter perturbation SCALE — the fix for SPSA finding nothing. The default
+ * spsaStep used one scalar c across a vector where piece values are 1–9 but term
+ * weights are 0.04–0.5, so at c=0.25 a term weight was kicked by ~5× its own value
+ * (pure noise) while a pawn barely moved. Scaling the perturbation by each weight's
+ * own magnitude (with a small floor so a zero-valued weight can still move) nudges
+ * every axis by a comparable FRACTION of itself — this game's analogue of Fishtest's
+ * per-variable c_end. Effectively SPSA runs in the normalized space φ = θ/scale.
+ */
+export function deriveScales(reference: EvalWeights): number[] {
+  return encodeWeights(reference).map((v) => Math.max(0.05, Math.abs(v)));
+}
+
+/**
+ * Polyak–Ruppert tail average: the mean of the LAST `fraction` of the trajectory's
+ * iterates. SPSA's single best-scoring point is a noisy estimate (it can be a lucky
+ * measurement); the tail average is the standard variance-reduced estimator and is
+ * what the adopt path should validate on held-out openings. Returns null for an
+ * empty trajectory.
+ */
+export function tailAverageTheta(trajectory: readonly { theta: number[] }[], fraction = 0.25): number[] | null {
+  if (!trajectory.length) return null;
+  const n = Math.max(1, Math.round(trajectory.length * fraction));
+  const tail = trajectory.slice(trajectory.length - n);
+  const dim = tail[0].theta.length;
+  const sum = new Array(dim).fill(0);
+  for (const p of tail) for (let i = 0; i < dim; i += 1) sum[i] += p.theta[i];
+  return sum.map((v) => v / tail.length);
+}
+
 export interface MatchOptions {
   search: SearchOptions;
   maxPlies?: number;
@@ -116,6 +146,10 @@ export interface SpsaHyperParams {
   gamma: number;
   /** Learning-rate stability constant A. */
   bigA: number;
+  /** Optional per-parameter perturbation scale (see deriveScales). When omitted,
+   * spsaStep derives it from the reference's magnitudes so each weight moves
+   * proportionally to itself instead of being swamped/starved by one scalar c. */
+  cScale?: number[];
 }
 
 export const DEFAULT_HYPERPARAMS: SpsaHyperParams = { a0: 0.6, c0: 0.25, alpha: 0.602, gamma: 0.101, bigA: 5 };
@@ -153,19 +187,23 @@ export function spsaStep(
   match: MatchOptions,
 ): StepResult {
   const rng = createRng(masterSeed + step * 7919 + 101);
+  // Per-parameter scale so each weight is perturbed by a comparable FRACTION of its
+  // own magnitude (see deriveScales) — the fix for one scalar c being noise on the
+  // term weights and negligible on the piece values.
+  const scale = hp.cScale ?? deriveScales(reference);
   const c = hp.c0 / Math.pow(step + 1, hp.gamma);
   const a = hp.a0 / Math.pow(step + 1 + hp.bigA, hp.alpha);
   // Δ: a random ±1 for every weight (Bernoulli), the "simultaneous perturbation".
   const delta = theta.map(() => (rng.next() < 0.5 ? -1 : 1));
-  const thetaPlus = clampVec(theta.map((v, i) => v + c * delta[i]));
-  const thetaMinus = clampVec(theta.map((v, i) => v - c * delta[i]));
+  const thetaPlus = clampVec(theta.map((v, i) => v + c * scale[i] * delta[i]));
+  const thetaMinus = clampVec(theta.map((v, i) => v - c * scale[i] * delta[i]));
   const sPlus = matchStats(level, decodeWeights(thetaPlus), reference, book, match);
   const sMinus = matchStats(level, decodeWeights(thetaMinus), reference, book, match);
   const yPlus = sPlus.score;
   const yMinus = sMinus.score;
-  // Gradient estimate for the whole vector from just those two measurements, then
-  // a step toward the better-scoring direction.
-  const thetaNew = clampVec(theta.map((v, i) => v + a * ((yPlus - yMinus) / (2 * c * delta[i]))));
+  // Gradient in the normalized space, mapped back per-axis by `scale`: a step toward
+  // the better-scoring direction where each weight moves proportionally to itself.
+  const thetaNew = clampVec(theta.map((v, i) => v + scale[i] * a * ((yPlus - yMinus) / (2 * c * delta[i]))));
   return {
     theta: thetaNew, yPlus, yMinus, c, a,
     games: sPlus.games + sMinus.games,
