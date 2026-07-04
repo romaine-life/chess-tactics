@@ -74,6 +74,11 @@ Studio is the violation.**
   dev entry point, not a player surface (ADR-0006 dev tier,
   [studio-out-of-scope-chrome]). This ADR governs surfaces *inside* the Studio;
   it does not add the Studio to player-facing menus.
+- Applied (debt paid): the pre-existing standalone labs were migrated to this
+  rule — the prop-seat editor (`propseat` kind + Props category), tile-compare,
+  surface-lab, scene-anim, doodad-editor, and artwork-compare are now Viewer kinds
+  reached from catalog categories, with their old paths kept only as deep-link
+  aliases that canonicalise into the Studio (`/prop-lab`, `/nine-slice-editor`, …).
 
 ## More Information
 

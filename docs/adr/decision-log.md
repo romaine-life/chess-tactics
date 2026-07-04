@@ -8,7 +8,7 @@ A one-row summary of every ADR in this folder. See each record for full context.
 | [0002](0002-nine-slice-border-image-for-pixel-art-chrome.md) | Render chrome via 9-slice `border-image` of a source PNG (not live atom composition) | accepted | 2026-06-25 |
 | [0003](0003-single-shared-brand-lockup.md) | One shared brand lockup everywhere; hero treatment only on the main menu | accepted | 2026-06-25 |
 | [0004](0004-standard-app-title-bar.md) | One shared, full-bleed app title bar at a standard height token | accepted | 2026-06-25 |
-| [0005](0005-artwork-compare-fidelity-surface.md) | A permanent in-app art-vs-live compare surface for checking art fidelity | accepted | 2026-06-25 |
+| [0005](0005-artwork-compare-fidelity-surface.md) | A permanent in-app art-vs-live compare surface for checking art fidelity | accepted; navigation superseded by [0058](0058-studio-editors-are-viewer-kinds-not-routes.md) | 2026-06-25 |
 | [0006](0006-ui-decision-criteria.md) | Criteria + surface-based tie-break for weighing game-UI vs product-UI | accepted | 2026-06-25 |
 | [0007](0007-brand-shield-baseline-size-and-placement.md) | Keep the brand shield at baseline size; heraldic rook placement is intentional | accepted | 2026-06-25 |
 | [0008](0008-brand-lockup-typography.md) | Brand lockup typography: app-header framing (screen name leads, real descriptor) | accepted | 2026-06-25 |
@@ -87,3 +87,4 @@ Small, low-risk calls not worth a full record:
   (gear · mute · account), so the Level Editor's existing `‹ Back`/`‹ Catalog` and this
   one now share one consistent spot. Fits ADR-0042's actions slot (which already lists
   `‹ Catalog`) with no invariant change.
+| [0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md) | Reuse the canonical shared primitive; a bespoke PARALLEL reimplementation of something the repo already does one blessed way is a defect (ADR-0059 violation). Search before you build; if a primitive is genuinely missing, make it shared + registered, not inlined. Ships a findable INDEX of the canonical primitives — ViewPane (board viewport pan/zoom), BoardLabBoard/TileGrid (board render), PropSprite/BoardStructure (props/doodads seating), .board-unit-seat (unit seat), the Studio catalogCategories/ViewerKind shell, SliderRow/ctlReset (controls), the nine-slice kit, AppTitleBar, NavButton. The general rule the per-domain ADRs (0058/0032/0057/0042/0016) are each an instance of | accepted | 2026-07-03 |

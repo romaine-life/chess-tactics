@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import type { TerrainType } from '../core/types';
-import { AUTHORED_SAMPLE_KEYS, auditionSampleRaw, authoredSampleKeyFor, isSampleReady, loadAuthoredSamples, previewArrival, previewSample, previewTerrain, type SampleKey } from '../sfx';
+import { ARRIVAL_BAKED, AUTHORED_SAMPLE_KEYS, auditionSampleRaw, authoredSampleKeyFor, isSampleReady, loadAuthoredSamples, previewArrival, previewSample, previewTerrain, type SampleKey } from '../sfx';
 import { sfxSampleWaveform, sfxSampleWaveformCached } from '../sfxWaveform';
 import { ASSIGNABLE_TERRAINS, SFX_ASSETS, type SfxAsset } from './sfxCatalog';
 
@@ -12,8 +12,9 @@ const ARRIVAL_STORE_KEY = 'chess-tactics-sfx-arrival-v1';
 
 type FiringMode = 'per-unit' | 'once';
 interface ArrivalSettings { sound: string; volume: number; firing: FiringMode }
-// Current baked-in behaviour: the 'arrival' set, ~0.55 call gain, one thump per unit.
-const DEFAULT_ARRIVAL: ArrivalSettings = { sound: 'arrival', volume: 55, firing: 'per-unit' };
+// Baseline DERIVED from the shipped source (ADR-0057): ARRIVAL_BAKED in sfx.ts is what
+// playArrival + the deploy roll-call actually use, so "Reset to current" can't drift.
+const DEFAULT_ARRIVAL: ArrivalSettings = { sound: ARRIVAL_BAKED.sample, volume: Math.round(ARRIVAL_BAKED.gain * 100), firing: ARRIVAL_BAKED.firing };
 
 function defaultAssignments(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -64,6 +65,13 @@ function SfxAssignmentPanel(): ReactElement {
   const setOne = (terrain: string, key: string) => setAssign((a) => ({ ...a, [terrain]: key }));
   const setArr = (patch: Partial<ArrivalSettings>) => setArrival((a) => ({ ...a, ...patch }));
   const reset = () => { setAssign(defaultAssignments()); setArrival({ ...DEFAULT_ARRIVAL }); };
+  // Per-control reset (ADR-0057): each row's ↺ restores JUST that control to the baked
+  // baseline; disabled when already at it, so it doubles as a per-control dirty light.
+  const baseAssign = useMemo(() => defaultAssignments(), []);
+  const miniReset = (onReset: () => void, atSaved: boolean, what: string): ReactElement => (
+    <button type="button" className="tileset-view-action" title={`Reset ${what} to current`} aria-label={`Reset ${what} to current`}
+      disabled={atSaved} onClick={onReset} style={{ minWidth: 30, opacity: atSaved ? 0.4 : 1 }}>↺</button>
+  );
   const copy = () => {
     const w = Math.max(...ASSIGNABLE_TERRAINS.map((t) => t.length));
     const terrainLines = ASSIGNABLE_TERRAINS.map((t) => `  ${t.padEnd(w)} -> ${assign[t] ? assign[t] : '(silent)'}`);
@@ -86,7 +94,7 @@ function SfxAssignmentPanel(): ReactElement {
   const label: CSSProperties = { color: 'var(--ds-ink-1, #ecedf2)', textTransform: 'capitalize' };
   const heading: CSSProperties = { margin: 0, color: '#72bde8', font: '800 12px/1.3 var(--ds-font-sans, system-ui, sans-serif)', letterSpacing: 0.6, textTransform: 'uppercase' };
   const note: CSSProperties = { margin: 0 };
-  const rows: CSSProperties = { display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 };
+  const rows: CSSProperties = { display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: '6px 12px', alignItems: 'center', maxWidth: 460 };
 
   return (
     <div aria-label="Sound assignments" style={{ display: 'grid', gap: 18, alignContent: 'start' }}>
@@ -110,6 +118,7 @@ function SfxAssignmentPanel(): ReactElement {
                 onClick={() => { if (assign[t]) previewSample(assign[t] as SampleKey); }}
                 aria-label={`Play the sound assigned to ${t}`}
               >▶</button>
+              {miniReset(() => setOne(t, baseAssign[t]), (assign[t] ?? '') === (baseAssign[t] ?? ''), t)}
             </Fragment>
           ))}
         </div>
@@ -131,6 +140,7 @@ function SfxAssignmentPanel(): ReactElement {
             onClick={() => { if (arrival.sound) previewSample(arrival.sound as SampleKey, arrival.volume / 100); }}
             aria-label="Play the arrival sound at its volume"
           >▶</button>
+          {miniReset(() => setArr({ sound: DEFAULT_ARRIVAL.sound }), arrival.sound === DEFAULT_ARRIVAL.sound, 'arrival sound')}
 
           <span style={label}>Volume</span>
           <input
@@ -139,6 +149,7 @@ function SfxAssignmentPanel(): ReactElement {
             aria-label="Arrival volume" style={{ width: '100%' }}
           />
           <span style={{ color: 'var(--ds-ink-2, #aeb4c2)', minWidth: 34, textAlign: 'right' }}>{arrival.volume}%</span>
+          {miniReset(() => setArr({ volume: DEFAULT_ARRIVAL.volume }), arrival.volume === DEFAULT_ARRIVAL.volume, 'arrival volume')}
 
           <span style={label}>Firing</span>
           <select value={arrival.firing} onChange={(e) => setArr({ firing: e.target.value as FiringMode })} aria-label="Arrival firing mode" style={{ width: '100%' }}>
@@ -146,6 +157,7 @@ function SfxAssignmentPanel(): ReactElement {
             <option value="once">once (whole squad)</option>
           </select>
           <span />
+          {miniReset(() => setArr({ firing: DEFAULT_ARRIVAL.firing }), arrival.firing === DEFAULT_ARRIVAL.firing, 'arrival firing')}
         </div>
       </div>
 

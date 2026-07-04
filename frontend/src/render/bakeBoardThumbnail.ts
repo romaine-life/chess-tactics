@@ -171,8 +171,9 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
     const dx = left - def.sprite.anchorX;
     const dy = top - def.sprite.anchorY;
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
-    ops.push({ src: propHalfSrc(placement.propId, 'back'), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: back });
-    ops.push({ src: propHalfSrc(placement.propId, 'front'), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: front });
+    // Size variants share the base's PNG — bake by spriteId (the base), not the placed variant id.
+    ops.push({ src: propHalfSrc(def.spriteId, 'back'), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: back });
+    ops.push({ src: propHalfSrc(def.spriteId, 'front'), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: front });
   }
 
   // Ground cover (grass/water/sand tufts) — the SAME vegetation the GAME scatters (SkirmishBoard),

@@ -2309,35 +2309,155 @@ function featureMaskAt(present, x, y, isSevered, isExit) {
   return mask;
 }
 
+// src/core/propSeats.json
+var propSeats_default = {
+  oak: {
+    anchorX: 96,
+    anchorY: 255,
+    scale: 1,
+    w: 2,
+    h: 2
+  },
+  cottage: {
+    anchorX: 91,
+    anchorY: 110,
+    scale: 0.62,
+    w: 2,
+    h: 2
+  },
+  cabin: {
+    anchorX: 118,
+    anchorY: 107,
+    scale: 0.35,
+    w: 1,
+    h: 1
+  },
+  lodge: {
+    anchorX: 103,
+    anchorY: 126,
+    scale: 1,
+    w: 2,
+    h: 2
+  },
+  "cottage-small": {
+    base: "cottage",
+    label: "1x1 cottage",
+    anchorX: 91,
+    anchorY: 110,
+    scale: 0.42,
+    w: 1,
+    h: 1
+  },
+  "cabin-2x2-house": {
+    base: "cabin",
+    label: "Log cabin \u2014 2x2 house",
+    anchorX: 118,
+    anchorY: 107,
+    scale: 0.72,
+    w: 2,
+    h: 2
+  },
+  "cabin-1x1-house": {
+    base: "cabin",
+    label: "Log cabin \u2014 1x1 house",
+    anchorX: 118,
+    anchorY: 107,
+    scale: 0.35,
+    w: 1,
+    h: 1
+  },
+  "lodge-3x2-green-roof-house": {
+    base: "lodge",
+    label: "Green-roof house \u2014 3x2 green-roof house",
+    anchorX: 91,
+    anchorY: 129,
+    scale: 0.71,
+    w: 2,
+    h: 3
+  },
+  "lodge-1x1-green-roof-house": {
+    base: "lodge",
+    label: "Green-roof house \u2014 1x1 green-roof house",
+    anchorX: 13,
+    anchorY: 185,
+    scale: 0.25,
+    w: 1,
+    h: 2
+  },
+  "oak-1x1-tree": {
+    base: "oak",
+    label: "Oak tree \u2014 1x1 tree",
+    anchorX: 96,
+    anchorY: 238,
+    scale: 0.25,
+    w: 1,
+    h: 1
+  }
+};
+
 // src/core/props.ts
-var PROP_DEFS = [
+var SEATS = propSeats_default;
+var DEFAULT_FOOTPRINT = 2;
+function seat(id) {
+  const s = SEATS[id];
+  if (!s) throw new Error(`propSeats.json has no seat for prop "${id}"`);
+  return { anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale };
+}
+var footW = (id) => SEATS[id]?.w ?? DEFAULT_FOOTPRINT;
+var footH = (id) => SEATS[id]?.h ?? DEFAULT_FOOTPRINT;
+var BASE_PROP_DEFS = [
   {
     id: "oak",
     label: "Oak tree",
     kind: "tree",
-    w: 2,
-    h: 2,
+    w: footW("oak"),
+    h: footH("oak"),
     blocking: true,
     terrains: ["grass", "dirt"],
-    sprite: { w: 192, h: 300, anchorX: 96, anchorY: 255 }
+    spriteId: "oak",
+    family: "oak",
+    sprite: { w: 192, h: 300, ...seat("oak") }
   },
   {
     id: "cottage",
     label: "Cottage",
     kind: "house",
-    w: 2,
-    h: 2,
+    w: footW("cottage"),
+    h: footH("cottage"),
     blocking: true,
     terrains: ["grass", "dirt", "stone"],
-    sprite: { w: 177, h: 184, anchorX: 88, anchorY: 172 }
+    spriteId: "cottage",
+    family: "cottage",
+    sprite: { w: 177, h: 184, ...seat("cottage") }
   },
   // Houses — the stylized keeper set. `cottage` above is the low-poly mesh render; these two are
   // gated Codex img2img RESTYLES of real Blender captures (photoreal meshes read "too realistic"
   // raw, so the cabin/green-roof shapes are kept but re-skinned to pixel-art). Method-verified via
   // imageGenVerdict (rollout image_generation_call), NOT code-drawn.
-  { id: "cabin", label: "Log cabin", kind: "house", w: 2, h: 2, blocking: true, terrains: ["grass", "dirt", "stone"], sprite: { w: 220, h: 176, anchorX: 119, anchorY: 156 } },
-  { id: "lodge", label: "Green-roof house", kind: "house", w: 2, h: 2, blocking: true, terrains: ["grass", "dirt", "stone"], sprite: { w: 210, h: 177, anchorX: 105, anchorY: 175 } }
+  { id: "cabin", label: "Log cabin", kind: "house", w: footW("cabin"), h: footH("cabin"), blocking: true, terrains: ["grass", "dirt", "stone"], spriteId: "cabin", family: "cabin", sprite: { w: 220, h: 176, ...seat("cabin") } },
+  { id: "lodge", label: "Green-roof house", kind: "house", w: footW("lodge"), h: footH("lodge"), blocking: true, terrains: ["grass", "dirt", "stone"], spriteId: "lodge", family: "lodge", sprite: { w: 210, h: 177, ...seat("lodge") } }
 ];
+function variantDefs(bases) {
+  const byId = new Map(bases.map((d) => [d.id, d]));
+  const out = [];
+  for (const [id, s] of Object.entries(SEATS)) {
+    if (!s.base) continue;
+    const base = byId.get(s.base);
+    if (!base) throw new Error(`prop variant "${id}" in propSeats.json references unknown base "${s.base}"`);
+    out.push({
+      ...base,
+      // inherit kind/blocking/terrains/spriteId/family from the base
+      id,
+      label: s.label ?? `${base.label} (${id})`,
+      // Footprint: a variant inherits the base's cells unless its entry overrides w/h.
+      w: s.w ?? base.w,
+      h: s.h ?? base.h,
+      sprite: { w: base.sprite.w, h: base.sprite.h, anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale }
+    });
+  }
+  return out;
+}
+var PROP_DEFS = [...BASE_PROP_DEFS, ...variantDefs(BASE_PROP_DEFS)];
 function propDef(id) {
   return PROP_DEFS.find((def) => def.id === id);
 }
@@ -2528,8 +2648,8 @@ function boardDrawOps(board) {
     const dx = left - def.sprite.anchorX;
     const dy = top - def.sprite.anchorY;
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
-    ops.push({ src: propHalfSrc(placement.propId, "back"), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: back });
-    ops.push({ src: propHalfSrc(placement.propId, "front"), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: front });
+    ops.push({ src: propHalfSrc(def.spriteId, "back"), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: back });
+    ops.push({ src: propHalfSrc(def.spriteId, "front"), dx, dy, dw: def.sprite.w, dh: def.sprite.h, z: front });
   }
   const COVER_SEED = 1234;
   const coverCells = [];

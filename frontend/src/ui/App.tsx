@@ -6,10 +6,6 @@ import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { Settings } from './Settings';
-import { ArtworkCompare } from './ArtworkCompare';
-import { TileCompare } from './TileCompare';
-import { SurfaceLab } from './SurfaceLab';
-import { SceneAnimLab } from './SceneAnimLab';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
@@ -25,7 +21,6 @@ import { isBoardArtRoute, isHeavyRoute, isLightArtRoute, routeScreenKey } from '
 import { SCREEN_EXIT_MS, setScreenExiting } from './shell/screenExit';
 import {
   importCampaignEditor,
-  importDoodadEditor,
   importLevelEditor,
   importPortraitEditor,
   importSkirmish,
@@ -45,7 +40,6 @@ const CampaignEditor = lazy(() => importCampaignEditor().then((m) => ({ default:
 const TilesetStudio = lazy(() => importTilePreview().then((m) => ({ default: m.TilesetStudio })));
 const LevelEditor = lazy(() => importLevelEditor().then((m) => ({ default: m.LevelEditor })));
 const PortraitEditor = lazy(() => importPortraitEditor().then((m) => ({ default: m.PortraitEditor })));
-const DoodadEditor = lazy(() => importDoodadEditor().then((m) => ({ default: m.DoodadEditor })));
 
 const fallback = <div style={{ padding: 40, color: 'var(--ds-ink-3)', fontFamily: 'var(--ds-font-sans)' }}>Loading…</div>;
 
@@ -350,11 +344,22 @@ function renderRoute(path: string): ReactElement {
   // catalog/lab/brush flow stays a single mounted component (no route swaps).
   if (path === '/unit-studio') return <TilesetStudio initialCategory="units" />;
   if (path === '/portrait-editor') return <PortraitEditor />;
-  if (path === '/doodad-editor') return <DoodadEditor />;
+  // /doodad-editor: alias into the Studio's Doodads category, opening the composition
+  // composer (Viewer 'doodadcomp' kind). Not its own route or 3-panel shell (ADR-0058).
+  if (path === '/doodad-editor') return <TilesetStudio initialCategory="doodads" />;
   // /nine-slice-editor is a deep-link alias into the one Studio (like /unit-studio):
   // the 9-slice editor is an embedded Viewer surface, not its own route. The studio
   // reads ?asset=<frame> off this path and canonicalises the URL to /tileset-studio.
   if (path === '/nine-slice-editor') return <TilesetStudio />;
+  // /prop-lab is the same shape: a deep-link alias that opens the Studio's embedded
+  // prop-seat Viewer (Props category). Not its own route or toolbar (ADR-0058).
+  if (path === '/prop-lab') return <TilesetStudio initialCategory="props" />;
+  // /tile-compare: alias into the Studio's Tile Pipeline category (ADR-0058 debt migration).
+  if (path === '/tile-compare') return <TilesetStudio initialCategory="tilecompare" />;
+  // /surface-lab: alias into the Studio's Tileset Surfaces category (ADR-0058 debt migration).
+  if (path === '/surface-lab') return <TilesetStudio initialCategory="surfacetiles" />;
+  // /scene-anim-lab: alias into the Studio's Scene Animations category (ADR-0058 debt migration).
+  if (path === '/scene-anim-lab') return <TilesetStudio initialCategory="sceneanim" />;
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return <LevelEditor />;
@@ -365,9 +370,8 @@ function renderRoute(path: string): ReactElement {
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
   if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
-  if (path === '/artwork-compare') return <ArtworkCompare />;
-  if (path === '/tile-compare') return <TileCompare />;
-  if (path === '/surface-lab') return <SurfaceLab />;
-  if (path === '/scene-anim-lab') return <SceneAnimLab />;
+  // /artwork-compare: alias into the Studio's Art Compare viewer (ADR-0058 supersedes
+  // ADR-0005's standalone-route choice). It reads its own ?opts/l/r/lcss/rcss on mount.
+  if (path === '/artwork-compare') return <TilesetStudio initialCategory="pages" />;
   return <MainMenu />;
 }

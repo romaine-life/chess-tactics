@@ -26,15 +26,11 @@ export interface TitleBarConfig {
 
 export function titleBarConfig(path: string): TitleBarConfig | null {
   // The design/asset Studio + its deep-link aliases: brand left, account cluster right.
-  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor') {
+  if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') {
     return { screenName: 'Studio' };
   }
   // Dev / inspector tools — the shared bar with just brand + account cluster.
   if (path === '/portrait-editor') return { screenName: 'Portrait Editor' };
-  if (path === '/doodad-editor') return { screenName: 'Doodad Editor' };
-  if (path === '/tile-compare') return { screenName: 'Tile Compare' };
-  if (path === '/artwork-compare') return { screenName: 'Artwork Compare' };
-  if (path === '/surface-lab') return { screenName: 'Surface Lab' };
 
   if (path === '/play' || path === '/skirmish') {
     return { screenName: 'Skirmish', barClass: 'skirmish-topbar', centerSlot: true };

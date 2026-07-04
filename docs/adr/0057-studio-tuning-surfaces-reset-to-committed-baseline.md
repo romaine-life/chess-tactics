@@ -42,6 +42,13 @@ control, wired before the surface ships.**
    like a page with no way back. The builder wires it and verifies it; it is
    never deferred to a follow-up or surfaced to the owner as a request.
 
+4. **Reset is per-control, at the selected-item grain — not only a whole-surface
+   button.** Each independent control (each slider/field/knob) carries its own ↺
+   back to that control's committed value, in addition to any "Reset all". A
+   surface with three controls and a single blanket reset is still incomplete —
+   the owner had to re-request this specifically. VIEW state (zoom, seed, search,
+   selection) is exempt: it isn't tuning, so it has no baseline to restore to.
+
 ### Consequences
 
 - Good: a tuning surface missing Reset (or shipping a destructive zero-out) is a
