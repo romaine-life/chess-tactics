@@ -74,8 +74,10 @@ Output `/assets/props/<propId>/{back,front}.png` (flat sprites use the same imag
 Source meshes for the houses arrived as zips in the repo-root `houses/` staging folder (outside
 git); the 4th, `dae-diorama-forest-loner`, is a `.rar` and needs an extractor. The two rock meshes
 arrived the same way in `/rocks`. 1×1 props must FIT WITHIN THEIR TILE (owner call, 2026-07-02):
-downscale to ~72px wide so the base sits inside the 96px cell diamond with margin — the 2×2
-~210px "slight overhang" convention does NOT scale down to 1×1.
+the base sits inside the 96px cell diamond with margin. Under the ADR-0059 prop model, sizing is
+NOT baked into the PNG — ship the sprite at native resolution (rock/fieldstone are 300px wide) and
+set the tile-fit via `scale` in `propSeats.json` (both at `0.24`, eye-tunable in `/prop-lab`), the
+same way `cabin`/`cottage` shrink. Do NOT re-render a small PNG for sizing.
 
 Fences are NOT props — they are an edge-autotile feature (`featureAutotile.ts`, kind `fence`),
 visual-only in v1; the brush is gated until a 16-mask wood/stone set is baked (via the feature-tile
