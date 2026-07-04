@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { DoodadSprite } from '../render/BoardDoodad';
-import { PropSprite } from '../render/BoardStructure';
+import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import { TileGrid, type TileGridCell } from '../render/TileGrid';
 import { studioBoardSprites, studioCellArt } from '../render/StudioReadOnlyBoard';
@@ -1923,7 +1923,7 @@ export function LevelEditor(): ReactElement {
                 : brushKind === 'doodad'
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'prop'
-                ? <img src={`/assets/props/${propBrushDef.id}/front.png`} alt="" draggable={false} />
+                ? <img src={propHalfSrc(propBrushDef.spriteId, 'front')} alt="" draggable={false} />
                 : brushKind === 'zone'
                 ? <span className={`le-brush-thumb-zone le-zone-${LE_ZONE_TINT[zoneBrushType] ?? 'goal'}`} aria-hidden="true" />
                 : featureKind === 'fence'
@@ -2054,7 +2054,7 @@ export function LevelEditor(): ReactElement {
                         title={`${def.label} · ${def.w}×${def.h} · ${def.terrains.join(', ')}${def.blocking ? ' · blocks' : ''}`}
                         onClick={() => { setPropBrushId(def.id); setBrushKind('prop'); setLayer('prop'); setTool('brush'); }}
                       >
-                        <img src={`/assets/props/${def.id}/front.png`} alt="" draggable={false} />
+                        <img src={propHalfSrc(def.spriteId, 'front')} alt="" draggable={false} />
                         <small>{def.label}</small>
                       </button>
                     ))}
