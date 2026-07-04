@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { writeFile, readFile, mkdir } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { createServer as createNetServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
@@ -77,111 +79,11 @@ function doodadCompositionSave() {
   };
 }
 
-// Dev-only endpoint: /prop-lab's Save POSTs the EDITED prop seats here and they are MERGED
-// into src/core/propSeats.json — the checked-in single source of truth the game composes
-// into PROP_DEFS. Merge (never replace): props.ts throws at module load for a missing seat,
-// so a whole-file replace from a stale tab (or an empty POST) would white-screen every dev
-// route and silently drop other tabs' saved tuning. Vite's JSON-module HMR then reloads
-// every open board with the new seats.
-function propSeatSave() {
-  return {
-    name: 'prop-seat-save',
-    apply: 'serve',
-    configureServer(server) {
-      server.middlewares.use('/__prop-seat/save', (req, res) => {
-        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
-        let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', async () => {
-          try {
-            const posted = JSON.parse(body);
-            const entries = posted && typeof posted === 'object' && !Array.isArray(posted) ? Object.entries(posted) : [];
-            const okFoot = (v) => v === undefined || (Number.isInteger(v) && v >= 1 && v <= 12);
-            const ok = entries.length > 0 && entries.every(([id, s]) => /^[a-z0-9_-]+$/i.test(id)
-              && s && typeof s === 'object'
-              && Number.isFinite(s.anchorX) && Number.isFinite(s.anchorY)
-              && Number.isFinite(s.scale) && s.scale > 0
-              && okFoot(s.w) && okFoot(s.h)
-              && (s.base === undefined || typeof s.base === 'string')
-              && (s.label === undefined || typeof s.label === 'string'));
-            if (!ok) throw new Error('body must be a non-empty { [propId]: { anchorX, anchorY, scale, w?, h?, base?, label? } } map with finite numbers');
-            const rel = 'src/core/propSeats.json';
-            const out = join(process.cwd(), rel);
-            const existing = JSON.parse(await readFile(out, 'utf8'));
-            const merged = { ...existing };
-            for (const [id, s] of entries) {
-              // A `base`/`label` marks a size variant; preserve them across a plain seat re-tune
-              // (which posts only anchor/scale) so re-saving a variant can't demote it to a base.
-              const prev = existing[id] || {};
-              const base = s.base ?? prev.base;
-              const label = s.label ?? prev.label;
-              const w = s.w ?? prev.w;
-              const h = s.h ?? prev.h;
-              merged[id] = {
-                ...(base ? { base } : {}),
-                ...(label ? { label } : {}),
-                anchorX: s.anchorX, anchorY: s.anchorY, scale: s.scale,
-                ...(w !== undefined ? { w } : {}),
-                ...(h !== undefined ? { h } : {}),
-              };
-            }
-            await writeFile(out, `${JSON.stringify(merged, null, 2)}\n`);
-            res.statusCode = 200;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: true, path: rel, updated: entries.map(([id]) => id) }));
-          } catch (err) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: false, error: String(err) }));
-          }
-        });
-      });
-    },
-  };
-}
-
-// Dev-only endpoint: /prop-lab's "Delete this copy" POSTs { id } here to remove ONE size-variant
-// entry from src/core/propSeats.json. Base protection lives HERE, not only in the UI: a base prop's
-// seat has no `base` field and backs a real PNG + PROP_DEF (props.ts throws at load for a missing
-// base seat), so this refuses to delete any entry that isn't a copy — a base can never be deleted,
-// even by a hand-rolled request. Vite's JSON-module HMR then drops the variant from every open board.
-function propSeatDelete() {
-  return {
-    name: 'prop-seat-delete',
-    apply: 'serve',
-    configureServer(server) {
-      server.middlewares.use('/__prop-seat/delete', (req, res) => {
-        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
-        let body = '';
-        req.on('data', (chunk) => { body += chunk; });
-        req.on('end', async () => {
-          try {
-            const posted = JSON.parse(body);
-            const id = posted && typeof posted.id === 'string' ? posted.id : '';
-            if (!/^[a-z0-9_-]+$/i.test(id)) throw new Error('body must be { id: "<propId>" }');
-            const rel = 'src/core/propSeats.json';
-            const out = join(process.cwd(), rel);
-            const existing = JSON.parse(await readFile(out, 'utf8'));
-            const entry = existing[id];
-            if (!entry) throw new Error(`no prop "${id}" in propSeats.json`);
-            // BASE PROTECTION: only a copy (an entry with a `base`) is deletable. A base seat has no
-            // `base` and is required by props.ts at load — deleting it would white-screen every route.
-            if (!entry.base) throw new Error(`"${id}" is a base prop — bases can't be deleted, only copies`);
-            const { [id]: _removed, ...rest } = existing;
-            await writeFile(out, `${JSON.stringify(rest, null, 2)}\n`);
-            res.statusCode = 200;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: true, path: rel, deleted: id }));
-          } catch (err) {
-            res.statusCode = 500;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: false, error: String(err && err.message ? err.message : err) }));
-          }
-        });
-      });
-    },
-  };
-}
+// NOTE: the dev-only `/__prop-seat/save` + `/__prop-seat/delete` file-writing endpoints were RETIRED
+// in ADR-0061 step 3. /prop-lab Save now PUTs the live seat map to the DB (PUT /api/prop-seats/default,
+// admin-gated, instant-live) instead of writing src/core/propSeats.json on disk; base/variant integrity
+// moved server-side into that PUT's validation (backend/server.js validatePropSeatsData). The committed
+// propSeats.json stays as the always-render baseline, kept in sync by the DB→file bake-back cron.
 
 // Dev-only stand-in for the backend's /api/bgm. Local dev has no backend process,
 // so this proxies the DEPLOYED backend's playlist (which lists the blob container
@@ -362,16 +264,42 @@ function officialCampaignsDevProxy() {
 // a reboot is just re-running it. `apply:'serve'`, so this NEVER touches a production
 // build. Escape hatch: DEV_OFFLINE=1 skips the backend and restores the mock stack.
 // host/db/user are not secrets (see k8s deployment); override any via the env.
-const BACKEND_PORT = 3000;
-function prodBackend() {
+// Ask the OS for a free port instead of hardcoding one, so multiple dev servers /
+// worktrees never fight over a fixed number (the crash-loop that happened when several
+// backends all pinned :3000). The backend and the /api proxy both use this exact port.
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = createNetServer();
+    srv.once('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+function prodBackend(port) {
   const backendDir = fileURLToPath(new URL('../backend', import.meta.url));
+  // Per-worktree pidfile in the OS temp dir. On start we kill any backend left running
+  // by a previously force-killed dev server, so orphans (each holding a live prod DB
+  // connection) never stack up.
+  const pidFile = join(tmpdir(), `chess-dev-backend-${createHash('md5').update(backendDir).digest('hex').slice(0, 8)}.pid`);
   let child = null;
   let stopping = false;
+  const killStale = () => {
+    try {
+      if (!existsSync(pidFile)) return;
+      const pid = Number(readFileSync(pidFile, 'utf8').trim());
+      if (pid) { try { process.kill(pid); } catch { /* already gone */ } }
+      unlinkSync(pidFile);
+    } catch { /* best effort */ }
+  };
   return {
     name: 'prod-backend',
     apply: 'serve',
     configureServer(server) {
       const log = server.config.logger;
+      killStale();
       const start = () => {
         child = spawn(process.execPath, ['server.js'], {
           cwd: backendDir,
@@ -384,10 +312,12 @@ function prodBackend() {
             DEV_AUTH_EMAIL: process.env.DEV_AUTH_EMAIL || 'nelson@romaine.life',
             DEV_AUTH_NAME: process.env.DEV_AUTH_NAME || 'Nelson',
             ADMIN_EMAILS: process.env.ADMIN_EMAILS || 'nelson@romaine.life',
-            PORT: String(BACKEND_PORT),
+            PORT: String(port),
           },
           stdio: ['ignore', 'pipe', 'pipe'],
         });
+        try { writeFileSync(pidFile, String(child.pid)); } catch { /* best effort */ }
+        log.info(`[backend] launching on :${port}`);
         child.stdout.on('data', (d) => log.info(`[backend] ${String(d).replace(/\s+$/, '')}`));
         child.stderr.on('data', (d) => log.warn(`[backend] ${String(d).replace(/\s+$/, '')}`));
         child.on('exit', (code) => {
@@ -397,7 +327,7 @@ function prodBackend() {
           setTimeout(start, 1000);
         });
       };
-      const stop = () => { stopping = true; if (child) { child.kill(); child = null; } };
+      const stop = () => { stopping = true; if (child) { child.kill(); child = null; } try { unlinkSync(pidFile); } catch { /* */ } };
       start();
       server.httpServer?.once('close', stop);
       process.once('exit', stop);
@@ -407,11 +337,17 @@ function prodBackend() {
 }
 
 const offline = process.env.DEV_OFFLINE === '1';
-const devApiPlugins = offline
-  ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()]
-  : [prodBackend()];
 
-export default defineConfig({
-  plugins: [react(), buildInfo(), doodadCompositionSave(), propSeatSave(), propSeatDelete(), nineSliceDevSave(), ...devApiPlugins],
-  ...(offline ? {} : { server: { proxy: { '/api': { target: `http://localhost:${BACKEND_PORT}`, changeOrigin: true, secure: false } } } }),
+export default defineConfig(async ({ command }) => {
+  // Only a dev server (command 'serve') spawns the backend + proxy; a production build
+  // touches none of this. A fresh free port is chosen each start and shared by both.
+  const useBackend = command === 'serve' && !offline;
+  const backendPort = useBackend ? await getFreePort() : 0;
+  const devApiPlugins = command === 'serve'
+    ? (offline ? [bgmDevMock(), officialCampaignsDevProxy(), devAuthMock()] : [prodBackend(backendPort)])
+    : [];
+  return {
+    plugins: [react(), buildInfo(), doodadCompositionSave(), nineSliceDevSave(), ...devApiPlugins],
+    ...(useBackend ? { server: { proxy: { '/api': { target: `http://localhost:${backendPort}`, changeOrigin: true, secure: false, ws: true } } } } : {}),
+  };
 });

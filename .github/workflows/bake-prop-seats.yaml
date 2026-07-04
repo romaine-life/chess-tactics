@@ -1,0 +1,68 @@
+name: Bake prop seats
+
+# Snapshot the live prop-seat tuning (the global DB row, served publicly) back into
+# the committed baseline file, so git always holds a recoverable mirror and — because
+# the instant-live PUT has no publish/draft boundary — this snapshot commit IS the undo
+# for a bad nudge (revert it). ADR-0061, model B: the DB row is the live authority for
+# tuned values; the committed propSeats.json is the always-render baseline + git history.
+# Unlike the officials bake-back this file is NEVER retired (props require a complete
+# baseline to render at all), so it is always overwritten in full, never deleted.
+#
+# Needs NO database credentials — the prop-seats GET is public (ADR-0060). Models the
+# officials bake-back (bake-official-campaigns.yaml) and the image bump-bot's [skip ci]
+# commit-to-main pattern in build-and-deploy.yaml (main is open, so the bot can push;
+# [skip ci] avoids a needless rebuild — the live site already serves the DB content,
+# this only refreshes the in-repo baseline).
+
+on:
+  schedule:
+    - cron: '37 7 * * 1' # Mondays 07:37 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bake-prop-seats
+  cancel-in-progress: false
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    env:
+      PROD_ORIGIN: ${{ vars.PROD_ORIGIN || 'https://chess.romaine.life' }}
+      SEATS_ID: default
+      SEATS_FILE: frontend/src/core/propSeats.json
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch live prop seats into the baseline file
+        run: |
+          set -euo pipefail
+          url="${PROD_ORIGIN}/api/prop-seats/${SEATS_ID}"
+          echo "Fetching ${url}"
+          resp="$(curl -fsS --retry 3 --retry-delay 5 "${url}")"
+          # Bail if the live override map is empty (never published / DB miss synthesizes
+          # {}), so a missing row never blanks the committed render baseline.
+          count="$(printf '%s' "${resp}" | jq '(.portfolio.data // {}) | keys | length')"
+          if [ "${count}" -eq 0 ]; then
+            echo "No live prop-seat overrides (empty row) — leaving the committed baseline untouched."
+            exit 0
+          fi
+          # Write the whole seat MAP (propId -> {anchorX,anchorY,scale,w?,h?,base?,label?})
+          # at 2-space indent with a trailing newline — matches propSeats.json's shape.
+          printf '%s' "${resp}" | jq --indent 2 '.portfolio.data' > "${SEATS_FILE}"
+          echo "Wrote ${count} seat(s) to ${SEATS_FILE}"
+
+      - name: Commit and push if changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${SEATS_FILE}"
+          if git diff --cached --quiet; then
+            echo "Prop seats already in sync — nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore: bake prop seats from live DB [skip ci]"
+          git push origin HEAD:main

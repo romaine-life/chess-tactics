@@ -58,8 +58,15 @@ export const DEFAULT_EVAL_WEIGHTS: EvalWeights = {
     rock: 0,
     'random-rock': 0,
   },
-  hangingUndefended: 0.5,
-  hangingDefended: 0.1,
+  // Near-zero since quiescence search now resolves exchanges EXACTLY at the leaf:
+  // these static terms were a horizon-blind approximation of what q-search computes,
+  // and keeping them high double-counts (the engine flees pieces it can see are
+  // safe). A small `undefended` residual still covers a threat that needs a quiet
+  // preparatory move, which is beyond q-search's capture-only horizon. NOTE: this
+  // changes DEFAULT_EVAL_WEIGHTS — the vector the SPSA trainer perturbs and the
+  // resolver's fallback — so the tuner fits the POST-quiescence engine.
+  hangingUndefended: 0.05,
+  hangingDefended: 0.0,
   advance: 0.05,
   guard: 0.04,
   reachProgress: 0.25,
@@ -96,8 +103,17 @@ export interface SearchOptions {
 }
 
 const DEFAULT_MAX_DEPTH = 6;
+// Quiescence search SHARES this budget — q-nodes count against it — so at the
+// default the main search completes a slightly shallower depth than pre-q but plays
+// it more soundly (no throughput regression for default callers). It's only a
+// backstop: live play and the trainer each pass their own maxNodes (live also a
+// time budget), so this default governs nothing performance-critical. The trainer
+// picks its search budget explicitly, trading depth against self-play volume.
 const DEFAULT_MAX_NODES = 200_000;
 const DEFAULT_EPSILON = 0.25;
+// Hard ply cap on the capture-only quiescence recursion, so a long forced exchange
+// can't recurse unbounded (the node budget is the other, global, backstop).
+const QUIESCE_MAX_PLY = 8;
 
 /** Terminal score magnitude; ply-adjusted so faster wins (and later losses) rank higher. */
 const WIN_SCORE = 10_000;
@@ -270,6 +286,83 @@ function captureValue(move: Move, pieces: readonly Piece[], values: Record<Piece
 }
 
 /**
+ * Quiescence search at the leaf: keep searching CAPTURES (only) until the position
+ * is "quiet", so a leaf is never scored mid-exchange. Without this, negamax scores
+ * a position one ply before a recapture and happily gifts pieces past the horizon —
+ * the classic horizon effect. Standard shape (chessprogramming.org "Quiescence
+ * Search"): budget/terminal check, a stand-pat lower bound (not capturing is always
+ * an option), a hard ply cap, then delta-pruned captures in MVV order.
+ *
+ * Returns a side-to-move-positive value, the SAME convention as negamax's leaf, so
+ * it drops in at `depth === 0`. Adds NO randomness and reuses the exact `captureValue`
+ * ordering + `legalMoves` generation negamax uses, so seeds still replay identically.
+ */
+function quiesce(
+  s: SearchState,
+  state: GameState,
+  lastMove: GameState['lastMove'],
+  ply: number,
+  alpha: number,
+  beta: number,
+  turnsElapsed: number,
+  qDepth: number,
+): number {
+  if (outOfBudget(s)) return 0;
+  const color = state.turn === 'player' ? 1 : -1;
+  const env: MoveEnv = { terrain: s.terrainEnv, lastMove };
+
+  // Same terminal check as negamax, BEFORE stand-pat: a King capture inside the
+  // exchange must resolve as a mate via the objective, not as a bag of material.
+  const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
+  if (winner) return color * terminalScore(winner, ply);
+
+  // Stand-pat: declining all captures is a legal option in a quiet search, so the
+  // static eval is a lower bound. Fail-high if it already beats beta.
+  const standPat = color * evaluateGameState(state, { ...s.sctx, turnsElapsed }, s.weights, env);
+  if (standPat >= beta) return standPat;
+  if (standPat > alpha) alpha = standPat;
+  if (qDepth <= 0) return standPat; // hard cap on a long forced exchange
+
+  const side = state.turn as Side;
+  // Capture-only extension: reuse legalMoves (inherits the king-safety filter and
+  // en-passant for free) and keep only capturing moves. The wasted non-capture
+  // generation is the measured perf cost; a captures-only generator is the Phase-2
+  // lever if the benchmark warrants it.
+  const caps: { piece: Piece; move: Move }[] = [];
+  for (const piece of livingPieces(state.pieces, side)) {
+    for (const move of legalMoves(piece, state.pieces, state.size, env)) {
+      if (move.capture != null) caps.push({ piece, move });
+    }
+  }
+  if (!caps.length) return standPat; // quiet node — the recursion's base case
+
+  caps.sort(
+    (a, b) => captureValue(b.move, state.pieces, s.weights.pieceValues) - captureValue(a.move, state.pieces, s.weights.pieceValues),
+  );
+
+  // Delta pruning: skip a capture that can't lift alpha even if the victim were
+  // free — but never inside a forced-mate line (standPat already a mate score).
+  const notMate = Math.abs(standPat) < WIN_SCORE - 1000;
+  const deltaMargin = s.weights.pieceValues.pawn * 2;
+  for (const cap of caps) {
+    if (notMate) {
+      const gain = captureValue(cap.move, state.pieces, s.weights.pieceValues);
+      if (standPat + gain + deltaMargin < alpha) continue;
+    }
+    s.nodes += 1;
+    const res = applyMove(state, cap.piece.id, cap.move);
+    const roundDone = state.turn === 'enemy' && res.state.turn === 'player';
+    const v = -quiesce(s, res.state, res.state.lastMove, ply + 1, -beta, -alpha, turnsElapsed + (roundDone ? 1 : 0), qDepth - 1);
+    if (s.aborted) return 0;
+    if (v > alpha) {
+      alpha = v;
+      if (alpha >= beta) return alpha;
+    }
+  }
+  return alpha;
+}
+
+/**
  * Negamax with alpha-beta. Returns the state's value from the PLAYER perspective
  * times the side-to-move color, per negamax convention. `turnsElapsed` advances
  * when a move hands the turn from enemy back to player (a full round), which is
@@ -291,7 +384,7 @@ function negamax(
   const env: MoveEnv = { terrain: s.terrainEnv, fences: s.fences, lastMove };
   const winner = state.winner ?? evaluateObjective(state, s.sctx.objective, { ...s.sctx.ctx, turnsElapsed });
   if (winner) return color * terminalScore(winner, ply);
-  if (depth === 0) return color * evaluateGameState(state, { ...s.sctx, turnsElapsed }, s.weights, env);
+  if (depth === 0) return quiesce(s, state, lastMove, ply, alpha, beta, turnsElapsed, QUIESCE_MAX_PLY);
 
   const side = state.turn as Side;
   const entries: { piece: Piece; move: Move }[] = [];

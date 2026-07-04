@@ -25,7 +25,11 @@ export async function loadOpeningBooks(levelId: string): Promise<BooksBlob> {
   const data = await request<{ data?: Partial<BooksBlob> }>('GET', `/api/opening-books/${encodeURIComponent(levelId)}`);
   const blob = data.data;
   if (!blob || !Array.isArray(blob.books)) return emptyBlob();
-  return { nextId: typeof blob.nextId === 'number' ? blob.nextId : 1, books: blob.books };
+  return {
+    nextId: typeof blob.nextId === 'number' ? blob.nextId : 1,
+    books: blob.books,
+    ...(Array.isArray(blob.adoptedWeights) ? { adoptedWeights: blob.adoptedWeights } : {}),
+  };
 }
 
 /** Persist a level's books (each book's trajectory capped so the blob stays
@@ -34,6 +38,7 @@ export async function saveOpeningBooks(levelId: string, blob: BooksBlob): Promis
   const capped: BooksBlob = {
     nextId: blob.nextId,
     books: blob.books.map((b) => ({ ...b, session: capSessionForStorage(b.session) })),
+    ...(blob.adoptedWeights ? { adoptedWeights: blob.adoptedWeights } : {}),
   };
   await request<{ ok: boolean }>('PUT', `/api/opening-books/${encodeURIComponent(levelId)}`, { data: capped });
 }

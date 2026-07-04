@@ -15,7 +15,9 @@ import { encodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 import type { BookPosition, OpeningBookSettings } from '../game/openingBook';
 
-/** One point on a book's convergence curve — the worker's step output. */
+/** One point on a book's convergence curve — the worker's step output. Game outcomes
+ * (this step's decisive/draw split) are optional so trajectories persisted before they
+ * were surfaced still load. */
 export interface GymPoint {
   step: number;
   score: number;
@@ -24,6 +26,10 @@ export interface GymPoint {
   c: number;
   a: number;
   theta: number[];
+  games?: number;
+  wins?: number;
+  draws?: number;
+  losses?: number;
 }
 
 /** A book's RETAINED training state — the complete, portable SPSA session.
@@ -50,6 +56,11 @@ export interface OpeningBook {
 export interface BooksBlob {
   nextId: number;
   books: OpeningBook[];
+  /** The eval-weight vector the owner ADOPTED for this level's live enemy AI (from a
+   * gym champion that passed SPRT validation), or absent if none is adopted. This is
+   * the durable, account-scoped copy; game/adoptedWeights mirrors it into a local
+   * cache the live AI reads synchronously. */
+  adoptedWeights?: number[];
 }
 
 /** Default generation settings for a brand-new book (small, so a step lands fast). */
@@ -88,16 +99,17 @@ export function capSessionForStorage(session: GymSession): GymSession {
 export function makeNewBook(existingBlob: BooksBlob, settings: OpeningBookSettings): { blob: BooksBlob; book: OpeningBook } {
   const id = existingBlob.nextId;
   const book: OpeningBook = { id, settings: { ...settings }, positions: [], session: freshSession() };
-  const blob: BooksBlob = { nextId: id + 1, books: [...existingBlob.books, book] };
+  const blob: BooksBlob = { ...existingBlob, nextId: id + 1, books: [...existingBlob.books, book] };
   return { blob, book };
 }
 
-/** Remove a book by id (nextId is never rewound — ids stay stable/unique). */
+/** Remove a book by id (nextId is never rewound — ids stay stable/unique). The
+ * level's adopted weights are book-independent, so they survive a book delete. */
 export function deleteBook(blob: BooksBlob, id: number): BooksBlob {
-  return { nextId: blob.nextId, books: blob.books.filter((b) => b.id !== id) };
+  return { ...blob, books: blob.books.filter((b) => b.id !== id) };
 }
 
 /** Replace a book in the blob by id (returns a new blob; unchanged if id absent). */
 export function updateBook(blob: BooksBlob, book: OpeningBook): BooksBlob {
-  return { nextId: blob.nextId, books: blob.books.map((b) => (b.id === book.id ? book : b)) };
+  return { ...blob, books: blob.books.map((b) => (b.id === book.id ? book : b)) };
 }

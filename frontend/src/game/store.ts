@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import type { GameEvent, GameState, Move, Side, Winner } from '../core/types';
 import { applyMove, enemyMove, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { searchEnemyMove } from '../core/ai';
+import { adoptedWeightsFor } from './adoptedWeights';
 import { evaluateObjective, kingSideOf, objectiveContextForLevel, objectiveSummary, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType } from '../core/level';
 import { buildTerrainIndex, terrainAt } from '../core/terrain';
@@ -385,13 +386,17 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // The search enemy needs the objective framing so it plays the MODE (hunt
       // the King, rush the survive clock, garrison the reach zone) — that's the
       // whole point of the rung-1 AI. The greedy policy ignores it.
+      // The live opponent uses this level's ADOPTED weights when the Training Gym
+      // has validated + adopted a champion for it (else the shipped defaults). Read
+      // once per reply so a fresh adoption takes effect on the very next enemy turn.
+      const liveWeights = adoptedWeightsFor(cur.levelId);
       const pick: EnemyPolicy = cur.aiMode === 'greedy'
         ? enemyMove
         : (g, rng, env) => searchEnemyMove(g, rng, env, {
             objective: cur.objective,
             ctx: cur.objectiveCtx ?? {},
             turnsElapsed: cur.turnsElapsed ?? 0,
-          }, LIVE_SEARCH);
+          }, { ...LIVE_SEARCH, weights: liveWeights });
       const enemyRes = resolveEnemy(cur.game, cur.seed, cur.tick, envFor(cur.game), pick);
       const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
       // With no manual End Turn, a player handed the turn with no legal move would

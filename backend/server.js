@@ -3,20 +3,6 @@ const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
-// Pure board-render geometry (committed bundle of the SAME code the editor uses — see
-// frontend/scripts/build-server-render.mjs) so the server can compute a level's draw plan + content
-// hash. server.js is hot-copied to and run from a hot dir (supervisor.js), so a bare './generated'
-// require would resolve against that dir; resolve sibling assets against the BAKED backend dir instead
-// (BAKED_BACKEND_DIR from the supervisor; __dirname when run directly in dev/test). Fail-soft: a
-// missing/broken bundle just means thumbnails fall back to the default share image, never a crash
-// (the game must stay up). The @napi-rs/canvas compositor is required lazily in the render route too.
-const bakedBackendDir = process.env.BAKED_BACKEND_DIR || __dirname;
-let serverRender = null;
-try {
-  serverRender = require(path.join(bakedBackendDir, 'generated', 'board-render.cjs'));
-} catch (error) {
-  console.error('board-render bundle unavailable; level thumbnails will use the default image:', error && error.message);
-}
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -244,6 +230,26 @@ const MIGRATIONS = [
         data        jsonb       NOT NULL,
         updated_at  timestamptz NOT NULL DEFAULT now(),
         PRIMARY KEY (owner_email, level_id)
+      );
+    `,
+  },
+  {
+    version: 9,
+    name: 'prop seats global tier',
+    // The global PROP-SEAT tuning tier (ADR-0061): one upserted row per id (PK id
+    // alone ⇒ global, cloning official_campaigns), holding a map of propId → seat
+    // {anchorX,anchorY,scale,w?,h?,base?}. Public GET / admin-gated PUT. The committed
+    // propSeats.json is the always-render BASELINE the client overlays this row over,
+    // so props never depend on this row (an empty/missing row = "no overrides").
+    sql: `
+      CREATE TABLE IF NOT EXISTS prop_seats (
+        id                    text        PRIMARY KEY,
+        data                  jsonb       NOT NULL,
+        client_schema_version integer,
+        revision              integer     NOT NULL DEFAULT 0,
+        created_at            timestamptz NOT NULL DEFAULT now(),
+        updated_at            timestamptz NOT NULL DEFAULT now(),
+        updated_by            text
       );
     `,
   },
@@ -2476,6 +2482,128 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
   }
 });
 
+// --- Prop-seat tuning (global) tier (ADR-0061) -----------------------------
+// Live-tunable prop geometry: a map of propId → seat {anchorX,anchorY,scale,w?,h?,base?}.
+// Public GET / requireAdmin PUT, cloning official_campaigns. The committed propSeats.json is
+// the always-render BASELINE the client overlays this row over — an empty/missing row just
+// means "no overrides" (props still render), so props/`play` never depend on this row.
+const PROP_SEATS_STORE_SCHEMA_VERSION = 1;
+const PROP_SEATS_ROW_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
+function propSeatsRowId(raw) {
+  const id = String(raw || '').trim();
+  return PROP_SEATS_ROW_ID_PATTERN.test(id) ? id : null;
+}
+
+// A prop id is a lowercase slug (letters/digits/hyphens, e.g. "oak", "cabin-2x2-house").
+const PROP_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+// Validate the seat map shape + base/variant integrity: every entry has numeric anchors and a
+// positive scale, optional positive-integer w/h, and any `base` must reference another entry IN
+// THE SAME document (no orphan size-variant — the server-side analog of /prop-lab base-protection).
+function validatePropSeatsData(data) {
+  if (!isObjectRecord(data)) return 'prop seats must be an object map of propId → seat';
+  for (const [id, seat] of Object.entries(data)) {
+    if (!PROP_ID_PATTERN.test(id)) return `prop id "${id}" must be a lowercase slug`;
+    if (!isObjectRecord(seat)) return `seat "${id}" must be an object`;
+    if (!Number.isFinite(seat.anchorX) || !Number.isFinite(seat.anchorY)) return `seat "${id}" needs numeric anchorX/anchorY`;
+    if (!(Number.isFinite(seat.scale) && seat.scale > 0)) return `seat "${id}" needs a positive scale`;
+    for (const dim of ['w', 'h']) {
+      if (Object.hasOwn(seat, dim) && !(Number.isInteger(seat[dim]) && seat[dim] >= 1)) return `seat "${id}" ${dim} must be a positive integer`;
+    }
+    if (Object.hasOwn(seat, 'base') && (typeof seat.base !== 'string' || !Object.hasOwn(data, seat.base))) {
+      return `seat "${id}" base "${seat.base}" must reference an existing prop in the same document`;
+    }
+  }
+  return null;
+}
+
+async function dbGetPropSeats(id) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT data, client_schema_version, revision, created_at, updated_at, updated_by FROM prop_seats WHERE id = $1',
+    [id],
+  );
+  return rows[0] || null;
+}
+
+async function dbUpsertPropSeats(id, input) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO prop_seats (id, data, client_schema_version, revision, updated_by)
+       VALUES ($1, $2::jsonb, $3, 1, $4)
+     ON CONFLICT (id) DO UPDATE SET
+       data = EXCLUDED.data,
+       client_schema_version = EXCLUDED.client_schema_version,
+       revision = prop_seats.revision + 1,
+       updated_at = now(),
+       updated_by = EXCLUDED.updated_by
+     RETURNING data, client_schema_version, revision, created_at, updated_at, updated_by`,
+    [id, JSON.stringify(input.data), input.client_schema_version, input.updated_by],
+  );
+  return rows[0];
+}
+
+function publicPropSeatsDocument(id, document) {
+  return {
+    id,
+    data: isObjectRecord(document && document.data) ? document.data : {},
+    client_schema_version: document && Object.hasOwn(document, 'client_schema_version') ? document.client_schema_version : null,
+    revision: Number.isInteger(document && document.revision) ? document.revision : 0,
+    created_at: document && document.created_at ? document.created_at : null,
+    updated_at: document && document.updated_at ? document.updated_at : null,
+    updated_by: document && document.updated_by ? document.updated_by : null,
+  };
+}
+
+app.get('/api/prop-seats/:id', async (req, res) => {
+  const id = propSeatsRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_prop_seats_id' });
+    return;
+  }
+  try {
+    const document = await dbGetPropSeats(id);
+    res.status(200).json({
+      portfolio: publicPropSeatsDocument(id, document),
+      store_schema_version: PROP_SEATS_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'prop seats read failed', error, 'prop_seats_store_unavailable');
+  }
+});
+
+app.put('/api/prop-seats/:id', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const id = propSeatsRowId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'invalid_prop_seats_id' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  if (!isObjectRecord(raw.data)) {
+    res.status(400).json({ error: 'prop_seats_data_object_required' });
+    return;
+  }
+  const validationError = validatePropSeatsData(raw.data);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_prop_seats', details: validationError });
+    return;
+  }
+  try {
+    const document = await dbUpsertPropSeats(id, {
+      data: raw.data,
+      client_schema_version: Object.hasOwn(raw, 'client_schema_version') ? raw.client_schema_version : null,
+      updated_by: user.email,
+    });
+    res.status(200).json({
+      portfolio: publicPropSeatsDocument(id, document),
+      store_schema_version: PROP_SEATS_STORE_SCHEMA_VERSION,
+    });
+  } catch (error) {
+    dbUnavailable(res, 'prop seats write failed', error, 'prop_seats_store_unavailable');
+  }
+});
+
 // --- Shareable public maps -------------------------------------------------
 // A user's map lives in their per-owner workspace blob keyed by a per-owner l<n> id, so it has no
 // global name a signed-out crawler/visitor could resolve. Publishing mints a stable, owner-free
@@ -2541,9 +2669,8 @@ app.post('/api/maps/publish', async (req, res) => {
     const level = row && row.body && row.body.levels && typeof row.body.levels === 'object'
       ? row.body.levels[levelId] : null;
     if (!level || typeof level !== 'object') { res.status(404).json({ error: 'level_not_found' }); return; }
-    let contentHash = null;
-    try { contentHash = serverRender.boardHashForLevel(level); } catch { contentHash = null; }
-    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, contentHash);
+    // content_hash was only a server-thumbnail cache-buster; that path is gone, so it's null now.
+    const publicId = await dbEnsurePublicId(user.email, levelId, { ...level, id: levelId }, null);
     res.status(200).json({ public_id: publicId, url: `${publicOrigin}/play?map=${publicId}` });
   } catch (error) {
     dbUnavailable(res, 'map publish failed', error, 'map_store_unavailable');
@@ -2653,13 +2780,11 @@ function makeStaticCacheHeaders(rootDir) {
   };
 }
 
-// --- Open Graph unfurl + on-demand board thumbnails ------------------------
+// --- Open Graph unfurl ------------------------------------------------------
 // A shared level link must unfurl on Discord/Slack/Twitter (crawlers fetch the URL server-side — no
-// JS, no auth). The SPA fallback injects per-level og:/twitter: tags, and og:image points at an
-// ON-DEMAND board render served here — no CI bake, no browser (the board composites in Node via
-// generated/board-render.cjs + boardThumbnail.js). Officials resolve from the LIVE DB (never the
-// committed seed fixture); user maps from public_maps. A render/resolve failure degrades to the
-// branded default image.
+// JS, no auth). The SPA fallback injects per-level og:/twitter: title/description tags; og:image is
+// the branded default card. (Per-level server-rendered preview images were removed — the in-app
+// thumbnails are client-baked and nothing else consumed the server render path.)
 const OG_SITE_NAME = 'Chess Tactics';
 const OG_DEFAULT_DESC = 'Tactical chess battles on a living board.';
 const DEFAULT_OG_IMAGE = '/assets/og/default.png';
@@ -2742,39 +2867,6 @@ async function resolveShareTarget({ levelId, campaignId, mapId }) {
   return null;
 }
 
-// On-demand board thumbnail: /assets/level-thumb/<id>.png (?v=<hash> only busts caches). Rendered once
-// per (id, board-content-hash), cached in-process (single replica). Registered BEFORE express.static
-// so the .png isn't 404'd by the SPA fallback's static-extension guard.
-const _thumbCache = new Map(); // `${id}:${hash}` -> Buffer
-const THUMB_CACHE_MAX = 200;
-app.get(/^\/assets\/level-thumb\/(.+)\.png$/, async (req, res) => {
-  const id = String(req.params[0] || '');
-  const isOfficial = /^off-[a-z-]+$/.test(id);
-  const isMap = PUBLIC_ID_RE.test(id);
-  if (!isOfficial && !isMap) { res.status(404).send('not found'); return; }
-  try {
-    if (!serverRender) { res.redirect(302, DEFAULT_OG_IMAGE); return; } // bundle unavailable → default card
-    const target = await resolveShareTarget(isOfficial ? { levelId: id } : { mapId: id });
-    if (!target) { res.redirect(302, DEFAULT_OG_IMAGE); return; }
-    const plan = serverRender.levelRenderPlan(target.level);
-    const cacheKey = `${id}:${plan.contentHash}`;
-    let png = _thumbCache.get(cacheKey);
-    if (!png) {
-      const { renderLevelCard } = require(path.join(bakedBackendDir, 'boardThumbnail'));
-      const backgroundSrc = typeof serverRender.worldBackgroundSrc === 'function' ? serverRender.worldBackgroundSrc() : undefined;
-      png = await renderLevelCard({ plan, frontendDir, title: target.title, subtitle: target.subtitle, backgroundSrc });
-      if (_thumbCache.size >= THUMB_CACHE_MAX) _thumbCache.delete(_thumbCache.keys().next().value);
-      _thumbCache.set(cacheKey, png);
-    }
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.status(200).end(png);
-  } catch (error) {
-    console.error('level-thumb render failed:', error && error.message);
-    res.redirect(302, DEFAULT_OG_IMAGE); // never fail an unfurl — fall back to the branded card
-  }
-});
-
 async function ogTagsFor(req) {
   const origin = publicOrigin; // TRUSTED canonical origin, never the spoofable Host header
   const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
@@ -2788,14 +2880,7 @@ async function ogTagsFor(req) {
   if (target) {
     title = target.title || OG_SITE_NAME;
     description = target.description || target.subtitle || OG_DEFAULT_DESC;
-    // Only point og:image at the on-demand render when the bundle is available; else keep the
-    // default (avoids advertising an endpoint that would just 302 to the default anyway).
-    if (serverRender) {
-      const key = mapId || levelId;
-      let hash = '';
-      try { hash = serverRender.boardHashForLevel(target.level); } catch { hash = ''; }
-      image = `${origin}/assets/level-thumb/${encodeURIComponent(key)}.png${hash ? `?v=${hash}` : ''}`;
-    }
+    // og:image stays the branded default card — per-level server-rendered previews were removed.
   }
   const url = `${origin}${req.originalUrl}`;
   const meta = [

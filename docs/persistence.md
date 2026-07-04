@@ -31,6 +31,25 @@ not image bytes.
 What is **not** in Postgres (deliberate, see "Boundaries"): the `lobbies`
 matchmaking map.
 
+## Request auth: reads public, writes gated
+
+The standing rule for HTTP request auth is **game-content reads are public, only
+writes are login-gated — playing never requires a session** (per
+[ADR-0060](adr/0060-playing-never-requires-sign-in.md)). Everything needed to load
+and play the game serves **without a session**: official campaigns
+(`GET /api/official-campaigns/:id`), public shareable maps
+(`GET /api/maps/:publicId`), the `design_portfolios` catalog, and OG/thumbnail
+unfurls — so anonymous cold-start players and link-preview crawlers work. Writes
+require sign-in, and publishing **global** game content (officials, and future
+DB-backed tweakables such as props) additionally requires admin (`requireAdmin` /
+`ADMIN_EMAILS`, per [ADR-0038](adr/0038-campaigns-are-tiered-game-content.md)).
+
+Private **per-user** documents are the exception by nature, not a contradiction:
+`levels` and `campaign_workspaces` are scoped to `owner_email`, so their reads
+*and* writes require sign-in — they are the viewer's own data, not game content.
+Any new DB-backed content we want to tweak live inherits this public-read /
+admin-write shape, never a blanket session gate.
+
 ## Authentication to the database
 
 Two connection modes, chosen by environment in `backend/server.js`:
