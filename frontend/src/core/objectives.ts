@@ -139,8 +139,8 @@ const eliminate = (side: ConditionSide, type?: Piece['type']): VictoryCondition 
 const act = (kind: VictoryAction['kind'], side: ConditionSide): VictoryAction => ({ kind, side });
 // Preset rules are authored from the PLAYER's perspective (win/lose for 'player'); in the 2-player
 // game that implies the mirror for the enemy, which is what satisfies the per-faction save gate.
-const loseRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, do: [act('lose', 'player')] });
-const winRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, do: [act('win', 'player')] });
+const loseRule = (name: string, ...conds: VictoryCondition[]): VictoryRule => ({ name, if: conds, do: [act('lose', 'player')] });
+const winRule = (name: string, ...conds: VictoryCondition[]): VictoryRule => ({ name, if: conds, do: [act('win', 'player')] });
 
 /**
  * Expand a legacy `objective` preset into the if-then rule model (ADR-0055) — the ONLY place the 5
@@ -153,21 +153,21 @@ const winRule = (...conds: VictoryCondition[]): VictoryRule => ({ if: conds, do:
 export function victoryRulesForObjective(objective: ObjectiveType, ctx: ObjectiveContext = {}): VictoryRules {
   switch (objective) {
     case 'capture-all':
-      return [loseRule(eliminate('player')), winRule(eliminate('enemy'))];
+      return [loseRule('Your force is wiped out', eliminate('player')), winRule('Enemy is wiped out', eliminate('enemy'))];
     case 'capture-king':
       // Direction-aware: the King-holder loses when its King falls; the kingless side loses only
       // by wipe. ctx.kingSide defaults to 'enemy' (free skirmish / legacy = hunt the enemy King).
       return (ctx.kingSide ?? 'enemy') === 'player'
-        ? [loseRule(eliminate('player', ROYAL)), winRule(eliminate('enemy'))]
-        : [loseRule(eliminate('player')), winRule(eliminate('enemy', ROYAL))];
+        ? [loseRule('Your King is captured', eliminate('player', ROYAL)), winRule('Enemy is wiped out', eliminate('enemy'))]
+        : [loseRule('Your force is wiped out', eliminate('player')), winRule('Enemy King is captured', eliminate('enemy', ROYAL))];
     case 'rival-kings':
-      return [loseRule(eliminate('player', ROYAL)), winRule(eliminate('enemy', ROYAL))];
+      return [loseRule('Your King is captured', eliminate('player', ROYAL)), winRule('Enemy King is captured', eliminate('enemy', ROYAL))];
     case 'survive':
-      return [loseRule(eliminate('player')), winRule({ kind: 'turnLimit', turns: ctx.surviveTurns ?? 0 })];
+      return [loseRule('Your force is wiped out', eliminate('player')), winRule('You outlast the assault', { kind: 'turnLimit', turns: ctx.surviveTurns ?? 0 })];
     case 'reach':
-      return [loseRule(eliminate('player')), winRule({ kind: 'reach', side: 'player' })];
+      return [loseRule('Your force is wiped out', eliminate('player')), winRule('A pawn reaches the goal', { kind: 'reach', side: 'player' })];
     default:
-      return [loseRule(eliminate('player')), winRule(eliminate('enemy'))];
+      return [loseRule('Your force is wiped out', eliminate('player')), winRule('Enemy is wiped out', eliminate('enemy'))];
   }
 }
 

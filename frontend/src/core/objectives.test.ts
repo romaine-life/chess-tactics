@@ -132,24 +132,24 @@ describe('evaluateVictory (ADR-0055 if-then rules)', () => {
 describe('victoryRulesForObjective (preset expansion)', () => {
   it('expands to lose-then-win rules; capture-king is direction-aware', () => {
     expect(victoryRulesForObjective('capture-all')).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
-      { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+      { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'Enemy is wiped out', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
     ]);
     expect(victoryRulesForObjective('capture-king', { kingSide: 'enemy' })).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
-      { if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] },
+      { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'Enemy King is captured', if: [{ kind: 'eliminate', side: 'enemy', filter: { type: 'king' } }], do: [{ kind: 'win', side: 'player' }] },
     ]);
     expect(victoryRulesForObjective('capture-king', { kingSide: 'player' })).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player', filter: { type: 'king' } }], do: [{ kind: 'lose', side: 'player' }] },
-      { if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
+      { name: 'Your King is captured', if: [{ kind: 'eliminate', side: 'player', filter: { type: 'king' } }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'Enemy is wiped out', if: [{ kind: 'eliminate', side: 'enemy' }], do: [{ kind: 'win', side: 'player' }] },
     ]);
     expect(victoryRulesForObjective('survive', { surviveTurns: 6 })).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
-      { if: [{ kind: 'turnLimit', turns: 6 }], do: [{ kind: 'win', side: 'player' }] },
+      { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'You outlast the assault', if: [{ kind: 'turnLimit', turns: 6 }], do: [{ kind: 'win', side: 'player' }] },
     ]);
     expect(victoryRulesForObjective('reach')).toEqual([
-      { if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
-      { if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
+      { name: 'Your force is wiped out', if: [{ kind: 'eliminate', side: 'player' }], do: [{ kind: 'lose', side: 'player' }] },
+      { name: 'A pawn reaches the goal', if: [{ kind: 'reach', side: 'player' }], do: [{ kind: 'win', side: 'player' }] },
     ]);
   });
 

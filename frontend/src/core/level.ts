@@ -76,6 +76,9 @@ export interface VictoryAction {
  * (an empty `if` always fires); order matters ACROSS rules (see VictoryRules). A future `when`
  * trigger ("each turn" today) is the reserved Event half for on-capture / on-turn-N. */
 export interface VictoryRule {
+  /** Author-facing name, shown in the editor's rule list and unique within a level. Optional for
+   * back-compat / hand-authored bodies; the editor always assigns one. */
+  name?: string;
   if: VictoryCondition[];
   do: VictoryAction[];
 }
@@ -282,7 +285,8 @@ function victoryRuleErrors(value: unknown): string[] {
   value.forEach((r, i) => {
     const path = `victory[${i}]`;
     if (!r || typeof r !== 'object' || Array.isArray(r)) { errs.push(`${path} must be a rule object`); return; }
-    const rule = r as { if?: unknown; do?: unknown };
+    const rule = r as { name?: unknown; if?: unknown; do?: unknown };
+    if (rule.name !== undefined && typeof rule.name !== 'string') errs.push(`${path}.name must be a string`);
     if (!Array.isArray(rule.if)) errs.push(`${path}.if must be an array of conditions`);
     else rule.if.forEach((c, j) => errs.push(...conditionErrors(c, `${path}.if[${j}]`)));
     if (!Array.isArray(rule.do)) errs.push(`${path}.do must be an array of actions`);

@@ -665,6 +665,9 @@ export function LevelEditor(): ReactElement {
   // The victory-events editor opens as a full-size overlay over the board — the narrow control
   // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
   const [eventsOpen, setEventsOpen] = useState(false);
+  // The template the overlay's "Set template" button applies (a dropdown choice, not the old
+  // row of buttons). Seeded from the current objective.
+  const [templateChoice, setTemplateChoice] = useState<ObjectiveType>(objective);
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
@@ -1582,27 +1585,29 @@ export function LevelEditor(): ReactElement {
                 <h2>Victory events</h2>
                 <button type="button" className="le-seg-btn" onClick={() => setEventsOpen(false)}>Done</button>
               </div>
-              <div className="le-events-body">
-                <section className="le-events-templates">
-                  <h3 className="le-victory-head">Templates</h3>
-                  <p className="le-board-note">Start from a template — it fills in a full rule set (each faction gets a way to win and lose). Load several to combine; duplicate rules are ignored.</p>
-                  <div className="le-seg le-seg-wrap le-victory-presets">
-                    {OBJECTIVE_TYPES.map((mode) => (
-                      <button type="button" key={mode} className="le-seg-btn" title={MODE_DESCRIPTION[mode]}
-                        onClick={() => {
-                          const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
-                          setObjective(mode);
-                          setVictory((v) => mergeRules(v, victoryRulesForObjective(mode, { surviveTurns, kingSide: kingSideOf(seedUnits) })));
-                        }}>{MODE_NAME[mode]}</button>
-                    ))}
+              <VictoryConditionsEditor
+                value={victory}
+                factions={victoryFactions}
+                onChange={setVictory}
+                templates={(
+                  <div className="le-events-templates">
+                    <h3 className="le-victory-head">Template</h3>
+                    <p className="le-board-note">Set a template to fill in a full rule set (each faction gets a way to win and lose). It ADDS to the rules — duplicates are ignored.</p>
+                    <div className="le-template-apply">
+                      <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
+                        value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
+                        {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
+                      </select>
+                      <button type="button" className="le-seg-btn" onClick={() => {
+                        const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
+                        setObjective(templateChoice);
+                        setVictory((v) => mergeRules(v, victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) })));
+                      }}>Set template</button>
+                    </div>
+                    <p className="le-board-note">Rules run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
                   </div>
-                </section>
-                <section className="le-events-rules">
-                  <h3 className="le-victory-head">Rules</h3>
-                  <p className="le-board-note">Checked top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
-                  <VictoryConditionsEditor value={victory} factions={victoryFactions} onChange={setVictory} />
-                </section>
-              </div>
+                )}
+              />
             </div>
           ) : null}
         </div>
