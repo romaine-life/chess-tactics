@@ -102,6 +102,10 @@ async function renderLevelCard({ plan, frontendDir, title, subtitle }) {
       const cx = op.dx + (op.dw - w) / 2;
       const cy = op.dy + (op.dh - h) / 2;
       ctx.drawImage(img, originX + (cx - bounds.minX) * scale, originY + (cy - bounds.minY) * scale, w * scale, h * scale);
+    } else if (op.sw != null) {
+      // Sprite-sheet frame (ground-cover tuft): draw the source sub-rect (frame 0) into the dest.
+      ctx.drawImage(img, op.sx || 0, op.sy || 0, op.sw, op.sh,
+        originX + (op.dx - bounds.minX) * scale, originY + (op.dy - bounds.minY) * scale, op.dw * scale, op.dh * scale);
     } else {
       ctx.drawImage(img, originX + (op.dx - bounds.minX) * scale, originY + (op.dy - bounds.minY) * scale, op.dw * scale, op.dh * scale);
     }

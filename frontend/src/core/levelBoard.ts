@@ -93,8 +93,9 @@ function zonesFromLayers(zones: Zone[] | undefined, cols: number, rows: number):
   return channel;
 }
 
-// Resolve a Studio tile id to its family (so its terrain material is known).
-const familyOfTile = (tileId: string): TileFamilyId | undefined =>
+// Resolve a Studio tile id to its family (so its terrain material is known). Exported so the
+// thumbnail renderer (bakeBoardThumbnail) can derive a cell's terrain for ground-cover scatter.
+export const familyOfTile = (tileId: string): TileFamilyId | undefined =>
   studioFamilies.find((family) => family.assets.some((asset) => asset.id === tileId))?.id;
 
 // The default (first) tile id of a family — used when deriving a board from `layers`,
