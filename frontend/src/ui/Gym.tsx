@@ -14,7 +14,7 @@ import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
 import { ViewPane } from './shared/ViewPane';
 import { createFromLevel } from '../game/setup';
-import { PARAM_LABELS, encodeWeights } from '../game/tuning';
+import { PARAM_LABELS, encodeWeights, makeBook } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 import type { GymRequest, GymResponse, GymPoint } from '../lab/gymWorker';
 
@@ -37,6 +37,14 @@ const GYM_CSS = `
 .gym-weights .k { color:#93a0b0; } .gym-weights .v { text-align:right; font-variant-numeric:tabular-nums; }
 .gym-weights .d { text-align:right; width:56px; } .gym-weights .d.up { color:#5ad19a; } .gym-weights .d.dn { color:#e0685f; } .gym-weights .d.z { color:#5c6875; }
 .gym-num { font-family:ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+.gym-steps { display:flex; gap:0; margin-bottom:12px; }
+.gym-steps button { border:1px solid #29323f; background:#161d26; color:#93a0b0; padding:6px 16px; font-size:12px; }
+.gym-steps button:first-child { border-radius:6px 0 0 6px; } .gym-steps button:last-child { border-radius:0 6px 6px 0; border-left:none; }
+.gym-steps button.active { background:#212b37; color:#e7ebf0; }
+.gym-bookhead,.gym-pager { display:flex; align-items:center; gap:14px; margin-bottom:10px; flex-wrap:wrap; font-size:13px; }
+.gym-bookhead label,.gym-pager label { display:inline-flex; align-items:center; gap:6px; color:#93a0b0; font-size:12px; }
+.gym-bookhead input,.gym-pager input { width:80px; background:#0c1116; color:#e7ebf0; border:1px solid #3a4657; border-radius:4px; padding:4px 7px; font:12px ui-monospace,monospace; }
+.gym-pager .gym-num { color:#46d6b8; }
 `;
 
 /** Catalog grid — the levels you can train on, with board thumbnails. */
@@ -87,7 +95,11 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   // bookSize×4 real games); crank both up for a more trustworthy signal.
   const [bookSize, setBookSize] = useState(2);
   const [depth, setDepth] = useState(2);
-  const [seed, setSeed] = useState(1);
+  // Workflow: seed the book first, then train. bookBaseSeed + bookIndex address the
+  // position being inspected; the book is [base .. base+size-1].
+  const [mode, setMode] = useState<'book' | 'train'>('book');
+  const [bookBaseSeed, setBookBaseSeed] = useState(1);
+  const [bookIndex, setBookIndex] = useState(0);
   const [viewZoom, setViewZoom] = useState(0.72);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
 
@@ -119,13 +131,16 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
       } else { setBusy(false); playingRef.current = false; setPlaying(false); }
     };
     const init: GymRequest = {
-      type: 'init', level, bookSize,
+      type: 'init', level, bookSize, bookBaseSeed,
       match: { search: { maxDepth: depth, maxNodes: 2500 }, maxPlies: 80 },
     };
     worker.postMessage(init);
     return () => { worker.terminate(); workerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, bookSize, depth]);
+  }, [level, bookSize, bookBaseSeed, depth]);
+
+  // Keep the inspected position inside the book when its size shrinks.
+  useEffect(() => { if (bookIndex > bookSize - 1) setBookIndex(Math.max(0, bookSize - 1)); }, [bookSize, bookIndex]);
 
   const stepOnce = useCallback(() => {
     if (!workerRef.current || !ready) return;
@@ -159,13 +174,16 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
     ctx.beginPath(); ctx.arc(X(n - 1), Y(last.score), 4, 0, 7); ctx.fillStyle = '#46d6b8'; ctx.fill();
   }, [traj]);
 
-  // Board at the current seed (the position being tuned on).
+  const book = useMemo(() => makeBook(bookSize, bookBaseSeed), [bookSize, bookBaseSeed]);
+  const currentSeed = book[Math.min(bookIndex, book.length - 1)] ?? bookBaseSeed;
+
+  // Board at the current book position.
   const board = useMemo(() => {
     if (!level) return null;
     const base = levelToEditorBoard(level);
-    const game = createFromLevel(level, seed);
+    const game = createFromLevel(level, currentSeed);
     return { ...base, units: unitsForGamePieces(game.pieces) };
-  }, [level, seed]);
+  }, [level, currentSeed]);
 
   const lastScore = traj.length ? traj[traj.length - 1].score : 0.5;
   const champVec = champion.theta;
@@ -180,11 +198,34 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
           <p className="gym-hint">Pick a level from the Gym catalog to train the AI on it.</p>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>Board — seed <span className="gym-num">#{seed}</span></h3>
-              <button type="button" onClick={() => setSeed((s) => s + 1)} title="Next book position">↻</button>
-              <span className="gym-hint">book position {((seed - 1) % bookSize) + 1} of {bookSize}</span>
-            </div>
+            <nav className="gym-steps" aria-label="Gym steps">
+              <button type="button" className={mode === 'book' ? 'active' : ''} onClick={() => setMode('book')}>1 · Seed book</button>
+              <button type="button" className={mode === 'train' ? 'active' : ''} onClick={() => setMode('train')}>2 · Train</button>
+            </nav>
+
+            {mode === 'book' ? (
+              <div className="gym-bookhead">
+                <span>Book: <b className="gym-num">{bookSize}</b> starting positions from seed <b className="gym-num">#{bookBaseSeed}</b></span>
+                <label className="gym-num">seed base
+                  <input type="number" min={1} value={bookBaseSeed} onChange={(e) => { setBookBaseSeed(Math.max(1, Number(e.target.value) || 1)); setBookIndex(0); }} />
+                </label>
+              </div>
+            ) : (
+              <h3 style={{ margin: '0 0 8px' }}>Board — position <span className="gym-num">#{currentSeed}</span> of the book</h3>
+            )}
+
+            {mode === 'book' ? (
+              <div className="gym-pager">
+                <button type="button" onClick={() => setBookIndex((i) => Math.max(0, i - 1))} disabled={bookIndex === 0}>◂ prev</button>
+                <span>position <span className="gym-num">{bookIndex + 1}</span> of <span className="gym-num">{bookSize}</span> — seed <span className="gym-num">#{currentSeed}</span></span>
+                <button type="button" onClick={() => setBookIndex((i) => Math.min(bookSize - 1, i + 1))} disabled={bookIndex >= bookSize - 1}>next ▸</button>
+                <label className="gym-num">go to seed
+                  <input type="number" min={bookBaseSeed} max={bookBaseSeed + bookSize - 1} value={currentSeed}
+                    onChange={(e) => setBookIndex(Math.max(0, Math.min(bookSize - 1, (Number(e.target.value) || bookBaseSeed) - bookBaseSeed)))} />
+                </label>
+              </div>
+            ) : null}
+
             <div className="gym-board">
               {board ? (
                 <ViewPane kind="board" ariaLabel="Board" zoom={viewZoom} pan={viewPan} minZoom={0.3} maxZoom={2} onZoomChange={setViewZoom} onPanChange={setViewPan}>
@@ -193,16 +234,22 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
               ) : null}
             </div>
 
-            <div className="gym-conv">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                <span className="gym-hint">Champion strength vs the shipped AI ({traj.length} steps)</span>
-                <span className="gym-scorebig" style={{ color: lastScore > 0.505 ? '#5ad19a' : lastScore < 0.495 ? '#e0685f' : '#e7ebf0' }}>{lastScore.toFixed(3)}</span>
-              </div>
-              <canvas ref={convRef} width={900} height={300} aria-label="convergence curve" />
-              <p className="gym-hint" style={{ marginTop: 8 }}>
-                0.5 = even with the shipped weights. Above 0.5 = the tuner found something stronger. A flat line at 0.5 means the games are drawing — no signal to climb (the unbalanced-book / oracle-fitness work).
+            {mode === 'book' ? (
+              <p className="gym-hint" style={{ marginTop: 10 }}>
+                These are the starts the champion and challengers play across, both sides. Page through to verify they exist and look right — set <b>book size</b> and <b>seed base</b> on the right to change how many and where from — then switch to <b>Train</b>. (They're varied but not yet <em>unbalanced</em>, which is why training draws — the next real step.)
               </p>
-            </div>
+            ) : (
+              <div className="gym-conv">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <span className="gym-hint">Champion strength vs the shipped AI ({traj.length} steps)</span>
+                  <span className="gym-scorebig" style={{ color: lastScore > 0.505 ? '#5ad19a' : lastScore < 0.495 ? '#e0685f' : '#e7ebf0' }}>{lastScore.toFixed(3)}</span>
+                </div>
+                <canvas ref={convRef} width={900} height={300} aria-label="convergence curve" />
+                <p className="gym-hint" style={{ marginTop: 8 }}>
+                  0.5 = even with the shipped weights. Above 0.5 = the tuner found something stronger. A flat line at 0.5 means the games are drawing — no signal to climb (the unbalanced-book / oracle-fitness work).
+                </p>
+              </div>
+            )}
           </>
         )}
       </section>
