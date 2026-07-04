@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { tileAssets, tileFamilies, edgeTiles, muralTiles, edgeFeatures, type TileAsset } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard } from '../render/BoardLabBoard';
+import { ViewPane } from './shared/ViewPane';
 
 // Inspector for the production surface-swap BOARD tileset (Blender edge + flat PixelLab top;
 // scripts/build-surface-tiles.py, ADR-0039/0040) as an embedded Studio Viewer kind (ADR-0058).
@@ -42,6 +43,7 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
   const [view, setView] = useState<'board' | 'tiles'>('board');
   const [seed, setSeed] = useState(7);
   const [zoom, setZoom] = useState(1.1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [crisp, setCrisp] = useState(true);
   // Story features are PARKED (ADR-0041) — default OFF so the board shows the continuity mural.
   const [story, setStory] = useState(false);
@@ -66,11 +68,12 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
   return (
     <>
       <style>{STL_CSS}</style>
-      <section className="al-lab-main" aria-label="Surface tileset preview">
+      <section className={`al-lab-main ${view === 'board' ? 'stl-board-main' : ''}`.trim()} aria-label="Surface tileset preview">
         {view === 'board' ? (
-          <div className={`stl-board ${crisp ? 'is-crisp' : ''}`}>
-            <BoardLabBoard board={board} assetFrameSrc={(a) => a.src} boardZoom={zoom} ariaLabel="Surface tileset board preview" />
-          </div>
+          <ViewPane kind="board" ariaLabel="Surface tileset viewport" zoom={zoom} pan={pan} minZoom={0.5} maxZoom={3} onZoomChange={setZoom} onPanChange={setPan}>
+            <BoardLabBoard board={board} assetFrameSrc={(a) => a.src} boardZoom={zoom} boardPan={pan}
+              className={`stl-board-surface ${crisp ? 'is-crisp' : ''}`} ariaLabel="Surface tileset board preview" />
+          </ViewPane>
         ) : (
           <div className="stl-grid" key={fam}>
             {Array.from({ length: MAX_PER_FAMILY }, (_, n) => <Card key={`${fam}-${n}`} family={fam} n={n} />)}
@@ -116,9 +119,10 @@ export function SurfaceTilesLab({ family, onFamily, header }: {
 }
 
 const STL_CSS = `
-.stl-board { position: relative; align-self: stretch; min-height: 66vh; overflow: hidden; border-radius: 4px;
-  background: radial-gradient(120% 90% at 50% 18%, #16202f 0%, #0b1018 70%); }
-.stl-board.is-crisp .tileset-generated-board-tile img { image-rendering: pixelated; }
+/* Board view fills the pane and uses the shared ViewPane (pan/zoom/fit) — same as the skirmish
+   board, so it pans and never clips. */
+.stl-board-main { padding: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; overflow: hidden; }
+.stl-board-surface.is-crisp .tileset-generated-board-tile img { image-rendering: pixelated; }
 .stl-grid { align-self: stretch; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; align-content: start; }
 .stl-card { display: flex; flex-direction: column; gap: 8px; background: #0c1322; border: 1px solid #1b2740; border-radius: 8px; padding: 10px; }
 .stl-card-head { text-align: center; font-size: 13px; font-weight: 600; color: #9fd8ff; letter-spacing: .03em; }

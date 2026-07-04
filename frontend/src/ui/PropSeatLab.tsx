@@ -6,6 +6,7 @@ import { PropSprite } from '../render/BoardStructure';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PROP_DEFS, propCells, type PropDef } from '../core/props';
 import { pieceSpritePath } from '../core/pieces';
+import { ViewPane } from './shared/ViewPane';
 import COMMITTED_SEATS from '../core/propSeats.json';
 
 // The prop-seat editor as an embedded Studio Viewer kind (docs/studio-control-architecture.md,
@@ -77,6 +78,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
   const [family, setFamily] = useState<Family>('grass');
   const [seed, setSeed] = useState(7);
   const [zoom, setZoom] = useState(1.4);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [showGuides, setShowGuides] = useState(true);
   const [showUnit, setShowUnit] = useState(true);
   const [showSavedGhost, setShowSavedGhost] = useState(false);
@@ -157,6 +159,7 @@ export function PropSeatLab({ propId, onPropId, header }: {
 
   const onDragStart = (ev: React.PointerEvent<HTMLDivElement>) => {
     ev.preventDefault();
+    ev.stopPropagation(); // don't let the ViewPane start a pan — this drag moves the prop
     ev.currentTarget.setPointerCapture(ev.pointerId);
     drag.current = { px: ev.clientX, py: ev.clientY, anchorX: liveSeat.anchorX, anchorY: liveSeat.anchorY };
   };
@@ -207,9 +210,9 @@ export function PropSeatLab({ propId, onPropId, header }: {
   return (
     <>
       <style>{PS_CSS}</style>
-      <section className="al-lab-main" aria-label="Prop seat preview">
-        <div className={`ps-stage ${showGuides ? '' : 'crisp'}`}>
-          <BoardLabBoard board={board} assetFrameSrc={(a) => a.src} boardZoom={zoom} ariaLabel="Prop seat preview board">
+      <section className="al-lab-main ps-board-main" aria-label="Prop seat preview">
+        <ViewPane kind="board" ariaLabel="Prop seat viewport" zoom={zoom} pan={pan} minZoom={0.5} maxZoom={3} onZoomChange={setZoom} onPanChange={setPan}>
+          <BoardLabBoard board={board} assetFrameSrc={(a) => a.src} boardZoom={zoom} boardPan={pan} className="ps-board-surface" ariaLabel="Prop seat preview board">
             {showSavedGhost ? <div className="ps-ghost"><PropSprite prop={{ x: ax, y: ay, propId: activeId }} def={savedDef} /></div> : null}
             <PropSprite prop={{ x: ax, y: ay, propId: activeId }} def={liveDef} />
             {showUnit ? (
@@ -237,9 +240,9 @@ export function PropSeatLab({ propId, onPropId, header }: {
             ) : null}
             <div className="ps-drag" style={frame}
               onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}
-              title="Drag to move the prop. Arrow keys nudge (Shift = ×10)." />
+              title="Drag to move the prop. Drag empty board to pan · wheel to zoom · arrow keys nudge (Shift = ×10)." />
           </BoardLabBoard>
-        </div>
+        </ViewPane>
       </section>
 
       <aside className="tileset-view-controls" aria-label="Prop seat controls">
@@ -315,9 +318,10 @@ export function PropSeatLab({ propId, onPropId, header }: {
 }
 
 const PS_CSS = `
-.ps-stage { position: relative; align-self: stretch; min-height: 60vh; overflow: hidden; border-radius: 4px;
-  background: radial-gradient(120% 90% at 50% 18%, #16202f 0%, #0b1018 70%); }
-.ps-stage .tileset-generated-board-tile img { image-rendering: pixelated; }
+/* Fill the main pane and let the shared ViewPane own pan/zoom/fit — same board viewport the
+   skirmish board uses, so it pans and never clips (was a bespoke fixed-height overflow:hidden box). */
+.ps-board-main { padding: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; overflow: hidden; }
+.ps-board-surface .tileset-generated-board-tile img { image-rendering: pixelated; }
 .ps-ghost { display: contents; }
 .ps-ghost img { opacity: 0.35; filter: saturate(0.4); }
 .ps-guide { position: absolute; pointer-events: none; z-index: 40000; }
