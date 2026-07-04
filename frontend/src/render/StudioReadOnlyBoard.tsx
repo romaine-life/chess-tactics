@@ -18,7 +18,7 @@ import {
 } from '../ui/unitCatalog';
 import { doodadAsset, type DoodadAsset } from '../ui/doodadCatalog';
 import { resolveFeatureOverlays, type ResolvedFeatureOverlay } from '../core/featureAutotile';
-import { committedBridgeTune, bridgeTuneStyle } from '../core/bridgeTune';
+import { committedBridgeTune, bridgeTuneStyle, BRIDGE_CELL_Z_BUMP } from '../core/bridgeTune';
 import { groundCoverSet, rollGroundCover, type GroundCover, type GroundCoverDensity } from '../core/groundCover';
 import type { TileFamilyId } from '../core/tileSockets';
 import type { EditorBoard } from '../ui/boardCode';
@@ -223,6 +223,7 @@ export function StudioReadOnlyBoard({
         key,
         x,
         y,
+        zBump: featureOverlays[key]?.kind === 'bridge' ? BRIDGE_CELL_Z_BUMP : undefined,
         className: `tileset-placement-cell ${tileAsset ? '' : 'is-empty'}`.trim(),
         children: studioCellArt({ tileAsset, feature: featureOverlays[key], animationFrame, x, y }),
       });

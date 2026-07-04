@@ -24,6 +24,13 @@ export interface BridgeTune {
 
 export const DEFAULT_BRIDGE_TUNE: BridgeTune = { scale: 1, offsetX: 0, offsetY: 0 };
 
+// A bridge's near rail + pier hang ~2.5 tile-rows below the equator, so the front (higher-z) tiles
+// it crosses would paint over that overhang and chop the rail. Every board renderer lifts a bridge
+// cell by this much (added to its x+y paint order) to clear the frontmost tile its art reaches
+// (~3 rows); bumped cells sort identically among themselves so a run stays layered, and it stays far
+// below the unit band (+20000).
+export const BRIDGE_CELL_Z_BUMP = 4;
+
 // The tile-equator centre inside the 96x180 feature frame — the transform origin so scaling grows
 // the deck symmetrically about the tile it sits on (see projectionContract: apex y41, equator y68).
 const EQUATOR_Y = 68;

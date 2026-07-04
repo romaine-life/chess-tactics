@@ -34,6 +34,7 @@ import {
 } from '../ui/unitCatalog';
 import { DOODAD_ASSETS, type DoodadAsset } from '../ui/doodadCatalog';
 import { resolveFeatureOverlays, FENCE_ART_PENDING } from '../core/featureAutotile';
+import { BRIDGE_CELL_Z_BUMP } from '../core/bridgeTune';
 import { propHalfSrc, propZBracket, structureSeatPoint } from './BoardStructure';
 import { propDef } from '../core/props';
 import { groundCoverSet, resolveGroundCover, densityFieldAt, type GroundCover } from '../core/groundCover';
@@ -118,14 +119,16 @@ export function boardDrawOps(board: EditorBoard): DrawOp[] {
       const feature = overlays[key];
       // Fences are PLUMBING-ONLY (no baked mask art yet) — skip them so featureFrameSrc never 404s.
       if (feature && !(FENCE_ART_PENDING && feature.kind === 'fence')) {
+        // A bridge's near rail + pier overhang the front tiles, so lift it above them (mirrors the
+        // DOM boards' per-cell z-bump); road/river ribbons stay in their own cell band at +0.5.
+        const featureZ = feature.kind === 'bridge' ? zIndex + BRIDGE_CELL_Z_BUMP + 0.5 : zIndex + 0.5;
         ops.push({
           src: featureFrameSrc(feature.kind, feature.material, feature.mask, feature.bridgeKey),
           dx: frameX,
           dy: frameY,
           dw: TILE_FRAME_W,
           dh: TILE_FRAME_H,
-          // Feature rides OVER its own tile but stays within the cell band (DOM: same cell div).
-          z: zIndex + 0.5,
+          z: featureZ,
         });
       }
     }

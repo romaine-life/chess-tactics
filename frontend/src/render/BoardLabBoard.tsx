@@ -5,7 +5,7 @@ import { TileTopLayer } from './TileTopLayer';
 import type { SocketBoardCell, SocketBoardResult } from '../core/tileBoardGenerator';
 import type { TileSocketAsset } from '../core/tileSockets';
 import { featureFrameSrc } from '../art/tileset';
-import { committedBridgeTune, bridgeTuneStyle, type BridgeTune } from '../core/bridgeTune';
+import { committedBridgeTune, bridgeTuneStyle, BRIDGE_CELL_Z_BUMP, type BridgeTune } from '../core/bridgeTune';
 
 // Re-export the projection so existing importers (SkirmishBoard, TilePreview, the
 // thumbnail bake) keep working; the math itself now lives in one place: boardProjection.
@@ -64,6 +64,7 @@ export function BoardLabBoard<TAsset extends TileSocketAsset>({
       key: `${cell.x}-${cell.y}`,
       x: cell.x,
       y: cell.y,
+      zBump: cell.feature?.kind === 'bridge' ? BRIDGE_CELL_Z_BUMP : undefined,
       className: cell.missing ? 'is-missing' : !cell.asset ? 'is-empty' : '',
       data: {
         'data-asset-id': cell.asset?.id,

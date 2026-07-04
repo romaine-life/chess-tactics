@@ -42,6 +42,7 @@ import {
 } from './studioBoard';
 import { featureThumbSrc, tileTopSrc } from '../art/tileset';
 import { resolveFeatureOverlays, roadEdgeKey, FEATURE_DIRS, ROAD_MATERIALS, RIVER_MATERIALS, defaultFeatureMaterial, FEATURE_MATERIAL_LABELS, FENCE_ART_PENDING, type FeatureKind, type FeatureMaterial } from '../core/featureAutotile';
+import { BRIDGE_CELL_Z_BUMP } from '../core/bridgeTune';
 import { type TileFamilyId } from '../core/tileSockets';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import { GroundCoverLayer } from '../render/GroundCoverLayer';
@@ -173,6 +174,7 @@ function StudioEditableBoard({
         key,
         x,
         y,
+        zBump: placedFeatures[key]?.kind === 'bridge' ? BRIDGE_CELL_Z_BUMP : undefined,
         className: `tileset-placement-cell ${asset ? '' : 'is-empty'} ${isSelected ? 'is-selected' : ''}`.trim(),
         children: (
           <>
