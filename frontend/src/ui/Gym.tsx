@@ -20,9 +20,11 @@ import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
 import { stateAtPosition, positionBalance, type BookPosition, type OpeningBookSettings } from '../game/openingBook';
 import type { GymRequest, GymResponse } from '../lab/gymWorker';
 import {
-  loadBooks, saveBooks, makeNewBook, deleteBook, updateBook,
+  emptyBlob, makeNewBook, deleteBook, updateBook,
   DEFAULT_BOOK_SETTINGS, type BooksBlob, type GymSession,
 } from '../lab/openingBooks';
+import { loadOpeningBooks, saveOpeningBooks } from '../net/openingBooks';
+import { HttpError } from '../net/http';
 
 const GYM_CSS = `
 /* Fill the stage like every other Studio viewer (ADR-0059): the board is the item,
@@ -142,10 +144,13 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   useEffect(() => { void ensureCampaignsHydrated(); }, []);
   const level = levelId ? workspaceLevels[levelId] : undefined;
 
-  // Per-level book store (localStorage-backed). blob + activeId are the source of
-  // truth; positions and each book's training session live inside the blob.
-  const [blob, setBlob] = useState<BooksBlob>(() => (levelId ? loadBooks(levelId) : { nextId: 1, books: [] }));
-  const [activeId, setActiveId] = useState<number | undefined>(() => blob.books[0]?.id);
+  // Per-level book store (account-scoped, backend-persisted). blob + activeId are
+  // the source of truth; positions and each book's training session live inside the
+  // blob. Loaded async from /api/opening-books; starts empty until it resolves.
+  const [blob, setBlob] = useState<BooksBlob>(() => emptyBlob());
+  const [activeId, setActiveId] = useState<number | undefined>(undefined);
+  const [loadingBooks, setLoadingBooks] = useState(false);
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [mode, setMode] = useState<'book' | 'train'>('book');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [depth, setDepth] = useState(2);
@@ -169,22 +174,49 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
   const blobRef = useRef(blob); blobRef.current = blob;
   const activeIdRef = useRef(activeId); activeIdRef.current = activeId;
 
-  // Persist + set state together — every meaningful change goes through here.
+  // Persist + set state together — every meaningful change goes through here. The
+  // save is fire-and-forget (never blocks the UI); a signed-out/failed save is
+  // swallowed after logging, matching Game Lab's saved-runs behavior.
   const commit = useCallback((next: BooksBlob) => {
     blobRef.current = next;
     setBlob(next);
-    if (levelId) saveBooks(levelId, next);
+    if (levelId) {
+      void saveOpeningBooks(levelId, next).catch((error) => {
+        if (error instanceof HttpError && error.status === 401) setSignedIn(false);
+        else console.warn('opening-books save failed', error);
+      });
+    }
   }, [levelId]);
 
-  // When the level changes, load its books and reset selection/session view.
+  // When the level changes, load its books async and reset selection/session view.
+  // Race-guard: a load result is ignored if the level changed before it resolved.
   useEffect(() => {
     playingRef.current = false; setPlaying(false);
-    const loaded = levelId ? loadBooks(levelId) : { nextId: 1, books: [] };
-    blobRef.current = loaded;
-    setBlob(loaded);
-    setActiveId(loaded.books[0]?.id);
+    const empty = emptyBlob();
+    blobRef.current = empty;
+    setBlob(empty);
+    setActiveId(undefined);
     setSelectedIndex(0);
     setMode('book');
+    if (!levelId) { setLoadingBooks(false); return undefined; }
+    let cancelled = false;
+    setLoadingBooks(true);
+    loadOpeningBooks(levelId)
+      .then((loaded) => {
+        if (cancelled) return;
+        setSignedIn(true);
+        blobRef.current = loaded;
+        setBlob(loaded);
+        setActiveId(loaded.books[0]?.id);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error instanceof HttpError && error.status === 401) setSignedIn(false);
+        else console.warn('opening-books load failed', error);
+        // Leave the empty blob in place; the user can still work locally.
+      })
+      .finally(() => { if (!cancelled) setLoadingBooks(false); });
+    return () => { cancelled = true; };
   }, [levelId]);
 
   // (Re)create the worker whenever the level or the search depth changes. The worker
@@ -417,6 +449,8 @@ export function GymViewer({ levelId, header }: { levelId?: string; header?: Reac
           <div className="tileset-control-stack">
             {header}
             <p className="gym-hint">{level ? `Training: ${level.name} (${MODE_NAME[level.objective]})` : 'No level — pick one in the Catalog.'}</p>
+            {level && loadingBooks ? <p className="gym-hint">Loading your books…</p> : null}
+            {level && signedIn === false ? <p className="gym-hint">Sign in to save opening books to your account.</p> : null}
 
             {level ? (
               <div className="gym-bookmgr">

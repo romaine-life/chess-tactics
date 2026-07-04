@@ -1,4 +1,4 @@
-// Per-level opening-book store with localStorage persistence.
+// Per-level opening-book store: types + pure helpers.
 //
 // A level's gym state is a set of opening books. Each book bundles:
 //   - its generation settings (size / seedBase / plies / variety),
@@ -7,8 +7,9 @@
 //     convergence curve) — so switching between books restores each one's training
 //     exactly where it was left, and a fresh book starts clean at 0.5.
 //
-// Persisted per level under localStorage key ("gym-books:" + levelId). The traj is
-// capped in storage so a long auto-run can't grow the blob without bound.
+// Persistence is account-scoped in the backend (net/openingBooks.ts, one blob row
+// per (owner, level)). capSessionForStorage caps each book's traj before persisting
+// so a long auto-run can't grow the blob without bound.
 
 import { encodeWeights } from '../game/tuning';
 import { DEFAULT_EVAL_WEIGHTS } from '../core/ai';
@@ -58,8 +59,6 @@ export const DEFAULT_BOOK_SETTINGS: OpeningBookSettings = { size: 4, seedBase: 1
  * is unbounded; only persistence is capped, keeping the newest points). */
 const MAX_STORED_TRAJ = 400;
 
-const KEY = (levelId: string): string => `gym-books:${levelId}`;
-
 /** A pristine session: even with the reference, champion = the reference itself. */
 export function freshSession(): GymSession {
   const theta = encodeWeights(DEFAULT_EVAL_WEIGHTS);
@@ -77,41 +76,11 @@ export function emptyBlob(): BooksBlob {
   return { nextId: 1, books: [] };
 }
 
-const hasStorage = (): boolean => {
-  try { return typeof localStorage !== 'undefined'; } catch { return false; }
-};
-
-/** Trim a session's trajectory for storage (keep the newest MAX_STORED_TRAJ). */
-function capSessionForStorage(session: GymSession): GymSession {
+/** Trim a session's trajectory for storage (keep the newest MAX_STORED_TRAJ). The
+ * net client applies this to each book before persisting the blob. */
+export function capSessionForStorage(session: GymSession): GymSession {
   if (session.traj.length <= MAX_STORED_TRAJ) return session;
   return { ...session, traj: session.traj.slice(session.traj.length - MAX_STORED_TRAJ) };
-}
-
-/** Load a level's books from localStorage (empty blob if none / on any parse error). */
-export function loadBooks(levelId: string): BooksBlob {
-  if (!hasStorage()) return emptyBlob();
-  let raw: string | null = null;
-  try { raw = localStorage.getItem(KEY(levelId)); } catch { return emptyBlob(); }
-  if (!raw) return emptyBlob();
-  try {
-    const parsed = JSON.parse(raw) as Partial<BooksBlob>;
-    if (!parsed || !Array.isArray(parsed.books)) return emptyBlob();
-    const books = parsed.books.filter((b): b is OpeningBook => !!b && typeof b.id === 'number' && !!b.settings && !!b.session);
-    const maxId = books.reduce((m, b) => Math.max(m, b.id), 0);
-    return { nextId: Math.max(typeof parsed.nextId === 'number' ? parsed.nextId : 1, maxId + 1), books };
-  } catch {
-    return emptyBlob();
-  }
-}
-
-/** Persist a level's books (trajectories capped so the blob stays bounded). */
-export function saveBooks(levelId: string, blob: BooksBlob): void {
-  if (!hasStorage()) return;
-  const capped: BooksBlob = {
-    nextId: blob.nextId,
-    books: blob.books.map((b) => ({ ...b, session: capSessionForStorage(b.session) })),
-  };
-  try { localStorage.setItem(KEY(levelId), JSON.stringify(capped)); } catch { /* quota / disabled — non-fatal */ }
 }
 
 /** Create a new book (positions empty until generated) with a fresh session, append

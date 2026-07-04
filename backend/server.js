@@ -64,6 +64,11 @@ let bgmContainerClient = null; // lazily built Azure ContainerClient (list mode 
 // request as already read and skips it, so every other route keeps the 256kb
 // limit.
 app.use('/api/lab-runs', express.json({ limit: '10mb' }));
+// Opening-book blobs carry every book's capped training trajectory (up to a few
+// hundred points each across several books), which can exceed the global 256kb
+// ceiling. Mount a larger parser first, same as lab-runs; the global parser below
+// then sees the body as already read and skips it.
+app.use('/api/opening-books', express.json({ limit: '4mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -222,6 +227,23 @@ const MIGRATIONS = [
         owner_email text        PRIMARY KEY,
         body        jsonb       NOT NULL,
         updated_at  timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
+  {
+    version: 8,
+    name: 'training gym opening books',
+    // Account-scoped Training Gym opening books, one blob row per (owner, level),
+    // mirroring the per-owner campaign_workspaces model: a single JSON `data` column
+    // holding the level's whole BooksBlob {nextId, books}, upserted on save. Replaces
+    // the former per-browser localStorage store so books follow the account.
+    sql: `
+      CREATE TABLE IF NOT EXISTS opening_books (
+        owner_email text        NOT NULL,
+        level_id    text        NOT NULL,
+        data        jsonb       NOT NULL,
+        updated_at  timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (owner_email, level_id)
       );
     `,
   },
@@ -2249,6 +2271,86 @@ app.delete('/api/lab-runs/:id', async (req, res) => {
     res.status(200).json({ ok: true });
   } catch (error) {
     dbUnavailable(res, 'lab run delete failed', error, 'lab_runs_unavailable');
+  }
+});
+
+// Training Gym opening-book persistence: account-scoped, one blob row per (owner,
+// level) in the Postgres `opening_books` table, mirroring the per-owner
+// campaign_workspaces model. `data` is the level's whole BooksBlob {nextId, books}.
+// Every query filters by owner_email so a user can never read another user's books.
+const OPENING_BOOKS_LEVEL_ID_MAX = 256;
+
+function validOpeningBooksLevelId(raw) {
+  const id = String(raw ?? '').trim();
+  if (!id || id.length > OPENING_BOOKS_LEVEL_ID_MAX) return null;
+  return id;
+}
+
+function validateOpeningBooksBody(raw) {
+  if (!isObjectRecord(raw.data)) return 'data must be an object';
+  if (!Array.isArray(raw.data.books)) return 'data.books must be an array';
+  return null;
+}
+
+async function dbGetOpeningBooks(ownerEmail, levelId) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    'SELECT data, updated_at FROM opening_books WHERE owner_email = $1 AND level_id = $2',
+    [ownerEmail, levelId],
+  );
+  return rows[0] || null;
+}
+
+async function dbPutOpeningBooks(ownerEmail, levelId, data) {
+  await ensureDbReady();
+  const { rows } = await pool.query(
+    `INSERT INTO opening_books (owner_email, level_id, data)
+       VALUES ($1, $2, $3::jsonb)
+     ON CONFLICT (owner_email, level_id) DO UPDATE SET
+       data = EXCLUDED.data,
+       updated_at = now()
+     RETURNING updated_at`,
+    [ownerEmail, levelId, JSON.stringify(data)],
+  );
+  return rows[0].updated_at;
+}
+
+app.get('/api/opening-books/:levelId', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const levelId = validOpeningBooksLevelId(req.params.levelId);
+  if (!levelId) {
+    res.status(400).json({ error: 'invalid_level_id' });
+    return;
+  }
+  try {
+    const row = await dbGetOpeningBooks(user.email, levelId);
+    const data = row && row.data && Array.isArray(row.data.books) ? row.data : { nextId: 1, books: [] };
+    res.status(200).json({ data });
+  } catch (error) {
+    dbUnavailable(res, 'opening books read failed', error, 'opening_books_unavailable');
+  }
+});
+
+app.put('/api/opening-books/:levelId', async (req, res) => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const levelId = validOpeningBooksLevelId(req.params.levelId);
+  if (!levelId) {
+    res.status(400).json({ error: 'invalid_level_id' });
+    return;
+  }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  const validationError = validateOpeningBooksBody(raw);
+  if (validationError) {
+    res.status(400).json({ error: 'invalid_opening_books', details: validationError });
+    return;
+  }
+  try {
+    const updatedAt = await dbPutOpeningBooks(user.email, levelId, raw.data);
+    res.status(200).json({ ok: true, updated_at: updatedAt });
+  } catch (error) {
+    dbUnavailable(res, 'opening books write failed', error, 'opening_books_unavailable');
   }
 });
 
