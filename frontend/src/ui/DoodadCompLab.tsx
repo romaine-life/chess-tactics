@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { DOODAD_ASSETS } from './doodadCatalog';
+import { seatTransformPercent } from '../render/BoardStructure';
+
+// The doodad contact-anchor seat (the shared -50% / -38.333% constant) comes from the canonical
+// helper (ADR-0059), not a re-typed magic number. The free (x,y)/scale/flip/layer composition
+// canvas itself is a legitimately different need than board placement, so it stays bespoke.
+const DOODAD_SEAT = seatTransformPercent({ w: 96, h: 180, anchorX: 48, anchorY: 69 });
 
 // Doodad-composition composer as an embedded Studio Viewer kind (ADR-0058): arm a doodad from
 // the shelf, click the tile to drop it beside a reference unit, then move/resize/flip it and tag
@@ -135,7 +141,7 @@ export function DoodadCompLab({ compositionName, onCompositionName, header }: {
     const box: CSSProperties = {
       position: 'absolute', left: e.x * ZOOM, top: e.y * ZOOM,
       width: FRAME_W * ZOOM * e.scale, height: FRAME_H * ZOOM * e.scale,
-      transform: `translate(${(-ANCHOR_X / FRAME_W) * 100}%, ${(-ANCHOR_Y / FRAME_H) * 100}%) scaleX(${e.flip ? -1 : 1})`,
+      transform: `translate(${DOODAD_SEAT.x}%, ${DOODAD_SEAT.y}%) scaleX(${e.flip ? -1 : 1})`,
       cursor: 'move', outline: e.id === selectedId ? '1px dashed rgba(70,200,255,0.5)' : 'none',
     };
     return (
@@ -156,12 +162,16 @@ export function DoodadCompLab({ compositionName, onCompositionName, header }: {
         <div className="dc-stage-wrap">
           <div ref={stageRef} data-testid="doodad-stage" className="dc-stage"
             style={{ width: FRAME_W * ZOOM, height: FRAME_H * ZOOM, cursor: armed ? 'copy' : 'default' }} onPointerDown={onStagePointerDown}>
-            <div className="dc-layer" style={{ zIndex: 0 }}><img src={tileSrc(tileId)} alt="" draggable={false} style={imgAnchored} /></div>
+            <div className="dc-layer" style={{ zIndex: 0, transform: `translate(${DOODAD_SEAT.x}%, ${DOODAD_SEAT.y}%)` }}><img src={tileSrc(tileId)} alt="" draggable={false} style={imgAnchored} /></div>
             {back.map(renderEl)}
             {showUnit ? (
               <>
-                <div style={{ position: 'absolute', left: ANCHOR_X * ZOOM, top: ANCHOR_Y * ZOOM, width: 72 * ZOOM, height: 86 * ZOOM, transform: 'translate(-50%,-78%)', display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
-                  <img src={unitSrc(unitKind)} alt="" draggable={false} style={{ maxHeight: 92 * ZOOM, maxWidth: 78 * ZOOM, objectFit: 'contain' }} />
+                {/* Reference unit through the canonical .board-unit-seat (ADR-0059) — scaled by the
+                    stage ZOOM, so it can't drift from the game board's seat geometry. */}
+                <div className="dc-unit-scale" style={{ transform: `scale(${ZOOM})` }}>
+                  <span className="board-unit-seat" style={{ left: ANCHOR_X, top: ANCHOR_Y }}>
+                    <img src={unitSrc(unitKind)} alt="" draggable={false} />
+                  </span>
                 </div>
                 <div style={{ position: 'absolute', left: 0, right: 0, top: shinY, height: 0, borderTop: '1px dashed rgba(111,210,255,0.55)', pointerEvents: 'none' }} />
                 <span style={{ position: 'absolute', left: 4, top: shinY - 14, fontSize: 10, color: '#6fd2ff', pointerEvents: 'none' }}>shin line — keep doodads below</span>
@@ -265,7 +275,10 @@ const DC_CSS = `
 .dc-stage { position: relative; border-radius: 6px; background-color: #0a1622;
   background-image: linear-gradient(45deg,rgba(120,170,214,0.08) 25%,transparent 25%,transparent 75%,rgba(120,170,214,0.08) 75%),linear-gradient(45deg,rgba(120,170,214,0.08) 25%,transparent 25%,transparent 75%,rgba(120,170,214,0.08) 75%);
   background-size: 24px 24px; background-position: 0 0,12px 12px; }
-.dc-layer { position: absolute; left: ${ANCHOR_X * ZOOM}px; top: ${ANCHOR_Y * ZOOM}px; width: ${FRAME_W * ZOOM}px; height: ${FRAME_H * ZOOM}px; transform: translate(-50%,-38.333%); pointer-events: none; }
+.dc-layer { position: absolute; left: ${ANCHOR_X * ZOOM}px; top: ${ANCHOR_Y * ZOOM}px; width: ${FRAME_W * ZOOM}px; height: ${FRAME_H * ZOOM}px; pointer-events: none; }
+/* Scale the canonical .board-unit-seat (unscaled 72×86 geometry) by the stage ZOOM from the
+   stage's top-left, so the reference unit consumes the shared seat numbers instead of forking them. */
+.dc-unit-scale { position: absolute; left: 0; top: 0; transform-origin: top left; pointer-events: none; }
 .dc-group { display: grid; gap: 6px; }
 .dc-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8fa8cc; }
 .dc-hint { margin: 0; font-size: 12px; color: #8197ad; }
