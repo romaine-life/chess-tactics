@@ -2,6 +2,7 @@ import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { SkirmishBoard } from '../render/SkirmishBoard';
 import { SkirmishHud } from './SkirmishHud';
 import { NavButton } from './shared/NavButton';
+import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { useSkirmish, shouldStartFreshSkirmish, setNetMoveSink, setNetResignSink } from '../game/store';
 import { loadMatch, setMatchPersistenceEnabled } from '../game/matchPersistence';
@@ -137,6 +138,19 @@ export function Skirmish() {
     const seed = routeLevel.placement === 'random' ? Math.floor(Math.random() * 999999) + 1 : useSkirmish.getState().seed;
     newSkirmish({ seed, level: routeLevel });
   };
+
+  // The title-bar ornament diamond doubles as a Retry control in single-player (see the
+  // stud TitleBarSlot below). It restarts the CURRENT battle: a level (campaign / test /
+  // board-link / shared map) reuses replayLevel's fixed-vs-random logic; a bare free
+  // skirmish rebuilds byte-identically from its seed. Netplay never reaches here — the
+  // stud is hidden there, since a local reset would desync the shared board.
+  const retrySkirmish = () => {
+    if (routeLevel) { replayLevel(); return; }
+    newSkirmish({ seed: useSkirmish.getState().seed });
+  };
+  // Show the Retry stud only once a single-player board is up (no netplay, no dead map link).
+  const showRetryStud = boardSettled && !mapError && !routeLobby && !net;
+  const retryStudLabel = isCampaignPlay ? 'Retry level' : 'Retry skirmish';
 
   // The next level in this campaign after the one just cleared (null on the last level or
   // before the workspace hydrates) — powers the victory "Continue" button.
@@ -442,6 +456,24 @@ export function Skirmish() {
         </div>
       </TitleBarSlot>
 
+      {/* The bottom-centre ornament diamond becomes a Retry button in single-player: one
+          click restarts the current battle. Portals into the shell bar's stud slot (ADR-0042)
+          so it sits exactly on the decorative nailhead without disturbing any other bar track. */}
+      {showRetryStud ? (
+        <TitleBarSlot region="stud">
+          <button
+            type="button"
+            className="skirmish-retry-stud"
+            data-testid="retry-stud"
+            aria-label={retryStudLabel}
+            title={retryStudLabel}
+            onClick={retrySkirmish}
+          >
+            <RestartGlyph className="skirmish-retry-stud-glyph" />
+          </button>
+        </TitleBarSlot>
+      ) : null}
+
       <section className="skirmish-war-room" aria-label="Skirmish battlefield">
         <div className="skirmish-field">
           <div className="skirmish-board-frame">
@@ -475,8 +507,8 @@ export function Skirmish() {
       </section>
       <SkirmishHud
         canStartNewSkirmish={!isCampaignPlay}
-        onRestartLevel={isCampaignPlay && routeLevel ? replayLevel : null}
-        showRestartLevel={isCampaignPlay}
+        onRestart={showRetryStud ? retrySkirmish : null}
+        restartLabel={isCampaignPlay ? 'Restart level' : 'Restart skirmish'}
       />
 
       {isCampaignPlay && routeLevel && game.winner && (

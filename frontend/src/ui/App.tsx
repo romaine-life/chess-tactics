@@ -73,7 +73,8 @@ export function App(): ReactElement {
   // (a sibling of AppTitleBar) can portal its dynamic bar content into them.
   const [centerNode, setCenterNode] = useState<HTMLElement | null>(null);
   const [actionsNode, setActionsNode] = useState<HTMLElement | null>(null);
-  const titleBarPortals = useMemo(() => ({ centerNode, actionsNode }), [centerNode, actionsNode]);
+  const [studNode, setStudNode] = useState<HTMLElement | null>(null);
+  const titleBarPortals = useMemo(() => ({ centerNode, actionsNode, studNode }), [centerNode, actionsNode, studNode]);
   // Cold-load reveal: on a fresh main-menu load the title bar is the 2nd layer to appear
   // (after the background). It reads the shared director's stage so it can hold hidden
   // until its turn. On every other route / later navigation the store is fully revealed,
@@ -298,7 +299,7 @@ export function App(): ReactElement {
           survives navigation (only its contents change). It always draws the brand +
           account/settings cluster; screens only fill its optional center/actions
           slots (ADR-0042). revealTitle gates only the cold-load reveal. */}
-      <AppTitleBar path={path} onCenterNode={setCenterNode} onActionsNode={setActionsNode} revealTitle={reveal.has('title')} />
+      <AppTitleBar path={path} onCenterNode={setCenterNode} onActionsNode={setActionsNode} onStudNode={setStudNode} revealTitle={reveal.has('title')} />
       {/* ONE stable Suspense boundary above the router. Because the boundary
           persists across every route swap (rather than each route mounting its
           own), a transition navigation keeps the already-revealed screen painted

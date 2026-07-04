@@ -4684,6 +4684,20 @@ h1 {
   padding: 0 var(--ds-gutter);
 }
 
+/* Icon-only battle-lifecycle buttons (Restart ↻ / New ＋): a square kit frame with the glyph
+   centered, no text or tooltip — the "Scenario" heading and the marks carry the meaning. The
+   glyph is stroked in currentColor, so it inherits the button ink and its hover/focus lift. */
+.skirmish-view-row .app-header-button.skirmish-lifecycle-button {
+  inline-size: 46px;
+  justify-content: center;
+  padding: 0;
+}
+.skirmish-lifecycle-icon {
+  block-size: 20px;
+  display: block;
+  inline-size: 20px;
+}
+
 /* Resign is a concede/caution action — swap the neutral kit frame for the danger (red)
    one so it reads as distinct from the other match controls (same treatment as the
    editor's Delete/Clear buttons). */
@@ -11164,6 +11178,83 @@ button.tileset-relationship-cell {
     url("/assets/ui/titlebar/band-studded.png") left bottom / auto var(--titlebar-rule-h) repeat-x,
     url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
   image-rendering: pixelated;
+}
+
+/* The bottom-centre ornament diamond (ADR-0037) as an interactive control. A single-player
+   Skirmish portals a Retry button into this slot (ui/Skirmish → TitleBarSlot region="stud"),
+   seated exactly on the decorative nailhead. Absolutely positioned over the bar's bottom edge,
+   OUT of the grid, so it never nudges the brand/center/cluster tracks; the map-picker and
+   netplay leave it empty, so the diamond stays the plain ornament there. */
+.app-shell-titlebar-stud {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Above the bar's background ornament and the (non-interactive) status chips, so the hit
+     target and its hover glow are never clipped. */
+  z-index: 2;
+  line-height: 0;
+}
+
+.skirmish-retry-stud {
+  /* Clear the global button base (min-height/border/radius/gradient/padding/shadow) so only
+     the diamond paints — the same reset .brand-lockup / .cluster-icon-button use. */
+  appearance: none;
+  background: url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: block;
+  /* A comfortable hit target around the 26px diamond; the diamond stays bottom-anchored so it
+     overlays the decorative one pixel-for-pixel and grows in place on hover. */
+  block-size: 30px;
+  inline-size: 46px;
+  min-height: 0;
+  padding: 0;
+  position: relative;
+  image-rendering: pixelated;
+  transform-origin: center bottom;
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+/* Idle it reads as the plain ornament; hover/focus lifts + lights it cyan (the app's focus
+   accent — ADR-0027 emphasis-by-color) so it announces itself as a control. The lit diamond
+   + revealed glyph is the visible focus state (no rectangular outline around the diamond). */
+.skirmish-retry-stud:hover,
+.skirmish-retry-stud:focus-visible {
+  transform: scale(1.14);
+  filter: brightness(1.12) drop-shadow(0 0 6px rgba(101, 184, 255, .9));
+  outline: none;
+}
+.skirmish-retry-stud:active {
+  transform: scale(1.04);
+}
+
+/* The retry glyph — hidden until the control is engaged, then it fades in over the diamond as
+   the explicit "this restarts the battle" cue. Cyan currentColor matches the hover glow. */
+.skirmish-retry-stud-glyph {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 15px;
+  height: 15px;
+  transform: translateX(-50%);
+  color: #cdeaff;
+  opacity: 0;
+  filter: drop-shadow(0 1px 1px rgba(2, 8, 16, .85));
+  transition: opacity 140ms ease;
+  pointer-events: none;
+}
+.skirmish-retry-stud:hover .skirmish-retry-stud-glyph,
+.skirmish-retry-stud:focus-visible .skirmish-retry-stud-glyph {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skirmish-retry-stud,
+  .skirmish-retry-stud-glyph { transition: none; }
 }
 
 /* Shared brand lockup — [shield] CHESS TACTICS / screen name — the ONE top-left
