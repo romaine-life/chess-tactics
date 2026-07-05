@@ -126,9 +126,9 @@ function StudioEditableBoard({
   fences?: Record<string, FenceMaterial>;
   /** When true, the brush paints EDGES (fences) not cells: hover picks the nearest diamond edge. */
   fenceTool?: boolean;
-  /** Add a fence on the shared edge (roadEdgeKey between two on-board cells). */
+  /** Add a fence on an edge; boundary edges use one off-board endpoint. */
   onPaintEdge?: (edgeKey: string) => void;
-  /** Remove a fence from the shared edge. */
+  /** Remove a fence from an edge. */
   onEraseEdge?: (edgeKey: string) => void;
   /** Gameplay zones (ADR-0050) keyed by cell "x,y" -> zone type — drawn as a tinted diamond. */
   zones?: Record<string, ZoneType>;
@@ -173,13 +173,13 @@ function StudioEditableBoard({
     else if (tool === 'move') { /* handled via drag in the pointer handlers below */ }
     else onSelect(x, y);
   };
-  // The neighbour + canonical edge key for one of a cell's 4 diamond sides. onBoard is false when
-  // the neighbour is off the board (no fence there — a fence always joins two real tiles).
+  // The neighbour + canonical edge key for one of a cell's 4 diamond sides. Boundary fences use the
+  // off-board neighbour as a harmless visual endpoint; gameplay only blocks in-board crossings.
   const edgeTarget = (x: number, y: number, edge: FeatureEdge) => {
     const dir = FEATURE_DIRS.find((d) => d.edge === edge)!;
     const nx = x + dir.dx;
     const ny = y + dir.dy;
-    return { nx, ny, key: roadEdgeKey(x, y, nx, ny), onBoard: nx >= 0 && nx < cols && ny >= 0 && ny < rows };
+    return { nx, ny, key: roadEdgeKey(x, y, nx, ny), neighborOnBoard: nx >= 0 && nx < cols && ny >= 0 && ny < rows };
   };
   // Nearest diamond edge to the pointer: `.tileset-cell-hit` IS the diamond (centred), so the sign
   // of the offset from its centre picks the quadrant → the adjoining edge (N=NE, E=SE, S=SW, W=NW).
@@ -190,10 +190,8 @@ function StudioEditableBoard({
     return dy < 0 ? (dx >= 0 ? 'N' : 'W') : (dx >= 0 ? 'E' : 'S');
   };
   // Toggle a fence on the diamond edge under the cursor (brush adds, erase/right-click removes).
-  // A no-op when the neighbour is off-board (nothing to wall between).
   const applyFenceAt = (x: number, y: number, edge: FeatureEdge, erasing: boolean): void => {
-    const { key, onBoard } = edgeTarget(x, y, edge);
-    if (!onBoard) return;
+    const { key } = edgeTarget(x, y, edge);
     if (erasing) onEraseEdge?.(key);
     else onPaintEdge?.(key);
   };
@@ -261,9 +259,9 @@ function StudioEditableBoard({
               onPointerDown={(event) => {
                 if (event.button === 2) return; // right-click erases via onContextMenu
                 event.stopPropagation(); // don't let the ViewPane start a pan while editing
-                if (fenceTool) {
+                if (fenceTool && (tool === 'brush' || tool === 'erase')) {
                   // Fence tool paints EDGES: toggle the diamond side under the cursor.
-                  if (tool === 'brush' || tool === 'erase') applyFenceAt(x, y, edgeAtPointer(event), tool === 'erase');
+                  applyFenceAt(x, y, edgeAtPointer(event), tool === 'erase');
                   return;
                 }
                 if (tool === 'move') {
@@ -744,6 +742,68 @@ function FeatureConnections({
           >
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" strokeLinecap="round" />
             <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth="6" strokeLinecap="round" strokeDasharray={state === 'cut' ? '5 5' : undefined} />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function FenceConnections({
+  cell,
+  cols,
+  rows,
+  fences,
+  onPaint,
+  onErase,
+}: {
+  cell: { x: number; y: number };
+  cols: number;
+  rows: number;
+  fences: Record<string, FenceMaterial>;
+  onPaint: (edge: string) => void;
+  onErase: (edge: string) => void;
+}): ReactElement {
+  const V = { apex: [64, 14], right: [114, 48], bottom: [64, 82], left: [14, 48] } as const;
+  const EDGE_GEO: Record<string, readonly [readonly [number, number], readonly [number, number]]> = {
+    N: [V.apex, V.right],
+    E: [V.right, V.bottom],
+    S: [V.bottom, V.left],
+    W: [V.left, V.apex],
+  };
+  return (
+    <svg className="le-roadconn" viewBox="0 0 128 96" role="group" aria-label="Fence edges for the selected tile">
+      <polygon points={`${V.apex} ${V.right} ${V.bottom} ${V.left}`} fill="rgba(8,20,28,.55)" stroke="rgba(82,142,170,.35)" strokeWidth="1" />
+      {FEATURE_DIRS.map((dir) => {
+        const nx = cell.x + dir.dx;
+        const ny = cell.y + dir.dy;
+        const neighborOnBoard = nx >= 0 && nx < cols && ny >= 0 && ny < rows;
+        const edge = roadEdgeKey(cell.x, cell.y, nx, ny);
+        const material = fences[edge];
+        const state = material ? 'fence' : neighborOnBoard ? 'none' : 'boundary';
+        const [[x1, y1], [x2, y2]] = EDGE_GEO[dir.edge];
+        const stroke =
+          material === 'stone' ? '#c7d3d8'
+          : material === 'wood' ? '#d6b169'
+          : neighborOnBoard ? 'rgba(120,150,165,.35)'
+          : 'rgba(103,217,138,.48)';
+        const toggle = (): void => (material ? onErase(edge) : onPaint(edge));
+        const label = material
+          ? `Remove ${FENCE_MATERIAL_LABELS[material]} fence from ${dir.edge} edge`
+          : `Add fence to ${neighborOnBoard ? '' : 'boundary '}${dir.edge} edge`;
+        return (
+          <g
+            key={dir.edge}
+            className={`le-roadconn-edge is-${state}`}
+            role="button"
+            aria-label={label}
+            aria-pressed={Boolean(material)}
+            tabIndex={0}
+            onClick={toggle}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+          >
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" strokeLinecap="round" />
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={material ? '7' : '5'} strokeLinecap="round" strokeDasharray={material ? undefined : neighborOnBoard ? '4 7' : '2 6'} />
           </g>
         );
       })}
@@ -1827,7 +1887,7 @@ export function LevelEditor(): ReactElement {
   const resizeBoard = (nextCols: number, nextRows: number): void => {
     const within = (key: string): boolean => {
       const [cx, cy] = key.split(',').map(Number);
-      return cx < nextCols && cy < nextRows;
+      return cx >= 0 && cy >= 0 && cx < nextCols && cy < nextRows;
     };
     const prune = <T,>(map: Record<string, T>): Record<string, T> => {
       const next: Record<string, T> = {};
@@ -1882,6 +1942,17 @@ export function LevelEditor(): ReactElement {
         else dropped = true;
       }
       if (dropped) nextBoard.featureExits = next;
+    }
+    // Boundary fences also use one off-board endpoint; keep any rail touching a surviving cell.
+    {
+      const next: Record<string, FenceMaterial> = {};
+      let dropped = false;
+      for (const [edge, material] of Object.entries(nextBoard.fences ?? {})) {
+        const [p1, p2] = edge.split('|');
+        if ((p1 && within(p1)) || (p2 && within(p2))) next[edge] = material;
+        else dropped = true;
+      }
+      if (dropped) nextBoard.fences = next;
     }
     nextBoard.cols = nextCols;
     nextBoard.rows = nextRows;
@@ -2709,8 +2780,8 @@ export function LevelEditor(): ReactElement {
             </div>
             <p className="le-board-note">
               Hover a tile and the nearest <strong>edge</strong> highlights; click to drop a rail on that edge
-              (right-click or the Erase tool removes it). A fenced edge can&rsquo;t be crossed — both tiles stay
-              walkable, and knights hop it (like water).
+              (right-click or the Erase tool removes it). Boundary rails are visual; a fenced edge between
+              two board tiles can&rsquo;t be crossed — both tiles stay walkable, and knights hop it (like water).
             </p>
           </section>
         ) : featureKind ? (
@@ -2776,6 +2847,14 @@ export function LevelEditor(): ReactElement {
                   </div>
                 </div>
               ))}
+          </section>
+        ) : null}
+
+        {fenceTool && selectedCell ? (
+          <section className="skirmish-card">
+            <h2>Fence edges</h2>
+            <FenceConnections cell={selectedCell} cols={boardCols} rows={boardRows} fences={boardFences} onPaint={paintFenceEdge} onErase={eraseFenceEdge} />
+            <p className="le-board-note">Click an edge to select or clear the fence on that side of the selected tile. Outer board edges place boundary rails.</p>
           </section>
         ) : null}
 

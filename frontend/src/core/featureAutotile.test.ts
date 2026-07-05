@@ -201,6 +201,15 @@ describe('edge fences', () => {
     expect(both.get('0,0')).toEqual({ mask: 6, material: 'wood' });
   });
 
+  it('resolves north/west boundary fences through off-board phantom owners', () => {
+    const boundary = resolveFenceOverlays({
+      [roadEdgeKey(0, 0, 0, -1)]: 'wood',
+      [roadEdgeKey(0, 0, -1, 0)]: 'stone',
+    });
+    expect(boundary.get('0,-1')).toEqual({ mask: 4, material: 'wood' });
+    expect(boundary.get('-1,0')).toEqual({ mask: 2, material: 'stone' });
+  });
+
   it('exposes wood + stone fence materials with wood as the default', () => {
     expect(FENCE_MATERIALS).toEqual(['wood', 'stone']);
     expect(DEFAULT_FENCE_MATERIAL).toBe('wood');

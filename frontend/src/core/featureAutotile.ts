@@ -214,18 +214,20 @@ export function featurePiece(mask: number): FeaturePiece {
 // ────────────────────────────────────────────────────────────────────────────────────
 // EDGE FENCES
 //
-// A fence sits on the EDGE between two orthogonally-adjacent cells and blocks a piece from
-// stepping across that edge (both cells stay walkable — a fence is a wall, not an obstacle).
+// A fence sits on an orthogonal EDGE. Between two board cells it blocks a piece from stepping
+// across that edge (both cells stay walkable — a fence is a wall, not an obstacle). Along the
+// board boundary it is a visual rail keyed against a one-step off-board phantom neighbour.
 // It is NOT a FeatureKind: it is stored edge-keyed (roadEdgeKey), like a cut/exit, as
 // `Record<edgeKey, FenceMaterial>` in the editor and a parallel channel through the level.
 //
 //   • COLLISION reads the raw edge set: a crossing (ax,ay)→(bx,by) is blocked iff its
 //     roadEdgeKey is fenced. Only orthogonal steps ever cross an edge, so knights (whose
 //     jumps are never orthogonally-adjacent) and diagonal slides pass a lone fence freely.
-//   • RENDERING draws each shared edge exactly once: a cell paints rails on its OWN E (SE)
-//     and S (SW) diamond sides, so the upper-left cell of every fenced pair owns the draw
-//     (see resolveFenceOverlays). Bits: E = 2, S = 4 (same as FEATURE_DIRS), so a per-cell
-//     fence frame is `fence-<material>-<mask>.png` with mask ∈ {2, 4, 6}.
+//   • RENDERING draws each edge exactly once: a cell paints rails on its OWN E (SE) and S
+//     (SW) diamond sides, so the upper-left cell of every fenced pair owns the draw (boundary
+//     N/W rails are owned by the off-board phantom cell). Bits: E = 2, S = 4 (same as
+//     FEATURE_DIRS), so a per-cell fence frame is `fence-<material>-<mask>.png` with mask ∈
+//     {2, 4, 6}.
 // ────────────────────────────────────────────────────────────────────────────────────
 
 /** Fence surface look — one baked rail set per material (fence-<material>-<mask>.png). */
@@ -281,8 +283,9 @@ export interface ResolvedFenceOverlay {
 
 /**
  * Resolve an edge-keyed fence map to the per-cell render overlay (E=2 / S=4 mask + material) —
- * each shared edge is assigned to its UPPER-LEFT cell (smaller x for a horizontal-screen pair,
- * smaller y for a vertical-screen pair) so every rail is drawn exactly once. Returns a
+ * each edge is assigned to its UPPER-LEFT cell (smaller x for a horizontal-screen pair, smaller
+ * y for a vertical-screen pair) so every rail is drawn exactly once. Boundary N/W rails resolve
+ * to an off-board phantom owner's E/S frame, using the same baked art. Returns a
  * `cellKey → { mask, material }` map; cells with no owned fenced edge are absent. If one cell
  * owns two edges of different materials, the first-seen material wins (a cosmetic v1 limit —
  * the collision path reads the raw edge set, unaffected).

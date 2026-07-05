@@ -178,10 +178,10 @@ export interface Level {
     // (createFromLevel reads `layers`, not `boardCode`); boardCode carries a parallel 'p' map
     // only to re-seed the editor losslessly.
     props?: PlacedProp[];
-    // Edge fences: walls on the boundary between two orthogonally-adjacent tiles, as canonical
-    // edge keys (roadEdgeKey "x,y|x,y"). Optional + back-compat like `props`. This is the durable
-    // GAMEPLAY channel (createFromLevel → GameState.fences → movement blocking); boardCode carries
-    // a parallel `fe` map (edge → material) to re-seed the editor + render the rails.
+    // Edge fences: walls on an orthogonal tile edge, as canonical edge keys (roadEdgeKey
+    // "x,y|x,y"). Boundary rails use one off-board endpoint. Optional + back-compat like `props`.
+    // This is the durable GAMEPLAY channel (createFromLevel → GameState.fences → movement
+    // blocking); boardCode carries a parallel `fe` map (edge → material) for editor rendering.
     fences?: string[];
   };
 }
@@ -430,8 +430,8 @@ export function validateLevel(value: unknown): ValidateResult {
       }
     }
     // Fences are an OPTIONAL layer (back-compat like props). Each entry is a canonical edge key
-    // "x,y|x,y" between two in-bounds, orthogonally-adjacent cells — an off-board or diagonal
-    // "edge" would block nothing meaningful and points at corrupt data, so reject it.
+    // "x,y|x,y" for an orthogonal edge. Interior fences block movement; boundary fences use one
+    // off-board endpoint and are visual rails on the level edge.
     if (layers.fences !== undefined) {
       if (!Array.isArray(layers.fences)) {
         errors.push('layers.fences must be an array');
@@ -442,8 +442,8 @@ export function validateLevel(value: unknown): ValidateResult {
             errors.push('malformed fence edge (need "x,y|x,y" between two orthogonally-adjacent cells)');
             break;
           }
-          if (b && [[cells.ax, cells.ay], [cells.bx, cells.by]].some(([x, y]) => x < 0 || x >= b.cols || y < 0 || y >= b.rows)) {
-            errors.push(`fence edge "${edge}" out of bounds`);
+          if (b && ![[cells.ax, cells.ay], [cells.bx, cells.by]].some(([x, y]) => x >= 0 && x < b.cols && y >= 0 && y < b.rows)) {
+            errors.push(`fence edge "${edge}" does not touch the board`);
             break;
           }
         }
