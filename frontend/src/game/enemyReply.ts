@@ -47,7 +47,7 @@ export interface EnemyReplyResult {
  *  parameterised by aiMode + weights so it can run standalone in a worker or inline. */
 export function resolveEnemyReply(req: EnemyReplyRequest): EnemyReplyResult {
   // Static env built once from the pre-reply game (terrain + fences + this ply's lastMove),
-  // exactly as the store's envFor does — reused across a multi-move (AP) enemy turn.
+  // exactly as the store's envFor does.
   const env: MoveEnv = { ...gameEnv(req.game), lastMove: req.game.lastMove };
   const pick: (g: GameState, rng: Rng, e: MoveEnv) => { pieceId: string; move: Move } | null =
     req.aiMode === 'greedy'

@@ -181,12 +181,6 @@ describe('king may not move into check', () => {
     expect(has(legalMoves(king, [king, rook, guard, farKing()], SIZE), 3, 6)).toBe(true); // still has an out
   });
 
-  it('may not attack-in-place a multi-hp checker it cannot kill (still in check)', () => {
-    const king = P('player', 'king', 4, 6);
-    const tank = P('enemy', 'rook', 4, 5, { hp: 2, maxHp: 2 }); // survives the hit, keeps checking
-    expect(has(legalMoves(king, [king, tank, farKing()], SIZE), 4, 5)).toBe(false);
-  });
-
   it('keeps the two kings apart (cannot step next to the enemy king)', () => {
     const king = P('player', 'king', 4, 6);
     const foeKing = P('enemy', 'king', 4, 4); // guards row 5 around (4,5)
@@ -372,16 +366,11 @@ describe('applyMove service-record stats', () => {
     expect(knight.squaresTraveled).toBe(2.5);
   });
 
-  it('counts a kill in enemiesKilled (but not a non-fatal hit)', () => {
+  it('counts a capture in enemiesKilled', () => {
     const queen = P('player', 'queen', 4, 6);
     const foe = P('enemy', 'pawn', 4, 3);
     const killed = after([queen, foe, P('player', 'king', 0, 11), P('enemy', 'king', 7, 0)], queen.id, { x: 4, y: 3, capture: foe.id });
     expect(killed.enemiesKilled).toBe(1);
-
-    const q2 = P('player', 'queen', 4, 6);
-    const tank = P('enemy', 'pawn', 4, 3, { hp: 2, maxHp: 2 });
-    const hit = after([q2, tank, P('player', 'king', 0, 11), P('enemy', 'king', 7, 0)], q2.id, { x: 4, y: 3, capture: tank.id });
-    expect(hit.enemiesKilled ?? 0).toBe(0);
   });
 
   it('counts an escape only when leaving a square an opponent attacks', () => {

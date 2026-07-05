@@ -29,31 +29,6 @@ const FACING_VECTOR: Record<UnitFacing, readonly [number, number]> = {
 
 const isObstacle = (p: Piece): boolean => p.type === 'rock' || p.type === 'random-rock';
 
-/** Current hit points, defaulting to 1 so unset pieces keep single-hit capture. */
-export function pieceHp(piece: Piece): number {
-  return piece.hp ?? 1;
-}
-
-/** Hit-point capacity (for HUD/board bars); defaults to current hp. */
-export function pieceMaxHp(piece: Piece): number {
-  return piece.maxHp ?? piece.hp ?? 1;
-}
-
-/** Action points available this turn; defaults to 1 (classic single action). */
-export function pieceAp(piece: Piece): number {
-  return piece.ap ?? 1;
-}
-
-/** Action-point capacity, refreshed at the owner's turn start; defaults to ap. */
-export function pieceMaxAp(piece: Piece): number {
-  return piece.maxAp ?? piece.ap ?? 1;
-}
-
-/** True while `side` has any living piece with action points left to spend. */
-export function sideHasAp(state: GameState, side: Side): boolean {
-  return livingPieces(state.pieces, side).some((p) => pieceAp(p) > 0);
-}
-
 /** Relative worth, used to rank enemy targets when forecasting intents. */
 const PIECE_VALUE: Record<PieceType, number> = {
   pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100, rock: 0, 'random-rock': 0,
@@ -253,22 +228,18 @@ function pawnMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, env:
 /**
  * The board (positions only) after `mover` plays `move`. Mirrors `applyMove`'s
  * displacement so a hypothetical check test sees the same occupancy a committed
- * move would: the target is removed only when the hit kills it (hp reaches 0),
- * and a surviving hostile target is an attack-in-place that leaves the mover on
- * its origin. En passant is handled implicitly — `move.capture` names the victim
- * by id, so it is the piece removed even though it doesn't sit on the
- * destination square.
+ * move would. En passant is handled implicitly: `move.capture` names the victim
+ * by id, so it is the piece removed even though it doesn't sit on the destination
+ * square.
  */
 function boardAfterMove(mover: Piece, move: Move, pieces: readonly Piece[]): Piece[] {
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
   const captured = capturedId ? pieces.find((p) => p.id === capturedId) : undefined;
-  const hostile = !!captured && captured.side !== mover.side && !isObstacle(captured);
-  const kills = hostile && pieceHp(captured!) - 1 <= 0;
-  const displaced = !hostile || kills; // stays put only for a surviving hostile target
+  const captures = !!captured && isEnemy(mover, captured);
   const after: Piece[] = [];
   for (const p of pieces) {
-    if (kills && p.id === capturedId) continue; // removed by a fatal capture
-    after.push(p.id === mover.id && displaced ? { ...p, x: move.x, y: move.y } : p);
+    if (captures && p.id === capturedId) continue;
+    after.push(p.id === mover.id ? { ...p, x: move.x, y: move.y } : p);
   }
   return after;
 }
@@ -409,22 +380,12 @@ export interface ApplyResult {
   events: GameEvent[];
 }
 
-export interface ApplyOptions {
-  /**
-   * Enable the action-point turn model: each action spends 1 AP from the acting
-   * piece and the turn only hands off once the acting side has no AP left, at
-   * which point the incoming side's AP refreshes to `maxAp`. Off by default, so
-   * the classic alternating one-move-per-turn flow is unchanged.
-   */
-  ap?: boolean;
-}
-
 /**
  * Apply a move to the state, returning a NEW state plus the events it produced.
  * Handles capture, pawn promotion, victory (last side standing), and turn
  * hand-off. Pure: the input state is never mutated.
  */
-export function applyMove(state: GameState, pieceId: string, move: Move, opts: ApplyOptions = {}): ApplyResult {
+export function applyMove(state: GameState, pieceId: string, move: Move): ApplyResult {
   const events: GameEvent[] = [];
   const pieces = state.pieces.map((p) => ({ ...p }));
   const piece = pieces.find((p) => p.id === pieceId && p.alive);
@@ -450,61 +411,41 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
   const nextFacing = facingFromDelta(move.x - from.x, move.y - from.y);
   if (nextFacing) piece.facing = nextFacing;
   const capturedId = move.capture ?? pieceAt(pieces, move.x, move.y)?.id;
-  // Attacker displaces onto the target square only when the target dies. With
-  // hp > 1 the target survives the hit and the attacker stays put (an
-  // attack-in-place). For the default hp of 1 this collapses to classic capture.
-  let displaced = true;
   if (capturedId) {
     const target = pieces.find((p) => p.id === capturedId);
-    if (target && target.side !== piece.side && !isObstacle(target)) {
-      const damage = 1;
-      const remaining = pieceHp(target) - damage;
-      if (remaining > 0) {
-        target.hp = remaining;
-        displaced = false;
-        events.push({ kind: 'damaged', pieceId: target.id, by: piece.id, amount: damage, hp: remaining });
-      } else {
-        target.alive = false;
-        target.hp = 0;
-        if (tracksStats) piece.enemiesKilled = (piece.enemiesKilled ?? 0) + 1;
-        events.push({ kind: 'captured', pieceId: target.id, by: piece.id });
-      }
+    if (target && isEnemy(piece, target)) {
+      target.alive = false;
+      if (tracksStats) piece.enemiesKilled = (piece.enemiesKilled ?? 0) + 1;
+      events.push({ kind: 'captured', pieceId: target.id, by: piece.id });
     }
   }
 
-  if (displaced) {
-    piece.x = move.x;
-    piece.y = move.y;
-    events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
+  piece.x = move.x;
+  piece.y = move.y;
+  events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
 
-    if (piece.type === 'pawn') {
-      if (reachedPawnFarEdge(piece, state.size)) {
-        piece.type = 'queen';
-        events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
-      }
+  if (piece.type === 'pawn') {
+    if (reachedPawnFarEdge(piece, state.size)) {
+      piece.type = 'queen';
+      events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
     }
   }
 
   // Tally the service record now that the piece sits at its final square.
   if (tracksStats) {
     piece.timesUsed = (piece.timesUsed ?? 0) + 1;
-    if (displaced) {
-      const dx = Math.abs(piece.x - from.x);
-      const dy = Math.abs(piece.y - from.y);
-      const diagonal = Math.min(dx, dy);
-      const straight = Math.abs(dx - dy);
-      piece.squaresTraveled = (piece.squaresTraveled ?? 0) + diagonal * 1.5 + straight;
-      if (escapedThreat) piece.escapes = (piece.escapes ?? 0) + 1;
-    }
+    const dx = Math.abs(piece.x - from.x);
+    const dy = Math.abs(piece.y - from.y);
+    const diagonal = Math.min(dx, dy);
+    const straight = Math.abs(dx - dy);
+    piece.squaresTraveled = (piece.squaresTraveled ?? 0) + diagonal * 1.5 + straight;
+    if (escapedThreat) piece.escapes = (piece.escapes ?? 0) + 1;
     // Opponents this piece newly placed under attack (in its post-move position).
     const threatenedAfter = opponentsUnderAttackBy(piece, pieces, state.size, statEnv);
     let newlyThreatened = 0;
     for (const id of threatenedAfter) if (!threatenedBefore.has(id)) newlyThreatened += 1;
     if (newlyThreatened > 0) piece.threatsMade = (piece.threatsMade ?? 0) + newlyThreatened;
   }
-
-  // Spend an action point in AP mode (an attack-in-place still costs an action).
-  if (opts.ap) piece.ap = Math.max(0, pieceAp(piece) - 1);
 
   let winner: Winner = state.winner;
   let turn = state.turn;
@@ -516,21 +457,10 @@ export function applyMove(state: GameState, pieceId: string, move: Move, opts: A
     events.push({ kind: 'victory', winner });
   } else if (piece.side === 'player' || piece.side === 'enemy') {
     const other: Side = piece.side === 'player' ? 'enemy' : 'player';
-    // AP mode: the acting side keeps the turn while it still has AP to spend;
-    // otherwise hand off and refresh the incoming side to full AP.
-    if (opts.ap && livingPieces(pieces, piece.side).some((p) => pieceAp(p) > 0)) {
-      turn = piece.side;
-    } else {
-      turn = other;
-      if (opts.ap) {
-        for (const p of pieces) if (p.side === other && p.alive) p.ap = pieceMaxAp(p);
-      }
-    }
+    turn = other;
   }
 
-  const lastMove: LastMove | undefined = displaced
-    ? { pieceId: piece.id, pieceType: movedPieceType, side: piece.side, from, to: { x: piece.x, y: piece.y } }
-    : state.lastMove;
+  const lastMove: LastMove = { pieceId: piece.id, pieceType: movedPieceType, side: piece.side, from, to: { x: piece.x, y: piece.y } };
 
   return { state: { ...state, pieces, winner, turn, lastMove }, events };
 }
@@ -594,7 +524,7 @@ export function forecastEnemyIntents(state: GameState, env?: MoveEnv): EnemyInte
     const targetId = move.capture ?? pieceAt(state.pieces, move.x, move.y)?.id;
     const target = targetId ? state.pieces.find((p) => p.id === targetId && p.side !== piece.side) : null;
     intents.push(target
-      ? { pieceId: piece.id, from, to: { x: move.x, y: move.y }, kind: 'attack', targetId: target.id, damage: 1 }
+      ? { pieceId: piece.id, from, to: { x: move.x, y: move.y }, kind: 'attack', targetId: target.id }
       : { pieceId: piece.id, from, to: { x: move.x, y: move.y }, kind: 'move' });
   }
   return intents;
@@ -605,20 +535,9 @@ export function withForecast(state: GameState, env?: MoveEnv): GameState {
   return { ...state, intents: forecastEnemyIntents(state, env) };
 }
 
-/** Refresh a side's living pieces to full AP (start-of-turn). Pure. */
-export function refreshAp(state: GameState, side: Side): GameState {
-  const pieces = state.pieces.map((p) => (p.side === side && p.alive ? { ...p, ap: pieceMaxAp(p) } : p));
-  return { ...state, pieces };
-}
-
-/**
- * Force the turn to the other side and refresh that side's AP. For AP levels
- * where the active side ends early or has no legal action left (the AP apply
- * path keeps the turn until AP is exhausted, so the store calls this to break
- * out when the side is stuck). Pure; no-op once the game is over.
- */
+/** Force the turn to the other side. Pure; no-op once the game is over. */
 export function endTurn(state: GameState): GameState {
   if (state.turn !== 'player' && state.turn !== 'enemy') return state;
   const other: Side = state.turn === 'player' ? 'enemy' : 'player';
-  return refreshAp({ ...state, turn: other }, other);
+  return { ...state, turn: other };
 }

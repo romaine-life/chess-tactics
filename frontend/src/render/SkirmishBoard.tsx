@@ -4,7 +4,7 @@ import { tileFrameSrc, tileAssets, tileFamilies, edgeTiles, type TileAsset } fro
 import { countIllegalEdges, solveSocketBoard, type SocketBoardCell, type SocketBoardResult } from '../core/tileBoardGenerator';
 import { densityFieldAt, resolveGroundCover } from '../core/groundCover';
 import type { BoardSize, GameState, Move, Piece, Side, TerrainType, Vec } from '../core/types';
-import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt, pieceHp, pieceMaxHp } from '../core/rules';
+import { attackedSquares, enemyThreats, inBounds, isEnemy, legalMoves, livingPieces, pieceAt } from '../core/rules';
 import { canTraverse, elevationAt, haltsTravel } from '../core/terrain';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, defaultFacingForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import { familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
@@ -369,8 +369,6 @@ function UnitPiece({
   const [isMoving, setIsMoving] = useState(false);
   const previousGridRef = useRef({ x: piece.x, y: piece.y });
   const src = pieceImageSrc(piece);
-  const maxHp = pieceMaxHp(piece);
-  const hp = Math.max(0, pieceHp(piece));
 
   useEffect(() => {
     const previous = previousGridRef.current;
@@ -425,11 +423,6 @@ function UnitPiece({
       aria-label={`${piece.side} ${piece.type}`}
     >
       {src ? <img src={src} alt="" draggable={false} /> : <span>{PIECE_MARK[piece.type] ?? '?'}</span>}
-      {maxHp > 1 && piece.side !== 'neutral' ? (
-        <i className="skirmish-board-hp" aria-hidden="true">
-          <b style={{ width: `${(hp / maxHp) * 100}%` }} />
-        </i>
-      ) : null}
     </div>
   );
 }

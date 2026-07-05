@@ -85,20 +85,6 @@ function fmtStat(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function hpText(piece: Piece | null): string {
-  if (!piece) return '--';
-  const hp = piece.hp ?? 1;
-  const maxHp = piece.maxHp ?? hp;
-  return `${hp} / ${maxHp}`;
-}
-
-function apText(piece: Piece | null): string {
-  if (!piece) return '--';
-  const ap = piece.ap ?? 1;
-  const maxAp = piece.maxAp ?? ap;
-  return `${ap} / ${maxAp}`;
-}
-
 function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: boolean }) {
   const side = piece?.side ?? 'neutral';
   const label = piece ? MARK[piece.type] : '?';
@@ -283,16 +269,6 @@ export function SkirmishHud({
               <div className="skirmish-selected-copy">
                 <strong data-testid="selected-name">{focused ? TYPE_LABEL[focused.type] : 'None'}</strong>
                 <span>{focused ? `${focused.side === 'enemy' ? 'Enemy' : focused.side === 'player' ? 'Blue' : 'Neutral'} - ${ROLE[focused.type]}` : 'Choose a unit on the board.'}</span>
-                <dl>
-                  <div>
-                    <dt>HP</dt>
-                    <dd><span>{hpText(focused)}</span></dd>
-                  </div>
-                  <div>
-                    <dt>AP</dt>
-                    <dd><span>{apText(focused)}</span></dd>
-                  </div>
-                </dl>
               </div>
             </div>
             {focused && (focused.side === 'player' || focused.side === 'enemy') && (
