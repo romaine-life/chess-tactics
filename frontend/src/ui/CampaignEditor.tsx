@@ -272,7 +272,7 @@ function LevelRow({
   );
 }
 
-export function CampaignEditor() {
+export function CampaignEditor({ embedded = false }: { embedded?: boolean } = {}) {
   const campaigns = useCampaigns((s) => s.campaigns);
   const levels = useCampaigns((s) => s.levels);
   const selectedCampaignId = useCampaigns((s) => s.selectedCampaignId);
@@ -318,10 +318,11 @@ export function CampaignEditor() {
   useEffect(() => {
     // The Editor is a settings-twin now (like the play-side Campaign screen), so it takes
     // the same shell host class — full-bleed menu layout over the shared scene backdrop.
+    if (embedded) return; // the persistent menu shell (MainMenu) owns .main-menu-active + the backdrop
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
-  }, []);
+  }, [embedded]);
 
   useEffect(() => {
     let active = true;
@@ -564,39 +565,20 @@ export function CampaignEditor() {
     setStatus(`Attached "${levelDoc.name}" to ${target.name}. Save to keep this change.`);
   };
 
-  return (
-    // A settings-twin of the main menu / play-side Campaign screen: the reveal classes are
-    // declared up front (the cold-reveal director's opt-OUT gates otherwise hide the scene +
-    // buttons of any .main-menu-layer until data-reveal-* is present, #238).
-    <div
-      className="menu-layer main-menu-layer is-ready ce-editor-layer"
-      data-testid="campaign-editor"
-      data-reveal-bg=""
-      data-reveal-buttons=""
-    >
-      {confirmDialog}
-      {/* Same shared backdrop as the main menu / play-side Campaign screen: the one continuous
-          HomepageBackdrop (animated menu scene + synced rain), behind the rail and content
-          frames — it keeps the feel consistent with the rest of the app in the gaps. */}
-      <HomepageBackdrop />
-      {/* ‹ Back to the menu — the trailing actions slot, the same title-bar spot Settings
-          uses; the brand lockup remains the fixed leading anchor. */}
-      <TitleBarSlot region="actions">
-        <NavButton className="app-header-button" data-testid="editor-back" to="/" title="Back to the menu">‹ Back</NavButton>
-      </TitleBarSlot>
-      {/* Live workspace save-state — the center slot. Save · Publish are workspace verbs and
-          live in the rail footer (below), not global chrome (matching Settings). */}
-      <TitleBarSlot region="center">
-        <div className="ce-topbar-stats" aria-label="Workspace state">
-          <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
-        </div>
-      </TitleBarSlot>
-
-      <div className="settings-screen main-menu-twin-screen ce-editor-screen app-shell-bar-pad">
-        <ArtRouteChrome className="settings-shell ce-editor-shell" ready={loaded}>
-
-          {/* ── RAIL: the campaigns navigator (fold 1 of the old 3-panel layout) ── */}
-          <aside className="settings-frame settings-rail-frame ce-editor-rail" aria-label="Campaigns">
+  // Live workspace save-state — portaled to the title bar's center slot (renders nowhere inline).
+  const centerSlot = (
+    <TitleBarSlot region="center">
+      <div className="ce-topbar-stats" aria-label="Workspace state">
+        <span className={`ce-save-state ${dirty ? 'is-dirty' : ''}`.trim()}>{dirty ? 'Unsaved' : 'Saved'}</span>
+      </div>
+    </TitleBarSlot>
+  );
+  // The two editor columns — the campaigns rail (a tab column) + the selected campaign's editor panel
+  // (an action column). Shared by the standalone route AND the embedded-in-shell render.
+  const inner = (
+    <>
+      {/* ── RAIL: the campaigns navigator (fold 1 of the old 3-panel layout) ── */}
+      <aside className={embedded ? 'menu-dest-col menu-dest-tabs ce-editor-rail' : 'settings-frame settings-rail-frame ce-editor-rail'} aria-label="Campaigns">
             <KitScroll className="ce-rail-scroll">
               <div className="ce-rail-list">
                 <p className="campaign-rail-group">
@@ -662,7 +644,7 @@ export function CampaignEditor() {
 
           {/* ── CONTENT: the selected campaign — one column: pinned live preview over a
               scrolling stack of SettingsSection groups (Campaign · Levels · Actions). ── */}
-          <main className="settings-frame settings-main-frame ce-editor-main">
+          <main className={embedded ? 'menu-dest-col menu-dest-action ce-editor-main' : 'settings-frame settings-main-frame ce-editor-main'}>
             <h2 className="sr-only">{isUnassignedSelected ? 'Unassigned Levels' : camp?.name ?? 'Editor'}</h2>
             <div className="ce-editor-body">
               <KitScroll className="settings-scroll ce-editor-scroll">
@@ -841,7 +823,34 @@ export function CampaignEditor() {
                 )}
               </aside>
             </div>
-          </main>
+      </main>
+    </>
+  );
+
+  // Embedded in the persistent menu shell (MainMenu's second column): render just the two columns
+  // plus the (portal/modal) confirm dialog + save-state slot; the shell owns the backdrop + wrapper.
+  if (embedded) return <>{confirmDialog}{centerSlot}{inner}</>;
+
+  return (
+    // A settings-twin of the main menu / play-side Campaign screen: the reveal classes are declared
+    // up front (the cold-reveal director's opt-OUT gates otherwise hide any .main-menu-layer, #238).
+    <div
+      className="menu-layer main-menu-layer is-ready ce-editor-layer"
+      data-testid="campaign-editor"
+      data-reveal-bg=""
+      data-reveal-buttons=""
+    >
+      {confirmDialog}
+      {/* One continuous HomepageBackdrop (scene + synced rain), shared across the menu family. */}
+      <HomepageBackdrop />
+      {/* ‹ Back to the menu — trailing actions slot (the brand lockup remains the leading anchor). */}
+      <TitleBarSlot region="actions">
+        <NavButton className="app-header-button" data-testid="editor-back" to="/" title="Back to the menu">‹ Back</NavButton>
+      </TitleBarSlot>
+      {centerSlot}
+      <div className="settings-screen main-menu-twin-screen ce-editor-screen app-shell-bar-pad">
+        <ArtRouteChrome className="settings-shell ce-editor-shell" ready={loaded}>
+          {inner}
         </ArtRouteChrome>
       </div>
     </div>

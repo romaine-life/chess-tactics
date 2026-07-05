@@ -1,7 +1,14 @@
-import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
+import { Settings } from './Settings';
+import { Campaign } from './Campaign';
 import { NavButton } from './shared/NavButton';
+
+// The Editor is heavy (authoring workspace) and code-split out of the menu bundle — lazy-loaded only
+// when its destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
+// (not the whole menu). Settings/Campaign are light enough to import directly.
+const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -64,11 +71,16 @@ const SETTINGS_ICON = `${ICONS}/settings.png`;
 // `index` is the tab's position down the rail — it drives the shared stone-continuity
 // slice (--tab-index) so this rail's stone reads as one sheet however many tabs it has
 // (the menu carries five; the Settings screen four). See .settings-tab in style.css.
-function ModeTab({ tab, index }: { tab: MenuTab; index: number }): ReactElement {
+// `active` lights the tab whose destination is currently open in the shell (ADR-0062 family).
+function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?: boolean }): ReactElement {
   return (
     <NavButton
-      className="settings-tab main-menu-mode-tab"
-      to={tab.href}
+      className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
+      // Toggle: clicking a tab whose destination is already open closes it (back to the bare
+      // menu at '/'); otherwise it opens that destination. Home is a menu path, so React keeps
+      // this MainMenu instance mounted either way — the button column never blinks.
+      to={active ? '/' : tab.href}
+      aria-current={active ? 'page' : undefined}
       style={{ ['--tab-index' as string]: index }}
     >
       <span className="settings-tab-icon" aria-hidden="true">
@@ -79,7 +91,44 @@ function ModeTab({ tab, index }: { tab: MenuTab; index: number }): ReactElement 
   );
 }
 
-export function MainMenu(): ReactElement {
+// Which menu destinations render INSIDE the persistent shell (their own columns beside the pinned
+// button column) vs. navigate away to a full screen. Menu-family destinations (Settings, Campaign)
+// live in the shell; heavy gameplay/editor surfaces (Skirmish, Level Editor) take the whole screen.
+type ShellDest = 'settings' | 'campaign' | 'editor';
+const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign', editor: '/editor' };
+const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', campaign: 'Campaign', editor: 'Editor' };
+// How long the destination panel fades in/out. Matches --ds-duration-fade (the ONE shared fade
+// speed, ADR-0046) — same as the Settings panel crossfade + the screen entrance.
+const DEST_FADE_MS = 350;
+function shellDest(path: string): ShellDest | null {
+  if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
+  if (path === '/campaign' || path.startsWith('/campaign/')) return 'campaign';
+  // The Editor is a settings-twin now (ADR-0065): canonical /editor + legacy /campaigns-next·/campaigns.
+  // The NESTED level editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
+  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
+  return null;
+}
+
+export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
+  // The persistent menu shell. The button column (left) stays mounted across the home↔destination
+  // hop (routeScreenKey keeps '/' and '/settings' one 'menu' screen, so React never remounts this).
+  // A menu-config destination fills the shell's SECOND column with its own fixed-width columns; the
+  // home route leaves it empty. The rail's zoom-safe placement (ADR-0062) is untouched — the
+  // destination just occupies the previously-empty grid track to its right.
+  const dest = shellDest(path);
+  // Destination fade (ADR-0046 one-fade-speed): the button column stays put, but the destination
+  // panel fades IN when opened and fades OUT before it unmounts — the hop no longer swaps whole
+  // screens, so this keeps the dissolve. `renderedDest` lags `dest` through the exit fade; the
+  // panel's key = renderedDest so opening/switching remounts it and replays the entrance.
+  const [renderedDest, setRenderedDest] = useState<ShellDest | null>(dest);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (dest === renderedDest) { setLeaving(false); return; }
+    if (dest) { setRenderedDest(dest); setLeaving(false); return; } // open / switch: show + fade in
+    setLeaving(true); // close: hold the panel, fade out, then drop it
+    const t = window.setTimeout(() => { setRenderedDest(null); setLeaving(false); }, DEST_FADE_MS);
+    return () => window.clearTimeout(t);
+  }, [dest, renderedDest]);
   // Cold-load reveal: the menu's layers fade in in a fixed order — background -> title
   // -> buttons (rain drifts in last on its own) — driven by the shared reveal director
   // (see shell/coldReveal). Here MainMenu just REPORTS readiness for the title's brand
@@ -140,11 +189,18 @@ export function MainMenu(): ReactElement {
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no
           home-only position class — so its buttons line up pixel-for-pixel with the
           Settings/Campaign rails at every width. */}
-      <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
+      <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${renderedDest ? 'has-dest' : ''}`.trim()} data-dest={renderedDest ?? undefined}>
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} />)}
+            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && tab.href === DEST_HREF[dest]} />)}
           </aside>
+          {renderedDest ? (
+            <div className={`menu-dest ${leaving ? 'is-leaving' : ''}`.trim()} key={renderedDest} aria-label={DEST_LABEL[renderedDest]}>
+              {renderedDest === 'settings' ? <Settings embedded />
+                : renderedDest === 'campaign' ? <Campaign embedded />
+                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>}
+            </div>
+          ) : null}
         </ArtRouteChrome>
       </div>
     </div>

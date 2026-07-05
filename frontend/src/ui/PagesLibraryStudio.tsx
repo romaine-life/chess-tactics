@@ -79,12 +79,13 @@ const STONE_SURFACES = [
 // handshake: the menu-scoped audition CSS is the per-control preview rules with the (now-absent)
 // `.pages-menu-tweak` scope prefix stripped, so they target the real menu elements and keep their
 // !important guards to beat the shipped chrome. "Copy menu CSS" still exports the bake-form rules.
-function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
+function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: ReactNode; zoom?: number }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  // True-to-window miniature: the menu body is centred under a viewport-relative cap, so a
-  // panel-sized iframe would re-centre the rail at the wrong indent — see useWindowScaledPreview.
-  const { hostRef, frameStyle } = useWindowScaledPreview();
-  const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // tab min-height
+  // Full-size, scrollable preview scaled by the Viewer's zoom: the iframe carries the live window's
+  // size (so the menu's vw-based, centred rail resolves at shipped proportions) — see
+  // useWindowScaledPreview. The panel scrolls to roam it; the canvas reserves the scaled footprint.
+  const { canvasStyle, frameStyle } = useWindowScaledPreview(zoom);
+  const [btnH, setBtnH] = useState<number>(MM_LIVE.btnH); // true tab height (drives padding + icon slot, not a bare min-height)
   const [railW, setRailW] = useState<number>(MM_LIVE.railW); // rail (button) width
   const [tabGap, setTabGap] = useState<number>(MM_LIVE.gap); // space between tabs
   const [btnX, setBtnX] = useState<number>(MM_LIVE.btnX); // move the whole button group left/right (px; baseline = shipped)
@@ -142,9 +143,21 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   add(!!iconFilter,
     `.pages-menu-tweak .settings-tab-icon img { filter: ${iconFilter} !important; image-rendering: pixelated; }`,
     `.main-menu-mode-tab .settings-tab-icon img {\n  filter: ${iconFilter};\n  image-rendering: pixelated;\n}`);
+  // Button height is a REAL height, not a bare min-height. The tab is box-sizing:border-box, so its
+  // rendered height = border(4) + 2·padV + max(iconSlot, label≈23) — a `min-height` under that
+  // (the old 56px vs the shipped 88px) never engaged, which is why the slider looked dead and had a
+  // false floor. So derive the true levers from btnH: down to 44px we keep the 40px icon slot and
+  // spend vertical padding; below 44px padding is gone, so the slot itself contracts (never under
+  // the label box). min-height is pinned to btnH too so the box can't over-grow from stray content.
+  const H_BORDER = 4; // .settings-tab border: 2px top + 2px bottom
+  const H_LABEL = 23; // label line box floor (measured 22.78px) — the slot must not dip below it
+  let iconSlot = 40; // the shipped icon slot (--settings-tab-icon-slot)
+  let padV = (btnH - H_BORDER - iconSlot) / 2;
+  if (padV < 0) { padV = 0; iconSlot = Math.max(H_LABEL, btnH - H_BORDER); }
+  padV = Math.round(padV * 100) / 100;
   add(btnH !== MM_LIVE.btnH,
-    `.pages-menu-tweak .main-menu-mode-tab { min-height: ${btnH}px !important; }`,
-    `.main-menu-mode-tab {\n  min-height: ${btnH}px;\n}`);
+    `.pages-menu-tweak .main-menu-mode-tab { min-height: ${btnH}px !important; padding-top: ${padV}px !important; padding-bottom: ${padV}px !important; --settings-tab-icon-slot: ${iconSlot}px !important; }`,
+    `.main-menu-mode-tab {\n  min-height: ${btnH}px;\n  padding-top: ${padV}px;\n  padding-bottom: ${padV}px;\n  --settings-tab-icon-slot: ${iconSlot}px;\n}`);
   // Button width = the rail column. The shell ships a centred width cap (--settings-shell-w,
   // computed from --layout-vw — the zoom-corrected viewport width — so browser zoom magnifies
   // instead of re-centring), so widen the cap to fit the chosen width — max() keeps the default
@@ -163,9 +176,16 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
   // translated rail is CLIPPED the moment it crosses the shell edge (worse in a narrow window where
   // the shell hugs the rail). Lift that clip (menu-scoped) whenever the group is moved, in BOTH the
   // preview and the bake, so the buttons stay whole wherever you place them and what ships matches.
+  //
+  // ZOOM-SAFETY COUPLING (ADR-0062): a leftward pull needs the shared shell's margin floored at the
+  // SAME magnitude, or the rail shears off the left edge at high browser zoom (the PR #339 regression
+  // that cost hours). The "Copy CSS" used to emit ONLY the transform, so a re-tuned offset shipped a
+  // stale floor. Now the bake emits the floor too — max(|btnX|, centred) — so what you paste is
+  // already zoom-safe. mmLive.test.ts guards that the shipped floor equals |btnX|.
+  const railFloor = `margin-inline-start: max(${-btnX}px, calc((var(--layout-vw, 100vw) - var(--settings-shell-w)) / 2))`;
   add(btnX !== MM_LIVE.btnX || btnY !== MM_LIVE.btnY,
-    `.pages-menu-tweak .settings-shell { overflow: visible !important; }\n.pages-menu-tweak .settings-rail-frame { transform: translate(${btnX}px, ${btnY}px) !important; }`,
-    `.settings-shell {\n  overflow: visible;\n}\n.settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
+    `.pages-menu-tweak .settings-shell { overflow: visible !important; ${railFloor} !important; }\n.pages-menu-tweak .settings-rail-frame { transform: translate(${btnX}px, ${btnY}px) !important; }`,
+    `.settings-shell {\n  overflow: visible;\n  ${railFloor};\n}\n.settings-rail-frame {\n  transform: translate(${btnX}px, ${btnY}px);\n}`);
   // Horizontal nudge of the label span (the second grid cell; transform doesn't reflow the layout).
   add(textX !== MM_LIVE.textX,
     `.pages-menu-tweak .settings-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
@@ -213,16 +233,19 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
     <>
       {/* Iframe the REAL "/" route so the preview carries the full app shell — the shared title bar
           included — exactly as it ships; the tweak controls inject into it (see inject() above).
-          is-window-scaled + frameStyle make it a true-to-window miniature so the rail indent matches
-          what ships, not a panel-sized re-centre (see useWindowScaledPreview). */}
-      <section className="surface-dressing-main is-window-scaled" aria-label="Main Menu preview" ref={hostRef}>
-        <iframe
-          ref={iframeRef}
-          className="surface-dressing-frame"
-          src={page.route}
-          title="Live main menu preview"
-          style={frameStyle}
-        />
+          is-window-zoom + canvasStyle/frameStyle render it at true window size, scaled by the
+          Viewer zoom, in a scrollable panel — so the rail indent and proportions match what ships,
+          not a panel-sized re-centre (see useWindowScaledPreview). */}
+      <section className="surface-dressing-main is-window-zoom" aria-label="Main Menu preview">
+        <div className="surface-dressing-canvas" style={canvasStyle}>
+          <iframe
+            ref={iframeRef}
+            className="surface-dressing-frame"
+            src={page.route}
+            title="Live main menu preview"
+            style={frameStyle}
+          />
+        </div>
       </section>
       <aside className="tileset-view-controls" aria-label="Main Menu controls">
         <section className="tileset-inspector-section">
@@ -234,7 +257,7 @@ function MainMenuViewer({ page, header }: { page: PageEntry; header?: ReactNode 
 
             {group === 'buttons' ? (
               <>
-                <SliderRow label={<>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</>} value={btnH} set={setBtnH} min={44} max={96} dflt={MM_LIVE.btnH} />
+                <SliderRow label={<>Button height · {btnH}px{btnH === MM_LIVE.btnH ? ' · live' : ''}</>} value={btnH} set={setBtnH} min={28} max={96} dflt={MM_LIVE.btnH} />
                 <SliderRow label={<>Button width · {railW}px{railW === MM_LIVE.railW ? ' · live' : ''}</>} value={railW} set={setRailW} min={220} max={screenW} dflt={MM_LIVE.railW} />
                 <SliderRow label={<>Tab spacing · {tabGap}px{tabGap === MM_LIVE.gap ? ' · live' : ''}</>} value={tabGap} set={setTabGap} min={4} max={28} dflt={MM_LIVE.gap} />
                 <SliderRow label={<>Buttons · horizontal · {btnX > 0 ? '+' : ''}{btnX}px{btnX === MM_LIVE.btnX ? ' · live' : ''}</>} value={btnX} set={setBtnX} min={-screenW} max={screenW} dflt={MM_LIVE.btnX} />
@@ -456,10 +479,11 @@ function buildCeChromeCss(state: Record<string, CeGroupTune>): string {
 // in an iframe, with controls that inject a tuning stylesheet into it — the same proven shape as
 // the Settings dressing room. Iframing isolates the full-page editor's layout + mount side-effects
 // and means this touches ZERO shipped CSS; "Copy CSS" exports the bare rules to bake in later.
-function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: ReactNode }): ReactElement {
+function CampaignEditorViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: ReactNode; zoom?: number }): ReactElement {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  // True-to-window miniature so the editor's vw-based chrome previews at shipped proportions.
-  const { hostRef, frameStyle } = useWindowScaledPreview();
+  // Full-size, scrollable preview scaled by the Viewer zoom so the editor's vw-based chrome previews
+  // at shipped proportions (see useWindowScaledPreview).
+  const { canvasStyle, frameStyle } = useWindowScaledPreview(zoom);
   const [groups, setGroups] = useState<Record<string, CeGroupTune>>(ceAllDefaults);
   const [activeId, setActiveId] = useState<string>(CE_GROUPS[0].id);
   const [copied, setCopied] = useState(false);
@@ -487,11 +511,14 @@ function CampaignEditorViewer({ page, header }: { page: PageEntry; header?: Reac
 
   return (
     <>
-      {/* True-to-window miniature (is-window-scaled + frameStyle): the iframe carries the live
-          window's size — a DEFINITE height for the editor's height:100% .ce-screen/.app-root — and
-          scales to fit, so the vw-based chrome previews at shipped proportions (useWindowScaledPreview). */}
-      <section className="surface-dressing-main is-window-scaled" aria-label="Campaign Editor preview" ref={hostRef}>
-        <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live campaign editor preview" style={frameStyle} />
+      {/* Full-size, scrollable preview (is-window-zoom + canvasStyle/frameStyle): the iframe carries
+          the live window's size — a DEFINITE height for the editor's height:100% .ce-screen/.app-root —
+          scaled by the Viewer zoom, so the vw-based chrome previews at shipped proportions and the
+          panel scrolls to roam it (useWindowScaledPreview). */}
+      <section className="surface-dressing-main is-window-zoom" aria-label="Campaign Editor preview">
+        <div className="surface-dressing-canvas" style={canvasStyle}>
+          <iframe ref={iframeRef} className="surface-dressing-frame" src={page.route} title="Live campaign editor preview" style={frameStyle} />
+        </div>
       </section>
       <aside className="tileset-view-controls" aria-label="Campaign Editor chrome controls">
         <section className="tileset-inspector-section">
@@ -608,10 +635,10 @@ function PageStubViewer({ page, header }: { page: PageEntry; header?: ReactNode 
 // Dispatcher: routes the selected page to its viewer — Main Menu tunes the live menu; Settings
 // is the dressing room (assign surfaces to each region of the live /settings page); the rest are
 // live stubs. One arm in the TilePreview viewer ladder calls this.
-export function PagesViewer({ name, header }: { name?: string; header?: ReactNode }): ReactElement {
+export function PagesViewer({ name, header, zoom = 1 }: { name?: string; header?: ReactNode; zoom?: number }): ReactElement {
   const page = PAGE_ENTRIES.find((p) => p.name === name) ?? PAGE_ENTRIES[0];
-  if (page.name === 'main-menu') return <MainMenuViewer page={page} header={header} />;
-  if (page.name === 'settings') return <SurfaceDressingRoom header={header} />;
-  if (page.name === 'campaign-editor') return <CampaignEditorViewer page={page} header={header} />;
+  if (page.name === 'main-menu') return <MainMenuViewer page={page} header={header} zoom={zoom} />;
+  if (page.name === 'settings') return <SurfaceDressingRoom header={header} zoom={zoom} />;
+  if (page.name === 'campaign-editor') return <CampaignEditorViewer page={page} header={header} zoom={zoom} />;
   return <PageStubViewer page={page} header={header} />;
 }

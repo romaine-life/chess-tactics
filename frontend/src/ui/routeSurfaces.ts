@@ -56,10 +56,13 @@ export function isLightArtRoute(pathname: string): boolean {
 // chrome for those would blink a screen that never remounts.
 export function routeScreenKey(pathname: string): string {
   const path = normalizeRoutePath(pathname);
-  if (path === '/campaign' || path.startsWith('/campaign/')) return 'campaign';
-  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'campaign-editor';
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
-  if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
+  // /settings, /campaign, AND the Editor (/editor + legacy /campaigns-next·/campaigns) all render
+  // INSIDE the persistent menu shell (MainMenu) — same 'menu' screen key as '/', so React keeps the
+  // one MainMenu instance mounted across the home↔destination hop and the button column never
+  // dissolves/remounts. MainMenu reads the path and fills its second column with that destination's
+  // columns. (All fall through to the 'menu' default below.) The NESTED level editor (/editor/level,
+  // legacy /edit·/level-editor) is its own heavy full screen and keeps its own key.
   if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return 'level-editor';
   if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return 'studio';
   // Each remaining explicit renderRoute entry is its own screen…
