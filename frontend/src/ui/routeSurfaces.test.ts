@@ -17,14 +17,15 @@ describe('route surface classification', () => {
   });
 
   it('keeps heavy editors out of the board-art reveal gate', () => {
+    expect(routeSurface('/editor/level')).toBe('heavy-editor');
     expect(routeSurface('/edit')).toBe('heavy-editor');
     expect(routeSurface('/level-editor')).toBe('heavy-editor');
-    expect(isHeavyRoute('/edit')).toBe(true);
-    expect(isBoardArtRoute('/edit')).toBe(false);
+    expect(isHeavyRoute('/editor/level')).toBe(true);
+    expect(isBoardArtRoute('/editor/level')).toBe(false);
   });
 
   it('classifies menu-family art routes explicitly', () => {
-    for (const path of ['/', '/campaign', '/campaign/official', '/campaigns-next', '/lobbies', '/party', '/settings/audio']) {
+    for (const path of ['/', '/campaign', '/campaign/official', '/editor', '/campaigns-next', '/lobbies', '/party', '/settings/audio']) {
       expect(routeSurface(path)).toBe('light-art');
       expect(isLightArtRoute(path)).toBe(true);
       expect(isHeavyRoute(path)).toBe(false);
@@ -39,12 +40,19 @@ describe('route screen key (ADR-0051 exit-dissolve grouping)', () => {
     expect(routeScreenKey('/campaign')).toBe(routeScreenKey('/campaign/official-1'));
     expect(routeScreenKey('/lobbies')).toBe(routeScreenKey('/lobbies/abc'));
     expect(routeScreenKey('/campaigns-next')).toBe(routeScreenKey('/campaigns'));
+    // The canonical /editor + /editor/level names share the screen instance with their
+    // legacy aliases, so a hop between an alias and the canonical name doesn't dissolve.
+    expect(routeScreenKey('/editor')).toBe(routeScreenKey('/campaigns-next'));
+    expect(routeScreenKey('/editor/level')).toBe(routeScreenKey('/edit'));
     expect(routeScreenKey('/')).toBe(routeScreenKey('/main-menu'));
   });
 
   it('separates distinct screens so cross-screen hops dissolve', () => {
     expect(routeScreenKey('/')).not.toBe(routeScreenKey('/campaign'));
     expect(routeScreenKey('/campaign')).not.toBe(routeScreenKey('/campaigns-next'));
+    // The Editor (/editor) and the nested Level Editor (/editor/level) are distinct
+    // screens (different components), so drilling in dissolves the chrome.
+    expect(routeScreenKey('/editor')).not.toBe(routeScreenKey('/editor/level'));
     expect(routeScreenKey('/settings')).not.toBe(routeScreenKey('/'));
     expect(routeScreenKey('/skirmish')).not.toBe(routeScreenKey('/play'));
   });

@@ -52,11 +52,14 @@ export function titleBarConfig(path: string): TitleBarConfig | null {
   if (path === '/party') {
     return { screenName: 'Party', signInReturnTo: '/party' };
   }
-  if (path === '/edit' || path === '/level-editor') {
+  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') {
     return { screenName: 'Level Editor', barClass: 'le-topbar', centerSlot: true, actionsSlot: true };
   }
-  if (path === '/campaigns-next' || path === '/campaigns') {
-    return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true };
+  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') {
+    // The Editor is a settings-twin now: a ‹ Back control in the trailing actions slot
+    // (like Settings) plus the live save-state chip in the center slot. ce-topbar adds the
+    // trailing grid column the actions slot needs (mirrors settings-topbar).
+    return { screenName: 'Editor', barClass: 'ce-topbar', centerSlot: true, actionsSlot: true };
   }
   if (path === '/settings' || path.startsWith('/settings/')) {
     // screen, so only Settings scales.

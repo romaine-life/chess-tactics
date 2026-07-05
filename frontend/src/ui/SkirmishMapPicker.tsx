@@ -51,7 +51,7 @@ function SkirmishMapPickerContent({ levels, loading }: { levels: Level[]; loadin
         <div className="skirmish-card skirmish-picker-empty-card">
           <h2>No saved skirmish maps</h2>
           <p>Save a standalone board in the Level Editor, then it will appear here.</p>
-          <NavButton className="ce-link-button" to="/level-editor"><span>Open Level Editor</span></NavButton>
+          <NavButton className="ce-link-button" to="/editor/level"><span>Open Level Editor</span></NavButton>
         </div>
       ) : null}
 
@@ -73,7 +73,7 @@ function SkirmishMapPickerContent({ levels, loading }: { levels: Level[]; loadin
                 </dl>
               </div>
               <div className="skirmish-map-actions">
-                <NavButton className="ce-link-button ce-link-button-ghost" to={`/edit?levelId=${encodeURIComponent(level.id)}&returnTo=${encodeURIComponent('/skirmish')}`}>
+                <NavButton className="ce-link-button ce-link-button-ghost" to={`/editor/level?levelId=${encodeURIComponent(level.id)}&returnTo=${encodeURIComponent('/skirmish')}`}>
                   <span>Edit</span>
                 </NavButton>
                 <NavButton className="ce-link-button" to={playSkirmishLevelHref(level.id)}>

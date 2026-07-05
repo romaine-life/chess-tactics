@@ -3868,10 +3868,12 @@ h1 {
 .app-shell-titlebar.le-topbar {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
 }
-/* Campaign Editor bar: 3 columns — brand · save-state (center) · account cluster. Its actions
-   (Save/Publish) moved into the editor's own footer, so the bar has no actions slot. */
+/* Editor bar: 4 columns — brand · save-state (center) · ‹ Back (actions) · account cluster.
+   The Editor is a settings-twin, so like Settings it carries a Back control in the trailing
+   actions slot; the two `auto auto` tracks before the cluster hold center + actions (mirrors
+   .le-topbar, the other center+actions bar). Save/Publish are workspace verbs in the rail. */
 .app-shell-titlebar.ce-topbar {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
 }
 
 /* Studio bar: 3 columns — brand · workspace switcher (Catalog/Lab/Viewer icons, actions
@@ -5908,7 +5910,12 @@ body { font-size: 17px; }
   overflow: hidden;
 }
 
-.ce-screen {
+/* The editor's palette tokens — consumed by the kept preview / force-readout / field-input
+   chrome. Scoped to BOTH the legacy .ce-screen (retired) AND the new settings-twin wrapper
+   (.ce-editor-layer) so the tokens still resolve now that the render root is the shared menu
+   layer, not .ce-screen. */
+.ce-screen,
+.ce-editor-layer {
   --ce-cyan: #30d6ff;
   --ce-blue: #2f7fe8;
   --ce-gold: #d9ad52;
@@ -5923,6 +5930,9 @@ body { font-size: 17px; }
   --ce-slate: #b7cad4;
   --ce-gold-bright: #f5bb45;
   --ce-eyebrow: #c9a877;
+}
+
+.ce-screen {
   /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
      the <SceneBackdrop> element the editor renders (ui/SceneBackdrop.tsx), the same way the
      main menu paints it, so the editor sits over the menu scene + synced rain. The editor's
@@ -12163,6 +12173,146 @@ button.tileset-relationship-cell {
   inline-size: auto;
   min-inline-size: 72px;
 }
+
+/* ===== Editor (/editor) — settings-twin layout (ADR-0059 / ADR-0062) =====
+   The Editor reuses the shared menu/settings shell: a rail of campaign tabs + a content frame
+   of SettingsSection/Row groups, mirroring the play-side Campaign screen. These rules add ONLY
+   what the settings pattern has no analogue for — a SCROLLING rail with a pinned workspace-verb
+   footer (the campaign list is dynamic, unlike Settings' fixed tabs), and a content frame split
+   into an editable scroll column + an always-visible live-preview column. Everything else
+   (frames, tabs, rows, buttons) is the shared kit. Placed AFTER the settings rules so its
+   equal-specificity overrides (grid columns, the trailing-badge nudge reset) win by order. */
+
+/* Rail — a scrolling campaign list over a pinned footer of workspace verbs. */
+.ce-editor-rail {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.ce-editor-rail .ce-rail-scroll {
+  block-size: 100%;
+  min-height: 0;
+}
+.ce-editor-rail .ce-rail-list {
+  align-content: start;
+  display: grid;
+  gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
+  padding-right: 6px; /* clear the drawn scrollbar (ADR-0030) */
+}
+.ce-rail-list .campaign-rail-group {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.ce-rail-count { font-weight: 400; opacity: .8; }
+/* The campaign list is dynamic, so the fixed-four-tab stone-continuity offsets don't apply —
+   reset every tab to the same texture origin. */
+.ce-editor-rail .settings-tab { background-position-y: 0; }
+
+/* A campaign tab = the shared icon | label grid + a trailing cell for the favorite star /
+   OFFICIAL tag / padlock. */
+.ce-campaign-tab {
+  align-items: center;
+  grid-template-columns: var(--settings-tab-icon-slot) minmax(0, 1fr) auto;
+}
+.ce-campaign-tab.is-locked {
+  cursor: default;
+  filter: grayscale(.35) brightness(.86);
+}
+.ce-campaign-tab-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.ce-campaign-tab-copy strong {
+  font-size: var(--ds-text-md);
+  letter-spacing: .02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ce-campaign-tab-copy small {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
+  font-size: var(--ds-text-2xs);
+}
+/* Neutralise the shared label nudge for the trailing badge so it stays in its grid cell. */
+.ce-campaign-tab > span.ce-tab-trail { transform: none; }
+.ce-tab-trail {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
+
+/* Pinned rail footer — the whole-workspace verbs (New / Import / Save / Publish / Sign-in). */
+.ce-rail-actions {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+.ce-rail-actions .settings-chrome-button { inline-size: 100%; }
+.ce-rail-actions .ce-status { margin: 2px 0 0; }
+
+/* Content — a single column: the live preview PINNED at top (always visible) over a
+   scrolling stack of SettingsSection groups. The main frame's 1fr row (row 2) holds this
+   body; the sr-only heading sits in the collapsed row 1. Single column = faithful to the
+   settings pattern (rail + one content column) and gives the board + rows the full width.
+   Explicit grid-rows place the preview (row 1) above the scroll (.settings-scroll → row 2)
+   regardless of DOM order. */
+.ce-editor-main .ce-editor-body {
+  display: grid;
+  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .01), 16px);
+  grid-row: 2;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+.ce-editor-body > .ce-preview-col { grid-row: 1; }
+/* Restore the inter-section gap the settings crossfade layer normally provides (the Editor
+   doesn't run the crossfade, so its sections are direct children of the panel content). */
+.ce-editor-scroll .settings-panel-content {
+  align-content: start;
+  gap: clamp(14px, calc(var(--layout-vw, 100vw) * .013), 22px);
+}
+/* The pinned live preview: head · framed board · verbs, stacked; the board is capped so it
+   never crowds out the scrolling sections below. */
+.ce-preview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ce-preview-col .ce-level-viewer,
+.ce-preview-col .level-preview-empty { max-height: 34vh; }
+
+/* A selectable level row (a role=button div over the shared .settings-row). */
+.ce-editor-level-row { cursor: pointer; }
+.ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
+.ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
+/* The level list wraps its rows only to carry a data-testid — it must not disturb the
+   section-rows grid, so it disappears and its rows become the grid's direct items. */
+.ce-level-list { display: contents; }
+/* Section-trailing action (+ Add Level / + New Board). */
+.ce-section-action { padding: 4px 2px 0; }
+
+/* The campaign-name field (Campaign › Name row) — the kit field-input 9-slice. */
+.ce-name-input {
+  appearance: none;
+  background: transparent;
+  border: 8px solid transparent;
+  border-image: url("/assets/ui/kit/field-input.png") 14 fill / 8px stretch;
+  box-sizing: border-box;
+  color: var(--ce-ink);
+  font-family: var(--ds-font-pixel);
+  font-size: var(--ds-text-md);
+  image-rendering: pixelated;
+  min-height: 42px;
+  min-width: 220px;
+  outline: none;
+  padding: 8px 12px;
+  width: 100%;
+}
+.ce-name-input:disabled { cursor: default; opacity: .6; }
+.ce-name-input:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 
 /* Tracks sub-view: a pinned header above the soundtrack list. It sits in the main
    frame's header row, OUTSIDE the KitScroll viewport, so ← Back AND the "Soundtrack"

@@ -10,7 +10,7 @@ export function routeSurface(pathname: string): RouteSurface {
   const path = normalizeRoutePath(pathname);
 
   if (path === '/play') return 'heavy-board';
-  if (path === '/edit' || path === '/level-editor') return 'heavy-editor';
+  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return 'heavy-editor';
 
   if (
     path === '/' ||
@@ -21,6 +21,7 @@ export function routeSurface(pathname: string): RouteSurface {
     path === '/skirmish' ||
     path === '/campaign' ||
     path.startsWith('/campaign/') ||
+    path === '/editor' ||
     path === '/campaigns-next' ||
     path === '/campaigns' ||
     path === '/lobbies' ||
@@ -56,10 +57,10 @@ export function isLightArtRoute(pathname: string): boolean {
 export function routeScreenKey(pathname: string): string {
   const path = normalizeRoutePath(pathname);
   if (path === '/campaign' || path.startsWith('/campaign/')) return 'campaign';
-  if (path === '/campaigns-next' || path === '/campaigns') return 'campaign-editor';
+  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'campaign-editor';
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return 'lobbies';
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
-  if (path === '/edit' || path === '/level-editor') return 'level-editor';
+  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return 'level-editor';
   if (path === '/tileset-studio' || path === '/unit-studio' || path === '/nine-slice-editor' || path === '/prop-lab' || path === '/tile-compare' || path === '/surface-lab' || path === '/scene-anim-lab' || path === '/doodad-editor' || path === '/artwork-compare') return 'studio';
   // Each remaining explicit renderRoute entry is its own screen…
   if (

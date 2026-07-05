@@ -1,5 +1,5 @@
 // A compact, URL-safe encoding of a level-editor board, so a board can be shared/inspected
-// via `/level-editor?board=<code>`. Round-trips the editor's in-memory layers (tiles, units,
+// via `/editor/level?board=<code>`. Round-trips the editor's in-memory layers (tiles, units,
 // doodads, cover, and linear features — roads + rivers). Used both to LOAD a board on mount
 // and to EXPORT the current one.
 //
@@ -160,7 +160,7 @@ export function decodeBoard(code: string): EditorBoard | null {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/** Accept either a full `/level-editor?board=...` URL, a query string, or the raw board code. */
+/** Accept either a full `/editor/level?board=...` URL, a query string, or the raw board code. */
 export function decodeBoardLinkInput(input: string): EditorBoard | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
