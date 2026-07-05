@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-b0166bad9219c31ee07e1a1df625947f1807df46a064004ed3bc8ad6af0b1309"
+  tag: "app-2e67e86bc4f4af851a65392a2fd44acae5d482f0510e43fe43a371df43cf4deb"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "feat(tools): Advance Wars map-import pipeline + board caps & data-seam guard"
-  prNumber: "395"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/395"
-  commit: "a7336a2"
+  prTitle: "feat(kit): section dividers use an authored 3-way tee atom + interactive Studio viewer (ADR-0063)"
+  prNumber: "396"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/396"
+  commit: "f152756"
 
 name: chess-tactics
 namespace: chess-tactics
