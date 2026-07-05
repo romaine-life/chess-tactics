@@ -78,8 +78,15 @@ function checkFile(path) {
 walk(uiDir);
 
 const app = readFileSync(join(uiDir, 'App.tsx'), 'utf8');
-if (!/if \(path === '\/skirmish'\) return <SkirmishMapPickerRoute \/>;/.test(app)) {
-  errors.push('src/ui/App.tsx: /skirmish must render SkirmishMapPickerRoute, not the live Skirmish board.');
+// The live game board (<Skirmish/>) is reachable at /play ONLY. Since #386 the Solo Skirmish
+// PICKER renders inside the persistent menu shell, so /skirmish falls through to MainMenu — it
+// must never return <Skirmish/> (the live board) directly. Guard the real invariant rather than a
+// brittle exact-literal for the picker route (which legitimately moved into the shell).
+if (!/if \(path === '\/play'\) return <Skirmish \/>;/.test(app)) {
+  errors.push('src/ui/App.tsx: /play must render the live Skirmish board (<Skirmish/>).');
+}
+if (/path === '\/skirmish'[^\n]*<Skirmish\b/.test(app)) {
+  errors.push("src/ui/App.tsx: /skirmish must NOT render the live Skirmish board — that lives at /play; the picker renders in the menu shell.");
 }
 
 if (errors.length) {
