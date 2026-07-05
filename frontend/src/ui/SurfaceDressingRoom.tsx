@@ -150,7 +150,7 @@ function buildCss(config: DressingConfig, base: Record<RegionId, GeomBase>): str
 
     if (region.id === 'title') {
       // Title bar (ADR-0037): a full-bleed surface under a forged stud strip — not a frame+fill.
-      const studded = 'url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat, url("/assets/ui/titlebar/band-studded.png") left bottom / auto var(--titlebar-rule-h, 14px) repeat-x';
+      const studded = 'url("/assets/ui/titlebar/joint-diamond-forged.png") center bottom / auto 26px no-repeat, url("/assets/ui/titlebar/band-forged.png") left bottom / auto var(--titlebar-rule-h, 14px) repeat-x';
       if (name === CLEAR) {
         decls.push('border: 0', 'border-image: none', `background: ${studded}`, 'image-rendering: pixelated');
       } else if (isSurface(name)) {

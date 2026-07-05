@@ -11422,8 +11422,8 @@ button.tileset-relationship-cell {
   border: 0;
   padding: var(--ds-titlebar-inset) var(--ds-space-6) calc(var(--ds-titlebar-inset) + var(--titlebar-rule-h));
   background:
-    url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat,
-    url("/assets/ui/titlebar/band-studded.png") left bottom / auto var(--titlebar-rule-h) repeat-x,
+    url("/assets/ui/titlebar/joint-diamond-forged.png") center bottom / auto 26px no-repeat,
+    url("/assets/ui/titlebar/band-forged.png") left bottom / auto var(--titlebar-rule-h) repeat-x,
     url("/assets/ui/surfaces/hybrid-wood-oak.png") 0 0 / 1024px repeat fixed;
   image-rendering: pixelated;
 }
@@ -11448,7 +11448,9 @@ button.tileset-relationship-cell {
   /* Clear the global button base (min-height/border/radius/gradient/padding/shadow) so only
      the diamond paints — the same reset .brand-lockup / .cluster-icon-button use. */
   appearance: none;
-  background: url("/assets/ui/titlebar/ornament-nailstud.png") center bottom / auto 26px no-repeat;
+  /* Overlays the decorative centre diamond pixel-for-pixel — so it uses the SAME forged diamond
+     the band's background cap uses (joint-diamond-forged, ADR-0066). */
+  background: url("/assets/ui/titlebar/joint-diamond-forged.png") center bottom / auto 26px no-repeat;
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -11601,6 +11603,66 @@ button.tileset-relationship-cell {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+}
+
+/* The wall (component: HeaderAccountCluster) — a vertical forged-iron rule that LOCKS the
+   invariant cluster off from the contextual controls to its left: the ADR-0037 bottom rule
+   stood on end. The whole title-bar rule is a forged TILESET (ADR-0066), assembled from
+   codex-GENERATED atoms (method-verified, chroma-keyed + low-fi — ADR-0011/0013/0014), never
+   code-drawn:
+     - one shared RIVET atom (atom-rivet.png), used UPRIGHT in every piece so rivets never drift;
+     - two orientation-lit STRAP atoms — horizontal ledge (atom-strap-h, bright top edge) and
+       vertical wall (atom-strap-v, symmetric left-right) — so lighting reads right per axis;
+     - composed by scripts/compose-titlebar-runs.py into the run tiles band-forged.png (E-W,
+       tiled x on .settings-header-frame) and rail-forged.png (N-S, tiled y here).
+   Two DISTINCT joints: joint-square-forged.png (the intersection cover, this wall's ::after) and
+   joint-diamond-forged.png (the band's centre cap, on .settings-header-frame).
+   The wall lives INSIDE the cluster, so per ADR-0042 it renders wherever the invariant cluster
+   does — every screen — and claims NO grid column of its own (no cluster nudge, the "don't pad
+   with an empty auto column" hazard on .settings-header-frame). A screen's actionsSlot sits in
+   the PRIOR grid track, so its controls land OUTSIDE (left of) the wall by construction.
+     ::before = the vertical run (rail-forged.png), full-bleed top edge down to the band.
+     ::after  = the square intersection joint (joint-square-forged.png), bottom-aligned to the
+                bar, covering where the run meets the band (no rivet collisions, holds across widths). */
+.cluster-wall {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: stretch;
+  inline-size: var(--titlebar-rule-h, 14px);
+}
+
+/* The vertical run: an absolute layer running the full bar height — full-bleed to the TOP edge
+   (mirroring the band's full-bleed to the bottom edge) down to the floor band. inset-block-start
+   is pulled well above the cluster-wall box (symmetric with the bottom overrun) so the run always
+   reaches the top edge regardless of the header-h clamp's centering slack; the excess sits off the
+   top of the fixed bar / viewport. Drawn from the bottom so its base seats on the band and its top
+   ends flat (no cap — same as the band's ends). */
+.cluster-wall::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: calc(-1 * (var(--ds-space-2) + var(--titlebar-rule-h, 14px)));
+  inset-block-end: calc(-1 * (var(--ds-space-2) + var(--titlebar-rule-h, 14px)));
+  overflow: hidden;
+  /* the N-S run tile — the SAME rivet as the band, on the symmetric vertical strap — tiled y */
+  background: url("/assets/ui/titlebar/rail-forged.png") bottom center / var(--titlebar-rule-h, 14px) auto repeat-y;
+  image-rendering: pixelated;
+}
+
+/* The intersection joint — a forged SQUARE that blocks the run↔run connection point. Centered
+   on the wall, its BOTTOM edge flush with the bar's bottom edge. The cluster-wall box (the
+   button band) sits its bottom-padding + the button-centering gap above the bar bottom; that
+   whole distance is the bottom padding (--ds-space-2 + rule) plus ~1px of centering slack. */
+.cluster-wall::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: 50%;
+  inset-block-end: calc(-1 * (var(--ds-space-2) + var(--titlebar-rule-h, 14px)) - 1px);
+  block-size: 24px;
+  inline-size: 24px;
+  transform: translateX(-50%);
+  background: url("/assets/ui/titlebar/joint-square-forged.png") bottom center / contain no-repeat;
+  image-rendering: pixelated;
 }
 
 /* Square icon-only button — the app's kit mode-button frame, made equal-sided. A
