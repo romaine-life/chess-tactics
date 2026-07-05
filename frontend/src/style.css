@@ -12819,7 +12819,98 @@ button.tileset-relationship-cell {
 .ce-preview-col .level-preview-empty { max-height: 34vh; }
 
 /* A selectable level row (a role=button div over the shared .settings-row). */
-.ce-editor-level-row { cursor: pointer; }
+.ce-editor-level-row {
+  align-items: center;
+  block-size: 86px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-areas: "thumb copy actions";
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  min-block-size: 86px;
+  overflow: hidden;
+  padding: 12px 18px;
+}
+
+.ce-editor-level-row + .ce-editor-level-row {
+  margin-top: 8px;
+  min-block-size: 86px;
+  padding: 12px 18px;
+}
+
+.ce-editor-level-row.is-read-only {
+  grid-template-areas: "thumb copy";
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+.ce-editor-level-row .settings-row-thumb {
+  block-size: 54px;
+  border-width: 5px;
+  border-image-width: 5px;
+  grid-area: thumb;
+  inline-size: 78px;
+}
+
+.ce-editor-level-copy {
+  align-content: center;
+  gap: 4px;
+  grid-area: copy;
+}
+
+.ce-editor-level-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ce-editor-level-heading h4 {
+  flex: 1 1 auto;
+  font-size: var(--ds-text-md);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-editor-level-row p {
+  font-size: var(--ds-text-sm);
+  line-height: 1.1;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ce-editor-level-row .ce-stars {
+  flex: none;
+  gap: 1px;
+}
+
+.ce-editor-level-row .ce-star {
+  block-size: 12px;
+  inline-size: 12px;
+}
+
+.ce-editor-level-row .ce-row-actions {
+  gap: 4px;
+  grid-area: actions;
+  justify-content: end;
+}
+
+.ce-editor-level-row .ce-icon-button {
+  block-size: 32px;
+  border-width: 8px;
+  border-image-width: 8px;
+  inline-size: 32px;
+}
+
+.ce-editor-level-row .ce-icon-button .ce-icon-img {
+  max-block-size: 14px;
+  max-inline-size: 14px;
+}
+
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the
