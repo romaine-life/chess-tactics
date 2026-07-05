@@ -349,6 +349,7 @@ function UnitPiece({
   arrivalDelay = 0,
   dragging = false,
   suppressHop = false,
+  premoveOrigin = false,
 }: {
   piece: Piece;
   selected?: boolean;
@@ -360,6 +361,8 @@ function UnitPiece({
   dragging?: boolean;
   /** This piece just landed via a drop-move — snap into the seat with no pick-up/hop arc. */
   suppressHop?: boolean;
+  /** This piece has a premove queued — dim it in place as the "before" ghost of its planned move. */
+  premoveOrigin?: boolean;
 }) {
   const { left, top, zIndex } = boardLabCellPosition(piece);
   const [displayPosition, setDisplayPosition] = useState({ left, top });
@@ -410,6 +413,7 @@ function UnitPiece({
         selected ? 'is-selected' : '',
         focused ? 'is-focused' : '',
         dragging ? 'is-dragging' : '',
+        premoveOrigin ? 'is-premove-origin' : '',
       ].filter(Boolean).join(' ')}
       style={{
         left: seat.left,
@@ -463,6 +467,25 @@ function PremoveArrowLayer({ arrows }: { arrows: PremoveArrow[] }) {
         );
       })}
     </svg>
+  );
+}
+
+// The "after" ghost: a translucent copy of a premoved piece on its planned (provisional) square,
+// the far end of the premove arrow. It's pointer-events:none (inherits from .board-unit-seat), so
+// the cell-hit button beneath owns the click — clicking the ghost's square re-selects the piece to
+// extend its chain. `piece` is the provisional-board piece (already facing its move direction).
+function PremoveGhost({ piece }: { piece: Piece }) {
+  const { left, top, zIndex } = boardLabCellPosition(piece);
+  const src = pieceImageSrc(piece);
+  if (!src) return null;
+  return (
+    <div
+      className={`board-unit-seat skirmish-board-unit is-${piece.side} is-${piece.type} is-premove-ghost`}
+      style={{ left, top, zIndex: zIndex + 20000 } as CSSProperties}
+      aria-hidden="true"
+    >
+      <img src={src} alt="" draggable={false} />
+    </div>
   );
 }
 
@@ -639,6 +662,19 @@ export function SkirmishBoard() {
     const p = provGame.pieces.find((q) => q.id === premoveSelectedId && q.alive && q.side === 'player');
     return p ? `${p.x},${p.y}` : null;
   }, [premoveMode, premoveSelectedId, provGame.pieces]);
+  // Pieces with a queued premove get TWO ghosts: the real piece dimmed in place (before) and a
+  // translucent copy on its planned square (after). `premovedOrigins` is the before squares —
+  // clicking one cancels the chain; `afterGhosts` are the provisional-board pieces to draw.
+  const premovedIds = useMemo(() => new Set(premoves.map((s) => s.pieceId)), [premoves]);
+  const premovedOrigins = useMemo(() => {
+    const out = new Set<string>();
+    for (const p of game.pieces) if (p.alive && premovedIds.has(p.id)) out.add(`${p.x},${p.y}`);
+    return out;
+  }, [game.pieces, premovedIds]);
+  const afterGhosts = useMemo(
+    () => (premovedIds.size ? provGame.pieces.filter((p) => p.alive && premovedIds.has(p.id)) : []),
+    [provGame.pieces, premovedIds],
+  );
 
   // The chain-building selection is only meaningful during the opponent's turn; when it
   // ends (a premove fires, or the player regains a live turn) drop it so the next enemy
@@ -662,10 +698,15 @@ export function SkirmishBoard() {
   );
 
   const handleTile = (x: number, y: number) => {
-    // Opponent's turn: clicks build the premove chain instead of being ignored. Select a
-    // player piece (by its provisional position), then click a legal target to queue a step.
+    // Opponent's turn: clicks build the premove chain instead of being ignored.
     if (premoveMode) {
-      if (premoveSelectedId && premoveTargetSet.has(`${x},${y}`)) { queueMove(premoveSelectedId, x, y); return; }
+      const key = `${x},${y}`;
+      // A legal target for the selected piece → queue the step.
+      if (premoveSelectedId && premoveTargetSet.has(key)) { queueMove(premoveSelectedId, x, y); return; }
+      // A premoved piece's BEFORE ghost (its real square) → cancel the queued chain.
+      if (premovedOrigins.has(key)) { clearPremoves(); setPremoveSelectedId(null); return; }
+      // A player piece on the provisional board — a fresh piece, or a premoved piece's AFTER
+      // ghost on its planned square → select it to (continue) premoving.
       const here = provGame.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
       if (here && here.side === 'player') setPremoveSelectedId(here.id);
       return;
@@ -889,7 +930,11 @@ export function SkirmishBoard() {
               arrivalDelay={arrivalDelays.get(piece.id) ?? 0}
               dragging={drag?.pieceId === piece.id}
               suppressHop={noHopId === piece.id}
+              premoveOrigin={premovedIds.has(piece.id)}
             />
+          ))}
+          {afterGhosts.map((piece) => (
+            <PremoveGhost key={`premove-ghost-${piece.id}`} piece={piece} />
           ))}
           <PremoveArrowLayer arrows={premoveChain} />
         </BoardLabBoard>

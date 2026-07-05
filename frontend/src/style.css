@@ -4087,6 +4087,22 @@ h1 {
   opacity: 1;
 }
 
+/* Premove ghosts — the planned move made visible. The BEFORE ghost is the real piece dimmed in
+   place (it has a premove queued); the AFTER ghost is a translucent copy sitting on the planned
+   square (the arrow's far end). Both are pointer-events:none (via .board-unit-seat) so the cell-hit
+   buttons under them own the clicks: the before square cancels the chain, the after square extends it. */
+.skirmish-board-unit.is-premove-origin {
+  opacity: .4;
+}
+
+.board-unit-seat.is-premove-ghost {
+  opacity: .55;
+}
+
+.board-unit-seat.is-premove-ghost img {
+  filter: drop-shadow(0 1px 5px rgba(96, 132, 240, .65));
+}
+
 /* The queued-chain arrows (placeholder art). Coordinates are board-space, so the stroke
    scales with the board zoom transform. */
 .premove-arrow {
