@@ -24,21 +24,8 @@ import { PALETTE_FOR_SIDE, isPlayablePieceType } from '../core/pieces';
 import { masterSrc, type Piece as PortraitPiece, type Palette as PortraitPalette } from './PortraitEditor';
 import { PRODUCTION_PORTRAIT_METHOD } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
-import { livingPieces } from '../core/rules';
-import { computeStars, nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
+import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
-
-const STAR_ICON = '/assets/ui/kit/icons/star.png';
-
-function ResultStars({ count }: { count: number }) {
-  return (
-    <span className="campaign-result-stars" aria-label={`${count} of 3 stars`}>
-      {[0, 1, 2].map((i) => (
-        <img key={i} src={STAR_ICON} alt="" aria-hidden="true" style={{ width: 26, height: 26, opacity: i < count ? 1 : 0.22 }} />
-      ))}
-    </span>
-  );
-}
 
 export function Skirmish() {
   const routeSearch = window.location.search;
@@ -152,18 +139,10 @@ export function Skirmish() {
     navigateApp('/lobbies', { replace: true });
   };
 
-  // Stars earned this clear (3 flawless, 2 light losses, 1 any win), from the level's
-  // authored player force vs. who's still standing.
-  const stars = useMemo(() => {
-    if (!routeLevel || game.winner !== 'player') return 0;
-    const initial = routeLevel.layers.units.filter((u) => u.side === 'player').length;
-    return computeStars(initial, livingPieces(game.pieces, 'player').length);
-  }, [routeLevel, game.winner, game.pieces]);
-
-  // Bank the win the moment a campaign battle is won (idempotent — keeps the best stars).
+  // Bank the win the moment a campaign battle is won (idempotent).
   useEffect(() => {
-    if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id, stars);
-  }, [isCampaignPlay, routeLevel, game.winner, stars]);
+    if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id);
+  }, [isCampaignPlay, routeLevel, game.winner]);
 
   // Re-arm the netplay result card whenever a fresh game is built (winner clears), so a
   // dismissal from the previous match doesn't suppress the next one's result.
@@ -623,7 +602,6 @@ export function Skirmish() {
         <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Stalemate' : 'Defeat'}</h2>
-            {game.winner === 'player' && <ResultStars count={stars} />}
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
               <button type="button" className="app-header-button" onClick={replayLevel}>

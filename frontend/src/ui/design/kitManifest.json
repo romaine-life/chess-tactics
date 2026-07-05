@@ -287,17 +287,6 @@
           "fails": []
         },
         {
-          "name": "star",
-          "url": "/assets/ui/kit/icons/star.png",
-          "w": 64,
-          "h": 64,
-          "magenta": 0,
-          "semiPct": 0,
-          "edge": 0,
-          "pass": true,
-          "fails": []
-        },
-        {
           "name": "studio-catalog",
           "url": "/assets/ui/kit/icons/studio-catalog.png",
           "w": 64,

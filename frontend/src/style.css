@@ -6833,8 +6833,7 @@ body { font-size: 17px; }
 }
 
 .ce-row-favorite,
-.ce-row-lock,
-.ce-stars {
+.ce-row-lock {
   color: var(--ce-gold-bright);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-sm);
@@ -6872,22 +6871,6 @@ body { font-size: 17px; }
   opacity: 1;
   outline: 2px solid rgba(101, 184, 255, .72);
   outline-offset: 2px;
-}
-
-.ce-stars {
-  display: flex;
-  gap: 2px;
-  white-space: nowrap;
-}
-
-.ce-star {
-  height: 14px;
-  image-rendering: pixelated;
-  width: 14px;
-}
-
-.ce-stars .ce-star:not(.is-filled) {
-  opacity: .32;
 }
 
 .ce-level-thumb {
@@ -7248,7 +7231,7 @@ body { font-size: 17px; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   padding: 0 4px 8px;
 }
-/* Single full-width verb (the play screen's preview has just Play/Replay, not Edit + Test). */
+/* Single full-width verb (the play screen's preview has just Play, not Edit + Test). */
 .ce-preview-actions.is-single { grid-template-columns: minmax(0, 1fr); }
 
 .ce-preview-actions .ce-link-button {
@@ -7382,7 +7365,6 @@ body { font-size: 17px; }
   }
 
   .ce-row-favorite,
-  .ce-stars,
   .ce-row-actions {
     grid-column: 2;
   }
@@ -12887,7 +12869,7 @@ button.tileset-relationship-cell {
    past the Unassigned tab), so the rail reads as one sheet however many campaigns there are —
    the same shared mechanism the menu / Settings / Campaign rails use. */
 
-/* A campaign tab = the shared icon | label grid + a trailing cell for the favorite star /
+/* A campaign tab = the shared icon | label grid + a trailing cell for the favorite control /
    padlock. Official identity is carried by the rail group heading. */
 .ce-campaign-tab {
   align-items: center;
@@ -13063,16 +13045,6 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
-.ce-editor-level-row .ce-stars {
-  flex: none;
-  gap: 1px;
-}
-
-.ce-editor-level-row .ce-star {
-  block-size: 12px;
-  inline-size: 12px;
-}
-
 .ce-editor-level-row .ce-row-actions {
   gap: 4px;
   grid-area: actions;
@@ -13100,16 +13072,16 @@ button.tileset-relationship-cell {
   cursor: pointer;
   display: grid;
   gap: 10px;
-  grid-template-areas: "thumb copy value control";
-  grid-template-columns: 78px minmax(0, 1fr) auto auto;
+  grid-template-areas: "thumb copy control";
+  grid-template-columns: 78px minmax(0, 1fr) auto;
   min-block-size: 86px;
   overflow: hidden;
-  padding: 12px 18px;
+  padding: 10px 18px;
 }
 .campaign-level-row + .campaign-level-row {
   margin-top: 8px;
   min-block-size: 86px;
-  padding: 12px 18px;
+  padding: 10px 18px;
 }
 .campaign-level-row .settings-row-thumb {
   block-size: 54px;
@@ -13120,11 +13092,12 @@ button.tileset-relationship-cell {
 }
 .campaign-level-row .settings-row-copy {
   align-content: center;
-  gap: 4px;
+  gap: 2px;
   grid-area: copy;
 }
 .campaign-level-row h4 {
   font-size: var(--ds-text-md);
+  line-height: .98;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -13132,23 +13105,12 @@ button.tileset-relationship-cell {
 }
 .campaign-level-row p {
   font-size: var(--ds-text-sm);
-  line-height: 1.1;
+  line-height: 1.05;
   margin: 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.campaign-level-row .settings-row-value {
-  grid-area: value;
-  min-width: 0;
-}
-.campaign-level-row .ce-stars {
-  gap: 1px;
-}
-.campaign-level-row .ce-star {
-  block-size: 12px;
-  inline-size: 12px;
 }
 .campaign-level-row .settings-row-control {
   grid-area: control;
@@ -13157,6 +13119,56 @@ button.tileset-relationship-cell {
 }
 .campaign-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .campaign-level-row:not(.is-selected):not(.is-disabled):hover { filter: brightness(1.06); }
+
+.campaign-level-meta {
+  align-items: start;
+  display: grid;
+  gap: 3px;
+}
+
+.campaign-level-goal {
+  margin: 0;
+}
+
+.campaign-level-status {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  line-height: 1.05;
+}
+
+.campaign-level-status.is-cleared {
+  color: #7ee787;
+  text-shadow: 0 1px 0 #082812;
+}
+
+.campaign-level-status.is-locked {
+  color: #c7a178;
+}
+
+.campaign-level-status-check {
+  background: #1f8f45;
+  border: 1px solid #97f2a0;
+  box-shadow: 0 1px 0 #073116;
+  display: inline-block;
+  flex: none;
+  height: 13px;
+  position: relative;
+  width: 13px;
+}
+
+.campaign-level-status-check::after {
+  border: solid #f2fff4;
+  border-width: 0 2px 2px 0;
+  content: "";
+  display: block;
+  height: 7px;
+  left: 4px;
+  position: absolute;
+  top: 1px;
+  transform: rotate(45deg);
+  width: 3px;
+}
 /* The level list wraps its rows only to carry a data-testid — it must not disturb the
    section-rows grid, so it disappears and its rows become the grid's direct items. */
 .ce-level-list { display: contents; }
@@ -13750,7 +13762,6 @@ button.tileset-relationship-cell {
   margin: 0;
   color: var(--ds-ink-3, #9eb1c5);
 }
-.campaign-result-stars { display: inline-flex; gap: 8px; }
 .campaign-result-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 4px; }
 
 /* ============================================================================
