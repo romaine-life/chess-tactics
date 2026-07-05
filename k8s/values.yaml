@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-360d2935c03af51ee620290780aaa7061bce06c5f8db31405e7cc55b8307b757"
+  tag: "app-dc37ee6327d0e82774b69331c97f8bbabce45241e3afd79998e61badb5484612"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix level thumbnail cache invalidation"
-  prNumber: "415"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/415"
-  commit: "80e5448"
+  prTitle: "Fix level editor region selection state"
+  prNumber: "416"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/416"
+  commit: "aa2303e"
 
 name: chess-tactics
 namespace: chess-tactics
