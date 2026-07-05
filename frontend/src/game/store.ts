@@ -862,7 +862,9 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
 
   setTestMinCpuDelay: (ms) => {
     if (!get().testMode) return; // test-board only — never floors real play
-    set({ testMinCpuDelayMs: Math.max(0, Math.min(10_000, Math.round(ms))) });
+    // Generous ceiling (10 min) so a tester can set whatever floor they like, while an absurd
+    // typo still can't hang the turn forever.
+    set({ testMinCpuDelayMs: Math.max(0, Math.min(600_000, Math.round(ms))) });
   },
   };
 });
