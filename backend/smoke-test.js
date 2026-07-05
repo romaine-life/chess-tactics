@@ -164,6 +164,9 @@ const child = spawn(process.execPath, ['supervisor.js'], {
     // The mock auth returns player@example.com for any non-rival session; make that
     // the official-campaigns admin so the requireAdmin path is exercised (ADR-0038).
     ADMIN_EMAILS: 'player@example.com',
+    // Smoke-test databases are throwaway/reset by this file, so schema mutation is
+    // intentional here even though local backend startup defaults to read-only check.
+    SCHEMA_MIGRATIONS: 'auto',
     // DATABASE_URL is set above (external or self-provisioned) and inherited
     // here via ...process.env.
   },
