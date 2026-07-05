@@ -21,14 +21,16 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
-import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
+import { readBoardParam, encodeBoard, decodeBoardLinkInput, type BoardFactionDirections, type EditorBoard, type FeatureCell } from './boardCode';
 import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import {
+  directionCompassCells,
   hasDirectionSprite,
   productionUnitAssets,
+  rookDirectionLabel,
   rookDirections,
   unitAssets,
   type Direction,
@@ -548,6 +550,21 @@ const LE_FACTION_LABELS: Record<UnitPalette, string> = {
   golden: 'Golden',
   emerald: 'Emerald',
 };
+type FactionDirections = Partial<Record<UnitPalette, Direction>>;
+const DEFAULT_FACTION_DIRECTIONS: Record<UnitPalette, Direction> = {
+  'navy-blue': 'north',
+  crimson: 'south',
+  golden: 'north',
+  emerald: 'south',
+};
+const normalizeFactionDirections = (directions?: BoardFactionDirections): FactionDirections =>
+  Object.fromEntries(
+    Object.entries(directions ?? {}).filter(([faction, direction]) =>
+      (UNIT_PALETTES as readonly string[]).includes(faction) && (rookDirections as readonly string[]).includes(direction),
+    ),
+  ) as FactionDirections;
+const factionDefaultDirection = (faction: UnitPalette, directions: FactionDirections): Direction =>
+  directions[faction] ?? DEFAULT_FACTION_DIRECTIONS[faction];
 const leUnitAssets = productionUnitAssets.length ? productionUnitAssets : unitAssets;
 const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
   pawn: 1,
@@ -598,6 +615,64 @@ const levelSignature = (level: Level): string =>
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
 const cloneEditorBoard = (board: EditorBoard): EditorBoard => structuredClone(board) as EditorBoard;
 const HISTORY_LIMIT = 100;
+
+function DirectionPopover({ value, label, onChange }: {
+  value: Direction;
+  label: string;
+  onChange: (direction: Direction) => void;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  const choose = (direction: Direction): void => {
+    onChange(direction);
+    setOpen(false);
+  };
+  return (
+    <div
+      className="le-direction-popover"
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (!(next instanceof Node) || !event.currentTarget.contains(next)) setOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        setOpen(false);
+        event.currentTarget.querySelector<HTMLButtonElement>('.le-direction-trigger')?.focus();
+      }}
+    >
+      <button
+        type="button"
+        className="le-faction-select le-direction-trigger"
+        aria-label={label}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {rookDirectionLabel[value]}
+      </button>
+      {open ? (
+        <div className="le-direction-menu" role="radiogroup" aria-label={label}>
+          {directionCompassCells.map((cell) =>
+            cell === 'center' ? (
+              <span key="center" className="unit-facing-cell le-direction-cell is-empty" aria-hidden="true" />
+            ) : (
+              <button
+                key={cell}
+                type="button"
+                className={`unit-facing-cell le-direction-cell${value === cell ? ' is-active' : ''}`}
+                role="radio"
+                aria-checked={value === cell}
+                title={`Face ${cell}`}
+                onClick={() => choose(cell)}
+              >
+                {rookDirectionLabel[cell]}
+              </button>
+            ),
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 // The 4-edge connection control for a selected feature tile. Mirrors the iso diamond:
 // each edge is one cardinal neighbour (grid N/E/S/W = the screen NE/SE/SW/NW edges).
@@ -771,6 +846,7 @@ export function LevelEditor(): ReactElement {
   );
   const initialCampaignBoard = useMemo(() => initialCampaignLevel ? levelToEditorBoard(initialCampaignLevel) : undefined, [initialCampaignLevel]);
   const initialBoard = localDraft?.board ?? loadedBoard ?? initialCampaignBoard;
+  const initialFactionDirections = normalizeFactionDirections(initialBoard?.factionDirections);
   const needsCampaignHydration = Boolean(routeParams.levelId && !loadedBoard && !localDraft && !initialCampaignLevel);
   const [editorReady, setEditorReady] = useState(!needsCampaignHydration);
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
@@ -779,6 +855,7 @@ export function LevelEditor(): ReactElement {
   const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
     (initialBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(initialBoard.playerFaction)) ? initialBoard.playerFaction as UnitPalette : null,
   );
+  const [boardFactionDirections, setBoardFactionDirections] = useState<FactionDirections>(() => initialFactionDirections);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move' | 'region'>(toolForLayer(initialLayer));
   const [brushId, setBrushId] = useState<string>(studioArm.kind === 'tile' && studioArm.brush ? studioArm.brush : leDefaultTile.id);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
@@ -837,8 +914,8 @@ export function LevelEditor(): ReactElement {
   const fenceTool = brushKind === 'fence';
   const [unitBrushId, setUnitBrushId] = useState<string>(studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : leUnitAssets[0].id);
   const [doodadBrushId, setDoodadBrushId] = useState<string>(studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : DOODAD_ASSETS[0].id);
-  const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>('south');
-  const [unitFaction, setUnitFaction] = useState<UnitPalette>('navy-blue');
+  const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>(() => factionDefaultDirection('navy-blue', initialFactionDirections));
+  const [unitFaction, setUnitFactionState] = useState<UnitPalette>('navy-blue');
   const [undoStack, setUndoStack] = useState<EditorBoard[]>([]);
   const [redoStack, setRedoStack] = useState<EditorBoard[]>([]);
   // Gameplay zones (ADR-0050): a per-cell channel (cell "x,y" -> zone type), painted like cover.
@@ -984,6 +1061,7 @@ export function LevelEditor(): ReactElement {
       setFeatureExits(board.featureExits);
       setBoardZones(board.zones ?? {});
       setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
+      setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
       setUndoStack([]);
       setRedoStack([]);
       // Restore the mode fields from the Level so the RULES panel opens on what was authored.
@@ -1011,8 +1089,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zones: boardZones }),
-    [boardCols, boardRows, playerFaction, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, featureCuts, featureExits, boardZones],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zones: boardZones }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, featureCuts, featureExits, boardZones],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -1031,6 +1109,7 @@ export function LevelEditor(): ReactElement {
     setFeatureExits(board.featureExits);
     setBoardZones(board.zones ?? {});
     setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
+    setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
   };
   const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
     const current = currentEditorBoardRef.current;
@@ -1077,6 +1156,21 @@ export function LevelEditor(): ReactElement {
   const brushAsset = resolveAsset(brushId) ?? leDefaultTile;
   const resolveUnitAsset = (id: string): UnitAsset | undefined => leUnitAssets.find((unit) => unit.id === id) ?? unitAssets.find((unit) => unit.id === id);
   const unitBrushAsset = resolveUnitAsset(unitBrushId) ?? leUnitAssets[0];
+  const directionForFaction = (faction: UnitPalette): Direction => factionDefaultDirection(faction, boardFactionDirections);
+  const setUnitFaction = (faction: UnitPalette): void => {
+    setUnitFactionState(faction);
+    const dir = directionForFaction(faction);
+    setUnitBrushDirection(hasDirectionSprite(unitBrushAsset, dir) ? dir : 'south');
+  };
+  const setFactionDefaultDirection = (faction: UnitPalette, direction: Direction): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const factionDirections = normalizeFactionDirections(next.factionDirections);
+    if (direction === DEFAULT_FACTION_DIRECTIONS[faction]) delete factionDirections[faction];
+    else factionDirections[faction] = direction;
+    next.factionDirections = factionDirections;
+    commitEditorBoard(next);
+    if (unitFaction === faction) setUnitBrushDirection(hasDirectionSprite(unitBrushAsset, direction) ? direction : 'south');
+  };
   // Facing sets the brush direction AND rotates the unit selected on the board (in place).
   const setUnitFacing = (dir: Direction): void => {
     setUnitBrushDirection(dir);
@@ -2219,21 +2313,28 @@ export function LevelEditor(): ReactElement {
               {presentFactions.length ? (
                 <div className="le-faction-assignments">
                   {presentFactions.map((faction) => (
-                    <label className="le-faction-assignment" key={faction}>
+                    <div className="le-faction-assignment" key={faction}>
                       <span className="le-faction-name">
                         <i className={`le-faction-dot is-${faction}`} aria-hidden="true" />
                         <span>{LE_FACTION_LABELS[faction]}</span>
                         <b>{boardFactionCounts[faction]}</b>
                       </span>
-                      <select
-                        className="le-faction-select"
-                        value={playerFaction === faction ? 'player' : 'cpu'}
-                        aria-label={`${LE_FACTION_LABELS[faction]} control`}
-                        onChange={onFactionControlChange(faction)}
-                      >
-                        {controlOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                    </label>
+                      <span className="le-faction-fields">
+                        <select
+                          className="le-faction-select"
+                          value={playerFaction === faction ? 'player' : 'cpu'}
+                          aria-label={`${LE_FACTION_LABELS[faction]} control`}
+                          onChange={onFactionControlChange(faction)}
+                        >
+                          {controlOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                        <DirectionPopover
+                          value={directionForFaction(faction)}
+                          label={`${LE_FACTION_LABELS[faction]} default facing`}
+                          onChange={(direction) => setFactionDefaultDirection(faction, direction)}
+                        />
+                      </span>
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -2503,6 +2604,14 @@ export function LevelEditor(): ReactElement {
                   onClick={() => setUnitFaction(faction)}
                 >{LE_FACTION_LABELS[faction]}</button>
               ))}
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Default facing</span>
+              <DirectionPopover
+                value={directionForFaction(unitFaction)}
+                label={`${LE_FACTION_LABELS[unitFaction]} default facing`}
+                onChange={(direction) => setFactionDefaultDirection(unitFaction, direction)}
+              />
             </div>
             <h2 className="le-card-subhead">Facing</h2>
             <FacingCompass
