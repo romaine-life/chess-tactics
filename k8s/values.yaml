@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-8bdcf89bff24462244ffabec5d1ce346af76b750614ddd1b9f814817a5afc41e"
+  tag: "app-3ad0511dca170f4b624af4e12356f806b58049577f03b29d4c75c90c014b7777"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "feat(level-editor): level-preview column that fills its box (editor + campaign)"
-  prNumber: "409"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/409"
-  commit: "d2f6d9b"
+  prTitle: "Install backend deps before dev server"
+  prNumber: "410"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/410"
+  commit: "c8599b5"
 
 name: chess-tactics
 namespace: chess-tactics
