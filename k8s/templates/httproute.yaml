@@ -1,0 +1,60 @@
+{{- if eq (include "chess-tactics.renderWarm" .) "true" }}
+{{- if not .Values.hostname -}}
+{{- fail "hostname is required" -}}
+{{- end -}}
+# Dual parentRef: XListenerSet for HTTPS serving, Gateway main for HTTP (and
+# so ExternalDNS creates the A record — external-dns#5694 tracks native
+# XListenerSet source support).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "chess-tactics.resourceName" . }}
+  namespace: {{ include "chess-tactics.namespace" . }}
+spec:
+  hostnames:
+    - {{ .Values.hostname | quote }}
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.ingress.gatewayName }}
+      namespace: {{ .Values.ingress.gatewayNamespace }}
+    - group: gateway.networking.x-k8s.io
+      kind: XListenerSet
+      name: {{ include "chess-tactics.resourceName" . }}
+  rules:
+    # Long-lived SSE streams (the lobby-list channel /api/lobbies/events and the
+    # per-lobby game channels /api/lobbies/<id>/events). Envoy Gateway applies a
+    # DEFAULT HTTPRoute request timeout of 15s, which is incompatible with streaming
+    # responses (it caps total response duration, not idle time) — with it, every
+    # lobby event stream is severed ~every 15s and live sync silently breaks. Disable
+    # the request timeout for the events routes ONLY (request: "0s"); all other lobby
+    # endpoints keep the default via the catch-all rule below. This rule is listed
+    # first and uses Exact / RegularExpression matches so it takes precedence over the
+    # PathPrefix "/" catch-all. Guarded by backend/check-sse-route.js.
+    - matches:
+        - path:
+            type: Exact
+            value: /api/lobbies/events
+        - path:
+            type: RegularExpression
+            value: /api/lobbies/[^/]+/events
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ include "chess-tactics.resourceName" . }}
+          port: 80
+          weight: 1
+      timeouts:
+        request: "0s"
+        backendRequest: "0s"
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ include "chess-tactics.resourceName" . }}
+          port: 80
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+{{- end }}
