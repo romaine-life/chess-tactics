@@ -19,7 +19,7 @@ const TYPE_LABEL = PIECE_LABEL;
 
 const ROLE: Record<PieceType, string> = {
   pawn: 'Forward footman',
-  knight: 'L-shaped jumper',
+  knight: 'Mounted raider',
   bishop: 'Diagonal runner',
   rook: 'Orthogonal siege keep',
   queen: 'Promoted raider',
