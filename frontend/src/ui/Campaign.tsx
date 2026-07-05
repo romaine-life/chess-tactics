@@ -64,12 +64,12 @@ function CampaignTab({ campaign, active, index }: { campaign: CampaignDoc; activ
 }
 
 // The selected campaign's levels, in play order, with progress and a Play link.
-function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: CampaignProgress }): ReactElement {
+function LevelSelect({ campaign, progress, embedded }: { campaign: CampaignDoc; progress: CampaignProgress; embedded?: boolean }): ReactElement {
   const levelDocs = useCampaigns((s) => s.levels);
   const refs = orderedLevels(campaign);
 
   return (
-    <main className="settings-frame settings-main-frame">
+    <main className={embedded ? 'menu-dest-col menu-dest-action' : 'settings-frame settings-main-frame'}>
       <div className="settings-panel-content">
         <section className="settings-section">
           <h3 className="settings-section-title">{campaign.name} — Levels</h3>
@@ -134,16 +134,17 @@ function LevelSelect({ campaign, progress }: { campaign: CampaignDoc; progress: 
 // The Campaign (play) screen: a settings-twin of the main menu. The rail lists the
 // campaigns (the editor at /campaigns-next authors them; this plays them) and the
 // panel is the selected campaign's level select. Click the brand lockup to go home.
-export function Campaign(): ReactElement {
+export function Campaign({ embedded = false }: { embedded?: boolean } = {}): ReactElement {
   const [selectedId, setSelectedId] = useState<string>(() => campaignIdFromPath(window.location.pathname));
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const campaigns = useCampaigns((s) => s.campaigns);
 
   useEffect(() => {
+    if (embedded) return; // the persistent menu shell (MainMenu) owns .main-menu-active + the backdrop
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
     return () => shell?.classList.remove('main-menu-active');
-  }, []);
+  }, [embedded]);
 
   // Load the shared workspace the same way the editor does, so the lists match. The
   // entrance fade HOLDS until this settles (ADR-0046 C.1 / ADR-0051): on a first visit
@@ -205,6 +206,40 @@ export function Campaign(): ReactElement {
   const officialCampaigns = campaigns.filter((c) => c.origin === 'official');
   const myCampaigns = campaigns.filter((c) => c.origin !== 'official');
 
+  // The two campaign columns — the campaign list (a tab column) + the selected campaign's level
+  // select (an action column). Shared by the standalone route AND the embedded-in-shell render.
+  const inner = (
+    <>
+      <aside className={embedded ? 'menu-dest-col menu-dest-tabs' : 'settings-frame settings-rail-frame'} aria-label="Campaigns">
+        {officialCampaigns.length > 0 && (
+          <>
+            {/* Only label the tiers when the user actually has their own (myCampaigns
+                is non-empty only when signed in — it comes from the authed merge). */}
+            {myCampaigns.length > 0 ? <p className="campaign-rail-group">Official</p> : null}
+            {officialCampaigns.map((campaign, i) => (
+              <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} index={i} />
+            ))}
+          </>
+        )}
+        {myCampaigns.length > 0 && (
+          <>
+            <p className="campaign-rail-group">Your Campaigns</p>
+            {myCampaigns.map((campaign, i) => (
+              // Continue the index past the official tier so the stone stays one sheet.
+              <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} index={officialCampaigns.length + i} />
+            ))}
+          </>
+        )}
+      </aside>
+
+      {activeCampaign && <LevelSelect campaign={activeCampaign} progress={progress} embedded={embedded} />}
+    </>
+  );
+
+  // Embedded in the persistent menu shell (MainMenu's second column): render just the two columns.
+  // The shell owns the backdrop, screen wrapper, cold-reveal gates, and zoom-safe placement.
+  if (embedded) return inner;
+
   return (
     // The cold-load reveal director (shell/coldReveal) arms ONLY on the home menu path,
     // so it never sequences this screen. But its opt-OUT gates hide any .main-menu-layer's
@@ -224,29 +259,7 @@ export function Campaign(): ReactElement {
           of campaign tabs and a level-select panel over the ambience. */}
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell" ready={contentReady}>
-          <aside className="settings-frame settings-rail-frame" aria-label="Campaigns">
-            {officialCampaigns.length > 0 && (
-              <>
-                {/* Only label the tiers when the user actually has their own (myCampaigns
-                    is non-empty only when signed in — it comes from the authed merge). */}
-                {myCampaigns.length > 0 ? <p className="campaign-rail-group">Official</p> : null}
-                {officialCampaigns.map((campaign, i) => (
-                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} index={i} />
-                ))}
-              </>
-            )}
-            {myCampaigns.length > 0 && (
-              <>
-                <p className="campaign-rail-group">Your Campaigns</p>
-                {myCampaigns.map((campaign, i) => (
-                  // Continue the index past the official tier so the stone stays one sheet.
-                  <CampaignTab key={campaign.id} campaign={campaign} active={campaign.id === activeId} index={officialCampaigns.length + i} />
-                ))}
-              </>
-            )}
-          </aside>
-
-          {activeCampaign && <LevelSelect campaign={activeCampaign} progress={progress} />}
+          {inner}
         </ArtRouteChrome>
       </div>
     </div>

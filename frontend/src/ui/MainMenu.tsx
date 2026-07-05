@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactElement } from 're
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { Settings } from './Settings';
+import { Campaign } from './Campaign';
 import { NavButton } from './shared/NavButton';
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
@@ -70,7 +71,10 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
   return (
     <NavButton
       className={`settings-tab main-menu-mode-tab ${active ? 'is-active' : ''}`.trim()}
-      to={tab.href}
+      // Toggle: clicking a tab whose destination is already open closes it (back to the bare
+      // menu at '/'); otherwise it opens that destination. Home is a menu path, so React keeps
+      // this MainMenu instance mounted either way — the button column never blinks.
+      to={active ? '/' : tab.href}
       aria-current={active ? 'page' : undefined}
       style={{ ['--tab-index' as string]: index }}
     >
@@ -82,11 +86,17 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
   );
 }
 
-// Which menu destinations render INSIDE the persistent shell (their own second column) vs. navigate
-// away to a full screen. Menu-config destinations (Settings) live in the shell; gameplay/editor
-// destinations (Campaign, Skirmish, Editor) legitimately take the whole screen.
-function shellDest(path: string): 'settings' | null {
+// Which menu destinations render INSIDE the persistent shell (their own columns beside the pinned
+// button column) vs. navigate away to a full screen. Menu-family destinations (Settings, Campaign)
+// live in the shell; heavy gameplay/editor surfaces (Skirmish, Level Editor) take the whole screen.
+type ShellDest = 'settings' | 'campaign';
+const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign' };
+// How long the destination panel fades in/out. Matches --ds-duration-fade (the ONE shared fade
+// speed, ADR-0046) — same as the Settings panel crossfade + the screen entrance.
+const DEST_FADE_MS = 350;
+function shellDest(path: string): ShellDest | null {
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
+  if (path === '/campaign' || path.startsWith('/campaign/')) return 'campaign';
   return null;
 }
 
@@ -97,6 +107,19 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
   // home route leaves it empty. The rail's zoom-safe placement (ADR-0062) is untouched — the
   // destination just occupies the previously-empty grid track to its right.
   const dest = shellDest(path);
+  // Destination fade (ADR-0046 one-fade-speed): the button column stays put, but the destination
+  // panel fades IN when opened and fades OUT before it unmounts — the hop no longer swaps whole
+  // screens, so this keeps the dissolve. `renderedDest` lags `dest` through the exit fade; the
+  // panel's key = renderedDest so opening/switching remounts it and replays the entrance.
+  const [renderedDest, setRenderedDest] = useState<ShellDest | null>(dest);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (dest === renderedDest) { setLeaving(false); return; }
+    if (dest) { setRenderedDest(dest); setLeaving(false); return; } // open / switch: show + fade in
+    setLeaving(true); // close: hold the panel, fade out, then drop it
+    const t = window.setTimeout(() => { setRenderedDest(null); setLeaving(false); }, DEST_FADE_MS);
+    return () => window.clearTimeout(t);
+  }, [dest, renderedDest]);
   // Cold-load reveal: the menu's layers fade in in a fixed order — background -> title
   // -> buttons (rain drifts in last on its own) — driven by the shared reveal director
   // (see shell/coldReveal). Here MainMenu just REPORTS readiness for the title's brand
@@ -157,14 +180,14 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no
           home-only position class — so its buttons line up pixel-for-pixel with the
           Settings/Campaign rails at every width. */}
-      <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${dest ? 'has-dest' : ''}`.trim()} data-dest={dest ?? undefined}>
+      <div className={`settings-screen main-menu-twin-screen app-shell-bar-pad ${renderedDest ? 'has-dest' : ''}`.trim()} data-dest={renderedDest ?? undefined}>
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={tab.href === '/settings' ? dest === 'settings' : tab.href === path} />)}
+            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && tab.href === DEST_HREF[dest]} />)}
           </aside>
-          {dest === 'settings' ? (
-            <div className="menu-dest" aria-label="Settings">
-              <Settings embedded />
+          {renderedDest ? (
+            <div className={`menu-dest ${leaving ? 'is-leaving' : ''}`.trim()} key={renderedDest} aria-label={renderedDest === 'settings' ? 'Settings' : 'Campaign'}>
+              {renderedDest === 'settings' ? <Settings embedded /> : <Campaign embedded />}
             </div>
           ) : null}
         </ArtRouteChrome>

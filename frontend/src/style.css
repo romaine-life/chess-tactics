@@ -11801,7 +11801,17 @@ button.tileset-relationship-cell {
   /* Same pull as the rail, from the shared vars (not a copied literal) so the row stays locked to
      col1 at every width and browser zoom. */
   transform: translate(calc(-1 * var(--rail-pull-x)), calc(-1 * var(--rail-pull-y)));
+  /* Destination dissolve (ADR-0046, one fade speed): the panel fades IN when opened (keyed remount
+     replays this), and .is-leaving fades it OUT before MainMenu drops it. The button column doesn't
+     animate — only this panel — so the hop reads as swapping a panel, not the screen. */
+  animation: menu-dest-in var(--ds-duration-fade) var(--ds-ease-standard) both;
 }
+.menu-dest.is-leaving {
+  animation: menu-dest-out var(--ds-duration-fade) var(--ds-ease-standard) both;
+  pointer-events: none;
+}
+@keyframes menu-dest-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes menu-dest-out { from { opacity: 1; } to { opacity: 0; } }
 .menu-dest-col {
   flex: none;
   min-block-size: 0;

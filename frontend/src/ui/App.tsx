@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import { MainMenu } from './MainMenu';
 import { getSnapshot as getRevealSnapshot, subscribe as subscribeReveal } from './shell/coldReveal';
 import { armBoardArtForNav, isBoardArtPending, subscribeBoardArt } from '../render/boardArtReady';
-import { Campaign } from './Campaign';
 import { Lobbies } from './Lobbies';
 import { Party } from './Party';
 import { UpdateBanner } from './UpdateBanner';
@@ -363,9 +362,9 @@ function renderRoute(path: string): ReactElement {
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
   if (path === '/edit' || path === '/level-editor') return <LevelEditor />;
-  // /campaign (singular) is the play surface — pick a campaign; /campaigns-next is
-  // the authoring editor. Distinct paths, so order here doesn't matter.
-  if (path === '/campaign' || path.startsWith('/campaign/')) return <Campaign />;
+  // /campaign (the campaign picker) now renders INSIDE the persistent menu shell (MainMenu fills its
+  // second column with the campaign list + details). It falls through to the MainMenu default below,
+  // sharing the 'menu' screen key so the button column stays mounted. /campaigns-next is the editor.
   if (path === '/campaigns-next' || path === '/campaigns') return <CampaignEditor />;
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
