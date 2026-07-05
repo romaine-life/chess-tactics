@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-246cc24683422c6d9e5ee6adfba58f0b7d1838a6bf391b3df9d4f056821cba56"
+  tag: "app-cc243cedb69db242ed800ed12346ee6963d630cd80186f3ef23dd722692efbce"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Match campaign level row sizing"
-  prNumber: "426"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/426"
-  commit: "3b30d6a"
+  prTitle: "Simplify campaign progress display"
+  prNumber: "427"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/427"
+  commit: "3e1ba1b"
 
 name: chess-tactics
 namespace: chess-tactics
