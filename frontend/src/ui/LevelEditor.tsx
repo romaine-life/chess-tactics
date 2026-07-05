@@ -21,6 +21,7 @@ import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
+import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type BoardFactionDirections, type EditorBoard, type FeatureCell } from './boardCode';
 import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
@@ -460,17 +461,14 @@ const DEFAULT_COVER: CoverKnobs = { amount: 0.6, amountRandom: 0.3, density: 0.4
 // A region carries a LIST of cover entries (add/remove, like the region list itself), each a cover
 // SET (decoupled from terrain) plus its own scatter knobs. `expanded` is UI state. Per cell the
 // first listed entry whose Coverage roll hits wins, so several entries read as a MIX across the region.
-type CoverEntry = { id: number; type: TileFamilyId; expanded: boolean; knobs: CoverKnobs };
+type CoverEntry = { id: number; type: GroundCoverId; expanded: boolean; knobs: CoverKnobs };
 type ScatterRow = { id: number; terrain: TileFamilyId; share: number; locked: boolean; covers: CoverEntry[] };
 // The three ground-cover sets that have art, offered on every region regardless of its terrain.
-const LE_COVER_TYPES: ReadonlyArray<{ id: TileFamilyId; label: string }> = [
-  { id: 'grass', label: 'Grass tufts' },
-  { id: 'water', label: 'Reeds' },
-  { id: 'sand', label: 'Sand' },
-];
+const LE_COVER_TYPES = GROUND_COVER_ASSETS;
 // A terrain's own cover set (grass tufts / water reeds / sand), or null — the default cover a region
 // picks up when it uses that terrain (the author can then change it to anything).
-const defaultCoverType = (terrain: TileFamilyId): TileFamilyId | null => (groundCoverSet(terrain) ? terrain : null);
+const defaultCoverType = (terrain: TileFamilyId): GroundCoverId | null =>
+  GROUND_COVER_ASSETS.some((asset) => asset.id === terrain) ? terrain as GroundCoverId : null;
 // Spatially-coherent value noise in [0,1] (bilinear over a hashed lattice) — drives cover patchiness
 // so the "randomness" knobs vary coverage/density across areas instead of per-cell static.
 function coverNoise(x: number, y: number, seed: number): number {
@@ -795,15 +793,15 @@ const STATUS_LOG_LIMIT = 24;
 export function LevelEditor(): ReactElement {
   const animationFrame = useAnimationClock(true, 8, 150);
   // The Studio routes here with ?from=studio (show a "back to catalog" link) and optionally
-  // ?kind=tile|unit|doodad&brush=<id> to pre-arm the brush you clicked in the catalog. A general
+  // ?kind=tile|unit|doodad|cover&brush=<id> to pre-arm the brush you clicked in the catalog. A general
   // ?layer=<id> deep-link opens straight on any panel (rules, status, zone, …) — validated
   // against the real layer list, ignoring unknown/disabled ids. Read once at mount; reached from
   // the main menu these are all absent and we open on the first layer.
   const studioArm = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const kindParam = params.get('kind');
-    const kind: 'tile' | 'unit' | 'doodad' | undefined =
-      kindParam === 'unit' || kindParam === 'doodad' || kindParam === 'tile' ? kindParam : undefined;
+    const kind: 'tile' | 'unit' | 'doodad' | 'cover' | undefined =
+      kindParam === 'unit' || kindParam === 'doodad' || kindParam === 'tile' || kindParam === 'cover' ? kindParam : undefined;
     const layerParam = params.get('layer');
     const layer: LayerKey | undefined = LEVEL_EDITOR_LAYER_OPTIONS.some(
       (option) => option.id === layerParam && !isLayerOptionDisabled(option.id),
@@ -886,6 +884,8 @@ export function LevelEditor(): ReactElement {
   // absent here uses its own tile terrain's cover.
   const [boardCoverTypes, setBoardCoverTypes] = useState<Record<string, TileFamilyId>>(initialBoard?.coverTypes ?? {});
   const [coverBrushDensity, setCoverBrushDensity] = useState<GroundCoverDensity>('sparse');
+  const [coverBrushType, setCoverBrushType] = useState<GroundCoverId>(() =>
+    groundCoverAsset(studioArm.kind === 'cover' ? studioArm.brush : undefined).id);
   const [coverSeed, setCoverSeed] = useState(1234);
   // Roads and rivers are LINEAR features (ribbons you draw), not per-cell terrain materials:
   // store each painted cell's {kind, material}, then derive its connection mask from its
@@ -1192,6 +1192,7 @@ export function LevelEditor(): ReactElement {
   const doodadAssets = currentDoodadAssets();
   const resolveDoodadAsset = (id: string): DoodadAsset | undefined => doodadAssets.find((doodad) => doodad.id === id) ?? doodadAsset(id);
   const doodadBrushAsset = resolveDoodadAsset(doodadBrushId) ?? doodadAssets[0] ?? DOODAD_ASSETS[0];
+  const coverBrushAsset = groundCoverAsset(coverBrushType);
   // HARD terrain gate (mirrors the Studio): a doodad only lands on a tile of its home terrain.
   const doodadFitsTile = (doodad: DoodadAsset, tileId: string | undefined): boolean => {
     const terrain = tileId ? leFamilyOfTile(tileId)?.id : undefined;
@@ -1277,10 +1278,13 @@ export function LevelEditor(): ReactElement {
       return;
     }
     if (brushKind === 'cover') {
-      // Cover grows only on a tile whose terrain has a cover set (grass for now).
+      // Ground cover paints a density onto an existing tile. If the chosen cover set differs
+      // from the tile terrain, store the decoupled override in the existing coverTypes channel.
       const terrain = boardCells[key] ? leFamilyOfTile(boardCells[key])?.id : undefined;
-      if (!terrain || !groundCoverSet(terrain as TileFamilyId)) return;
+      if (!terrain || !groundCoverSet(coverBrushType)) return;
       next.cover[key] = coverBrushDensity;
+      if (coverBrushType === terrain) delete next.coverTypes?.[key];
+      else next.coverTypes = { ...(next.coverTypes ?? {}), [key]: coverBrushType };
       commitEditorBoard(next);
       return;
     }
@@ -1450,7 +1454,7 @@ export function LevelEditor(): ReactElement {
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, expanded: !c.expanded } : c)) } : s)));
   const removeCover = (sectionId: number, coverId: number): void =>
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.filter((c) => c.id !== coverId) } : s)));
-  const setCoverType = (sectionId: number, coverId: number, type: TileFamilyId): void =>
+  const setCoverType = (sectionId: number, coverId: number, type: GroundCoverId): void =>
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, type } : c)) } : s)));
   const setCoverKnob = (sectionId: number, coverId: number, knob: keyof CoverKnobs, value: number): void =>
     setScatterSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, covers: s.covers.map((c) => (c.id === coverId ? { ...c, knobs: { ...c.knobs, [knob]: Math.max(0, Math.min(1, value)) } } : c)) } : s)));
@@ -2393,7 +2397,7 @@ export function LevelEditor(): ReactElement {
                           <button type="button" className="le-gen-cover-caret-btn" onClick={() => toggleCoverEntryExpand(sec.id, c.id)} aria-expanded={c.expanded} aria-label={c.expanded ? 'Collapse cover settings' : 'Expand cover settings'}>
                             <span className="le-gen-cover-caret" aria-hidden="true">{c.expanded ? '▾' : '▸'}</span>
                           </button>
-                          <select className="le-gen-region-terrain" value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as TileFamilyId)} aria-label="Cover set">
+                          <select className="le-gen-region-terrain" value={c.type} onChange={(event) => setCoverType(sec.id, c.id, event.target.value as GroundCoverId)} aria-label="Cover set">
                             {LE_COVER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                           </select>
                           <button type="button" className="le-gen-icon" onClick={() => removeCover(sec.id, c.id)} title="Remove this cover">×</button>
@@ -2538,6 +2542,8 @@ export function LevelEditor(): ReactElement {
                 ? <img src={doodadBrushAsset.front} alt="" draggable={false} />
                 : brushKind === 'prop'
                 ? <img src={propHalfSrc(propBrushDef.spriteId, 'front')} alt="" draggable={false} />
+                : brushKind === 'cover'
+                ? <GroundCoverPreview asset={coverBrushAsset} />
                 : brushKind === 'zone'
                 ? <span className={`le-brush-thumb-zone le-zone-${LE_ZONE_TINT[zoneBrushType] ?? 'goal'}`} aria-hidden="true" />
                 : fenceTool
@@ -2547,7 +2553,7 @@ export function LevelEditor(): ReactElement {
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} grass` : brushKind === 'zone' ? (LE_ZONE_LABEL[zoneBrushType] ?? 'Zone') : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (LE_ZONE_LABEL[zoneBrushType] ?? 'Zone') : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
               <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
@@ -2555,12 +2561,26 @@ export function LevelEditor(): ReactElement {
 
         {brushKind === 'cover' ? (
           <section className="skirmish-card">
-            <h2>Cover density</h2>
+            <h2>Ground cover</h2>
+            <div className="le-swatches le-cover-swatches">
+              {LE_COVER_TYPES.map((cover) => (
+                <button
+                  type="button"
+                  key={cover.id}
+                  className={`le-swatch le-cover-swatch ${coverBrushType === cover.id && tool !== 'erase' ? 'active' : ''}`.trim()}
+                  title={`${cover.label} · ${cover.terrainLabel}`}
+                  onClick={() => { setCoverBrushType(cover.id); setBrushKind('cover'); setTool('brush'); }}
+                >
+                  <GroundCoverPreview asset={cover} zoom={0.72} />
+                  <small>{cover.label}</small>
+                </button>
+              ))}
+            </div>
             <div className="le-seg">
               <button type="button" className={`le-seg-btn ${coverBrushDensity === 'sparse' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('sparse')}>Sparse</button>
               <button type="button" className={`le-seg-btn ${coverBrushDensity === 'filled' ? 'active' : ''}`.trim()} onClick={() => setCoverBrushDensity('filled')}>Filled</button>
             </div>
-            <p className="le-board-note">Brush paints {coverBrushDensity} grass on grass tiles; Erase clears a tile. The tufts scatter from the density.</p>
+            <p className="le-board-note">Brush paints {coverBrushDensity} {coverBrushAsset.label}; Erase clears a tile. The cover scatters from the density.</p>
             <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setCoverSeed((s) => s + 1)}>Re-roll scatter</button>
             <p className="le-board-note">{coverCount} tile{coverCount === 1 ? '' : 's'} with cover.</p>
           </section>

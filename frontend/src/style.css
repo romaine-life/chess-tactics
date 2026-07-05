@@ -5144,6 +5144,12 @@ h1 {
    `contain` shrinks it to a low sliver. Fill the chip and frame the diamond so the preview
    focuses on the surface. object-position pulls the upper diamond into the box center. */
 .le-brush-thumb img.le-thumb-tile { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 26%; }
+.le-brush-thumb .ground-cover-preview {
+  --tile-zoom: .42;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
 .le-brush-meta strong { color: #fff5df; display: block; line-height: 1.1; text-transform: uppercase; }
 .le-brush-meta span { color: var(--skirmish-muted); font-size: var(--ds-text-sm); }
 
@@ -5428,6 +5434,31 @@ h1 {
 }
 .le-swatch img { height: 46px; image-rendering: pixelated; object-fit: contain; width: 46px; }
 .le-swatch small { font-size: var(--ds-text-2xs); line-height: 1; text-align: center; }
+.le-cover-swatches {
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  margin-bottom: 8px;
+}
+.le-cover-swatch {
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px 4px 6px;
+}
+.le-cover-swatch .ground-cover-preview {
+  width: min(100%, calc(132px * var(--tile-zoom, 1)));
+  height: calc(112px * var(--tile-zoom, 1));
+}
+.le-cover-swatch .ground-cover-preview-tile {
+  width: calc(96px * var(--tile-zoom, 1));
+  height: calc(96px * var(--tile-zoom, 1));
+  max-width: none;
+  max-height: none;
+}
+.le-cover-swatch small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .le-swatch.active { border-color: var(--skirmish-cyan); box-shadow: 0 0 0 1px rgba(56, 215, 255, .35); color: #eafaff; }
 .le-swatch:hover {
   color: #f4fbff;
@@ -9832,6 +9863,37 @@ button.tileset-relationship-cell {
   height: calc(var(--iso-tile-canvas-height) * var(--tile-zoom, 1));
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+.ground-cover-preview {
+  position: relative;
+  display: block;
+  width: calc(132px * var(--tile-zoom, 1));
+  height: calc(112px * var(--tile-zoom, 1));
+  overflow: hidden;
+  border: 1px solid rgba(67, 127, 179, .16);
+  border-radius: 4px;
+  background: rgba(2, 8, 13, .34);
+}
+
+.tileset-studio-card-image .ground-cover-preview-tile,
+.ground-cover-preview-tile {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: calc(96px * var(--tile-zoom, 1));
+  height: calc(96px * var(--tile-zoom, 1));
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  image-rendering: pixelated;
+  transform: translate(-50%, -50%);
+}
+
+.ground-cover-preview-tuft {
+  position: absolute;
+  transform: scale(var(--tile-zoom, 1));
+  transform-origin: 0 0;
 }
 
 .tileset-studio-card-meta {
