@@ -64,7 +64,7 @@ function SkirmishLevelsPanel({ levels, loading }: { levels: Level[]; loading: bo
                   <p>Save a board in the Level Editor and it appears here.</p>
                 </div>
                 <div className="settings-row-control">
-                  <NavButton className="app-header-button" to="/level-editor">Open Editor</NavButton>
+                  <NavButton className="app-header-button" to="/editor/level">Open Editor</NavButton>
                 </div>
               </section>
             ) : null}

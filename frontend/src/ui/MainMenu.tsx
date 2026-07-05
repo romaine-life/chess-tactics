@@ -1,9 +1,14 @@
-import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { Settings } from './Settings';
 import { Campaign } from './Campaign';
 import { NavButton } from './shared/NavButton';
+
+// The Editor is heavy (authoring workspace) and code-split out of the menu bundle — lazy-loaded only
+// when its destination opens, inside a LOCAL Suspense so the fallback shows in the destination column
+// (not the whole menu). Settings/Campaign are light enough to import directly.
+const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 import { MENU_MODES } from './design/catalogData';
 import { getSnapshot, markReady, subscribe } from './shell/coldReveal';
 
@@ -19,7 +24,7 @@ const TITLE_SURFACE = '/assets/ui/surfaces/hybrid-wood-oak.png';
 
 const MODE_HREFS: Record<string, string> = {
   'solo-skirmish': '/skirmish',
-  'campaign-editor': '/campaigns-next',
+  'campaign-editor': '/editor',
   lobbies: '/lobbies',
   settings: '/settings',
 };
@@ -28,10 +33,10 @@ interface MenuTab { slug: string; label: string; href: string; iconSlug: string 
 
 // Product-menu relabels applied over MENU_MODES (which stays the untouched design-catalog
 // source of truth — its widget assets keep their 'campaign-editor'/'level-editor' names).
-// The campaign editor IS the app's single "Editor": level authoring is reached from inside
+// The Editor (/editor) IS the app's single "Editor": level authoring is reached from inside
 // it (Edit Board / + New Board), so the rail presents it simply as "Editor" and no longer
-// carries a separate top-level "Level Editor" tab. That route (/edit) still exists — it's
-// just no longer a front door, only reached by drilling into a level from the Editor.
+// carries a separate top-level "Level Editor" tab. The nested level editor (/editor/level)
+// still exists — it's just no longer a front door, only reached by drilling into a level.
 const MENU_TAB_LABELS: Record<string, string> = { 'campaign-editor': 'Editor' };
 const MENU_HIDDEN_SLUGS = new Set(['level-editor']);
 
@@ -89,14 +94,18 @@ function ModeTab({ tab, index, active }: { tab: MenuTab; index: number; active?:
 // Which menu destinations render INSIDE the persistent shell (their own columns beside the pinned
 // button column) vs. navigate away to a full screen. Menu-family destinations (Settings, Campaign)
 // live in the shell; heavy gameplay/editor surfaces (Skirmish, Level Editor) take the whole screen.
-type ShellDest = 'settings' | 'campaign';
-const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign' };
+type ShellDest = 'settings' | 'campaign' | 'editor';
+const DEST_HREF: Record<ShellDest, string> = { settings: '/settings', campaign: '/campaign', editor: '/editor' };
+const DEST_LABEL: Record<ShellDest, string> = { settings: 'Settings', campaign: 'Campaign', editor: 'Editor' };
 // How long the destination panel fades in/out. Matches --ds-duration-fade (the ONE shared fade
 // speed, ADR-0046) — same as the Settings panel crossfade + the screen entrance.
 const DEST_FADE_MS = 350;
 function shellDest(path: string): ShellDest | null {
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings';
   if (path === '/campaign' || path.startsWith('/campaign/')) return 'campaign';
+  // The Editor is a settings-twin now (ADR-0065): canonical /editor + legacy /campaigns-next·/campaigns.
+  // The NESTED level editor (/editor/level) is a separate heavy full screen — NOT a shell dest.
+  if (path === '/editor' || path === '/campaigns-next' || path === '/campaigns') return 'editor';
   return null;
 }
 
@@ -186,8 +195,10 @@ export function MainMenu({ path = '/' }: { path?: string } = {}): ReactElement {
             {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} active={dest !== null && tab.href === DEST_HREF[dest]} />)}
           </aside>
           {renderedDest ? (
-            <div className={`menu-dest ${leaving ? 'is-leaving' : ''}`.trim()} key={renderedDest} aria-label={renderedDest === 'settings' ? 'Settings' : 'Campaign'}>
-              {renderedDest === 'settings' ? <Settings embedded /> : <Campaign embedded />}
+            <div className={`menu-dest ${leaving ? 'is-leaving' : ''}`.trim()} key={renderedDest} aria-label={DEST_LABEL[renderedDest]}>
+              {renderedDest === 'settings' ? <Settings embedded />
+                : renderedDest === 'campaign' ? <Campaign embedded />
+                : <Suspense fallback={<div className="menu-dest-col menu-dest-action" aria-hidden="true" />}><CampaignEditor embedded /></Suspense>}
             </div>
           ) : null}
         </ArtRouteChrome>

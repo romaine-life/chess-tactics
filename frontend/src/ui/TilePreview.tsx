@@ -672,7 +672,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   // Every catalog card (tile/unit/doodad, paintbrush + inspect) now opens the standalone
   // Level Editor with that asset pre-armed as the brush — the in-studio board lab is retired.
   const openInLevelEditor = (kind: 'tile' | 'unit' | 'doodad', id: string): void => {
-    navigateApp(`/level-editor?from=studio&kind=${kind}&brush=${encodeURIComponent(id)}`);
+    navigateApp(`/editor/level?from=studio&kind=${kind}&brush=${encodeURIComponent(id)}`);
   };
 
   const viewSubtitle =
@@ -1268,7 +1268,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <div>
               <h3 style={{ margin: '0 0 6px', color: '#eaf3ff' }}>Edge fences</h3>
               <p style={{ margin: '0 0 12px', color: '#9fb6d6', fontSize: 13, lineHeight: 1.5 }}>A low rail that sits on the boundary between two tiles and blocks a piece from crossing that edge — both tiles stay walkable, and knights hop it. Paint them on tile edges in the Level Editor.</p>
-              <button type="button" className="tileset-view-action" onClick={() => navigateApp('/level-editor?from=studio&layer=fence')}>Paint fences in the editor</button>
+              <button type="button" className="tileset-view-action" onClick={() => navigateApp('/editor/level?from=studio&layer=fence')}>Paint fences in the editor</button>
             </div>
           </div>
         </div>
@@ -1276,7 +1276,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: (
         <>
           <p className="tileset-catalog-note" style={{ color: '#9fb6d6', fontSize: 12, lineHeight: 1.5 }}>Fences live on tile edges and block crossing. Paint them in the Level Editor&rsquo;s Fence layer.</p>
-          <button type="button" className="tileset-view-action" onClick={() => navigateApp('/level-editor?from=studio&layer=fence')}>Paint fences in the editor</button>
+          <button type="button" className="tileset-view-action" onClick={() => navigateApp('/editor/level?from=studio&layer=fence')}>Paint fences in the editor</button>
         </>
       ),
     },
@@ -1418,7 +1418,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       <button type="button" className={`studio-mode-icon${studioMode === 'catalog' ? ' is-active' : ''}`} aria-pressed={studioMode === 'catalog'} onClick={openCatalogMode} aria-label="Catalog" title="Catalog — browse the catalogs.">
         <img src="/assets/ui/kit/icons/studio-catalog.png" alt="" />
       </button>
-      <button type="button" className="studio-mode-icon" onClick={() => navigateApp('/level-editor?from=studio')} aria-label="Lab" title="Lab — open the Level Editor to paint tiles and units and set the board size.">
+      <button type="button" className="studio-mode-icon" onClick={() => navigateApp('/editor/level?from=studio')} aria-label="Lab" title="Lab — open the Level Editor to paint tiles and units and set the board size.">
         <img src="/assets/ui/kit/icons/studio-lab.png" alt="" />
       </button>
       <button type="button" className={`studio-mode-icon${studioMode === 'viewer' ? ' is-active' : ''}`} aria-pressed={studioMode === 'viewer'} onClick={() => setStudioMode('viewer')} aria-label="Viewer" title="Viewer — view one finished asset or artwork.">

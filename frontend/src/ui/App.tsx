@@ -361,11 +361,13 @@ function renderRoute(path: string): ReactElement {
   if (path === '/scene-anim-lab') return <TilesetStudio initialCategory="sceneanim" />;
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
-  if (path === '/edit' || path === '/level-editor') return <LevelEditor />;
-  // /campaign (the campaign picker) now renders INSIDE the persistent menu shell (MainMenu fills its
-  // second column with the campaign list + details). It falls through to the MainMenu default below,
-  // sharing the 'menu' screen key so the button column stays mounted. /campaigns-next is the editor.
-  if (path === '/campaigns-next' || path === '/campaigns') return <CampaignEditor />;
+  // The nested level editor keeps its own heavy full screen (canonical /editor/level; legacy /edit,
+  // /level-editor). Reached only by drilling into a level from the Editor.
+  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return <LevelEditor />;
+  // /campaign (picker), /settings, AND the Editor (canonical /editor; legacy /campaigns-next,
+  // /campaigns) all render INSIDE the persistent menu shell — they fall through to the MainMenu
+  // default below, sharing the 'menu' screen key so the button column stays mounted. MainMenu fills
+  // its second column with each destination's own columns (Settings / Campaign / Editor).
   if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
   if (path === '/party') return <Party />;
   // /settings now renders inside the persistent menu shell (MainMenu fills its second column with

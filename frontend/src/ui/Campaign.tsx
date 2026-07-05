@@ -132,7 +132,7 @@ function LevelSelect({ campaign, progress, embedded }: { campaign: CampaignDoc; 
 }
 
 // The Campaign (play) screen: a settings-twin of the main menu. The rail lists the
-// campaigns (the editor at /campaigns-next authors them; this plays them) and the
+// campaigns (the editor at /editor authors them; this plays them) and the
 // panel is the selected campaign's level select. Click the brand lockup to go home.
 export function Campaign({ embedded = false }: { embedded?: boolean } = {}): ReactElement {
   const [selectedId, setSelectedId] = useState<string>(() => campaignIdFromPath(window.location.pathname));

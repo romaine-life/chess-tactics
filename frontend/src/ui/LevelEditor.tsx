@@ -1,4 +1,4 @@
-// The standalone Level Editor (/level-editor, /edit). Split out of TilePreview.tsx so
+// The standalone Level Editor (/editor/level; legacy aliases /level-editor, /edit). Split out of TilePreview.tsx so
 // it ships its own small lazy chunk instead of dragging the entire design Studio:
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
@@ -1351,10 +1351,10 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  // Export the whole board as a /level-editor?board=<code> link (round-trips via boardCode.ts).
+  // Export the whole board as a /editor/level?board=<code> link (round-trips via boardCode.ts).
   const copyBoardLink = (): void => {
     const code = encodeBoard(currentEditorBoard);
-    void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
+    void navigator.clipboard?.writeText(`${window.location.origin}/editor/level?board=${code}`);
     reportStatus('Copied board link.', 'success');
   };
   // Publish this map to the server and copy a public /play?map=<id> link. Unlike the board-code
@@ -1390,7 +1390,7 @@ export function LevelEditor(): ReactElement {
     setTool('select');
     const input = boardLinkDraft.trim();
     if (!input) {
-      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /level-editor?board=... link or raw board code, then press Load board link.');
+      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /editor/level?board=... link or raw board code, then press Load board link.');
       return;
     }
     const decoded = decodeBoardLinkInput(input);
@@ -1899,7 +1899,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-board-actions">
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
-              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy Link</button>
+              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board.">Copy Link</button>
               <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>
             <input
@@ -1911,7 +1911,7 @@ export function LevelEditor(): ReactElement {
               placeholder="Paste board link"
               aria-label="Board link"
             />
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /level-editor?board=... link and replace this editor board with it.">Load board link</button>
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /editor/level?board=... link and replace this editor board with it.">Load board link</button>
           </section>
           <section className="skirmish-card le-level-settings">
             <h2>Level Settings</h2>
