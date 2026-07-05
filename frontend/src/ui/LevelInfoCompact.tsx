@@ -13,9 +13,9 @@ const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', '
 const PIECE_LABEL: Record<PieceType, string> = {
   king: 'King', queen: 'Queen', rook: 'Rook', bishop: 'Bishop', knight: 'Knight', pawn: 'Pawn', rock: 'Rock', 'random-rock': 'Rubble',
 };
-const ZONE_ORDER: ZoneType[] = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock'];
+const ZONE_ORDER: ZoneType[] = ['player-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'];
 const ZONE_LABEL: Record<ZoneType, string> = {
-  'player-spawn': 'Ally spawns', 'enemy-spawn': 'Enemy spawns', 'enemy-threat': 'Threats', objective: 'Objectives', 'falling-rock': 'Hazards',
+  'player-spawn': 'Ally spawns', 'enemy-spawn': 'Enemy spawns', 'enemy-threat': 'Threats', objective: 'Objectives', 'falling-rock': 'Hazards', 'pawn-promotion': 'Promotion',
 };
 const TERRAIN_LABEL: Record<string, string> = {
   grass: 'Grass', water: 'Water', bridge: 'Bridge', road: 'Road', stone: 'Stone', rock: 'Rock', cliff: 'Cliff', dirt: 'Dirt', pebble: 'Pebble', sand: 'Sand',

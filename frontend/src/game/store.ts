@@ -3,7 +3,7 @@
 // new state out). The renderer and HUD subscribe to it; neither mutates state.
 
 import { create } from 'zustand';
-import type { GameEvent, GameState, Move, Piece, Side, Winner } from '../core/types';
+import { PROMOTION_PIECE_TYPES, type GameEvent, type GameState, type Move, type Piece, type PromotionPieceType, type Side, type Winner } from '../core/types';
 import { applyMove, gameEnv, legalMoves, livingPieces, sideInCheck, type MoveEnv } from '../core/rules';
 import { adoptedWeightsFor } from './adoptedWeights';
 import { premoveTargets, type PremoveStep } from './premoves';
@@ -16,6 +16,7 @@ import { ARRIVAL_BAKED, playArrival, playTerrain } from '../sfx';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
 import { loadShippedAiWeights } from '../net/aiWeights';
+import { PIECE_LABEL } from '../core/pieces';
 
 // Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
 // admin shipped for a level (ship-to-everyone). Best-effort; a failure leaves the
@@ -47,10 +48,10 @@ export interface NetMatchOptions {
   seed: number;
 }
 
-/** The minimal identifier for a relayed move: just the destination cell. The receiver
- *  re-derives the canonical Move (capture id, en-passant flag) from its own identical
- *  board via legalMoves — so nothing rules-derived rides the wire. */
-export interface RelayMove { x: number; y: number }
+/** The minimal identifier for a relayed move: the destination cell plus an optional promotion
+ *  choice. The receiver re-derives the canonical Move (capture id, en-passant flag) from its own
+ *  identical board via legalMoves; promotion choice is the one move detail the rules cannot infer. */
+export interface RelayMove { x: number; y: number; promotion?: PromotionPieceType }
 
 /** Relay hook: in a netplay match the store calls this with each LOCAL move so the
  *  netplay layer (Skirmish) can POST it to the lobby relay. Null in single-player. */
@@ -139,10 +140,14 @@ function playLandingSfx(env: MoveEnv, x: number, y: number, delayMs: number, gai
 function describeEvent(ev: GameEvent): string | null {
   switch (ev.kind) {
     case 'captured': return 'A piece falls.';
-    case 'promoted': return 'A pawn ascends to a Queen.';
+    case 'promoted': return `A pawn ascends to a ${PIECE_LABEL[ev.to] ?? ev.to}.`;
     case 'victory': return ev.winner === 'player' ? 'Victory — the enemy is routed.' : 'Defeat — your force has fallen.';
     default: return null;
   }
+}
+
+function movePromotesPawn(game: GameState, piece: Piece, move: Move): boolean {
+  return piece.type === 'pawn' && !!game.promotionZones?.some((cell) => cell.x === move.x && cell.y === move.y);
 }
 
 function firstPlayerId(game: GameState): string | null {
@@ -241,6 +246,12 @@ export interface ClockState {
   incrementMs: number;
 }
 
+export interface PendingPromotion {
+  pieceId: string;
+  move: Move;
+  choices: readonly PromotionPieceType[];
+}
+
 export interface SkirmishState {
   game: GameState;
   /** Indexed terrain for the current game; movement generation reads this. */
@@ -279,6 +290,8 @@ export interface SkirmishState {
   aiMode: AiMode;
   /** The battle clock, when the level authored one (null = untimed). */
   clock: ClockState | null;
+  /** A local pawn has chosen a promotion-zone move and is waiting for the piece choice. */
+  pendingPromotion: PendingPromotion | null;
   /** Multiplayer context (null = single-player). When set, the AI never fires and
    *  input is gated to `net.localSide` instead of 'player'. */
   net: NetState | null;
@@ -308,6 +321,7 @@ export interface SkirmishState {
   focus: (id: string | null) => void;
   movesForSelected: () => Move[];
   tryMoveTo: (x: number, y: number) => void;
+  choosePromotion: (type: PromotionPieceType) => void;
   /** Moves queued while the opponent is thinking (premoves), fired one-per-turn as
    *  control returns. Ephemeral — dropped on reload, never persisted. */
   premoves: PremoveStep[];
@@ -513,10 +527,10 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   // stalemate/check on the enemy now to move, commit, stage the enemy reply, persist.
   // Shared by the live path (tryMoveTo) and the premove drain so an auto-fired premove
   // is byte-for-byte the same move a click would have made.
-  const commitPlayerMove = (piece: Piece, mv: Move) => {
+  const commitPlayerMove = (piece: Piece, mv: Move, promotion?: PromotionPieceType) => {
     const s = get();
     pauseClockWithIncrement();
-    const playerRes = applyMove(s.game, piece.id, mv);
+    const playerRes = applyMove(s.game, piece.id, mv, { promotion });
     let game = playerRes.state;
     // Footstep: only when the piece actually relocates. The single 'moved'
     // event's destination equals (mv.x, mv.y).
@@ -558,6 +572,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       game,
       env: enemyEnv,
       resultDetail,
+      pendingPromotion: null,
       selectedId: piece.id,
       focusedId: piece.id,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
@@ -607,7 +622,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
 
     const localSide = s.net.localSide;
     const prevTurn = s.game.turn;
-    const res = applyMove(s.game, piece.id, mv);
+    const res = applyMove(s.game, piece.id, mv, { promotion: move.promotion });
     let game = res.state;
     if (res.events.some((e) => e.kind === 'moved')) playLandingSfx(s.env, mv.x, mv.y, LANDING_SFX_DELAY);
     const msgs = res.events.map(describeEvent).filter((m): m is string => m !== null);
@@ -639,6 +654,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       turnsElapsed,
       selectedId: nextSel,
       focusedId: nextSel,
+      pendingPromotion: null,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
       net: { ...s.net, moveCount: s.net.moveCount + 1 },
     });
@@ -662,6 +678,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   levelId: null,
   aiMode: 'search',
   clock: null,
+  pendingPromotion: null,
   net: null,
   premoves: [],
   testMode: false,
@@ -705,7 +722,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       : null;
     // An explicit opts.ai wins; otherwise keep the running mode (a HUD retry
     // preserves the A/B lever the route set on entry).
-    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail: null, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, net: null, premoves: [] });
+    set({ game, env, seed: opts.seed, tick: 0, turnsElapsed: 0, objectiveCtx, victoryOverride, resultDetail: null, selectedId, focusedId: selectedId, log: [intro], objective, started: true, levelId: opts.level?.id ?? null, aiMode: opts.ai ?? get().aiMode, clock, pendingPromotion: null, net: null, premoves: [] });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
     startClock();
@@ -758,6 +775,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       started: true,
       levelId: level.id,
       clock: null, // netplay is untimed in v1 (a shared wall-clock is future work)
+      pendingPromotion: null,
       net: { lobbyId, localSide, moveCount: 0 },
     });
     // Deploy roll-call for the pieces this client commands (cosmetic; each client
@@ -791,6 +809,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       selectedId: null,
       focusedId: null,
       premoves: [],
+      pendingPromotion: null,
       resultDetail: null,
       clock: s.clock ? { ...s.clock, running: false } : null,
       log: ['Defeat — you resigned.', ...s.log].slice(0, 12),
@@ -809,6 +828,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       game: { ...s.game, winner, turn: 'done' },
       selectedId: null,
       focusedId: null,
+      pendingPromotion: null,
       log: [copy, ...s.log].slice(0, 12),
     });
   },
@@ -841,6 +861,7 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
       // A queued premove is ephemeral thinking-time intent — a reload drops it, like
       // navigating away mid-plan.
       premoves: [],
+      pendingPromotion: null,
       // Resume with the clock paused; startClock re-arms the deadline from the
       // banked remainder when it's the player's live turn. A reload isn't thinking
       // time, so the player keeps the time they had at their last move.
@@ -874,7 +895,8 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   },
 
   movesForSelected: () => {
-    const { game, selectedId, env, net } = get();
+    const { game, selectedId, env, net, pendingPromotion } = get();
+    if (pendingPromotion) return [];
     const side = net ? net.localSide : 'player';
     if (game.turn !== side || game.winner) return [];
     const p = game.pieces.find((q) => q.id === selectedId && q.alive && q.side === side);
@@ -884,11 +906,16 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
   tryMoveTo: (x, y) => {
     const s = get();
     const side = s.net ? s.net.localSide : 'player';
+    if (s.pendingPromotion) return;
     if (s.game.turn !== side || s.game.winner) return;
     const p = s.game.pieces.find((q) => q.id === s.selectedId && q.alive && q.side === side);
     if (!p) return;
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
+    if (movePromotesPawn(s.game, p, mv)) {
+      set({ pendingPromotion: { pieceId: p.id, move: mv, choices: PROMOTION_PIECE_TYPES }, premoves: [] });
+      return;
+    }
     // Netplay is server-sequenced: DON'T apply locally — relay the target cell and let
     // the server's echo apply it in order on both boards (no optimistic apply, so a
     // dropped POST is a no-op the seat can retry, never a permanent desync). Clear the
@@ -903,12 +930,34 @@ export const useSkirmish = create<SkirmishState>((set, get) => {
     commitPlayerMove(p, mv);
   },
 
+  choosePromotion: (type) => {
+    const s = get();
+    const pending = s.pendingPromotion;
+    if (!pending || !pending.choices.includes(type)) return;
+    const side = s.net ? s.net.localSide : 'player';
+    const p = s.game.pieces.find((q) => q.id === pending.pieceId && q.alive && q.side === side);
+    const mv = p
+      ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === pending.move.x && m.y === pending.move.y)
+      : undefined;
+    if (!p || !mv || !movePromotesPawn(s.game, p, mv)) {
+      set({ pendingPromotion: null });
+      return;
+    }
+    if (s.net) {
+      if (netMoveSink) netMoveSink(p.id, { x: mv.x, y: mv.y, promotion: type });
+      set({ pendingPromotion: null, selectedId: null, focusedId: null });
+      return;
+    }
+    if (s.premoves.length) set({ premoves: [] });
+    commitPlayerMove(p, mv, type);
+  },
+
   queueMove: (pieceId, x, y) => {
     const s = get();
     // Premoves are single-player only — the local AI reply is what drains them, and a
     // netplay match has no such local reply. They're also the OPPONENT-turn action: on the
     // player's own live turn a click is a real move. Nothing queues onto a decided game.
-    if (s.net || s.game.turn === 'player' || s.game.winner) return;
+    if (s.net || s.pendingPromotion || s.game.turn === 'player' || s.game.winner) return;
     // Validate against the PROVISIONAL board (current board + the moves already queued)
     // so the chain builds on itself; the tip stays legal for the click that follows.
     if (!premoveTargets(s.game, s.premoves, pieceId).some((m) => m.x === x && m.y === y)) return;

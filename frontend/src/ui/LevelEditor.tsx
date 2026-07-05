@@ -22,7 +22,7 @@ import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
 import { currentDoodadAssets, doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { GROUND_COVER_ASSETS, GroundCoverPreview, groundCoverAsset, type GroundCoverId } from './groundCoverCatalog';
-import { readBoardParam, encodeBoard, decodeBoardLinkInput, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type FeatureCell } from './boardCode';
+import { readBoardParam, encodeBoard, decodeBoardLinkInput, zoneCellMapFromEntries, zoneEntriesFromCellMap, type BoardFactionDirections, type BoardGeneratedRegion, type BoardGeneratedRegionSection, type EditorBoard, type EditorZoneEntry, type FeatureCell } from './boardCode';
 import { appendTimeControlParams, readTimeControlParams } from './playtestRoute';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -65,7 +65,7 @@ import { publishMap } from '../net/maps';
 import { HttpError } from '../net/http';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type VictoryRules, type ZoneType } from '../core/level';
+import { OBJECTIVE_TYPES, ZONE_TYPES, type Level, type ObjectiveType, type Roster, type VictoryRules, type ZoneType } from '../core/level';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
@@ -602,17 +602,19 @@ const materialPointsForUnitId = (unitId: string): number => {
   return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
 };
 
-// The zone types the editor paints (ADR-0050): the two placement pools + the objective/goal zone.
-// The schema has more (enemy-threat/falling-rock) but only these three have consumers today, so
-// only these get brushes. Each carries its owner-facing label and the CSS modifier that tints its
-// board overlay + swatch.
-const LE_ZONE_BRUSHES = [
-  { type: 'player-spawn', label: 'Player placement', tint: 'player' },
-  { type: 'enemy-spawn', label: 'Enemy placement', tint: 'enemy' },
-  { type: 'objective', label: 'Goal', tint: 'goal' },
+// Authored gameplay zones. The editor controls the number of zone entries separately from each
+// entry's type, so same-type zones can stay distinct on save/reopen.
+const LE_ZONE_TYPES = [
+  { type: 'player-spawn', label: 'Player spawn', tint: 'player' },
+  { type: 'enemy-spawn', label: 'Enemy spawn', tint: 'enemy' },
+  { type: 'enemy-threat', label: 'Enemy threat', tint: 'threat' },
+  { type: 'objective', label: 'Objective', tint: 'goal' },
+  { type: 'falling-rock', label: 'Falling rock', tint: 'rock' },
+  { type: 'pawn-promotion', label: 'Pawn promotion', tint: 'promotion' },
 ] as const satisfies ReadonlyArray<{ type: ZoneType; label: string; tint: string }>;
-const LE_ZONE_TINT: Partial<Record<ZoneType, string>> = Object.fromEntries(LE_ZONE_BRUSHES.map((z) => [z.type, z.tint]));
-const LE_ZONE_LABEL: Partial<Record<ZoneType, string>> = Object.fromEntries(LE_ZONE_BRUSHES.map((z) => [z.type, z.label]));
+const DEFAULT_ZONE_TYPE: ZoneType = 'pawn-promotion';
+const LE_ZONE_TINT: Record<ZoneType, string> = Object.fromEntries(LE_ZONE_TYPES.map((z) => [z.type, z.tint])) as Record<ZoneType, string>;
+const LE_ZONE_LABEL: Record<ZoneType, string> = Object.fromEntries(LE_ZONE_TYPES.map((z) => [z.type, z.label])) as Record<ZoneType, string>;
 
 // A one-line, owner-facing gloss of each mode's win rule (the ADR-0050 table, in plain terms),
 // shown under the mode picker so the author knows what they picked.
@@ -637,6 +639,23 @@ const levelSignature = (level: Level): string =>
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
 const cloneEditorBoard = (board: EditorBoard): EditorBoard => structuredClone(board) as EditorBoard;
 const HISTORY_LIMIT = 100;
+
+const zoneEntriesForBoard = (board: EditorBoard): EditorZoneEntry[] =>
+  board.zoneEntries ? board.zoneEntries : zoneEntriesFromCellMap(board.zones, board.cols, board.rows);
+
+const withZoneEntries = (board: EditorBoard, zoneEntries: EditorZoneEntry[]): EditorBoard => ({
+  ...board,
+  zoneEntries,
+  zones: zoneCellMapFromEntries(zoneEntries),
+});
+
+function nextZoneEntryId(entries: readonly EditorZoneEntry[]): string {
+  const used = new Set(entries.map((entry) => entry.id));
+  for (let i = entries.length + 1; ; i += 1) {
+    const id = `zone-${i}`;
+    if (!used.has(id)) return id;
+  }
+}
 
 function DirectionPopover({ value, label, onChange }: {
   value: Direction;
@@ -1006,11 +1025,20 @@ export function LevelEditor(): ReactElement {
   const [unitFaction, setUnitFactionState] = useState<UnitPalette>('navy-blue');
   const [undoStack, setUndoStack] = useState<EditorBoard[]>([]);
   const [redoStack, setRedoStack] = useState<EditorBoard[]>([]);
-  // Gameplay zones (ADR-0050): a per-cell channel (cell "x,y" -> zone type), painted like cover.
-  // Seeded from a loaded board (boardCode carries them losslessly); the active brush picks which
-  // zone type paints.
-  const [boardZones, setBoardZones] = useState<Record<string, ZoneType>>(initialBoard?.zones ?? {});
-  const [zoneBrushType, setZoneBrushType] = useState<ZoneType>(LE_ZONE_BRUSHES[0].type);
+  // Gameplay zones: an authored list of zone entries. `boardZones` below is the legacy per-cell
+  // overlay map derived from this list for board rendering and old board-code compatibility.
+  const [boardZoneEntries, setBoardZoneEntries] = useState<EditorZoneEntry[]>(() => zoneEntriesForBoard(initialBoard ?? { cols: boardCols, rows: boardRows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} }));
+  const [selectedZoneIndex, setSelectedZoneIndex] = useState(0);
+  const boardZones = useMemo(() => zoneCellMapFromEntries(boardZoneEntries), [boardZoneEntries]);
+  const activeZone = boardZoneEntries[selectedZoneIndex] ?? null;
+  const activeZoneType = activeZone?.type ?? DEFAULT_ZONE_TYPE;
+  const activeZoneTint = LE_ZONE_TINT[activeZoneType] ?? 'goal';
+  const activeZoneOverlay = useMemo(() => activeZone ? zoneCellMapFromEntries([activeZone]) : {}, [activeZone]);
+  const visibleZones = brushKind === 'zone' ? activeZoneOverlay : {};
+  useEffect(() => {
+    if (selectedZoneIndex < boardZoneEntries.length || selectedZoneIndex === 0) return;
+    setSelectedZoneIndex(Math.max(0, boardZoneEntries.length - 1));
+  }, [boardZoneEntries.length, selectedZoneIndex]);
 
   // The RULES panel state — the authored win-rule mode + the orthogonal placement axis (ADR-0050).
   // Seeded from the campaign level on hydrate (below); a fresh/standalone board starts at the
@@ -1147,7 +1175,7 @@ export function LevelEditor(): ReactElement {
       setBoardFeatures(board.features);
       setFeatureCuts(board.featureCuts);
       setFeatureExits(board.featureExits);
-      setBoardZones(board.zones ?? {});
+      setBoardZoneEntries(zoneEntriesForBoard(board));
       setGeneratedRegions(board.generatedRegions ?? []);
       setActiveGeneratedRegionId(null);
       setRegionSelection(new Set());
@@ -1180,8 +1208,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the board link
   // and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zones: boardZones, generatedRegions }),
-    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, featureCuts, featureExits, boardZones, generatedRegions],
+    () => ({ cols: boardCols, rows: boardRows, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, units: boardUnits, doodads: boardDoodads, props: boardProps, cover: boardCover, coverTypes: boardCoverTypes, features: boardFeatures, fences: boardFences, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions }),
+    [boardCols, boardRows, playerFaction, boardFactionDirections, boardCells, boardUnits, boardDoodads, boardProps, boardCover, boardCoverTypes, boardFeatures, boardFences, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions],
   );
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -1198,7 +1226,7 @@ export function LevelEditor(): ReactElement {
     setBoardFences(board.fences ?? {});
     setFeatureCuts(board.featureCuts);
     setFeatureExits(board.featureExits);
-    setBoardZones(board.zones ?? {});
+    setBoardZoneEntries(zoneEntriesForBoard(board));
     const nextGeneratedRegions = board.generatedRegions ?? [];
     setGeneratedRegions(nextGeneratedRegions);
     if (activeGeneratedRegionId && !nextGeneratedRegions.some((region) => region.id === activeGeneratedRegionId)) {
@@ -1386,12 +1414,11 @@ export function LevelEditor(): ReactElement {
       return;
     }
     if (brushKind === 'zone') {
-      // One zone type per cell (repainting replaces it). Zones sit on TOP of terrain — they don't
-      // gate on tile material, so a placement pool can cover any surface (playability decides
-      // which of those tiles are actually usable). Routed through commitEditorBoard so zone paints
-      // ride the undo/redo history + board-link/save signature like every other layer.
-      next.zones = { ...(next.zones ?? {}), [key]: zoneBrushType };
-      commitEditorBoard(next);
+      const entries = zoneEntriesForBoard(next);
+      const target = entries[selectedZoneIndex];
+      if (!target || target.tiles.includes(key)) return;
+      const updated = entries.map((entry, index) => index === selectedZoneIndex ? { ...entry, tiles: [...entry.tiles, key] } : entry);
+      commitEditorBoard(withZoneEntries(next, updated));
       return;
     }
     next.cells[key] = brushAsset.id;
@@ -1428,7 +1455,14 @@ export function LevelEditor(): ReactElement {
       return;
     }
     if (brushKind === 'cover') { delete next.cover[key]; if (next.coverTypes) delete next.coverTypes[key]; commitEditorBoard(next); return; }
-    if (brushKind === 'zone') { if (next.zones) delete next.zones[key]; commitEditorBoard(next); return; }
+    if (brushKind === 'zone') {
+      const entries = zoneEntriesForBoard(next);
+      const target = entries[selectedZoneIndex];
+      if (!target?.tiles.includes(key)) return;
+      const updated = entries.map((entry, index) => index === selectedZoneIndex ? { ...entry, tiles: entry.tiles.filter((tile) => tile !== key) } : entry);
+      commitEditorBoard(withZoneEntries(next, updated));
+      return;
+    }
     delete next.cells[key];
     commitEditorBoard(next);
   };
@@ -1449,7 +1483,7 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, featureCuts: {}, featureExits: {}, zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, units: {}, doodads: {}, props: {}, cover: {}, coverTypes: {}, features: {}, fences: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
   };
@@ -1460,7 +1494,13 @@ export function LevelEditor(): ReactElement {
     else if (brushKind === 'doodad') next.doodads = {};
     else if (brushKind === 'prop') next.props = {};
     else if (brushKind === 'cover') { next.cover = {}; next.coverTypes = {}; }
-    else if (brushKind === 'zone') next.zones = {};
+    else if (brushKind === 'zone') {
+      const entries = zoneEntriesForBoard(next);
+      if (entries[selectedZoneIndex]) {
+        const updated = entries.map((entry, index) => index === selectedZoneIndex ? { ...entry, tiles: [] } : entry);
+        Object.assign(next, withZoneEntries(next, updated));
+      }
+    }
     else if (brushKind === 'fence') next.fences = {};
     else if (featureKind) {
       const cleared = new Set<string>();
@@ -2054,9 +2094,11 @@ export function LevelEditor(): ReactElement {
     }
     nextBoard.cover = prune(nextBoard.cover);
     nextBoard.features = prune(nextBoard.features);
-    // Zones are a per-cell channel like cover — drop any tile now off the board, so a shrunk
-    // board never keeps a spawn/goal tile hanging past its edge (mirrors the units/props pruning).
-    nextBoard.zones = prune(nextBoard.zones ?? {});
+    // Zone entries keep their identity on resize; only their off-board tiles are pruned.
+    {
+      const entries = zoneEntriesForBoard(nextBoard).map((entry) => ({ ...entry, tiles: entry.tiles.filter(within) }));
+      Object.assign(nextBoard, withZoneEntries(nextBoard, entries));
+    }
     const prunedGeneratedRegions = (nextBoard.generatedRegions ?? [])
       .map((region) => ({ ...region, cells: sortRegionCells(region.cells.filter((key) => within(key))) }))
       .filter((region) => region.cells.length > 0);
@@ -2114,7 +2156,8 @@ export function LevelEditor(): ReactElement {
   const unitCount = Object.keys(boardUnits).length;
   const doodadCount = Object.keys(boardDoodads).length;
   const propCount = Object.keys(boardProps).length;
-  const zoneCount = Object.keys(boardZones).length;
+  const zoneCount = boardZoneEntries.length;
+  const zonedTileCount = boardZoneEntries.reduce((sum, zone) => sum + zone.tiles.length, 0);
   const selectedTileId = selectedCell ? boardCells[`${selectedCell.x},${selectedCell.y}`] : undefined;
   const selectedAsset = selectedTileId ? resolveAsset(selectedTileId) : undefined;
   const selectedUnit = selectedCell ? boardUnits[`${selectedCell.x},${selectedCell.y}`] : undefined;
@@ -2153,7 +2196,35 @@ export function LevelEditor(): ReactElement {
     return list;
   }, [boardCover, boardCoverTypes, boardCells, coverSeed]);
   const selectedFeature = selectedCell ? boardFeatures[`${selectedCell.x},${selectedCell.y}`] : undefined;
-  const selectedZone = selectedCell ? boardZones[`${selectedCell.x},${selectedCell.y}`] : undefined;
+  const selectedZones = selectedCell && activeZone?.tiles.includes(`${selectedCell.x},${selectedCell.y}`) ? [activeZone] : [];
+  const addZoneEntry = (): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(next).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
+    entries.push({ id: nextZoneEntryId(entries), type: DEFAULT_ZONE_TYPE, tiles: [] });
+    const nextIndex = entries.length - 1;
+    setSelectedZoneIndex(nextIndex);
+    commitEditorBoard(withZoneEntries(next, entries), null);
+  };
+  const removeActiveZoneEntry = (): void => {
+    if (!activeZone) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(next).map((entry) => ({ ...entry, tiles: [...entry.tiles] }));
+    if (!entries.length) return;
+    const updated = entries.filter((_, index) => index !== selectedZoneIndex);
+    const nextIndex = updated.length ? Math.min(selectedZoneIndex, updated.length - 1) : 0;
+    setSelectedZoneIndex(nextIndex);
+    commitEditorBoard(withZoneEntries(next, updated), null);
+  };
+  const selectZoneEntry = (id: string): void => {
+    const index = boardZoneEntries.findIndex((zone) => zone.id === id);
+    if (index >= 0) setSelectedZoneIndex(index);
+  };
+  const setActiveZoneType = (type: ZoneType): void => {
+    if (!(ZONE_TYPES as readonly string[]).includes(type) || !activeZone) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    const entries = zoneEntriesForBoard(next).map((entry, index) => index === selectedZoneIndex ? { ...entry, type } : entry);
+    commitEditorBoard(withZoneEntries(next, entries));
+  };
   const toggleFeatureCut = (edge: string): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     if (next.featureCuts[edge]) delete next.featureCuts[edge];
@@ -2276,7 +2347,7 @@ export function LevelEditor(): ReactElement {
                   doodads={boardDoodads}
                   props={boardProps}
                   features={featureOverlays}
-                  zones={boardZones}
+                  zones={visibleZones}
                   resolveAsset={resolveAsset}
                   resolveUnit={resolveUnitAsset}
                   resolveDoodad={resolveDoodadAsset}
@@ -2789,7 +2860,7 @@ export function LevelEditor(): ReactElement {
                 : brushKind === 'cover'
                 ? <GroundCoverPreview asset={coverBrushAsset} />
                 : brushKind === 'zone'
-                ? <span className={`le-brush-thumb-zone le-zone-${LE_ZONE_TINT[zoneBrushType] ?? 'goal'}`} aria-hidden="true" />
+                ? <span className={`le-brush-thumb-zone le-zone-${activeZoneTint}`} aria-hidden="true" />
                 : fenceTool
                 ? <img src={fenceThumbSrc(fenceBrushMaterial)} alt="" draggable={false} />
                 : featureKind
@@ -2797,7 +2868,7 @@ export function LevelEditor(): ReactElement {
                 : <img className="le-thumb-tile" src={tileTopSrc(brushAsset)} alt="" draggable={false} onError={(e) => { const img = e.currentTarget; if (img.src.endsWith('-top.png')) img.src = brushAsset.src; }} />}
             </span>
             <span className="le-brush-meta">
-              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (LE_ZONE_LABEL[zoneBrushType] ?? 'Zone') : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
+              <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? LE_ZONE_LABEL[activeZone.type] : 'No zones') : fenceTool ? `${FENCE_MATERIAL_LABELS[fenceBrushMaterial]} fence` : featureKind ? `${FEATURE_MATERIAL_LABELS[featureBrushMaterial[featureKind]]} ${featureKind}` : brushAsset.label}</strong>
               <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : fenceTool ? 'fence · edge' : featureKind ? `feature · ${featureKind}` : 'tile'}</span>
             </span>
           </div>
@@ -2833,26 +2904,50 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'zone' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Zone</h2>
-            {/* Which gameplay zone the brush paints. Player/Enemy placement pools feed random
-                placement; Goal is the objective tile for Reach. Brush paints, Erase clears. */}
-            <div className="le-seg">
-              {LE_ZONE_BRUSHES.map((zone) => (
-                <button
-                  type="button"
-                  key={zone.type}
-                  className={`le-seg-btn ${zoneBrushType === zone.type && tool !== 'erase' ? 'active' : ''}`.trim()}
-                  onClick={() => { setZoneBrushType(zone.type); setBrushKind('zone'); setLayer('zone'); setTool('brush'); }}
-                >
-                  <span className={`le-zone-dot le-zone-${zone.tint}`} aria-hidden="true" />{zone.label}
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Zone</span>
+              <div className="le-zone-select-controls">
+                <div className="le-layer-select-wrap">
+                  <select
+                    className="le-layer-select"
+                    value={activeZone?.id ?? ''}
+                    disabled={!activeZone}
+                    onChange={(event) => selectZoneEntry(event.target.value)}
+                    aria-label="Selected zone"
+                  >
+                    {activeZone ? null : <option value="">None</option>}
+                    {boardZoneEntries.map((zone, index) => (
+                      <option key={zone.id} value={zone.id}>Zone {index + 1} - {LE_ZONE_LABEL[zone.type]}</option>
+                    ))}
+                  </select>
+                </div>
+                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
+                  <span><span className="stepper-glyph stepper-minus" aria-hidden="true" /></span>
                 </button>
-              ))}
+                <button type="button" className="settings-chrome-button settings-chrome-button-neutral le-zone-stepper-button" aria-label="Add zone" title="Add zone" onClick={addZoneEntry}>
+                  <span><span className="stepper-glyph stepper-plus" aria-hidden="true" /></span>
+                </button>
+              </div>
+            </div>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Type</span>
+              <div className="le-layer-select-wrap">
+                <select
+                  className="le-layer-select"
+                  value={activeZone?.type ?? DEFAULT_ZONE_TYPE}
+                  disabled={!activeZone}
+                  onChange={(event) => setActiveZoneType(event.target.value as ZoneType)}
+                  aria-label="Zone type"
+                >
+                  {LE_ZONE_TYPES.map((zone) => (
+                    <option key={zone.type} value={zone.type}>{zone.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <p className="le-board-note">
-              Placement zones set where each side's random-placement roster can be dealt. The Goal
-              zone is the tile a player piece must reach to win a Reach level. Zones tint the board;
-              they never change the terrain underneath.
+              Brush paints cells into the selected zone. Erase removes cells from the selected zone.
             </p>
-            <p className="le-board-note">{zoneCount} tile{zoneCount === 1 ? '' : 's'} zoned.</p>
           </section>
         ) : null}
 
@@ -3071,7 +3166,7 @@ export function LevelEditor(): ReactElement {
         {brushKind !== 'tile' ? (
           <section className="skirmish-card">
             <h2>Layer Actions</h2>
-            <button type="button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={`Clear every ${brushKind} placement from this board.`}>Clear {brushKind}</button>
+            <button type="button" className="le-seg-btn danger" style={{ width: '100%' }} onClick={clearActiveLayer} title={brushKind === 'zone' ? 'Clear the selected zone entry.' : `Clear every ${brushKind} placement from this board.`}>Clear {brushKind === 'zone' ? 'active zone' : brushKind}</button>
           </section>
         ) : null}
 
@@ -3123,7 +3218,7 @@ export function LevelEditor(): ReactElement {
               <div><dt>Type</dt><dd>{leFamilyOfTile(selectedAsset.id)?.label ?? '—'}</dd></div>
               <div><dt>Source</dt><dd>{selectedAsset.id}</dd></div>
               <div><dt>Cell</dt><dd>{selectedCell?.x}, {selectedCell?.y}</dd></div>
-              {selectedZone ? <div><dt>Zone</dt><dd>{LE_ZONE_LABEL[selectedZone] ?? selectedZone}</dd></div> : null}
+              {selectedZones.length ? <div><dt>Zone</dt><dd>{selectedZones.map((zone) => LE_ZONE_LABEL[zone.type]).join(', ')}</dd></div> : null}
             </dl>
           ) : (
             <dl>
@@ -3131,7 +3226,7 @@ export function LevelEditor(): ReactElement {
               <div><dt>Units</dt><dd>{unitCount}</dd></div>
               <div><dt>Doodads</dt><dd>{doodadCount}</dd></div>
               <div><dt>Props</dt><dd>{propCount}</dd></div>
-              <div><dt>Zoned</dt><dd>{zoneCount}</dd></div>
+              <div><dt>Zones</dt><dd>{zoneCount}</dd></div>
             </dl>
           )}
         </section>
@@ -3141,7 +3236,7 @@ export function LevelEditor(): ReactElement {
             per-layer control). The Details card above still surfaces the same counts contextually. */}
         {layer === 'board' ? (
         <div className="le-statusline">
-          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zoned · {boardCols}×{boardRows}
+          {selectedCell ? <>Cell <b>{selectedCell.x},{selectedCell.y}</b> · </> : null}<b>{paintedCount}</b> tiles · <b>{unitCount}</b> units · <b>{doodadCount}</b> doodads · <b>{propCount}</b> props · <b>{zoneCount}</b> zones · <b>{zonedTileCount}</b> zoned tiles · {boardCols}×{boardRows}
         </div>
         ) : null}
         </KitScroll>

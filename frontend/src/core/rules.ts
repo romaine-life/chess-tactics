@@ -3,7 +3,7 @@
 // obstacles, side-based pawns, threat = enemy attacked squares, capture/promote/
 // last-side-standing) — but deterministic and immutable.
 
-import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, Side, UnitFacing, Vec, Winner } from './types';
+import type { BoardSize, EnemyIntent, GameEvent, GameState, LastMove, Move, Piece, PieceType, PromotionPieceType, Side, UnitFacing, Vec, Winner } from './types';
 import type { Rng } from './rng';
 import { buildTerrainIndex, canTraverse, elevationAt, haltsTravel, type TerrainIndex } from './terrain';
 import { facingFromDelta } from './pieces';
@@ -130,14 +130,6 @@ function isPawnDoubleStep(last: LastMove): boolean {
   const dx = Math.abs(last.from.x - last.to.x);
   const dy = Math.abs(last.from.y - last.to.y);
   return (dx === 0 && dy === 2) || (dx === 2 && dy === 0) || (dx === 2 && dy === 2);
-}
-
-function reachedPawnFarEdge(piece: Piece, size: BoardSize): boolean {
-  const [dx, dy] = pawnForwardVector(piece);
-  return (dx < 0 && piece.x === 0) ||
-    (dx > 0 && piece.x === size.cols - 1) ||
-    (dy < 0 && piece.y === 0) ||
-    (dy > 0 && piece.y === size.rows - 1);
 }
 
 function rayMoves(piece: Piece, pieces: readonly Piece[], size: BoardSize, dirs: ReadonlyArray<readonly [number, number]>, env: MoveEnv | undefined, originElev: number): Move[] {
@@ -380,12 +372,20 @@ export interface ApplyResult {
   events: GameEvent[];
 }
 
+export interface ApplyOptions {
+  promotion?: PromotionPieceType;
+}
+
+function isPawnPromotionCell(state: GameState, piece: Piece): boolean {
+  return !!state.promotionZones?.some((cell) => cell.x === piece.x && cell.y === piece.y);
+}
+
 /**
  * Apply a move to the state, returning a NEW state plus the events it produced.
  * Handles capture, pawn promotion, victory (last side standing), and turn
  * hand-off. Pure: the input state is never mutated.
  */
-export function applyMove(state: GameState, pieceId: string, move: Move): ApplyResult {
+export function applyMove(state: GameState, pieceId: string, move: Move, options: ApplyOptions = {}): ApplyResult {
   const events: GameEvent[] = [];
   const pieces = state.pieces.map((p) => ({ ...p }));
   const piece = pieces.find((p) => p.id === pieceId && p.alive);
@@ -425,9 +425,10 @@ export function applyMove(state: GameState, pieceId: string, move: Move): ApplyR
   events.push({ kind: 'moved', pieceId: piece.id, from, to: { x: move.x, y: move.y } });
 
   if (piece.type === 'pawn') {
-    if (reachedPawnFarEdge(piece, state.size)) {
-      piece.type = 'queen';
-      events.push({ kind: 'promoted', pieceId: piece.id, to: 'queen' });
+    if (isPawnPromotionCell(state, piece)) {
+      const promotion = options.promotion ?? 'queen';
+      piece.type = promotion;
+      events.push({ kind: 'promoted', pieceId: piece.id, to: promotion });
     }
   }
 

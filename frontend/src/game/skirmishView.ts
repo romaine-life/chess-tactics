@@ -18,7 +18,8 @@ type OverlayKey =
   | 'showBlocked'
   | 'showEnemyMoves'
   | 'showPlayerAttacks'
-  | 'showPlayerMoves';
+  | 'showPlayerMoves'
+  | 'showPromotionZones';
 
 export interface SkirmishViewState {
   /** Highlight the focused piece's legal moves. Default on. */
@@ -34,6 +35,8 @@ export interface SkirmishViewState {
   showEnemyMoves: boolean;
   showPlayerAttacks: boolean;
   showPlayerMoves: boolean;
+  /** Highlight authored pawn-promotion cells. Opt-in so gameplay stays visually clean. */
+  showPromotionZones: boolean;
   zoom: number;
   pan: { x: number; y: number };
   toggle: (key: OverlayKey) => void;
@@ -49,6 +52,7 @@ export const useSkirmishView = create<SkirmishViewState>((set) => ({
   showEnemyMoves: false,
   showPlayerAttacks: false,
   showPlayerMoves: false,
+  showPromotionZones: false,
   zoom: DEFAULT_ZOOM,
   pan: DEFAULT_PAN,
   toggle: (key) => set((s) => ({ [key]: !s[key] })),

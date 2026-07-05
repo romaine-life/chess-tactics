@@ -26,7 +26,7 @@ afterEach(() => {
   vi.useRealTimers();
   // The store is a module singleton shared across tests; a test that sets an authored victory
   // override (ADR-0064) must not leak it into the next test's preset eval. Reset the victory state.
-  useSkirmish.setState({ victoryOverride: null, resultDetail: null });
+  useSkirmish.setState({ victoryOverride: null, resultDetail: null, pendingPromotion: null });
 });
 
 function playFirstMove(seed: number) {
@@ -353,11 +353,9 @@ describe('skirmish store: survive + reach objectives', () => {
     expect(useSkirmish.getState().game.winner).toBe('player');
   });
 
-  it('reach: a PAWN stepping onto a target cell wins instantly (even as it promotes there)', () => {
+  it('reach: a PAWN promoting on a target cell wins after the promotion choice', () => {
     useSkirmish.setState({
-      // Pawn one step from the target (0,0) is the enemy back rank, so it promotes on arrival —
-      // reach still fires because lastMove records the pre-promotion type (ADR-0064).
-      game: { size: { cols: 8, rows: 8 }, pieces: [piece('pp', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null },
+      game: { size: { cols: 8, rows: 8 }, pieces: [piece('pp', 'player', 'pawn', 0, 1), piece('ek', 'enemy', 'king', 7, 7)], turn: 'player', winner: null, promotionZones: [{ x: 0, y: 0 }] },
       env: { terrain: undefined, lastMove: undefined },
       objective: 'reach',
       objectiveCtx: { reachCells: [{ x: 0, y: 0 }] },
@@ -369,9 +367,13 @@ describe('skirmish store: survive + reach objectives', () => {
       log: [],
     });
     useSkirmish.getState().tryMoveTo(0, 0); // pawn steps onto the target
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ pieceId: 'pp' });
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+    useSkirmish.getState().choosePromotion('rook');
     const { game } = useSkirmish.getState();
     expect(game.winner).toBe('player');
     expect(game.turn).toBe('done');
+    expect(game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'rook', x: 0, y: 0 });
   });
 
   it('reach: a NON-pawn on a target cell does NOT win (reach is pawn-only)', () => {
