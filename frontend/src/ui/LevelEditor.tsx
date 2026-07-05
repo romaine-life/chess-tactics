@@ -1517,6 +1517,7 @@ export function LevelEditor(): ReactElement {
     const existing = generatedRegions.find((region) => regionCellsEqual(sortRegionCells(region.cells), cells));
     if (existing) {
       selectGeneratedRegionUnit(existing.id);
+      setTool('select');
       return;
     }
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -1526,6 +1527,7 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next);
     setActiveGeneratedRegionId(region.id);
     setRegionSelection(new Set(cells));
+    setTool('select');
   };
   const clearRegion = (): void => {
     setActiveGeneratedRegionId(null);
