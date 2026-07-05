@@ -66,12 +66,31 @@ export function readAdoptedVector(levelId: string): number[] | null {
   return Array.isArray(vec) ? vec : null;
 }
 
-/** The EvalWeights the live AI should use for a level: the adopted champion if one
- * has been adopted, else the shipped DEFAULT_EVAL_WEIGHTS. Null levelId (free
- * skirmish) always uses the shipped weights. Never throws. */
+// The GLOBAL "shipped" tier: an admin tuned + shipped these weights for a level via
+// PUT /api/ai-weights (ship-to-everyone), so EVERY player's live AI uses them —
+// unless that player has personally adopted their own. Held in a synchronous cache
+// the app populates once at startup (net/aiWeights.loadShippedAiWeights), so the
+// live AI can read it without awaiting. Empty until loaded ⇒ falls back to DEFAULT.
+let shippedMap: AdoptedMap = {};
+
+/** Populate the shipped-weights cache (called once at startup from the backend). */
+export function setShippedAiWeights(map: AdoptedMap | null | undefined): void {
+  shippedMap = map && typeof map === 'object' ? map : {};
+}
+
+/** The globally-shipped vector for a level, or null if none was shipped. */
+export function readShippedVector(levelId: string): number[] | null {
+  const vec = shippedMap[levelId];
+  return Array.isArray(vec) ? vec : null;
+}
+
+/** The EvalWeights the live AI should use for a level, resolving three tiers in
+ * order: (1) the player's PERSONAL adopted champion, (2) the globally SHIPPED weights
+ * an admin published, (3) the shipped DEFAULT_EVAL_WEIGHTS. Null levelId (free
+ * skirmish) always uses DEFAULT. Never throws. */
 export function adoptedWeightsFor(levelId: string | null): EvalWeights {
   if (!levelId) return DEFAULT_EVAL_WEIGHTS;
-  const vec = readAdoptedVector(levelId);
+  const vec = readAdoptedVector(levelId) ?? readShippedVector(levelId);
   if (!vec) return DEFAULT_EVAL_WEIGHTS;
   try {
     return decodeWeights(vec);

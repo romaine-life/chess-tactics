@@ -4,7 +4,7 @@ date: 2026-07-04
 deciders: owner (Nelson) + Claude
 ---
 
-# ADR-0063: The Editor is a settings-twin at `/editor`; the level editor nests at `/editor/level`
+# ADR-0065: The Editor is a settings-twin at `/editor`; the level editor nests at `/editor/level`
 
 ## Context and Problem Statement
 
@@ -32,8 +32,9 @@ Legacy paths (`/campaigns-next`, `/campaigns`, `/edit`, `/level-editor`) stay as
 router + `routeSurfaces` + `titleBarConfig` + `routePrefetch` accept both) so bookmarks/tests keep
 working; every *internal* producer emits the canonical name, so the address bar reads `/editor`.
 
-**2 — The Editor is a settings-twin.** It adopts the shared shell — `SceneBackdrop` /
-`AmbienceBackground` behind one `ArtRouteChrome className="settings-shell"`, split into a left
+**2 — The Editor is a settings-twin.** It adopts the shared shell — the one continuous
+`HomepageBackdrop` ([ADR-0064](0064-homepage-backdrop-is-one-continuous-instance.md)) behind one
+`ArtRouteChrome className="settings-shell"`, split into a left
 `.settings-rail-frame` (a rail of campaign `.settings-tab`s + a pinned workspace-verb footer) and a
 right `.settings-main-frame` (a single scrolling column of `SettingsSection`/`SettingsRow` groups
 with the live board preview pinned at the top). It is now the **fourth member** of the

@@ -14,8 +14,7 @@ import { LevelInfoCompact, levelObjectiveLine } from './LevelInfoCompact';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
@@ -107,12 +106,14 @@ function Stars({ count = 0 }: { count?: number }): ReactElement {
 function CampaignRailTab({
   campaign,
   active,
+  index,
   isAdmin,
   onSelect,
   onFavorite,
 }: {
   campaign: Campaign;
   active: boolean;
+  index: number;
   isAdmin: boolean;
   onSelect: () => void;
   onFavorite: (event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -130,6 +131,10 @@ function CampaignRailTab({
       tabIndex={locked ? -1 : 0}
       aria-current={active ? 'page' : undefined}
       aria-disabled={locked || undefined}
+      // --tab-index drives the shared stone-continuity slice so the rail's stone reads as
+      // one sheet however many campaigns there are (counted continuously past the Unassigned
+      // tab), matching the menu / Settings / Campaign rails.
+      style={{ ['--tab-index' as string]: index }}
       className={`settings-tab main-menu-mode-tab ce-campaign-tab ${active ? 'is-active' : ''} ${locked ? 'is-locked' : ''}`.trim()}
       onClick={selectCampaign}
       onKeyDown={(event) => {
@@ -170,10 +175,12 @@ function CampaignRailTab({
 function UnassignedRailTab({
   count,
   active,
+  index,
   onSelect,
 }: {
   count: number;
   active: boolean;
+  index: number;
   onSelect: () => void;
 }): ReactElement {
   const levelCount = `${count} level${count === 1 ? '' : 's'}`;
@@ -182,6 +189,7 @@ function UnassignedRailTab({
       role="button"
       tabIndex={0}
       aria-current={active ? 'page' : undefined}
+      style={{ ['--tab-index' as string]: index }}
       className={`settings-tab main-menu-mode-tab ce-campaign-tab ce-campaign-tab-meta ${active ? 'is-active' : ''}`.trim()}
       onClick={onSelect}
       onKeyDown={(event) => {
@@ -567,10 +575,10 @@ export function CampaignEditor() {
       data-reveal-buttons=""
     >
       {confirmDialog}
-      {/* Same animated menu scene + synced rain as the main menu / Campaign screen, behind
-          the rail and content frames. */}
-      <SceneBackdrop />
-      <AmbienceBackground />
+      {/* Same shared backdrop as the main menu / play-side Campaign screen: the one continuous
+          HomepageBackdrop (animated menu scene + synced rain), behind the rail and content
+          frames — it keeps the feel consistent with the rest of the app in the gaps. */}
+      <HomepageBackdrop />
       {/* ‹ Back to the menu — the trailing actions slot, the same title-bar spot Settings
           uses; the brand lockup remains the fixed leading anchor. */}
       <TitleBarSlot region="actions">
@@ -596,10 +604,11 @@ export function CampaignEditor() {
                   <span className="ce-rail-count">{ownCount} / 20</span>
                 </p>
                 {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}
-                {campaigns.map((campaign) => (
+                {campaigns.map((campaign, index) => (
                   <CampaignRailTab
                     key={campaign.id}
                     campaign={campaign}
+                    index={index}
                     active={!isUnassignedSelected && campaign.id === selectedCampaignId}
                     isAdmin={isAdmin}
                     onSelect={() => selectCampaignCollection(campaign.id)}
@@ -610,8 +619,10 @@ export function CampaignEditor() {
                   />
                 ))}
                 <p className="campaign-rail-group">Workspace</p>
+                {/* Continue the stone slice past the campaign tabs so the rail stays one sheet. */}
                 <UnassignedRailTab
                   count={unassignedLevels.length}
+                  index={campaigns.length}
                   active={isUnassignedSelected}
                   onSelect={selectUnassignedCollection}
                 />

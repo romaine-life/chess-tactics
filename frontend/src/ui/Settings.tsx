@@ -6,8 +6,7 @@ import { NavButton } from './shared/NavButton';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { SFX_SETTINGS_CHANGE_EVENT, previewTerrain } from '../sfx';
@@ -668,18 +667,20 @@ export function Settings(): ReactElement {
           <NavButton className="app-header-button" data-testid="settings-back" to={returnTo} title="Back to the previous screen">‹ Back</NavButton>
         ) : null}
       </TitleBarSlot>
-      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu,
+      {/* Same art-directed backdrop (animated menu scene + synced rain) as the main menu,
           behind the frames. */}
-      <SceneBackdrop />
-      <AmbienceBackground />
+      <HomepageBackdrop />
       <div className="settings-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Settings sections">
-            {tabs.map((tab) => (
+            {tabs.map((tab, index) => (
               <NavButton
                 key={tab.id}
                 to={withReturnTo(TAB_PATHS[tab.id])}
                 className={`settings-tab ${tab.id === activeTab ? 'is-active' : ''}`}
+                // Position down the rail — drives the shared stone-continuity slice
+                // (--tab-index, see .settings-tab in style.css) so the tabs read as one sheet.
+                style={{ ['--tab-index' as string]: index }}
                 aria-current={tab.id === activeTab ? 'page' : undefined}
                 onClick={() => setConfirmingReset(false)}
               >

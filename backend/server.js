@@ -278,6 +278,22 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS train_runs_owner_idx ON train_runs (owner_email, created_at DESC);
     `,
   },
+  {
+    version: 11,
+    name: 'shipped per-level AI weights',
+    // The GLOBAL admin-tuned AI-weight tier (ship-to-everyone). One upserted row per
+    // level id (PK id alone ⇒ global, cloning prop_seats/official_campaigns) holding
+    // the encoded eval-weight vector every player's live AI uses on that level —
+    // unless the player has personally adopted their own. Public GET / admin PUT.
+    sql: `
+      CREATE TABLE IF NOT EXISTS level_ai_weights (
+        level_id   text        PRIMARY KEY,
+        weights    jsonb       NOT NULL,
+        updated_by text,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 let pool = null;
@@ -1929,6 +1945,53 @@ const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
 // frontend `isPlayablePieceType` gate on `Level.roster` (core/level.ts + core/pieces.ts).
 const WORKSPACE_ROSTER_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+// ADR-0064 victory-condition kinds — mirror of core/level.ts VictoryCondition.
+const WORKSPACE_CONDITION_KINDS = new Set(['eliminate', 'reach', 'turnLimit']);
+
+/** Structural check for one ADR-0064 victory condition. Returns an error string or null. Shape/enum
+ * only, mirroring the frontend's conditionErrors (core/level.ts). */
+function validateWorkspaceCondition(c, label) {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return `${label} must be a condition object`;
+  if (!WORKSPACE_CONDITION_KINDS.has(c.kind)) return `${label}.kind is invalid`;
+  if (c.kind === 'eliminate') {
+    if (c.side !== 'player' && c.side !== 'enemy') return `${label}.side is invalid`;
+    if (c.filter !== undefined) {
+      if (!c.filter || typeof c.filter !== 'object' || Array.isArray(c.filter)) return `${label}.filter is invalid`;
+      if (c.filter.type !== undefined && !WORKSPACE_ROSTER_PIECES.has(c.filter.type)) return `${label}.filter.type is invalid`;
+    }
+  } else if (c.kind === 'reach') {
+    if (c.side !== 'player' && c.side !== 'enemy') return `${label}.side is invalid`;
+  } else if (c.kind === 'turnLimit') {
+    if (!isFiniteInteger(c.turns) || c.turns < 1) return `${label}.turns is invalid`;
+  }
+  return null;
+}
+
+/** Structural check for an authored `Level.victory` (ADR-0064) — an ORDERED array of if-then rules.
+ * An empty list is legal shape here (the editor's validatePlayability P6 gates unwinnable/unlosable
+ * sets); this only checks each rule has a conditions array + a valid `then`, and every condition is
+ * well-formed. Returns an error string or null. */
+function validateWorkspaceVictory(victory, key) {
+  if (!Array.isArray(victory)) return `levels.${key}.victory is invalid`;
+  for (let i = 0; i < victory.length; i += 1) {
+    const rule = victory[i];
+    const label = `levels.${key}.victory[${i}]`;
+    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return `${label} must be a rule object`;
+    if (!Array.isArray(rule.if)) return `${label}.if is invalid`;
+    for (let j = 0; j < rule.if.length; j += 1) {
+      const err = validateWorkspaceCondition(rule.if[j], `${label}.if[${j}]`);
+      if (err) return err;
+    }
+    if (!Array.isArray(rule.do)) return `${label}.do is invalid`;
+    for (let j = 0; j < rule.do.length; j += 1) {
+      const a = rule.do[j];
+      if (!a || typeof a !== 'object' || Array.isArray(a)) return `${label}.do[${j}] must be an action object`;
+      if (a.kind !== 'win' && a.kind !== 'lose') return `${label}.do[${j}].kind is invalid`;
+      if (a.side !== 'player' && a.side !== 'enemy') return `${label}.do[${j}].side is invalid`;
+    }
+  }
+  return null;
+}
 // Board floor dropped to 1×1 (ADR-0050): the old 4×4 clamp was an arbitrary guardrail with
 // no technical basis, and tiny boards are legitimate for several modes. Mirrors the frontend
 // BOARD_COLS / BOARD_ROWS consts in core/level.ts.
@@ -1979,6 +2042,13 @@ function validateWorkspaceLevel(level, key) {
       || !isFiniteInteger(tc.incrementSeconds) || tc.incrementSeconds < 0) {
       return `levels.${key}.timeControl is invalid`;
     }
+  }
+  // ADR-0064 authored victory — optional, structural mirror of the frontend's validateLevel
+  // (shape/enum only; the win/lose-non-empty gate stays editor-side, like P1–P6). Absent ⇒ the
+  // objective preset defines win/lose; legacy bodies omit it and stay valid.
+  if (level.victory !== undefined) {
+    const victoryErr = validateWorkspaceVictory(level.victory, key);
+    if (victoryErr) return victoryErr;
   }
   if (level.roster !== undefined) {
     if (!level.roster || typeof level.roster !== 'object' || Array.isArray(level.roster)) {
@@ -2288,6 +2358,29 @@ async function dbDeleteTrainRun(ownerEmail, id) {
   await ensureDbReady();
   const { rowCount } = await pool.query('DELETE FROM train_runs WHERE owner_email = $1 AND id = $2', [ownerEmail, id]);
   return rowCount > 0;
+}
+
+// ── Global shipped per-level AI weights (ship-to-everyone) ────────────────────
+async function dbGetAllAiWeights() {
+  await ensureDbReady();
+  const { rows } = await pool.query('SELECT level_id, weights FROM level_ai_weights');
+  const out = {};
+  for (const r of rows) out[r.level_id] = r.weights;
+  return out;
+}
+
+async function dbUpsertAiWeights(levelId, weights, updatedBy) {
+  await ensureDbReady();
+  await pool.query(
+    `INSERT INTO level_ai_weights (level_id, weights, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, now())
+       ON CONFLICT (level_id) DO UPDATE SET weights = EXCLUDED.weights, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+    [levelId, JSON.stringify(weights), updatedBy],
+  );
+}
+
+async function dbDeleteAiWeights(levelId) {
+  await ensureDbReady();
+  await pool.query('DELETE FROM level_ai_weights WHERE level_id = $1', [levelId]);
 }
 
 app.get('/api/lab-runs', async (req, res) => {
@@ -2741,6 +2834,34 @@ app.put('/api/prop-seats/:id', async (req, res) => {
   } catch (error) {
     dbUnavailable(res, 'prop seats write failed', error, 'prop_seats_store_unavailable');
   }
+});
+
+// Global shipped per-level AI weights (ship-to-everyone). Public GET returns the whole
+// map (every player's live AI reads it before falling back to DEFAULT weights);
+// admin-gated PUT sets one level's vector, or clears it with { weights: null }. A
+// player's PERSONAL adopted override (opening_books blob) still wins over this.
+const AI_WEIGHTS_LEN = 14; // 6 piece values + 8 term weights (encodeWeights order)
+function validAiWeightsVec(v) {
+  return Array.isArray(v) && v.length === AI_WEIGHTS_LEN && v.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0);
+}
+
+app.get('/api/ai-weights', async (_req, res) => {
+  try { res.status(200).json({ weights: await dbGetAllAiWeights() }); }
+  catch (error) { dbUnavailable(res, 'ai weights read failed', error, 'ai_weights_unavailable'); }
+});
+
+app.put('/api/ai-weights/:levelId', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  const levelId = String(req.params.levelId || '').trim();
+  if (!levelId || levelId.length > 256) { res.status(400).json({ error: 'invalid_level_id' }); return; }
+  const raw = req.body && typeof req.body === 'object' ? req.body : {};
+  try {
+    if (raw.weights === null) { await dbDeleteAiWeights(levelId); res.status(200).json({ ok: true, cleared: true }); return; }
+    if (!validAiWeightsVec(raw.weights)) { res.status(400).json({ error: 'invalid_ai_weights', details: `weights must be ${AI_WEIGHTS_LEN} finite non-negative numbers` }); return; }
+    await dbUpsertAiWeights(levelId, raw.weights, user.email);
+    res.status(200).json({ ok: true });
+  } catch (error) { dbUnavailable(res, 'ai weights write failed', error, 'ai_weights_unavailable'); }
 });
 
 // --- Shareable public maps -------------------------------------------------

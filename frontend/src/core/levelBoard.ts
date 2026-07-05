@@ -10,7 +10,7 @@
 //    `boardCode` so the next open is exact, and projecting terrain/units into `layers` so
 //    the game (which reads `layers`, not `boardCode`) plays the authored board.
 
-import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, Zone, ZoneType } from './level';
+import type { Level, LevelEconomy, LevelUnit, ObjectiveType, Roster, TimeControl, VictoryRules, Zone, ZoneType } from './level';
 import { BOARD_COLS, BOARD_ROWS, LEVEL_FORMAT_VERSION } from './level';
 import type { PlacedProp } from './props';
 import type { Piece, Side, TerrainCell, TerrainType, UnitFacing } from './types';
@@ -144,6 +144,9 @@ export interface LevelMeta {
   surviveTurns?: number;
   // The battle clock, authored in the RULES panel. Omitted ⇒ untimed (back-compat).
   timeControl?: TimeControl;
+  // Authored win/lose lists (ADR-0064). Omitted ⇒ the `objective` preset defines the outcome
+  // (the RULES panel's "Custom win/lose" toggle is off) — the same back-compat default as above.
+  victory?: VictoryRules;
   difficulty?: string;
   economy?: LevelEconomy;
   theme?: string;
@@ -363,5 +366,6 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   if (meta.roster !== undefined) level.roster = meta.roster;
   if (meta.surviveTurns !== undefined) level.surviveTurns = meta.surviveTurns;
   if (meta.timeControl !== undefined) level.timeControl = meta.timeControl;
+  if (meta.victory !== undefined) level.victory = meta.victory;
   return level;
 }

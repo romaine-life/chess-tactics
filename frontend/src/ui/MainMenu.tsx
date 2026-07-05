@@ -1,6 +1,5 @@
 import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { NavButton } from './shared/NavButton';
 import { MENU_MODES } from './design/catalogData';
@@ -62,9 +61,16 @@ const SETTINGS_ICON = `${ICONS}/settings.png`;
 // Settings sidebar uses, so the menu and the rest of the app read as one family
 // (retires the bespoke stone slabs). A NavButton, not an anchor (ADR-0052): game
 // controls are buttons; the route is the address, not the affordance.
-function ModeTab({ tab }: { tab: MenuTab }): ReactElement {
+// `index` is the tab's position down the rail — it drives the shared stone-continuity
+// slice (--tab-index) so this rail's stone reads as one sheet however many tabs it has
+// (the menu carries five; the Settings screen four). See .settings-tab in style.css.
+function ModeTab({ tab, index }: { tab: MenuTab; index: number }): ReactElement {
   return (
-    <NavButton className="settings-tab main-menu-mode-tab" to={tab.href}>
+    <NavButton
+      className="settings-tab main-menu-mode-tab"
+      to={tab.href}
+      style={{ ['--tab-index' as string]: index }}
+    >
       <span className="settings-tab-icon" aria-hidden="true">
         <img src={`${ICONS}/${tab.iconSlug}.png`} alt="" />
       </span>
@@ -128,8 +134,7 @@ export function MainMenu(): ReactElement {
       data-reveal-bg={reveal.has('bg') ? '' : undefined}
       data-reveal-buttons={reveal.has('buttons') && entered ? '' : undefined}
     >
-      <SceneBackdrop />
-      <AmbienceBackground />
+      <HomepageBackdrop />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of
           mode tabs + a framed feature panel — the same baked-skin chrome as /settings.
           The rail is placed by the shared .settings-shell rule alone (ADR-0062) — no
@@ -138,7 +143,7 @@ export function MainMenu(): ReactElement {
       <div className="settings-screen main-menu-twin-screen app-shell-bar-pad">
         <ArtRouteChrome className="settings-shell">
           <aside className="settings-frame settings-rail-frame" aria-label="Game modes">
-            {MENU_TABS.map((tab) => <ModeTab key={tab.slug} tab={tab} />)}
+            {MENU_TABS.map((tab, index) => <ModeTab key={tab.slug} tab={tab} index={index} />)}
           </aside>
         </ArtRouteChrome>
       </div>

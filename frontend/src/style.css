@@ -558,7 +558,7 @@ h1 {
 
 /* Ambience effect credit — a quiet bottom-right stamp naming the scene the
    shared rain world is running right now (read live off the vendored client;
-   rendered by AmbienceBackground, so every screen with the shared backdrop
+   rendered by HomepageBackdrop, so every screen with the shared backdrop
    carries it). Links to ambience's read-only monitor for the same broadcast.
    z4: above the screens' z3 UI tier so the corner stays clickable under
    footers/panels that reach it, still below the near-drop overlay (z5) so the
@@ -605,7 +605,7 @@ h1 {
     color var(--ds-duration-fast) var(--ds-ease-standard);
 }
 
-/* One start frame at opacity 0; AmbienceBackground drops this class on the
+/* One start frame at opacity 0; HomepageBackdrop drops this class on the
    next frame and the transition above plays. */
 .ambience-credit-start {
   opacity: 0;
@@ -3684,8 +3684,35 @@ h1 {
   z-index: -1;
 }
 
+/* The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
+   (menu scene + synced rain), NOT the battlefield world (/play keeps that). LevelEditor wraps
+   the faded editor chrome in .level-editor-root and renders <HomepageBackdrop> as a SIBLING of
+   it — outside the fade, so the backdrop stays continuous and never re-fades on entrance
+   (ADR-0046 §G), mirroring CampaignEditor's shape. This root is the positioned/overflow anchor
+   the backdrop's absolute layers fill; the editor's own ::before battlefield is dropped so the
+   shared scene shows through the (otherwise transparent) .skirmish-screen.
+   `isolation: isolate` makes the whole backdrop+editor stack self-contained, so its top layer
+   (the near rain overlay, z5) stays BELOW the global title bar (z50) that lives outside it. */
+.level-editor-root {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* Same layer order as the menu: scene (z1) < rain field (z2) < editor chrome (z3) < near rain
+   overlay (z5, drops crossing IN FRONT of the UI). The editor chrome inherits .skirmish-screen's
+   z5 — drop it to z3 so the overlay clears it; two classes out-rank the base rule. /play keeps
+   z5 (it has no rain). */
+.skirmish-screen.level-editor-screen {
+  z-index: 3;
+}
+.level-editor-screen::before {
+  background: none;
+}
+
 /* The skirmish picker is a light-art route: LightArtRouteShell renders the animated menu
-   scene (still art + waterfalls + scrim) as a <SceneBackdrop> element, so the picker no
+   scene (still art + waterfalls + scrim) via the shared <HomepageBackdrop>, so the picker no
    longer overrides the base ::before with the menu scene — the base dark floor rides behind
    the backdrop like every other light-art screen. */
 
@@ -3704,144 +3731,6 @@ h1 {
      where they overlap. Cut only at the screen edge (.skirmish-screen: overflow hidden). */
   position: relative;
   z-index: 0;
-}
-
-.skirmish-picker {
-  align-content: start;
-  display: grid;
-  gap: 14px;
-  grid-column: 1 / -1;
-  grid-row: 2;
-  min-height: 0;
-  overflow: auto;
-  padding: clamp(16px, 2.2vw, 28px);
-  position: relative;
-  z-index: 3;
-}
-
-.skirmish-picker-header {
-  align-items: end;
-  display: flex;
-  gap: 14px;
-  justify-content: space-between;
-  margin-inline: auto;
-  max-width: 1180px;
-  width: 100%;
-}
-
-.skirmish-picker-header h1 {
-  color: #f4fbff;
-  font-family: var(--ds-font-display);
-  font-size: clamp(1.4rem, 2.2vw, 2rem);
-  line-height: 1;
-  margin: 4px 0 0;
-  text-transform: uppercase;
-}
-
-.skirmish-picker-random {
-  min-width: 178px;
-}
-
-.skirmish-map-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  margin-inline: auto;
-  max-width: 1180px;
-  width: 100%;
-}
-
-.skirmish-map-card {
-  background: linear-gradient(180deg, rgba(10, 29, 42, .92), rgba(5, 15, 24, .9));
-  border: 1px solid rgba(149, 216, 234, .2);
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 0 16px 30px rgba(0, 0, 0, .26);
-  display: grid;
-  gap: 10px;
-  grid-template-rows: auto minmax(120px, 1fr) auto;
-  min-height: 0;
-  padding: 10px;
-}
-
-.skirmish-map-thumb {
-  align-items: center;
-  background: rgba(1, 7, 12, .48);
-  border: 1px solid rgba(149, 216, 234, .16);
-  border-radius: 6px;
-  display: grid;
-  justify-items: center;
-  min-height: 132px;
-  overflow: hidden;
-}
-
-.skirmish-map-copy {
-  display: grid;
-  gap: 8px;
-}
-
-.skirmish-map-copy h2,
-.skirmish-picker-empty-card h2 {
-  color: #f1cf86;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-lg);
-  line-height: 1.15;
-  margin: 0;
-  text-transform: uppercase;
-}
-
-.skirmish-map-copy dl {
-  color: var(--skirmish-muted);
-  display: grid;
-  gap: 5px;
-  margin: 0;
-}
-
-.skirmish-map-copy dl div {
-  align-items: baseline;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-}
-
-.skirmish-map-copy dt {
-  color: rgba(149, 216, 234, .78);
-  font-size: var(--ds-text-2xs);
-  text-transform: uppercase;
-}
-
-.skirmish-map-copy dd {
-  color: var(--skirmish-ink);
-  font-size: var(--ds-text-xs);
-  margin: 0;
-  text-align: right;
-}
-
-.skirmish-map-actions {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 1fr 1fr;
-}
-
-.skirmish-map-actions .ce-link-button {
-  min-height: 38px;
-}
-
-.skirmish-picker-empty {
-  justify-self: center;
-  margin-top: 18px;
-}
-
-.skirmish-picker-empty-card {
-  justify-self: center;
-  max-width: 520px;
-  padding: 18px;
-  text-align: center;
-}
-
-.skirmish-picker-empty-card p {
-  color: var(--skirmish-muted);
-  line-height: 1.45;
-  margin: 8px 0 16px;
 }
 
 .skirmish-topbar {
@@ -4004,6 +3893,28 @@ h1 {
   text-align: center;
 }
 
+/* The two flank chips share ONE width so the status cluster is symmetric about its
+   middle chip. The whole cluster is already page-centered (it's the centred `auto`
+   track of the title bar's 1fr·auto·1fr grid), so an equal-width pair puts the battle
+   clock — the middle chip — dead centre of the page, directly over the title bar's
+   nailhead diamond, with the turn plate and objective hugging it as a mirrored pair.
+   min- (not fixed) width so an unusually long objective line grows rather than clips;
+   the widest real content is ~139px ("Defeat every enemy piece"), so 150 sits both
+   comfortably on one line. The clock is always the centre chip (untimed reads "∞"),
+   so this equal pair centres it on every play surface, timed or not.
+   Scoped to the cluster so the standalone board status chips that reuse
+   .skirmish-turn-plate (loading / map-error) keep sizing to their own content. */
+.skirmish-topbar-status .skirmish-turn-plate,
+.skirmish-topbar-status .skirmish-objective {
+  min-inline-size: 150px;
+}
+
+/* Centre the objective's glyph+copy within its now-wider box so it mirrors the
+   centred turn plate across the clock (both flanks read as balanced panels). */
+.skirmish-topbar-status .skirmish-objective {
+  justify-content: center;
+}
+
 /* Battle-clock chip: sits between the turn plate and the objective on timed games,
    same two-line centered stack as the turn plate. The time line needs a stable
    width (digits tick every second) so the flanking chips don't breathe with it;
@@ -4019,6 +3930,16 @@ h1 {
 
 .skirmish-clock strong {
   font-variant-numeric: tabular-nums;
+}
+
+/* Untimed games show "∞" here instead of a countdown. The infinity glyph is absent from
+   the pixel display font (it falls back to a text font and renders small/thin), so bump
+   its size and drop the tabular-figure treatment it doesn't need — it then reads with the
+   same weight as the "5:00" it stands in for. */
+.skirmish-clock strong.skirmish-clock-unlimited {
+  font-size: 1.5em;
+  font-variant-numeric: normal;
+  line-height: 0.9;
 }
 
 /* The final seconds read as danger — the telegraph palette's threat tone, the same
@@ -4707,6 +4628,64 @@ h1 {
   border-image-source: url("/assets/ui/kit/button-danger.png");
 }
 
+/* New-skirmish battle-clock picker (HUD Controls tab): a caps label + a shared
+   stepper/toggle per row, the same primitives as the level editor's clock authoring.
+   The enclosing .skirmish-view-group's grid gap stacks the rows; each row just needs
+   the label and control pushed to opposite ends of the narrow HUD panel. */
+.skirmish-clock-row {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  justify-content: space-between;
+}
+
+.skirmish-clock-row > span {
+  color: #d6ecf5;
+  font-size: var(--ds-text-sm);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* Random Skirmish setup panel (the /skirmish hub's first tab): a blurb, the shared clock
+   picker in a width-capped column so its rows don't stretch across the whole panel, and a
+   Start button. Reuses .skirmish-clock-row from the picker above. */
+.skirmish-setup-section {
+  display: grid;
+  gap: var(--ds-stack);
+}
+
+.skirmish-setup-blurb {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-sm);
+  max-inline-size: 48ch;
+}
+
+/* Frame the clock config as the same baked stone panel the settings rows wear (panel-line
+   over the stone surface), so it reads as a real framed control on the page rather than
+   text floating on the scene. Content matches .settings-row's inset. */
+.skirmish-setup-clock {
+  display: grid;
+  gap: var(--ds-stack);
+  margin-top: var(--ds-gutter);
+  max-inline-size: 360px;
+  border: 2px solid transparent;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 14px round;
+  background: url("/assets/ui/surfaces/baseline-stone-blue.png") 0 0 / 1024px repeat fixed;
+  background-origin: padding-box;
+  background-clip: padding-box;
+  image-rendering: pixelated;
+  padding: 16px 22px;
+}
+
+.skirmish-setup-actions {
+  margin-top: var(--ds-gutter);
+}
+
+.skirmish-setup-start {
+  min-block-size: 46px;
+  padding: 0 var(--ds-space-6);
+}
+
 .skirmish-zoom-readout {
   color: var(--skirmish-ink);
   font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
@@ -5195,6 +5174,72 @@ h1 {
 .le-ctrlrow { align-items: center; display: flex; gap: var(--ds-inline-tight); justify-content: space-between; margin-top: var(--ds-stack); }
 .le-ctrllabel { color: #d6ecf5; font-size: var(--ds-text-sm); text-transform: uppercase; }
 .le-board-note { color: var(--skirmish-muted); font-size: var(--ds-text-sm); line-height: 1.4; margin: var(--ds-stack) 2px 0; }
+
+/* Victory-conditions editor (ADR-0064) — layout only; every control is a kit atom (le-seg-btn /
+   Toggle / Stepper / the styled le-layer-select). Each RULE is a faint grouping block; its
+   conditions stack with an IF/and prefix, then a THEN row. */
+.le-victory-presets { margin: 6px 0 2px; }
+.le-rules { margin-top: 12px; }
+.le-rule { border: 1px solid rgba(150, 180, 200, .18); border-radius: 6px; margin-top: 10px; padding: 8px 10px 10px; }
+.le-rule-cond { border-top: 1px solid rgba(150, 180, 200, .12); margin-top: 8px; padding-top: 8px; }
+.le-rule-cond:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.le-cond-top { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.le-cond-summary { color: #eaf5fb; font-size: var(--ds-text-sm); }
+.le-cond-summary b { color: var(--skirmish-cyan, #7fd7ff); font-weight: 700; margin-right: 3px; }
+.le-cond-remove { min-height: 26px; min-width: 0; padding: 0 10px; }
+.le-cond-params { margin-top: 2px; }
+.le-faction-select { min-width: 120px; }
+.le-cond-add { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.le-cond-add .le-seg-btn { min-height: 30px; min-width: 0; padding: 0 10px; }
+.le-rule-and { opacity: .7; }
+.le-rule-then { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.le-rule-then .le-ctrllabel { color: var(--skirmish-cyan, #7fd7ff); }
+.le-rule-remove { margin-left: auto; min-height: 30px; min-width: 0; padding: 0 10px; }
+.le-rule-add { margin-top: 12px; }
+.le-seg-compact .le-seg-btn { min-width: 0; padding: 0 12px; }
+
+/* Victory events editor opens as a full-size overlay OVER the board (.skirmish-field is
+   position:relative), leaving the right control panel untouched. Two columns inside: templates on
+   the left, the rules grid on the right — room to breathe that the narrow panel couldn't give. */
+.le-events-open { width: 100%; }
+.le-events-overlay {
+  /* Same kit panel frame as the right control panel (.skirmish-hud, ADR-0033): the panel.png
+     9-slice at 14px, box-sizing border-box, full height, padding:0 — NOT a hand-rolled border. */
+  border: 14px solid transparent;
+  border-image: url("/assets/ui/kit/panel.png") 24 fill / 14px round;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  inset: 0;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  text-align: left;
+  z-index: 30;
+}
+.le-events-head { align-items: center; border-bottom: 1px solid rgba(150, 180, 200, .18); display: flex; flex: 0 0 auto; justify-content: space-between; padding: 0 2px 10px; }
+.le-events-head h2 { color: #eafaff; margin: 0; }
+/* Master-detail: a scrollable NAMED rule list (left) + the selected rule's editor (right). */
+.le-md { display: grid; flex: 1; gap: 20px; grid-template-columns: minmax(230px, 300px) minmax(0, 1fr); min-height: 0; padding: 12px 2px 4px; }
+.le-md-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.le-md-rules { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.le-md-item { align-items: center; background: rgba(20, 34, 44, .5); border: 1px solid rgba(120, 160, 180, .18); border-radius: 5px; color: #cfe6f2; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 7px 10px; text-align: left; }
+.le-md-item:hover { border-color: rgba(120, 160, 180, .4); }
+.le-md-item.active { background: rgba(30, 60, 82, .7); border-color: var(--skirmish-cyan, #7fd7ff); color: #eafaff; }
+.le-md-item-name { font-size: var(--ds-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.le-md-item-out { flex: none; font-size: var(--ds-text-2xs); opacity: .85; text-transform: uppercase; }
+.le-md-item-out.lose { color: #ff9a9a; }
+.le-md-item-out.win { color: #9ff0b0; }
+.le-md-detail { min-height: 0; overflow-y: auto; padding-right: 6px; }
+.le-md-detail .le-rule { border: 0; margin-top: 0; padding: 0; }
+.le-events-templates { border-bottom: 1px solid rgba(150, 180, 200, .14); flex: none; padding-bottom: 12px; }
+.le-template-apply { align-items: center; display: flex; gap: 8px; margin-top: 8px; }
+.le-template-apply .le-layer-select { flex: 1; }
+.le-text-input { background: rgba(8, 18, 26, .8); border: 1px solid rgba(120, 160, 180, .35); border-radius: 4px; color: #eafaff; font-family: inherit; font-size: var(--ds-text-sm); min-width: 0; padding: 5px 8px; }
+.le-text-input:focus-visible { border-color: var(--skirmish-cyan, #7fd7ff); outline: none; }
+.le-events-tabs { flex: none; margin: 8px 0 0; }
+.le-events-placeholder { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 2px; }
+
 /* A LIVE flex column (ADR-0056): the gap actually applies — it was declared on a block
    container for this card's whole life and silently did nothing (children sat flush).
    Gap-driven container ⇒ children carry no vertical margins of their own (flex margins
@@ -5934,8 +5979,8 @@ body { font-size: 17px; }
 
 .ce-screen {
   /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
-     the <SceneBackdrop> element the editor renders (ui/SceneBackdrop.tsx), the same way the
-     main menu paints it, so the editor sits over the menu scene + synced rain. The editor's
+     the shared <HomepageBackdrop> the editor renders, the same continuous instance the
+     main menu shows, so the editor sits over the menu scene + synced rain. The editor's
      panels overlap most of it; the scene + rain only show in the gaps, for a consistent
      feel. This floor keeps the screen dark (never white) before the scene decodes. */
   background: #02070b;
@@ -5957,9 +6002,9 @@ body { font-size: 17px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Sit above the scene backdrop (<SceneBackdrop>, z1) so this cyan edge tint still colors
-     the menu scene — it used to ride over the .ce-screen background scene, which now lives
-     in a z1 element. Rain field (z2, later in the DOM) still falls in front of the tint. */
+  /* Sit above the scene backdrop (HomepageBackdrop's .scene-backdrop, z1) so this cyan edge
+     tint still colors the menu scene — it used to ride over the .ce-screen background scene,
+     which now lives in a z1 element. Rain field (z2, later in the DOM) still falls in front. */
   z-index: 2;
   background:
     linear-gradient(90deg, rgba(48, 214, 255, .08), transparent 16% 84%, rgba(48, 214, 255, .08)),
@@ -7395,6 +7440,18 @@ body { font-size: 17px; }
   align-items: center;
   display: flex;
   gap: 6px;
+}
+
+/* The Studio's title-bar actions cluster: the "‹ Scene" back (shown in the waterfall
+   inspector) sits inline, left of the Catalog/Lab/Viewer nav — one flex row so the text
+   button doesn't drop onto its own line above the icons. */
+.studio-topbar-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+.studio-scene-back {
+  white-space: nowrap;
 }
 
 .studio-mode-icon {
@@ -11009,8 +11066,8 @@ button.tileset-relationship-cell {
 .settings-art-route {
   align-items: center;
   /* Solid dark floor only — the animated menu scene (still art + waterfalls) + scrim ride
-     the <SceneBackdrop> element these screens render (ui/SceneBackdrop.tsx), the same way
-     the main menu paints it, so the settings frames sit over the menu scene + synced rain.
+     the shared <HomepageBackdrop> these screens render, the same continuous instance the
+     main menu shows, so the settings frames sit over the menu scene + synced rain.
      This floor keeps the screen dark (never white) before the scene decodes. */
   background: #02070b;
   display: grid;
@@ -11641,7 +11698,7 @@ button.tileset-relationship-cell {
 }
 
 /* Screen entrance (ADR-0046): the SHARED entrance fade, applied through ArtRouteChrome to a
-   screen's CHROME ROOT (.settings-shell in Settings/menu, .skirmish-picker for map select) —
+   screen's CHROME ROOT (.settings-shell in Settings / menu / Campaign / the Skirmish hub) —
    never the screen's outer element, so the ambience backdrop (a sibling) stays continuous and
    never re-fades across art-background screens (ADR-0046 B/G). Entrance tier (slow +
    decelerate). Pure opacity = reduced-motion-safe -> not gated (ADR-0043). The hook only
@@ -11776,13 +11833,16 @@ button.tileset-relationship-cell {
   transition: color .14s ease, filter .14s ease;
 }
 
-/* Recover the continuous-stone flow the retired `fixed` attachment gave: each stacked
-   tab samples the vertical slice it would have if one texture sheet ran down the rail.
-   Step = the ~98px tab pitch (measured; drifts a few px with the clamp()ed gap/padding,
-   imperceptible for a stone texture). The rail is exactly these four tabs in order. */
-.settings-tab:nth-child(2) { background-position-y: -98px; }
-.settings-tab:nth-child(3) { background-position-y: -196px; }
-.settings-tab:nth-child(4) { background-position-y: -294px; }
+/* Recover the continuous-stone flow the retired `fixed` attachment gave: each tab samples
+   the vertical slice it would have if ONE texture sheet ran down the rail. The slice is
+   keyed to the tab's OWN rail position via --tab-index (set by every renderer — MainMenu,
+   Campaign, Settings), NOT its :nth-child index. nth-child re-counts the DOM, so a fixed
+   ladder silently breaks the continuity whenever the rail length changes (the main menu's
+   trailing Settings tab was an uncovered 5th child, restarting the stone at 0) or a non-tab
+   sibling sits between tabs (Campaign interleaves .campaign-rail-group dividers). An index
+   the data owns is immune to both. Step = the ~98px tab pitch (measured; drifts a few px
+   with the clamp()ed gap/padding, imperceptible for a stone texture). ADR-0063. */
+.settings-tab { background-position-y: calc(var(--tab-index, 0) * -98px); }
 
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
@@ -12204,9 +12264,9 @@ button.tileset-relationship-cell {
   justify-content: space-between;
 }
 .ce-rail-count { font-weight: 400; opacity: .8; }
-/* The campaign list is dynamic, so the fixed-four-tab stone-continuity offsets don't apply —
-   reset every tab to the same texture origin. */
-.ce-editor-rail .settings-tab { background-position-y: 0; }
+/* Stone continuity is data-indexed via --tab-index (set on each rail tab, counted continuous
+   past the Unassigned tab), so the rail reads as one sheet however many campaigns there are —
+   the same shared mechanism the menu / Settings / Campaign rails use. */
 
 /* A campaign tab = the shared icon | label grid + a trailing cell for the favorite star /
    OFFICIAL tag / padlock. */

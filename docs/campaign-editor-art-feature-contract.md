@@ -4,7 +4,7 @@ This contract exists to prevent the campaign editor from drifting into
 CSS-themed placeholder UI. The target is an art-driven editor whose visible
 controls are backed by real behavior and real data.
 
-> **Update — [ADR-0063](adr/0063-editor-is-a-settings-twin-at-editor-route.md), 2026-07-04.**
+> **Update — [ADR-0065](adr/0065-editor-is-a-settings-twin-at-editor-route.md), 2026-07-04.**
 > The editor is now the app's single **"Editor"** at the route **`/editor`** (the level editor
 > nests at **`/editor/level`**), and it renders through the **shared menu/settings shell** — a
 > `.settings-shell` rail of campaign tabs + a single scrolling content column with the live
@@ -21,7 +21,7 @@ controls are backed by real behavior and real data.
 ## Source Of Truth
 
 - Visual target: `docs/art/ui-screen-concepts/02-campaign-editor.png` (feature reference; the
-  chrome now follows the shared settings shell, not this screen's bespoke panels — see ADR-0063).
+  chrome now follows the shared settings shell, not this screen's bespoke panels — see ADR-0065).
 - Live route: `/editor` (the nested board editor is `/editor/level`).
 - Reusable chrome: the shared settings shell (`.settings-*` in `frontend/src/style.css`) + the
   9-slice kit — NOT the retired `campaign-editor/source-sheet.png` panel program (superseded).
