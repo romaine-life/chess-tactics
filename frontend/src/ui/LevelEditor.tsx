@@ -17,6 +17,7 @@ import { ViewPane } from './shared/ViewPane';
 import { NavButton } from './shared/NavButton';
 import { useConfirm } from './shared/ConfirmDialog';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { TitleBarActions, TitleBarButton } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
 import { BoardSizePanel } from './shared/BoardSizePanel';
@@ -2329,10 +2330,10 @@ export function LevelEditor(): ReactElement {
               document verbs belong in the editor's toolbar, not global chrome (the
               Unity/Unreal/Godot/Blender convention). The bar stays brand + return-nav +
               account cluster, matching Settings. */}
-          <nav className="le-topbar-actions" aria-label="Editor navigation">
-            {cameFromStudio ? <NavButton className="app-header-button le-back-catalog" to="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</NavButton> : null}
-            {routeParams.returnTo ? <NavButton className="app-header-button" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</NavButton> : null}
-          </nav>
+          <TitleBarActions aria-label="Editor navigation">
+            {cameFromStudio ? <TitleBarButton to="/tileset-studio" title="Return to the Studio catalog">‹ Catalog</TitleBarButton> : null}
+            {routeParams.returnTo ? <TitleBarButton variant="return" to={routeParams.returnTo} title="Return to the campaign editor">‹ Back</TitleBarButton> : null}
+          </TitleBarActions>
         </TitleBarSlot> : null}
 
         <div className="skirmish-field">

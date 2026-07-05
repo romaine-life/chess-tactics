@@ -3775,12 +3775,11 @@ h1 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-/* Level Editor bar: 4 columns — brand · live save-state (center) · return-nav (‹ Catalog /
-   ‹ Back, actions slot) · account cluster. Two classes out-rank the base grid so the cluster
-   keeps its own track. (Undo/Test/Save moved into the editor's rail dock, so the actions slot
-   now carries only the return-nav.) */
+/* Level Editor bar: 3 columns — brand · return-nav (‹ Catalog / ‹ Back, actions slot) ·
+   account cluster. Undo/Test/Save moved into the editor's rail dock, and the owner removed
+   the center status cluster, so do not render a ghost center track/gap here. */
 .app-shell-titlebar.le-topbar {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 /* Editor bar: 4 columns — brand · save-state (center) · ‹ Back (actions) · account cluster.
    The Editor is a settings-twin, so like Settings it carries a Back control in the trailing
@@ -3794,7 +3793,7 @@ h1 {
    slot) · account cluster. The extra track lets the icon nav sit before the always-present
    cluster (ADR-0042). */
 .app-shell-titlebar.studio-topbar {
-  column-gap: var(--titlebar-control-gap, 10px);
+  column-gap: var(--titlebar-control-gap, var(--ds-space-2));
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
@@ -4943,10 +4942,9 @@ h1 {
    columns, gap, and padding all come from .app-titlebar + .settings-header-frame carried
    on the element itself. The editor puts NO status in the bar (the level name and
    save-state cluster were removed — that state lives in the Status layer card); only the
-   return-nav buttons ride it (.app-header-button on the kit gold frame). Bar-content
-   rules are scoped to the bar class (.le-topbar), NOT the screen — the bar lives in the
-   app shell, outside .level-editor-screen. */
-.le-topbar .le-topbar-actions { align-items: center; display: flex; gap: 10px; }
+   return-nav buttons ride it through the title-bar controls API. Bar-content rules are
+   scoped to the bar class (.le-topbar), NOT the screen — the bar lives in the app shell,
+   outside .level-editor-screen. */
 
 /* segmented switch (layer / tool / fill) */
 .le-seg { display: grid; gap: 5px; grid-auto-columns: 1fr; grid-auto-flow: column; }
@@ -6445,8 +6443,7 @@ body { font-size: 17px; }
   padding: 0 clamp(10px, 1.2vw, 18px);
 }
 
-.ce-topbar-stats,
-.ce-topbar-actions {
+.ce-topbar-stats {
   align-items: center;
   display: flex;
 }
@@ -6514,10 +6511,6 @@ body { font-size: 17px; }
   color: var(--ce-gold-bright);
   font-weight: 700;
   letter-spacing: .08em;
-}
-
-.ce-topbar-actions {
-  gap: 10px;
 }
 
 .ce-icon-button {
@@ -7369,8 +7362,7 @@ body { font-size: 17px; }
     justify-items: stretch;
   }
 
-  .ce-topbar-stats,
-  .ce-topbar-actions {
+  .ce-topbar-stats {
     justify-content: space-between;
   }
 
@@ -7452,33 +7444,13 @@ body { font-size: 17px; }
 }
 
 .bgm-control {
-  align-items: center;
-  block-size: 52px;
-  inline-size: 52px;
-  box-sizing: border-box;
-  display: inline-flex;
-  justify-content: center;
-  padding: 0;
-  cursor: pointer;
-  appearance: none;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
-  image-rendering: pixelated;
   /* Motion tokens (ADR-0043): press/hover transform = fast tier; the show/hide opacity
      fade = base tier (was an ad-hoc 0.2s — now the one shared content-fade speed). */
   transition: transform var(--ds-duration-fast) var(--ds-ease-standard), opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 
 .bgm-control-icon {
-  block-size: 26px;
-  inline-size: 26px;
-  image-rendering: pixelated;
   pointer-events: none;
-}
-
-.bgm-control:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
 }
 
 .bgm-control.is-playing,
@@ -7795,67 +7767,6 @@ body { font-size: 17px; }
   cursor: pointer;
   font: 700 12px/1 var(--ds-font-sans, system-ui, sans-serif);
 }
-
-/* The Studio workspace switcher (Catalog / Lab / Viewer). It rides the title bar's
-   actions slot as three kit-framed icon buttons, so it reads as a sibling of the trailing
-   gear/account cluster instead of eating a row on every Viewer's control rail. */
-.studio-mode-nav {
-  align-items: center;
-  display: flex;
-  gap: var(--titlebar-control-gap, 10px);
-}
-
-/* The Studio's title-bar actions cluster: the "‹ Scene" back (shown in the waterfall
-   inspector) sits inline, left of the Catalog/Lab/Viewer nav — one flex row so the text
-   button doesn't drop onto its own line above the icons. */
-.studio-topbar-actions {
-  align-items: center;
-  display: flex;
-  gap: var(--titlebar-control-gap, 10px);
-}
-.studio-scene-back {
-  white-space: nowrap;
-}
-
-.studio-mode-icon {
-  align-items: center;
-  appearance: none;
-  background: transparent;
-  block-size: 52px;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
-  box-sizing: border-box;
-  cursor: pointer;
-  display: inline-flex;
-  image-rendering: pixelated;
-  inline-size: 52px;
-  justify-content: center;
-  overflow: hidden;
-  padding: 0;
-}
-
-/* Active mode gets the lit frame — same swap the settings gear / mode buttons use. */
-.studio-mode-icon.is-active {
-  border-image: url("/assets/ui/kit/mode-button-active.png") 24 fill / 10px stretch;
-}
-
-.studio-mode-icon:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, 0.72);
-  outline-offset: 2px;
-}
-
-/* Forged pixel-art glyph, sized like the neighbouring gear's icon (26px in its frame). */
-.studio-mode-icon > img {
-  block-size: 28px;
-  image-rendering: pixelated;
-  inline-size: 28px;
-  object-fit: contain;
-}
-
-/* Idle glyphs sit a touch dimmed so the lit (active) mode reads as selected; hover/active full. */
-.studio-mode-icon > img { opacity: 0.82; }
-.studio-mode-icon.is-active > img,
-.studio-mode-icon:hover > img { opacity: 1; }
 
 .tileset-context-tabs {
   flex: none;
@@ -11614,10 +11525,9 @@ button.tileset-relationship-cell {
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
-/* Shared title-bar control button — kit gold mode-button 9-slice frame, equal
-   height, always labeled (ADR-0016). The cyan `-active` variant marks a single
-   primary action (e.g. Save / Sign In). Used by every app title bar's controls;
-   the in-game skirmish bar uses its own icon+label variant of the same frame. */
+/* Shared kit-framed text button. Non-title-bar panels and HUDs still use this visual
+   primitive directly; title-bar controls must go through TitleBarControls.tsx so the bar,
+   not the caller, owns control geometry. */
 .app-header-button {
   align-items: center;
   block-size: 46px;
@@ -11660,12 +11570,107 @@ button.tileset-relationship-cell {
   outline-offset: 2px;
 }
 
+.app-shell-titlebar-center,
+.app-shell-titlebar-actions {
+  min-width: 0;
+}
+
+.app-shell-titlebar-actions,
+.titlebar-actions {
+  align-items: center;
+  display: flex;
+}
+
+.titlebar-actions {
+  gap: var(--titlebar-control-gap, var(--ds-space-2));
+}
+
+/* TitleBarControls.tsx is the only supported way for routed screens to add title-bar
+   buttons. It clears the global button base and consumes the title-bar geometry tokens
+   below, so no screen chooses its own padding, frame width, or fixed control size. */
+.titlebar-control {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  block-size: var(--titlebar-control-size, 52px);
+  border: var(--titlebar-control-frame-w, 10px) solid transparent;
+  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / var(--titlebar-control-frame-w, 10px) stretch;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+  color: #eef6ff;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm);
+  gap: var(--titlebar-label-gap, var(--ds-space-2));
+  image-rendering: pixelated;
+  justify-content: center;
+  letter-spacing: .04em;
+  line-height: 1;
+  min-block-size: 0;
+  overflow: hidden;
+  padding: 0 var(--titlebar-label-pad-inline, var(--ds-space-4));
+  position: relative;
+  text-align: center;
+  text-decoration: none;
+  text-shadow: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.titlebar-control--active,
+.titlebar-control.is-playing,
+.titlebar-control.is-othertab {
+  border-image-source: url("/assets/ui/kit/mode-button-active.png");
+}
+
+.titlebar-control--return,
+.titlebar-control--icon {
+  inline-size: var(--titlebar-control-size, 52px);
+  padding: 0;
+}
+
+.titlebar-control-glyph {
+  block-size: var(--titlebar-control-icon-size, 26px);
+  image-rendering: pixelated;
+  inline-size: var(--titlebar-control-icon-size, 26px);
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.titlebar-control[aria-pressed="false"] .titlebar-control-glyph {
+  opacity: 0.82;
+}
+
+.titlebar-control--active .titlebar-control-glyph,
+.titlebar-control:hover .titlebar-control-glyph {
+  opacity: 1;
+}
+
+.titlebar-control.is-disabled,
+.titlebar-control[aria-disabled="true"],
+.titlebar-control:disabled {
+  cursor: help;
+  filter: grayscale(.12);
+  opacity: .55;
+}
+
+.titlebar-control:hover {
+  color: #f4fbff;
+}
+
+.titlebar-control:focus-visible {
+  color: #f4fbff;
+  outline: 2px solid rgba(101, 184, 255, .72);
+  outline-offset: 2px;
+}
+
 .settings-header-frame {
   align-content: center;
   align-items: center;
   block-size: var(--app-header-h);
   display: grid;
-  gap: clamp(10px, calc(var(--layout-vw, 100vw) * .011), 18px);
   /* The DEFAULT bar is two sections: brand (1fr, leading) · account cluster (auto,
      trailing) — the invariant chrome every screen carries (ADR-0042). The cluster is the
      last DOM child, so it lands in this final column flush to the right padding edge.
@@ -11689,7 +11694,16 @@ button.tileset-relationship-cell {
      --app-header-h is sized so this inset fits (content + rule + 2×inset). */
   --titlebar-rule-h: 14px;
   --ds-titlebar-inset: var(--ds-space-2);
-  --titlebar-control-gap: 10px;
+  --titlebar-control-gap: var(--ds-space-2);
+  --titlebar-control-size: 52px;
+  --titlebar-control-frame-w: 10px;
+  --titlebar-control-icon-size: 26px;
+  --titlebar-label-gap: var(--ds-space-2);
+  --titlebar-label-pad-inline: var(--ds-space-4);
+  /* The grid column gap is the space OUTSIDE the invariant wall; the cluster flex gap is
+     the space INSIDE it. Both must use the same token or controls frame the divider
+     asymmetrically. */
+  column-gap: var(--titlebar-control-gap);
   /* Trailing/leading inline padding, published as a var so the account cluster can pull its
      own trailing edge in to match (see .header-account-cluster). Tightened at the
      landscape-phone breakpoint, where the cluster's pull-in follows automatically. */
@@ -11876,7 +11890,7 @@ button.tileset-relationship-cell {
 .header-account-cluster {
   /* ONE spacing source for the cluster's two edges: the inter-button gap AND the gap that
      frames the whole cluster against the bar. Both read this so they can never drift apart. */
-  --cluster-gap: var(--titlebar-control-gap, 10px);
+  --cluster-gap: var(--titlebar-control-gap, var(--ds-space-2));
   align-items: center;
   display: flex;
   gap: var(--cluster-gap);
@@ -11951,45 +11965,10 @@ button.tileset-relationship-cell {
   image-rendering: pixelated;
 }
 
-/* Square icon-only button — the app's kit mode-button frame, made equal-sided. A
-   slightly thinner border than the labelled header button so the 32px opening
-   carries a glyph/avatar without the frame dominating. */
+/* Title-bar icon-only controls get their geometry from .titlebar-control--icon. This
+   semantic hook remains for cluster-specific descendants such as the avatar image. */
 .cluster-icon-button {
-  align-items: center;
-  /* Rendered as a <button> since ADR-0052 (the gear): clear the UA button surface so
-     only the kit mode-button frame paints, exactly as the anchor version did. */
-  appearance: none;
-  background: transparent;
-  block-size: 52px;
-  border: 10px solid transparent;
-  border-image: url("/assets/ui/kit/mode-button.png") 24 fill / 10px stretch;
-  box-sizing: border-box;
-  cursor: pointer;
-  display: inline-flex;
-  image-rendering: pixelated;
-  inline-size: 52px;
-  justify-content: center;
-  overflow: hidden;
-  padding: 0;
   position: relative;
-}
-
-.cluster-icon-button:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-
-/* Signed-out Sign In rides the same cluster — match the icon buttons' height so the
-   gear + control read as one unit. */
-.header-account-cluster .app-header-button {
-  block-size: 52px;
-}
-
-.cluster-icon-button > img {
-  block-size: 26px;
-  image-rendering: pixelated;
-  inline-size: 26px;
-  object-fit: contain;
 }
 
 /* The Gravatar fills the avatar button's opening, clipped square by the frame. */
