@@ -7057,14 +7057,17 @@ body { font-size: 17px; }
   min-height: 0;
 }
 .ce-preview-frame::after {
-  /* panel.png is 72×72 = a 3×3 grid of 24px cells → slice 24 (not 18, which cut through the corner
-     atom and glitched it), edges tiled with `round` (integer repeats, crisp pixel art). No `fill`
-     → transparent interior, so the board shows through. pointer-events:none keeps the board pannable. */
+  /* MUST be the LINE frame (transparent-interior twin, ADR-0034), not panel.png: the filled
+     panel's border cells are ~1px gold line + ~11px OPAQUE navy fill, so as an overlay it paints
+     a dark band over the board's outer 12px — the frame reads as inset "padding" no matter how
+     the board fills the box. panel-line's border cells are ornament-only (inner half fully
+     transparent), so board pixels run up to the gold line. 72×72, 3×3 of 24px cells → slice 24,
+     `round` edges (integer repeats, crisp pixel art). pointer-events:none keeps the board pannable. */
   content: "";
   position: absolute;
   inset: 0;
   border: 12px solid transparent;
-  border-image: url("/assets/ui/kit/panel.png") 24 / 12px round;
+  border-image: url("/assets/ui/explore/frames/panel-line.png") 24 / 12px round;
   image-rendering: pixelated;
   pointer-events: none;
 }
