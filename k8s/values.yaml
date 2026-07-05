@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-c3042a1bc9251badf24bde7903ac1168c838959d248b81688559c708650ec5ae"
+  tag: "app-196a247e6d5c08f71cc5723ce40b33ba3b1e02d7fb4c20e5d016215b757f4fe6"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix fence overlay depth ordering"
-  prNumber: "421"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/421"
-  commit: "44046ba"
+  prTitle: "Add authored pawn promotion zones"
+  prNumber: "418"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/418"
+  commit: "7d55d2a"
 
 name: chess-tactics
 namespace: chess-tactics
