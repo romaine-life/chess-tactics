@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-e389ccd497e6a024f37b5c6fd20e541c9dbf9b1b4f59fded738eb13441d8740f"
+  tag: "app-8bdcf89bff24462244ffabec5d1ce346af76b750614ddd1b9f814817a5afc41e"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Fix playtest exit controls"
-  prNumber: "408"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/408"
-  commit: "796356e"
+  prTitle: "feat(level-editor): level-preview column that fills its box (editor + campaign)"
+  prNumber: "409"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/409"
+  commit: "d2f6d9b"
 
 name: chess-tactics
 namespace: chess-tactics
