@@ -511,10 +511,6 @@ h1 {
   grid-template-rows: var(--app-header-h) minmax(0, 1fr);
   gap: clamp(6px, calc(var(--layout-vw, 100vw) * .0072), 12px);
   min-block-size: 0;
-  /* .menu-layer.main-menu-layer is pointer-events:none (so the rain stays click-through);
-     the old menu re-enabled interaction on .main-menu-left/right. Re-enable it for the whole
-     twin UI, or every click falls through to the app root and the tabs do nothing. */
-  pointer-events: auto;
 }
 /* Home has no Back/Menu actions, so the bar is just brand | account. */
 .main-menu-twin-header {
@@ -559,9 +555,8 @@ h1 {
    shared rain world is running right now (read live off the vendored client;
    rendered by HomepageBackdrop, so every screen with the shared backdrop
    carries it). Links to ambience's read-only monitor for the same broadcast.
-   z4: above the screens' z3 UI tier so the corner stays clickable under
-   footers/panels that reach it, still below the near-drop overlay (z5) so the
-   promoted drops cross in front of it like the rest of the chrome. */
+   It shares the backdrop tier with the scene art: later DOM order keeps it
+   barely above the raw art, while rain tint/screen UI/overlay layers cover it. */
 .ambience-credit {
   /* A <button> since ADR-0052: clear the UA button chrome AND the global `button`
      base (radius/shadow/line-height); everything else below is the same label
@@ -585,10 +580,10 @@ h1 {
   padding: 0 var(--ds-space-2);
   display: inline-flex;
   align-items: center;
-  z-index: 4;
+  z-index: 1;
   /* .menu-layer (menu/campaign) is pointer-events:none so the rain stays
-     click-through, and the credit would inherit that inertness — opt back in,
-     like .main-menu-twin-screen does for the menu UI. */
+     click-through, and the credit would inherit that inertness. Opt back in,
+     but at this backdrop z-index it only wins over exposed scene art. */
   pointer-events: auto;
   font-family: var(--ds-font-pixel);
   font-size: var(--ds-text-2xs);
@@ -11463,6 +11458,10 @@ button.tileset-relationship-cell {
      containing block for fixed backgrounds, so the surface stays unbroken across
      regions at any scale. */
   zoom: var(--settings-ui-scale, 1);
+  /* This is a full-screen placement layer, not visible chrome. Keep empty screen
+     real estate click-through so the ambience credit can remain clickable wherever
+     only raw background art is exposed; the actual panels opt back in below. */
+  pointer-events: none;
 }
 
 /* Shared frame primitive. One panel.png 9-slice with a SINGLE corner-size token,
@@ -11478,6 +11477,12 @@ button.tileset-relationship-cell {
   --settings-frame-corner: 16px;
   border: var(--settings-frame-corner) solid transparent;
   box-sizing: border-box;
+}
+
+.settings-frame,
+.menu-dest-col,
+.utility-screen {
+  pointer-events: auto;
 }
 
 /* Shared title bar — the ONE app-header treatment: panel.png frame at a single
