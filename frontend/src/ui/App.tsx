@@ -343,8 +343,8 @@ function renderRoute(path: string): ReactElement {
   // catalog/lab/brush flow stays a single mounted component (no route swaps).
   if (path === '/unit-studio') return <TilesetStudio initialCategory="units" />;
   if (path === '/portrait-editor') return <PortraitEditor />;
-  // /doodad-editor: alias into the Studio's Doodads category, opening the composition
-  // composer (Viewer 'doodadcomp' kind). Not its own route or 3-panel shell (ADR-0058).
+  // /doodad-editor: legacy alias into the Studio's Doodads category, opening the
+  // shared structure editor. Not its own route or 3-panel shell (ADR-0058).
   if (path === '/doodad-editor') return <TilesetStudio initialCategory="doodads" />;
   // /nine-slice-editor is a deep-link alias into the one Studio (like /unit-studio):
   // the 9-slice editor is an embedded Viewer surface, not its own route. The studio

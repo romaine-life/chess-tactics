@@ -9,13 +9,14 @@ import manifest from './kitManifest.json';
 import provenance from './kitProvenance.json';
 import usage from './kitUsage.json';
 import nineSliceRegistry from '../../../config/nine-slice-registry.json';
+import { STRUCTURE_ART_ASSETS, structureArtHalfSrc, type StructureArtAsset } from '../../core/structureArt';
 
 // Every asset card carries three filterable properties: its TYPE (which shelf it
 // lives on — Icons/Game/Shields/Frames, restoring the portfolio's categorisation),
 // its PROVENANCE (forged through the kit pipeline vs. an original pre-forge asset),
 // and its GATE result (did the hard-alpha verifier pass). The Controls panel filters
 // on all three; the card surfaces gate + provenance as chips (type is the section).
-export type AssetTypeFacet = 'all' | 'settings' | 'game' | 'shields' | 'frames';
+export type AssetTypeFacet = 'all' | 'settings' | 'game' | 'shields' | 'frames' | 'structure';
 export type AssetProvFacet = 'all' | 'forged' | 'original';
 export type AssetGateFacet = 'all' | 'pass' | 'fail';
 export interface AssetFilters { type: AssetTypeFacet; prov: AssetProvFacet; gate: AssetGateFacet }
@@ -29,6 +30,7 @@ export const ASSET_TYPE_FACETS: { value: AssetTypeFacet; label: string }[] = [
   { value: 'game', label: 'Skirmish' },
   { value: 'shields', label: 'Campaign' },
   { value: 'frames', label: 'Chrome' },
+  { value: 'structure', label: 'Structure Art' },
 ];
 
 interface Glyph { name: string; url: string; w: number; h: number; magenta: number; semiPct: number; edge: number; pass: boolean; fails: string[] }
@@ -53,7 +55,7 @@ const EDITOR_ASSET: Record<string, string> = {};
 for (const [id, a] of Object.entries(REG_ASSETS)) if (a.kind !== 'bar' && a.kind !== 'junction') for (const v of a.variants) EDITOR_ASSET[v.out.replace(/\.png$/, '')] = id;
 const GROUP_LABEL: Record<string, string> = { settings: 'Settings', game: 'Skirmish', shields: 'Campaign' };
 
-function Card({ name, url, sub, gate, selected, onSelect }: { name: string; url: string; sub: string; gate?: 'pass' | 'fail'; selected: boolean; onSelect: (name: string) => void }): ReactElement {
+function Card({ name, url, sub, gate, selected, onSelect, provLabel }: { name: string; url: string; sub: string; gate?: 'pass' | 'fail'; selected: boolean; onSelect: (name: string) => void; provLabel?: string }): ReactElement {
   return (
     <button
       type="button"
@@ -68,7 +70,7 @@ function Card({ name, url, sub, gate, selected, onSelect }: { name: string; url:
         <span className="asset-card-chips">
           {ORPHANS.has(name) ? <span className="asset-orphan" title="Not used on any live screen">orphan</span> : null}
           {gate ? <span className={`asset-gate is-${gate}`}>{gate}</span> : null}
-          <span className={`asset-prov ${forged(name) ? 'is-forged' : 'is-original'}`}>{forged(name) ? 'forged' : 'original'}</span>
+          <span className={`asset-prov ${forged(name) ? 'is-forged' : 'is-original'}`}>{provLabel ?? (forged(name) ? 'forged' : 'original')}</span>
         </span>
       </span>
     </button>
@@ -86,6 +88,12 @@ export function AssetLibraryStudio({ filters, search, zoom, selected, onSelect }
   const provOk = (name: string): boolean => filters.prov === 'all' || (filters.prov === 'forged' ? forged(name) : !forged(name));
   const searchOk = (name: string): boolean => !q || name.toLowerCase().includes(q);
   const gateOk = (g: Glyph): boolean => filters.gate === 'all' || (filters.gate === 'pass' ? g.pass : !g.pass);
+  const structureOk = (asset: StructureArtAsset): boolean => (
+    (filters.type === 'all' || filters.type === 'structure')
+    && filters.gate === 'all'
+    && filters.prov !== 'forged'
+    && (!q || [asset.label, asset.id, asset.kind, ...asset.terrains].join(' ').toLowerCase().includes(q))
+  );
 
   const groupSections = KIT.groups
     .filter((g) => filters.type === 'all' || filters.type === g.id)
@@ -114,8 +122,19 @@ export function AssetLibraryStudio({ filters, search, zoom, selected, onSelect }
   }));
   const orphanFrames = !showFrames ? [] : KIT.frames.filter((f) => !claimed.has(f.name) && provOk(f.name) && searchOk(f.name)).map((f) => ({ name: f.name, url: f.url, sub: `unforged · ${f.w}×${f.h}`, gate: undefined as 'pass' | 'fail' | undefined }));
   const frameSection = [...frameEntitySections, ...(orphanFrames.length ? [{ key: 'frame-unforged', label: 'Unforged frames (migration debt)', items: orphanFrames }] : [])];
+  const structureSection = {
+    key: 'structure-art',
+    label: 'Structure Art',
+    items: STRUCTURE_ART_ASSETS.filter(structureOk).map((asset) => ({
+      name: asset.id,
+      url: structureArtHalfSrc(asset.id, 'front'),
+      sub: `${asset.kind} · ${asset.sprite.w}×${asset.sprite.h}`,
+      gate: undefined as 'pass' | 'fail' | undefined,
+      provLabel: 'source art',
+    })),
+  };
 
-  const sections = [...groupSections, ...frameSection].filter((s) => s.items.length);
+  const sections = [...groupSections, ...frameSection, structureSection].filter((s) => s.items.length);
 
   return (
     <section className="tileset-studio-main is-headless">
@@ -125,7 +144,10 @@ export function AssetLibraryStudio({ filters, search, zoom, selected, onSelect }
             <section className="tileset-asset-section" aria-label={s.label} key={s.key}>
               <h3>{s.label}</h3>
               <div className="tileset-studio-grid">
-                {s.items.map((it) => <Card key={it.name} name={it.name} url={it.url} sub={it.sub} gate={it.gate} selected={selected === it.name} onSelect={onSelect} />)}
+                {s.items.map((it) => {
+                  const provLabel = 'provLabel' in it && typeof it.provLabel === 'string' ? it.provLabel : undefined;
+                  return <Card key={it.name} name={it.name} url={it.url} sub={it.sub} gate={it.gate} selected={selected === it.name} onSelect={onSelect} provLabel={provLabel} />;
+                })}
               </div>
             </section>
           ))}
@@ -138,13 +160,16 @@ export function AssetLibraryStudio({ filters, search, zoom, selected, onSelect }
 
 type Found =
   | { kind: 'glyph'; groupLabel: string; item: Glyph }
-  | { kind: 'frame'; item: Frame };
+  | { kind: 'frame'; item: Frame }
+  | { kind: 'structure'; item: StructureArtAsset };
 
 function findAsset(name: string): Found | null {
   for (const g of KIT.groups) {
     const item = g.items.find((i) => i.name === name);
     if (item) return { kind: 'glyph', groupLabel: GROUP_LABEL[g.id] ?? g.label, item };
   }
+  const structure = STRUCTURE_ART_ASSETS.find((asset) => asset.id === name);
+  if (structure) return { kind: 'structure', item: structure };
   const f = KIT.frames.find((fr) => fr.name === name);
   return f ? { kind: 'frame', item: f } : null;
 }
@@ -158,7 +183,11 @@ function findAsset(name: string): Found | null {
 export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: string; header?: ReactNode; onEditFrame?: (editorAssetId: string) => void; onOpenDivider?: () => void }): ReactElement {
   const found = name ? findAsset(name) : null;
   const item = found?.item;
-  const prov = item && forged(item.name) ? PROV.assets[item.name] : null;
+  const itemName = found ? (found.kind === 'structure' ? found.item.id : found.item.name) : undefined;
+  const itemW = found ? (found.kind === 'structure' ? found.item.sprite.w : found.item.w) : undefined;
+  const itemH = found ? (found.kind === 'structure' ? found.item.sprite.h : found.item.h) : undefined;
+  const prov = itemName && forged(itemName) ? PROV.assets[itemName] : null;
+  const editableFrameId = itemName ? EDITOR_ASSET[itemName] : undefined;
   const glyph = found?.kind === 'glyph' ? found.item : null;
   return (
     <>
@@ -172,6 +201,11 @@ export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: s
                 <figure className="al-stage"><span className="al-checker"><img src={found.item.url} alt={found.item.name} className="al-glyph-lg" /></span><figcaption>default · transparency</figcaption></figure>
                 <figure className="al-stage"><span className="al-in-button"><img src={found.item.url} alt="" className="al-glyph-md" /></span><figcaption>in a button</figcaption></figure>
                 <figure className="al-stage"><span className="al-on-panel"><img src={found.item.url} alt="" className="al-glyph-md" /></span><figcaption>on a panel</figcaption></figure>
+              </>
+            ) : found.kind === 'structure' ? (
+              <>
+                <figure className="al-stage"><span className="al-checker"><img src={structureArtHalfSrc(found.item.id, 'back')} alt="" className="al-frame-native" /></span><figcaption>back half</figcaption></figure>
+                <figure className="al-stage"><span className="al-checker"><img src={structureArtHalfSrc(found.item.id, 'front')} alt={found.item.label} className="al-frame-native" /></span><figcaption>front half</figcaption></figure>
               </>
             ) : (
               <>
@@ -187,13 +221,13 @@ export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: s
           <h2>Controls</h2>
           <div className="tileset-control-stack">
             {header}
-            {item && EDITOR_ASSET[item.name] && onEditFrame ? (
+            {editableFrameId && onEditFrame ? (
               <button
                 type="button"
-                onClick={() => onEditFrame(EDITOR_ASSET[item.name])}
+                onClick={() => onEditFrame(editableFrameId)}
                 style={{ display: 'block', width: '100%', padding: '9px 12px', textAlign: 'center', background: '#1d5f9e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
               >✎ Edit in 9-slice editor</button>
-            ) : item && item.name === 'panel-divider' && onOpenDivider ? (
+            ) : itemName === 'panel-divider' && onOpenDivider ? (
               // A divider is a junction, not a box — it only reads assembled. Its interactive,
               // inspectable home is the divider Viewer (DividerLab), not this read-only card (ADR-0063).
               <button
@@ -210,8 +244,9 @@ export function AssetLab({ name, header, onEditFrame, onOpenDivider }: { name: s
             ) : null}
             {found && item ? (
               <dl className="al-meta">
-                <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : 'frame'} · {item.w}×{item.h}</dd></div>
-                <div><dt>Process</dt><dd className={prov ? 'al-ok' : ''}>{prov ? `forged ${prov.forged}${prov.tries ? ` (${prov.tries} tr)` : ''}` : 'original (pre-forge)'}</dd></div>
+                <div><dt>Source</dt><dd>{found.kind === 'glyph' ? `${found.groupLabel} · glyph` : found.kind === 'structure' ? `structure art · ${found.item.kind}` : 'frame'} · {itemW}×{itemH}</dd></div>
+                <div><dt>Process</dt><dd className={prov || found.kind === 'structure' ? 'al-ok' : ''}>{found.kind === 'structure' ? 'source artwork' : prov ? `forged ${prov.forged}${prov.tries ? ` (${prov.tries} tr)` : ''}` : 'original (pre-forge)'}</dd></div>
+                {found.kind === 'structure' ? <div><dt>Terrain</dt><dd>{found.item.terrains.join(', ') || 'none'}</dd></div> : null}
                 {glyph ? <div><dt>Gate</dt><dd className={glyph.pass ? 'al-ok' : 'al-no'}>{glyph.pass ? 'PASS' : glyph.fails.join(' · ')}</dd></div> : null}
                 {glyph ? <div><dt>Magenta</dt><dd>{glyph.magenta}</dd></div> : null}
                 {glyph ? <div><dt>Semi-alpha</dt><dd>{glyph.semiPct}%</dd></div> : null}
