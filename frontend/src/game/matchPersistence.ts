@@ -23,7 +23,7 @@ const VERSION = 1;
 // `selectedId`/`focusedId` (transient) are deliberately omitted — see module note.
 export type PersistedMatch = Pick<
   SkirmishState,
-  'game' | 'seed' | 'tick' | 'log' | 'objective' | 'objectiveCtx' | 'turnsElapsed' | 'levelId' | 'clock'
+  'game' | 'seed' | 'tick' | 'log' | 'objective' | 'objectiveCtx' | 'victoryOverride' | 'turnsElapsed' | 'levelId' | 'clock'
 > &
   // Optional: snapshots written before the enemy-policy lever existed lack it, and
   // resumeMatch defaults a missing value to the search AI.
@@ -62,6 +62,7 @@ function sliceOf(state: SkirmishState): PersistedMatch {
     log: state.log,
     objective: state.objective,
     objectiveCtx: state.objectiveCtx,
+    victoryOverride: state.victoryOverride,
     turnsElapsed: state.turnsElapsed,
     levelId: state.levelId,
     clock: state.clock,

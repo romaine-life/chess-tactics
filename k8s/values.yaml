@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-a5889b5a6d3862d51ec800d366566812fa9d9a0073d877e4974ac26ec76be55d"
+  tag: "app-d8b760f7bd2277a16d792ec4c39d158d2482445670540d88a3ac2626789318aa"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "refactor(dev): rename DEV_OFFLINE → DEV_NO_BACKEND (alias kept)"
-  prNumber: "377"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/377"
-  commit: "49e1d59"
+  prTitle: "Persistent menu shell: button column stays; Settings / Campaign / Editor drill in"
+  prNumber: "385"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/385"
+  commit: "a2ff9f0"
 
 name: chess-tactics
 namespace: chess-tactics

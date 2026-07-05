@@ -97,6 +97,9 @@ export function Skirmish() {
   const clock = useSkirmish((s) => s.clock);
   const net = useSkirmish((s) => s.net);
   const objectiveGoal = objectiveSummary(objective, kingSide);
+  // How the battle actually ended (ADR-0064) — the fired victory rule's name, when one decided the
+  // game. Falls back to the static objective goal (checkmate / clock / draw, or an older save).
+  const resultDetail = useSkirmish((s) => s.resultDetail);
   // Status reads from THIS client's seat (single-player: 'player'; netplay: the lobby seat).
   const localSide: Side = net ? net.localSide : 'player';
   const turnLabel = game.winner
@@ -551,7 +554,7 @@ export function Skirmish() {
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Stalemate' : 'Defeat'}</h2>
             {game.winner === 'player' && <ResultStars count={stars} />}
-            <p>{routeLevel.name} — {objectiveGoal}</p>
+            <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
               <button type="button" className="app-header-button" onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}

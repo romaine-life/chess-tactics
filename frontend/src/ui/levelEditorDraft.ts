@@ -1,5 +1,5 @@
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
-import { OBJECTIVE_TYPES, type ObjectiveType, type Roster, type TimeControl } from '../core/level';
+import { OBJECTIVE_TYPES, type ObjectiveType, type Roster, type TimeControl, type VictoryRules } from '../core/level';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 
 const STORAGE_PREFIX = 'ct:level-editor-draft:v1';
@@ -18,6 +18,8 @@ export interface LevelEditorDraft {
   roster: { player: Roster; enemy: Roster };
   // The battle clock (ADR-0053), or undefined when the level is untimed.
   timeControl?: TimeControl;
+  // Authored victory conditions (ADR-0064), or undefined when the level uses the objective preset.
+  victory?: VictoryRules;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -62,6 +64,7 @@ export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
     surviveTurns: draft.surviveTurns,
     roster: draft.roster,
     timeControl: draft.timeControl,
+    victory: draft.victory,
   });
 }
 
@@ -75,6 +78,13 @@ const cleanTimeControl = (raw: unknown): TimeControl | undefined => {
   if (typeof incrementSeconds !== 'number' || !Number.isInteger(incrementSeconds) || incrementSeconds < 0) return undefined;
   return { initialSeconds, incrementSeconds };
 };
+
+// A stored victory (ADR-0064 if-then rule list) survives the round-trip when it is an array; the
+// contents came from our own serialize, so a light shape check is enough — the real gate is
+// validateLevel / validatePlayability at save time. (A pre-ADR-0064 `{win,lose}` draft is not an
+// array, so it resolves to undefined and the level falls back to its objective preset.)
+const cleanVictory = (raw: unknown): VictoryRules | undefined =>
+  Array.isArray(raw) ? (raw as VictoryRules) : undefined;
 
 export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
   try {
@@ -103,6 +113,7 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
         enemy: cleanRoster(isRecord(value.roster) ? value.roster.enemy : undefined),
       },
       timeControl: cleanTimeControl(value.timeControl),
+      victory: cleanVictory(value.victory),
     };
   } catch {
     return null;

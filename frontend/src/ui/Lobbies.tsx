@@ -16,8 +16,7 @@ import {
   type LobbyUser,
 } from '../net/lobbies';
 import { LevelThumbnail } from '../render/LevelThumbnail';
-import { AmbienceBackground } from './AmbienceBackground';
-import { SceneBackdrop } from './SceneBackdrop';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { navigateApp } from './navigation';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -112,7 +111,7 @@ function LevelPicker({ current, selectedId, onPick }: { current: Lobby; selected
 //
 // Live: a subscribeLobbies SSE stream re-runs refresh() on any lobby mutation, so
 // the host sees the guest join without hitting Refresh (the manual button stays too).
-export function Lobbies() {
+export function Lobbies({ embedded = false }: { embedded?: boolean } = {}) {
   const [me, setMe] = useState<AuthUser | null>(null);
   const [data, setData] = useState<LobbyList | null>(null);
   const [status, setStatus] = useState('');
@@ -124,10 +123,11 @@ export function Lobbies() {
   const launchedRef = useRef(false);
 
   useEffect(() => {
+    if (embedded) return; // the persistent menu shell (MainMenu) owns the shell host class + backdrop
     const shell = document.querySelector('.shell');
     shell?.classList.add('settings-art-active');
     return () => shell?.classList.remove('settings-art-active');
-  }, []);
+  }, [embedded]);
 
   const refresh = async () => {
     try { setData(await fetchLobbies()); setStatus(''); }
@@ -188,14 +188,8 @@ export function Lobbies() {
   const canStart = Boolean(isHost && current?.guest && current?.level_id);
   const chosenLevel = useCampaigns((s) => (current?.level_id ? s.levels[current.level_id] : undefined));
 
-  return (
-    <section className="settings-art-route" aria-label="Lobbies" data-testid="lobbies">
-      {/* Same art-directed backdrop (animated menu scene) + synced rain as the main menu. */}
-      <SceneBackdrop />
-      <AmbienceBackground />
-      <div className="settings-screen utility-twin-screen app-shell-bar-pad">
-        <ArtRouteChrome className="utility-screen utility-lobbies">
-          {me && !me.signed_in ? (
+  // The lobbies content — one utility column (host/join + the lobby list, or a sign-in prompt).
+  const content = me && !me.signed_in ? (
             <section className="utility-panel utility-empty-panel">
               <button type="button" data-testid="lobbies-sign-in" className="utility-button utility-button-primary" onClick={() => goSignIn()}>Sign in to host or join</button>
             </section>
@@ -267,7 +261,19 @@ export function Lobbies() {
                 {data && !data.lobbies.length && !current ? <span className="utility-empty-row">No open lobbies. Host one.</span> : null}
               </div>
             </div>
-          )}
+  );
+
+  // Embedded in the persistent menu shell (MainMenu's second column): the lobbies content IS the one
+  // action column (tab → action). The shell owns the backdrop, screen wrapper, and zoom-safe placement.
+  if (embedded) return <div className="menu-dest-col menu-dest-action utility-screen utility-lobbies">{content}</div>;
+
+  return (
+    <section className="settings-art-route" aria-label="Lobbies" data-testid="lobbies">
+      {/* One continuous HomepageBackdrop (scene + synced rain), shared across the menu family. */}
+      <HomepageBackdrop />
+      <div className="settings-screen utility-twin-screen app-shell-bar-pad">
+        <ArtRouteChrome className="utility-screen utility-lobbies">
+          {content}
         </ArtRouteChrome>
       </div>
     </section>

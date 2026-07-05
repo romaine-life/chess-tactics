@@ -1,9 +1,9 @@
-// The standalone Level Editor (/level-editor, /edit). Split out of TilePreview.tsx so
+// The standalone Level Editor (/editor/level; legacy aliases /level-editor, /edit). Split out of TilePreview.tsx so
 // it ships its own small lazy chunk instead of dragging the entire design Studio:
 // the heavy library studios + manifests live in TilePreview.tsx and are never
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement, type ReactNode } from 'react';
 import { boardLabCellPosition } from '../render/BoardLabBoard';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { DoodadSprite } from '../render/BoardDoodad';
@@ -23,7 +23,7 @@ import { doodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { readBoardParam, encodeBoard, decodeBoardLinkInput, type EditorBoard, type FeatureCell } from './boardCode';
 import { clearLevelEditorDraft, levelEditorDraftKey, readLevelEditorDraft, writeLevelEditorDraft } from './levelEditorDraft';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
-import { DEFAULT_BACKGROUND_SET } from '../art/backgroundSets';
+import { HomepageBackdrop } from './HomepageBackdrop';
 import {
   hasDirectionSprite,
   productionUnitAssets,
@@ -54,13 +54,14 @@ import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
 import { OBJECTIVE_LABEL } from '../core/objectives';
+import { VictoryConditionsEditor, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, saveUserWorkspace, publishOfficialWorkspace, mapSaveError } from '../campaign/save';
 import { publishMap } from '../net/maps';
 import { HttpError } from '../net/http';
 import { fetchMe, goSignIn, type AuthUser } from '../net/auth';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type ZoneType } from '../core/level';
-import { MODE_NAME, DEFAULT_SURVIVE_TURNS } from '../core/objectives';
+import { OBJECTIVE_TYPES, type Level, type ObjectiveType, type Roster, type VictoryRules, type ZoneType } from '../core/level';
+import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, PIECE_LABEL, type PlayablePieceType } from '../core/pieces';
@@ -588,7 +589,7 @@ const MODE_DESCRIPTION: Record<ObjectiveType, string> = {
 // signature and for the just-saved / just-loaded baseline, so a freshly hydrated level reads clean
 // and a mode/name change (not just a board paint) marks it dirty.
 const levelSignature = (level: Level): string =>
-  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '']);
+  JSON.stringify([level.name, level.boardCode ?? '', level.objective, level.placement ?? 'fixed', level.surviveTurns ?? '', level.roster ?? {}, level.timeControl ?? '', level.victory ?? '']);
 // The undo/redo history signature of an editor board (boardCode is deterministic + lossless, so two
 // boards encode identically iff equal); plus a deep clone + the history-stack depth cap.
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
@@ -855,6 +856,22 @@ export function LevelEditor(): ReactElement {
   );
   const [clockInitialSeconds, setClockInitialSeconds] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
   const [clockIncrementSeconds, setClockIncrementSeconds] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+  // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
+  // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
+  // that never customized them; a level stores `victory` only when the lists diverge from that
+  // preset (see victoryForSave), which keeps preset levels' bodies clean and out of the dirty check.
+  const [victory, setVictory] = useState<VictoryRules>(
+    localDraft?.victory ?? initialCampaignLevel?.victory ?? victoryRulesForObjective(objective, { surviveTurns }),
+  );
+  // The victory-events editor opens as a full-size overlay over the board — the narrow control
+  // panel can't give rule authoring room to breathe. The panel stays put; a button opens this.
+  const [eventsOpen, setEventsOpen] = useState(false);
+  // The template the overlay's "Set template" button applies (a dropdown choice, not the old
+  // row of buttons). Seeded from the current objective.
+  const [templateChoice, setTemplateChoice] = useState<ObjectiveType>(objective);
+  // The events overlay's tab: victory rules (win/lose events) vs other events (spawn/gate/phase —
+  // future, empty for now). The Template control only appears on the victory-rules tab.
+  const [eventsTab, setEventsTab] = useState<'victory' | 'other'>('victory');
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name shows in
@@ -970,6 +987,7 @@ export function LevelEditor(): ReactElement {
       setClockEnabled(level.timeControl !== undefined);
       setClockInitialSeconds(level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
       setClockIncrementSeconds(level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+      setVictory(level.victory ?? victoryRulesForObjective(level.objective, { surviveTurns: level.surviveTurns ?? DEFAULT_SURVIVE_TURNS }));
       setEditingId(level.id);
       setLevelName(level.name);
       // Defer the clean-baseline capture to the effect below: it reads the SETTLED signature, so a
@@ -1398,13 +1416,33 @@ export function LevelEditor(): ReactElement {
   // toggle + its config live here (objective is always written); placement/roster/surviveTurns are
   // sent WHEN they diverge from the schema default, so a fixed capture-all board serializes without
   // them (back-compat) — but the roster/survive values are always carried when their mode is active.
+  // The factions offered in each condition's "IF <faction>" dropdown — one per side, labelled by the
+  // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
+  // (two distinct enemies) is future work.
+  const victoryFactions = useMemo((): FactionOption[] => {
+    const label = (p: string): string =>
+      (({ 'navy-blue': 'Navy', crimson: 'Crimson', golden: 'Golden', emerald: 'Emerald' }) as Record<string, string>)[p] ?? p;
+    const enemyPalette = Object.values(boardUnits).map((u) => u.faction).find((f) => f && f !== playerFaction);
+    return [
+      { side: 'player', label: playerFaction ? label(playerFaction) : 'You (Player)' },
+      { side: 'enemy', label: enemyPalette ? label(enemyPalette) : 'Enemy' },
+    ];
+  }, [playerFaction, boardUnits]);
+  // A level stores `victory` only when the lists DIVERGE from the objective preset — else the
+  // preset drives it (keeps preset bodies clean + out of the dirty check, and preserves
+  // capture-king's runtime kingSide direction-awareness for an untouched King Assault). ADR-0064.
+  const victoryForSave = useMemo(
+    () => (rulesEqual(victory, victoryRulesForObjective(objective, { surviveTurns })) ? undefined : victory),
+    [victory, objective, surviveTurns],
+  );
   const modeMeta = useMemo(() => ({
     objective,
     placement: placement === 'random' ? ('random' as const) : undefined,
     roster: placement === 'random' ? roster : undefined,
     surviveTurns: objective === 'survive' ? surviveTurns : undefined,
     timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
-  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
+    victory: victoryForSave,
+  }), [objective, placement, roster, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave]);
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
@@ -1447,8 +1485,9 @@ export function LevelEditor(): ReactElement {
       surviveTurns,
       roster,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+      victory: victoryForSave,
     });
-  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds]);
+  }, [currentEditorBoard, dirty, draftKey, levelName, objective, placement, roster, savedSig, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave]);
 
   const targetLevelId = editingId ?? routeParams.levelId;
   const targetLevel = useCampaigns((s) => (targetLevelId ? s.levels[targetLevelId] : undefined));
@@ -1566,10 +1605,10 @@ export function LevelEditor(): ReactElement {
     }
   };
 
-  // Export the whole board as a /level-editor?board=<code> link (round-trips via boardCode.ts).
+  // Export the whole board as a /editor/level?board=<code> link (round-trips via boardCode.ts).
   const copyBoardLink = (): void => {
     const code = encodeBoard(currentEditorBoard);
-    void navigator.clipboard?.writeText(`${window.location.origin}/level-editor?board=${code}`);
+    void navigator.clipboard?.writeText(`${window.location.origin}/editor/level?board=${code}`);
     reportStatus('Copied board link.', 'success');
   };
   // Publish this map to the server and copy a public /play?map=<id> link. Unlike the board-code
@@ -1605,7 +1644,7 @@ export function LevelEditor(): ReactElement {
     setTool('select');
     const input = boardLinkDraft.trim();
     if (!input) {
-      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /level-editor?board=... link or raw board code, then press Load board link.');
+      reportStatus('Paste a board link first.', 'warning', 'Open Board, paste a /editor/level?board=... link or raw board code, then press Load board link.');
       return;
     }
     const decoded = decodeBoardLinkInput(input);
@@ -1631,6 +1670,7 @@ export function LevelEditor(): ReactElement {
   };
   const selectLayer = (nextLayer: LayerKey): void => {
     if (isLayerOptionDisabled(nextLayer)) return;
+    setEventsOpen(false); // the events overlay belongs to the rules layer; close it on any switch
     setLayer(nextLayer);
     setTool(toolForLayer(nextLayer));
     if (nextLayer === 'paths') {
@@ -1800,8 +1840,6 @@ export function LevelEditor(): ReactElement {
     else next.featureExits[edge] = true;
     commitEditorBoard(next);
   };
-  const screenStyle = { '--skirmish-world-bg': `url("${DEFAULT_BACKGROUND_SET.world}")` } as CSSProperties;
-
   // Tier of the level under edit drives the Save verb (INV6): an official (`off-`) level
   // PUBLISHES to all players; a private/unassigned level just SAVES. A level only resolves a
   // tier once a target id is known (campaign path); a fresh standalone board saves as private.
@@ -1854,7 +1892,15 @@ export function LevelEditor(): ReactElement {
     : undefined;
 
   return (
-    <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" style={screenStyle} ready={editorReady}>
+    // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
+    // (menu scene + synced rain), not the battlefield world. The backdrop is a SIBLING of the
+    // faded editor chrome (not a child) so it stays continuous across navigation and never
+    // re-fades on entrance (ADR-0046 §G) — the same shape CampaignEditor uses. The editor's own
+    // ::before battlefield is dropped (.level-editor-screen::before) so the shared scene shows
+    // through the transparent chrome; /play keeps that battlefield (its game world).
+    <div className="level-editor-root">
+      <HomepageBackdrop />
+      <ArtRouteChrome className="skirmish-screen level-editor-screen" data-testid="level-editor" ready={editorReady}>
         {confirmDialog}
         {/* The title bar carries NO editor status (no level name, no save-state chip) — the
             owner removed the center cluster: that's ambient chrome noise while editing, and
@@ -1912,6 +1958,47 @@ export function LevelEditor(): ReactElement {
               </div>
             </ViewPane>
           </div>
+          {eventsOpen ? (
+            <div className="le-events-overlay" role="dialog" aria-label="Level events editor">
+              <div className="le-events-head">
+                <h2>Events</h2>
+                <button type="button" className="le-seg-btn" onClick={() => setEventsOpen(false)}>Done</button>
+              </div>
+              <div className="le-seg le-seg-wrap le-events-tabs">
+                <button type="button" className={`le-seg-btn ${eventsTab === 'victory' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('victory')}>Victory rules</button>
+                <button type="button" className={`le-seg-btn ${eventsTab === 'other' ? 'active' : ''}`.trim()} onClick={() => setEventsTab('other')}>Other events</button>
+              </div>
+              {eventsTab === 'victory' ? (
+                <VictoryConditionsEditor
+                  value={victory}
+                  factions={victoryFactions}
+                  onChange={setVictory}
+                  templates={(
+                    <div className="le-events-templates">
+                      <h3 className="le-victory-head">Template</h3>
+                      <p className="le-board-note">Set a template to REPLACE the victory rules with a full set (each faction gets a way to win and lose). Then edit.</p>
+                      <div className="le-template-apply">
+                        <select className="le-layer-select" aria-label="Victory template" title={MODE_DESCRIPTION[templateChoice]}
+                          value={templateChoice} onChange={(e) => setTemplateChoice(e.target.value as ObjectiveType)}>
+                          {OBJECTIVE_TYPES.map((mode) => <option key={mode} value={mode}>{MODE_NAME[mode]}</option>)}
+                        </select>
+                        <button type="button" className="le-seg-btn" onClick={() => {
+                          const seedUnits = candidateLevel.layers.units.map((u) => ({ ...u, id: '', alive: true, startY: u.y }));
+                          setObjective(templateChoice);
+                          setVictory(victoryRulesForObjective(templateChoice, { surviveTurns, kingSide: kingSideOf(seedUnits) }));
+                        }}>Set template</button>
+                      </div>
+                      <p className="le-board-note">Events run top-to-bottom, first match decides. To save, every faction on the board needs a way to win and a way to lose.</p>
+                    </div>
+                  )}
+                />
+              ) : (
+                <div className="le-events-placeholder">
+                  <p className="le-board-note">Other event types — spawn reinforcements, open a gate, advance a phase — will live here. There are none yet; today every event is a victory rule.</p>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
 
       <aside className="skirmish-hud" aria-label="Editor controls">
@@ -2070,7 +2157,7 @@ export function LevelEditor(): ReactElement {
             <div className="le-board-actions">
               <button type="button" className="le-seg-btn" onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</button>
               <button type="button" className="le-seg-btn danger" onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, road, and river from the board.">Clear</button>
-              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /level-editor?board=… link that recreates this exact board.">Copy Link</button>
+              <button type="button" className="le-seg-btn" onClick={copyBoardLink} title="Copy a /editor/level?board=… link that recreates this exact board.">Copy Link</button>
               <button type="button" className="le-seg-btn" onClick={() => void copyShareLink()} disabled={sharing} title="Publish this saved map and copy a public /play?map=… link — it previews on Discord and anyone can play it.">{sharing ? 'Sharing…' : 'Share Link'}</button>
             </div>
             <input
@@ -2082,7 +2169,7 @@ export function LevelEditor(): ReactElement {
               placeholder="Paste board link"
               aria-label="Board link"
             />
-            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /level-editor?board=... link and replace this editor board with it.">Load board link</button>
+            <button type="button" className="le-seg-btn" style={{ width: '100%', marginTop: 8 }} onClick={loadBoardLink} title="Paste a /editor/level?board=... link and replace this editor board with it.">Load board link</button>
           </section>
           <section className="skirmish-card le-level-settings">
             <h2>Level Settings</h2>
@@ -2195,20 +2282,11 @@ export function LevelEditor(): ReactElement {
           </section>
         </>) : layer === 'rules' ? (<>
           <section className="skirmish-card">
-            <h2>Mode</h2>
-            {/* The win-rule mode picker (ADR-0050). One control, kit segmented buttons; labels are
-                the owner-facing MODE_NAME, not the stored objective ids. */}
-            <div className="le-seg le-seg-wrap">
-              {OBJECTIVE_TYPES.map((mode) => (
-                <button
-                  type="button"
-                  key={mode}
-                  className={`le-seg-btn ${objective === mode ? 'active' : ''}`.trim()}
-                  onClick={() => setObjective(mode)}
-                >{MODE_NAME[mode]}</button>
-              ))}
-            </div>
-            <p className="le-board-note">{MODE_DESCRIPTION[objective]}</p>
+            <h2>Victory events</h2>
+            {/* ADR-0064: the rule authoring lives in a full-size overlay over the board (this panel is
+                too narrow) — see the .le-events-overlay below. This card is just the entry point. */}
+            <p className="le-board-note">How this level is won and lost, as <b>IF … THEN</b> events. {victory.length} event{victory.length === 1 ? '' : 's'} set — templates and editing open over the board.</p>
+            <button type="button" className="le-seg-btn le-events-open" onClick={() => { setEventsTab('victory'); setEventsOpen(true); }}>Open events editor</button>
           </section>
 
           <section className="skirmish-card">
@@ -2282,24 +2360,6 @@ export function LevelEditor(): ReactElement {
                 : 'Untimed — the player can think as long as they like.'}
             </p>
           </section>
-
-          {objective === 'survive' ? (
-            <section className="skirmish-card">
-              <h2>Survive turns</h2>
-              <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Turns to outlast</span>
-                <Stepper
-                  value={surviveTurns}
-                  suffix=""
-                  decreaseLabel="Fewer turns to survive"
-                  increaseLabel="More turns to survive"
-                  onDecrease={() => setSurviveTurns((n) => Math.max(1, n - 1))}
-                  onIncrease={() => setSurviveTurns((n) => n + 1)}
-                />
-              </div>
-              <p className="le-board-note">The player wins by lasting this many of their own turns.</p>
-            </section>
-          ) : null}
 
           {placement === 'random' ? (
             (['player', 'enemy'] as const).map((side) => (
@@ -2668,6 +2728,7 @@ export function LevelEditor(): ReactElement {
         ) : null}
         </KitScroll>
       </aside>
-    </ArtRouteChrome>
+      </ArtRouteChrome>
+    </div>
   );
 }

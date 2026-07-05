@@ -2,10 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import { MainMenu } from './MainMenu';
 import { getSnapshot as getRevealSnapshot, subscribe as subscribeReveal } from './shell/coldReveal';
 import { armBoardArtForNav, isBoardArtPending, subscribeBoardArt } from '../render/boardArtReady';
-import { Campaign } from './Campaign';
-import { Lobbies } from './Lobbies';
 import { Party } from './Party';
-import { Settings } from './Settings';
 import { UpdateBanner } from './UpdateBanner';
 import { AppTitleBar } from './shell/AppTitleBar';
 import { TitleBarPortalContext } from './shell/TitleBarPortalContext';
@@ -338,7 +335,8 @@ export function App(): ReactElement {
 
 function renderRoute(path: string): ReactElement {
   if (path === '/play') return <Skirmish />;
-  if (path === '/skirmish') return <SkirmishMapPickerRoute />;
+  // /skirmish (the Solo Skirmish picker) now renders INSIDE the persistent menu shell — it falls
+  // through to the MainMenu default below, sharing the 'menu' key so the button column stays mounted.
   if (path === '/tileset-studio') return <TilesetStudio />;
   // /unit-studio is a deep-link into the one Studio with the Units shelf
   // preselected — not a separate surface. Keeps old links working while the
@@ -363,16 +361,21 @@ function renderRoute(path: string): ReactElement {
   if (path === '/scene-anim-lab') return <TilesetStudio initialCategory="sceneanim" />;
   // The level editor is now the studio's socket-legal board in the original
   // asset-backed chrome; the old Pixi LevelEditor/EditorBoard is retired.
-  if (path === '/edit' || path === '/level-editor') return <LevelEditor />;
-  // /campaign (singular) is the play surface — pick a campaign; /campaigns-next is
-  // the authoring editor. Distinct paths, so order here doesn't matter.
-  if (path === '/campaign' || path.startsWith('/campaign/')) return <Campaign />;
-  if (path === '/campaigns-next' || path === '/campaigns') return <CampaignEditor />;
-  if (path === '/lobbies' || path.startsWith('/lobbies/')) return <Lobbies />;
+  // The nested level editor keeps its own heavy full screen (canonical /editor/level; legacy /edit,
+  // /level-editor). Reached only by drilling into a level from the Editor.
+  if (path === '/editor/level' || path === '/edit' || path === '/level-editor') return <LevelEditor />;
+  // /campaign (picker), /settings, AND the Editor (canonical /editor; legacy /campaigns-next,
+  // /campaigns) all render INSIDE the persistent menu shell — they fall through to the MainMenu
+  // default below, sharing the 'menu' screen key so the button column stays mounted. MainMenu fills
+  // its second column with each destination's own columns (Settings / Campaign / Editor).
+  // /lobbies now renders INSIDE the persistent menu shell (MainMenu fills its second column with the
+  // lobbies action column). Falls through to the MainMenu default below, sharing the 'menu' key.
   if (path === '/party') return <Party />;
-  if (path === '/settings' || path.startsWith('/settings/')) return <Settings />;
+  // /settings now renders inside the persistent menu shell (MainMenu fills its second column with
+  // the Settings sections + content). It falls through to the MainMenu default below, which reads
+  // the path — keeping the button column mounted across the home↔settings hop (routeScreenKey 'menu').
   // /artwork-compare: alias into the Studio's Art Compare viewer (ADR-0058 supersedes
   // ADR-0005's standalone-route choice). It reads its own ?opts/l/r/lcss/rcss on mount.
   if (path === '/artwork-compare') return <TilesetStudio initialCategory="pages" />;
-  return <MainMenu />;
+  return <MainMenu path={path} />;
 }

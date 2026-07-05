@@ -4,18 +4,30 @@ This contract exists to prevent the campaign editor from drifting into
 CSS-themed placeholder UI. The target is an art-driven editor whose visible
 controls are backed by real behavior and real data.
 
+> **Update — [ADR-0065](adr/0065-editor-is-a-settings-twin-at-editor-route.md), 2026-07-04.**
+> The editor is now the app's single **"Editor"** at the route **`/editor`** (the level editor
+> nests at **`/editor/level`**), and it renders through the **shared menu/settings shell** — a
+> `.settings-shell` rail of campaign tabs + a single scrolling content column with the live
+> preview pinned on top — as a fourth settings-twin (menu · Settings · Campaign · Editor),
+> mirroring `Campaign.tsx`. This **supersedes the bespoke `campaign-editor/*` panel-art chrome
+> direction below** (the `panel-large` / `row-campaign` / `preview-frame` / `footer-bar` /
+> `button-*` source-sheet program): the frames, tabs, rows, and buttons now come from the shared
+> 9-slice kit (`panel.png` / `panel-line.png` / `mode-button.png`). The **Non-Negotiables and the
+> Feature Contract still hold** — no fake controls, live DOM text, data-backed previews,
+> confirmed destructive actions — and "no CSS imitation of rendered chrome" is honored *better*
+> (every reused surface is real border-image art). The only surviving bespoke chrome is the live
+> preview frame + force shields (`.ce-preview-*`), which the settings pattern has no analogue for.
+
 ## Source Of Truth
 
-- Visual target: `docs/art/ui-screen-concepts/02-campaign-editor.png`.
-- Live route: `/campaigns-next`.
-- Reusable chrome source: `frontend/public/assets/ui/campaign-editor/source-sheet.png`.
+- Visual target: `docs/art/ui-screen-concepts/02-campaign-editor.png` (feature reference; the
+  chrome now follows the shared settings shell, not this screen's bespoke panels — see ADR-0065).
+- Live route: `/editor` (the nested board editor is `/editor/level`).
+- Reusable chrome: the shared settings shell (`.settings-*` in `frontend/src/style.css`) + the
+  9-slice kit — NOT the retired `campaign-editor/source-sheet.png` panel program (superseded).
 - Production component: `frontend/src/ui/CampaignEditor.tsx`.
+- Shared control primitives: `frontend/src/ui/shared/SettingsControls.tsx` (Section/Row/Button).
 - Campaign workspace store: `frontend/src/campaign/store.ts`.
-
-Do not crop the full concept screen into reusable controls. The concept has
-layout-specific lighting and baked sample content. Use the campaign editor
-source sheet for reusable chrome, and create new matching assets only where the
-source sheet does not contain a needed control or icon.
 
 ## Non-Negotiables
 
