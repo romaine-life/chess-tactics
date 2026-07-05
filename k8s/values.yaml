@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets image tag characters.
-  tag: "app-2cf956bd4a2712c8629f0c99a3c93f52bef98d24e755bd2b711226cac0b1c501"
+  tag: "app-73e7223526c8ee02f65f310be2d2926b1e3daa6f7561592ae5aa8f35ddcebcfb"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # skipped, so baking these in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add Gym latest-step game inspection"
-  prNumber: "405"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/405"
-  commit: "b85c1cb"
+  prTitle: "Remove AP and HP game references"
+  prNumber: "406"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/406"
+  commit: "3fe70de"
 
 name: chess-tactics
 namespace: chess-tactics
